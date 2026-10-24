@@ -195,7 +195,7 @@ describe('refreshLiveGrantedQuotas', () => {
 
     const readings = await fleetShardQuotaService.refreshLiveGrantedQuotas('ci_runner', deps());
     const printed = JSON.stringify(readings, (_k, v: unknown) =>
-      v instanceof Error ? { message: v.message, ...v } : v,
+      v instanceof Error ? { ...v, message: v.message } : v,
     );
 
     for (const secret of [SESSION.secretAccessKey, SESSION.sessionToken, SESSION.accessKeyId]) {

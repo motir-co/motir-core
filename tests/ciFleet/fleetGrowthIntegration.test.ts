@@ -465,7 +465,7 @@ describe('shared admission and the spares growth leaves behind', () => {
     });
 
     const placed = await choose(fx.organizationId);
-    expect([primaryId, ready.id]).toContain(placed.shardId);
+    expect([primaryId, ready.id]).toContain('shardId' in placed ? placed.shardId : null);
     expect(await choose(meta.organizationId)).toEqual({ shardId: replacementId });
 
     // Fill both primaries: the non-exempt job defers rather than take the spare.

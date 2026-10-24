@@ -229,7 +229,7 @@ describe('refreshOpenRequests', () => {
     org.requestReadFailures.set(request.awsRequestId, new Error(SESSION.sessionToken));
     const results = await fleetQuotaRaiseService.refreshOpenRequests(undefined, deps());
     const printed = JSON.stringify(results, (_k, v: unknown) =>
-      v instanceof Error ? { message: v.message, ...v } : v,
+      v instanceof Error ? { ...v, message: v.message } : v,
     );
     for (const secret of Object.values(SESSION).filter((v): v is string => !!v)) {
       expect(printed).not.toContain(secret);
