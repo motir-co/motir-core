@@ -259,6 +259,53 @@ export const agentInstanceRepository = {
   },
 
   /**
+   * Release a RESERVED placement whose provision was refused (Story MOTIR-9361 ·
+   * MOTIR-9471) — legal only while the row has no machine, so a placement that
+   * already holds a disk can never be released. Answers how many rows changed
+   * (0 or 1). `tx` required.
+   */
+  async releasePlacement(
+    id: string,
+    fleetShardId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.agentInstance.updateMany({
+      where: { id, fleetShardId, machineId: null },
+      data: { fleetShardId: null, availabilityZone: null },
+    });
+    return result.count;
+  },
+
+  /**
+   * Write the handle beside the placement that reserved it (MOTIR-9471) — only
+   * while the row is live, still placed on `fleetShardId` and has no machine yet.
+   * `applied: false` means the placement is no longer this call's: what it
+   * provisioned must be destroyed. `tx` required.
+   */
+  async setPlacedHandle(
+    id: string,
+    fleetShardId: string,
+    handle: AgentInstanceHandleColumns,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ applied: boolean }> {
+    const result = await tx.agentInstance.updateMany({
+      where: { id, fleetShardId, machineId: null, ...LIVE },
+      data: handle,
+    });
+    return { applied: result.count === 1 };
+  },
+
+  /**
+   * How many live instances one account holds — reserved, running or asleep
+   * (MOTIR-9471): admission's per-account in-flight count for the agent hoster.
+   * A sleeping instance counts, because its wake comes back to the same account
+   * and never chooses. `tx` required.
+   */
+  async countLiveOnFleetShard(fleetShardId: string, tx: Prisma.TransactionClient): Promise<number> {
+    return tx.agentInstance.count({ where: { fleetShardId, ...LIVE } });
+  },
+
+  /**
    * Every record in one fleet account, live AND deleted — the reconciler and the
    * headroom reading count an account's instances. An instance with no account
    * (the process-wide Fly app) is in no account's list. `tx` required.
