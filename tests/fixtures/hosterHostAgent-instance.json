@@ -1,0 +1,14 @@
+{
+  "image": "motir/sandbox@sha256:test",
+  "mountPath": "/home/node",
+  "env": {},
+  "idleCommand": null,
+  "terminal": {
+    "version": 2,
+    "keyId": "kid-a",
+    "command": ["motir", "agent-terminal", "serve"],
+    "env": {},
+    "service": { "internalPort": 7681, "ports": [], "autostart": false, "autostop": "off" }
+  },
+  "hostAgent": null
+}

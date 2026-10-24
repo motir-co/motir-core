@@ -1,0 +1,21 @@
+{
+  // The host agent's BUILD (MOTIR-9480): Node built-ins only, no dependency, so
+  // the image copies `dist/` and runs it with the instance's Node. It is not a
+  // workspace package and imports nothing from the app or `packages/`; its
+  // type-check runs in the root `tsconfig.tests.json`, beside its tests in
+  // `tests/hosterHostAgent/`.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "lib": ["ES2023"],
+    "types": ["node"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "include": ["src/**/*.ts"]
+}

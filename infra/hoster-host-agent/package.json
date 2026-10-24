@@ -1,0 +1,16 @@
+{
+  "name": "@motir/hoster-host-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The HTTPS service on port 8443 of every AWS agent instance: docker exec and the terminal proxy, behind mutual TLS (MOTIR-9480).",
+  "type": "commonjs",
+  "main": "dist/cli.js",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/cli.js",
+    "test": "cd ../.. && vitest run tests/hosterHostAgent"
+  }
+}
