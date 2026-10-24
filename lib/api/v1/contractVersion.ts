@@ -1098,15 +1098,16 @@
  *   (`POST /api/v1/projects/{projectKey}/pages`, `page:edit`, `201` with `Page`) and
  *   `getPage` (`GET /api/v1/pages/{pageId}`, `page:view`, `200` with `Page`), and MOTIR-9494's
  *   `updatePage` (`PATCH /api/v1/pages/{pageId}`, `page:edit`, the whole body with the
- *   `revision` read; a stale one is `PAGE_REVISION_CONFLICT` 409) — a page's
+ *   `revision` read; a stale one is `PAGE_REVISION_CONFLICT` 409), and MOTIR-9495's `movePage`
+ *   (`PATCH /api/v1/pages/{pageId}/placement`, `page:edit`, `200` with `PagePlacement`) — a page's
  *   title, placement, `revision` and markdown body, over the same `pagesService` doors as
  *   the MCP `create_page` / `get_page`. The page refusal codes (`PAGE_NOT_FOUND`,
  *   `CROSS_PROJECT_PAGE_PARENT`, `PAGE_PARENT_ARCHIVED`, `PAGE_PARENT_NOT_ALLOWED`,
  *   `PAGE_DEPTH_EXCEEDED`, `PAGE_TITLE_TOO_LONG`, `PAGE_BODY_TOO_LARGE`, …) are the
  *   package's own.
  *
- *   Additive: two new operations, a new component and new codes for new conditions (§8's
- *   allowed list).
+ *   Additive: four new operations, two new components and new codes for new conditions
+ *   (§8's allowed list).
  *
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.75.0` after MOTIR-9052's
  *   `1.74.0`. If a sibling has taken it since, RENUMBER this entry — it names the

@@ -457,6 +457,13 @@ export const V1_OPERATIONS = {
     successStatus: 200,
     responseComponent: undefined,
   },
+  "movePage": {
+    method: "PATCH",
+    path: "/api/v1/pages/{pageId}/placement",
+    permission: "page:edit",
+    successStatus: 200,
+    responseComponent: "PagePlacement",
+  },
   "moveWorkItemsToBacklog": {
     method: "POST",
     path: "/api/v1/projects/{projectKey}/backlog/work-items",

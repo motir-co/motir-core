@@ -82,6 +82,7 @@ export declare const operation_listWorkItemDesigns: ValidateFunction;
 export declare const operation_listWorkItemLinks: ValidateFunction;
 export declare const operation_listWorkItemTransitions: ValidateFunction;
 export declare const operation_listWorkspaces: ValidateFunction;
+export declare const operation_movePage: ValidateFunction;
 export declare const operation_moveWorkItemsToBacklog: ValidateFunction;
 export declare const operation_moveWorkItemsToSprint: ValidateFunction;
 export declare const operation_openDispatchRun: ValidateFunction;

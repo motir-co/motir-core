@@ -5,7 +5,13 @@ import {
   type V1Operation,
   type V1Parameter,
 } from '@/lib/api/v1/openapi/operation';
-import { createPageBodySchema, pageSchema, updatePageBodySchema } from '@/lib/api/v1/pages/schema';
+import {
+  createPageBodySchema,
+  movePageBodySchema,
+  pagePlacementResultSchema,
+  pageSchema,
+  updatePageBodySchema,
+} from '@/lib/api/v1/pages/schema';
 
 // The PAGE operations (Story MOTIR-9486 · MOTIR-9493).
 //
@@ -91,8 +97,29 @@ export const PAGE_OPERATIONS: readonly V1Operation[] = [
     },
     errorStatuses: [403, 404, 409, 413, 422],
   }),
+  defineOperation({
+    method: 'PATCH',
+    path: '/api/v1/pages/{pageId}/placement',
+    operationId: 'movePage',
+    summary: 'Move a page',
+    description:
+      'Re-parent a page under another page, into a folder or to the project root — or reorder it among its siblings, or both — carrying its whole subtree, in ONE transaction; the session route’s move. With no neighbour, a re-parented page goes last and a page left at its own parent keeps its place; a move to where the page already is answers `moved: false` and writes nothing. Each refusal is named and moves nothing: a page under itself or one of its own sub-pages is 422 `PAGE_CYCLE`; nesting past the depth limit 422 `PAGE_DEPTH_EXCEEDED`; an archived parent page 422 `PAGE_PARENT_ARCHIVED`; a kind other than `root` · `folder` · `page` 422 `PAGE_PARENT_NOT_ALLOWED`; a neighbour that is the page itself, not at the destination or out of order 422 `PAGE_NEIGHBOUR_INVALID`; an archived page 409 `PAGE_ARCHIVED`. A parent page that is missing or in another project is 404 `PAGE_NOT_FOUND`, and such a folder 404 `FOLDER_NOT_FOUND`. A page the caller cannot see is the same 404 `PAGE_NOT_FOUND` as one that never existed; a caller who can browse the project but may not edit its pages is 403 `PROJECT_ACCESS_DENIED`.',
+    permission: 'page:edit',
+    parameters: [pageIdParameter],
+    requestBody: {
+      schema: movePageBodySchema,
+      description: 'The new parent, and optionally the neighbour to land beside.',
+    },
+    response: {
+      status: 200,
+      body: { kind: 'object', schema: pagePlacementResultSchema },
+      description: 'Where the page now sits.',
+    },
+    errorStatuses: [403, 404, 409, 422],
+  }),
 ];
 
 export const PAGE_COMPONENTS: Readonly<Record<string, ZodType>> = {
   Page: pageSchema,
+  PagePlacement: pagePlacementResultSchema,
 };

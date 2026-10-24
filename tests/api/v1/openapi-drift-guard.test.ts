@@ -1148,7 +1148,7 @@ describe('every operation’s REAL response validates against its declared schem
 
     // ── The page resource (Story MOTIR-9486 · MOTIR-9493) ────────────────────
     // Create one in the folder above with a markdown body, read it back, then
-    // replace its body at the revision the create returned.
+    // replace its body at the revision the create returned and move it to the root.
     const page = await drive(
       'createPage',
       () => import('@/app/api/v1/projects/[projectKey]/pages/route'),
@@ -1173,6 +1173,12 @@ describe('every operation’s REAL response validates against its declared schem
         markdown: '# Runbook\n\nRestart the worker, then the queue.',
         revision: (page.body as { revision: number }).revision,
       }),
+      { pageId },
+    );
+    await drive(
+      'movePage',
+      () => import('@/app/api/v1/pages/[pageId]/placement/route'),
+      send(`/api/v1/pages/${pageId}/placement`, 'PATCH', { parent: { kind: 'root' } }),
       { pageId },
     );
 

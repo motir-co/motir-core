@@ -1,6 +1,6 @@
 import { z } from 'zod/v4';
 import { InvalidRequestError } from '@/lib/api/v1/errors';
-import type { PageMarkdownDto, PageParentInput } from '@/lib/dto/pages';
+import type { PageMarkdownDto, PageMoveResultDto, PageParentInput } from '@/lib/dto/pages';
 import { parseParentBody } from '@/lib/pages/parentInput';
 
 // The v1 PAGE resource (Story MOTIR-9486 · MOTIR-9493) — a project's document,
@@ -118,7 +118,9 @@ export type CreatePageBody = z.infer<typeof createPageBodySchema>;
  * shape problem, refused here; an unknown kind passes through so the package
  * refuses it by name.
  */
-export function readPageParent(raw: CreatePageBody['parent']): PageParentInput {
+export function readPageParent(
+  raw: CreatePageBody['parent'] | MovePageBody['parent'],
+): PageParentInput {
   if (raw === undefined) return { kind: 'root' };
   const parent = parseParentBody(raw);
   if (!parent) {
@@ -147,3 +149,63 @@ export const updatePageBodySchema = z
   })
   .strict();
 export type UpdatePageBody = z.infer<typeof updatePageBodySchema>;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The MOVE (MOTIR-9495)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** A page's parent as the move reports it — the shape a request names. */
+export const pageParentResultSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('root') }),
+  z.object({ kind: z.literal('folder'), id: z.string() }),
+  z.object({ kind: z.literal('page'), id: z.string() }),
+]);
+
+/** Where a move left the page. */
+export const pagePlacementResultSchema = z.object({
+  id: z.string(),
+  parent: pageParentResultSchema,
+  /** Fractional index among the page's new siblings — opaque, but it sorts. */
+  position: z.string(),
+  /** The page's ancestor pages, root first, the page itself excluded. */
+  ancestorPageIds: z.array(z.string()),
+  /** `false` for a move to where the page already was, which writes nothing. */
+  moved: z.boolean(),
+});
+export type V1PagePlacement = z.infer<typeof pagePlacementResultSchema>;
+
+/** Map a move's result to the wire resource — field by field. */
+export function presentPagePlacement(result: PageMoveResultDto): V1PagePlacement {
+  return {
+    id: result.id,
+    parent:
+      result.parent.kind === 'root'
+        ? { kind: 'root' }
+        : { kind: result.parent.kind, id: result.parent.id },
+    position: result.position,
+    ancestorPageIds: [...result.ancestorPageIds],
+    moved: result.moved,
+  };
+}
+
+const neighbourIdSchema = z.string().min(1).nullish();
+
+/**
+ * `PATCH /api/v1/pages/{pageId}/placement` — the session route's body
+ * (`app/api/pages/[pageId]/placement/route.ts`): the new parent, and optionally
+ * the sibling to land after (`beforeId`) or before (`afterId`).
+ */
+export const movePageBodySchema = z
+  .object({
+    parent: pageParentSchema.describe(
+      'Where the page goes: `{ kind: "root" }`, `{ kind: "folder", id }` or `{ kind: "page", id }`. Its whole subtree moves with it.',
+    ),
+    beforeId: neighbourIdSchema.describe(
+      'A page at the destination the moved page lands right AFTER. Omit to place it last (or keep its place at its own parent).',
+    ),
+    afterId: neighbourIdSchema.describe(
+      'A page at the destination the moved page lands right BEFORE.',
+    ),
+  })
+  .strict();
+export type MovePageBody = z.infer<typeof movePageBodySchema>;
