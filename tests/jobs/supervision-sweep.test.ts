@@ -600,9 +600,11 @@ describe('an abandoned hosted-agent supervision on an agent-runner account (MOTI
       },
     });
     const workspace = await adminDb.workspace.findUniqueOrThrow({ where: { id: run.workspaceId } });
+    const orgId = workspace.organizationId;
+    if (orgId === null) throw new Error('the seeded workspace belongs to no organisation');
     const account = fakeOrchestratorForShard(shard.id);
     const handle = await account.provision({
-      orgId: workspace.organizationId,
+      orgId,
       workspaceId: run.workspaceId,
       projectId: project.id,
       repoFullName: 'motir-projects/site',
@@ -630,7 +632,7 @@ describe('an abandoned hosted-agent supervision on an agent-runner account (MOTI
       timeoutSeconds: 3_600,
       size: FLEET_CONTAINER_SIZE,
       attribution: {
-        orgId: workspace.organizationId,
+        orgId,
         workspaceId: run.workspaceId,
         projectId: project.id,
         repoFullName: 'motir-projects/site',
