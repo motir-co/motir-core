@@ -23,6 +23,7 @@ import { InvalidAuthoredBugError, parseAuthoredBug, type AuthoredBug } from '@/l
 import { LOG_BUG_TARGET_KINDS, type LogBugTargetKind } from '@/lib/ai/logBugOffer';
 import type { WorkItemRefMap } from '@/lib/dto/workItems';
 import { readGuideTurnRecord } from '@/lib/ai/guideWorkItem';
+import { narrowSharpenedRequirement } from '@/lib/sharpening/requirement';
 import { parseCodeUnsearchableRepos } from '@/lib/planning/codeUnsearchable';
 
 // Prisma rows → API DTOs for the plan-change conversation (Story 7.30 ·
@@ -95,6 +96,16 @@ function toLogBugOfferDto(value: unknown): LogBugOfferDto | null {
   };
 }
 
+/** The saved requirement page an offer records (MOTIR-9436): an id and a title, both
+ *  non-empty strings, or nothing. */
+function toRequirementPageRef(value: unknown): { pageId: string; title: string } | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const { pageId, title } = value as Record<string, unknown>;
+  return typeof pageId === 'string' && pageId && typeof title === 'string' && title
+    ? { pageId, title }
+    : undefined;
+}
+
 /** A string, or null; `undefined` when the value is neither — the wrong type. */
 function nullableString(value: unknown): string | null | undefined {
   if (value === null || value === undefined) return null;
@@ -125,10 +136,25 @@ function toAnswerOfferDto(value: unknown): PlanAnswerOfferDto | null {
   // A `log_bug` offer is only as good as its bug: one that does not read is no offer.
   const bug = v.kind === 'log_bug' ? toLogBugOfferDto(v.bug) : null;
   if (v.kind === 'log_bug' && !bug) return null;
+  // The composed requirement (MOTIR-9432) rides a no-target `plan` offer alone. One
+  // that does not read is dropped; the offer itself still reads.
+  const requirement =
+    v.kind === 'plan' && fields.targetKey === null
+      ? narrowSharpenedRequirement(v.requirement)
+      : undefined;
+  // The saved page and the failed-save flag (MOTIR-9436) ride the same offers, each
+  // dropped alone when it does not read.
+  const noTargetPlan = v.kind === 'plan' && fields.targetKey === null;
+  const requirementPage = noTargetPlan ? toRequirementPageRef(v.requirementPage) : undefined;
   return {
     kind: v.kind as AnswerOfferKindDto,
     requestMd: v.requestMd,
     ...(fields as { [K in keyof typeof fields]: string | null }),
+    ...(requirement ? { requirement } : {}),
+    ...(requirementPage ? { requirementPage } : {}),
+    ...(noTargetPlan && v.requirementSaveFailed === true
+      ? { requirementSaveFailed: true as const }
+      : {}),
     ...(bug ? { bug } : {}),
   };
 }

@@ -8417,7 +8417,9 @@
       "held": "Motir AI bietet die Planung an, sobald diese Fragen beantwortet sind.",
       "settledHeading": "Was Ihre Antworten festgelegt haben",
       "clearEnough": "Klar genug, um es wie beschrieben zu planen.",
-      "nothingSettled": "Es wurde nichts festgelegt, daher wird die Anfrage wie beschrieben geplant."
+      "nothingSettled": "Es wurde nichts festgelegt, daher wird die Anfrage wie beschrieben geplant.",
+      "requirementSaved": "Gespeichert als <link>{title}</link> in den Anforderungsdokumenten.",
+      "requirementNotSaved": "<lead>Die Anforderung konnte nicht gespeichert werden.</lead> Es wurde nichts gestartet. Bestätigen ist weiterhin verfügbar – versuchen Sie es noch einmal."
     },
     "logBugOffer": {
       "label": "Angebot, einen Bug zu erfassen",
@@ -8496,6 +8498,20 @@
       "emptyBody": "Fragen, die du stellst, und Pläne, die du in diesem Projekt beginnst, werden hier aufgeführt.",
       "error": "Deine Gespräche konnten nicht geladen werden.",
       "rowAria": "{title} · {status} · aktiv {when}"
+    },
+    "requirementPane": {
+      "label": "Zu planende Anforderung",
+      "headings": {
+        "outcome": "Ergebnis",
+        "behaviour": "Verhalten",
+        "scopeEdge": "Abgrenzung",
+        "constraints": "Randbedingungen",
+        "acceptance": "Abnahme",
+        "assumptions": "Annahmen"
+      },
+      "none": "Nichts vorhanden",
+      "correctionHint": "Um hier etwas zu ändern, schreibe die Korrektur in die Unterhaltung.",
+      "notice": "Für dieses Angebot wurde keine Anforderung verfasst. Die Planung verfasst sie, sobald du bestätigst."
     }
   },
   "codeHealth": {

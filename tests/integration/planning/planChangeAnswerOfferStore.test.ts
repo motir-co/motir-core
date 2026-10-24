@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import type { ProjectContext } from '@/lib/projects';
+import type { SubmittedRequirement } from '@/lib/ai/types';
 import { buildScope } from '@/lib/planChange/scope';
 import { toPlanChangeSessionDto } from '@/lib/mappers/planChangeMappers';
 import { planChangeTurnRepository } from '@/lib/repositories/planChangeTurnRepository';
@@ -14,6 +15,7 @@ import { truncateAuthTables } from '../../helpers/db';
 // answer without one stores NULL, and `setAnswerOffer` rewrites only that column,
 // only in its own workspace.
 
+const { planOfferService } = await import('@/lib/services/planOfferService');
 const { planChangeSessionsService } = await import('@/lib/services/planChangeSessionsService');
 const { workItemsService } = await import('@/lib/services/workItemsService');
 
@@ -45,6 +47,15 @@ const OFFER = {
   kind: 'plan' as const,
   requestMd: 'Plan a fix for the CSV export dropping custom fields.',
   targetKey: null as string | null,
+};
+
+const REQUIREMENT: SubmittedRequirement = {
+  outcome: 'A person plans a fix from the overlay.',
+  behaviour: 'The requirement shows before Confirm.',
+  scopeEdge: '',
+  constraints: '',
+  acceptance: 'Six headings.',
+  assumptions: [{ id: 'r1', text: 'One pane.' }],
 };
 
 /** A conversation with one answer turn, the offer on it when given. */
@@ -178,5 +189,100 @@ describe('setAnswerOffer rewrites the offer and nothing else', () => {
 
     const after = await adminDb.planChangeTurn.findUniqueOrThrow({ where: { id: turn.id } });
     expect(after).toEqual(turn);
+  });
+});
+
+describe('the composed requirement rides the stored offer (MOTIR-9432)', () => {
+  /** A no-target offer carrying the requirement, appended with its answer. */
+  async function withRequirement() {
+    const s = await planChangeSessionsService.startWithFirstTurn(
+      me(),
+      buildScope([]),
+      'Plan something new',
+    );
+    await planChangeSessionsService.appendAnswerTurn(
+      {
+        jobId: `job-${++jobSeq}`,
+        body: 'I can plan that.',
+        answerOffer: {
+          kind: 'plan',
+          requestMd: OFFER.requestMd,
+          targetKey: null,
+          requirement: REQUIREMENT,
+        },
+      },
+      me(),
+      { sessionId: s.id },
+    );
+    const turn = await adminDb.planChangeTurn.findFirstOrThrow({
+      where: { sessionId: s.id, role: 'assistant' },
+    });
+    return { sessionId: s.id, turnId: turn.id };
+  }
+
+  const storedRequirement = async (turnId: string) =>
+    (
+      (await adminDb.planChangeTurn.findUniqueOrThrow({ where: { id: turnId } }))
+        .answerOffer as Record<string, unknown>
+    ).requirement;
+
+  const servedRequirement = async (sessionId: string, turnId: string) =>
+    (await reread(sessionId)).turns.find((t) => t.id === turnId)!.offer?.requirement;
+
+  it('is stored on the turn and served on the session DTO', T, async () => {
+    const { sessionId, turnId } = await withRequirement();
+    expect(await storedRequirement(turnId)).toEqual(REQUIREMENT);
+    expect(await servedRequirement(sessionId, turnId)).toEqual(REQUIREMENT);
+  });
+
+  it('survives the decline door', T, async () => {
+    const { sessionId, turnId } = await withRequirement();
+    await planOfferService.declinePlanOffer(turnId, me(), { sessionId });
+    expect(await storedRequirement(turnId)).toEqual(REQUIREMENT);
+    expect(await servedRequirement(sessionId, turnId)).toEqual(REQUIREMENT);
+  });
+
+  it('survives a recorded refusal', T, async () => {
+    const { sessionId, turnId } = await withRequirement();
+    await planOfferService.recordCannotStart(turnId, 'out_of_credits', null, me(), { sessionId });
+    expect(await storedRequirement(turnId)).toEqual(REQUIREMENT);
+    expect(await servedRequirement(sessionId, turnId)).toEqual(REQUIREMENT);
+  });
+
+  it('survives the start claim, its release and a stamped session', T, async () => {
+    const { sessionId, turnId } = await withRequirement();
+    const claimed = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      planChangeTurnRepository.claimAnswerOfferStart(turnId, fx.workspaceId, fx.ownerId, tx),
+    );
+    expect(claimed).toBe(true);
+    expect(await storedRequirement(turnId)).toEqual(REQUIREMENT);
+
+    await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      planChangeTurnRepository.releaseAnswerOfferStart(turnId, fx.workspaceId, tx),
+    );
+    expect(await storedRequirement(turnId)).toEqual(REQUIREMENT);
+
+    // The stamp spreads the stored JSON the way `stampOffer` does.
+    const row = await adminDb.planChangeTurn.findUniqueOrThrow({ where: { id: turnId } });
+    await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      planChangeTurnRepository.setAnswerOffer(
+        turnId,
+        fx.workspaceId,
+        {
+          ...(row.answerOffer as Record<string, unknown>),
+          confirmedSessionId: sessionId,
+          start: { jobId: 'job-x', planId: null },
+        },
+        tx,
+      ),
+    );
+    expect(await servedRequirement(sessionId, turnId)).toEqual(REQUIREMENT);
+  });
+
+  it('is absent, with no key, on an offer stored without one', T, async () => {
+    const { sessionId, turn } = await answered(OFFER);
+    expect('requirement' in (turn.answerOffer as object)).toBe(false);
+    const offer = (await reread(sessionId)).turns.find((t) => t.role === 'assistant')!.offer!;
+    expect('requirement' in offer).toBe(false);
   });
 });

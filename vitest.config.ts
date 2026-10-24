@@ -3387,6 +3387,19 @@ export default defineConfig({
         'components/planning/PlanOffer.tsx',
         'app/api/ai/plan-change/session/offer/confirm/route.ts',
         'app/api/ai/plan-change/session/offer/decline/route.ts',
+        // Story MOTIR-9430 · MOTIR-9440 — the composed requirement's NEW core modules (the
+        // page writer, the pure markdown renderer, the left pane's derivation). MEASURED
+        // on the story branch against `tests/integration/planning/composedRequirementSeam`,
+        // `planOfferRequirementPage`, `tests/services/requirementPageService.integration`,
+        // `tests/ai/requirementMarkdown`, `tests/planning/requirementPane` and
+        // `tests/components/requirement-pane`, statements / branches / functions / lines:
+        // requirementPageService.ts 93.93 / 85.71 / 100 / 96.42 on one run and 81.81 /
+        // 71.42 / 100 / 85.71 on another (the folder-race arm is hit only when two writes
+        // actually collide), pinned at the lower run; requirementMarkdown.ts 100 / 87.5 /
+        // 100 / 100; requirementPane.ts 100 / 96.15 / 100 / 100. Pinned at the floor below.
+        'lib/services/requirementPageService.ts',
+        'lib/ai/requirementMarkdown.ts',
+        'lib/planning/requirementPane.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -3446,6 +3459,25 @@ export default defineConfig({
           functions: 90,
           branches: 90,
           statements: 90,
+        },
+        // Story MOTIR-9430 · MOTIR-9440 — measured above, pinned at the floor.
+        'lib/services/requirementPageService.ts': {
+          lines: 85,
+          functions: 100,
+          branches: 71,
+          statements: 81,
+        },
+        'lib/ai/requirementMarkdown.ts': {
+          lines: 100,
+          functions: 100,
+          branches: 87,
+          statements: 100,
+        },
+        'lib/planning/requirementPane.ts': {
+          lines: 100,
+          functions: 100,
+          branches: 96,
+          statements: 100,
         },
         // ── Story MOTIR-8538 · THE LOAD TEST (Subtask MOTIR-8681) — see `include`. ──
         'loadtest/staging/sideEffectSwitches.ts': {

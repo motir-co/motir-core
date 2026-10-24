@@ -8411,7 +8411,9 @@
       "held": "这几问答完后，Motir AI 会提议规划。",
       "settledHeading": "你的回答确定了这些",
       "clearEnough": "已足够清楚，可以按原样规划。",
-      "nothingSettled": "没有确定任何内容，所以会按请求原样规划。"
+      "nothingSettled": "没有确定任何内容，所以会按请求原样规划。",
+      "requirementSaved": "已保存为需求文档中的<link>{title}</link>。",
+      "requirementNotSaved": "<lead>无法保存需求。</lead>尚未开始规划。确认按钮仍可使用，请重试。"
     },
     "logBugOffer": {
       "label": "提议记录缺陷",
@@ -8490,6 +8492,20 @@
       "emptyBody": "你在此项目中的提问和开始的规划会列在这里。",
       "error": "无法加载你的对话。",
       "rowAria": "{title} · {status} · {when}活跃"
+    },
+    "requirementPane": {
+      "label": "待规划的需求",
+      "headings": {
+        "outcome": "结果",
+        "behaviour": "行为",
+        "scopeEdge": "范围边界",
+        "constraints": "约束",
+        "acceptance": "验收",
+        "assumptions": "假设"
+      },
+      "none": "此处为空",
+      "correctionHint": "如需修改，请在对话中输入更正。",
+      "notice": "此提议没有写出需求。确认后，规划会自行撰写。"
     }
   },
   "codeHealth": {

@@ -11535,6 +11535,16 @@
   "planningWorkspace.planOffer.settledHeading": "What your answers settled",
   "planningWorkspace.planOffer.clearEnough": "Clear enough to plan as stated.",
   "planningWorkspace.planOffer.nothingSettled": "Nothing was settled, so the request is planned as stated.",
+  "planningWorkspace.requirementPane.label": "Requirement to be planned",
+  "planningWorkspace.requirementPane.headings.outcome": "Outcome",
+  "planningWorkspace.requirementPane.headings.behaviour": "Behaviour",
+  "planningWorkspace.requirementPane.headings.scopeEdge": "Scope edge",
+  "planningWorkspace.requirementPane.headings.constraints": "Constraints",
+  "planningWorkspace.requirementPane.headings.acceptance": "Acceptance",
+  "planningWorkspace.requirementPane.headings.assumptions": "Assumptions",
+  "planningWorkspace.requirementPane.none": "Nothing here",
+  "planningWorkspace.requirementPane.correctionHint": "To change anything here, type the correction in the conversation.",
+  "planningWorkspace.requirementPane.notice": "No requirement was composed for this offer. Planning will compose it when you confirm.",
   "sharpen.conversation.nothingToAsk": "I have nothing to ask — this is clear enough to plan as stated.",
   "sharpen.conversation.stoppedNoAnswer": "You stopped the grilling before any answer.",
   "sharpen.conversation.switchedOff": "You turned Grill me off, so the questions stopped.",
@@ -11564,5 +11574,7 @@
   "platformAdmin.tenant.fleet.facts.planExempt": "Plan <strong>No plan limit</strong>",
   "platformAdmin.tenant.fleet.facts.planExemptOverride": "Plan <strong>No plan limit</strong> · CI jobs at once: {ci} (override)",
   "platformAdmin.tenant.fleet.facts.planUnknown": "Plan <strong>unknown · {key}</strong> · new containers refused",
-  "platformAdmin.tenant.fleet.facts.planUnknownNoKey": "Plan <strong>unknown</strong> · new containers refused"
+  "platformAdmin.tenant.fleet.facts.planUnknownNoKey": "Plan <strong>unknown</strong> · new containers refused",
+  "planningWorkspace.planOffer.requirementSaved": "Saved as <link>{title}</link> in Requirements Docs.",
+  "planningWorkspace.planOffer.requirementNotSaved": "<lead>Couldn’t save the requirement.</lead> Nothing was started. Confirm is still here — try it again."
 }

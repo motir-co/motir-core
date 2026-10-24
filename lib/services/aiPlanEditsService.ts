@@ -143,6 +143,11 @@ export interface PlanEditSubmitOptions {
    * only when present.
    */
   carriedAnswers?: CarriedAnswers;
+  /**
+   * The page a confirmed no-target offer's requirement was saved to (MOTIR-9436):
+   * `context.requirementPage`, beside `requirement`, only when present.
+   */
+  requirementPage?: { pageId: string; title: string };
 }
 
 /**
@@ -468,11 +473,12 @@ export const aiPlanEditsService = {
     opts: PlanEditSubmitOptions = {},
   ): Promise<PlanEditSubmitResult> {
     await assertCanPlan(ctx);
-    const { carriedAnswers, ...rest } = opts;
+    const { carriedAnswers, requirementPage, ...rest } = opts;
     return submitPlanEditJob(
       {
         prompt,
         ...(requirement ? { requirement } : {}),
+        ...(requirementPage ? { requirementPage } : {}),
         ...(carriedAnswers ? { carriedAnswers } : {}),
       },
       ctx,
@@ -517,12 +523,13 @@ export const aiPlanEditsService = {
     opts: PlanEditSubmitOptions = {},
   ): Promise<PlanEditSubmitResult> {
     await assertCanPlan(ctx);
-    const { carriedAnswers, ...rest } = opts;
+    const { carriedAnswers, requirementPage, ...rest } = opts;
     return submitPlanEditJob(
       {
         prompt,
         targetKeys: [...targetKeys],
         ...(requirement ? { requirement } : {}),
+        ...(requirementPage ? { requirementPage } : {}),
         ...(carriedAnswers ? { carriedAnswers } : {}),
       },
       ctx,

@@ -7280,3 +7280,62 @@ Unchanged and reused: the opening marker, _That's everything I needed to ask._, 
 - The plan offer panel's own states (§ _The plan offer on an answer turn_) — a held offer, once shown, is that panel in every state it draws.
 - The bug offer, and a targeted _plan this_ — neither is ever held.
 - Which code builds which element; the server's door and storage for a conversation-scope grilling.
+
+## ⭐ The composed requirement in the left pane — read it before Confirm, keep it after (2026-10-24)
+
+**Design system — read first.** Files read: `package.json` (depends on `@motir/design-system` `workspace:*`) and `app/globals.css` (imports `@motir/design-system/theme.css`). **Verdict: ON MOTIR DESIGN.** Every colour below is an `--el-*` token and every surface's shape a shape token; nothing is invented.
+
+**A DELTA.** The mock is **`design/ai-chat/plan-offer--requirement.mock.html`**. It amends § _The plan offer on an answer turn_ (`design/ai-chat/plan-offer.mock.html`) and composes, without redrawing them, the planning workspace's left pane (`components/planning/PlanningWorkspace.tsx`), the offer panel (`components/planning/PlanOffer.tsx`) and the conversation rail (`components/planning/PlanChangeRail.tsx`). The offer panel's own markup, buttons and states are unchanged.
+
+**The access path** is the existing one: ask Motir AI in the planning overlay for something to plan; the answer carries a plan offer with no target.
+
+### What changes, in one sentence
+
+A plan offer with no target now carries the requirement Motir composed from the conversation; while the offer is undecided the left pane shows that requirement as a read-only document in place of the canvas, and after Confirm the rail says which page it was saved as.
+
+### The named elements
+
+| Element                   | Where                                                                            | What is drawn                                                                                                                                                                                                                                                        |
+| ------------------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Requirement document**  | the whole left pane, in place of the canvas while a no-target offer is undecided | the document fills the pane’s full canvas area with **no panel, card, border or fill of its own**, centred in a readable measure on `--el-page-bg`: the title, then the six parts in order. Read-only. No edit control and no Confirm.                               |
+| **Section heading**       | above each part's text                                                           | 12px semibold in `--el-text-secondary`: _Outcome_, _Behaviour_, _Scope edge_, _Constraints_, _Acceptance_, _Assumptions_. An empty part keeps its heading and says _Nothing here_ in `--el-text-secondary`, italic.                                                  |
+| **Assumption row**        | under _Assumptions_, one per assumption                                          | a row on `--el-tint-lavender` (`--radius-control`, `--spacing-control-x-8`/`--spacing-control-y-4`) with the id in mono and the text in `--el-text-strong`.                                                                                                          |
+| **Correction hint**       | under the document, only when the model corrected itself once                    | a line on `--el-tint-yellow` in `--el-text-strong`: _Motir asked for a correction: the first requirement didn’t read as a whole. This is the corrected one._                                                                                                         |
+| **No-requirement notice** | the left pane, when the stored offer has no requirement                          | a `--el-surface-soft` card in `--el-text-secondary`: _No requirement was written for this offer. The request on the right is all Confirm will use._ Confirm still works. Never a blank pane.                                                                         |
+| **Page link line**        | under the document once confirmed, and in the reopened conversation              | one line in `--el-text-secondary` with the page title as a link in `--el-link`: _Saved as Export the board in Requirements Docs._                                                                                                                                    |
+| **Cannot-save line**      | in the offer panel, between the buttons and the helper, after a failed save      | a line on `--el-danger-surface` with a `--el-danger` border; the lead words in `--el-danger-on-surface`, the rest in `--el-text`: _Couldn’t save the requirement. Nothing was started. Confirm is still here — try it again._ `role="alert"`. Confirm stays enabled. |
+
+The cannot-save line is **not** the cannot-start line: cannot-start replaces the offer (nothing to try again); cannot-save keeps the offer and its Confirm.
+
+**No separate settled-answers line is drawn** when the offer carries a requirement: the answers are folded into the document, and drawing both would say the same thing twice.
+
+### States — the storyboard
+
+| Mock sheet | State                           | What is drawn                                                                                                                                                                 |
+| ---------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1          | pending, populated              | document in the pane; undecided offer in the rail                                                                                                                             |
+| 2          | long · sparse                   | the whole left pane scrolls, so its scroll bar sits at the pane’s far right edge, not beside the centred column; an empty part and an empty _Assumptions_ show _Nothing here_ |
+| 3          | no requirement · corrected      | the notice in place of the document; the correction hint under a document                                                                                                     |
+| 4          | the swap                        | before: the canvas; after: the document. Declined or moved on: the canvas returns, uncovered, not rebuilt                                                                     |
+| 5          | confirming · cannot save        | both buttons disabled, Confirm reads _Confirming…_; then the cannot-save line with Confirm kept                                                                               |
+| 6          | confirmed · declined · reopened | confirmed: document kept, page link line, decided panel with no buttons; declined: canvas back, decided panel; reopened: the same, derived from the stored offer              |
+| 7          | mid-planning                    | the document and page link stay readable above the run; the decided panel in the rail                                                                                         |
+| 8          | 中文                            | pending, cannot save and confirmed in Chinese; layout unchanged                                                                                                               |
+
+### Strings (en / zh)
+
+| Key                   | en                                                                                                     | zh                                                           |
+| --------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------ |
+| part headings         | Outcome · Behaviour · Scope edge · Constraints · Acceptance · Assumptions                              | 结果 · 行为 · 范围边界 · 约束 · 验收 · 假设                  |
+| empty part            | Nothing here                                                                                           | 此处为空                                                     |
+| correction hint       | Motir asked for a correction: the first requirement didn’t read as a whole. This is the corrected one. | Motir 请求过一次修正：第一版需求不够完整。这是修正后的版本。 |
+| no-requirement notice | No requirement was written for this offer. The request on the right is all Confirm will use.           | 此提议没有写需求。确认只会使用右侧的请求。                   |
+| page link line        | Saved as {title} in Requirements Docs.                                                                 | 已保存为需求文档中的{title}。                                |
+| cannot-save line      | Couldn’t save the requirement. Nothing was started. Confirm is still here — try it again.              | 无法保存需求。尚未开始规划。确认按钮仍可使用，请重试。       |
+| confirming            | Confirming…                                                                                            | 确认中…                                                      |
+
+### What this section does not change
+
+- The offer panel's label, request block, Confirm, Decline and helper — as in § _The plan offer on an answer turn_.
+- A targeted _plan this_ and the bug offer — neither carries a requirement.
+- Which code builds which element, and where the page is stored.

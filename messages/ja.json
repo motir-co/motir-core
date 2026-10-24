@@ -8414,7 +8414,9 @@
       "held": "これらの質問が終わったら、Motir AI が計画を提案します。",
       "settledHeading": "回答で決まったこと",
       "clearEnough": "このまま計画できるほど明確です。",
-      "nothingSettled": "何も決まらなかったので、依頼をそのまま計画します。"
+      "nothingSettled": "何も決まらなかったので、依頼をそのまま計画します。",
+      "requirementSaved": "要件ドキュメントに<link>{title}</link>として保存しました。",
+      "requirementNotSaved": "<lead>要件を保存できませんでした。</lead>何も開始されていません。確認は引き続き押せます。もう一度お試しください。"
     },
     "logBugOffer": {
       "label": "バグ登録の提案",
@@ -8493,6 +8495,20 @@
       "emptyBody": "このプロジェクトでした質問や開始した計画がここに表示されます。",
       "error": "会話を読み込めませんでした。",
       "rowAria": "{title} · {status} · {when}にアクティブ"
+    },
+    "requirementPane": {
+      "label": "計画する要件",
+      "headings": {
+        "outcome": "成果",
+        "behaviour": "振る舞い",
+        "scopeEdge": "対象外の範囲",
+        "constraints": "制約",
+        "acceptance": "受け入れ条件",
+        "assumptions": "前提"
+      },
+      "none": "ここには何もありません",
+      "correctionHint": "ここを変更するには、会話で修正内容を入力してください。",
+      "notice": "この提案には要件が作成されていません。確認すると、計画側が作成します。"
     }
   },
   "codeHealth": {

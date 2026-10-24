@@ -8417,7 +8417,9 @@
       "held": "Motir AI will offer to plan when these questions are done.",
       "settledHeading": "What your answers settled",
       "clearEnough": "Clear enough to plan as stated.",
-      "nothingSettled": "Nothing was settled, so the request is planned as stated."
+      "nothingSettled": "Nothing was settled, so the request is planned as stated.",
+      "requirementSaved": "Saved as <link>{title}</link> in Requirements Docs.",
+      "requirementNotSaved": "<lead>Couldn’t save the requirement.</lead> Nothing was started. Confirm is still here — try it again."
     },
     "logBugOffer": {
       "label": "Offer to log a bug",
@@ -8496,6 +8498,20 @@
       "emptyBody": "Questions you ask and plans you start in this project are listed here.",
       "error": "Couldn’t load your conversations.",
       "rowAria": "{title} · {status} · active {when}"
+    },
+    "requirementPane": {
+      "label": "Requirement to be planned",
+      "headings": {
+        "outcome": "Outcome",
+        "behaviour": "Behaviour",
+        "scopeEdge": "Scope edge",
+        "constraints": "Constraints",
+        "acceptance": "Acceptance",
+        "assumptions": "Assumptions"
+      },
+      "none": "Nothing here",
+      "correctionHint": "To change anything here, type the correction in the conversation.",
+      "notice": "No requirement was composed for this offer. Planning will compose it when you confirm."
     }
   },
   "codeHealth": {
