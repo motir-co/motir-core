@@ -6587,10 +6587,7 @@
       "tiers": {
         "standard": {
           "useCase": "Plan your projects with the Motir AI planner.",
-          "features": [
-            "Plan the whole project, in detail",
-            "Credits refresh monthly · top up anytime"
-          ]
+          "features": ["Plan the project, in detail", "Credits refresh monthly · top up anytime"]
         },
         "pro": {
           "useCase": "Standard, plus stronger models for planning.",
@@ -6603,12 +6600,26 @@
         "max": {
           "useCase": "Pro, plus headroom to hand planned work to the agent.",
           "prev": "Pro",
-          "features": ["Headroom to dispatch planned work to the agent automatically"]
+          "features": [
+            "Plan more work, so your project moves faster",
+            "Headroom to dispatch some planned work to the agent automatically"
+          ]
         },
         "max_x2": {
           "useCase": "Max, at twice the volume.",
           "prev": "Max",
-          "features": ["Twice the Max monthly credit pool"]
+          "features": [
+            "Twice the Max monthly credit pool",
+            "Dispatch more planned work to the agent automatically"
+          ]
+        },
+        "host": {
+          "useCase": "Motir at fleet scale, on AWS accounts of your own.",
+          "prev": "Max ×2",
+          "features": [
+            "Motir runs your project autonomously",
+            "Dedicated pools for CI runners, agent runs, the indexer and hosted agents"
+          ]
         }
       },
       "trial": {

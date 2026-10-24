@@ -551,6 +551,17 @@ describe('billingService.startCheckout', () => {
     },
   );
 
+  it.each(['host_pool_annual', 'host_pool_monthly'])(
+    'forwards the Host price %s at quantity 1 (MOTIR-9403)',
+    async (priceLookupKey) => {
+      const { organizationId, owner } = await makeOrgWithRoles();
+      await billingService.startCheckout({ organizationId, actorUserId: owner.id, priceLookupKey });
+      expect(createCheckoutSessionMock).toHaveBeenCalledWith(
+        expect.objectContaining({ priceId: priceLookupKey, quantity: 1 }),
+      );
+    },
+  );
+
   // ── The top-up bundle QUANTITY (MOTIR-2949) ──────────────────────────────
   // The credit top-up is the only multi-unit line, and only at the catalog's
   // bundle sizes. A subscription's quantity belongs to the seat sync; a one-time

@@ -6588,7 +6588,7 @@
         "standard": {
           "useCase": "Plan je projecten met de Motir AI-planner.",
           "features": [
-            "Het hele project in detail plannen",
+            "Het project in detail plannen",
             "Credits worden maandelijks vernieuwd · altijd bij te kopen"
           ]
         },
@@ -6603,12 +6603,26 @@
         "max": {
           "useCase": "Pro, plus ruimte om gepland werk aan de agent over te dragen.",
           "prev": "Pro",
-          "features": ["Ruimte om gepland werk automatisch aan de agent toe te wijzen"]
+          "features": [
+            "Plan meer werk, zodat je project sneller vordert",
+            "Ruimte om een deel van het geplande werk automatisch aan de agent toe te wijzen"
+          ]
         },
         "max_x2": {
           "useCase": "Max, met twee keer het volume.",
           "prev": "Max",
-          "features": ["Twee keer de maandelijkse creditpool van Max"]
+          "features": [
+            "Twee keer de maandelijkse creditpool van Max",
+            "Meer gepland werk automatisch aan de agent toewijzen"
+          ]
+        },
+        "host": {
+          "useCase": "Motir op vlootschaal, op AWS-accounts van jezelf.",
+          "prev": "Max ×2",
+          "features": [
+            "Motir brengt je project zelfstandig verder",
+            "Eigen pools voor CI-runners, agentruns, de indexer en gehoste agents"
+          ]
         }
       },
       "trial": {
