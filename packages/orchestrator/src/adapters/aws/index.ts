@@ -13,6 +13,9 @@ import type {
   ContainerSpec,
   ContainerStatus,
   ContainerUsage,
+  FleetInventory,
+  InventoryMachine,
+  PersistentContainerState,
   ReapSparePredicate,
   TeardownReason,
   UsageAttribution,
@@ -26,8 +29,10 @@ import {
 } from './capacityErrors';
 import { AWS_SHARD_TAG_KEY } from './network';
 import { buildRunnerUserData, encodeUserData } from './userData';
+import { buildIndexUserData, consoleExitCode, consoleShowsPullFailure } from './indexUserData';
 
 export * from './userData';
+export * from './indexUserData';
 export * from './capacityErrors';
 export * from './credentials';
 export * from './management';
@@ -43,8 +48,8 @@ export * from './management';
 // for free:
 //
 //   1. AN INSTANCE DOES NOT STOP ON ITS OWN. The AMI powers the VM off when the
-//      runner exits and every launch says `InstanceInitiatedShutdownBehavior:
-//      'terminate'`, so a finished job reads as terminal instead of billing to
+//      runner exits and every runner launch says `InstanceInitiatedShutdownBehavior:
+//      'terminate'` (an index VM's says `stop`, below), so a finished job reads as terminal instead of billing to
 //      the one-hour timeout.
 //   2. A TERMINATED INSTANCE LINGERS for about an hour in DescribeInstances. It
 //      reads as `exists: false, state: 'destroyed'`, the port's "gone".
@@ -54,6 +59,16 @@ export * from './management';
 //
 // ⚠️ SHARD-BLIND AND ENVIRONMENT-BLIND. The composition root reads the account's
 // key and the AMI id and hands this a plain config.
+//
+// AN INDEX VM (MOTIR-9446) is the one launch that is not a runner: a
+// `code_graph_index` spec boots the stock Docker-host AMI (`indexerAmiId`) with a
+// script that pulls the indexer image by digest and runs it (`./indexUserData.ts`
+// names the AMI and why). Same size, same network, same tags and the same
+// launch/zone walk as a runner. Its signals are read from the VM's serial console
+// once it has stopped: a failed pull, reported as `imagePullFailed`, and the
+// indexer's exit code (MOTIR-9449), reported as `exitCode`. Unlike a runner it
+// launches with `InstanceInitiatedShutdownBehavior: 'stop'`, so its power-off
+// leaves it stopped and readable until `teardown` terminates it at settle.
 
 /** The machine class the fleet's one size maps to — 2 vCPU / 8 GiB, x86. */
 export const AWS_DEFAULT_INSTANCE_TYPE = 'm6i.large';
@@ -109,6 +124,33 @@ export class AwsInstanceSizeError extends Error {
   }
 }
 
+/**
+ * The four tags every index VM carries (MOTIR-9450), on its instance, volumes and
+ * network interface, so a person in the EC2 console and AWS cost tooling can tell
+ * whose index a billed resource is. They are a FINDING aid, never attribution:
+ * anyone holding the account's key could write them, so the attribution pass
+ * matches a VM by its usage row and slot, and reaps a tagged VM with no record.
+ */
+export const AWS_INDEX_TAG_KEYS = {
+  workload: 'motir:workload',
+  org: 'motir:org',
+  project: 'motir:project',
+  repo: 'motir:repo',
+} as const;
+
+/** EC2's limit on a tag value. A longer value is cut to it, never dropped. */
+export const AWS_TAG_VALUE_MAX = 256;
+
+/** An index spec missing what its tags are made of — refused before any call,
+ *  so no VM is launched untagged. */
+export class AwsIndexAttributionError extends Error {
+  readonly code = 'AWS_INDEX_ATTRIBUTION_MISSING' as const;
+  constructor(readonly field: 'orgId' | 'projectId' | 'repoFullName') {
+    super(`An index VM cannot launch untagged: the spec has no ${field}.`);
+    this.name = 'AwsIndexAttributionError';
+  }
+}
+
 const FLEET_VALUE_SET: ReadonlySet<string> = new Set(Object.values(FLEET_METADATA_VALUES));
 
 export interface AwsOrchestratorConfig {
@@ -119,6 +161,9 @@ export interface AwsOrchestratorConfig {
   readonly shardTag: string;
   /** The runner AMI (`MOTIR_AWS_RUNNER_AMI_ID`). */
   readonly amiId: string;
+  /** The Docker-host AMI an index VM boots (`MOTIR_AWS_INDEXER_AMI_ID`). Unset
+   *  refuses a `code_graph_index` spec before any EC2 call. */
+  readonly indexerAmiId?: string;
   /** Overrides {@link AWS_DEFAULT_INSTANCE_TYPE}. */
   readonly instanceType?: string;
   /** Overrides {@link AWS_REAP_PAGE_SIZE}. */
@@ -145,6 +190,64 @@ function tagOf(instance: Ec2Instance, key: string): string | undefined {
   return instance.tags.find((t) => t.key === key)?.value;
 }
 
+function isIndexInstance(instance: Ec2Instance): boolean {
+  return tagOf(instance, FLEET_METADATA_KEY) === FLEET_METADATA_VALUES.code_graph_index;
+}
+
+interface LaunchPlan {
+  readonly imageId: string;
+  readonly userData: string;
+  readonly shutdownBehavior: 'terminate' | 'stop';
+  /** Tags beyond the fleet's own: the index VM's four attribution tags. */
+  readonly extraTags: readonly Ec2Tag[];
+  readonly tagNetworkInterface: boolean;
+}
+
+/** The index VM's four tags, or a refusal naming the first field it lacks. */
+function indexTags(spec: ContainerSpec): Ec2Tag[] {
+  for (const field of ['orgId', 'projectId', 'repoFullName'] as const) {
+    if (!spec[field]?.trim()) throw new AwsIndexAttributionError(field);
+  }
+  return [
+    // The workload KIND, as the fleet names it (`motir_fleet` keeps the Fly spelling).
+    { key: AWS_INDEX_TAG_KEYS.workload, value: spec.workload },
+    { key: AWS_INDEX_TAG_KEYS.org, value: spec.orgId },
+    { key: AWS_INDEX_TAG_KEYS.project, value: spec.projectId },
+    { key: AWS_INDEX_TAG_KEYS.repo, value: spec.repoFullName },
+  ];
+}
+
+/** The AMI, user-data and power-off behaviour one spec launches with, or a
+ *  refusal before any call. */
+function launchPlan(
+  spec: ContainerSpec,
+  config: Pick<AwsOrchestratorConfig, 'amiId' | 'indexerAmiId'>,
+): LaunchPlan {
+  if (spec.workload !== 'code_graph_index') {
+    return {
+      imageId: config.amiId,
+      userData: encodeUserData(buildRunnerUserData(spec.env)),
+      shutdownBehavior: 'terminate',
+      extraTags: [],
+      tagNetworkInterface: false,
+    };
+  }
+  const extraTags = indexTags(spec);
+  if (!config.indexerAmiId) {
+    throw new OrchestratorNotConfiguredError(
+      'this aws account has no indexer AMI (set MOTIR_AWS_INDEXER_AMI_ID)',
+    );
+  }
+  return {
+    imageId: config.indexerAmiId,
+    userData: encodeUserData(buildIndexUserData(spec)),
+    // Held stopped until teardown, so describe can read the exit code first.
+    shutdownBehavior: 'stop',
+    extraTags,
+    tagNetworkInterface: true,
+  };
+}
+
 /**
  * The instant in `StateTransitionReason`, when AWS gives one — its form is
  * `User initiated (2026-10-22 12:00:00 GMT)`.
@@ -167,8 +270,9 @@ function nameFor(spec: ContainerSpec): string {
     : `${prefix}-${spec.projectId}`;
 }
 
-/** Every tag a launch writes, on the instance and its volumes in the SAME call. */
-function tagsFor(spec: ContainerSpec, shardTag: string): Ec2Tag[] {
+/** Every tag a launch writes, on the instance and its volumes (and an index VM's
+ *  network interface) in the SAME call. Each value is cut to EC2's limit. */
+function tagsFor(spec: ContainerSpec, shardTag: string, extraTags: readonly Ec2Tag[]): Ec2Tag[] {
   return [
     { key: AWS_SHARD_TAG_KEY, value: shardTag },
     { key: FLEET_METADATA_KEY, value: FLEET_METADATA_VALUES[spec.workload] },
@@ -179,12 +283,13 @@ function tagsFor(spec: ContainerSpec, shardTag: string): Ec2Tag[] {
     { key: 'motir_org_id', value: spec.orgId },
     { key: 'motir_project_id', value: spec.projectId },
     { key: 'Name', value: nameFor(spec) },
-  ];
+    ...extraTags,
+  ].map((tag) => ({ key: tag.key, value: tag.value.slice(0, AWS_TAG_VALUE_MAX) }));
 }
 
 /** An AWS adapter for ONE shard (one account, one region). */
 export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerOrchestrator {
-  const { ec2, region, shardTag, amiId } = config;
+  const { ec2, region, shardTag } = config;
   const instanceType = config.instanceType ?? AWS_DEFAULT_INSTANCE_TYPE;
   const pageSize = config.reapPageSize ?? AWS_REAP_PAGE_SIZE;
   const clientToken = config.clientToken ?? (() => randomUUID());
@@ -233,7 +338,7 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
    */
   async function launchInSubnet(
     spec: ContainerSpec,
-    userData: string,
+    { imageId, userData, shutdownBehavior, extraTags, tagNetworkInterface }: LaunchPlan,
     { subnetId, zone }: { subnetId: string; zone: string },
     securityGroupId: string,
   ): Promise<Ec2Instance> {
@@ -242,7 +347,7 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
       try {
         return await ec2.runInstances({
           clientToken: token,
-          imageId: amiId,
+          imageId,
           instanceType,
           subnetId,
           securityGroupIds: [securityGroupId],
@@ -255,7 +360,7 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
             httpPutResponseHopLimit: 1,
             httpEndpoint: 'enabled',
           },
-          instanceInitiatedShutdownBehavior: 'terminate',
+          instanceInitiatedShutdownBehavior: shutdownBehavior,
           blockDeviceMappings:
             spec.dockerVolumeGb && spec.dockerVolumeGb > 0
               ? [
@@ -267,7 +372,8 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
                   },
                 ]
               : [],
-          tags: tagsFor(spec, shardTag),
+          tags: tagsFor(spec, shardTag, extraTags),
+          ...(tagNetworkInterface ? { tagNetworkInterface: true } : {}),
         });
       } catch (err) {
         const retryable = err instanceof Ec2ApiError && err.retryable && !awsCapacityReason(err);
@@ -331,6 +437,30 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
     });
   }
 
+  /**
+   * What a stopped index VM reported on its console — the one channel a VM with
+   * no inbound rule and no credentials has: whether its pull failed, and the
+   * indexer's exit code. A pull failure carries no exit code. A console that
+   * cannot be read is "not known" for both, never a pull failure: the run then
+   * ends as a stop whose code was not observed.
+   */
+  async function indexOutcome(
+    instance: Ec2Instance,
+  ): Promise<{ imagePullFailed?: true; exitCode: number | null }> {
+    let output: string | null;
+    try {
+      output = await ec2.getConsoleOutput(instance.instanceId);
+    } catch (err) {
+      console.warn('[awsOrchestrator] could not read an index VM console', {
+        instanceId: instance.instanceId,
+        detail: err instanceof Ec2ApiError ? err.code : 'unknown',
+      });
+      return { exitCode: null };
+    }
+    if (consoleShowsPullFailure(output)) return { imagePullFailed: true, exitCode: null };
+    return { exitCode: consoleExitCode(output) };
+  }
+
   function gone(handle: ContainerHandle): ContainerStatus {
     return {
       handleId: handle.id,
@@ -360,7 +490,7 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
       if (spec.size.cpus !== 2 || spec.size.memoryMb !== 8192) {
         throw new AwsInstanceSizeError(spec.size.cpus, spec.size.memoryMb);
       }
-      const userData = encodeUserData(buildRunnerUserData(spec.env));
+      const plan = launchPlan(spec, config);
 
       // THE ZONE WALK (MOTIR-9277): from this call's rotation index around the
       // list once, one RunInstances per zone, each with its own token (a refused
@@ -378,7 +508,7 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
         if (tried.has(subnet.zone)) continue;
         tried.add(subnet.zone);
         try {
-          return toHandle(await launchInSubnet(spec, userData, subnet, securityGroupId));
+          return toHandle(await launchInSubnet(spec, plan, subnet, securityGroupId));
         } catch (err) {
           if (!(err instanceof OrchestratorCapacityError) || err.reason !== 'out_of_stock')
             throw err;
@@ -390,9 +520,18 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
 
     async describe(handle: ContainerHandle): Promise<ContainerStatus> {
       const instance = await readInstance(handle.id);
-      if (!instance || instance.state === 'terminated') return gone(handle);
-      const terminal = TERMINAL_STATES.has(instance.state);
+      if (!instance) return gone(handle);
+      const index = isIndexInstance(instance);
+      // An index VM that is still `stopping` has not finished: its console is read
+      // once it reads `stopped`, so the code is never judged missing too early.
+      const terminal =
+        TERMINAL_STATES.has(instance.state) && !(index && instance.state === 'stopping');
+      const stopped = instance.state === 'terminated' || terminal;
+      // Only a stopped index VM is asked: one console read per stop, not per poll.
+      const outcome = stopped && index ? await indexOutcome(instance) : { exitCode: null };
+      if (instance.state === 'terminated') return { ...gone(handle), ...outcome };
       return {
+        ...outcome,
         handleId: handle.id,
         exists: true,
         state: instance.state,
@@ -400,8 +539,6 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
         createdAt: instance.launchTime ?? handle.createdAt,
         startedAt: startedAtOf(instance),
         stoppedAt: terminal ? transitionTimeOf(instance.stateTransitionReason) : null,
-        // EC2 reports no exit status; the port documents null as an answer.
-        exitCode: null,
       };
     },
 
@@ -491,6 +628,100 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
         usages.push(usageFor(handle, instance, 'reaped', attribution));
       }
       return usages;
+    },
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ONE ACCOUNT'S MACHINE LISTING (MOTIR-9450) — the attribution reconciler's view
+// of an AWS fleet account, the `FleetInventory` an indexer-pool account
+// registers. One "app" per account (its shard tag); its machines are EVERY
+// instance the account has in the region that can still bill, tagged or not —
+// an untagged VM is precisely the leak the pass exists to find. `terminated` is
+// gone and never judged. A listing failure THROWS, never an empty list, so the
+// pass skips the account instead of reading "nothing is running".
+
+export interface AwsFleetInventoryConfig {
+  readonly ec2: Ec2Api;
+  readonly region: string;
+  /** The account's shard tag — the one app it lists. */
+  readonly shardTag: string;
+  /** Overrides {@link AWS_REAP_PAGE_SIZE}. */
+  readonly pageSize?: number;
+}
+
+/** EC2's instance state in the port's persistent vocabulary. */
+function inventoryState(state: string): PersistentContainerState {
+  switch (state) {
+    case 'pending':
+      return 'starting';
+    case 'running':
+      return 'running';
+    case 'stopping':
+      return 'stopping';
+    case 'stopped':
+      return 'stopped';
+    default:
+      // shutting-down, terminated: no longer runs anything.
+      return 'gone';
+  }
+}
+
+export function createAwsFleetInventory(config: AwsFleetInventoryConfig): FleetInventory {
+  const { ec2, region, shardTag } = config;
+  const pageSize = config.pageSize ?? AWS_REAP_PAGE_SIZE;
+  return {
+    provider: 'aws',
+
+    async listApps() {
+      return [shardTag];
+    },
+
+    async listMachines(app) {
+      if (app !== shardTag) return [];
+      const machines: InventoryMachine[] = [];
+      let nextToken: string | undefined;
+      do {
+        let page;
+        try {
+          page = await ec2.describeInstances({
+            filters: [{ name: 'instance-state-name', values: LIVE_STATES }],
+            maxResults: pageSize,
+            nextToken,
+          });
+        } catch (err) {
+          throw apiError(err);
+        }
+        for (const instance of page.instances) {
+          machines.push({
+            app,
+            machineId: instance.instanceId,
+            name: tagOf(instance, 'Name') ?? '',
+            region,
+            state: inventoryState(instance.state),
+            createdAt: instance.launchTime,
+            metadata: Object.fromEntries(instance.tags.map((t) => [t.key, t.value])),
+          });
+        }
+        nextToken = page.nextToken ?? undefined;
+      } while (nextToken);
+      return machines;
+    },
+
+    /** Terminate, in THIS account. Idempotent on an instance already gone. */
+    async destroyMachine(_app, machineId) {
+      try {
+        await ec2.terminateInstances([machineId]);
+      } catch (err) {
+        if (isGone(err)) return;
+        throw apiError(err);
+      }
+    },
+
+    /** An AWS account holds no persistent machine to rest: nothing the
+     *  reconciler would stop runs here, so a stop is refused, never guessed. */
+    async stopMachine() {
+      throw new OrchestratorNotConfiguredError('an aws fleet account holds no persistent machines');
     },
   };
 }

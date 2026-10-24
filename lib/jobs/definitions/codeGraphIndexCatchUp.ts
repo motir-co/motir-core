@@ -23,6 +23,8 @@ export const codeGraphIndexCatchUp = defineJob(
     retryPolicy: 'idempotent',
   },
   (ctx, services) => {
-    return ctx.step.run('catch-up-paused-indexes', () => services.codeGraphIndexCatchUp.catchUp());
+    return ctx.step.run('catch-up-paused-indexes-v2', () =>
+      services.codeGraphIndexCatchUp.catchUp(),
+    );
   },
 );

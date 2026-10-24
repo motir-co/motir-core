@@ -9,6 +9,7 @@ import {
   type IndexAdmissionVerdict,
 } from '@/lib/services/codeGraphIndexAdmissionService';
 import { fleetCeilingService } from '@/lib/services/fleetCeilingService';
+import { fleetShardAdmissionService } from '@/lib/services/fleetShardAdmissionService';
 import { ciRunnerAdmissionService } from '@/lib/services/ciRunnerAdmissionService';
 import { fleetInFlightSlotRepository } from '@/lib/repositories/fleetInFlightSlotRepository';
 import { ciFleetAdmissionLockRepository } from '@/lib/repositories/ciFleetAdmissionLockRepository';
@@ -19,9 +20,11 @@ import {
 } from '@/lib/ciFleet/limits';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
+import { wireFleetKindSwitch } from '@/lib/ciFleet/shardTargets';
+import type { FleetShard } from '@/generated/prisma/client';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
-import { randomInt } from '../helpers/random';
+import { randomInt, randomToken } from '../helpers/random';
 import { grantPaidAiPlan } from '../helpers/paidAiPlan';
 
 // THE INDEX ADMISSION CAP against real Postgres (Story MOTIR-1981 · MOTIR-1990) —
@@ -1095,5 +1098,235 @@ describe('nothing bypasses the index caps', () => {
 
     expect((await admit(fx, 'moooon/a')).outcome).toBe('admitted');
     expect(await admit(await seedTenant(), 'moooon/b')).toMatchObject({ reason: 'index_cap' });
+  });
+});
+
+// ── The indexer's own account pool (MOTIR-9445) ──────────────────────────────
+
+describe("an admitted index lands on an account of the INDEXER'S pool", () => {
+  /** One account of a kind's pool, with room for `machineLimit` containers. */
+  function account(machineLimit: number, fleetKind = 'code_graph_index'): Promise<FleetShard> {
+    const slug = randomToken(6).toLowerCase();
+    return adminDb.fleetShard.create({
+      data: {
+        name: `acct-${slug}`,
+        fleetKind,
+        provider: 'fly',
+        state: 'active',
+        githubOrg: MOTIR_ORG,
+        githubInstallationId: '556677',
+        flyOrg: 'motir',
+        flyApp: `motir-idx-${slug}`,
+        flyRegion: 'iad',
+        credentialRef: 'FLEET_SHARD_TEST_TOKEN',
+        machineLimit,
+      },
+    });
+  }
+
+  /** Fill `count` units of an account with live index slots of other projects. */
+  async function occupy(shard: FleetShard, count: number): Promise<void> {
+    for (let i = 0; i < count; i += 1) {
+      await withSystemContext((tx) =>
+        fleetInFlightSlotRepository.take(
+          {
+            workload: 'code_graph_index',
+            ref: `busy:${shard.id}:${i}`,
+            // A filler org, so no tenant under test is near its own cap.
+            organizationId: 'org-filler',
+            expiresAt: new Date(NOW.getTime() + CONTAINER_TIMEOUT_MS * 2),
+            fleetShardId: shard.id,
+          },
+          tx,
+        ),
+      );
+    }
+  }
+
+  function slotShard(fx: Fixture, repoRef: string): Promise<string | null | undefined> {
+    return adminDb.fleetInFlightSlot
+      .findUnique({
+        where: {
+          workload_ref: { workload: 'code_graph_index', ref: indexSlotRef(fx.projectId, repoRef) },
+        },
+      })
+      .then((row) => row?.fleetShardId);
+  }
+
+  beforeEach(async () => {
+    await adminDb.fleetShard.deleteMany({});
+    vi.stubEnv('MOTIR_INDEX_MAX_IN_FLIGHT', '12');
+    vi.stubEnv('MOTIR_INDEX_FLEET_PROVIDER', 'aws');
+  });
+
+  afterEach(async () => {
+    // The slot's FK onto the account is RESTRICT: slots first.
+    await adminDb.fleetInFlightSlot.deleteMany({});
+    await adminDb.fleetShard.deleteMany({});
+    wireFleetKindSwitch('ci_runner', null);
+  });
+
+  it('switch OFF: admitted with no account, whatever the other kinds say', async () => {
+    vi.stubEnv('MOTIR_INDEX_FLEET_PROVIDER', '');
+    wireFleetKindSwitch('ci_runner', () => true);
+    await account(4);
+    const fx = await seedTenant();
+
+    const verdict = await admit(fx, 'moooon/off');
+
+    expect(verdict.outcome).toBe('admitted');
+    if (verdict.outcome !== 'admitted') throw new Error('expected an admission');
+    expect(verdict.admission.shardId).toBeNull();
+    expect(await slotShard(fx, 'moooon/off')).toBeNull();
+  });
+
+  it('switch ON: takes the roomier account, on the slot and on the admission', async () => {
+    const tight = await account(3);
+    const roomy = await account(5);
+    await occupy(tight, 1);
+    const fx = await seedTenant();
+
+    const verdict = await admit(fx, 'moooon/on');
+
+    if (verdict.outcome !== 'admitted') throw new Error('expected an admission');
+    expect(verdict.admission.shardId).toBe(roomy.id);
+    expect(verdict.admission.detail).toContain(roomy.id);
+    expect(await slotShard(fx, 'moooon/on')).toBe(roomy.id);
+  });
+
+  it("never takes another kind's account", async () => {
+    await account(8, 'ci_runner');
+    const own = await account(1);
+    const fx = await seedTenant();
+
+    const verdict = await admit(fx, 'moooon/own');
+    if (verdict.outcome !== 'admitted') throw new Error('expected an admission');
+    expect(verdict.admission.shardId).toBe(own.id);
+
+    // The indexer's pool is now full; the roomy CI account is NOT a fallback.
+    expect(await admit(await seedTenant(), 'moooon/next')).toMatchObject({
+      outcome: 'deferred',
+      reason: 'pool_full',
+    });
+  });
+
+  it('every account full: deferred pool_full, no slot taken, nothing on Fly', async () => {
+    const only = await account(2);
+    await occupy(only, 2);
+    const before = await indexInFlight();
+    const fx = await seedTenant();
+
+    const verdict = await admit(fx, 'moooon/full');
+
+    expect(verdict).toMatchObject({
+      outcome: 'deferred',
+      reason: 'pool_full',
+      detail: expect.stringContaining('pool'),
+    });
+    expect(await indexInFlight()).toBe(before);
+    expect(await slotShard(fx, 'moooon/full')).toBeUndefined();
+  });
+
+  it('no account at all with the switch on is also pool_full — never a Fly fallback', async () => {
+    const verdict = await admit(await seedTenant(), 'moooon/empty');
+    expect(verdict).toMatchObject({ outcome: 'deferred', reason: 'pool_full' });
+    expect(await indexInFlight()).toBe(0);
+  });
+
+  it("already_held answers the held slot's account; another dispatch waits", async () => {
+    const shard = await account(4);
+    const fx = await seedTenant();
+    expect(await admit(fx, 'moooon/held', 'evt-A')).toMatchObject({ outcome: 'admitted' });
+
+    const redelivery = await admit(fx, 'moooon/held', 'evt-A');
+    if (redelivery.outcome !== 'already_held') throw new Error('expected already_held');
+    expect(redelivery.admission.shardId).toBe(shard.id);
+
+    expect(await admit(fx, 'moooon/held', 'evt-B')).toMatchObject({
+      outcome: 'deferred',
+      reason: 'repo_index_in_flight',
+    });
+  });
+
+  // Every earlier refusal is decided BEFORE the pool is read: a full pool must not
+  // mask the reason an operator actually needs to see.
+  it('kill switch, single-flight, org cap and global cap all come before the account', async () => {
+    const only = await account(1);
+    await occupy(only, 1);
+
+    vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '0');
+    expect(await admit(await seedTenant())).toMatchObject({ reason: 'fleet_ceiling' });
+    vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '');
+
+    // Single-flight: the holder took its slot while the pool still had room.
+    await adminDb.fleetInFlightSlot.deleteMany({});
+    const fx = await seedTenant();
+    expect((await admit(fx, 'moooon/sf', 'evt-A')).outcome).toBe('admitted');
+    expect(await admit(fx, 'moooon/sf', 'evt-B')).toMatchObject({
+      reason: 'repo_index_in_flight',
+    });
+
+    // Org cap (ceil(2/2) = 1) and global cap (2/2), both with the pool full.
+    vi.stubEnv('MOTIR_INDEX_MAX_IN_FLIGHT', '2');
+    expect(await admit(fx, 'moooon/sf-2')).toMatchObject({ reason: 'org_index_cap' });
+    await withSystemContext((tx) =>
+      fleetInFlightSlotRepository.take(
+        {
+          workload: 'code_graph_index',
+          ref: 'other:org',
+          organizationId: 'org-other',
+          expiresAt: new Date(NOW.getTime() + CONTAINER_TIMEOUT_MS * 2),
+        },
+        tx,
+      ),
+    );
+    expect(await admit(await seedTenant())).toMatchObject({ reason: 'index_cap' });
+  });
+
+  // ⚠️ MUTATION-CHECK THIS TEST: comment out the `lockScope` call in
+  // `codeGraphIndexAdmissionService.admit` and it MUST go red — every racer reads
+  // the same free unit and all of them land on it. The choice is held open for a
+  // beat before the take, so the racers genuinely overlap between "this account
+  // has one unit free" and the INSERT that spends it; under the lock they simply
+  // queue behind each other.
+  it('admits exactly one of many racing for the last unit of the pool', async () => {
+    const shard = await account(3);
+    await occupy(shard, 2);
+    const tenants = await Promise.all(Array.from({ length: 6 }, () => seedTenant()));
+    // The lock's anchor row exists before the race, as it does in production. A
+    // FIRST admission inserts it, and a racer blocking on that uncommitted insert
+    // would serialize the race with or without the lock — hiding the mutation.
+    await withSystemContext((tx) => ciFleetAdmissionLockRepository.ensureScope('fleet', tx));
+    const choose = fleetShardAdmissionService.chooseInTx.bind(fleetShardAdmissionService);
+    vi.spyOn(fleetShardAdmissionService, 'chooseInTx').mockImplementation(async (...args) => {
+      const placement = await choose(...args);
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      return placement;
+    });
+
+    const verdicts = await Promise.all(tenants.map((fx, i) => admit(fx, `moooon/last-${i}`)));
+
+    expect(verdicts.filter((v) => v.outcome === 'admitted')).toHaveLength(1);
+    expect(verdicts.filter((v) => v.outcome === 'deferred')).toHaveLength(5);
+    expect(
+      await withSystemContext((tx) =>
+        fleetInFlightSlotRepository.countLiveForWorkloadOnShard(
+          'code_graph_index',
+          shard.id,
+          NOW,
+          tx,
+        ),
+      ),
+    ).toBe(3);
+  });
+
+  it('an admission naming its account survives a JSON round-trip (a replayed step)', async () => {
+    const shard = await account(2);
+    const verdict = await admit(await seedTenant(), 'moooon/json');
+    if (verdict.outcome !== 'admitted') throw new Error('expected an admission');
+
+    const replayed = JSON.parse(JSON.stringify(verdict.admission)) as typeof verdict.admission;
+    expect(replayed).toEqual(verdict.admission);
+    expect(replayed.shardId).toBe(shard.id);
   });
 });

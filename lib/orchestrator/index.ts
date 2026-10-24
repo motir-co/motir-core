@@ -1,4 +1,5 @@
 import {
+  createAwsFleetInventory,
   createAwsOrchestrator,
   createEc2Api,
   createFakeOrchestrator,
@@ -235,6 +236,38 @@ function flyOrchestratorForShard(shard: FleetShardDTO): ContainerOrchestrator {
 /** The env var naming the runner AMI every AWS account boots (MOTIR-9272). */
 export const AWS_RUNNER_AMI_ENV_VAR = 'MOTIR_AWS_RUNNER_AMI_ID';
 
+/** The env var naming the Docker-host AMI an AWS index VM boots (MOTIR-9446) —
+ *  the ECS-optimized Amazon Linux 2023 AMI. Optional: unset, the account still
+ *  boots runners and refuses an index spec as not configured. */
+export const AWS_INDEXER_AMI_ENV_VAR = 'MOTIR_AWS_INDEXER_AMI_ID';
+
+/**
+ * One AWS account's EC2 client, from its own runtime key. Throws naming every
+ * missing variable at once (with any the caller adds), as `indexFleetConfig` does.
+ */
+function awsAccountEc2(
+  shard: FleetShardDTO,
+  alsoMissing: readonly string[] = [],
+): { ec2: ReturnType<typeof createEc2Api>; region: string } {
+  const keyIdVar = `${shard.credentialRef}_ACCESS_KEY_ID`;
+  const secretVar = `${shard.credentialRef}_SECRET_ACCESS_KEY`;
+  const accessKeyId = process.env[keyIdVar]?.trim();
+  const secretAccessKey = process.env[secretVar]?.trim();
+  const missing = [
+    ...(accessKeyId ? [] : [keyIdVar]),
+    ...(secretAccessKey ? [] : [secretVar]),
+    ...alsoMissing,
+  ];
+  if (missing.length > 0 || !accessKeyId || !secretAccessKey) {
+    throw new OrchestratorNotConfiguredError(`set ${missing.join(', ')}`);
+  }
+  if (!shard.aws) {
+    throw new OrchestratorNotConfiguredError(`fleet account ${shard.name} names no AWS location`);
+  }
+  const { region } = shard.aws;
+  return { ec2: createEc2Api({ accessKeyId, secretAccessKey, region }), region };
+}
+
 /**
  * An AWS account's orchestrator (MOTIR-9276): its own IAM key, read from
  * `<credentialRef>_ACCESS_KEY_ID` / `<credentialRef>_SECRET_ACCESS_KEY` (the
@@ -242,29 +275,15 @@ export const AWS_RUNNER_AMI_ENV_VAR = 'MOTIR_AWS_RUNNER_AMI_ID';
  * region. The shard tag is the account's name — what its network is tagged with.
  */
 function awsOrchestratorForShard(shard: FleetShardDTO): ContainerOrchestrator {
-  const keyIdVar = `${shard.credentialRef}_ACCESS_KEY_ID`;
-  const secretVar = `${shard.credentialRef}_SECRET_ACCESS_KEY`;
-  const accessKeyId = process.env[keyIdVar]?.trim();
-  const secretAccessKey = process.env[secretVar]?.trim();
   const amiId = process.env[AWS_RUNNER_AMI_ENV_VAR]?.trim();
-  // Every missing variable at once, as `indexFleetConfig` does.
-  const missing = [
-    ...(accessKeyId ? [] : [keyIdVar]),
-    ...(secretAccessKey ? [] : [secretVar]),
-    ...(amiId ? [] : [AWS_RUNNER_AMI_ENV_VAR]),
-  ];
-  if (missing.length > 0 || !accessKeyId || !secretAccessKey || !amiId) {
-    throw new OrchestratorNotConfiguredError(`set ${missing.join(', ')}`);
-  }
-  if (!shard.aws) {
-    throw new OrchestratorNotConfiguredError(`fleet account ${shard.name} names no AWS location`);
-  }
-  const { region } = shard.aws;
+  const { ec2, region } = awsAccountEc2(shard, amiId ? [] : [AWS_RUNNER_AMI_ENV_VAR]);
+  if (!amiId) throw new OrchestratorNotConfiguredError(`set ${AWS_RUNNER_AMI_ENV_VAR}`);
   return createAwsOrchestrator({
-    ec2: createEc2Api({ accessKeyId, secretAccessKey, region }),
+    ec2,
     region,
     shardTag: shard.name,
     amiId,
+    indexerAmiId: process.env[AWS_INDEXER_AMI_ENV_VAR]?.trim() || undefined,
   });
 }
 
@@ -294,15 +313,23 @@ export function orchestratorForShard(shard: FleetShardDTO): ContainerOrchestrato
  * The machine listing for ONE account, for the reconciler. Null for `fly`: the
  * Fly ORGANISATION inventory already walks every Fly app, and a second listing
  * would judge each machine twice.
+ *
+ * An AWS account of the INDEXER pool lists every instance it has (MOTIR-9450),
+ * with that account's own key, so an index VM no record owns is reaped there. A
+ * CI-runner AWS account has none: its runners are swept by the adapter's
+ * tag-scoped reaper, and its key may only terminate shard-tagged instances. With
+ * the fake orchestrator selected nothing reads EC2.
  */
 export function inventoryForShard(shard: FleetShardDTO): FleetInventory | null {
   switch (shard.provider) {
     case 'fly':
       return null;
-    // No AWS listing yet: the AWS reaper sweeps each account by its shard tag,
-    // and the attribution reconciler does not read EC2.
-    case 'aws':
-      return null;
+    case 'aws': {
+      if (shard.fleetKind !== 'code_graph_index') return null;
+      if (selectedOrchestratorProvider() === 'fake') return null;
+      const { ec2, region } = awsAccountEc2(shard);
+      return createAwsFleetInventory({ ec2, region, shardTag: shard.name });
+    }
     default: {
       const unrouted: never = shard.provider;
       return registeredAdapter(unrouted).inventory(shard);

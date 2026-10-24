@@ -42,6 +42,16 @@ export const AWS_SPEC: ContainerSpec = {
   region: 'us-east-1',
 };
 
+/** The Docker-host AMI an index VM boots (MOTIR-9446). */
+export const AWS_INDEXER_AMI_ID = 'ami-0fedcba9876543210';
+
+/** What an index spec carries that a runner's does not: an image pinned by
+ *  digest, which the index VM pulls, and the indexer's own env. */
+export const AWS_INDEX_SPEC_OVERRIDES: Partial<ContainerSpec> = {
+  image: `ghcr.io/motir-co/motir-indexer@sha256:${'b'.repeat(64)}`,
+  env: { MOTIR_INDEX_RUN_CREDENTIAL: 'run-cred', MOTIR_INDEX_PROJECT_ID: 'proj-1' },
+};
+
 export const AWS_ATTRIBUTION: UsageAttribution = {
   orgId: 'org-1',
   workspaceId: 'ws-1',
@@ -60,6 +70,7 @@ export function awsHarness(): OrchestratorContractHarness {
     region: 'us-east-1',
     shardTag: AWS_SHARD_TAG,
     amiId: AWS_AMI_ID,
+    indexerAmiId: AWS_INDEXER_AMI_ID,
   });
   return {
     orchestrator,
@@ -67,7 +78,11 @@ export function awsHarness(): OrchestratorContractHarness {
       ec2.clear();
       ec2.seedShardNetwork(AWS_SHARD_TAG, AWS_ZONES);
     },
-    spec: (overrides = {}) => ({ ...AWS_SPEC, ...overrides }),
+    spec: (overrides = {}) => ({
+      ...AWS_SPEC,
+      ...(overrides.workload === 'code_graph_index' ? AWS_INDEX_SPEC_OVERRIDES : {}),
+      ...overrides,
+    }),
     attribution: (overrides = {}) => ({ ...AWS_ATTRIBUTION, ...overrides }),
     // A 4xx: refused outright, not retried.
     failNextProvision: () => ec2.failNext('runInstances', 'InvalidParameterValue', 400),

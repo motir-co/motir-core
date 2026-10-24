@@ -191,6 +191,15 @@ describe('the three threshold states are told apart (AC 2)', () => {
     });
   });
 
+  it('a full indexer pool is not the org’s pause: the card reads no pause (MOTIR-9451)', async () => {
+    const org = await seedOrg();
+    await adminDb.githubRepo.updateMany({
+      where: { workspaceId: org.workspaceId },
+      data: { indexPausedReason: 'paused_index_pool_full', indexPausedAt: new Date() },
+    });
+    expect((await enabled(org.organizationId)).pause).toBeNull();
+  });
+
   it('the card renders state (b) in the INFO family and the stops in danger — never (b) as a failure', () => {
     const source = readFileSync(
       'app/(admin)/admin/tenants/[orgId]/_components/OrgIndexCostCard.tsx',
