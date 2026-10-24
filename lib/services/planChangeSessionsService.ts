@@ -1433,11 +1433,15 @@ async function releasePlanAgainClaim(
  * settled, or `undefined`. Only a conversation is grilled before planning, and only
  * by the person whose conversation it is, so any other session carries nothing.
  */
-async function carriedAnswersFor(
-  session: PlanChangeSession,
+export async function carriedAnswersFor(
+  // `createdById` is absent on the session DTO the ask paths hold, which reads only the
+  // caller's own conversation (`findResumable` / `getById`); the grilling read below is
+  // the caller's too, so a missing owner is not a second person's answers (MOTIR-9442).
+  session: { id: string; origin: string; createdById?: string | null },
   pctx: ProjectContext,
 ): Promise<CarriedAnswers | undefined> {
-  if (session.origin !== 'conversation' || session.createdById !== pctx.userId) return undefined;
+  if (session.origin !== 'conversation') return undefined;
+  if (session.createdById !== undefined && session.createdById !== pctx.userId) return undefined;
   return toCarriedAnswers(await aiSharpenService.getSettledForConversation(session.id, pctx));
 }
 

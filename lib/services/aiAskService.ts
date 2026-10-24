@@ -9,9 +9,17 @@ import { planChangeMailboxService } from '@/lib/services/planChangeMailboxServic
 import { planChangeLateChangeService } from '@/lib/services/planChangeLateChangeService';
 import { plansService } from '@/lib/services/plansService';
 import type { MailboxDeliveryDto } from '@/lib/dto/planChangeMailbox';
-import type { JobContextBag, JobStreamEvent } from '@/lib/ai/types';
+import type {
+  AskConversationTurn,
+  CarriedAnswers,
+  JobContextBag,
+  JobStreamEvent,
+} from '@/lib/ai/types';
 import { projectAccessService } from '@/lib/services/projectAccessService';
-import { planChangeSessionsService } from '@/lib/services/planChangeSessionsService';
+import {
+  planChangeSessionsService,
+  carriedAnswersFor,
+} from '@/lib/services/planChangeSessionsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { readAskOutcome } from '@/lib/planning/askResult';
 import { planOfferService, type PendingPlanOfferStatement } from '@/lib/services/planOfferService';
@@ -193,6 +201,33 @@ function tenantFor(
   };
 }
 
+/** The most earlier turns an `ask_project` submit carries. */
+export const ASK_CONVERSATION_TURNS_MAX = 20;
+
+/**
+ * The conversation's earlier turns as `ask_project` reads them (MOTIR-9442): a person
+ * turn is its body, a Motir turn its answer text; system turns and blank ones are
+ * dropped, and only the last {@link ASK_CONVERSATION_TURNS_MAX} stay, oldest first.
+ * Pass the turns BEFORE the one being answered.
+ */
+export function conversationTurnsOf(
+  turns: readonly Pick<PlanChangeTurnDto, 'role' | 'body'>[],
+): AskConversationTurn[] {
+  const out: AskConversationTurn[] = [];
+  for (const t of turns) {
+    if (t.role === 'system') continue;
+    const text = t.body.trim();
+    if (text) out.push({ role: t.role === 'user' ? 'person' : 'motir', text });
+  }
+  return out.slice(-ASK_CONVERSATION_TURNS_MAX);
+}
+
+/** What a conversation turn tells the answering session about the conversation so far. */
+interface AskConversation {
+  turns: AskConversationTurn[];
+  carriedAnswers?: CarriedAnswers;
+}
+
 /** Submit ONE conversation job — always `ask_project` (MOTIR-9231). The gate + tenant resolution are the shipped ones
  *  (`aiChatService.submitDiscoveryTurn`'s shape); nothing about metering or
  *  availability is re-implemented here — an out-of-credits org surfaces as the
@@ -209,6 +244,8 @@ async function submitAsk(
   /** NO RUN only (MOTIR-9290): the offer standing when the person spoke, read before
    *  their turn was appended; undefined when none is, so the key is not sent. */
   pendingPlanOffer?: PendingPlanOfferStatement,
+  /** The earlier turns, and the Grill me answers on a no-run turn (MOTIR-9442). */
+  conversation?: AskConversation,
 ): Promise<{ jobId: string }> {
   const { organizationId, isMeta, internalBilling } = await resolveTenantOrg({
     userId: ctx.userId,
@@ -235,6 +272,10 @@ async function submitAsk(
     // One carrier per fact: with a run, the snapshot's own `pendingOffer` states it.
     ...(!run && pendingPlanOffer ? { pendingPlanOffer } : {}),
     ...(code ? { code } : {}),
+    ...(conversation && conversation.turns.length > 0
+      ? { conversationTurns: conversation.turns }
+      : {}),
+    ...(conversation?.carriedAnswers ? { carriedAnswers: conversation.carriedAnswers } : {}),
   };
   return submitJob(
     'ask_project',
@@ -252,6 +293,15 @@ async function submitAsk(
 interface TurnAttempt {
   turnId: string;
   attempt: string | null;
+}
+
+/** `{ carriedAnswers }` when the conversation settled any, else nothing to spread. */
+async function carriedAnswersOrNone(
+  session: Pick<PlanChangeSessionDto, 'id' | 'origin'>,
+  ctx: ProjectContext,
+): Promise<{ carriedAnswers?: CarriedAnswers }> {
+  const carriedAnswers = await carriedAnswersFor(session, ctx);
+  return carriedAnswers ? { carriedAnswers } : {};
 }
 
 function attemptOf(turn: PlanChangeTurnDto): TurnAttempt {
@@ -705,6 +755,12 @@ export const aiAskService = {
     // Read BEFORE the append, so it is the offer standing when the person spoke
     // (MOTIR-9290) — the shape `submitMidRunTurn` uses for its forward offer.
     const pendingPlanOffer = planOfferService.statingPending(current.turns);
+    // The same read gives the earlier turns (MOTIR-9442); the Grill me answers are read
+    // NOW, at submit, so a Stop or Grill me switched off still carries what was settled.
+    const conversation: AskConversation = {
+      turns: conversationTurnsOf(current.turns),
+      ...(await carriedAnswersOrNone(current, ctx)),
+    };
     const appended = await planChangeSessionsService.appendTurn(trimmed, ctx, address, {
       intent: 'ask',
       // Recorded even here: a turn sent from the answer bar when nothing was
@@ -725,6 +781,7 @@ export const aiAskService = {
       undefined,
       attemptOf(turn),
       pendingPlanOffer,
+      conversation,
     );
     const session = await planChangeSessionsService.recordTurnIntent(
       turn.id,
@@ -788,7 +845,11 @@ export const aiAskService = {
       ctx,
       pendingOffer,
     );
-    const { jobId } = await submitAsk(trimmed, null, ctx, run, attemptOf(turn));
+    // The earlier turns, never the carried answers: a run in flight is past grilling, and
+    // carrying them would suppress a grilling the person has not had (MOTIR-9442).
+    const { jobId } = await submitAsk(trimmed, null, ctx, run, attemptOf(turn), undefined, {
+      turns: conversationTurnsOf(current.turns),
+    });
     const session = await planChangeSessionsService.recordTurnIntent(
       turn.id,
       'ask',
@@ -876,6 +937,10 @@ export const aiAskService = {
       opts.flip ? undefined : attemptOf(turn),
       // The offer that stood when this turn was first typed: the thread before it.
       planOfferService.statingPending(current.turns.filter((t) => t.seq < turn.seq)),
+      {
+        turns: conversationTurnsOf(current.turns.filter((t) => t.seq < turn.seq)),
+        ...(turn.runJobId ? {} : await carriedAnswersOrNone(current, ctx)),
+      },
     );
     const session = await planChangeSessionsService.recordTurnIntent(
       turnId,

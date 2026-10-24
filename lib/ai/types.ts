@@ -593,6 +593,18 @@ export interface JobContextBag {
   // fields, and spread conditionally for the same reason: absent means there is
   // nothing to carry.
   carriedAnswers?: CarriedAnswers;
+  // THE CONVERSATION'S EARLIER TURNS on an `ask_project` submit (MOTIR-9442 producer ↔
+  // MOTIR-9435 consumer): oldest first, the turn being answered excluded, the last 20,
+  // blank ones dropped. Absent on a conversation's first turn, never `[]`. With
+  // `carriedAnswers` above (no-run turns only) it lets the answering session compose
+  // and re-compose a plan offer's requirement.
+  conversationTurns?: AskConversationTurn[];
+}
+
+/** One earlier turn of the conversation, as `ask_project` reads it. */
+export interface AskConversationTurn {
+  role: 'person' | 'motir';
+  text: string;
 }
 
 /**
