@@ -96,10 +96,17 @@ export interface PersistentContractHarness {
   advance(ms: number): void;
   /** The next machine create fails AFTER its volume was created. */
   failNextMachineCreate(): void;
-  /** Every later `exec` behaves as `behaviour` says, until it is set again. */
-  setExecBehaviour(behaviour: PersistentExecBehaviour): void;
-  /** The commands that reached a machine, in order. */
-  execs(): PersistentExecRecord[];
+  /**
+   * Port operations this adapter does not implement YET, so their cases are
+   * skipped for it (MOTIR-9469: the AWS adapter's lifecycle lands before its
+   * reach channel). Absent for an adapter that implements the whole port.
+   */
+  readonly pending?: ReadonlyArray<'exec' | 'list'>;
+  /** Every later `exec` behaves as `behaviour` says, until it is set again.
+   *  Required unless `exec` is pending. */
+  setExecBehaviour?(behaviour: PersistentExecBehaviour): void;
+  /** The commands that reached a machine, in order. Required unless `exec` is pending. */
+  execs?(): PersistentExecRecord[];
   /** The machine vanished outside Motir (a console, a lost host); its volume stays. */
   destroyOutOfBand(handle: PersistentContainerHandle, options?: { machine?: boolean }): void;
   /** A machine made by hand in `app`, with no instance metadata. Answers its id. */
@@ -122,6 +129,13 @@ export function describePersistentContract(
   describe(`the PersistentContainerOrchestrator contract — ${name}`, () => {
     const harness = makeHarness();
     const { orchestrator } = harness;
+    const noExec = harness.pending?.includes('exec') ?? false;
+    const noList = harness.pending?.includes('list') ?? false;
+    function execControls() {
+      const { setExecBehaviour, execs } = harness;
+      if (!setExecBehaviour || !execs) throw new Error(`${name}: the exec controls are missing`);
+      return { setExecBehaviour: setExecBehaviour.bind(harness), execs: execs.bind(harness) };
+    }
 
     beforeEach(() => {
       harness.reset();
@@ -223,39 +237,47 @@ export function describePersistentContract(
       expect(status.events).toEqual([]);
     });
 
-    it('8 · exec returns a non-zero exit as a result, and delivers stdin to the command', async () => {
-      const handle = await provisioned();
-      harness.setExecBehaviour({ exitCode: 3, stdout: 'partial', stderr: 'boom' });
-      const result = await orchestrator.exec(handle, ['git', 'clone', 'x']);
-      expect(result).toEqual({ exitCode: 3, stdout: 'partial', stderr: 'boom' });
+    it.skipIf(noExec)(
+      '8 · exec returns a non-zero exit as a result, and delivers stdin to the command',
+      async () => {
+        const handle = await provisioned();
+        const { setExecBehaviour, execs } = execControls();
+        setExecBehaviour({ exitCode: 3, stdout: 'partial', stderr: 'boom' });
+        const result = await orchestrator.exec(handle, ['git', 'clone', 'x']);
+        expect(result).toEqual({ exitCode: 3, stdout: 'partial', stderr: 'boom' });
 
-      harness.setExecBehaviour({ exitCode: 0, stdout: 'ok' });
-      await orchestrator.exec(handle, ['motir', 'launch'], { stdin: 'secret-token' });
-      const last = harness.execs().at(-1);
-      expect(last).toMatchObject({ machineId: handle.machineId, stdin: 'secret-token' });
-      expect(last?.command).toEqual(['motir', 'launch']);
-    });
+        setExecBehaviour({ exitCode: 0, stdout: 'ok' });
+        await orchestrator.exec(handle, ['motir', 'launch'], { stdin: 'secret-token' });
+        const last = execs().at(-1);
+        expect(last).toMatchObject({ machineId: handle.machineId, stdin: 'secret-token' });
+        expect(last?.command).toEqual(['motir', 'launch']);
+      },
+    );
 
-    it('9 · checkLiveness answers exit, timeout and unreachable, and alive for exit 0 — never a throw', async () => {
-      const handle = await provisioned();
-      harness.setExecBehaviour({ exitCode: 127, stderr: 'agent: not found' });
-      expect(await orchestrator.checkLiveness(handle, LIVENESS)).toMatchObject({
-        alive: false,
-        reason: 'exit',
-        exitCode: 127,
-      });
-      harness.setExecBehaviour({ hangs: true });
-      expect(
-        await orchestrator.checkLiveness(handle, LIVENESS, { timeoutSeconds: 5 }),
-      ).toMatchObject({ alive: false, reason: 'timeout' });
-      harness.setExecBehaviour({ unreachable: true });
-      expect(await orchestrator.checkLiveness(handle, LIVENESS)).toMatchObject({
-        alive: false,
-        reason: 'unreachable',
-      });
-      harness.setExecBehaviour({ exitCode: 0 });
-      expect(await orchestrator.checkLiveness(handle, LIVENESS)).toEqual({ alive: true });
-    });
+    it.skipIf(noExec)(
+      '9 · checkLiveness answers exit, timeout and unreachable, and alive for exit 0 — never a throw',
+      async () => {
+        const handle = await provisioned();
+        const { setExecBehaviour } = execControls();
+        setExecBehaviour({ exitCode: 127, stderr: 'agent: not found' });
+        expect(await orchestrator.checkLiveness(handle, LIVENESS)).toMatchObject({
+          alive: false,
+          reason: 'exit',
+          exitCode: 127,
+        });
+        setExecBehaviour({ hangs: true });
+        expect(
+          await orchestrator.checkLiveness(handle, LIVENESS, { timeoutSeconds: 5 }),
+        ).toMatchObject({ alive: false, reason: 'timeout' });
+        setExecBehaviour({ unreachable: true });
+        expect(await orchestrator.checkLiveness(handle, LIVENESS)).toMatchObject({
+          alive: false,
+          reason: 'unreachable',
+        });
+        setExecBehaviour({ exitCode: 0 });
+        expect(await orchestrator.checkLiveness(handle, LIVENESS)).toEqual({ alive: true });
+      },
+    );
 
     it('10 · destroyPersistent takes the machine, THEN the volume', async () => {
       const handle = await provisioned();
@@ -281,30 +303,33 @@ export function describePersistentContract(
       expect(harness.liveVolumeIds(b.app)).toEqual([]);
     });
 
-    it('12 · lists every machine and volume of one app, and an app that does not exist as empty', async () => {
-      const a = await provisioned();
-      const b = await provisioned({ instanceId: 'inst-contract-b' });
-      const inventory = await orchestrator.listPersistent(a.app);
-      expect(inventory.app).toBe(a.app);
-      expect(inventory.machines.map((m) => m.machineId).sort()).toEqual(
-        [a.machineId, b.machineId].sort(),
-      );
-      const byMachine = new Map(inventory.machines.map((m) => [m.machineId, m]));
-      expect(byMachine.get(a.machineId)).toMatchObject({
-        state: 'running',
-        instanceId: harness.spec().instanceId,
-      });
-      expect(byMachine.get(b.machineId)?.instanceId).toBe('inst-contract-b');
-      expect(byMachine.get(a.machineId)?.createdAt).toBeInstanceOf(Date);
-      const byVolume = new Map(inventory.volumes.map((v) => [v.volumeId, v]));
-      expect([...byVolume.keys()].sort()).toEqual([a.volumeId, b.volumeId].sort());
-      expect(byVolume.get(a.volumeId)?.attachedMachineId).toBe(a.machineId);
-      expect(byVolume.get(b.volumeId)?.attachedMachineId).toBe(b.machineId);
-      expect(byVolume.get(a.volumeId)?.name).toEqual(expect.any(String));
+    it.skipIf(noList)(
+      '12 · lists every machine and volume of one app, and an app that does not exist as empty',
+      async () => {
+        const a = await provisioned();
+        const b = await provisioned({ instanceId: 'inst-contract-b' });
+        const inventory = await orchestrator.listPersistent(a.app);
+        expect(inventory.app).toBe(a.app);
+        expect(inventory.machines.map((m) => m.machineId).sort()).toEqual(
+          [a.machineId, b.machineId].sort(),
+        );
+        const byMachine = new Map(inventory.machines.map((m) => [m.machineId, m]));
+        expect(byMachine.get(a.machineId)).toMatchObject({
+          state: 'running',
+          instanceId: harness.spec().instanceId,
+        });
+        expect(byMachine.get(b.machineId)?.instanceId).toBe('inst-contract-b');
+        expect(byMachine.get(a.machineId)?.createdAt).toBeInstanceOf(Date);
+        const byVolume = new Map(inventory.volumes.map((v) => [v.volumeId, v]));
+        expect([...byVolume.keys()].sort()).toEqual([a.volumeId, b.volumeId].sort());
+        expect(byVolume.get(a.volumeId)?.attachedMachineId).toBe(a.machineId);
+        expect(byVolume.get(b.volumeId)?.attachedMachineId).toBe(b.machineId);
+        expect(byVolume.get(a.volumeId)?.name).toEqual(expect.any(String));
 
-      const missing = await orchestrator.listPersistent('an-app-nobody-created');
-      expect(missing).toEqual({ app: 'an-app-nobody-created', machines: [], volumes: [] });
-    });
+        const missing = await orchestrator.listPersistent('an-app-nobody-created');
+        expect(missing).toEqual({ app: 'an-app-nobody-created', machines: [], volumes: [] });
+      },
+    );
 
     it('13 · destroyMachine and destroyVolume take exactly their orphan, twice without a throw', async () => {
       const kept = await provisioned();
@@ -323,18 +348,21 @@ export function describePersistentContract(
       expect(harness.liveVolumeIds(kept.app)).toEqual([kept.volumeId]);
     });
 
-    it('14 · a machine made by hand lists with no instance id, and destroyMachine removes it', async () => {
-      const kept = await provisioned();
-      const stray = harness.addUntrackedMachine(kept.app);
-      const inventory = await orchestrator.listPersistent(kept.app);
-      expect(inventory.machines.find((m) => m.machineId === stray)?.instanceId).toBeNull();
-      await orchestrator.destroyMachine(kept.app, stray);
-      expect(harness.liveMachineIds(kept.app)).toEqual([kept.machineId]);
-    });
+    it.skipIf(noList)(
+      '14 · a machine made by hand lists with no instance id, and destroyMachine removes it',
+      async () => {
+        const kept = await provisioned();
+        const stray = harness.addUntrackedMachine(kept.app);
+        const inventory = await orchestrator.listPersistent(kept.app);
+        expect(inventory.machines.find((m) => m.machineId === stray)?.instanceId).toBeNull();
+        await orchestrator.destroyMachine(kept.app, stray);
+        expect(harness.liveMachineIds(kept.app)).toEqual([kept.machineId]);
+      },
+    );
 
     it('15 · this suite names no adapter — the only adapter code is in the harness files', () => {
       const source = readFileSync(fileURLToPath(import.meta.url), 'utf8');
-      for (const adapter of ['fake', 'fly']) {
+      for (const adapter of ['fake', 'fly', 'createAws']) {
         expect(source).not.toContain(`${adapter}PersistentOrchestrator`);
       }
     });

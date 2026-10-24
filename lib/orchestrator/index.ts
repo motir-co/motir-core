@@ -1,5 +1,6 @@
 import {
   createAwsOrchestrator,
+  createAwsPersistentOrchestrator,
   createEc2Api,
   createFakeOrchestrator,
   createFlyOrchestrator,
@@ -182,6 +183,9 @@ export function isOrchestratorConfigured(): boolean {
 export interface ShardAdapter {
   orchestrator(shard: FleetShardDTO): ContainerOrchestrator;
   inventory(shard: FleetShardDTO): FleetInventory | null;
+  /** How to reach one account's agent instances (MOTIR-9469). Absent for a
+   *  provider that hosts no agent instances. */
+  persistent?(shard: FleetShardDTO): PersistentContainerOrchestrator;
 }
 
 const shardAdapters = new Map<string, ShardAdapter>();
@@ -242,16 +246,25 @@ export const AWS_RUNNER_AMI_ENV_VAR = 'MOTIR_AWS_RUNNER_AMI_ID';
  * region. The shard tag is the account's name — what its network is tagged with.
  */
 function awsOrchestratorForShard(shard: FleetShardDTO): ContainerOrchestrator {
+  // Every missing variable at once, as `indexFleetConfig` does.
+  return createAwsOrchestrator(awsAccountConfig(shard, AWS_RUNNER_AMI_ENV_VAR));
+}
+
+/** The env var naming the hoster AMI every AWS agent-instance account boots (MOTIR-9469). */
+export const AWS_HOSTER_AMI_ENV_VAR = 'MOTIR_AWS_HOSTER_AMI_ID';
+
+/** An AWS account's IAM key and an AMI, read from the account's `credentialRef`
+ *  and `amiVar` — every missing variable named at once. */
+function awsAccountConfig(shard: FleetShardDTO, amiVar: string) {
   const keyIdVar = `${shard.credentialRef}_ACCESS_KEY_ID`;
   const secretVar = `${shard.credentialRef}_SECRET_ACCESS_KEY`;
   const accessKeyId = process.env[keyIdVar]?.trim();
   const secretAccessKey = process.env[secretVar]?.trim();
-  const amiId = process.env[AWS_RUNNER_AMI_ENV_VAR]?.trim();
-  // Every missing variable at once, as `indexFleetConfig` does.
+  const amiId = process.env[amiVar]?.trim();
   const missing = [
     ...(accessKeyId ? [] : [keyIdVar]),
     ...(secretAccessKey ? [] : [secretVar]),
-    ...(amiId ? [] : [AWS_RUNNER_AMI_ENV_VAR]),
+    ...(amiId ? [] : [amiVar]),
   ];
   if (missing.length > 0 || !accessKeyId || !secretAccessKey || !amiId) {
     throw new OrchestratorNotConfiguredError(`set ${missing.join(', ')}`);
@@ -260,12 +273,39 @@ function awsOrchestratorForShard(shard: FleetShardDTO): ContainerOrchestrator {
     throw new OrchestratorNotConfiguredError(`fleet account ${shard.name} names no AWS location`);
   }
   const { region } = shard.aws;
-  return createAwsOrchestrator({
+  return {
     ec2: createEc2Api({ accessKeyId, secretAccessKey, region }),
     region,
     shardTag: shard.name,
     amiId,
-  });
+  };
+}
+
+/**
+ * The PERSISTENT orchestrator for ONE account — where its agent instances live
+ * (Story MOTIR-9361 · MOTIR-9469). An `aws` account gets its own adapter over its
+ * own key and the hoster AMI; a `fly` account is the process-wide Fly instance
+ * lane, exactly what {@link getPersistentOrchestrator} returns. Nothing calls it
+ * yet: the routing cards read the account recorded on the instance and come here.
+ */
+export function persistentOrchestratorForShard(
+  shard: FleetShardDTO,
+): PersistentContainerOrchestrator {
+  if (selectedOrchestratorProvider() === 'fake') return fakePersistentOrchestrator;
+  switch (shard.provider) {
+    case 'fly':
+      return getPersistentOrchestrator();
+    case 'aws':
+      return createAwsPersistentOrchestrator(awsAccountConfig(shard, AWS_HOSTER_AMI_ENV_VAR));
+    default: {
+      const unrouted: never = shard.provider;
+      const adapter = registeredAdapter(unrouted);
+      if (!adapter.persistent) {
+        throw new OrchestratorNotConfiguredError(`${unrouted} hosts no agent instances`);
+      }
+      return adapter.persistent(shard);
+    }
+  }
 }
 
 /**

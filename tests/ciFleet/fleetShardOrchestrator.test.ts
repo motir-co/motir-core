@@ -3,6 +3,7 @@ import {
   FLEET_CONTAINER_SIZE,
   OrchestratorNotConfiguredError,
   fakeOrchestrator,
+  fakePersistentOrchestrator,
   type ContainerOrchestrator,
   type FleetInventory,
 } from '@motir/orchestrator';
@@ -11,9 +12,11 @@ import type { FleetShardDTO } from '@/lib/dto/fleetShard';
 import {
   fakeOrchestratorForShard,
   getOrchestrator,
+  getPersistentOrchestrator,
   inventoryForShard,
   legacyFleetLocationKey,
   orchestratorForShard,
+  persistentOrchestratorForShard,
   registerShardAdapter,
   resetShardFakes,
   shardLocationKey,
@@ -399,5 +402,76 @@ describe('a container is reached through the account its intent recorded', () =>
     await seedBootedIntent(tenant, fakeOrchestratorForShard(account.id), account.id);
     await expect(adminDb.fleetShard.delete({ where: { id: account.id } })).rejects.toThrow();
     expect(await adminDb.fleetShard.count()).toBe(1);
+  });
+});
+
+describe('persistentOrchestratorForShard — where an account’s agent instances live (MOTIR-9469)', () => {
+  const HOSTER: Partial<CreateFleetShardInput> = {
+    name: 'agent-hoster-use1-1',
+    fleetKind: 'agent_instance',
+    provider: 'aws',
+    flyOrg: null,
+    flyApp: null,
+    flyRegion: null,
+    awsAccountId: '210987654321',
+    awsRegion: 'us-east-1',
+    credentialRef: 'FLEET_SHARD_AGENT_HOSTER_USE1_1',
+    limits: { vcpuQuota: 640 },
+  };
+
+  it('builds an AWS persistent orchestrator from an aws row, naming every missing variable', async () => {
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
+    const account = await createAccount(HOSTER);
+    vi.stubEnv('FLEET_SHARD_AGENT_HOSTER_USE1_1_ACCESS_KEY_ID', '');
+    vi.stubEnv('FLEET_SHARD_AGENT_HOSTER_USE1_1_SECRET_ACCESS_KEY', '');
+    vi.stubEnv('MOTIR_AWS_HOSTER_AMI_ID', '');
+    const thrown = (() => {
+      try {
+        persistentOrchestratorForShard(account);
+      } catch (err) {
+        return err as Error;
+      }
+    })();
+    expect(thrown).toBeInstanceOf(OrchestratorNotConfiguredError);
+    for (const name of [
+      'FLEET_SHARD_AGENT_HOSTER_USE1_1_ACCESS_KEY_ID',
+      'FLEET_SHARD_AGENT_HOSTER_USE1_1_SECRET_ACCESS_KEY',
+      'MOTIR_AWS_HOSTER_AMI_ID',
+    ]) {
+      expect(thrown!.message).toContain(name);
+    }
+
+    vi.stubEnv('FLEET_SHARD_AGENT_HOSTER_USE1_1_ACCESS_KEY_ID', 'AKIAEXAMPLE');
+    vi.stubEnv('FLEET_SHARD_AGENT_HOSTER_USE1_1_SECRET_ACCESS_KEY', 'secret-example');
+    vi.stubEnv('MOTIR_AWS_HOSTER_AMI_ID', 'ami-0fedcba9876543210');
+    const persistent = persistentOrchestratorForShard(account);
+    expect(persistent.provider).toBe('aws');
+    expect(persistent.appNameFor('any-org')).toBe('agent-hoster-use1-1');
+    expect(persistent.defaultRegion()).toBe('us-east-1');
+  });
+
+  it('a fly row is the process-wide Fly instance lane, and the fake answers while it is selected', async () => {
+    const account = await createAccount();
+    expect(persistentOrchestratorForShard(account)).toBe(fakePersistentOrchestrator);
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
+    vi.stubEnv('FLY_INSTANCES_API_TOKEN', 'instances-token');
+    expect(persistentOrchestratorForShard(account)).toBe(getPersistentOrchestrator());
+  });
+
+  it('routes another provider through its registration, and refuses one that hosts no instances', async () => {
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
+    const account = { ...(await createAccount()), provider: 'stub' } as unknown as FleetShardDTO;
+    registerShardAdapter('stub', {
+      orchestrator: () => fakeOrchestrator,
+      inventory: () => null,
+    });
+    expect(() => persistentOrchestratorForShard(account)).toThrow(/hosts no agent instances/);
+    registerShardAdapter('stub', {
+      orchestrator: () => fakeOrchestrator,
+      inventory: () => null,
+      persistent: () => fakePersistentOrchestrator,
+    });
+    expect(persistentOrchestratorForShard(account)).toBe(fakePersistentOrchestrator);
+    unregisterShardAdapter('stub');
   });
 });

@@ -11,6 +11,7 @@ import {
   type Ec2SecurityGroup,
   type Ec2Subnet,
   type Ec2Tag,
+  type Ec2Volume,
   type Ec2Vpc,
 } from '../../src/index';
 
@@ -27,6 +28,14 @@ import {
 // made; a launched instance reads `running` (or stays `pending`); a terminated one
 // stays describable as `terminated` until it AGES OUT, after which its id is
 // `InvalidInstanceID.NotFound`; and DescribeInstances pages by `maxResults`.
+//
+// VOLUMES and STOP / START (MOTIR-9469) are the agent instance's: each launch
+// mapping becomes an EBS volume attached to the instance (`in-use`); a stop rests
+// the instance `stopped` with EC2's `StateTransitionReason`; a start refreshes its
+// `LaunchTime`, as EC2 does; a terminate deletes the delete-on-termination volumes
+// and DETACHES the others (`available`); and DeleteVolume refuses an attached
+// volume with `VolumeInUse`. Every instant is read from `now`, so a test moves
+// the clock rather than sleeping.
 
 export interface FakeCall {
   readonly method: string;
@@ -70,6 +79,13 @@ export class AwsEc2Fake implements Ec2Api {
   readonly routeTables = new Map<string, Ec2RouteTable & Tagged>();
   readonly subnets = new Map<string, Ec2Subnet & Tagged>();
   readonly securityGroups = new Map<string, Ec2SecurityGroup & Tagged>();
+  /** Every EBS volume that still exists, by id, with whether a terminate takes it. */
+  readonly volumes = new Map<string, Ec2Volume & { deleteOnTermination: boolean }>();
+  /** The clock every instant the fake stamps is read from. */
+  now: () => Date = () => new Date();
+  /** The next terminate leaves its instance `shutting-down`, holding its volumes,
+   *  until {@link finishTermination}. */
+  holdNextTerminate = false;
   /** Every instance ever launched, terminated ones included, by id. */
   readonly instances = new Map<string, Ec2Instance & { request: Ec2RunInstanceInput }>();
   /** The instance each `ClientToken` made. */
@@ -104,11 +120,14 @@ export class AwsEc2Fake implements Ec2Api {
       this.securityGroups,
       this.instances,
       this.byToken,
+      this.volumes,
     ]) {
       map.clear();
     }
     this.failures.clear();
     this.leaveNextPending = false;
+    this.holdNextTerminate = false;
+    this.now = () => new Date();
     this.failNextAfterCreate = null;
     this.arrangedRefusals.length = 0;
     this.outOfStockZones.clear();
@@ -170,6 +189,7 @@ export class AwsEc2Fake implements Ec2Api {
   /** The instance's VM powers off with `terminate` behaviour — a finished job. */
   endJob(instanceId: string, at = new Date()): void {
     this.setState(instanceId, 'terminated', userInitiated(at));
+    this.releaseVolumes(instanceId);
   }
 
   /** Move an instance to `state`, as a person in the console or AWS would. */
@@ -203,6 +223,31 @@ export class AwsEc2Fake implements Ec2Api {
     return instanceId;
   }
 
+  /** A terminate held by {@link holdNextTerminate} completes: terminated, and its
+   *  volumes taken or detached. */
+  finishTermination(instanceId: string): void {
+    this.setState(instanceId, 'terminated', userInitiated(this.now()));
+    this.releaseVolumes(instanceId);
+  }
+
+  /** The instance vanished outside Motir — terminated, its home disk detached. */
+  terminateOutside(instanceId: string): void {
+    this.finishTermination(instanceId);
+  }
+
+  /** Volumes that still exist (and bill). */
+  liveVolumeIds(): string[] {
+    return [...this.volumes.keys()];
+  }
+
+  private releaseVolumes(instanceId: string): void {
+    for (const [id, volume] of this.volumes) {
+      if (volume.attachedInstanceId !== instanceId) continue;
+      if (volume.deleteOnTermination) this.volumes.delete(id);
+      else this.volumes.set(id, { ...volume, state: 'available', attachedInstanceId: null });
+    }
+  }
+
   /** Instances that still bill — every one not terminated. */
   liveInstanceIds(): string[] {
     return [...this.instances.values()]
@@ -229,7 +274,7 @@ export class AwsEc2Fake implements Ec2Api {
   /** Every recorded call whose name starts with a mutating verb. */
   mutations(): FakeCall[] {
     return this.calls.filter((c) =>
-      /^(create|attach|associate|modify|authorize|run|terminate)/.test(c.method),
+      /^(create|attach|associate|modify|authorize|run|terminate|stop|start|delete)/.test(c.method),
     );
   }
 
@@ -423,13 +468,28 @@ export class AwsEc2Fake implements Ec2Api {
       throw new Ec2ApiError(code, status, status >= 500);
     }
     const instanceId = this.nextId('i');
+    const volumes = input.blockDeviceMappings.map((mapping) => {
+      const volumeId = this.nextId('vol');
+      this.volumes.set(volumeId, {
+        volumeId,
+        state: 'in-use',
+        availabilityZone: zone,
+        sizeGb: mapping.volumeSizeGb,
+        attachedInstanceId: instanceId,
+        createTime: this.now(),
+        tags: [...input.tags],
+        deleteOnTermination: mapping.deleteOnTermination,
+      });
+      return { deviceName: mapping.deviceName, volumeId };
+    });
     this.instances.set(instanceId, {
       instanceId,
       state: this.leaveNextPending ? 'pending' : 'running',
-      launchTime: new Date(),
+      launchTime: this.now(),
       stateTransitionReason: null,
       availabilityZone: subnet.availabilityZone,
       tags: [...input.tags],
+      ...(volumes.length > 0 ? { volumes } : {}),
       request: input,
     });
     this.leaveNextPending = false;
@@ -479,10 +539,77 @@ export class AwsEc2Fake implements Ec2Api {
     }
     for (const id of instanceIds) {
       const instance = this.instances.get(id)!;
-      if (instance.state !== 'terminated') {
-        this.setState(id, 'terminated', userInitiated(new Date()));
+      if (instance.state === 'terminated') continue;
+      if (this.holdNextTerminate) {
+        this.holdNextTerminate = false;
+        this.setState(id, 'shutting-down', userInitiated(this.now()));
+        continue;
+      }
+      this.finishTermination(id);
+    }
+  }
+
+  async stopInstances(instanceIds: readonly string[]) {
+    this.record('stopInstances', instanceIds);
+    for (const id of instanceIds) {
+      const instance = this.instances.get(id);
+      if (!instance) throw new Ec2ApiError('InvalidInstanceID.NotFound', 400, false);
+      if (['terminated', 'shutting-down'].includes(instance.state)) {
+        throw new Ec2ApiError('IncorrectInstanceState', 400, false);
       }
     }
+    for (const id of instanceIds) {
+      const instance = this.instances.get(id)!;
+      if (instance.state === 'stopped' || instance.state === 'stopping') continue;
+      this.setState(id, 'stopped', userInitiated(this.now()));
+    }
+  }
+
+  async startInstances(instanceIds: readonly string[]) {
+    this.record('startInstances', instanceIds);
+    for (const id of instanceIds) {
+      const instance = this.instances.get(id);
+      if (!instance) throw new Ec2ApiError('InvalidInstanceID.NotFound', 400, false);
+      if (['terminated', 'shutting-down', 'stopping'].includes(instance.state)) {
+        throw new Ec2ApiError('IncorrectInstanceState', 400, false);
+      }
+    }
+    for (const id of instanceIds) {
+      const instance = this.instances.get(id)!;
+      if (instance.state !== 'stopped') continue;
+      // EC2 refreshes LaunchTime on every start: it is the CURRENT run's start.
+      this.instances.set(id, {
+        ...instance,
+        state: 'running',
+        launchTime: this.now(),
+        stateTransitionReason: null,
+      });
+    }
+  }
+
+  async describeVolumes(input: { volumeIds?: readonly string[]; filters?: readonly Ec2Filter[] }) {
+    this.record('describeVolumes', input);
+    for (const id of input.volumeIds ?? []) {
+      if (!this.volumes.has(id)) throw new Ec2ApiError('InvalidVolume.NotFound', 400, false);
+    }
+    return [...this.volumes.values()]
+      .filter((v) => !input.volumeIds || input.volumeIds.includes(v.volumeId))
+      .filter((v) =>
+        matches(input.filters ?? [], v.tags, {
+          status: [v.state],
+          'attachment.instance-id': v.attachedInstanceId ? [v.attachedInstanceId] : [],
+          'availability-zone': [v.availabilityZone],
+        }),
+      )
+      .map(({ deleteOnTermination: _d, ...v }) => ({ ...v, tags: [...v.tags] }));
+  }
+
+  async deleteVolume(volumeId: string) {
+    this.record('deleteVolume', volumeId);
+    const volume = this.volumes.get(volumeId);
+    if (!volume) throw new Ec2ApiError('InvalidVolume.NotFound', 400, false);
+    if (volume.attachedInstanceId) throw new Ec2ApiError('VolumeInUse', 400, false);
+    this.volumes.delete(volumeId);
   }
 
   /** What DescribeInstances reports — the instance without its recorded request. */

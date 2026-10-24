@@ -12,16 +12,21 @@ import {
   DescribeInternetGatewaysCommand,
   DescribeRouteTablesCommand,
   DescribeSecurityGroupsCommand,
+  DeleteVolumeCommand,
   DescribeSubnetsCommand,
+  DescribeVolumesCommand,
   DescribeVpcsCommand,
   EC2Client,
   ModifySubnetAttributeCommand,
   RunInstancesCommand,
+  StartInstancesCommand,
+  StopInstancesCommand,
   TerminateInstancesCommand,
   type Filter,
   type Instance,
   type ResourceType,
   type Tag,
+  type Volume,
 } from '@aws-sdk/client-ec2';
 
 // The EC2 boundary (Story MOTIR-9270 · MOTIR-9273) — the one module that speaks
@@ -134,9 +139,25 @@ export interface Ec2Instance {
   readonly stateTransitionReason: string | null;
   readonly availabilityZone: string | null;
   readonly tags: readonly Ec2Tag[];
+  /** The EBS volumes attached to it, by device name (MOTIR-9469: an agent
+   *  instance's home disk). Absent when the answer listed none. */
+  readonly volumes?: ReadonlyArray<{ readonly deviceName: string; readonly volumeId: string }>;
 }
 
-/** One EBS mapping on a launch — the runner's Docker data disk. */
+/** One EBS volume (MOTIR-9469) — an agent instance's home disk. */
+export interface Ec2Volume {
+  readonly volumeId: string;
+  /** `creating` · `available` · `in-use` · `deleting` · `deleted` · `error`. */
+  readonly state: string;
+  readonly availabilityZone: string;
+  readonly sizeGb: number;
+  /** The instance it is attached to, when it is. */
+  readonly attachedInstanceId: string | null;
+  readonly createTime: Date | null;
+  readonly tags: readonly Ec2Tag[];
+}
+
+/** One EBS mapping on a launch — the runner's Docker data disk, an agent's home. */
 export interface Ec2BlockDeviceMapping {
   readonly deviceName: string;
   readonly volumeSizeGb: number;
@@ -237,6 +258,21 @@ export interface Ec2Api {
   ): Promise<{ instances: Ec2Instance[]; nextToken: string | null }>;
   /** https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_TerminateInstances.html */
   terminateInstances(instanceIds: readonly string[]): Promise<void>;
+  /** https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_StopInstances.html —
+   *  stopping a stopped instance succeeds; a terminated one is `IncorrectInstanceState`. */
+  stopInstances(instanceIds: readonly string[]): Promise<void>;
+  /** https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_StartInstances.html —
+   *  starting a running instance succeeds; a stopping one is `IncorrectInstanceState`. */
+  startInstances(instanceIds: readonly string[]): Promise<void>;
+  /** https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_DescribeVolumes.html —
+   *  an unknown id is `InvalidVolume.NotFound`, thrown. */
+  describeVolumes(input: {
+    volumeIds?: readonly string[];
+    filters?: readonly Ec2Filter[];
+  }): Promise<Ec2Volume[]>;
+  /** https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_DeleteVolume.html —
+   *  an attached volume is `VolumeInUse`; an unknown one `InvalidVolume.NotFound`. */
+  deleteVolume(volumeId: string): Promise<void>;
 }
 
 /** The slice of `EC2Client` the factory uses — what a test stubs. */
@@ -320,8 +356,16 @@ export function createEc2Api(
 
 type Send = <T>(command: unknown) => Promise<T>;
 
-type NetworkCalls = Omit<Ec2Api, 'runInstances' | 'describeInstances' | 'terminateInstances'>;
-type InstanceCalls = Pick<Ec2Api, 'runInstances' | 'describeInstances' | 'terminateInstances'>;
+type InstanceMethod =
+  | 'runInstances'
+  | 'describeInstances'
+  | 'terminateInstances'
+  | 'stopInstances'
+  | 'startInstances'
+  | 'describeVolumes'
+  | 'deleteVolume';
+type NetworkCalls = Omit<Ec2Api, InstanceMethod>;
+type InstanceCalls = Pick<Ec2Api, InstanceMethod>;
 
 function toInstance(i: Instance): Ec2Instance {
   return {
@@ -331,6 +375,29 @@ function toInstance(i: Instance): Ec2Instance {
     stateTransitionReason: i.StateTransitionReason || null,
     availabilityZone: i.Placement?.AvailabilityZone ?? null,
     tags: tagsOf(i.Tags),
+    ...(i.BlockDeviceMappings?.length
+      ? {
+          volumes: i.BlockDeviceMappings.flatMap((m) =>
+            m.DeviceName && m.Ebs?.VolumeId
+              ? [{ deviceName: m.DeviceName, volumeId: m.Ebs.VolumeId }]
+              : [],
+          ),
+        }
+      : {}),
+  };
+}
+
+function toVolume(v: Volume): Ec2Volume {
+  return {
+    volumeId: required(v.VolumeId, 'VolumeId'),
+    state: v.State ?? '',
+    availabilityZone: v.AvailabilityZone ?? '',
+    sizeGb: v.Size ?? 0,
+    attachedInstanceId:
+      v.Attachments?.find((a) => a.State === 'attached' || a.State === 'attaching')?.InstanceId ??
+      null,
+    createTime: v.CreateTime ?? null,
+    tags: tagsOf(v.Tags),
   };
 }
 
@@ -397,6 +464,24 @@ function instanceCalls(send: Send): InstanceCalls {
     },
     async terminateInstances(instanceIds) {
       await send(new TerminateInstancesCommand({ InstanceIds: [...instanceIds] }));
+    },
+    async stopInstances(instanceIds) {
+      await send(new StopInstancesCommand({ InstanceIds: [...instanceIds] }));
+    },
+    async startInstances(instanceIds) {
+      await send(new StartInstancesCommand({ InstanceIds: [...instanceIds] }));
+    },
+    async describeVolumes({ volumeIds, filters = [] }) {
+      const out = await send<{ Volumes?: Volume[] }>(
+        new DescribeVolumesCommand({
+          Filters: sdkFilters(filters),
+          ...(volumeIds ? { VolumeIds: [...volumeIds] } : {}),
+        }),
+      );
+      return (out.Volumes ?? []).map(toVolume);
+    },
+    async deleteVolume(volumeId) {
+      await send(new DeleteVolumeCommand({ VolumeId: volumeId }));
     },
   };
 }

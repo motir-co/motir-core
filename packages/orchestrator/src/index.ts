@@ -38,3 +38,5 @@ export * from './adapters/fake/inventory';
 export * from './adapters/aws/ec2Client';
 export * from './adapters/aws/network';
 export * from './adapters/aws';
+export * from './adapters/aws/persistent';
+export * from './adapters/aws/persistentUserData';

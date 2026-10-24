@@ -561,6 +561,13 @@ export interface PersistentContainerSpec {
    * process then. Absent or null keeps the image's `CMD`.
    */
   readonly idleCommand?: readonly string[] | null;
+  /**
+   * The availability zone the machine and its disk are created in (MOTIR-9469).
+   * Chosen ABOVE the port, by placement, and fixed for the instance's life: an
+   * EBS volume lives in one zone, so a stopped instance restarts there. The AWS
+   * adapter refuses a spec without it; Fly and the fake ignore it.
+   */
+  readonly availabilityZone?: string;
 }
 
 /**

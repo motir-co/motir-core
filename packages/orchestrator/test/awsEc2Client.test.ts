@@ -428,3 +428,95 @@ describe('createEc2Api — the instance calls (MOTIR-9276)', () => {
     });
   });
 });
+
+describe('createEc2Api — the persistent calls (MOTIR-9469)', () => {
+  it('stops and starts by id, and reads an instance’s attached volumes by device', async () => {
+    const { sent, factory } = stub({
+      DescribeInstancesCommand: {
+        Reservations: [
+          {
+            Instances: [
+              {
+                InstanceId: 'i-1',
+                State: { Name: 'running' },
+                BlockDeviceMappings: [
+                  { DeviceName: '/dev/xvda', Ebs: { VolumeId: 'vol-root' } },
+                  { DeviceName: '/dev/sdf', Ebs: { VolumeId: 'vol-home' } },
+                  { DeviceName: '/dev/sdg' },
+                ],
+              },
+              { InstanceId: 'i-2', BlockDeviceMappings: [] },
+            ],
+          },
+        ],
+      },
+    });
+    const ec2 = createEc2Api(CONFIG, factory);
+    await ec2.stopInstances(['i-1']);
+    await ec2.startInstances(['i-1']);
+    const { instances } = await ec2.describeInstances({ instanceIds: ['i-1'] });
+    expect(sent.slice(0, 2)).toEqual([
+      { command: 'StopInstancesCommand', input: { InstanceIds: ['i-1'] } },
+      { command: 'StartInstancesCommand', input: { InstanceIds: ['i-1'] } },
+    ]);
+    expect(instances[0]!.volumes).toEqual([
+      { deviceName: '/dev/xvda', volumeId: 'vol-root' },
+      { deviceName: '/dev/sdf', volumeId: 'vol-home' },
+    ]);
+    expect(instances[1]!.volumes).toBeUndefined();
+  });
+
+  it('describes volumes by id or filter, reading the attachment, and deletes by id', async () => {
+    const created = new Date('2026-10-24T10:00:00Z');
+    const { sent, factory } = stub({
+      DescribeVolumesCommand: {
+        Volumes: [
+          {
+            VolumeId: 'vol-1',
+            State: 'in-use',
+            AvailabilityZone: 'us-east-1a',
+            Size: 10,
+            CreateTime: created,
+            Attachments: [
+              { InstanceId: 'i-old', State: 'detached' },
+              { InstanceId: 'i-1', State: 'attached' },
+            ],
+            Tags: SDK_TAGS,
+          },
+          { VolumeId: 'vol-2' },
+        ],
+      },
+    });
+    const ec2 = createEc2Api(CONFIG, factory);
+    expect(await ec2.describeVolumes({ volumeIds: ['vol-1'] })).toEqual([
+      {
+        volumeId: 'vol-1',
+        state: 'in-use',
+        availabilityZone: 'us-east-1a',
+        sizeGb: 10,
+        attachedInstanceId: 'i-1',
+        createTime: created,
+        tags: TAGS,
+      },
+      {
+        volumeId: 'vol-2',
+        state: '',
+        availabilityZone: '',
+        sizeGb: 0,
+        attachedInstanceId: null,
+        createTime: null,
+        tags: [],
+      },
+    ]);
+    await ec2.describeVolumes({ filters: [{ name: 'tag:motir-shard', values: ['ci-1'] }] });
+    await ec2.deleteVolume('vol-1');
+    expect(sent.slice(0, 3)).toEqual([
+      { command: 'DescribeVolumesCommand', input: { Filters: undefined, VolumeIds: ['vol-1'] } },
+      {
+        command: 'DescribeVolumesCommand',
+        input: { Filters: [{ Name: 'tag:motir-shard', Values: ['ci-1'] }] },
+      },
+      { command: 'DeleteVolumeCommand', input: { VolumeId: 'vol-1' } },
+    ]);
+  });
+});
