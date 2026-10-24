@@ -97,3 +97,51 @@ export class FleetShardProvisioningRefusedError extends Error {
     this.name = 'FleetShardProvisioningRefusedError';
   }
 }
+
+// ── Quota requests and growth events (Story MOTIR-9362 · MOTIR-9457) ────────
+
+/** A quota-request status, or a growth outcome, outside the named values —
+ *  refused before anything is written. */
+export class FleetPoolValueInvalidError extends Error {
+  readonly code = 'FLEET_POOL_VALUE_INVALID' as const;
+  constructor(
+    readonly field:
+      | 'status'
+      | 'outcome'
+      | 'fleetKind'
+      | 'desiredValue'
+      | 'grantedValue'
+      | 'quotaCode'
+      | 'awsRequestId'
+      | 'figures',
+    readonly value: unknown,
+  ) {
+    super(`invalid fleet pool ${field}: ${String(value)}`);
+    this.name = 'FleetPoolValueInvalidError';
+  }
+}
+
+/** An account already has an OPEN raise of the same quota for a different
+ *  value — AWS allows one pending request per quota, so this one is refused. */
+export class FleetQuotaRequestOpenError extends Error {
+  readonly code = 'FLEET_QUOTA_REQUEST_OPEN' as const;
+  constructor(
+    readonly shardId: string,
+    readonly quotaCode: string,
+    readonly openRequestId: string,
+  ) {
+    super(
+      `fleet account ${shardId} already has open quota request ${openRequestId} for ${quotaCode}`,
+    );
+    this.name = 'FleetQuotaRequestOpenError';
+  }
+}
+
+/** No quota request has that id. */
+export class FleetQuotaRequestNotFoundError extends Error {
+  readonly code = 'FLEET_QUOTA_REQUEST_NOT_FOUND' as const;
+  constructor(readonly requestId: string) {
+    super(`no fleet quota request ${requestId}`);
+    this.name = 'FleetQuotaRequestNotFoundError';
+  }
+}
