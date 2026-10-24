@@ -7311,16 +7311,16 @@ The cannot-save line is **not** the cannot-start line: cannot-start replaces the
 
 ### States — the storyboard
 
-| Mock sheet | State                           | What is drawn                                                                                                                                                    |
-| ---------- | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1          | pending, populated              | document in the pane; undecided offer in the rail                                                                                                                |
-| 2          | long · sparse                   | the document scrolls with the whole pane as its viewport (title stays at the top); an empty part and an empty _Assumptions_ show _Nothing here_                  |
-| 3          | no requirement · corrected      | the notice in place of the document; the correction hint under a document                                                                                        |
-| 4          | the swap                        | before: the canvas; after: the document. Declined or moved on: the canvas returns, uncovered, not rebuilt                                                        |
-| 5          | confirming · cannot save        | both buttons disabled, Confirm reads _Confirming…_; then the cannot-save line with Confirm kept                                                                  |
-| 6          | confirmed · declined · reopened | confirmed: document kept, page link line, decided panel with no buttons; declined: canvas back, decided panel; reopened: the same, derived from the stored offer |
-| 7          | mid-planning                    | the document and page link stay readable above the run; the decided panel in the rail                                                                            |
-| 8          | 中文                            | pending, cannot save and confirmed in Chinese; layout unchanged                                                                                                  |
+| Mock sheet | State                           | What is drawn                                                                                                                                                                 |
+| ---------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1          | pending, populated              | document in the pane; undecided offer in the rail                                                                                                                             |
+| 2          | long · sparse                   | the whole left pane scrolls, so its scroll bar sits at the pane’s far right edge, not beside the centred column; an empty part and an empty _Assumptions_ show _Nothing here_ |
+| 3          | no requirement · corrected      | the notice in place of the document; the correction hint under a document                                                                                                     |
+| 4          | the swap                        | before: the canvas; after: the document. Declined or moved on: the canvas returns, uncovered, not rebuilt                                                                     |
+| 5          | confirming · cannot save        | both buttons disabled, Confirm reads _Confirming…_; then the cannot-save line with Confirm kept                                                                               |
+| 6          | confirmed · declined · reopened | confirmed: document kept, page link line, decided panel with no buttons; declined: canvas back, decided panel; reopened: the same, derived from the stored offer              |
+| 7          | mid-planning                    | the document and page link stay readable above the run; the decided panel in the rail                                                                                         |
+| 8          | 中文                            | pending, cannot save and confirmed in Chinese; layout unchanged                                                                                                               |
 
 ### Strings (en / zh)
 
