@@ -4,6 +4,7 @@ import type {
   FleetShardDTO,
   FleetShardLimitName,
   FleetShardLimitSource,
+  FleetShardRoleDTO,
 } from '@/lib/dto/fleetShard';
 import type { GithubAppRole } from '@/lib/github/appAuth';
 
@@ -19,6 +20,19 @@ export const FLEET_SHARD_LIMIT_SOURCES: readonly FleetShardLimitSource[] = [
   'documented',
   'raised',
 ];
+
+/** Every role an account can hold (MOTIR-9456). */
+export const FLEET_SHARD_ROLES: readonly FleetShardRoleDTO[] = ['primary', 'spare'];
+
+/**
+ * The stored role, carried through as it is. A role is a stored value, not a
+ * compile-time union: a value this build does not know (a role a newer
+ * migration added) keeps its identity rather than reading as `primary`, which
+ * would put a non-shared account in every reader's shared pool.
+ */
+export function fleetShardRoleOf(raw: string): FleetShardRoleDTO {
+  return raw as FleetShardRoleDTO;
+}
 
 /** The stored `limits_source` object, keeping only known limits and sources. */
 function limitsSourceOf(raw: unknown): FleetShardDTO['limitsSource'] {
@@ -40,7 +54,7 @@ export function toFleetShardDTO(row: FleetShard): FleetShardDTO {
     // The CHECK constraint holds the column to the four kinds.
     fleetKind: row.fleetKind as FleetWorkloadKind,
     provider: row.provider,
-    role: row.role,
+    role: fleetShardRoleOf(row.role),
     state: row.state,
     github: {
       org: row.githubOrg,

@@ -11508,9 +11508,16 @@ enum FleetShardProvider {
 }
 
 /// What an account is to its fleet kind. `primary` = an account of that kind's
-/// SHARED pool. The pool-growth story adds `spare`.
+/// SHARED pool; `spare` = its Motir spare (below).
 enum FleetShardRole {
   primary
+  /// The kind's Motir spare (MOTIR-9456): an `active` account that runs work, but
+  /// only Motir's own exempt orgs' — shared admission never places a job on it.
+  /// The growth job promotes it to `primary` (MOTIR-9461). At most one READY
+  /// (`active`) spare per kind: the partial unique index
+  /// `fleet_shard_one_ready_spare_per_kind` in the migration, which the DSL
+  /// cannot express.
+  spare
 
   @@map("fleet_shard_role")
 }

@@ -44,11 +44,12 @@ interface ShardOrg {
 
 let cached: { readAt: number; orgs: ShardOrg[] } | null = null;
 
-/** Every fleet account's GitHub org, except a `disabled` account's, de-duplicated. */
+/** Every fleet account's GitHub org, except a `disabled` account's, de-duplicated —
+ *  of every role: a kind's spare runs Motir's own jobs in its org (MOTIR-9456). */
 async function shardOrgs(): Promise<ShardOrg[]> {
   const now = Date.now();
   if (cached && now - cached.readAt < OWNED_ORG_CACHE_TTL_MS) return cached.orgs;
-  const accounts = await fleetShardService.listShards();
+  const accounts = await fleetShardService.listShards({ role: 'any' });
   const byLogin = new Map<string, ShardOrg>();
   for (const account of accounts) {
     if (account.state === 'disabled') continue;

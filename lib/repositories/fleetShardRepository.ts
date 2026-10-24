@@ -36,16 +36,17 @@ export const fleetShardRepository = {
     return client.fleetShard.findUnique({ where: { name } });
   },
 
-  /** One role's accounts, optionally of one kind and in one state — oldest first. */
+  /** One role's accounts (`null`: every role), optionally of one kind and in one
+   *  state — oldest first. */
   async listByRole(
-    role: FleetShardRole,
+    role: FleetShardRole | null,
     filter: { fleetKind?: string; state?: FleetShardState },
     tx?: Prisma.TransactionClient,
   ): Promise<FleetShard[]> {
     const client = tx ?? dbRead;
     return client.fleetShard.findMany({
       where: {
-        role,
+        ...(role !== null ? { role } : {}),
         ...(filter.fleetKind !== undefined ? { fleetKind: filter.fleetKind } : {}),
         ...(filter.state !== undefined ? { state: filter.state } : {}),
       },
@@ -74,16 +75,41 @@ export const fleetShardRepository = {
     return tx.fleetShard.update({ where: { id }, data: { state } });
   },
 
-  /** The ACTIVE accounts of one fleet kind's shared pool, with their pause and
-   *  override columns — admission's candidates (MOTIR-8968). Read uncached on
-   *  every admission, so an override or a pause takes effect on the next job. */
+  /** Move an account between the shared pool and the kind's spare (MOTIR-9456) —
+   *  the growth job's promotion is `setRoleInTx(spare, 'primary')`. */
+  async setRoleInTx(
+    id: string,
+    role: FleetShardRole,
+    tx: Prisma.TransactionClient,
+  ): Promise<FleetShard> {
+    return tx.fleetShard.update({ where: { id }, data: { role } });
+  },
+
+  /** The ACTIVE accounts of one fleet kind in the given roles, with their pause
+   *  and override columns — admission's candidates (MOTIR-8968). `primary` alone
+   *  is the shared pool; a Motir exempt org's job adds `spare` (MOTIR-9456). Read
+   *  uncached on every admission, so an override, a pause or a promotion takes
+   *  effect on the next job. */
   async listActiveForKindInTx(
     fleetKind: string,
+    roles: readonly FleetShardRole[],
     tx: Prisma.TransactionClient,
   ): Promise<FleetShard[]> {
     return tx.fleetShard.findMany({
-      where: { fleetKind, role: 'primary', state: 'active' },
+      where: { fleetKind, role: { in: [...roles] }, state: 'active' },
       orderBy: { id: 'asc' },
+    });
+  },
+
+  /** A kind's non-disabled spares, the ready (`active`) one first, then oldest
+   *  first (MOTIR-9456). At most one is `active` (the partial unique index). */
+  async listSparesForKind(fleetKind: string, tx?: Prisma.TransactionClient): Promise<FleetShard[]> {
+    const client = tx ?? dbRead;
+    return client.fleetShard.findMany({
+      where: { fleetKind, role: 'spare', state: { not: 'disabled' } },
+      // The enum is declared provisioning, active, disabled: descending puts
+      // `active` before `provisioning`.
+      orderBy: [{ state: 'desc' }, { createdAt: 'asc' }, { id: 'asc' }],
     });
   },
 
