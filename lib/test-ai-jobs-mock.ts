@@ -41,7 +41,7 @@
 // citations, the next answers honestly with none, the third redirects to a plan
 // change — without a second harness and without a timing assumption.
 
-import type { CarriedAnswers } from '@/lib/ai/types';
+import type { AskConversationTurn, CarriedAnswers, SubmittedRequirement } from '@/lib/ai/types';
 import { readFixtureFileSync, writeFixtureFileSync } from '@/lib/test-fixture-file';
 import type { MockAgent } from 'undici';
 
@@ -89,7 +89,16 @@ export interface AskJobOutcome {
    * byte-identical to before.
    */
   offer?:
-    | { kind: 'plan'; requestText: string; targetKey?: string; immediate?: boolean }
+    | {
+        kind: 'plan';
+        requestText: string;
+        targetKey?: string;
+        immediate?: boolean;
+        /** THE COMPOSED REQUIREMENT (Story MOTIR-9430 · MOTIR-9441), the six-field wire
+         *  shape a no-target plan offer carries. Passed onto `result.ask.offer` only
+         *  when declared, so every other offer is byte-identical to before. */
+        requirement?: SubmittedRequirement;
+      }
     | AskLogBugOfferFixture
     | null;
   offerReply?: { seq: number; kind: 'plan' | 'log_bug'; decision: 'agree' | 'decline' } | null;
@@ -311,6 +320,17 @@ export interface SubmittedJob {
   /** A `plan` submit's `context.carriedAnswers` (Story MOTIR-9221 · MOTIR-9319) — what
    *  the conversation's grilling settled before the run, as motir-core sent it. */
   carriedAnswers?: CarriedAnswers;
+  /** A `plan` submit's `context.requirement` and `context.requirementPage` (Story
+   *  MOTIR-9430 · MOTIR-9441) — the composed requirement core supplied to the run, and
+   *  the page it was saved to, each recorded as sent and only when present. */
+  requirement?: SubmittedRequirement;
+  requirementPage?: { pageId: string; title: string };
+  /** Whether a `plan` submit carried carried answers at all, recorded on EVERY plan
+   *  submit so a spec asserts their absence rather than inferring it. */
+  hasCarriedAnswers?: boolean;
+  /** An `ask_project` submit's `context.conversationTurns` (MOTIR-9442) — the earlier
+   *  turns core sent, oldest first. Absent on a conversation's first turn. */
+  conversationTurns?: AskConversationTurn[];
 }
 
 /**
@@ -418,6 +438,16 @@ function recordSubmit(kind: string, rawBody: string, refused = false): number {
       ...(kind === 'plan' && carriedAnswersOf(rawBody)
         ? { carriedAnswers: carriedAnswersOf(rawBody)! }
         : {}),
+      ...(kind === 'plan' ? { hasCarriedAnswers: carriedAnswersOf(rawBody) !== null } : {}),
+      ...(kind === 'plan' && requirementOf(rawBody)
+        ? { requirement: requirementOf(rawBody)! }
+        : {}),
+      ...(kind === 'plan' && requirementPageOf(rawBody)
+        ? { requirementPage: requirementPageOf(rawBody)! }
+        : {}),
+      ...(kind === 'ask_project' && conversationTurnsOf(rawBody)
+        ? { conversationTurns: conversationTurnsOf(rawBody)! }
+        : {}),
       ...(translate ? { translate } : {}),
       ...tenantLanguagesOf(rawBody),
       ...(idempotencyKeyOf(rawBody) ? { idempotencyKey: idempotencyKeyOf(rawBody)! } : {}),
@@ -511,6 +541,39 @@ function carriedAnswersOf(rawBody: string): CarriedAnswers | null {
     const carried = (JSON.parse(rawBody) as { context?: { carriedAnswers?: unknown } }).context
       ?.carriedAnswers;
     return typeof carried === 'object' && carried !== null ? (carried as CarriedAnswers) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** One `context.<key>` object a submit body carried, or null. */
+function contextObjectOf(rawBody: string, key: string): Record<string, unknown> | null {
+  try {
+    const value = (JSON.parse(rawBody) as { context?: Record<string, unknown> }).context?.[key];
+    return typeof value === 'object' && value !== null && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The `context.requirement` a `plan` submit carried (MOTIR-9436), or null. */
+function requirementOf(rawBody: string): SubmittedRequirement | null {
+  return contextObjectOf(rawBody, 'requirement') as SubmittedRequirement | null;
+}
+
+/** The `context.requirementPage` a `plan` submit carried (MOTIR-9436), or null. */
+function requirementPageOf(rawBody: string): { pageId: string; title: string } | null {
+  return contextObjectOf(rawBody, 'requirementPage') as { pageId: string; title: string } | null;
+}
+
+/** The `context.conversationTurns` an `ask_project` submit carried (MOTIR-9442), or null. */
+function conversationTurnsOf(rawBody: string): AskConversationTurn[] | null {
+  try {
+    const turns = (JSON.parse(rawBody) as { context?: { conversationTurns?: unknown } }).context
+      ?.conversationTurns;
+    return Array.isArray(turns) ? (turns as AskConversationTurn[]) : null;
   } catch {
     return null;
   }

@@ -108,3 +108,108 @@ describe('the ask arms of the jobs mock (MOTIR-9234)', () => {
     expect(job.result).toEqual({ ask: { intent: 'ask', answer: 'Plain.', citations: [] } });
   });
 });
+
+// ── The composed requirement (Story MOTIR-9430 · MOTIR-9441) ──────────────────────────
+// The lane could not reach a no-target offer WITH a requirement, nor see what a plan
+// submit or an ask submit carried for it. Each arm is crossed on the wire by the real
+// client, and the undeclared reply stays as it was.
+
+const REQUIREMENT = {
+  outcome: 'People export the board as CSV.',
+  behaviour: 'An Export button downloads every visible card.',
+  scopeEdge: '',
+  constraints: 'Reuses the download route.',
+  acceptance: 'The file has the same row count.',
+  assumptions: [{ id: 'r1', text: 'Archived cards are left out.' }],
+};
+
+describe('the composed requirement arms of the jobs mock (MOTIR-9441)', () => {
+  it('passes a declared offer.requirement onto the ask result’s offer', async () => {
+    declare([
+      {
+        intent: 'ask',
+        answer: 'I can plan that.',
+        offer: { kind: 'plan', requestText: 'Export the board', requirement: REQUIREMENT },
+      },
+    ]);
+    const { jobId } = await ask();
+
+    const job = await getJob(jobId, 'proj-1');
+
+    expect(job.result).toMatchObject({
+      ask: { offer: { kind: 'plan', requestText: 'Export the board', requirement: REQUIREMENT } },
+    });
+  });
+
+  it('leaves an offer that declares no requirement byte-identical', async () => {
+    declare([
+      {
+        intent: 'ask',
+        answer: 'I can plan that.',
+        offer: { kind: 'plan', requestText: 'Export the board', immediate: false },
+      },
+    ]);
+    const { jobId } = await ask();
+
+    const job = await getJob(jobId, 'proj-1');
+
+    const offer = (job.result as { ask: { offer: Record<string, unknown> } }).ask.offer;
+    expect(offer).toEqual({ kind: 'plan', requestText: 'Export the board', immediate: false });
+    expect(offer).not.toHaveProperty('requirement');
+  });
+
+  it('journals a plan submit’s requirement, page and whether it carried answers', async () => {
+    declare([]);
+    const page = { pageId: 'page-1', title: 'Export the board' };
+
+    await submitJob(
+      'plan',
+      tenant,
+      { requirement: REQUIREMENT, requirementPage: page },
+      { userId: 'user-1' },
+    );
+    await submitJob(
+      'plan',
+      tenant,
+      { carriedAnswers: { requests: [], settled: [], assumptions: [] } },
+      { userId: 'user-1' },
+    );
+    await submitJob('plan', tenant, {}, { userId: 'user-1' });
+
+    const [supplied, carried, bare] = submitted();
+    expect(supplied).toMatchObject({
+      kind: 'plan',
+      requirement: REQUIREMENT,
+      requirementPage: page,
+      hasCarriedAnswers: false,
+    });
+    expect(carried).toMatchObject({ kind: 'plan', hasCarriedAnswers: true });
+    expect(carried).not.toHaveProperty('requirement');
+    expect(bare).toMatchObject({ kind: 'plan', hasCarriedAnswers: false });
+    expect(bare).not.toHaveProperty('requirement');
+    expect(bare).not.toHaveProperty('requirementPage');
+  });
+
+  it('journals an ask submit’s conversation turns, and none on a first turn', async () => {
+    declare([{ intent: 'ask', answer: 'One.' }]);
+    const turns = [
+      { role: 'person', text: 'Plan an export' },
+      { role: 'motir', text: 'I can plan that.' },
+    ];
+
+    await submitJob(
+      'ask_project',
+      tenant,
+      { prompt: 'second', conversationTurns: turns },
+      {
+        userId: 'user-1',
+      },
+    );
+    await ask();
+
+    const [withTurns, first] = submitted();
+    expect(withTurns).toMatchObject({ kind: 'ask_project', conversationTurns: turns });
+    expect(first).toMatchObject({ kind: 'ask_project' });
+    expect(first).not.toHaveProperty('conversationTurns');
+  });
+});
