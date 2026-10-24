@@ -278,17 +278,27 @@ function awsOrchestratorForShard(shard: FleetShardDTO): ContainerOrchestrator {
     ? createEc2Api({ ...key, region })
     : createEc2Api({
         region,
-        credentialProvider: async () => {
-          const session = await management!.assumeRunnerRole(accountId);
-          return {
-            accessKeyId: session.accessKeyId,
-            secretAccessKey: session.secretAccessKey,
-            sessionToken: session.sessionToken,
-            ...(session.expiration ? { expiration: session.expiration } : {}),
-          };
-        },
+        credentialProvider: runnerRoleCredentialProvider(management!, accountId),
       });
   return createAwsOrchestrator({ ec2, region, shardTag: shard.name, amiId });
+}
+
+/** The SDK credential provider for an account's runner ROLE (MOTIR-9460): each
+ *  call assumes a fresh session through the management API; a session with no
+ *  expiry is handed over without one. */
+export function runnerRoleCredentialProvider(
+  management: Pick<AwsManagementApi, 'assumeRunnerRole'>,
+  accountId: string,
+) {
+  return async () => {
+    const session = await management.assumeRunnerRole(accountId);
+    return {
+      accessKeyId: session.accessKeyId,
+      secretAccessKey: session.secretAccessKey,
+      sessionToken: session.sessionToken,
+      ...(session.expiration ? { expiration: session.expiration } : {}),
+    };
+  };
 }
 
 /** The management API the runner role is assumed through, or null when the

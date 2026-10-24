@@ -37,19 +37,18 @@ export const fleetGrowthEventRepository = {
 
   /** The kind's newest UNFINISHED growth: not `refused`, and either the quota
    *  raise it waits on still open (read through the request, so no flag can
-   *  drift) or an unsettled CLAIM written after `claimFreshAfter` (MOTIR-9461).
-   *  Without `claimFreshAfter` no claim counts. */
+   *  drift) or an unsettled CLAIM written after `claimFreshAfter` (MOTIR-9461). */
   async findLatestUnfinishedByKind(
     fleetKind: string,
     tx: Prisma.TransactionClient,
-    claimFreshAfter?: Date,
+    claimFreshAfter: Date,
   ): Promise<FleetGrowthEvent | null> {
     return tx.fleetGrowthEvent.findFirst({
       where: {
         fleetKind,
         OR: [
           { outcome: { not: 'refused' }, quotaRequest: { closedAt: null } },
-          ...(claimFreshAfter ? [{ ...CLAIM, createdAt: { gt: claimFreshAfter } }] : []),
+          { ...CLAIM, createdAt: { gt: claimFreshAfter } },
         ],
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],

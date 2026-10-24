@@ -16,6 +16,7 @@ import {
   orchestratorForShard,
   registerShardAdapter,
   resetShardFakes,
+  runnerRoleCredentialProvider,
   shardLocationKey,
   unregisterShardAdapter,
 } from '@/lib/orchestrator';
@@ -217,6 +218,30 @@ describe('orchestratorForShard — the account row becomes its own adapter', () 
 
       // Built without a call: the session is assumed when the SDK first signs.
       expect(orchestratorForShard(account).provider).toBe('aws');
+    });
+
+    it('signs with a fresh runner-role session, its expiry only when AWS gave one', async () => {
+      const expiration = new Date('2026-10-25T00:00:00Z');
+      const sessions = [
+        { accessKeyId: 'ASIA1', secretAccessKey: 's1', sessionToken: 't1', expiration },
+        { accessKeyId: 'ASIA2', secretAccessKey: 's2', sessionToken: 't2', expiration: null },
+      ];
+      const assumeRunnerRole = vi.fn(async () => sessions.shift()!);
+      const provide = runnerRoleCredentialProvider({ assumeRunnerRole }, '123456789012');
+
+      await expect(provide()).resolves.toEqual({
+        accessKeyId: 'ASIA1',
+        secretAccessKey: 's1',
+        sessionToken: 't1',
+        expiration,
+      });
+      await expect(provide()).resolves.toEqual({
+        accessKeyId: 'ASIA2',
+        secretAccessKey: 's2',
+        sessionToken: 't2',
+      });
+      expect(assumeRunnerRole).toHaveBeenCalledWith('123456789012');
+      expect(assumeRunnerRole).toHaveBeenCalledTimes(2);
     });
 
     it('with neither a key nor the management credential, names both ways', async () => {
