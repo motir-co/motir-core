@@ -96,15 +96,20 @@ export const codeGraphIndex = defineJob(
   { id: 'system.code-graph-index', retryPolicy: 'idempotent' },
   async (ctx, services) => {
     const data = ctx.event.data as CodeGraphIndexData;
-    const result = await runIndexFleetSteps(ctx, services, {
-      installationId: data.installationId,
-      // Carried on the payload since MOTIR-1500 and now LOAD-BEARING
-      // (MOTIR-1931): it is the repo's own tenant, stamped at enqueue.
-      workspaceId: data.workspaceId,
-      repoOwner: data.repoOwner,
-      repoName: data.repoName,
-      defaultBranch: data.defaultBranch,
-    });
+    const result = await runIndexFleetSteps(
+      ctx,
+      services,
+      {
+        installationId: data.installationId,
+        // Carried on the payload since MOTIR-1500 and now LOAD-BEARING
+        // (MOTIR-1931): it is the repo's own tenant, stamped at enqueue.
+        workspaceId: data.workspaceId,
+        repoOwner: data.repoOwner,
+        repoName: data.repoName,
+        defaultBranch: data.defaultBranch,
+      },
+      'system.code-graph-index',
+    );
 
     // ⚠️ GATED ON `indexed`, SO A NO-OP RUN'S STEP SHAPE IS UNCHANGED. The three
     // vanished-tenant verdicts and `provider_cannot_index` return `indexed: false`
