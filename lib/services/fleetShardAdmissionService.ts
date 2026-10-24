@@ -175,18 +175,28 @@ export const fleetShardAdmissionService = {
   },
 
   /**
-   * After `refusedShardId` refused a CI intent's provision: pause it for
-   * `SHARD_PAUSE_SECONDS`, choose again excluding every account this boot has
-   * tried, and move the claim there with the reason. Null when no account is
-   * left. Inside the admission's locked transaction, like the first choice.
+   * After `refusedShardId` refused a claim's provision: pause it for
+   * `SHARD_PAUSE_SECONDS`, choose again among the job's kind excluding every
+   * account this boot has tried, and move the claim there through `reassign`
+   * with the reason. Null when no account is left. Inside the admission's locked
+   * transaction, like the first choice.
+   *
+   * `reassign` is the one thing a CI move (the intent row) and a hosted-agent
+   * move (the `fleet_in_flight_slot` row, MOTIR-9423) differ in; the pause, the
+   * exclusion set and the choice stay this one implementation.
    */
   async moveAfterRefusalInTx(
-    intent: { id: string; organizationId: string },
+    job: ShardPlacementJob,
     refusedShardId: string,
     reason: FleetShardMoveReason & FleetShardPauseReason,
     tried: ReadonlySet<string>,
     now: Date,
     tx: Prisma.TransactionClient,
+    reassign: (
+      nextShardId: string,
+      reason: FleetShardMoveReason,
+      tx: Prisma.TransactionClient,
+    ) => Promise<unknown>,
   ): Promise<string | null> {
     await fleetShardRepository.pauseInTx(
       refusedShardId,
@@ -194,14 +204,9 @@ export const fleetShardAdmissionService = {
       reason,
       tx,
     );
-    const next = await this.chooseInTx(
-      { fleetKind: 'ci_runner', organizationId: intent.organizationId },
-      now,
-      tx,
-      { exclude: tried },
-    );
+    const next = await this.chooseInTx(job, now, tx, { exclude: tried });
     if (!('shardId' in next) || next.shardId === null) return null;
-    await intents.reassignShardInTx(intent.id, next.shardId, reason, tx);
+    await reassign(next.shardId, reason, tx);
     return next.shardId;
   },
 };

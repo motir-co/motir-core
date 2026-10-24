@@ -418,6 +418,53 @@ describe('the agent runner on its pool (MOTIR-9421)', () => {
     vi.stubEnv(AGENT_RUNNER_PROVIDER_ENV_VAR, 'fly');
     expect(await choose(fx)).toEqual({ shardId: null });
   });
+  it('the generalised move pauses, re-chooses within the kind and hands the row to reassign (MOTIR-9423)', async () => {
+    const fx = await seedTenant();
+    const a = await account(5, { fleetKind: 'hosted_agent' });
+    const b = await account(2, { fleetKind: 'hosted_agent' });
+    // A CI account with far more room is never a hosted run's next account.
+    await account(50);
+    vi.stubEnv(AGENT_RUNNER_PROVIDER_ENV_VAR, 'aws');
+    const reassigned: Array<[string, string]> = [];
+
+    const next = await withSystemContext((tx) =>
+      fleetShardAdmissionService.moveAfterRefusalInTx(
+        { fleetKind: 'hosted_agent', organizationId: fx.organizationId },
+        a.id,
+        'provider_unavailable',
+        new Set([a.id]),
+        NOW,
+        tx,
+        async (nextShardId, reason) => {
+          reassigned.push([nextShardId, reason]);
+        },
+      ),
+    );
+
+    expect(next).toBe(b.id);
+    expect(reassigned).toEqual([[b.id, 'provider_unavailable']]);
+    expect(await adminDb.fleetShard.findUniqueOrThrow({ where: { id: a.id } })).toMatchObject({
+      admissionPausedUntil: new Date(NOW.getTime() + SHARD_PAUSE_SECONDS * 1000),
+      admissionPausedReason: 'provider_unavailable',
+    });
+
+    // Nothing left: null, and reassign is never called.
+    const none = await withSystemContext((tx) =>
+      fleetShardAdmissionService.moveAfterRefusalInTx(
+        { fleetKind: 'hosted_agent', organizationId: fx.organizationId },
+        b.id,
+        'capacity_refused',
+        new Set([a.id, b.id]),
+        NOW,
+        tx,
+        async (nextShardId, reason) => {
+          reassigned.push([nextShardId, reason]);
+        },
+      ),
+    );
+    expect(none).toBeNull();
+    expect(reassigned).toHaveLength(1);
+  });
 });
 
 describe('classifyProvisionRefusal', () => {

@@ -28,7 +28,21 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { DEFAULT_FLEET_SLOT_TTL_SECONDS } from '@/lib/ciFleet/limits';
-import { FLEET_CONTAINER_SIZE, fakeOrchestrator } from '@motir/orchestrator';
+import {
+  FLEET_CONTAINER_SIZE,
+  OrchestratorApiError,
+  OrchestratorImageUnpullableError,
+  OrchestratorTimeoutError,
+  fakeOrchestrator,
+  type OrchestratorCapacityReason,
+} from '@motir/orchestrator';
+import type { FleetShard } from '@/generated/prisma/client';
+import { fakeOrchestratorForShard, resetShardFakes } from '@/lib/orchestrator';
+import { AGENT_RUNNER_PROVIDER_ENV_VAR } from '@/lib/ciFleet/fleetKindSwitches';
+import { SHARD_PAUSE_SECONDS } from '@/lib/ciFleet/shardTargets';
+import { HOSTED_AGENT_SHARD_CAPACITY_DETAIL } from '@/lib/services/fleetShardAdmissionService';
+import { fleetShardOrchestratorService } from '@/lib/services/fleetShardOrchestratorService';
+import { fleetInFlightSlotRepository } from '@/lib/repositories/fleetInFlightSlotRepository';
 import { rehearseHostedAgentMeter } from '../../scripts/rehearseHostedAgentMeter';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
@@ -98,6 +112,8 @@ grantPaidAiPlan();
 
 beforeEach(async () => {
   fakeOrchestrator.reset();
+  resetShardFakes();
+  fleetShardOrchestratorService.resetCache();
   await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "ci_container_usage_slice", "ci_container_usage", "ci_container_period_cost" RESTART IDENTITY CASCADE',
   );
@@ -112,8 +128,10 @@ afterEach(async () => {
   vi.useRealTimers();
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
-  // Fleet-wide and FK-less, so nothing else cleans it up for the next file.
+  // Fleet-wide, so nothing else cleans it up for the next file. Slots first:
+  // an account a slot names cannot be deleted under it.
   await adminDb.fleetInFlightSlot.deleteMany({});
+  await adminDb.fleetShard.deleteMany({});
 });
 
 afterAll(async () => {
@@ -446,5 +464,303 @@ describe('the rehearsal command', () => {
     expect(rehearsal.text).toContain(`cost usd         ${rehearsal.outcome.usage.costUsd}`);
     expect(rehearsal.text).toContain(`$${rehearsal.agentLine!.costUsd}`);
     expect(rehearsal.text).toContain('workload         hosted_agent');
+  });
+});
+
+// ── ON THE ACCOUNT ITS SLOT CHOSE (MOTIR-9423) ────────────────────────────────
+// The agent runner's switch is on, so `reserve` names an account; every account
+// has its OWN fake (`fakeOrchestratorForShard`), and the process-wide fake is
+// the legacy target, which an account boot must never touch.
+
+const NOW = new Date('2026-10-24T12:00:00.000Z');
+
+async function agentAccount(
+  machineLimit = 5,
+  location: 'fly' | 'aws' = 'fly',
+): Promise<FleetShard> {
+  const slug = randomToken(6).toLowerCase();
+  return adminDb.fleetShard.create({
+    data: {
+      name: `agents-${slug}`,
+      fleetKind: 'hosted_agent',
+      provider: location,
+      state: 'active',
+      githubOrg: 'motir-projects',
+      githubInstallationId: '556677',
+      ...(location === 'fly'
+        ? { flyOrg: 'motir', flyApp: `motir-agents-${slug}`, flyRegion: 'iad' }
+        : { awsAccountId: '123456789012', awsRegion: 'us-east-1' }),
+      credentialRef: 'FLEET_SHARD_TEST_TOKEN',
+      machineLimit,
+    },
+  });
+}
+
+const accountFake = (shard: FleetShard) => fakeOrchestratorForShard(shard.id);
+const slotOf = (request: HostedAgentContainerRequest) =>
+  adminDb.fleetInFlightSlot.findUnique({
+    where: { workload_ref: { workload: 'hosted_agent', ref: request.dispatchId } },
+  });
+
+/** The admission-time mint, counted, returning a fresh key each call. */
+function countingMint() {
+  let calls = 0;
+  const mint = vi.fn(async () => {
+    calls += 1;
+    return { MOTIR_RUN_KEY: `sk-run-${calls}`, MOTIR_RUN_TOKEN: `rt-${calls}` };
+  });
+  return { mint, calls: () => calls };
+}
+
+describe('a hosted run boots on the account its slot chose (MOTIR-9423)', () => {
+  beforeEach(() => {
+    vi.stubEnv('MOTIR_CLOUD', 'true');
+    vi.stubEnv('GITHUB_FALLBACK_ORG', 'motir-projects');
+  });
+
+  it('switch off: the legacy target, the request’s image and region, and no shardId', async () => {
+    const a = await agentAccount();
+    vi.stubEnv(AGENT_RUNNER_PROVIDER_ENV_VAR, 'fly');
+    const request = requestFor();
+    const booted = await hostedAgentContainerService.boot(request);
+    if (booted.phase !== 'supervising') throw new Error('expected a supervising boot');
+
+    expect(fakeOrchestrator.specs).toHaveLength(1);
+    expect(fakeOrchestrator.specs[0]).toMatchObject({ image: request.image, region: 'iad' });
+    expect(accountFake(a).provisioned).toEqual([]);
+    expect('shardId' in booted.session.handle).toBe(false);
+    expect((await slotOf(request))?.fleetShardId).toBeNull();
+  });
+
+  it('switch off: an account-less capacity refusal still ends provision_failed, as on main', async () => {
+    vi.stubEnv(AGENT_RUNNER_PROVIDER_ENV_VAR, 'fly');
+    fakeOrchestrator.failNextProvisionForCapacity('out_of_stock');
+    const booted = await hostedAgentContainerService.boot(requestFor());
+    expect(booted).toMatchObject({ phase: 'terminal', outcome: { outcome: 'provision_failed' } });
+    expect(await adminDb.fleetInFlightSlot.count()).toBe(0);
+  });
+
+  it('switch on: provisions only on the chosen account, with its image and location', async () => {
+    const a = await agentAccount(5);
+    const b = await agentAccount(1);
+    vi.stubEnv(AGENT_RUNNER_PROVIDER_ENV_VAR, 'aws');
+    const request = requestFor({ image: 'legacy/never@sha256:fake', region: 'syd' });
+
+    const booted = await hostedAgentContainerService.boot(request);
+    if (booted.phase !== 'supervising') throw new Error('expected a supervising boot');
+
+    expect(fakeOrchestrator.provisioned).toEqual([]);
+    expect(accountFake(b).provisioned).toEqual([]);
+    expect(accountFake(a).specs).toHaveLength(1);
+    // The fake orchestrator's image for every provider; the account's own region.
+    expect(accountFake(a).specs[0]).toMatchObject({
+      image: 'motir/hosted-agent@sha256:fake',
+      region: 'iad',
+    });
+    expect(booted.session.handle.shardId).toBe(a.id);
+    expect((await slotOf(request))?.fleetShardId).toBe(a.id);
+  });
+
+  it('an account with no rate for its region is refused unpriced, after giving the slot back', async () => {
+    const aws = await agentAccount(5, 'aws');
+    vi.stubEnv(AGENT_RUNNER_PROVIDER_ENV_VAR, 'aws');
+    const request = requestFor();
+
+    const refused = hostedAgentContainerService.boot(request);
+    await expect(refused).rejects.toBeInstanceOf(HostedAgentContainerUnpricedError);
+    await expect(refused).rejects.toMatchObject({ provider: 'fake', region: 'us-east-1' });
+    expect(accountFake(aws).provisioned).toEqual([]);
+    expect(fakeOrchestrator.provisioned).toEqual([]);
+    expect(await slotOf(request)).toBeNull();
+  });
+
+  it.each(['quota_exceeded', 'out_of_stock', 'throttled'] as OrchestratorCapacityReason[])(
+    'a capacity refusal (%s) pauses A, moves the slot to B, and boots there with the same env',
+    async (capacityReason) => {
+      const a = await agentAccount(5);
+      const b = await agentAccount(3);
+      vi.stubEnv(AGENT_RUNNER_PROVIDER_ENV_VAR, 'aws');
+      accountFake(a).failNextProvisionForCapacity(capacityReason);
+      const attempted = vi.spyOn(accountFake(a), 'provision');
+      const { mint, calls } = countingMint();
+      const request = requestFor();
+
+      const booted = await hostedAgentContainerService.boot(request, {
+        envAtAdmission: mint,
+        now: () => NOW,
+      });
+      if (booted.phase !== 'supervising') throw new Error('expected a supervising boot');
+
+      expect(calls()).toBe(1);
+      const envOnA = attempted.mock.calls[0]![0].env;
+      const envOnB = accountFake(b).specs[0]!.env;
+      expect(envOnB['MOTIR_RUN_KEY']).toBe(envOnA['MOTIR_RUN_KEY']);
+      expect(envOnB['MOTIR_RUN_TOKEN']).toBe(envOnA['MOTIR_RUN_TOKEN']);
+      expect(envOnB).toMatchObject({ MOTIR_RUN_KEY: 'sk-run-1', MOTIR_RUN_TOKEN: 'rt-1' });
+
+      expect(accountFake(a).liveContainerIds()).toEqual([]);
+      expect(accountFake(b).liveContainerIds()).toHaveLength(1);
+      expect(fakeOrchestrator.provisioned).toEqual([]);
+      expect(booted.session.handle.shardId).toBe(b.id);
+      expect((await slotOf(request))?.fleetShardId).toBe(b.id);
+      expect(await adminDb.fleetShard.findUniqueOrThrow({ where: { id: a.id } })).toMatchObject({
+        admissionPausedUntil: new Date(NOW.getTime() + SHARD_PAUSE_SECONDS * 1000),
+        admissionPausedReason: 'capacity_refused',
+      });
+    },
+  );
+
+  it.each([
+    ['a timeout', new OrchestratorTimeoutError('fly', 30_000)],
+    ['a 503', new OrchestratorApiError('fly', 503, 'unavailable')],
+    ['no answer at all', new OrchestratorApiError('fly', null, 'unreachable')],
+  ])('an outage (%s) moves the boot with reason provider_unavailable', async (_case, error) => {
+    const a = await agentAccount(5);
+    const b = await agentAccount(3);
+    vi.stubEnv(AGENT_RUNNER_PROVIDER_ENV_VAR, 'aws');
+    vi.spyOn(accountFake(a), 'provision').mockRejectedValueOnce(error);
+    const request = requestFor();
+
+    const booted = await hostedAgentContainerService.boot(request, { now: () => NOW });
+    if (booted.phase !== 'supervising') throw new Error('expected a supervising boot');
+    expect(booted.session.handle.shardId).toBe(b.id);
+    expect((await slotOf(request))?.fleetShardId).toBe(b.id);
+    expect(await adminDb.fleetShard.findUniqueOrThrow({ where: { id: a.id } })).toMatchObject({
+      admissionPausedReason: 'provider_unavailable',
+    });
+  });
+
+  it('every account refuses for capacity: the slot is gone and the boot defers shard_capacity', async () => {
+    const a = await agentAccount(5);
+    const b = await agentAccount(3);
+    vi.stubEnv(AGENT_RUNNER_PROVIDER_ENV_VAR, 'aws');
+    accountFake(a).failNextProvisionForCapacity('out_of_stock');
+    accountFake(b).failNextProvisionForCapacity('quota_exceeded');
+    const request = requestFor();
+
+    const booted = await hostedAgentContainerService.boot(request, { now: () => NOW });
+
+    expect(booted).toEqual({
+      phase: 'terminal',
+      outcome: {
+        outcome: 'admission_deferred',
+        reason: 'shard_capacity',
+        detail: HOSTED_AGENT_SHARD_CAPACITY_DETAIL,
+      },
+    });
+    expect(await slotOf(request)).toBeNull();
+    expect(accountFake(a).liveContainerIds()).toEqual([]);
+    expect(accountFake(b).liveContainerIds()).toEqual([]);
+    expect(fakeOrchestrator.provisioned).toEqual([]);
+  });
+
+  it.each([
+    [
+      'an unpullable image',
+      new OrchestratorImageUnpullableError('fly', 400, 'ghcr.io/x@sha256:1', 'denied'),
+      'image_unpullable',
+    ],
+    ['a 400', new OrchestratorApiError('fly', 400, 'bad spec'), 'provision_failed'],
+  ])(
+    '%s from an account does not move: the slot goes back and the outcome is today’s',
+    async (_c, error, outcome) => {
+      const a = await agentAccount(5);
+      const b = await agentAccount(3);
+      vi.stubEnv(AGENT_RUNNER_PROVIDER_ENV_VAR, 'aws');
+      vi.spyOn(accountFake(a), 'provision').mockRejectedValueOnce(error);
+      const request = requestFor();
+
+      const booted = await hostedAgentContainerService.boot(request);
+      expect(booted).toMatchObject({ phase: 'terminal', outcome: { outcome } });
+      expect(await slotOf(request)).toBeNull();
+      expect(accountFake(b).provisioned).toEqual([]);
+      expect(
+        (await adminDb.fleetShard.findUniqueOrThrow({ where: { id: a.id } })).admissionPausedUntil,
+      ).toBeNull();
+    },
+  );
+
+  it('a move racing a new admission for the one free slot left: no account over, one deferred', async () => {
+    const a = await agentAccount(1);
+    const b = await agentAccount(1);
+    vi.stubEnv(AGENT_RUNNER_PROVIDER_ENV_VAR, 'aws');
+    accountFake(a).failNextProvisionForCapacity('out_of_stock');
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const other = await seedTenant();
+
+    const results = await Promise.all([
+      hostedAgentContainerService.boot(requestFor()),
+      hostedAgentContainerService.boot(requestFor(other)),
+    ]);
+
+    const phases = results.map((r) => r.phase).sort();
+    expect(phases).toEqual(['supervising', 'terminal']);
+    expect(results.find((r) => r.phase === 'terminal')).toMatchObject({
+      outcome: { outcome: 'admission_deferred', reason: 'shard_capacity' },
+    });
+    for (const shard of [a, b]) {
+      expect(
+        await adminDb.fleetInFlightSlot.count({ where: { fleetShardId: shard.id } }),
+      ).toBeLessThanOrEqual(1);
+    }
+    const live =
+      accountFake(a).liveContainerIds().length + accountFake(b).liveContainerIds().length;
+    expect(live).toBe(1);
+  });
+
+  it('never re-points a slot another run owns', async () => {
+    const a = await agentAccount(5);
+    const b = await agentAccount(5);
+    vi.stubEnv(AGENT_RUNNER_PROVIDER_ENV_VAR, 'aws');
+    await withSystemContext((tx) =>
+      fleetInFlightSlotRepository.take(
+        {
+          workload: 'hosted_agent',
+          ref: 'dispatch-shared',
+          ownerRef: 'run-owner',
+          organizationId: tenant.organizationId,
+          fleetShardId: a.id,
+          expiresAt: new Date(Date.now() + 3_600_000),
+        },
+        tx,
+      ),
+    );
+
+    const next = await fleetCeilingService.moveHostedSlotAfterRefusal(
+      { ref: 'dispatch-shared', ownerRef: 'run-intruder', organizationId: tenant.organizationId },
+      a.id,
+      'capacity_refused',
+      new Set([a.id]),
+      NOW,
+    );
+
+    expect(next).toBeNull();
+    const row = await adminDb.fleetInFlightSlot.findFirstOrThrow({
+      where: { ref: 'dispatch-shared' },
+    });
+    expect(row).toMatchObject({ ownerRef: 'run-owner', fleetShardId: a.id });
+    expect(b.id).not.toBe(a.id);
+  });
+
+  it('a session memoized before accounts (no handle.shardId) still round-trips as legacy', () => {
+    const memo: HostedAgentSession = JSON.parse(
+      JSON.stringify({
+        handle: { provider: 'fake', id: 'fake-1', region: 'iad', createdAt: NOW.toISOString() },
+        bootedAt: NOW.toISOString(),
+        dispatchId: 'dispatch-old',
+        runId: 'run-old',
+        dispatchRunId: null,
+        timeoutSeconds: 3_600,
+        size: FLEET_CONTAINER_SIZE,
+        attribution: {
+          orgId: 'org',
+          workspaceId: 'ws',
+          projectId: 'p',
+          repoFullName: 'motir-projects/acme-web',
+        },
+      }),
+    ) as HostedAgentSession;
+    expect(memo.handle.shardId).toBeUndefined();
+    expect(JSON.parse(JSON.stringify(memo))).toEqual(memo);
   });
 });

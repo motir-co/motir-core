@@ -11636,6 +11636,8 @@ model FleetShard {
   ciRunnerIntents    CiRunnerProvisioningIntent[]
   /// The fleet slots whose containers boot in this account (MOTIR-9421).
   fleetInFlightSlots FleetInFlightSlot[]
+  /// The hosted runs whose containers booted in this account (MOTIR-9423).
+  dispatchRuns       DispatchRun[]
 
   /// One Fly location is one account.
   @@unique([provider, flyOrg, flyApp])
@@ -12471,6 +12473,11 @@ model DispatchRun {
   /// constraint (`dispatch_run_agent_instance_origin_check`) pins that only an
   /// `instance` run names an agent.
   agentInstanceId String? @map("agent_instance_id")
+  /// The agent-runner account a HOSTED run's container booted on (MOTIR-9423),
+  /// written once the boot is supervising. Null for a run on the process-wide
+  /// fleet, a local run, and every run before accounts. SetNull: an account row
+  /// going away never takes run history with it.
+  fleetShardId    String? @map("fleet_shard_id")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -12480,6 +12487,7 @@ model DispatchRun {
   scope         WorkItem?      @relation("DispatchRunScope", fields: [scopeWorkItemId], references: [id], onDelete: SetNull)
   createdBy     User?          @relation(fields: [createdById], references: [id], onDelete: SetNull)
   agentInstance AgentInstance? @relation(fields: [agentInstanceId], references: [id], onDelete: SetNull)
+  fleetShard    FleetShard?    @relation(fields: [fleetShardId], references: [id], onDelete: SetNull)
 
   cards            DispatchRunCard[]
   events           DispatchRunEvent[]
@@ -12520,6 +12528,8 @@ model DispatchRun {
   /// heartbeat is older than the lapse window. Status-first for the same reason
   /// as the index above.
   @@index([status, lastHeartbeatAt])
+  /// Which runs an agent-runner account carries (MOTIR-9423), for the reaper.
+  @@index([fleetShardId])
   @@map("dispatch_run")
 }
 

@@ -616,7 +616,17 @@ async function admitHostedRun(
   }
 
   // ── Hand the booted session to the durable supervisor ──────────────────
+  // The account the container booted on is on the run BEFORE anything can
+  // supervise, reap or bill it (MOTIR-9423); null for the process-wide fleet.
+  // A write that fails tears the container down below, like a failed enqueue.
   try {
+    await withWorkspaceServiceContext(data.workspaceId, (tx) =>
+      dispatchRunRepository.recordFleetShard(
+        data.dispatchRunId,
+        booted.session.handle.shardId ?? null,
+        tx,
+      ),
+    );
     await sendEvent(
       'hosted-run/supervise',
       {
