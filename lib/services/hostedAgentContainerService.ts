@@ -10,6 +10,7 @@ import {
 } from '@/lib/services/fleetShardAdmissionService';
 import { fleetShardOrchestratorService } from '@/lib/services/fleetShardOrchestratorService';
 import { fleetShardService } from '@/lib/services/fleetShardService';
+import { agentRunnerOnPool } from '@/lib/ciFleet/fleetKindSwitches';
 import { hostedRunChargeService } from '@/lib/services/hostedRunChargeService';
 import {
   OrchestratorImageUnpullableError,
@@ -543,7 +544,8 @@ export const hostedAgentContainerService = {
    *
    * THROWS for the two refusals that are about the REQUEST — an unpriced machine
    * class and an out-of-bounds timeout — and for an unconfigured orchestrator.
-   * The timeout fires before the slot; the price and the orchestrator are read
+   * The timeout fires before the slot, and so does the price while the agent
+   * runner's switch is Fly; with it on, the price and the orchestrator are read
    * against the slot's account (MOTIR-9423), so they fire after it and give it
    * back first. No container is provisioned before any of them, so a throw
    * leaks nothing. A REFUSED provision is about this dispatch and comes back as a
@@ -560,6 +562,17 @@ export const hostedAgentContainerService = {
       throw new HostedAgentContainerRequestInvalidError(
         `timeoutSeconds must be in (0, ${HOSTED_AGENT_MAX_TIMEOUT_MS / 1000}], got ${request.timeoutSeconds}`,
       );
+    }
+
+    // ── 0a · While the switch is Fly, priced before the slot, exactly as before ─
+    // The run will boot on the process-wide fleet, so the price is read against
+    // it before anything is reserved and a refusal costs nothing at all. With the
+    // switch on, the price is read against the slot's account below instead.
+    if (!agentRunnerOnPool()) {
+      const legacy = getOrchestrator();
+      if (!resolveContainerRate(legacy.provider, request.size, request.region, now())) {
+        throw new HostedAgentContainerUnpricedError(legacy.provider, request.size, request.region);
+      }
     }
 
     // ── 1 · Take a fleet slot, sized to THIS run ─────────────────────────────
