@@ -360,6 +360,17 @@ describe('the reconciler walks every AWS agent-runner account (MOTIR-9426)', () 
     expect(charge).toHaveBeenCalledTimes(1);
     expect(charge.mock.calls[0]![0]).toBe(run.id);
     expect(end).toHaveBeenCalledWith(run.id, 'lost_supervision', expect.anything());
+    // The kill is recorded against the run and its paying organisation.
+    expect(
+      await adminDb.fleetMachineKill.findFirstOrThrow({ where: { machineId: id } }),
+    ).toMatchObject({
+      app: b.shard.name,
+      machineName: name,
+      reason: 'record_ended',
+      workload: 'hosted_agent',
+      recordRef: run.id,
+      organizationId: fx.organizationId,
+    });
     // The alert names the account and the VM.
     expect(alerts()).toHaveLength(1);
     expect(alerts()[0]).toContain(`AWS instance ${id} (${name}) in ${b.shard.name}`);
