@@ -163,6 +163,30 @@ async function runHosted(page: Page, itemKey: string): Promise<string> {
   return id;
 }
 
+/**
+ * The run panel's phase list says the agent is running. The panel shows phases,
+ * not log lines; a run's log is read in its Runs dialog ({@link expectRunLog}).
+ */
+async function expectAgentRunning(page: Page): Promise<void> {
+  await expect(main(page).locator('li[data-phase="running"]')).toHaveAttribute(
+    'data-state',
+    'now',
+    {
+      timeout: 30_000,
+    },
+  );
+}
+
+/** Open a run's dialog on the Runs page and wait until its log shows every line. */
+async function expectRunLog(page: Page, dispatchRunId: string, lines: string[]): Promise<void> {
+  await page.goto(`/runs?run=${dispatchRunId}`);
+  const dialog = page.getByRole('dialog', { name: en.runs.modalTitle });
+  await expect(dialog).toBeVisible({ timeout: FIRST_PAINT_MS });
+  for (const line of lines) {
+    await expect(dialog.getByTestId('run-log-body')).toContainText(line);
+  }
+}
+
 /** The instance a run booted on AWS, once it has, with its account's id. */
 async function awsBootOf(dispatchRunId: string) {
   await expect
@@ -356,7 +380,7 @@ test('a hosted run boots on the agent-runner AWS pool, moves when an account is 
     const c1 = await PlayedContainer.boot(runTokenFor(run1), run1, card1.identifier, baseURL);
     containers.push(c1);
     await c1.say('opencode: implementing on Fly…');
-    await expect(main(page).getByTestId('hosted-run')).toContainText('implementing on Fly');
+    await expectAgentRunning(page);
     await beat();
     await c1.exit();
     await expect(main(page).getByTestId('hosted-end')).toHaveAttribute('data-end', 'succeeded', {
@@ -386,7 +410,7 @@ test('a hosted run boots on the agent-runner AWS pool, moves when an account is 
     c2 = await PlayedContainer.boot(fakeAwsRunTokenFor(run2), run2, card2.identifier, baseURL);
     containers.push(c2);
     await c2.say('opencode: implementing on AWS account A…');
-    await expect(main(page).getByTestId('hosted-run')).toContainText('implementing on AWS');
+    await expectAgentRunning(page);
   });
   await beat();
 
@@ -405,7 +429,7 @@ test('a hosted run boots on the agent-runner AWS pool, moves when an account is 
     c3 = await PlayedContainer.boot(fakeAwsRunTokenFor(run3), run3, card3.identifier, baseURL);
     containers.push(c3);
     await c3.say('opencode: implementing on AWS account B…');
-    await expect(main(page).getByTestId('hosted-run')).toContainText('implementing on AWS');
+    await expectAgentRunning(page);
   });
   await beat();
 
@@ -440,11 +464,10 @@ test('a hosted run boots on the agent-runner AWS pool, moves when an account is 
     await beat();
 
     // …and the run's own log says why it waits.
-    await page.goto(`/runs?run=${run4}`);
-    const dialog = page.getByRole('dialog', { name: en.runs.modalTitle });
-    await expect(dialog).toBeVisible({ timeout: FIRST_PAINT_MS });
-    await expect(dialog.getByTestId('run-log-body')).toContainText(WAITING_LINE);
-    await expect(dialog).not.toContainText(hosted.end.failed);
+    await expectRunLog(page, run4, [WAITING_LINE]);
+    await expect(page.getByRole('dialog', { name: en.runs.modalTitle })).not.toContainText(
+      hosted.end.failed,
+    );
   });
   await beat();
 
@@ -515,7 +538,7 @@ test('a hosted run boots on the agent-runner AWS pool, moves when an account is 
     c4 = await PlayedContainer.boot(fakeAwsRunTokenFor(run4), run4, card4.identifier, baseURL);
     containers.push(c4);
     await c4.say('opencode: started after waiting for room…');
-    await expect(main(page).getByTestId('hosted-run')).toContainText('started after waiting');
+    await expectAgentRunning(page);
 
     // The waiting line comes first, then the run's output.
     const logs = await runLogs(run4);
@@ -523,6 +546,8 @@ test('a hosted run boots on the agent-runner AWS pool, moves when an account is 
     expect(logs.indexOf(WAITING_LINE)).toBeLessThan(
       logs.indexOf('opencode: started after waiting for room…'),
     );
+    // …and the person reads the same in the run's log.
+    await expectRunLog(page, run4, [WAITING_LINE, 'opencode: started after waiting for room…']);
   });
   await beat();
 
@@ -590,7 +615,7 @@ test('a hosted run boots on the agent-runner AWS pool, moves when an account is 
     );
     containers.push(c5);
     await c5.say('opencode: implementing on AWS account B after A refused…');
-    await expect(main(page).getByTestId('hosted-run')).toContainText('after A refused');
+    await expectAgentRunning(page);
   });
   await beat();
 
