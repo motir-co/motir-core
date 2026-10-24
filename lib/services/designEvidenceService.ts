@@ -502,6 +502,7 @@ async function moveToReviewWhenUndelivered(
   // open reaches this walk, and the publisher is told to clear the mark.
   for (const key of await hopsToReview(current, tx)) {
     const { transition } = await workItemsService.applyStatusTransition(current.id, key, ctx, tx);
+    /* v8 ignore next -- a hop `hopsToReview` chose always leaves the current status, so it always applies a transition */
     if (transition) appliedTransitions.push({ workItemId: current.id, ...transition });
   }
 }
