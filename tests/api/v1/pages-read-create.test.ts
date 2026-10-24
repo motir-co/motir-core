@@ -218,6 +218,19 @@ describe('GET /api/v1/pages/{pageId}', () => {
     expect(read.revision).toBe(created.revision);
     expect(read.latestVersion?.authorId).toBe(caller.user.id);
   });
+
+  it('a page whose history predates versions reads with latestVersion null', async () => {
+    const caller = await pageCaller();
+    const created = await body<V1Page>(
+      await createPageV1(caller, caller.projectKey, { title: 'Old page', markdown: 'Legacy.' }),
+    );
+    await adminDb.pageVersion.deleteMany({ where: { pageId: created.id } });
+
+    const read = await body<V1Page>(await getPageV1(caller, created.id));
+    expect(pageSchema.safeParse(read).success).toBe(true);
+    expect(read.latestVersion).toBeNull();
+    expect(read.markdown).toContain('Legacy.');
+  });
 });
 
 describe('one not-found', () => {
