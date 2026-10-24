@@ -51,6 +51,10 @@ export function toFleetShardDTO(row: FleetShard): FleetShardDTO {
       row.flyOrg !== null && row.flyApp !== null && row.flyRegion !== null
         ? { org: row.flyOrg, app: row.flyApp, region: row.flyRegion }
         : null,
+    aws:
+      row.awsAccountId !== null && row.awsRegion !== null
+        ? { accountId: row.awsAccountId, region: row.awsRegion }
+        : null,
     credentialRef: row.credentialRef,
     limits: {
       vcpuQuota: row.vcpuQuota,

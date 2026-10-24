@@ -52,6 +52,7 @@ export type FleetShardInvalidField =
   | 'githubOrg'
   | 'githubInstallationId'
   | 'flyLocation'
+  | 'awsLocation'
   | 'machineLimit'
   | 'limit'
   | 'limitsSource';

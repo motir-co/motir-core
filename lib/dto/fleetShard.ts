@@ -6,7 +6,7 @@ import type { GithubAppRole } from '@/lib/github/appAuth';
 // ⚠️ It carries `credentialRef` — the NAME of the environment variable the
 // provider secret lives in — and never a secret value: the row holds none.
 
-export type FleetShardProviderDTO = 'fly';
+export type FleetShardProviderDTO = 'fly' | 'aws';
 export type FleetShardRoleDTO = 'primary';
 export type FleetShardStateDTO = 'provisioning' | 'active' | 'disabled';
 
@@ -32,6 +32,8 @@ export interface FleetShardDTO {
   github: { org: string; installationId: string; appRole: GithubAppRole };
   /** The Fly location — set for a `fly` account. */
   fly: { org: string; app: string; region: string } | null;
+  /** The AWS location — set for an `aws` account (MOTIR-9276). */
+  aws: { accountId: string; region: string } | null;
   credentialRef: string;
   limits: FleetShardLimitsDTO;
   limitsSource: Partial<Record<FleetShardLimitName, FleetShardLimitSource>>;

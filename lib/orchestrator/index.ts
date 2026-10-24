@@ -1,4 +1,6 @@
 import {
+  createAwsOrchestrator,
+  createEc2Api,
   createFakeOrchestrator,
   createFlyOrchestrator,
   createUsageSink,
@@ -167,14 +169,13 @@ export function isOrchestratorConfigured(): boolean {
 // ONE ORCHESTRATOR PER FLEET ACCOUNT (Story MOTIR-8953 · MOTIR-8964)
 // ═══════════════════════════════════════════════════════════════════════════
 // The only place an account row becomes an adapter. The package stays
-// account-blind — it takes a plain `{ token, app, region }` — and nothing below
-// this seam names a vendor except the one `fly` case.
+// account-blind — it takes a plain `{ token, app, region }` or `{ ec2, region,
+// shardTag, amiId }` — and nothing below this seam names a vendor except the
+// `fly` and `aws` cases (MOTIR-9276).
 //
-// Every other provider resolves through a REGISTRY keyed on provider: an adapter
+// Any other provider resolves through a REGISTRY keyed on provider: an adapter
 // registers `{ orchestrator(shard), inventory(shard) }` and is handed the WHOLE
-// account (fleet kind, provider, location, `credentialRef`). That is what lets
-// every fleet kind share this layer, and the AWS adapter (MOTIR-9276) plug into
-// one slot. This card registers none.
+// account (fleet kind, provider, location, `credentialRef`).
 
 /** What a provider adapter registers: how to reach one account's containers,
  *  and how to list its machines (null when another inventory already covers it). */
@@ -231,6 +232,42 @@ function flyOrchestratorForShard(shard: FleetShardDTO): ContainerOrchestrator {
   return createFlyOrchestrator({ token, app: shard.fly.app, region: shard.fly.region });
 }
 
+/** The env var naming the runner AMI every AWS account boots (MOTIR-9272). */
+export const AWS_RUNNER_AMI_ENV_VAR = 'MOTIR_AWS_RUNNER_AMI_ID';
+
+/**
+ * An AWS account's orchestrator (MOTIR-9276): its own IAM key, read from
+ * `<credentialRef>_ACCESS_KEY_ID` / `<credentialRef>_SECRET_ACCESS_KEY` (the
+ * suffixes add-shard documents, MOTIR-9278), the fleet's AMI, and the account's
+ * region. The shard tag is the account's name — what its network is tagged with.
+ */
+function awsOrchestratorForShard(shard: FleetShardDTO): ContainerOrchestrator {
+  const keyIdVar = `${shard.credentialRef}_ACCESS_KEY_ID`;
+  const secretVar = `${shard.credentialRef}_SECRET_ACCESS_KEY`;
+  const accessKeyId = process.env[keyIdVar]?.trim();
+  const secretAccessKey = process.env[secretVar]?.trim();
+  const amiId = process.env[AWS_RUNNER_AMI_ENV_VAR]?.trim();
+  // Every missing variable at once, as `indexFleetConfig` does.
+  const missing = [
+    ...(accessKeyId ? [] : [keyIdVar]),
+    ...(secretAccessKey ? [] : [secretVar]),
+    ...(amiId ? [] : [AWS_RUNNER_AMI_ENV_VAR]),
+  ];
+  if (missing.length > 0 || !accessKeyId || !secretAccessKey || !amiId) {
+    throw new OrchestratorNotConfiguredError(`set ${missing.join(', ')}`);
+  }
+  if (!shard.aws) {
+    throw new OrchestratorNotConfiguredError(`fleet account ${shard.name} names no AWS location`);
+  }
+  const { region } = shard.aws;
+  return createAwsOrchestrator({
+    ec2: createEc2Api({ accessKeyId, secretAccessKey, region }),
+    region,
+    shardTag: shard.name,
+    amiId,
+  });
+}
+
 /**
  * The orchestrator for ONE account. Throws `OrchestratorNotConfiguredError` when
  * it cannot be reached — its credential unset, or no adapter registered for its
@@ -244,6 +281,8 @@ export function orchestratorForShard(shard: FleetShardDTO): ContainerOrchestrato
   switch (shard.provider) {
     case 'fly':
       return flyOrchestratorForShard(shard);
+    case 'aws':
+      return awsOrchestratorForShard(shard);
     default: {
       const unrouted: never = shard.provider;
       return registeredAdapter(unrouted).orchestrator(shard);
@@ -259,6 +298,10 @@ export function orchestratorForShard(shard: FleetShardDTO): ContainerOrchestrato
 export function inventoryForShard(shard: FleetShardDTO): FleetInventory | null {
   switch (shard.provider) {
     case 'fly':
+      return null;
+    // No AWS listing yet: the AWS reaper sweeps each account by its shard tag,
+    // and the attribution reconciler does not read EC2.
+    case 'aws':
       return null;
     default: {
       const unrouted: never = shard.provider;
