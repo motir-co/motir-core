@@ -364,6 +364,66 @@ describe('reportAction — a step, a milestone, or a heartbeat (§3)', () => {
   });
 });
 
+describe('a `needs_human` settle raises the manual-work gate only on a READY card (MOTIR-9500)', () => {
+  // The agent path the bug was seen on: a story run opened over every child, a manual
+  // child settled `needs_human` while the sibling it waits on is still open. §6 would
+  // withdraw that gate as `not_ready`, so the raise must not open it.
+  async function storyWithManualChild() {
+    const { story, children } = await heldStory(1);
+    const [code] = children;
+    const manual = await createTestWorkItem(fx, {
+      kind: 'subtask',
+      title: 'issue the certificate',
+      parentId: story.id,
+      type: 'manual',
+      executor: 'human',
+    });
+    await hold(manual);
+    await adminDb.workItemLink.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        fromId: manual.id,
+        toId: code!.id,
+        kind: 'is_blocked_by',
+        createdById: fx.ownerId,
+      },
+    });
+    return { story, code: code!, manual };
+  }
+
+  const settleNeedsHuman = (key: string) =>
+    dispatchRunService.reportAction(
+      {
+        key,
+        events: [{ kind: 'card_settled', disposition: 'skipped', skipReason: 'needs_human' }],
+      },
+      fx.ctx,
+    );
+  const manualGatesOf = (workItemId: string) =>
+    adminDb.approvalGate.findMany({ where: { workItemId, kind: 'manual_work' } });
+
+  it('raises no gate while the sibling blocker is open', async () => {
+    const { story, manual } = await storyWithManualChild();
+    await start(story.identifier);
+
+    await settleNeedsHuman(manual.identifier);
+
+    expect(await manualGatesOf(manual.id)).toEqual([]);
+  });
+
+  it('raises it once the blocker is done', async () => {
+    const { story, code, manual } = await storyWithManualChild();
+    await start(story.identifier);
+    await adminDb.workItem.update({ where: { id: code.id }, data: { status: 'done' } });
+
+    await settleNeedsHuman(manual.identifier);
+
+    expect(await manualGatesOf(manual.id)).toEqual([
+      expect.objectContaining({ state: 'awaiting', routedToId: fx.ownerId }),
+    ]);
+  });
+});
+
 describe('heartbeatCallerRuns — every Motir call keeps the agent’s run alive (§5)', () => {
   it('touches only the caller’s open AGENT runs, and skips one beaten under a minute ago', async () => {
     const leaf = await heldLeaf();
