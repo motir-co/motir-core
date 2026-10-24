@@ -418,18 +418,79 @@ export function indexFleetConfig(): IndexFleetConfig {
 /** The env var holding the hosted-agent image (`hosted-agent-run.md` §6). */
 export const HOSTED_AGENT_IMAGE_ENV_VAR = 'MOTIR_HOSTED_AGENT_IMAGE';
 
+/** What the fake orchestrator answers for the hosted-agent image. */
+const FAKE_HOSTED_AGENT_IMAGE = 'motir/hosted-agent@sha256:fake';
+
+/** The variable's value, trimmed, or `''` when it is unset. */
+function rawHostedAgentImage(): string {
+  return process.env[HOSTED_AGENT_IMAGE_ENV_VAR]?.trim() ?? '';
+}
+
 /**
- * The hosted-agent workload's configuration (MOTIR-690): the orchestrator's region
- * and the image `MOTIR_HOSTED_AGENT_IMAGE` names — or the typed not-configured
- * error naming every missing variable at once, like {@link indexFleetConfig}.
+ * The registry host of an image reference, lower-cased: the first path segment
+ * when it looks like a host (a `.`, a `:` or `localhost`), Docker Hub otherwise —
+ * the same rule `docker pull` applies.
+ */
+function imageRegistryHost(image: string): string {
+  const first = image.split('/')[0] ?? '';
+  const isHost = image.includes('/') && (/[.:]/.test(first) || first === 'localhost');
+  return isHost ? first.toLowerCase() : 'docker.io';
+}
+
+/** An ECR registry host: `<account>.dkr.ecr[-fips].<region>.amazonaws.com[.cn]`. */
+const ECR_HOST = /^\d{12}\.dkr\.ecr(-fips)?\.[a-z0-9-]+\.amazonaws\.com(\.cn)?$/;
+
+/**
+ * THE HOSTED-AGENT IMAGE for a run on `provider`'s fleet (MOTIR-9420) — the
+ * pinned reference `MOTIR_HOSTED_AGENT_IMAGE` names, read on its own, with no
+ * Fly fleet variable required.
  *
- * ⚠️ A DIGEST, NEVER A TAG (`hosted-agent-run.md` §6), refused here rather than
- * trusted: a tag lets a publish change what a running deployment boots, and a
- * hosted run's image holds the agent a customer's code is handed to.
+ * ⚠️ ONE VARIABLE SERVES BOTH FLEETS (`hosted-agent-run.md` §6, amended
+ * 2026-10-24). A second `MOTIR_AWS_HOSTED_AGENT_IMAGE` would agree with this one
+ * today and drift at the next pin.
+ *
+ * ⚠️ A DIGEST, NEVER A TAG — on every provider: a tag lets a publish change what
+ * a running deployment boots, and a hosted run's image holds the agent a
+ * customer's code is handed to.
+ *
+ * ⚠️ ON AWS, ONLY A REGISTRY A STRANGER CAN PULL FROM. An agent-runner VM boots
+ * with no instance profile and no Fly org credential, so it pulls anonymously.
+ * A `registry.fly.io` mirror needs the Fly org credential and an ECR repository
+ * needs an IAM role; both are refused here by HOST, never by substring. Any other
+ * host is accepted: whether it really serves an anonymous pull is
+ * {@link verifyHostedAgentImagePullable}'s question, asked of the live registry.
+ */
+export function hostedAgentImage(provider: OrchestratorProvider): string {
+  if (provider === 'fake' || selectedOrchestratorProvider() === 'fake') {
+    return FAKE_HOSTED_AGENT_IMAGE;
+  }
+  const image = rawHostedAgentImage();
+  if (!image) throw new OrchestratorNotConfiguredError(`set ${HOSTED_AGENT_IMAGE_ENV_VAR}`);
+  if (!/@sha256:[0-9a-f]{64}$/.test(image)) {
+    throw new OrchestratorNotConfiguredError(
+      `${HOSTED_AGENT_IMAGE_ENV_VAR} must be pinned by digest (…@sha256:<64 hex>), not a tag`,
+    );
+  }
+  const host = imageRegistryHost(image);
+  if (provider === 'aws' && (host === FLY_REGISTRY_HOST || ECR_HOST.test(host))) {
+    throw new OrchestratorNotConfiguredError(
+      `${HOSTED_AGENT_IMAGE_ENV_VAR} names an image on ${host}, which an agent-runner VM ` +
+        `cannot pull: it pulls anonymously, with no instance profile and no Fly org ` +
+        `credential, so the image must stay on a public registry (ghcr.io)`,
+    );
+  }
+  return image;
+}
+
+/**
+ * The hosted-agent workload's configuration on the FLY fleet (MOTIR-690): the
+ * fleet's region and {@link hostedAgentImage}'s image — or the typed
+ * not-configured error naming every missing variable at once, like
+ * {@link indexFleetConfig}. The digest rule lives in `hostedAgentImage` alone.
  */
 export function hostedAgentFleetConfig(): IndexFleetConfig {
   if (selectedOrchestratorProvider() === 'fake') {
-    return { image: 'motir/hosted-agent@sha256:fake', region: 'iad' };
+    return { image: FAKE_HOSTED_AGENT_IMAGE, region: 'iad' };
   }
   const missing: string[] = [];
   let region = 'iad';
@@ -441,17 +502,11 @@ export function hostedAgentFleetConfig(): IndexFleetConfig {
     // `flyFleetConfig` throws nothing but this refusal.
     missing.push((err as OrchestratorNotConfiguredError).detail.replace(/^set /, ''));
   }
-  const image = process.env[HOSTED_AGENT_IMAGE_ENV_VAR]?.trim() ?? '';
-  if (!image) missing.push(HOSTED_AGENT_IMAGE_ENV_VAR);
+  if (!rawHostedAgentImage()) missing.push(HOSTED_AGENT_IMAGE_ENV_VAR);
   if (missing.length > 0) {
     throw new OrchestratorNotConfiguredError(`set ${missing.join(', ')}`);
   }
-  if (!/@sha256:[0-9a-f]{64}$/.test(image)) {
-    throw new OrchestratorNotConfiguredError(
-      `${HOSTED_AGENT_IMAGE_ENV_VAR} must be pinned by digest (…@sha256:<64 hex>), not a tag`,
-    );
-  }
-  return { image, region };
+  return { image: hostedAgentImage('fly'), region };
 }
 
 /**
@@ -535,7 +590,7 @@ export async function verifyFleetBootable(): Promise<FleetBootableVerdict> {
     };
   }
 
-  return probeToVerdict(image);
+  return probeToVerdict(image, flyRegistryCredential);
 }
 
 /**
@@ -586,8 +641,11 @@ const flyRegistryCredential: RegistryCredentialResolver = (registry) =>
  * CONFIGURATION, before there is an image to probe, and each path decides it
  * differently.
  */
-async function probeToVerdict(image: string): Promise<FleetBootableVerdict> {
-  const probe = await probeImagePull(image, flyRegistryCredential);
+async function probeToVerdict(
+  image: string,
+  resolveCredential: RegistryCredentialResolver | undefined,
+): Promise<FleetBootableVerdict> {
+  const probe = await probeImagePull(image, resolveCredential);
   if (probe.pullable === true) {
     return { verdict: 'bootable', reference: probe.reference, digest: probe.digest };
   }
@@ -660,7 +718,53 @@ export async function verifyIndexFleetBootable(): Promise<FleetBootableVerdict> 
     };
   }
 
-  return probeToVerdict(image);
+  return probeToVerdict(image, flyRegistryCredential);
+}
+
+/**
+ * CAN AN AGENT-RUNNER VM PULL THE HOSTED-AGENT IMAGE? — the third pull path's
+ * preflight (MOTIR-9420), the twin of {@link verifyIndexFleetBootable}.
+ *
+ * ⚠️ IT PASSES NO CREDENTIAL, ON PURPOSE. It asks the question an agent-runner
+ * VM will ask: that VM has no instance profile and no Fly org credential, so its
+ * `docker pull` is anonymous, and so is this probe — on a Bearer registry such as
+ * GHCR it fetches an anonymous token and nothing else. `flyRegistryCredential`
+ * is deliberately not used: a mirror only the Fly org can read would answer
+ * `bootable` here and strand every AWS run. The same anonymous answer is right
+ * for the Fly path, which pulls this public image anonymously too.
+ *
+ * `not_applicable` under the fake orchestrator or with the variable unset (a
+ * deployment that runs no hosted agent). A variable set to a reference no VM can
+ * pull — a tag, or a `registry.fly.io` / ECR host — is `unpullable`, with
+ * {@link hostedAgentImage}'s refusal as the detail: that is a definite answer.
+ *
+ * NEVER THROWS, for the reason its twins do not: the caller is a health check.
+ */
+export async function verifyHostedAgentImagePullable(): Promise<FleetBootableVerdict> {
+  if (selectedOrchestratorProvider() === 'fake') {
+    return {
+      verdict: 'not_applicable',
+      detail: 'the fake orchestrator is selected; no image is pulled',
+    };
+  }
+  const reference = rawHostedAgentImage();
+  if (!reference) {
+    return {
+      verdict: 'not_applicable',
+      detail: `this deployment runs no hosted agent (${HOSTED_AGENT_IMAGE_ENV_VAR} is unset)`,
+    };
+  }
+  let image: string;
+  try {
+    image = hostedAgentImage('aws');
+  } catch (err) {
+    return {
+      verdict: 'unpullable',
+      reference,
+      detail: (err as OrchestratorNotConfiguredError).detail,
+    };
+  }
+  return probeToVerdict(image, undefined);
 }
 
 // ── The BOUND half: the package's usage sink, closed over the app's meter ────

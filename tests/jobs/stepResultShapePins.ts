@@ -280,6 +280,11 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/publicFollowDigestTick.ts',
     shape: '{ enqueued: number; projects: number }',
   },
+  'hosted-agent-image-preflight': {
+    file: 'lib/jobs/definitions/dailyHealthCheck.ts',
+    shape:
+      '{ detail: string; reference: string; verdict: "indeterminate" } | { detail: string; reference: string; verdict: "unpullable" } | { detail: string; verdict: "not_applicable" } | { digest: null | string; reference: string; verdict: "bootable" }',
+  },
   'purge-retained-organizations': {
     file: 'lib/jobs/definitions/organizationRetentionPurge.ts',
     shape:
