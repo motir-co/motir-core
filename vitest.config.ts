@@ -390,6 +390,16 @@ export default defineConfig({
         'lib/mcp/tools/getSectionSets.ts',
         'lib/api/v1/sectionSets/operations.ts',
         'lib/api/v1/sectionSets/schema.ts',
+        // Story MOTIR-9486 · MOTIR-9496 — the `/api/v1` PAGE resource: its helpers
+        // and its three route files, pinned at the project floor in `thresholds`
+        // below after being measured against the `tests/api/v1/pages-*` suites.
+        'lib/api/v1/pages/errors.ts',
+        'lib/api/v1/pages/resolve.ts',
+        'lib/api/v1/pages/schema.ts',
+        'lib/api/v1/pages/operations.ts',
+        'app/api/v1/projects/\\[projectKey\\]/pages/route.ts',
+        'app/api/v1/pages/\\[pageId\\]/route.ts',
+        'app/api/v1/pages/\\[pageId\\]/placement/route.ts',
         'lib/plans/applySectionsInput.ts',
         'lib/services/sectionSchemaService.ts',
         // Story MOTIR-6016 · MOTIR-6102 — the three modules the DIFFICULTY story
@@ -4145,6 +4155,34 @@ export default defineConfig({
           statements: 90,
         },
         'lib/api/v1/sectionSets/schema.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // Story MOTIR-9486 · MOTIR-9496 — the `/api/v1` PAGE resource.
+        'lib/api/v1/pages/errors.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/api/v1/pages/resolve.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/api/v1/pages/schema.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/api/v1/pages/operations.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/api/v1/projects/\\[projectKey\\]/pages/route.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/api/v1/pages/\\[pageId\\]/route.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/api/v1/pages/\\[pageId\\]/placement/route.ts': {
           lines: 90,
           functions: 90,
           branches: 90,
