@@ -5,7 +5,7 @@ import {
   type V1Operation,
   type V1Parameter,
 } from '@/lib/api/v1/openapi/operation';
-import { createPageBodySchema, pageSchema } from '@/lib/api/v1/pages/schema';
+import { createPageBodySchema, pageSchema, updatePageBodySchema } from '@/lib/api/v1/pages/schema';
 
 // The PAGE operations (Story MOTIR-9486 · MOTIR-9493).
 //
@@ -70,6 +70,26 @@ export const PAGE_OPERATIONS: readonly V1Operation[] = [
       description: 'The page.',
     },
     errorStatuses: [403, 404],
+  }),
+  defineOperation({
+    method: 'PATCH',
+    path: '/api/v1/pages/{pageId}',
+    operationId: 'updatePage',
+    summary: 'Replace a page’s body',
+    description:
+      'Replace a page’s WHOLE body with markdown, stating the `revision` the caller read — the same write the MCP `update_page` makes. A page saved since that revision is 409 `PAGE_REVISION_CONFLICT` and nothing is written: read it again and reapply. An archived page is 409 `PAGE_ARCHIVED` until it is restored. A body over the size limit is 413 `PAGE_BODY_TOO_LARGE`. The title is not changed here. A page the caller cannot see is the same 404 `PAGE_NOT_FOUND` as one that never existed; a caller who can browse the project but may not edit its pages is 403 `PROJECT_ACCESS_DENIED`.',
+    permission: 'page:edit',
+    parameters: [pageIdParameter],
+    requestBody: {
+      schema: updatePageBodySchema,
+      description: 'The new body and the revision it was written against.',
+    },
+    response: {
+      status: 200,
+      body: { kind: 'object', schema: pageSchema },
+      description: 'The page after the save, at its new `revision`.',
+    },
+    errorStatuses: [403, 404, 409, 413, 422],
   }),
 ];
 

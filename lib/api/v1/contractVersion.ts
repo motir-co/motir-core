@@ -1096,7 +1096,9 @@
  *
  * - `1.75.0` — MOTIR-9493 (Story MOTIR-9486) adds the page resource: `createPage`
  *   (`POST /api/v1/projects/{projectKey}/pages`, `page:edit`, `201` with `Page`) and
- *   `getPage` (`GET /api/v1/pages/{pageId}`, `page:view`, `200` with `Page`) — a page's
+ *   `getPage` (`GET /api/v1/pages/{pageId}`, `page:view`, `200` with `Page`), and MOTIR-9494's
+ *   `updatePage` (`PATCH /api/v1/pages/{pageId}`, `page:edit`, the whole body with the
+ *   `revision` read; a stale one is `PAGE_REVISION_CONFLICT` 409) — a page's
  *   title, placement, `revision` and markdown body, over the same `pagesService` doors as
  *   the MCP `create_page` / `get_page`. The page refusal codes (`PAGE_NOT_FOUND`,
  *   `CROSS_PROJECT_PAGE_PARENT`, `PAGE_PARENT_ARCHIVED`, `PAGE_PARENT_NOT_ALLOWED`,

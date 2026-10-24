@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { withPageErrors } from '@/lib/api/v1/pages/errors';
 import { resolvePageProjectId } from '@/lib/api/v1/pages/resolve';
-import { presentPage } from '@/lib/api/v1/pages/schema';
+import { presentPage, updatePageBodySchema } from '@/lib/api/v1/pages/schema';
 import { withV1Route } from '@/lib/api/v1/route';
+import { parseV1Body } from '@/lib/api/v1/workItems/schema';
 import { pagesService } from '@/lib/services/pagesService';
 
 // /api/v1/pages/{pageId} (Story MOTIR-9486 · MOTIR-9493) — one page, addressed
@@ -20,6 +21,25 @@ export const GET = withV1Route<{ pageId: string }>({ permission: 'page:view' }, 
   const page = await withPageErrors(async () => {
     const projectId = await resolvePageProjectId(ctx.params.pageId, ctx.service);
     return pagesService.getPageMarkdown(ctx.service, { projectId, pageId: ctx.params.pageId });
+  });
+  return NextResponse.json(presentPage(page));
+});
+
+// PATCH (MOTIR-9494) — replace the WHOLE body with markdown, stating the
+// `revision` the caller read: `pagesService.savePageMarkdown`, the write the MCP
+// `update_page` makes. A stale revision is 409 `PAGE_REVISION_CONFLICT` and an
+// archived page 409 `PAGE_ARCHIVED`, both decided under the page lock in the
+// package, and neither writes anything. No title here: a rename is its own door.
+export const PATCH = withV1Route<{ pageId: string }>({ permission: 'page:edit' }, async (ctx) => {
+  const body = await parseV1Body(ctx.req, updatePageBodySchema);
+  const page = await withPageErrors(async () => {
+    const projectId = await resolvePageProjectId(ctx.params.pageId, ctx.service);
+    return pagesService.savePageMarkdown(ctx.service, {
+      projectId,
+      pageId: ctx.params.pageId,
+      markdown: body.markdown,
+      expectedRevision: body.revision,
+    });
   });
   return NextResponse.json(presentPage(page));
 });

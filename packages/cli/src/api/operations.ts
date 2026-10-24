@@ -569,6 +569,13 @@ export const V1_OPERATIONS = {
     successStatus: 200,
     responseComponent: "Folder",
   },
+  "updatePage": {
+    method: "PATCH",
+    path: "/api/v1/pages/{pageId}",
+    permission: "page:edit",
+    successStatus: 200,
+    responseComponent: "Page",
+  },
   "updateSprint": {
     method: "PATCH",
     path: "/api/v1/sprints/{sprintId}",

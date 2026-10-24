@@ -129,3 +129,21 @@ export function readPageParent(raw: CreatePageBody['parent']): PageParentInput {
   }
   return parent;
 }
+
+/**
+ * `PATCH /api/v1/pages/{pageId}` — replace the WHOLE body, stating the revision
+ * the caller read. No title: a rename is its own door, as on the MCP.
+ */
+export const updatePageBodySchema = z
+  .object({
+    markdown: z.string().describe('The page’s new body, WHOLE, as markdown.'),
+    revision: z
+      .number()
+      .int()
+      .min(1)
+      .describe(
+        'The `revision` the caller read (from a read or the last write). A page saved since is `PAGE_REVISION_CONFLICT` (409) and nothing is written.',
+      ),
+  })
+  .strict();
+export type UpdatePageBody = z.infer<typeof updatePageBodySchema>;

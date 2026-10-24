@@ -1,6 +1,6 @@
 import type { WorkspaceRole } from '@/generated/prisma/client';
 import { POST as CREATE_PAGE } from '@/app/api/v1/projects/[projectKey]/pages/route';
-import { GET as GET_PAGE } from '@/app/api/v1/pages/[pageId]/route';
+import { GET as GET_PAGE, PATCH as PATCH_PAGE } from '@/app/api/v1/pages/[pageId]/route';
 import { workspacesService } from '@/lib/services/workspacesService';
 import type { TokenGrant } from '@/lib/tokens/grant';
 import { withTokenFor, type V1Caller, type V1ProjectCaller } from './apiV1Fixtures';
@@ -42,6 +42,18 @@ export function getPageV1(caller: Headers, pageId: string): Promise<Response> {
   return GET_PAGE(new Request(`${V1_BASE}/pages/${pageId}`, { headers: caller.headers }), {
     params: Promise.resolve({ pageId }),
   });
+}
+
+/** `PATCH /api/v1/pages/{pageId}`. */
+export function updatePageV1(caller: Headers, pageId: string, body: unknown): Promise<Response> {
+  return PATCH_PAGE(
+    new Request(`${V1_BASE}/pages/${pageId}`, {
+      method: 'PATCH',
+      headers: json(caller.headers),
+      body: typeof body === 'string' ? body : JSON.stringify(body),
+    }),
+    { params: Promise.resolve({ pageId }) },
+  );
 }
 
 /**

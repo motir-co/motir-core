@@ -501,8 +501,9 @@ describe('the operation → permission map is checked against the CODE (MOTIR-25
     // 74 with MOTIR-9029's `GET /api/v1/section-sets` (`getSectionSets`, `project:browse`) —
     // the section registry read, the same for every tenant.
     // 76 with MOTIR-9493's page create and read (`createPage` on `page:edit`, `getPage` on
-    // `page:view`) — the first operations to name a `page:*` key.
-    expect(V1_OPERATIONS.length).toBe(76);
+    // `page:view`) — the first operations to name a `page:*` key — and 77 with MOTIR-9494's
+    // `updatePage` (`page:edit`).
+    expect(V1_OPERATIONS.length).toBe(77);
     for (const operation of V1_OPERATIONS) {
       expect(
         isGrantable(operation.permission),
