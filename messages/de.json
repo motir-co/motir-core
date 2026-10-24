@@ -10041,7 +10041,11 @@
               "limits": "Limits eines Flottenkontos aktualisiert",
               "ceiling": "Obergrenze eines Flottenkontos geändert",
               "disable": "Flottenkonto deaktiviert",
-              "enable": "Flottenkonto wieder aktiviert"
+              "enable": "Flottenkonto wieder aktiviert",
+              "quota_request": "Kontingenterhöhung für ein Flottenkonto angefordert"
+            },
+            "pool": {
+              "grow": "Flottenpool erweitert"
             }
           },
           "idea": {

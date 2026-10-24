@@ -15,6 +15,9 @@
  * (--ceiling <n> | --clear)`, `disable --name <account> --reason <text>` and
  * `enable --name <account>`, each with `--operator <email>`.
  *
+ * and the pool commands (MOTIR-9463, `fleetAdminPoolCommands.ts`):
+ * `request-quota`, `pool-status` and `growth-events`.
+ *
  * `--provider aws` (MOTIR-9278) adds an AWS Organizations member account named
  * `--name`, in `--region` (default `us-east-1`); `--account-email <email>` is
  * required only when that account must be created.
@@ -38,6 +41,7 @@ import { parseArgs } from 'node:util';
 import { pathToFileURL } from 'node:url';
 import { FleetShardProvisioningRefusedError } from '@/lib/ciFleet/errors';
 import { findShardProvisioningProvider } from '@/lib/fleetShards/provisioningProviders';
+import { scrubSecrets } from '@/lib/fleetShards/scrubSecrets';
 import {
   fleetShardControlsService,
   type FleetShardControlResult,
@@ -46,6 +50,12 @@ import {
   fleetShardProvisioningService,
   type ShardProvisioningResult,
 } from '@/lib/services/fleetShardProvisioningService';
+import {
+  growthEvents,
+  poolStatus,
+  requestQuota,
+  type FleetAdminPoolDeps,
+} from './fleetAdminPoolCommands';
 
 export const EXIT_OK = 0;
 export const EXIT_ERROR = 1;
@@ -62,6 +72,10 @@ const USAGE = [
   '  fleet-admin set-ceiling --name <account> (--ceiling <n> | --clear) --operator <email>',
   '  fleet-admin disable --name <account> --reason <text> --operator <email>',
   '  fleet-admin enable --name <account> --operator <email>',
+  '  fleet-admin request-quota --name <account> [--name <account> ...] --vcpu <n>',
+  '    [--code L-1216C47A] --operator <email>',
+  '  fleet-admin pool-status [--kind <fleet kind>]',
+  '  fleet-admin growth-events --kind <fleet kind> [--limit <n>]',
 ].join('\n');
 
 /** Where the command writes — stdout and stderr in production, a buffer in tests. */
@@ -220,10 +234,18 @@ async function control(command: string, args: string[], io: FleetAdminIo): Promi
   return printControl(await fleetShardControlsService.enable(name, operator), io);
 }
 
-/** Run one `fleet-admin` command; answers its exit code. */
-export async function runFleetAdmin(argv: string[], io: FleetAdminIo): Promise<number> {
+/** Run one `fleet-admin` command; answers its exit code. `pool` carries the pool
+ *  commands' service seams for a test. */
+export async function runFleetAdmin(
+  argv: string[],
+  io: FleetAdminIo,
+  pool: FleetAdminPoolDeps = {},
+): Promise<number> {
   const [command, ...args] = argv;
   try {
+    if (command === 'request-quota') return await requestQuota(args, io, pool);
+    if (command === 'pool-status') return await poolStatus(args, io, pool);
+    if (command === 'growth-events') return await growthEvents(args, io);
     if (command === 'add-shard') return await addShard(args, io);
     if (command === 'refresh-limits') return await refreshLimits(args, io);
     if (command === 'set-ceiling' || command === 'disable' || command === 'enable') {
@@ -234,10 +256,10 @@ export async function runFleetAdmin(argv: string[], io: FleetAdminIo): Promise<n
   } catch (err) {
     if (err instanceof FleetShardProvisioningRefusedError) {
       io.err('refused:');
-      for (const problem of err.problems) io.err(`  - ${problem}`);
+      for (const problem of err.problems) io.err(scrubSecrets(`  - ${problem}`));
       return EXIT_ERROR;
     }
-    io.err(`error: ${err instanceof Error ? err.message : 'unknown'}`);
+    io.err(scrubSecrets(`error: ${err instanceof Error ? err.message : 'unknown'}`));
     return EXIT_ERROR;
   }
 }

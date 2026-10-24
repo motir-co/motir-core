@@ -10041,7 +10041,11 @@
               "limits": "Atualizou os limites de uma conta da frota",
               "ceiling": "Alterou o teto de uma conta da frota",
               "disable": "Desativou uma conta da frota",
-              "enable": "Reativou uma conta da frota"
+              "enable": "Reativou uma conta da frota",
+              "quota_request": "Solicitou aumento de cota de uma conta da frota"
+            },
+            "pool": {
+              "grow": "Ampliou um pool da frota"
             }
           },
           "idea": {

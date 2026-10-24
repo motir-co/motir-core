@@ -251,13 +251,18 @@ describe('add-shard → account row → adapter', () => {
     expect(world.keys).toEqual([RUNTIME_KEY.id]);
   });
 
-  it('with the runtime key and the AMI unset, names every missing variable and launches nothing', async () => {
+  it('with the runtime key, the management credential and the AMI unset, names every missing variable and launches nothing', async () => {
     await addShard();
     const shard = (await fleetShardService.findShardByName(NAME))!;
+    // With the management credential set, a keyless account assumes its runner
+    // role instead (MOTIR-9460); without it, nothing can reach the account.
+    vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', '');
 
     expect(() => orchestratorForShard(shard)).toThrow(
       new OrchestratorNotConfiguredError(
-        `set ${PREFIX}_ACCESS_KEY_ID, ${PREFIX}_SECRET_ACCESS_KEY, ${AWS_RUNNER_AMI_ENV_VAR}`,
+        `set ${PREFIX}_ACCESS_KEY_ID, ${PREFIX}_SECRET_ACCESS_KEY, ${AWS_RUNNER_AMI_ENV_VAR} ` +
+          '(or AWS_ORG_ADMIN_ACCESS_KEY_ID, AWS_ORG_ADMIN_SECRET_ACCESS_KEY, AWS_ORG_ADMIN_ROLE_ARN ' +
+          'to assume motir-fleet-runner)',
       ),
     );
     expect(ec2().count('runInstances')).toBe(0);

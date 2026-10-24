@@ -10041,7 +10041,11 @@
               "limits": "Odświeżono limity konta floty",
               "ceiling": "Zmieniono pułap konta floty",
               "disable": "Wyłączono konto floty",
-              "enable": "Ponownie włączono konto floty"
+              "enable": "Ponownie włączono konto floty",
+              "quota_request": "Zażądano zwiększenia limitu konta floty"
+            },
+            "pool": {
+              "grow": "Rozszerzono pulę floty"
             }
           },
           "idea": {
