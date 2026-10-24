@@ -1,5 +1,6 @@
 import {
   AwsAccountCreationRefusedError,
+  AwsManagementApiError,
   type AwsManagementApi,
   type AwsOrganizationAccount,
   type AwsPolicyDocument,
@@ -104,8 +105,18 @@ export class FakeOrganization implements AwsManagementApi {
   readonly quotaByAccount = new Map<string, number>();
   /** Per member account: the error its quota read throws (MOTIR-9458). */
   readonly readFailures = new Map<string, Error>();
+  /** The quota raises filed, by AWS request id (MOTIR-9459). */
+  readonly quotaRequests = new Map<
+    string,
+    { accountId: string; status: string; desiredValue: number }
+  >();
+  /** What the next raise filing throws, once. */
+  requestFailure: Error | null = null;
+  /** Per AWS request id: the error reading it throws. */
+  readonly requestReadFailures = new Map<string, Error>();
   createFailure: string | null = null;
   private seq = 0;
+  private requestSeq = 0;
   /** Which member account each answered session is for. */
   private readonly sessionAccount = new WeakMap<AwsSessionCredentials, string>();
 
@@ -157,6 +168,60 @@ export class FakeOrganization implements AwsManagementApi {
     const failure = accountId ? this.readFailures.get(accountId) : undefined;
     if (failure) throw failure;
     return (accountId ? this.quotaByAccount.get(accountId) : undefined) ?? this.quota;
+  }
+
+  async requestVcpuQuotaIncrease(
+    credentials: AwsSessionCredentials,
+    _regionId: string,
+    desired: number,
+  ) {
+    const accountId = this.sessionAccount.get(credentials) ?? 'unknown';
+    this.calls.push(`requestVcpuQuotaIncrease:${accountId}:${desired}`);
+    if (this.requestFailure) {
+      const failure = this.requestFailure;
+      this.requestFailure = null;
+      throw failure;
+    }
+    const open = [...this.quotaRequests.values()].find(
+      (r) => r.accountId === accountId && (r.status === 'PENDING' || r.status === 'CASE_OPENED'),
+    );
+    if (open)
+      throw new AwsManagementApiError('service-quotas', 'ResourceAlreadyExistsException', 400);
+    this.requestSeq += 1;
+    const requestId = `quota-req-${this.requestSeq}`;
+    this.quotaRequests.set(requestId, { accountId, status: 'PENDING', desiredValue: desired });
+    return { requestId, status: 'PENDING', desiredValue: desired };
+  }
+
+  async getQuotaRequest(_credentials: AwsSessionCredentials, _regionId: string, requestId: string) {
+    this.calls.push(`getQuotaRequest:${requestId}`);
+    const failure = this.requestReadFailures.get(requestId);
+    if (failure) throw failure;
+    const request = this.quotaRequests.get(requestId);
+    if (!request) throw new AwsManagementApiError('service-quotas', 'NoSuchResourceException', 400);
+    return { requestId, status: request.status, desiredValue: request.desiredValue };
+  }
+
+  async findOpenQuotaRequest(credentials: AwsSessionCredentials) {
+    const accountId = this.sessionAccount.get(credentials) ?? 'unknown';
+    this.calls.push(`findOpenQuotaRequest:${accountId}`);
+    for (const [requestId, r] of this.quotaRequests) {
+      if (r.accountId === accountId && (r.status === 'PENDING' || r.status === 'CASE_OPENED')) {
+        return { requestId, status: r.status, desiredValue: r.desiredValue };
+      }
+    }
+    return null;
+  }
+
+  /** Move a filed raise on, as AWS would; `APPROVED` grants its value (or
+   *  `granted`) to the account's quota. */
+  settleQuotaRequest(requestId: string, status: string, granted?: number): void {
+    const request = this.quotaRequests.get(requestId);
+    if (!request) throw new Error(`no fake quota request ${requestId}`);
+    request.status = status;
+    if (status === 'APPROVED') {
+      this.quotaByAccount.set(request.accountId, granted ?? request.desiredValue);
+    }
   }
 
   async ensureRunnerIamUser(_credentials: AwsSessionCredentials, policy: AwsPolicyDocument) {

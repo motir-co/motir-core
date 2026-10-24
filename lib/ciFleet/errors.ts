@@ -161,3 +161,45 @@ export class LiveQuotaReadFailedError extends Error {
     this.name = 'LiveQuotaReadFailedError';
   }
 }
+
+/** A quota raise refused BEFORE it was filed (MOTIR-9459): the desired value is
+ *  not above what the account is already granted, or the account cannot file. */
+export class QuotaRaiseRefusedError extends Error {
+  readonly code = 'QUOTA_RAISE_REFUSED' as const;
+  constructor(
+    readonly shardId: string,
+    readonly shardName: string,
+    readonly reason: string,
+  ) {
+    super(`quota raise for fleet account ${shardName} refused: ${reason}`);
+    this.name = 'QuotaRaiseRefusedError';
+  }
+}
+
+/** AWS did not accept a quota raise (MOTIR-9459). `reason` is AWS's error code. */
+export class QuotaRaiseFilingFailedError extends Error {
+  readonly code = 'QUOTA_RAISE_FILING_FAILED' as const;
+  constructor(
+    readonly shardId: string,
+    readonly shardName: string,
+    readonly reason: string,
+  ) {
+    super(`could not file the quota raise of fleet account ${shardName}: ${reason}`);
+    this.name = 'QuotaRaiseFilingFailedError';
+  }
+}
+
+/** One filed raise could not be read back from AWS (MOTIR-9459): the request is
+ *  left as stored. `reason` is AWS's error code, or the status AWS answered
+ *  that is none of the seven. */
+export class QuotaRequestReadFailedError extends Error {
+  readonly code = 'QUOTA_REQUEST_READ_FAILED' as const;
+  constructor(
+    readonly requestId: string,
+    readonly shardId: string,
+    readonly reason: string,
+  ) {
+    super(`could not read quota request ${requestId}: ${reason}`);
+    this.name = 'QuotaRequestReadFailedError';
+  }
+}

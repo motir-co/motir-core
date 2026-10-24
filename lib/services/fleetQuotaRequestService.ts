@@ -157,6 +157,17 @@ export const fleetQuotaRequestService = {
     return toFleetQuotaRequestDTO(row);
   },
 
+  /** The account's open request for this quota, or null. */
+  async findOpen(
+    shardId: string,
+    quotaCode: string = DEFAULT_FLEET_QUOTA_CODE,
+  ): Promise<FleetQuotaRequestDTO | null> {
+    const row = await withSystemContext((tx) =>
+      fleetQuotaRequestRepository.findOpenByShardAndCode(shardId, quotaCode, tx),
+    );
+    return row ? toFleetQuotaRequestDTO(row) : null;
+  },
+
   async getRequest(id: string): Promise<FleetQuotaRequestDTO> {
     const row = await withSystemContext((tx) => fleetQuotaRequestRepository.findById(id, tx));
     if (!row) throw new FleetQuotaRequestNotFoundError(id);

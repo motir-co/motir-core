@@ -16,7 +16,10 @@ import {
 } from '@aws-sdk/client-organizations';
 import {
   GetAWSDefaultServiceQuotaCommand,
+  GetRequestedServiceQuotaChangeCommand,
   GetServiceQuotaCommand,
+  ListRequestedServiceQuotaChangeHistoryByQuotaCommand,
+  RequestServiceQuotaIncreaseCommand,
   ServiceQuotasClient,
 } from '@aws-sdk/client-service-quotas';
 import { AssumeRoleCommand, STSClient } from '@aws-sdk/client-sts';
@@ -45,7 +48,9 @@ import { AWS_SHARD_TAG_KEY } from './network';
 //     API_ListCreateAccountStatus.html, API_CreateAccount.html, API_DescribeCreateAccountStatus.html
 //   STS — https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html
 //   Service Quotas — https://docs.aws.amazon.com/servicequotas/2019-06-24/apireference/API_GetServiceQuota.html,
-//     API_GetAWSDefaultServiceQuota.html
+//     API_GetAWSDefaultServiceQuota.html, API_RequestServiceQuotaIncrease.html,
+//     API_GetRequestedServiceQuotaChange.html, API_ListRequestedServiceQuotaChangeHistoryByQuota.html
+//     (MOTIR-9459: the fleet's own quota raises)
 //   IAM — https://docs.aws.amazon.com/IAM/latest/APIReference/API_GetUser.html, API_CreateUser.html,
 //     API_GetUserPolicy.html, API_PutUserPolicy.html
 
@@ -159,7 +164,16 @@ export interface AwsManagementOptions {
   now?: () => number;
 }
 
-/** The management calls add-shard makes. */
+/** One Service Quotas increase request, as AWS answers it (MOTIR-9459).
+ *  `status` is AWS's `RequestStatus` verbatim (`PENDING`, `CASE_OPENED`, …); the
+ *  caller maps it, so a value AWS adds later is seen rather than defaulted. */
+export interface AwsQuotaIncreaseRequest {
+  requestId: string;
+  status: string;
+  desiredValue: number | null;
+}
+
+/** The management calls add-shard and the pool's growth make. */
 export interface AwsManagementApi {
   findOrganizationAccount(name: string): Promise<AwsOrganizationAccountLookup>;
   /** File CreateAccount and wait for it. */
@@ -171,6 +185,26 @@ export interface AwsManagementApi {
   waitForCreateAccount(requestId: string, name: string): Promise<AwsOrganizationAccount>;
   assumeMemberRole(accountId: string): Promise<AwsSessionCredentials>;
   readVcpuQuota(credentials: AwsSessionCredentials, regionId: string): Promise<number>;
+  /** File a raise of `quotaCode` (default `L-1216C47A`) to `desired` — MOTIR-9459. */
+  requestVcpuQuotaIncrease(
+    credentials: AwsSessionCredentials,
+    regionId: string,
+    desired: number,
+    quotaCode?: string,
+  ): Promise<AwsQuotaIncreaseRequest>;
+  /** Read one filed raise. */
+  getQuotaRequest(
+    credentials: AwsSessionCredentials,
+    regionId: string,
+    requestId: string,
+  ): Promise<AwsQuotaIncreaseRequest>;
+  /** The account's still-open raise of `quotaCode`, if AWS has one — what a
+   *  re-filing finds when the first filing was accepted but never stored. */
+  findOpenQuotaRequest(
+    credentials: AwsSessionCredentials,
+    regionId: string,
+    quotaCode?: string,
+  ): Promise<AwsQuotaIncreaseRequest | null>;
   /** The runner's IAM user and inline policy; answers what it created. */
   ensureRunnerIamUser(
     credentials: AwsSessionCredentials,
@@ -228,6 +262,23 @@ function accountOf(account: Account): AwsOrganizationAccount {
     accountId: required(account.Id, 'Id'),
     name: account.Name ?? '',
     status: account.State ?? account.Status ?? '',
+  };
+}
+
+/** The two `RequestStatus` values a request is still open in. */
+const OPEN_QUOTA_REQUEST_STATUSES = ['PENDING', 'CASE_OPENED'] as const;
+
+interface RequestedQuotaShape {
+  Id?: string;
+  Status?: string;
+  DesiredValue?: number;
+}
+
+function quotaRequestOf(quota: RequestedQuotaShape): AwsQuotaIncreaseRequest {
+  return {
+    requestId: required(quota.Id, 'RequestedQuota.Id'),
+    status: required(quota.Status, 'RequestedQuota.Status'),
+    desiredValue: typeof quota.DesiredValue === 'number' ? quota.DesiredValue : null,
   };
 }
 
@@ -414,6 +465,48 @@ export function createAwsManagementApi(
         value = answer.Quota?.Value;
       }
       return Math.floor(required(value, 'Quota.Value'));
+    },
+
+    async requestVcpuQuotaIncrease(credentials, regionId, desired, quotaCode) {
+      const quotas = client('service-quotas', credentials, regionId);
+      const answer = await call<{ RequestedQuota?: RequestedQuotaShape }>(
+        'service-quotas',
+        quotas,
+        new RequestServiceQuotaIncreaseCommand({
+          ServiceCode: 'ec2',
+          QuotaCode: quotaCode ?? AWS_EC2_VCPU_QUOTA_CODE,
+          DesiredValue: desired,
+        }),
+      );
+      return quotaRequestOf(required(answer.RequestedQuota, 'RequestedQuota'));
+    },
+
+    async getQuotaRequest(credentials, regionId, requestId) {
+      const quotas = client('service-quotas', credentials, regionId);
+      const answer = await call<{ RequestedQuota?: RequestedQuotaShape }>(
+        'service-quotas',
+        quotas,
+        new GetRequestedServiceQuotaChangeCommand({ RequestId: requestId }),
+      );
+      return quotaRequestOf(required(answer.RequestedQuota, 'RequestedQuota'));
+    },
+
+    async findOpenQuotaRequest(credentials, regionId, quotaCode) {
+      const quotas = client('service-quotas', credentials, regionId);
+      for (const status of OPEN_QUOTA_REQUEST_STATUSES) {
+        const answer = await call<{ RequestedQuotas?: RequestedQuotaShape[] }>(
+          'service-quotas',
+          quotas,
+          new ListRequestedServiceQuotaChangeHistoryByQuotaCommand({
+            ServiceCode: 'ec2',
+            QuotaCode: quotaCode ?? AWS_EC2_VCPU_QUOTA_CODE,
+            Status: status,
+          }),
+        );
+        const open = answer.RequestedQuotas?.[0];
+        if (open) return quotaRequestOf(open);
+      }
+      return null;
     },
 
     async ensureRunnerIamUser(credentials, policyDocument) {

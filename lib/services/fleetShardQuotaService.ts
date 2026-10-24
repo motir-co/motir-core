@@ -7,6 +7,7 @@ import {
 } from '@motir/orchestrator';
 import type { FleetShard } from '@/generated/prisma/client';
 import { LiveQuotaReadFailedError } from '@/lib/ciFleet/errors';
+import type { FleetShardLimitSource } from '@/lib/dto/fleetShard';
 import { fleetKindOnPool } from '@/lib/ciFleet/shardTargets';
 import { FLEET_WORKLOAD_KINDS } from '@/lib/ciFleet/workloads';
 import { fleetShardRepository } from '@/lib/repositories/fleetShardRepository';
@@ -47,7 +48,7 @@ const defaultDeps: FleetShardQuotaDeps = {
 
 /** AWS's error code, or the error's class name — never a free-text message,
  *  which could quote what a call was given. */
-function reasonOf(err: unknown): string {
+export function awsReasonOf(err: unknown): string {
   if (err instanceof AwsManagementApiError) return err.awsCode;
   if (err instanceof Error) return err.name;
   return 'UnknownError';
@@ -61,14 +62,23 @@ async function inBatches<T, R>(items: T[], size: number, run: (item: T) => Promi
   return out;
 }
 
-/** Write AWS's answer only when it differs, keeping the other three limits and
- *  their sources. Re-read in the write's transaction, so a concurrent change of
- *  another limit is not overwritten. */
-async function writeIfChanged(shardId: string, granted: number, at: Date): Promise<boolean> {
+/**
+ * Write an account's granted vCPU quota only when it differs, keeping the other
+ * three limits and their sources (`setLimits` would null them). Re-read in the
+ * write's transaction, so a concurrent change of another limit is not
+ * overwritten. `provider_read` for a live read; `raised` for an approved raise
+ * (MOTIR-9459). Answers whether the row changed.
+ */
+export async function recordGrantedVcpuQuota(
+  shardId: string,
+  granted: number,
+  source: Extract<FleetShardLimitSource, 'provider_read' | 'raised'>,
+  at: Date,
+): Promise<boolean> {
   return withSystemContext(async (tx) => {
     const row = await fleetShardRepository.findById(shardId, tx);
     if (!row || row.vcpuQuota === granted) return false;
-    const source =
+    const limitsSource =
       row.limitsSource && typeof row.limitsSource === 'object' && !Array.isArray(row.limitsSource)
         ? (row.limitsSource as Record<string, unknown>)
         : {};
@@ -80,7 +90,7 @@ async function writeIfChanged(shardId: string, granted: number, at: Date): Promi
         githubRegistrationsPer5Min: row.githubRegistrationsPer5Min,
         githubApiPerHour: row.githubApiPerHour,
       },
-      { ...source, vcpuQuota: 'provider_read' },
+      { ...limitsSource, vcpuQuota: source },
       at,
       tx,
     );
@@ -134,7 +144,7 @@ export const fleetShardQuotaService = {
         fleetKind,
         failure: new LiveQuotaReadFailedError(shard.id, shard.name, reason),
       });
-      if (!management) return fail(reasonOf(managementFailure));
+      if (!management) return fail(awsReasonOf(managementFailure));
       // The row's CHECK requires both on an aws account; kept total regardless.
       if (!shard.awsAccountId || !shard.awsRegion) return fail('MissingAwsLocation');
       let granted: number;
@@ -142,9 +152,9 @@ export const fleetShardQuotaService = {
         const session = await management.assumeMemberRole(shard.awsAccountId);
         granted = await management.readVcpuQuota(session, shard.awsRegion);
       } catch (err) {
-        return fail(reasonOf(err));
+        return fail(awsReasonOf(err));
       }
-      const changed = await writeIfChanged(shard.id, granted, deps.now());
+      const changed = await recordGrantedVcpuQuota(shard.id, granted, 'provider_read', deps.now());
       return { shardId: shard.id, fleetKind, granted, changed };
     });
   },
