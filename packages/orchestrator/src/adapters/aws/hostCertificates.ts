@@ -24,6 +24,10 @@ import * as x509 from '@peculiar/x509';
 /** How long a server certificate is valid from its mint (one year). */
 export const HOST_CERTIFICATE_VALIDITY_DAYS = 365;
 
+/** A server certificate with fewer days than this left is reissued at the next
+ *  wake (MOTIR-9481). */
+export const HOST_CERTIFICATE_RENEW_BEFORE_DAYS = 60;
+
 /** How far `notBefore` is backdated, for clock skew between Motir and a host. */
 const CLOCK_SKEW_MS = 5 * 60_000;
 
@@ -223,4 +227,29 @@ export async function mintHostCertificateAuthority(input: {
     webcrypto,
   );
   return { certPem: cert.toString('pem'), keyPem: await privatePem(keys) };
+}
+
+/** A certificate's validity end, or null when the PEM is not a readable
+ *  certificate. Never throws, and never puts the PEM in an error. */
+export function certificateNotAfter(certPem: string | null | undefined): Date | null {
+  if (!certPem) return null;
+  try {
+    return new x509.X509Certificate(certPem).notAfter;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Whether a server certificate must be reissued (MOTIR-9481): fewer than
+ * {@link HOST_CERTIFICATE_RENEW_BEFORE_DAYS} left, already past its end, or no
+ * readable certificate at all (which counts as expired).
+ */
+export function hostCertificateNeedsRenewal(
+  certPem: string | null | undefined,
+  now: Date,
+): boolean {
+  const notAfter = certificateNotAfter(certPem);
+  if (!notAfter) return true;
+  return notAfter.getTime() - now.getTime() < HOST_CERTIFICATE_RENEW_BEFORE_DAYS * DAY_MS;
 }

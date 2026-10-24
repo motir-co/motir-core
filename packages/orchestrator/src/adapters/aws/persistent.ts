@@ -39,7 +39,11 @@ import {
 } from './ec2Client';
 import { AWS_DEFAULT_INSTANCE_TYPE, AwsInstanceSizeError, transitionTimeOf } from './index';
 import { HOST_AGENT_PORT, type HostAgentClient, type HostAgentTls } from './hostAgentClient';
-import { mintHostServerCertificate, type HostCertificatePem } from './hostCertificates';
+import {
+  hostCertificateNeedsRenewal,
+  mintHostServerCertificate,
+  type HostCertificatePem,
+} from './hostCertificates';
 import { AWS_SHARD_TAG_KEY } from './network';
 import {
   encodeInstanceUserData,
@@ -698,20 +702,45 @@ export function createAwsPersistentOrchestrator(
 
     /** Q8 on EC2: the stamp tags decide 'current' exactly as Fly's metadata does;
      *  otherwise the STOPPED instance's document has its terminal block replaced
-     *  (image, mount, env kept) and the stamp rewritten. Never starts it. */
+     *  (image, mount, env kept) and the stamp rewritten. Never starts it.
+     *
+     *  It also RENEWS the host agent's server certificate (MOTIR-9481): with
+     *  fewer than 60 days left, past its end, or unreadable, a fresh key pair and
+     *  certificate replace ONLY the `hostAgent` block. Both changes are one read
+     *  and one write; 'updated' when either changed anything. A running instance
+     *  is never written: its certificate is renewed at its next wake. */
     async ensureMachineConfig(
       handle: PersistentContainerHandle,
       terminal: PersistentTerminalConfig,
     ): Promise<'updated' | 'current'> {
       const instance = await requireInstance(handle.machineId);
-      if (isMachineConfigCurrent(stampOf(instance), terminal)) return 'current';
+      const stampCurrent = isMachineConfigCurrent(stampOf(instance), terminal);
       if (instance.state !== 'stopped') {
+        if (stampCurrent) return 'current';
         // EC2 refuses a user-data change on any other state; a wake calls this
         // BEFORE start, so a running machine here is the caller's mistake.
         throw new OrchestratorApiError('aws', 409, 'instance_not_stopped');
       }
       const current = await readConfig(handle.machineId);
-      await writeConfig(handle.machineId, { ...current, terminal }, terminalStampTags(terminal));
+      const renew = hostCertificateNeedsRenewal(current.hostAgent?.certPem, now());
+      if (stampCurrent && !renew) return 'current';
+      let next: AwsInstanceConfig = stampCurrent ? current : { ...current, terminal };
+      if (renew) {
+        const server = await mintHostServerCertificate({
+          ca: config.hostAgent.ca,
+          instanceId: tagOf(instance, INSTANCE_METADATA_KEY) ?? handle.machineId,
+          now: now(),
+        });
+        next = {
+          ...next,
+          hostAgent: {
+            certPem: server.certPem,
+            keyPem: server.keyPem,
+            caPem: current.hostAgent?.caPem ?? config.hostAgent.ca.certPem,
+          },
+        };
+      }
+      await writeConfig(handle.machineId, next, stampCurrent ? [] : terminalStampTags(terminal));
       return 'updated';
     },
 
