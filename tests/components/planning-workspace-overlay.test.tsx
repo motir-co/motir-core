@@ -1103,6 +1103,48 @@ describe('the ROUTING VERDICT is HONOURED (MOTIR-4769)', () => {
     expect(resolveOnboardingRouting).toHaveBeenCalledTimes(1);
   });
 
+  it('MOTIR-9414 · a re-render MID-ASK asks again, and applies exactly one verdict', async () => {
+    // A route refresh hands the overlay a NEW `substrate` object while the first
+    // ask is in flight, and the effect's cleanup aborts that ask. The guard used
+    // to stay set, so nothing asked again and the window read "Reading your
+    // project" for good. The aborted ask answers LATE here, with a hand-off, to
+    // prove a dead ask's answer is never applied either.
+    let answerFirst: (r: unknown) => void = () => {};
+    const signals: AbortSignal[] = [];
+    resolveOnboardingRouting
+      .mockImplementationOnce(({ signal }: { signal: AbortSignal }) => {
+        signals.push(signal);
+        return new Promise((resolve) => (answerFirst = resolve));
+      })
+      .mockImplementationOnce(({ signal }: { signal: AbortSignal }) => {
+        signals.push(signal);
+        return Promise.resolve(verdict());
+      });
+    openAt('plan=project&planFrom=project');
+    const view = mount({ substrate: rich });
+    await act(async () => {});
+    expect(screen.getByTestId('planning-reading-state')).toBeTruthy();
+
+    view.rerender(
+      <PlanningWorkspaceOverlay projectKey="ACME" projectName="Acme" substrate={{ ...rich }} />,
+    );
+    await act(async () => {});
+    await act(async () => answerFirst(verdict({ outcome: 'onboard_new_project' })));
+
+    expect(signals[0]?.aborted).toBe(true);
+    expect(resolveOnboardingRouting).toHaveBeenCalledTimes(2);
+    expect(screen.queryByTestId('planning-reading-state')).toBeNull();
+    expect(screen.queryByTestId('planning-handoff')).toBeNull();
+    expect(screen.getByTestId('host')).toBeTruthy();
+
+    // And once it HAS answered, a further re-render is not a new question.
+    view.rerender(
+      <PlanningWorkspaceOverlay projectKey="ACME" projectName="Acme" substrate={{ ...rich }} />,
+    );
+    await act(async () => {});
+    expect(resolveOnboardingRouting).toHaveBeenCalledTimes(2);
+  });
+
   it('an ESTABLISHED project is never asked at all', async () => {
     openAt('plan=project&planFrom=project');
     mount();
