@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { MockAgent, setGlobalDispatcher } from 'undici';
 import { db } from '@/lib/db';
 import { MotirAiOutOfCreditsError } from '@/lib/ai/errors';
-import type { Tenant } from '@/lib/ai/types';
+import type { AskConversationTurn, Tenant } from '@/lib/ai/types';
 import type { AiJobsFixture, AskJobOutcome } from '@/lib/test-ai-jobs-mock';
 
 // The in-repo motir-ai mock's two `ask_project` arms added for Story MOTIR-9216's
@@ -153,7 +153,7 @@ describe('the composed requirement arms of the jobs mock (MOTIR-9441)', () => {
 
     const job = await getJob(jobId, 'proj-1');
 
-    const offer = (job.result as { ask: { offer: Record<string, unknown> } }).ask.offer;
+    const offer = (job.result as unknown as { ask: { offer: Record<string, unknown> } }).ask.offer;
     expect(offer).toEqual({ kind: 'plan', requestText: 'Export the board', immediate: false });
     expect(offer).not.toHaveProperty('requirement');
   });
@@ -192,7 +192,7 @@ describe('the composed requirement arms of the jobs mock (MOTIR-9441)', () => {
 
   it('journals an ask submit’s conversation turns, and none on a first turn', async () => {
     declare([{ intent: 'ask', answer: 'One.' }]);
-    const turns = [
+    const turns: AskConversationTurn[] = [
       { role: 'person', text: 'Plan an export' },
       { role: 'motir', text: 'I can plan that.' },
     ];
