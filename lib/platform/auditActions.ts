@@ -327,6 +327,13 @@ export const PLATFORM_AUDIT_ACTIONS = {
    */
   'fleet.pool.grow': { kind: 'write', reason: 'required' },
   /**
+   * `fleet-admin request-quota` (Story MOTIR-9362 · MOTIR-9463): vCPU quota
+   * raises filed on one or more fleet accounts. One row per invocation, as the
+   * `--operator` superadmin, with a reason the service writes; `metadata` is
+   * `{ desiredVcpu, quotaCode, accounts: [{ name, outcome, awsRequestId? }] }`.
+   */
+  'fleet.shard.quota_request': { kind: 'write', reason: 'required' },
+  /**
    * The IDEA STORE's writes (Story MOTIR-7662 · MOTIR-7671), `targetKind:
    * 'idea'`, written by `ideasAdminService` inside `withPlatformWrite`. Reached
    * from the console session OR — on `/api/platform/ideas/**` alone — a staff

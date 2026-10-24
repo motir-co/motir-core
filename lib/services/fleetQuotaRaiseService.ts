@@ -10,17 +10,26 @@ import type { FleetShard } from '@/generated/prisma/client';
 import {
   FleetQuotaRequestOpenError,
   FleetShardNotFoundError,
+  FleetShardProvisioningRefusedError,
   QuotaRaiseFilingFailedError,
   QuotaRaiseRefusedError,
   QuotaRequestReadFailedError,
 } from '@/lib/ciFleet/errors';
-import type { FleetQuotaRequestDTO, FleetQuotaRequestStatusDTO } from '@/lib/dto/fleetPools';
+import type {
+  FleetQuotaRaiseOutcomeDTO,
+  FleetQuotaRequestDTO,
+  FleetQuotaRequestStatusDTO,
+} from '@/lib/dto/fleetPools';
 import {
   DEFAULT_FLEET_QUOTA_CODE,
   isTerminalQuotaRequestStatus,
 } from '@/lib/mappers/fleetPoolMappers';
+import { scrubSecrets } from '@/lib/fleetShards/scrubSecrets';
+import { platformPrincipalForStaffEmail, type PlatformPrincipal } from '@/lib/platform/auth';
+import { NotPlatformStaffError } from '@/lib/platform/errors';
 import { fleetShardRepository } from '@/lib/repositories/fleetShardRepository';
 import { fleetQuotaRequestService } from '@/lib/services/fleetQuotaRequestService';
+import { platformAuditService } from '@/lib/services/platformAuditService';
 import { awsReasonOf, recordGrantedVcpuQuota } from '@/lib/services/fleetShardQuotaService';
 import { withSystemContext } from '@/lib/workspaces/context';
 
@@ -90,6 +99,45 @@ async function shardOf(shardId: string): Promise<FleetShard> {
   const shard = await withSystemContext((tx) => fleetShardRepository.findById(shardId, tx));
   if (!shard) throw new FleetShardNotFoundError(shardId);
   return shard;
+}
+
+/** How many accounts `fileRaises` files at once. */
+const FILE_RAISES_CONCURRENCY = 4;
+
+/** `fn` over `items`, at most `limit` at a time; results in the items' order. */
+async function mapBounded<T, R>(
+  items: readonly T[],
+  limit: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await fn(items[index]!);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
+async function resolveSuperadmin(email: string): Promise<PlatformPrincipal> {
+  try {
+    return await platformPrincipalForStaffEmail(email, 'superadmin');
+  } catch (err) {
+    if (err instanceof NotPlatformStaffError) {
+      throw new FleetShardProvisioningRefusedError([
+        `--operator ${email || '(none)'} is not a superadmin on the platform staff`,
+      ]);
+    }
+    throw err;
+  }
+}
+
+/** A typed failure's own text — its message, never a stack or a cause. */
+function failureText(err: unknown): string {
+  return scrubSecrets(err instanceof Error ? err.message : 'unknown failure');
 }
 
 export const fleetQuotaRaiseService = {
@@ -247,5 +295,66 @@ export const fleetQuotaRaiseService = {
       }
     }
     return results;
+  },
+
+  /**
+   * `fleet-admin request-quota` (MOTIR-9463): file `desiredVcpu` on each named
+   * account, a few at once, through `fileRaise`. One account's failure is its own
+   * result and never stops the others; results come back in the names' order.
+   * One audit row per call, as the superadmin `operatorEmail`, written after the
+   * filings with each account's outcome.
+   *
+   * @throws FleetShardProvisioningRefusedError before any AWS call, when the
+   *   operator is not a superadmin or the quota code is not `L-1216C47A`.
+   */
+  async fileRaises(
+    input: { names: string[]; desiredVcpu: number; quotaCode?: string; operatorEmail: string },
+    deps: FleetQuotaRaiseDeps = defaultDeps,
+  ): Promise<FleetQuotaRaiseOutcomeDTO[]> {
+    const operator = await resolveSuperadmin(input.operatorEmail);
+    const quotaCode = input.quotaCode ?? DEFAULT_FLEET_QUOTA_CODE;
+    const problems: string[] = [];
+    if (quotaCode !== DEFAULT_FLEET_QUOTA_CODE) {
+      problems.push(`--code must be ${DEFAULT_FLEET_QUOTA_CODE}, the only quota the fleet raises`);
+    }
+    if (input.names.length === 0) problems.push('name at least one account with --name');
+    if (problems.length > 0) throw new FleetShardProvisioningRefusedError(problems);
+
+    const outcomes = await mapBounded(
+      input.names,
+      FILE_RAISES_CONCURRENCY,
+      async (name): Promise<FleetQuotaRaiseOutcomeDTO> => {
+        try {
+          const shard = await withSystemContext((tx) => fleetShardRepository.findByName(name, tx));
+          if (!shard) return { name, ok: false, failure: `no fleet account is named ${name}` };
+          const before = await fleetQuotaRequestService.findOpen(shard.id, quotaCode);
+          const request = await fleetQuotaRaiseService.fileRaise(shard.id, input.desiredVcpu, deps);
+          return { name, ok: true, request, reused: before?.id === request.id };
+        } catch (err) {
+          return { name, ok: false, failure: failureText(err) };
+        }
+      },
+    );
+
+    await platformAuditService.record(operator, {
+      action: 'fleet.shard.quota_request',
+      targetKind: 'platform',
+      targetLabel: input.names.join(', ').slice(0, 200),
+      reason: `fleet-admin request-quota: ${input.desiredVcpu} vCPU on ${input.names.length} account(s)`,
+      metadata: {
+        desiredVcpu: input.desiredVcpu,
+        quotaCode,
+        accounts: outcomes.map((o) =>
+          o.ok
+            ? {
+                name: o.name,
+                outcome: o.reused ? 'already_open' : 'filed',
+                awsRequestId: o.request.awsRequestId,
+              }
+            : { name: o.name, outcome: 'failed', failure: o.failure },
+        ),
+      },
+    });
+    return outcomes;
   },
 };

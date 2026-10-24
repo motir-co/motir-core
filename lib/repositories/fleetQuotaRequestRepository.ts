@@ -97,4 +97,18 @@ export const fleetQuotaRequestRepository = {
   async markAlertedInTx(id: string, at: Date, tx: Prisma.TransactionClient): Promise<void> {
     await tx.fleetQuotaRequest.update({ where: { id }, data: { alertedAt: at } });
   },
+
+  /** A kind's requests still open or closed since `closedSince`, with their
+   *  account's name — newest first (MOTIR-9463's `pool-status`). */
+  async listRecentByKindInTx(
+    fleetKind: string,
+    closedSince: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<FleetQuotaRequest & { shard: { name: string } }>> {
+    return tx.fleetQuotaRequest.findMany({
+      where: { fleetKind, OR: [{ closedAt: null }, { closedAt: { gte: closedSince } }] },
+      include: { shard: { select: { name: true } } },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    });
+  },
 };
