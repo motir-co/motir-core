@@ -29,6 +29,22 @@ export function crossesGrowthThreshold(inUse: number, granted: number): boolean 
  */
 export const GROWTH_CLAIM_STALE_MS = 15 * 60_000;
 
+/** A refused growth backs off before the next attempt (MOTIR-9462): 30 minutes,
+ *  doubling per consecutive refusal, capped at 6 hours. */
+export const REFUSAL_BACKOFF_BASE_MS = 30 * 60_000;
+export const REFUSAL_BACKOFF_CAP_MS = 6 * 60 * 60_000;
+
+/** An open quota raise older than this is alerted on, once (MOTIR-9462). */
+export const SLOW_QUOTA_REQUEST_AGE_MS = 24 * 60 * 60_000;
+
+/** How long to wait after the newest of `consecutiveRefusals` refused growths —
+ *  0 with none. Derived from the stored events, so a restart loses nothing. */
+export function refusalBackoffMs(consecutiveRefusals: number): number {
+  if (consecutiveRefusals <= 0) return 0;
+  const doublings = Math.min(consecutiveRefusals - 1, 16);
+  return Math.min(REFUSAL_BACKOFF_BASE_MS * 2 ** doublings, REFUSAL_BACKOFF_CAP_MS);
+}
+
 /** An account the decision could not compare, and why — reported, never
  *  compared against a stored or default quota. */
 export interface GrowthSkip {

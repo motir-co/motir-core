@@ -11686,6 +11686,10 @@ model FleetQuotaRequest {
   lastReadAt DateTime? @map("last_read_at")
   /// Set by the read that answered a terminal status; null while open.
   closedAt   DateTime? @map("closed_at")
+  /// When the growth pass last alerted about this request (MOTIR-9462): once when
+  /// it has been open 24 hours, and once when it closes refused. Stored so a
+  /// pass every minute alerts once, not every pass.
+  alertedAt  DateTime? @map("alerted_at")
   updatedAt  DateTime  @updatedAt @map("updated_at")
 
   shard        FleetShard         @relation(fields: [shardId], references: [id], onDelete: Cascade)
@@ -11747,6 +11751,20 @@ model FleetGrowthEvent {
   @@index([newShardId])
   @@index([quotaRequestId])
   @@map("fleet_growth_event")
+}
+
+/// The growth pass's single-flight lease (Story MOTIR-9362 · MOTIR-9462): one
+/// row per pass name. A run takes it only when `heldUntil` has passed, in one
+/// statement, so two overlapping runs cannot both execute; a crashed run's lease
+/// simply expires. Platform-only, as `fleet_shard`.
+model FleetGrowthPassLease {
+  id        String   @id
+  heldUntil DateTime @map("held_until")
+  /// The run holding it — released only by that run.
+  holder    String
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("fleet_growth_pass_lease")
 }
 
 /// The repo-role vocabulary (`docs/decisions/project-repository-set.md` §1.1).

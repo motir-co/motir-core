@@ -40,8 +40,14 @@ export interface FleetShardQuotaDeps {
   now(): Date;
 }
 
+/** The management API from this deployment's management credential — the
+ *  default seam of every pool service that reaches AWS. */
+export function fleetManagementApi(): AwsManagementApi {
+  return createAwsManagementApi(awsManagementCredentials(process.env));
+}
+
 const defaultDeps: FleetShardQuotaDeps = {
-  management: () => createAwsManagementApi(awsManagementCredentials(process.env)),
+  management: fleetManagementApi,
   onPool: fleetKindOnPool,
   now: () => new Date(),
 };

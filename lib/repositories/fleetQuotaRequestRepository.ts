@@ -70,4 +70,31 @@ export const fleetQuotaRequestRepository = {
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
   },
+
+  /** The requests the growth pass owes an alert (MOTIR-9462), with their
+   *  account's name: open since before `openBefore` and never alerted, or closed
+   *  `denied` / `not_approved` and not alerted since the close. */
+  async listToAlertInTx(
+    openBefore: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<FleetQuotaRequest & { shard: { name: string } }>> {
+    return tx.fleetQuotaRequest.findMany({
+      where: {
+        OR: [
+          { closedAt: null, createdAt: { lt: openBefore }, alertedAt: null },
+          {
+            status: { in: ['denied', 'not_approved'] },
+            closedAt: { not: null },
+            OR: [{ alertedAt: null }, { alertedAt: { lt: tx.fleetQuotaRequest.fields.closedAt } }],
+          },
+        ],
+      },
+      include: { shard: { select: { name: true } } },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+  },
+
+  async markAlertedInTx(id: string, at: Date, tx: Prisma.TransactionClient): Promise<void> {
+    await tx.fleetQuotaRequest.update({ where: { id }, data: { alertedAt: at } });
+  },
 };
