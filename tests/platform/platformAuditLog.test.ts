@@ -248,6 +248,9 @@ describe('the reason rule', () => {
     'fleet.shard.ceiling': 'required',
     'fleet.shard.disable': 'required',
     'fleet.shard.enable': 'required',
+    // One pool growth (Story MOTIR-9362 · MOTIR-9461), audited as Motir's system
+    // account with a reason the growth pass writes.
+    'fleet.pool.grow': 'required',
     // The idea store (Story MOTIR-7662 · MOTIR-7671): retiring and deleting say
     // why an idea left the public list; the rest carry the caller's context.
     'idea.add': 'inherited',

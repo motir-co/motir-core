@@ -232,3 +232,16 @@ export class MemberRoleAssumeFailedError extends Error {
     this.name = 'MemberRoleAssumeFailedError';
   }
 }
+
+// ── Pool growth (Story MOTIR-9362 · MOTIR-9461) ─────────────────────────────
+
+/** A fleet kind still switched to Fly is never grown: its pool is not in use, so
+ *  an account added to it would sit idle (ADR AMENDMENT 1). The growth pass
+ *  answers `not_aws` with this and touches nothing. */
+export class GrowthKindNotAwsError extends Error {
+  readonly code = 'GROWTH_KIND_NOT_AWS' as const;
+  constructor(readonly fleetKind: string) {
+    super(`fleet kind ${fleetKind} is still on Fly; its AWS pool is not grown`);
+    this.name = 'GrowthKindNotAwsError';
+  }
+}

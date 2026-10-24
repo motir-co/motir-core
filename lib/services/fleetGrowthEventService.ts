@@ -1,4 +1,5 @@
 import { FleetPoolValueInvalidError } from '@/lib/ciFleet/errors';
+import { GROWTH_CLAIM_STALE_MS } from '@/lib/ciFleet/poolGrowthPolicy';
 import { FLEET_WORKLOAD_KINDS } from '@/lib/ciFleet/workloads';
 import type { FleetGrowthEventDTO, FleetGrowthOutcomeDTO } from '@/lib/dto/fleetPools';
 import { FLEET_GROWTH_OUTCOMES, toFleetGrowthEventDTO } from '@/lib/mappers/fleetPoolMappers';
@@ -71,17 +72,26 @@ export const fleetGrowthEventService = {
     return rows.map(toFleetGrowthEventDTO);
   },
 
-  /** The kind's newest unfinished growth — not `refused`, its quota raise still
-   *  open — or null. The growth card holds one growth in flight per kind on it. */
-  async findUnfinishedGrowth(fleetKind: string): Promise<FleetGrowthEventDTO | null> {
+  /** The kind's newest unfinished growth — not `refused` and its quota raise
+   *  still open, or a claim younger than `GROWTH_CLAIM_STALE_MS` (MOTIR-9461) —
+   *  or null. The growth pass holds one growth in flight per kind on it. */
+  async findUnfinishedGrowth(
+    fleetKind: string,
+    now: Date = new Date(),
+  ): Promise<FleetGrowthEventDTO | null> {
+    const claimFreshAfter = new Date(now.getTime() - GROWTH_CLAIM_STALE_MS);
     const row = await withSystemContext((tx) =>
-      fleetGrowthEventRepository.findLatestUnfinishedByKind(validKind(fleetKind), tx),
+      fleetGrowthEventRepository.findLatestUnfinishedByKind(
+        validKind(fleetKind),
+        tx,
+        claimFreshAfter,
+      ),
     );
     return row ? toFleetGrowthEventDTO(row) : null;
   },
 
   /** Does this kind have a growth in flight? */
-  async hasUnfinishedGrowth(fleetKind: string): Promise<boolean> {
-    return (await fleetGrowthEventService.findUnfinishedGrowth(fleetKind)) !== null;
+  async hasUnfinishedGrowth(fleetKind: string, now: Date = new Date()): Promise<boolean> {
+    return (await fleetGrowthEventService.findUnfinishedGrowth(fleetKind, now)) !== null;
   },
 };
