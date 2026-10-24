@@ -1496,7 +1496,7 @@ model Organization {
   deletionRequests      OrganizationDeletionRequest[]
   /// SCHEMA-ONLY phase of the Contact-sales removal (MOTIR-9386): `@ignore`d with
   /// its model; the CONTRACT migration drops the table and this line later.
-  enterpriseRequests    EnterpriseRequest[] @ignore
+  enterpriseRequests    EnterpriseRequest[]           @ignore
   /// Per-org kill-switch OVERRIDES (MOTIR-750); absence = the registry default.
   featureFlags          OrgFeatureFlag[]
   /// Staff "View as" sessions opened inside this organization (MOTIR-749).
@@ -11487,6 +11487,8 @@ model FleetInFlightSlot {
 /// AWS story adds `aws` in its own migration, with its own columns and CHECKs.
 enum FleetShardProvider {
   fly
+  /// An AWS account of EC2 VM-per-job runners (MOTIR-9276).
+  aws
 
   @@map("fleet_shard_provider")
 }
@@ -11575,6 +11577,11 @@ model FleetShard {
   flyOrg    String? @map("fly_org")
   flyApp    String? @map("fly_app")
   flyRegion String? @map("fly_region")
+
+  /// The AWS location. Required for an `aws` row (CHECK) — the member account and
+  /// the region its tagged network lives in.
+  awsAccountId String? @map("aws_account_id")
+  awsRegion    String? @map("aws_region")
 
   /// The environment variable (or prefix) holding the provider credential.
   credentialRef String @map("credential_ref")

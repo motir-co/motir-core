@@ -1,3 +1,4 @@
+import { awsShardProvisioningProvider } from '@/lib/fleetShards/awsProvisioningProvider';
 import type {
   FleetShardDTO,
   FleetShardLimitsDTO,
@@ -11,9 +12,8 @@ import type {
 // network, its quota read and its runtime credential. A provider also names the
 // extra CLI options it takes and validates them with `--region`.
 //
-// ⚠️ NO PRODUCTION PROVIDER IS REGISTERED HERE YET. The first one is AWS
-// (MOTIR-9278), which adds its step list to `PROVIDERS` below and copies nothing
-// else. The tests register a fake.
+// The first production provider is AWS (MOTIR-9278,
+// `awsProvisioningProvider.ts`); the tests register fakes beside it.
 //
 // ⚠️ A PROVIDER NEVER MINTS OR RETURNS A SECRET. Its runtime-credential step
 // creates what it can without a key and CONFIRMS, read-only, that a key a person
@@ -49,6 +49,8 @@ export interface ProviderLocation {
   flyOrg?: string | null;
   flyApp?: string | null;
   flyRegion?: string | null;
+  awsAccountId?: string | null;
+  awsRegion?: string | null;
 }
 
 export interface ProviderAccountResult {
@@ -98,7 +100,9 @@ export interface ShardProvisioningProvider {
 }
 
 /** The registered providers. AWS (MOTIR-9278) is the first production entry. */
-const PROVIDERS = new Map<string, ShardProvisioningProvider>();
+const PROVIDERS = new Map<string, ShardProvisioningProvider>([
+  [awsShardProvisioningProvider.name, awsShardProvisioningProvider],
+]);
 
 export function findShardProvisioningProvider(name: string): ShardProvisioningProvider | null {
   return PROVIDERS.get(name) ?? null;
@@ -114,7 +118,7 @@ export function findShardProvisioningProviderForRow(
       candidate.location({
         name: shard.name,
         fleetKind: shard.fleetKind,
-        region: shard.fly?.region ?? '',
+        region: shard.fly?.region ?? shard.aws?.region ?? '',
         options: {},
         credentialRef: shard.credentialRef,
         shard,
@@ -127,10 +131,14 @@ export function shardProvisioningProviderNames(): string[] {
   return [...PROVIDERS.keys()].sort();
 }
 
-/** Register a provider; answers the call that removes it again. */
+/** Register a provider; answers the call that removes it again, restoring the
+ *  provider it replaced (a test's stand-in for `aws` gives the real one back). */
 export function registerShardProvisioningProvider(provider: ShardProvisioningProvider): () => void {
+  const replaced = PROVIDERS.get(provider.name);
   PROVIDERS.set(provider.name, provider);
   return () => {
-    if (PROVIDERS.get(provider.name) === provider) PROVIDERS.delete(provider.name);
+    if (PROVIDERS.get(provider.name) !== provider) return;
+    if (replaced) PROVIDERS.set(provider.name, replaced);
+    else PROVIDERS.delete(provider.name);
   };
 }
