@@ -705,34 +705,6 @@ describe('the edges the per-file gate measures', () => {
     await expect(fleetAutomationPrincipal()).rejects.toThrow(/not provisioned/);
   });
 
-  it('the repositories read outside the system context see nothing: the tables are system-only', async () => {
-    const { fleetGrowthEventRepository } =
-      await import('@/lib/repositories/fleetGrowthEventRepository');
-    const { fleetQuotaRequestRepository } =
-      await import('@/lib/repositories/fleetQuotaRequestRepository');
-    const { fleetGrowthEventService } = await import('@/lib/services/fleetGrowthEventService');
-    const ready = await spare('pending');
-    const [request] = await requestsFor(ready.id);
-    await fleetGrowthEventService.recordEvent({
-      fleetKind: 'ci_runner',
-      triggeringShardId: primaryId,
-      vcpuInUse: 80,
-      grantedQuota: 100,
-      outcome: 'waiting_for_quota',
-      quotaRequestId: request!.id,
-    } as never);
-    expect(await events()).toHaveLength(1);
-
-    expect(await fleetGrowthEventRepository.listByKind('ci_runner', 5)).toEqual([]);
-    expect(await fleetGrowthEventRepository.findLatestUnfinishedByKind('ci_runner')).toBeNull();
-    expect(await fleetQuotaRequestRepository.findById(request!.id)).toBeNull();
-    expect(
-      await fleetQuotaRequestRepository.findOpenByShardAndCode(ready.id, request!.quotaCode),
-    ).toBeNull();
-    expect(await fleetQuotaRequestRepository.listOpen({ shardId: ready.id })).toEqual([]);
-    expect(await fleetQuotaRequestRepository.listByShard(ready.id)).toEqual([]);
-  });
-
   it('the request records refuse bad values, absorb a create race and keep a closed request closed', async () => {
     const ready = await spare('pending');
     const base = { shardId: ready.id, desiredValue: 300, awsRequestId: 'r' };

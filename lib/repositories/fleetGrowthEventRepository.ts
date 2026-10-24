@@ -1,5 +1,4 @@
 import type { FleetGrowthEvent, FleetGrowthOutcome, Prisma } from '@/generated/prisma/client';
-import { dbRead } from '@/lib/db';
 
 // Data access for the POOL GROWTH record (Story MOTIR-9362 · MOTIR-9457). The
 // table's policy is `app.system_admin` only, so the caller holds a
@@ -27,10 +26,9 @@ export const fleetGrowthEventRepository = {
   async listByKind(
     fleetKind: string,
     limit: number,
-    tx?: Prisma.TransactionClient,
+    tx: Prisma.TransactionClient,
   ): Promise<FleetGrowthEvent[]> {
-    const client = tx ?? dbRead;
-    return client.fleetGrowthEvent.findMany({
+    return tx.fleetGrowthEvent.findMany({
       where: { fleetKind },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit,
@@ -43,11 +41,10 @@ export const fleetGrowthEventRepository = {
    *  Without `claimFreshAfter` no claim counts. */
   async findLatestUnfinishedByKind(
     fleetKind: string,
-    tx?: Prisma.TransactionClient,
+    tx: Prisma.TransactionClient,
     claimFreshAfter?: Date,
   ): Promise<FleetGrowthEvent | null> {
-    const client = tx ?? dbRead;
-    return client.fleetGrowthEvent.findFirst({
+    return tx.fleetGrowthEvent.findFirst({
       where: {
         fleetKind,
         OR: [

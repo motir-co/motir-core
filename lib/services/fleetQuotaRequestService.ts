@@ -1,4 +1,4 @@
-import { Prisma } from '@/generated/prisma/client';
+import { Prisma, type FleetQuotaRequest } from '@/generated/prisma/client';
 import {
   FleetPoolValueInvalidError,
   FleetQuotaRequestNotFoundError,
@@ -51,10 +51,7 @@ function positiveInteger(value: number): boolean {
 
 /** The open request with this account and code, answered when it asks for the
  *  same value (the idempotent create) and refused when it asks for another. */
-function sameOrRefuse(
-  open: Prisma.FleetQuotaRequestGetPayload<object>,
-  desiredValue: number,
-): FleetQuotaRequestDTO {
+function sameOrRefuse(open: FleetQuotaRequest, desiredValue: number): FleetQuotaRequestDTO {
   if (open.desiredValue !== desiredValue) {
     throw new FleetQuotaRequestOpenError(open.shardId, open.quotaCode, open.id);
   }

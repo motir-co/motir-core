@@ -1,5 +1,4 @@
 import type { FleetQuotaRequest, FleetQuotaRequestStatus, Prisma } from '@/generated/prisma/client';
-import { dbRead } from '@/lib/db';
 
 // Data access for the QUOTA RAISES filed for a fleet account (Story MOTIR-9362 ·
 // MOTIR-9457). The table's policy is `app.system_admin` only, so the caller holds
@@ -15,9 +14,8 @@ export const fleetQuotaRequestRepository = {
     return tx.fleetQuotaRequest.create({ data });
   },
 
-  async findById(id: string, tx?: Prisma.TransactionClient): Promise<FleetQuotaRequest | null> {
-    const client = tx ?? dbRead;
-    return client.fleetQuotaRequest.findUnique({ where: { id } });
+  async findById(id: string, tx: Prisma.TransactionClient): Promise<FleetQuotaRequest | null> {
+    return tx.fleetQuotaRequest.findUnique({ where: { id } });
   },
 
   /** The account's open request for this quota, if any — at most one (the
@@ -25,10 +23,9 @@ export const fleetQuotaRequestRepository = {
   async findOpenByShardAndCode(
     shardId: string,
     quotaCode: string,
-    tx?: Prisma.TransactionClient,
+    tx: Prisma.TransactionClient,
   ): Promise<FleetQuotaRequest | null> {
-    const client = tx ?? dbRead;
-    return client.fleetQuotaRequest.findFirst({ where: { shardId, quotaCode, closedAt: null } });
+    return tx.fleetQuotaRequest.findFirst({ where: { shardId, quotaCode, closedAt: null } });
   },
 
   /** Record one Service Quotas read: its status and granted value, and — when
@@ -49,10 +46,9 @@ export const fleetQuotaRequestRepository = {
   /** The open requests, optionally of one kind or one account — oldest first. */
   async listOpen(
     filter: { fleetKind?: string; shardId?: string },
-    tx?: Prisma.TransactionClient,
+    tx: Prisma.TransactionClient,
   ): Promise<FleetQuotaRequest[]> {
-    const client = tx ?? dbRead;
-    return client.fleetQuotaRequest.findMany({
+    return tx.fleetQuotaRequest.findMany({
       where: {
         closedAt: null,
         ...(filter.fleetKind !== undefined ? { fleetKind: filter.fleetKind } : {}),
@@ -63,9 +59,8 @@ export const fleetQuotaRequestRepository = {
   },
 
   /** Every request of one account, open or closed — newest first. */
-  async listByShard(shardId: string, tx?: Prisma.TransactionClient): Promise<FleetQuotaRequest[]> {
-    const client = tx ?? dbRead;
-    return client.fleetQuotaRequest.findMany({
+  async listByShard(shardId: string, tx: Prisma.TransactionClient): Promise<FleetQuotaRequest[]> {
+    return tx.fleetQuotaRequest.findMany({
       where: { shardId },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
