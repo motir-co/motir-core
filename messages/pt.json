@@ -8417,7 +8417,9 @@
       "held": "O Motir AI vai propor o planejamento quando estas perguntas terminarem.",
       "settledHeading": "O que suas respostas definiram",
       "clearEnough": "Claro o bastante para planejar como está.",
-      "nothingSettled": "Nada foi definido, então o pedido é planejado como está."
+      "nothingSettled": "Nada foi definido, então o pedido é planejado como está.",
+      "requirementSaved": "Guardado como <link>{title}</link> em Documentos de requisitos.",
+      "requirementNotSaved": "<lead>Não foi possível guardar o requisito.</lead> Nada foi iniciado. Confirmar continua disponível: tente novamente."
     },
     "logBugOffer": {
       "label": "Oferta para registrar um bug",

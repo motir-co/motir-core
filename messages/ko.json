@@ -8411,7 +8411,9 @@
       "held": "이 질문이 끝나면 Motir AI가 계획을 제안합니다.",
       "settledHeading": "답변으로 확정된 내용",
       "clearEnough": "그대로 계획할 만큼 충분히 명확합니다.",
-      "nothingSettled": "확정된 내용이 없어 요청을 그대로 계획합니다."
+      "nothingSettled": "확정된 내용이 없어 요청을 그대로 계획합니다.",
+      "requirementSaved": "요구사항 문서에 <link>{title}</link>(으)로 저장했습니다.",
+      "requirementNotSaved": "<lead>요구사항을 저장하지 못했습니다.</lead> 아무것도 시작되지 않았습니다. 확인 버튼은 그대로 사용할 수 있으니 다시 시도해 주세요."
     },
     "logBugOffer": {
       "label": "버그 기록 제안",

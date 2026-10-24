@@ -8417,7 +8417,9 @@
       "held": "Motir AI biedt aan te plannen zodra deze vragen klaar zijn.",
       "settledHeading": "Wat je antwoorden hebben vastgelegd",
       "clearEnough": "Duidelijk genoeg om zo te plannen.",
-      "nothingSettled": "Er is niets vastgelegd, dus het verzoek wordt gepland zoals het er staat."
+      "nothingSettled": "Er is niets vastgelegd, dus het verzoek wordt gepland zoals het er staat.",
+      "requirementSaved": "Opgeslagen als <link>{title}</link> in Vereistendocumenten.",
+      "requirementNotSaved": "<lead>De vereiste kon niet worden opgeslagen.</lead> Er is niets gestart. Bevestigen is nog beschikbaar – probeer het opnieuw."
     },
     "logBugOffer": {
       "label": "Aanbod om een bug vast te leggen",

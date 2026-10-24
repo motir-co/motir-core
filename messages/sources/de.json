@@ -11574,5 +11574,7 @@
   "platformAdmin.tenant.fleet.facts.planExempt": "Plan <strong>No plan limit</strong>",
   "platformAdmin.tenant.fleet.facts.planExemptOverride": "Plan <strong>No plan limit</strong> · CI jobs at once: {ci} (override)",
   "platformAdmin.tenant.fleet.facts.planUnknown": "Plan <strong>unknown · {key}</strong> · new containers refused",
-  "platformAdmin.tenant.fleet.facts.planUnknownNoKey": "Plan <strong>unknown</strong> · new containers refused"
+  "platformAdmin.tenant.fleet.facts.planUnknownNoKey": "Plan <strong>unknown</strong> · new containers refused",
+  "planningWorkspace.planOffer.requirementSaved": "Saved as <link>{title}</link> in Requirements Docs.",
+  "planningWorkspace.planOffer.requirementNotSaved": "<lead>Couldn’t save the requirement.</lead> Nothing was started. Confirm is still here — try it again."
 }

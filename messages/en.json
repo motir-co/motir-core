@@ -8417,7 +8417,9 @@
       "held": "Motir AI will offer to plan when these questions are done.",
       "settledHeading": "What your answers settled",
       "clearEnough": "Clear enough to plan as stated.",
-      "nothingSettled": "Nothing was settled, so the request is planned as stated."
+      "nothingSettled": "Nothing was settled, so the request is planned as stated.",
+      "requirementSaved": "Saved as <link>{title}</link> in Requirements Docs.",
+      "requirementNotSaved": "<lead>Couldn’t save the requirement.</lead> Nothing was started. Confirm is still here — try it again."
     },
     "logBugOffer": {
       "label": "Offer to log a bug",
