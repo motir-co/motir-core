@@ -111,6 +111,19 @@ export interface AgentInstanceBootStepDto {
   startedAt: string | null;
   endedAt: string | null;
   detail: string | null;
+  /**
+   * A `provision` step waiting for room in the pool (MOTIR-9474): why — `pool`
+   * for a new instance, `account` for a woken one whose own account is full —
+   * and since when (the first refusal). Null on every other step and state.
+   * Derived on the server, so the browser never parses `detail`.
+   */
+  waiting: { reason: 'pool' | 'account'; since: string } | null;
+  /**
+   * A `provision` step that WAITED for room and then got it: why it waited, from
+   * the first refusal (`since`) to the pass that got room (`until`) — what the
+   * read-out's _Room found_ row draws. Null on every step that never waited.
+   */
+  waited: { reason: 'pool' | 'account'; since: string; until: string } | null;
 }
 
 /** An agent's CURRENT boot attempt and its steps in read-out order (AMENDMENT 6 §6). */
@@ -166,6 +179,8 @@ export interface AgentInstanceListItemDto extends AgentInstanceDto {
 export interface AgentInstanceBootRowStepDto {
   step: AgentInstanceBootStepKind;
   repository: string | null;
+  /** Why the boot waits for room (MOTIR-9474), or null while it is not waiting. */
+  waiting: 'pool' | 'account' | null;
 }
 
 /**

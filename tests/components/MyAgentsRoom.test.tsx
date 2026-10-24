@@ -238,7 +238,7 @@ describe('create', () => {
           id: 'b1',
           name: 'cloning-one',
           state: 'starting',
-          bootStep: { step: 'clone', repository: 'acme/web' },
+          bootStep: { step: 'clone', repository: 'acme/web', waiting: null },
         }),
         agent({ id: 'b2', name: 'quiet-one', state: 'waking', bootStep: null }),
       ]),

@@ -13,6 +13,8 @@ import {
   isFlyInventoryConfigured,
   fakeOrchestrator,
   fakePersistentOrchestrator,
+  OrchestratorCapacityError,
+  type FakeCapacityOperation,
   flyFleetConfig,
   flyIndexerImage,
   flyOrchestrator,
@@ -232,6 +234,11 @@ export function fakeOrchestratorForShard(
  *  view it is passed to; `calls` tells a test where an instance was routed. */
 export type ShardPersistentFake = PersistentContainerOrchestrator & {
   readonly calls: string[];
+  /** THIS account refuses `op` as full (`OrchestratorCapacityError`) until
+   *  {@link releaseCapacity} — the waiting-for-room control (MOTIR-9474). */
+  holdCapacity(op: FakeCapacityOperation): void;
+  /** Lift this account's refusals (all of them, or one operation's). */
+  releaseCapacity(op?: FakeCapacityOperation): void;
 };
 
 const persistentShardFakes = new Map<string, ShardPersistentFake>();
@@ -241,13 +248,25 @@ export function fakePersistentOrchestratorForShard(shardId: string): ShardPersis
   let fake = persistentShardFakes.get(shardId);
   if (!fake) {
     const calls: string[] = [];
+    const held = new Set<FakeCapacityOperation>();
+    const controls = {
+      holdCapacity: (op: FakeCapacityOperation) => void held.add(op),
+      releaseCapacity: (op?: FakeCapacityOperation) => void (op ? held.delete(op) : held.clear()),
+    };
     fake = new Proxy(fakePersistentOrchestrator, {
       get(target, prop, receiver) {
         if (prop === 'calls') return calls;
+        if (prop === 'holdCapacity' || prop === 'releaseCapacity') return controls[prop];
         const value: unknown = Reflect.get(target, prop, receiver);
         if (typeof value !== 'function' || typeof prop !== 'string') return value;
         return (...args: unknown[]) => {
           calls.push(prop);
+          const op = prop === 'provisionPersistent' ? 'provision' : prop;
+          if ((op === 'provision' || op === 'start') && held.has(op)) {
+            return Promise.reject(
+              new OrchestratorCapacityError('fake', 422, 'quota_exceeded', null, 'held'),
+            );
+          }
           return (value as (...a: unknown[]) => unknown).apply(target, args);
         };
       },

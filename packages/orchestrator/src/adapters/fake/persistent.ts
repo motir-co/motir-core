@@ -1,6 +1,10 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { EXEC_RESPONSE_GRACE_SECONDS, OrchestratorApiError } from '../../errors';
+import {
+  EXEC_RESPONSE_GRACE_SECONDS,
+  OrchestratorApiError,
+  OrchestratorCapacityError,
+} from '../../errors';
 import type {
   PersistentAppInventory,
   PersistentContainerHandle,
@@ -99,6 +103,9 @@ interface FakeStore {
   failingImages?: string[];
 }
 
+/** An operation the fake can refuse as FULL until released (MOTIR-9474). */
+export type FakeCapacityOperation = 'provision' | 'start';
+
 export interface FakePersistentControls {
   /** Forget every app, machine and volume and every arranged failure. */
   reset(): void;
@@ -114,6 +121,14 @@ export interface FakePersistentControls {
   failNextDestroy(detail?: string): void;
   /** The next image move is refused, as Fly refuses an update (MOTIR-6950). */
   failNextMove(detail?: string): void;
+  /**
+   * Refuse every `provisionPersistent` (`'provision'`) or `start` as FULL — an
+   * `OrchestratorCapacityError` — until {@link releaseCapacity}: a held refusal,
+   * not a one-shot, so a boot waiting for room can be kept waiting (MOTIR-9474).
+   */
+  holdCapacity(op: FakeCapacityOperation): void;
+  /** Lift a held capacity refusal (one operation's, or all). */
+  releaseCapacity(op?: FakeCapacityOperation): void;
   /** New machines boot `running` (default) or stay `starting` until {@link completeBoot}. */
   setBootBehaviour(behaviour: 'start' | 'never_start'): void;
   /** Move a `starting` machine to `running`, stamping its run's start. */
@@ -214,6 +229,7 @@ const failures: Record<FailureKind, string | null> = {
   destroy: null,
   move: null,
 };
+const heldCapacity = new Set<FakeCapacityOperation>();
 let bootBehaviour: 'start' | 'never_start' = 'start';
 let terminalBase: string | null = null;
 let now: () => Date = () => new Date();
@@ -316,6 +332,7 @@ export const fakePersistentOrchestrator: PersistentContainerOrchestrator & FakeP
       execResponder = null;
       for (const key of Object.keys(failures) as Array<keyof typeof failures>) failures[key] = null;
       writeSharedFailures({});
+      heldCapacity.clear();
       bootBehaviour = 'start';
       terminalBase = null;
       now = () => new Date();
@@ -337,6 +354,13 @@ export const fakePersistentOrchestrator: PersistentContainerOrchestrator & FakeP
     },
     failNextMove(detail = 'the fake refused to update the machine') {
       armFailure('move', detail);
+    },
+    holdCapacity(op) {
+      heldCapacity.add(op);
+    },
+    releaseCapacity(op) {
+      if (op) heldCapacity.delete(op);
+      else heldCapacity.clear();
     },
     setBootBehaviour(behaviour) {
       bootBehaviour = behaviour;
@@ -471,6 +495,9 @@ export const fakePersistentOrchestrator: PersistentContainerOrchestrator & FakeP
     async provisionPersistent(spec: PersistentContainerSpec): Promise<PersistentContainerHandle> {
       load();
       persistentSpecs.push(spec);
+      if (heldCapacity.has('provision')) {
+        throw new OrchestratorCapacityError('fake', 422, 'quota_exceeded', null, 'held');
+      }
       const refused = takeFailure('provision');
       if (refused) throw new OrchestratorApiError('fake', 500, refused);
 
@@ -545,6 +572,9 @@ export const fakePersistentOrchestrator: PersistentContainerOrchestrator & FakeP
 
     async start(handle: PersistentContainerHandle): Promise<void> {
       load();
+      if (heldCapacity.has('start')) {
+        throw new OrchestratorCapacityError('fake', 422, 'quota_exceeded', null, 'held');
+      }
       const refused = takeFailure('start');
       if (refused) throw new OrchestratorApiError('fake', 500, refused);
       const machine = store.machines[handle.machineId];

@@ -4,12 +4,17 @@ import {
   type ContainerUsage,
   type TeardownReason,
 } from '@motir/orchestrator';
-import type { AgentInstanceIntervalEndReason } from '@/generated/prisma/client';
+import type {
+  AgentInstanceInterval,
+  AgentInstanceIntervalEndReason,
+  Prisma,
+} from '@/generated/prisma/client';
 import { debitAgentMachine } from '@/lib/ai/motirAiClient';
 import { MotirAiConfigError, MotirAiError, MotirAiUnavailableError } from '@/lib/ai/errors';
 import { isCloudBilling } from '@/lib/billing/availability';
 import { machineCreditsFor } from '@/lib/hostedRuns/machineRate';
 import { recordContainerUsage, selectedOrchestratorProvider } from '@/lib/orchestrator';
+import { agentInstanceBootRepository } from '@/lib/repositories/agentInstanceBootRepository';
 import { agentInstanceIntervalRepository } from '@/lib/repositories/agentInstanceIntervalRepository';
 import { agentInstanceRepository } from '@/lib/repositories/agentInstanceRepository';
 import { fleetShardRepository } from '@/lib/repositories/fleetShardRepository';
@@ -54,6 +59,31 @@ function describe(err: unknown): string {
   return err instanceof Error ? err.message.slice(0, 300) : String(err);
 }
 
+/**
+ * Was this interval DELETED BEFORE ITS MACHINE EXISTED OR STARTED (MOTIR-9474)?
+ * The interval is opened with its boot attempt, by the same create or wake; it is
+ * that attempt's when the attempt began at or after it. Ended by a delete with
+ * its `provision` step never done — a boot still waiting for room, or one the
+ * delete caught before its provider call answered — the machine never ran in it.
+ */
+async function deletedWhileWaiting(
+  interval: AgentInstanceInterval,
+  tx: Prisma.TransactionClient,
+): Promise<boolean> {
+  if (interval.endReason !== 'deleted') return false;
+  const attempt = await agentInstanceBootRepository.findCurrentAttempt(
+    interval.agentInstanceId,
+    tx,
+  );
+  if (!attempt || attempt.outcome !== 'deleted' || attempt.startedAt < interval.startedAt) {
+    return false;
+  }
+  const provision = (await agentInstanceBootRepository.listSteps(attempt.id, tx)).find(
+    (s) => s.step === 'provision',
+  );
+  return provision !== undefined && provision.state !== 'done';
+}
+
 export const agentInstanceChargeService = {
   /**
    * Charge ONE closed interval. Idempotent: an interval that is open, already
@@ -69,13 +99,20 @@ export const agentInstanceChargeService = {
       const shard = instance.fleetShardId
         ? await fleetShardRepository.findById(instance.fleetShardId, tx)
         : null;
-      return { interval, instance, shardProvider: shard?.provider ?? null };
+      return {
+        interval,
+        instance,
+        shardProvider: shard?.provider ?? null,
+        waitedThroughout: await deletedWhileWaiting(interval, tx),
+      };
     });
     if (!found) return { outcome: 'noop' };
-    const { interval, instance, shardProvider } = found;
+    const { interval, instance, shardProvider, waitedThroughout } = found;
     if (!interval.endedAt || interval.chargeOutcome !== 'pending') return { outcome: 'noop' };
 
-    const billableSeconds = interval.billableSeconds ?? 0;
+    // An interval whose machine never came up — deleted while its boot waited
+    // for room (MOTIR-9474) — bills zero seconds: there was no machine to bill.
+    const billableSeconds = waitedThroughout ? 0 : (interval.billableSeconds ?? 0);
     const record = (data: Parameters<typeof agentInstanceIntervalRepository.recordCharge>[1]) =>
       withWorkspaceServiceContext(instance.workspaceId, (tx) =>
         agentInstanceIntervalRepository.recordCharge(interval.id, data, tx),

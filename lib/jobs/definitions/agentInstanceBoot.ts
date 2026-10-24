@@ -30,7 +30,13 @@ export const agentInstanceBoot = defineJob(
       data.attempt,
       ctx.runId,
     );
-    if (verdict.next === 'defer') deferRun(verdict.deferUntil, 'the agent machine is starting');
+    if (verdict.next === 'defer') {
+      // A boot waiting for room in the pool says so (MOTIR-9474).
+      deferRun(
+        verdict.deferUntil,
+        verdict.waiting ? 'the agent is waiting for room' : 'the agent machine is starting',
+      );
+    }
     return verdict.next;
   },
 );

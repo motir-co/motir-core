@@ -123,3 +123,34 @@ export const INSTANCE_VOLUME_USD_PER_GB_MONTH = '0.15';
 export const INSTANCE_SNAPSHOT_USD_PER_GB_MONTH = '0.08';
 /** The record's month: §2 divides a month's cost by 30 to reach a day. */
 export const INSTANCE_STORAGE_DAYS_PER_MONTH = 30;
+
+/**
+ * A FULL POOL MEANS WAITING (Story MOTIR-9361 · MOTIR-9474): while a boot waits
+ * for room, its pass retries the placement (a new instance) or the start (a woken
+ * one) this often. Admission ships no wake-up of its own for freed capacity
+ * (MOTIR-8968 defers only), so this poll is the wake-up. Coarser than
+ * {@link AGENT_BOOT_POLL_MS}: a refusal pauses its account for two minutes.
+ */
+export const AGENT_WAITING_POLL_MS = 30_000;
+
+/**
+ * The reason codes a waiting `provision` step carries in its `detail` — stable,
+ * machine-readable, and naming no provider, account or zone. `pool`: a NEW
+ * instance found no account of the pool with room, and its retry may choose any
+ * account. `account`: a hibernated instance's own recorded account refused its
+ * start, and its retry asks that account only, because its disk cannot move.
+ */
+export const AGENT_WAITING_REASONS = {
+  poolFull: 'waiting_for_room:pool',
+  accountFull: 'waiting_for_room:account',
+} as const;
+
+/** Why a boot waits, as the boot DTO names it. */
+export type AgentWaitingReason = 'pool' | 'account';
+
+/** The waiting reason a step's detail records, or null for any other detail. */
+export function parseWaitingReason(detail: string | null | undefined): AgentWaitingReason | null {
+  if (detail === AGENT_WAITING_REASONS.poolFull) return 'pool';
+  if (detail === AGENT_WAITING_REASONS.accountFull) return 'account';
+  return null;
+}

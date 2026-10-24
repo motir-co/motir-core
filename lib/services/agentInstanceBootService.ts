@@ -11,7 +11,11 @@ import type { PersistentContainerStatus } from '@motir/orchestrator';
 import {
   AGENT_BOOT_LEASE_MS,
   AGENT_BOOT_POLL_MS,
+  AGENT_WAITING_POLL_MS,
+  AGENT_WAITING_REASONS,
   INSTANCE_BOOT_DEADLINE_MS,
+  parseWaitingReason,
+  type AgentWaitingReason,
 } from '@/lib/agentInstances/config';
 import {
   mintProjectReadCredentials,
@@ -87,8 +91,10 @@ export interface AgentBootOpened {
   event: AgentInstanceBootData;
 }
 
-/** What one pass leaves the job to do. */
-export type AgentBootPassVerdict = { next: 'defer'; deferUntil: Date } | { next: 'done' };
+/** What one pass leaves the job to do. `waiting`: the pass found no room (MOTIR-9474). */
+export type AgentBootPassVerdict =
+  | { next: 'defer'; deferUntil: Date; waiting?: true }
+  | { next: 'done' };
 
 const DONE: AgentBootPassVerdict = { next: 'done' };
 
@@ -240,6 +246,8 @@ async function advanceProvision(
   pass: Pass,
   step: AgentInstanceBootStep,
 ): Promise<AgentBootPassVerdict | null> {
+  const waiting = parseWaitingReason(step.detail);
+  if (waiting) return retryWaiting(pass, step, waiting);
   if (steps.handleOf(pass.row)) {
     const now = agentInstanceClock.now();
     await pass.record(step, { state: 'done', startedAt: step.startedAt ?? now, endedAt: now });
@@ -256,10 +264,62 @@ async function advanceProvision(
   return { next: 'defer', deferUntil: nextPoll() };
 }
 
+/**
+ * A FULL POOL MEANS WAITING (Story MOTIR-9361 · MOTIR-9474). The `provision` step
+ * records a reason code while there is no room: retry what was refused — the
+ * placement for a new instance (`pool`: `placeAndProvision` again, any account of
+ * the pool), the start for a woken one (`account`: its own recorded account only,
+ * never another and never Fly). A refusal again defers at the waiting poll and
+ * writes NOTHING, so the step's `startedAt` stays the first refusal's. Any other
+ * provider error fails the boot with its reason, as the opener would have. The
+ * boot deadline is not read here: it measures the machine coming up, and counts
+ * from the pass that got room (`advanceMachineStart`).
+ */
+async function retryWaiting(
+  pass: Pass,
+  step: AgentInstanceBootStep,
+  waiting: AgentWaitingReason,
+): Promise<AgentBootPassVerdict> {
+  // A new instance whose machine an earlier pass created but did not record as done.
+  const created = waiting === 'pool' && steps.handleOf(pass.row) !== null;
+  if (!created) {
+    try {
+      const answer =
+        waiting === 'pool'
+          ? await steps.provisionNew(pass.row)
+          : await steps.startRecorded(pass.row);
+      if (answer === 'waiting') return waitingPoll();
+    } catch (err) {
+      const detail = steps.describeError(err);
+      const reason =
+        waiting === 'pool'
+          ? `The machine could not be created: ${detail}`
+          : `The machine could not start: ${detail}. Wake to try again, or delete it.`;
+      await pass.fail(step, detail, reason);
+      return DONE;
+    }
+  }
+  // The reason code stays on the done step: the record that it waited, read out
+  // as _Room found_ (the boot DTO's `waited`).
+  const now = agentInstanceClock.now();
+  await pass.record(step, { state: 'done', endedAt: now });
+  // This pass read the row before its machine existed: the next one reads the handle.
+  return { next: 'defer', deferUntil: nextPoll() };
+}
+
+function waitingPoll(): AgentBootPassVerdict {
+  return {
+    next: 'defer',
+    deferUntil: new Date(agentInstanceClock.now().getTime() + AGENT_WAITING_POLL_MS),
+    waiting: true,
+  };
+}
+
 /** `machine_start`: in progress until the machine reports running; failed on an exit or the deadline. */
 async function advanceMachineStart(
   pass: Pass,
   step: AgentInstanceBootStep,
+  provision: AgentInstanceBootStep | undefined,
 ): Promise<AgentBootPassVerdict | null> {
   // The account the row records (MOTIR-9472); one that cannot be resolved is read
   // again next poll, and the boot's deadline bounds it.
@@ -297,7 +357,14 @@ async function advanceMachineStart(
     return DONE;
   }
   if (status.state !== 'running') {
-    const reason = steps.bootFailureReason(pass.row, status, agentInstanceClock.now().getTime());
+    // The deadline counts from the provision's end — after a wait for room, the
+    // pass that got it (MOTIR-9474); otherwise the boot's own start.
+    const reason = steps.bootFailureReason(
+      pass.row,
+      status,
+      agentInstanceClock.now().getTime(),
+      provision?.endedAt ?? null,
+    );
     if (!reason) return { next: 'defer', deferUntil: nextPoll() };
     const code = status.exitCode ?? null;
     const detail =
@@ -649,6 +716,39 @@ export const agentInstanceBootService = {
   },
 
   /**
+   * THE OPENER'S WAITING WRITE (MOTIR-9474): the provider call after commit found
+   * no room, so `provision` stays in progress with the reason code — written once;
+   * the boot job's retries never rewrite it. No lease exists yet, as for
+   * {@link recordProvision}.
+   */
+  async recordWaiting(
+    row: AgentInstance,
+    attempt: number,
+    reason: AgentWaitingReason,
+  ): Promise<void> {
+    const detail =
+      reason === 'pool' ? AGENT_WAITING_REASONS.poolFull : AGENT_WAITING_REASONS.accountFull;
+    await withWorkspaceServiceContext(row.workspaceId, async (tx) => {
+      const opened = await agentInstanceBootRepository.findAttempt(row.id, attempt, tx);
+      if (!opened || opened.endedAt) return;
+      const provision = (await agentInstanceBootRepository.listSteps(opened.id, tx)).find(
+        (s) => s.step === 'provision',
+      );
+      if (!provision || FINISHED.includes(provision.state) || provision.detail === detail) return;
+      await writeStep(
+        provision,
+        row.id,
+        {
+          state: 'in_progress',
+          startedAt: provision.startedAt ?? agentInstanceClock.now(),
+          detail,
+        },
+        tx,
+      );
+    });
+  },
+
+  /**
    * DELETION CLOSES THE ATTEMPT (§4), inside the delete's own transaction: the
    * step in progress `failed` with detail `deleted`, the outcome `deleted`, the
    * lease cleared. A driver pass after it finds the attempt closed and writes
@@ -719,7 +819,7 @@ export const agentInstanceBootService = {
       }
       const machine = rows.find((s) => s.step === 'machine_start');
       if (machine && !FINISHED.includes(machine.state)) {
-        const verdict = await advanceMachineStart(pass, machine);
+        const verdict = await advanceMachineStart(pass, machine, provision);
         if (verdict) return verdict;
       }
       const clones = rows.filter((s) => s.step === 'clone' && !FINISHED.includes(s.state));

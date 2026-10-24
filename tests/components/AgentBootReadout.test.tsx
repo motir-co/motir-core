@@ -34,6 +34,8 @@ function step(
     startedAt: null,
     endedAt: null,
     detail: null,
+    waiting: null,
+    waited: null,
     ...over,
   };
 }

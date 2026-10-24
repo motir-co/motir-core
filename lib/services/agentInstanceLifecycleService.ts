@@ -9,6 +9,7 @@ import type {
 } from '@/generated/prisma/client';
 import {
   FLEET_CONTAINER_SIZE,
+  OrchestratorCapacityError,
   type PersistentContainerHandle,
   type PersistentContainerStatus,
 } from '@motir/orchestrator';
@@ -23,6 +24,7 @@ import {
   INSTANCE_SLOT_TTL_SECONDS,
   INSTANCE_VOLUME_SIZE_GB,
   isUnlimitedAgentOrg,
+  parseWaitingReason,
 } from '@/lib/agentInstances/config';
 import {
   AgentInstanceNameInvalidError,
@@ -697,8 +699,13 @@ function bootFailureReason(
   row: AgentInstance,
   status: PersistentContainerStatus,
   now: number,
+  provisionEndedAt: Date | null = null,
 ): string | null {
   const began = row.stateChangedAt.getTime();
+  // The deadline measures the machine coming up: from the provision's end when
+  // that is later — a boot that waited for room counts from the pass that got it
+  // (MOTIR-9474).
+  const deadlineFrom = Math.max(began, provisionEndedAt?.getTime() ?? began);
   const exited =
     status.state === 'stopped' && status.stoppedAt !== null && status.stoppedAt.getTime() >= began;
   if (exited) {
@@ -709,7 +716,7 @@ function bootFailureReason(
       return `The machine exited during boot${said}. Wake to try again, or delete it.`;
     }
   }
-  if (now - began >= INSTANCE_BOOT_DEADLINE_MS) {
+  if (now - deadlineFrom >= INSTANCE_BOOT_DEADLINE_MS) {
     const minutes = Math.round(INSTANCE_BOOT_DEADLINE_MS / 60_000);
     return `The machine did not finish starting within ${minutes} minutes. Wake to try again, or delete it.`;
   }
@@ -925,6 +932,103 @@ async function handOverBoot(row: AgentInstance, boot: AgentBootOpened | null): P
   await sendEvent('agent-instance/boot', boot.event);
 }
 
+/**
+ * Hand a boot that found NO ROOM to its driver (MOTIR-9474): `provision` left in
+ * progress with the waiting reason, then the same `agent-instance/boot` event,
+ * whose passes retry until there is room.
+ */
+async function handOverWaitingBoot(
+  row: AgentInstance,
+  boot: AgentBootOpened | null,
+  reason: 'pool' | 'account',
+): Promise<void> {
+  /* v8 ignore next -- the callers wait only with an attempt opened */
+  if (!boot) return;
+  await agentInstanceBootService.recordWaiting(row, boot.attempt, reason);
+  await sendEvent('agent-instance/boot', boot.event);
+}
+
+/**
+ * CREATE A NEW INSTANCE'S MACHINE (MOTIR-9472, MOTIR-9474) — the create's
+ * provider call after commit, and the waiting boot's retry of it. Placement reads
+ * the agent hoster's switch, once: Fly is today's path; an AWS account records
+ * itself and the handle. `waiting` when there is no room — every account of the
+ * pool refused or is full, or the provider said it is full — and then nothing
+ * was created anywhere and nothing recorded. Any other error is raised.
+ */
+async function provisionNewInstance(
+  row: AgentInstance,
+  terminal: ReturnType<typeof agentTerminalMachineConfig>,
+): Promise<'placed' | 'waiting'> {
+  const orchestrator = getPersistentOrchestrator();
+  let placed: Awaited<ReturnType<typeof agentInstancePlacementService.placeAndProvision>>;
+  try {
+    placed = await agentInstancePlacementService.placeAndProvision(
+      {
+        instanceId: row.id,
+        organizationId: row.organizationId,
+        workspaceId: row.workspaceId,
+        spec: {
+          orgId: row.organizationId,
+          workspaceId: row.workspaceId,
+          projectId: row.projectId,
+          instanceId: row.id,
+          image: pinnedImageReference(row.imageTag, row.imageDigest),
+          size: FLEET_CONTAINER_SIZE,
+          // No credential of the user's, and none of Motir's: the instance knows only
+          // which record it is (§9's rule — Motir never pre-fills a sign-in).
+          env: { MOTIR_INSTANCE_ID: row.id },
+          volumeSizeGb: INSTANCE_VOLUME_SIZE_GB,
+          mountPath: INSTANCE_HOME_PATH,
+          // agent-terminal.md Q2–Q4: the terminal server as the main process, its
+          // public service, and the per-instance key (`MOTIR_TERMINAL_KEY`) — a key
+          // that opens only this machine's shell, never a credential of the user's.
+          terminal,
+          // With the terminal off, a main process that stays up (MOTIR-7336).
+          idleCommand: terminal ? null : AGENT_IDLE_COMMAND,
+        },
+      },
+      { persistentOrchestratorForShard, flyOrchestrator: () => orchestrator },
+    );
+  } catch (err) {
+    if (err instanceof OrchestratorCapacityError) return 'waiting';
+    throw err;
+  }
+  if (placed.outcome === 'pool_full') return 'waiting';
+  if (placed.outcome === 'fly') {
+    const { handle } = placed;
+    await withWorkspaceServiceContext(row.workspaceId, (tx) =>
+      agentInstanceRepository.setHandle(
+        row.id,
+        { flyApp: handle.app, machineId: handle.machineId, volumeId: handle.volumeId },
+        tx,
+      ),
+    );
+  }
+  return 'placed';
+}
+
+/**
+ * START A WOKEN INSTANCE ON ITS OWN ACCOUNT (MOTIR-9474) — the waiting wake's
+ * retry: the same config upkeep, image alignment and start the wake does, through
+ * the account the row records. `waiting` while that account is still full.
+ */
+async function startRecordedInstance(row: AgentInstance): Promise<'started' | 'waiting'> {
+  const { orchestrator, handle } = await routeOf(row);
+  /* v8 ignore next -- a woken instance always has its machine */
+  if (!handle) throw new Error('the instance has no machine to start');
+  try {
+    const terminal = agentTerminalMachineConfig(row.id);
+    if (terminal) await orchestrator.ensureMachineConfig(handle, terminal);
+    await alignMachineImage(row, handle, null, orchestrator);
+    await orchestrator.start(handle);
+  } catch (err) {
+    if (err instanceof OrchestratorCapacityError) return 'waiting';
+    throw err;
+  }
+  return 'started';
+}
+
 /** The catalog could not be asked: shown as "could not check", never as up to date. */
 const UNKNOWN_IMAGE: AgentInstanceImageFields = { imageVersion: null, update: 'unknown' };
 
@@ -1066,6 +1170,9 @@ export const agentInstanceBootSteps = {
   reload,
   failInstance,
   bootFailureReason,
+  provisionNew: (row: AgentInstance) =>
+    provisionNewInstance(row, agentTerminalMachineConfig(row.id)),
+  startRecorded: startRecordedInstance,
   cloneRepository,
   probeTerminalServer,
   probeRunCapabilities,
@@ -1149,7 +1256,11 @@ export const agentInstanceLifecycleService = {
       const bootSteps = new Map<string, AgentInstanceBootRowStepDto>();
       for (const s of booting) {
         if (!bootSteps.has(s.agentInstanceId))
-          bootSteps.set(s.agentInstanceId, { step: s.step, repository: s.repository });
+          bootSteps.set(s.agentInstanceId, {
+            step: s.step,
+            repository: s.repository,
+            waiting: parseWaitingReason(s.detail),
+          });
       }
       return { total, rows, usage, latestClosed, runs, bootSteps };
     });
@@ -1290,52 +1401,19 @@ export const agentInstanceLifecycleService = {
       throw err;
     }
 
+    let provisioned: 'placed' | 'waiting';
     try {
-      // WHERE IT LIVES (MOTIR-9472): placement reads the agent hoster's switch,
-      // once, here. Fly is today's path; an AWS account records itself and the
-      // handle; a full pool creates nothing anywhere and leaves the boot where it
-      // is before any machine exists, for the waiting card to take up.
-      const placed = await agentInstancePlacementService.placeAndProvision(
-        {
-          instanceId,
-          organizationId: project.organizationId,
-          workspaceId: project.workspaceId,
-          spec: {
-            orgId: project.organizationId,
-            workspaceId: project.workspaceId,
-            projectId: project.id,
-            instanceId,
-            image: pinnedImageReference(imageTag, imageDigest),
-            size: FLEET_CONTAINER_SIZE,
-            // No credential of the user's, and none of Motir's: the instance knows only
-            // which record it is (§9's rule — Motir never pre-fills a sign-in).
-            env: { MOTIR_INSTANCE_ID: instanceId },
-            volumeSizeGb: INSTANCE_VOLUME_SIZE_GB,
-            mountPath: INSTANCE_HOME_PATH,
-            // agent-terminal.md Q2–Q4: the terminal server as the main process, its
-            // public service, and the per-instance key (`MOTIR_TERMINAL_KEY`) — a key
-            // that opens only this machine's shell, never a credential of the user's.
-            terminal,
-            // With the terminal off, a main process that stays up (MOTIR-7336).
-            idleCommand: terminal ? null : AGENT_IDLE_COMMAND,
-          },
-        },
-        { persistentOrchestratorForShard, flyOrchestrator: () => orchestrator },
-      );
-      if (placed.outcome === 'fly') {
-        const { handle } = placed;
-        await withWorkspaceServiceContext(project.workspaceId, (tx) =>
-          agentInstanceRepository.setHandle(
-            instanceId,
-            { flyApp: handle.app, machineId: handle.machineId, volumeId: handle.volumeId },
-            tx,
-          ),
-        );
-      }
+      provisioned = await provisionNewInstance(row, terminal);
     } catch (err) {
       const detail = describeError(err);
       if (boot) await agentInstanceBootService.recordProvision(row, boot.attempt, detail);
       await failInstance(row, `The machine could not be created: ${detail}`);
+      return await toDtoWithImage(await reload(row));
+    }
+    if (provisioned === 'waiting') {
+      // A full pool is a wait, never a failure (MOTIR-9474): the boot stays
+      // `starting` and its job retries the placement until room appears.
+      await handOverWaitingBoot(row, boot, 'pool');
       return await toDtoWithImage(await reload(row));
     }
 
@@ -1441,6 +1519,13 @@ export const agentInstanceLifecycleService = {
       await alignMachineImage(row, handle, target, orchestrator);
       await orchestrator.start(handle);
     } catch (err) {
+      // Its own account is full (MOTIR-9474): a wake WAITS for room there — never
+      // another account, never Fly. An update's wake opens no boot to wait in,
+      // so it fails as before.
+      if (err instanceof OrchestratorCapacityError && boot) {
+        await handOverWaitingBoot(row, boot, 'account');
+        return await toDtoWithImage(await reload(row));
+      }
       const detail = describeError(err);
       if (boot) await agentInstanceBootService.recordProvision(row, boot.attempt, detail);
       await failInstance(
