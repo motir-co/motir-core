@@ -537,6 +537,21 @@ describe('the sweep’s own seams (MOTIR-4544 top-up)', () => {
     expect(index.mock.calls.map(([data]) => data.repoName)).toEqual(['fresh']);
   });
 
+  it('with NO injected deps a pool-full row is read against the real pool, and no allowance is asked (MOTIR-9452)', async () => {
+    await seedOrg('cu-defaults-pool', ['waiting']);
+    await setRepo('waiting', { paused: 'paused_index_pool_full', indexedHeadSha: null });
+    stubIndexFleet();
+    // The indexer switch is off: the process-wide fleet takes it, which is room.
+    vi.stubEnv('MOTIR_INDEX_FLEET_PROVIDER', 'fly');
+    const index = vi.spyOn(indexEnqueue, 'enqueueCodeGraphIndex').mockResolvedValue();
+
+    const summary = await codeGraphIndexCatchUpService.catchUp();
+
+    expect(summary.outcomes.map((o) => o.outcome)).toEqual(['index_enqueued']);
+    expect(index.mock.calls.map(([data]) => data.repoName)).toEqual(['waiting']);
+    expect(indexAllowanceWorld.checks).toEqual([]);
+  });
+
   it('one repository whose action throws is reported and keeps its pause; the rest proceed', async () => {
     await seedOrg('cu-throw', ['bad', 'good']);
     await setRepo('bad', {

@@ -6,6 +6,7 @@ import {
   classifyIndexExit,
   MAX_DISPATCH_ATTEMPTS,
   codeGraphIndexDispatchService,
+  MAX_INDEX_READMISSIONS,
   indexAdmissionWaitMs,
   indexPollWaitMs,
   INDEX_ADMISSION_BUDGETS,
@@ -1266,6 +1267,28 @@ describe("boot, poll and settle address the admitted account's orchestrator", ()
     expect(
       (await adminDb.fleetShard.findUniqueOrThrow({ where: { id: c.id } })).admissionPausedUntil,
     ).toBeNull();
+  });
+
+  it('a boot that has already re-admitted MAX_INDEX_READMISSIONS times stops moving and waits as pool_full (MOTIR-9452)', async () => {
+    const a = await account();
+    fakeOrchestratorForShard(a.id).failNextProvisionForCapacity('out_of_stock');
+
+    const booted = await codeGraphIndexDispatchService.bootIndexContainer(INPUT, onAccount(a.id), {
+      ...FAST,
+      indexReadmissions: MAX_INDEX_READMISSIONS,
+    });
+
+    expect(booted).toMatchObject({
+      phase: 'terminal',
+      outcome: { outcome: 'admission_deferred', reason: 'pool_full' },
+    });
+    // No further admission was asked, and the slot was still given back.
+    expect(vi.mocked(codeGraphIndexAdmissionService.admit)).not.toHaveBeenCalled();
+    expect(released).toEqual([ADMISSION.slotRef]);
+    expect(fakeOrchestrator.provisioned).toHaveLength(0);
+    expect(
+      (await adminDb.fleetShard.findUniqueOrThrow({ where: { id: a.id } })).admissionPausedReason,
+    ).toBe('capacity_refused');
   });
 
   it('with the switch off a capacity refusal is still provision_failed', async () => {
