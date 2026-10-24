@@ -468,10 +468,10 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/monitorIssueResolve.ts',
     shape: '{ failed: number; gone: number; links: number; resolved: number; skipped: number }',
   },
-  'reconcile-open-deliveries-v4': {
+  'reconcile-open-deliveries-v5': {
     file: 'lib/jobs/definitions/pullRequestReconcile.ts',
     shape:
-      '{ examined: number; failed: number; gatesRaised: number; gone: number; promoted: number; queueExitsResolved: number; replayed: number; skippedNoLiveCard: number; stillOpen: number; transitioned: number }',
+      '{ examined: number; failed: number; gatesRaised: number; gone: number; implemented: number; implementedRefused: number; promoted: number; queueExitsResolved: number; replayed: number; skippedNoLiveCard: number; stillOpen: number; transitioned: number }',
   },
   'reconcile-github-billed': {
     file: 'lib/jobs/definitions/ciMinutesReconcile.ts',
@@ -868,6 +868,13 @@ export const RETIRED_STEP_IDS: Record<string, RetiredStepId> = {
     supersededBy: 'reconcile-open-deliveries-v4',
     reason:
       'MOTIR-6848 added `queueExitsResolved` to the reconcile summary — the sweep now also reads the conclusion of a standing merge-queue exit’s failing check from the host when Motir never received it, and re-settles a cancelled / timed-out one (§4 SIXTH AMENDMENT). A memo written under the old id carries the narrower shape. The new limb is a read plus writes guarded on the conclusion still being null and a re-settle that re-judges to the same answer on a second call, so re-executing the step under the new id on a resumed run is safe — which is why the answer is a bump rather than a boundary guard on the replayed value.',
+  },
+  'reconcile-open-deliveries-v4': {
+    shape:
+      '{ examined: number; failed: number; gatesRaised: number; gone: number; promoted: number; queueExitsResolved: number; replayed: number; skippedNoLiveCard: number; stillOpen: number; transitioned: number }',
+    supersededBy: 'reconcile-open-deliveries-v5',
+    reason:
+      'MOTIR-9455 added `implemented` and `implementedRefused` to the reconcile summary — the sweep now also re-syncs a still-open, non-draft pull request whose delivered card was left at `in_progress` (a run that never reported `implemented`, or an `opened` / `ready_for_review` delivery that was lost or refused), through the link-time resync, and counts the cards it lifted and the ones the sync refused. A memo written under the old id carries the narrower shape. The new limb asks only about a card still at `in_progress`, through the delivery path, which reads `noop` for a card already at `implemented` and never moves one back from In Review, so re-executing the step under the new id on a resumed run is safe — which is why the answer is a bump rather than a boundary guard on the replayed value.',
   },
   '`recompute-parent-v2-${i}`': {
     shape:

@@ -11,6 +11,7 @@ import { approvalGateRepository } from '@/lib/repositories/approvalGateRepositor
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { bindWorkspaceContext, withSystemContext } from '@/lib/workspaces/context';
 import { githubWebhookService } from './githubWebhookService';
+import { resyncLinkedPullRequest, type ChangeRequestSyncResult } from './changeRequestStatusSync';
 import { workflowsService } from './workflowsService';
 import { reconcileGatesFor } from './gateSetFor';
 import { promoteIfCiAlreadyGreen } from './ciPromotion';
@@ -65,11 +66,22 @@ import { sendEvent } from '@/lib/jobs/sendEvent';
 //   5. When the host says it is still OPEN, records that it asked
 //      (`markReconciled`) so the row rotates to the back of the queue.
 //
-// ── Why only CLOSED is replayed ───────────────────────────────────────────
-// A missed `opened` or `ready_for_review` leaves a card one rung low, and the next
-// delivery for that pull request (any push's CI, the merge itself) repairs it. A
-// missed `closed` is the only delivery with NO successor: nothing else will ever
-// arrive for that pull request, so it is the one a guarantee is owed for.
+// ── Why a CLOSED pull request is replayed, and an OPEN one only re-synced ──
+// A missed `closed` is the only delivery with NO successor: nothing else will ever
+// arrive for that pull request, so it is replayed whole.
+//
+// A missed `opened` or `ready_for_review` was once assumed to leave a card one
+// rung low until the pull request's next delivery repaired it. That is FALSE for
+// the first rung (MOTIR-9455): only those deliveries, the link-time resync and the
+// run's own report write `in_progress → implemented`, and every promotion past it
+// (green CI, `promoteIfCiAlreadyGreen`) moves a card only FROM `implemented`. So a
+// run that forgot to report, a delivery that was lost, or one the container gate
+// refused while a story's children were still landing, left the card at In
+// Progress for good with its pull request green. A still-open, non-draft row whose
+// delivered card sits at `in_progress` is therefore RE-SYNCED through
+// `resyncLinkedPullRequest` — the link-time door, the same sync, the same gates —
+// before the promotion below, so a card whose CI is already green reaches In
+// Review in the same pass.
 //
 // ── Idempotency ───────────────────────────────────────────────────────────
 // A late or duplicate real delivery after a reconcile, or the other way round, is
@@ -144,6 +156,23 @@ export interface PullRequestReconcileSummary {
    * recorded before the conclusion was); a steady trickle is an ingestion defect.
    */
   queueExitsResolved: number;
+  /**
+   * Cards moved `in_progress → implemented` because their open, non-draft pull
+   * request was re-synced (MOTIR-9455) — a card whose run never reported it, or
+   * whose `opened` / `ready_for_review` delivery was lost or refused.
+   *
+   * ⚠️ READ IT LIKE `promoted`: one is a forgotten report repaired; a steady
+   * trickle means runs keep forgetting to write `implemented`, and that is the
+   * defect to fix.
+   */
+  implemented: number;
+  /**
+   * Cards at `in_progress` that re-sync LEFT where they are because the sync
+   * refused the move — a container whose children have not all landed, a workflow
+   * with no legal edge. A refusal, never a failure: the card is asked again next
+   * pass, and no note is posted for it.
+   */
+  implementedRefused: number;
 }
 
 /** The sync outcomes that mean a card actually moved. */
@@ -169,6 +198,8 @@ export const pullRequestReconcileService = {
       gatesRaised: 0,
       promoted: 0,
       queueExitsResolved: 0,
+      implemented: 0,
+      implementedRefused: 0,
     };
 
     const candidates = await withSystemContext((tx) =>
@@ -245,12 +276,18 @@ export const pullRequestReconcileService = {
           // failed enqueue, or a member GitHub had not computed within that job's waits
           // is settled here — BEFORE the promotion and the re-ask below, so a member
           // that now conflicts is neither promoted nor asked about. Not counted on the
-          // summary: that is a memoized step result (`reconcile-open-deliveries-v4`), and
+          // summary: that is a memoized step result (`reconcile-open-deliveries-v5`), and
           // widening it would owe an id bump for a number nothing reads.
           await settleMergeability(candidate, read.pullRequest);
           // ⚠️ A QUEUE EXIT WHOSE CHECK'S END NOBODY HEARD (MOTIR-6848). Before the
           // promotion and the gate sweep, so a hung check's card re-asks in THIS pass.
           if (await resolveStandingQueueExit(candidate)) summary.queueExitsResolved += 1;
+          // ⚠️ THE FIRST RUNG HAS NO OTHER BACKSTOP (MOTIR-9455), and it runs BEFORE the
+          // promotion: the latch below moves only a card at `implemented`, so a card
+          // this lifts is promoted — and asked about — in the same pass.
+          const repair = await implementUnreportedCards(candidate, read.pullRequest);
+          summary.implemented += repair.implemented;
+          summary.implementedRefused += repair.refused;
           // ⚠️ STILL OPEN IS NOT NOTHING TO DO (Subtask MOTIR-5671). This sweep
           // exists as the backstop for a delivery nobody heard, and a LOST EVENT
           // costs a card its gate exactly as it costs it a merge: every raise in
@@ -358,6 +395,93 @@ async function deliversLiveCard(candidate: ReconcileCandidate): Promise<boolean>
     if (live) return true;
   }
   return false;
+}
+
+/** The status a card is left at when nobody wrote `implemented` for it. */
+const IN_PROGRESS_KEY = 'in_progress';
+
+/**
+ * Lift every LIVE card this open pull request delivers that still reads
+ * `in_progress` to `implemented`, through the link-time resync (MOTIR-9455).
+ *
+ * ⚠️ IT ADDS AN OCCASION, NOT A TRANSITION PATH — the same rule the promotion
+ * beside it follows. `resyncLinkedPullRequest` is the door `link_pull_request`
+ * already runs: it synthesizes the open delivery from the stored row and hands it
+ * to `syncChangeRequestStatus`, so the container-completeness gate, the plan hold,
+ * the approval guard, the never-back-out-of-a-verdict rule and the revision and
+ * `work-item/transitioned` event are all the delivery path's.
+ *
+ * ⚠️ DRAFT-NESS MUST BE KNOWN `false`, on the stored row AND on the host read this
+ * pass just made. A draft is not offered for review, so it is not `implemented`;
+ * a row that does not know (`null`) is declined by the resync itself, and a host
+ * that now says draft means a `converted_to_draft` nobody heard — the stored
+ * `false` is stale, and lifting the card on it would assert what the host has
+ * retracted.
+ *
+ * ⚠️ ASKED ONLY WHEN A DELIVERED CARD READS `in_progress`. A pull request whose
+ * cards are all past that rung needs nothing, and re-syncing it would only write
+ * the row it already holds. When it does run, every card it delivers is decided
+ * exactly as the lost delivery would have decided it.
+ *
+ * Idempotent: a card already at `implemented` reads `noop`, and one at In Review
+ * is never moved back. A refused card (a container whose children have not all
+ * landed) stays at `in_progress`, is counted, and is asked again next pass.
+ */
+async function implementUnreportedCards(
+  candidate: ReconcileCandidate,
+  pull: Record<string, unknown>,
+): Promise<{ implemented: number; refused: number }> {
+  const none = { implemented: 0, refused: 0 };
+  if (candidate.draft !== false || pull['draft'] === true) return none;
+
+  const stuck = await inProgressDeliveredCards(candidate);
+  if (stuck.length === 0) return none;
+
+  const result = await resyncLinkedPullRequest(candidate.id);
+  if (!result) return none;
+
+  const outcomes = perCardOutcomes(result);
+  let implemented = 0;
+  let refused = 0;
+  for (const workItemId of stuck) {
+    const outcome = outcomes.get(workItemId);
+    if (outcome === undefined) continue;
+    if (outcome === 'transitioned') implemented += 1;
+    else refused += 1;
+  }
+  return { implemented, refused };
+}
+
+/** Each delivered card's own outcome — the list on a multi-card result, else the one card. */
+function perCardOutcomes(
+  result: ChangeRequestSyncResult,
+): Map<string, ChangeRequestSyncResult['outcome']> {
+  if (result.deliveredItems)
+    return new Map(result.deliveredItems.map((d) => [d.workItemId, d.outcome]));
+  return new Map(result.workItemId ? [[result.workItemId, result.outcome]] : []);
+}
+
+/**
+ * The live cards this pull request delivers that read `in_progress`, read per
+ * workspace with the workspace BOUND for the reason {@link deliversLiveCard} gives.
+ */
+async function inProgressDeliveredCards(candidate: ReconcileCandidate): Promise<string[]> {
+  const byWorkspace = new Map<string, string[]>();
+  for (const d of candidate.deliveries) {
+    byWorkspace.set(d.workspaceId, [...(byWorkspace.get(d.workspaceId) ?? []), d.workItemId]);
+  }
+
+  const stuck: string[] = [];
+  for (const [workspaceId, workItemIds] of byWorkspace) {
+    const items = await withSystemContext(async (tx) => {
+      await bindWorkspaceContext(tx, workspaceId);
+      return workItemRepository.findByIds(workItemIds, tx);
+    });
+    for (const item of items) {
+      if (item.archivedAt === null && item.status === IN_PROGRESS_KEY) stuck.push(item.id);
+    }
+  }
+  return stuck;
 }
 
 /**
