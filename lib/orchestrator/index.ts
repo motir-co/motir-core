@@ -2,6 +2,7 @@ import {
   createAwsFleetInventory,
   createAwsOrchestrator,
   createEc2Api,
+  Ec2ApiError,
   createFakeOrchestrator,
   createFlyOrchestrator,
   createUsageSink,
@@ -251,10 +252,59 @@ export const AWS_RUNNER_AMI_ENV_VAR = 'MOTIR_AWS_RUNNER_AMI_ID';
  * the caller needs (the AMI, for a launch); every missing one is named at once,
  * as `indexFleetConfig` does.
  */
+/**
+ * THE ACCEPTANCE LANE'S EC2 (MOTIR-9429): a factory `lib/test-fake-aws.ts`
+ * installs when `MOTIR_FAKE_AWS_STATE_PATH` is set, so the lane's three processes
+ * drive the REAL AWS adapter and inventory over one file-backed fake EC2. Given
+ * the caller's own `Ec2ApiError`, because the hook and the route that reads this
+ * are separate bundles with separate copies of the package, and the adapter tells
+ * a refusal by `instanceof`.
+ *
+ * Held on `globalThis` for the same reason `lib/blob/s3.ts`'s transport is: a
+ * module variable set at instrumentation is not the binding a route reads. Unset
+ * in every real deployment, and with it unset every line below is unchanged.
+ */
+export type AwsEc2Override = (
+  shard: FleetShardDTO,
+  errors: { Ec2ApiError: typeof Ec2ApiError },
+) => Ec2Api;
+
+const AWS_EC2_OVERRIDE_KEY = Symbol.for('motir.orchestrator.e2eAwsEc2');
+type AwsEc2OverrideHolder = { [AWS_EC2_OVERRIDE_KEY]?: AwsEc2Override };
+
+/** The lane's EC2 factory, or null outside it. */
+function awsEc2Override(): AwsEc2Override | null {
+  return (globalThis as AwsEc2OverrideHolder)[AWS_EC2_OVERRIDE_KEY] ?? null;
+}
+
+/** Install (or with `null`, remove) the lane's EC2 factory — tests and the lane only. */
+export function setAwsEc2OverrideForTests(factory: AwsEc2Override | null): void {
+  if (factory) (globalThis as AwsEc2OverrideHolder)[AWS_EC2_OVERRIDE_KEY] = factory;
+  else delete (globalThis as AwsEc2OverrideHolder)[AWS_EC2_OVERRIDE_KEY];
+}
+
+/** The AMI the lane's fake EC2 is handed: it boots nothing, so no image is read. */
+const FAKE_AWS_AMI_ID = 'ami-00000000000000000';
+
+/** Is this an `aws` account the lane's fake EC2 answers for? */
+function onFakeAws(shard: FleetShardDTO): boolean {
+  return shard.provider === 'aws' && awsEc2Override() !== null;
+}
+
 function awsShardClient(
   shard: FleetShardDTO,
   extra: readonly string[] = [],
 ): { ec2: Ec2Api; region: string; values: Record<string, string> } {
+  const override = awsEc2Override();
+  if (override) {
+    // The lane carries no AWS key and no AMI; the fake needs neither.
+    if (!shard.aws) {
+      throw new OrchestratorNotConfiguredError(`fleet account ${shard.name} names no AWS location`);
+    }
+    const values: Record<string, string> = {};
+    for (const name of extra) values[name] = process.env[name]?.trim() || FAKE_AWS_AMI_ID;
+    return { ec2: override(shard, { Ec2ApiError }), region: shard.aws.region, values };
+  }
   const keyIdVar = `${shard.credentialRef}_ACCESS_KEY_ID`;
   const secretVar = `${shard.credentialRef}_SECRET_ACCESS_KEY`;
   const values: Record<string, string> = {};
@@ -301,7 +351,10 @@ function awsOrchestratorForShard(shard: FleetShardDTO): ContainerOrchestrator {
  * compile error here until it is routed (to the registry — one `case` line).
  */
 export function orchestratorForShard(shard: FleetShardDTO): ContainerOrchestrator {
-  if (selectedOrchestratorProvider() === 'fake') return fakeOrchestratorForShard(shard.id);
+  // Under the lane's fake EC2 an `aws` account runs the real adapter (MOTIR-9429).
+  if (selectedOrchestratorProvider() === 'fake' && !onFakeAws(shard)) {
+    return fakeOrchestratorForShard(shard.id);
+  }
   switch (shard.provider) {
     case 'fly':
       return flyOrchestratorForShard(shard);
@@ -327,7 +380,7 @@ export function inventoryForShard(shard: FleetShardDTO): FleetInventory | null {
     // the same EC2 client its orchestrator launches through. Under the fake
     // orchestrator there is no EC2 to list.
     case 'aws': {
-      if (selectedOrchestratorProvider() === 'fake') return null;
+      if (selectedOrchestratorProvider() === 'fake' && !onFakeAws(shard)) return null;
       const { ec2, region } = awsShardClient(shard);
       return createAwsFleetInventory({ ec2, region, accountName: shard.name });
     }
@@ -489,7 +542,10 @@ const ECR_HOST = /^\d{12}\.dkr\.ecr(-fips)?\.[a-z0-9-]+\.amazonaws\.com(\.cn)?$/
  * {@link verifyHostedAgentImagePullable}'s question, asked of the live registry.
  */
 export function hostedAgentImage(provider: OrchestratorProvider): string {
-  if (provider === 'fake' || selectedOrchestratorProvider() === 'fake') {
+  // An `aws` boot on the lane's fake EC2 builds real user-data, which takes
+  // only a digest-pinned image (MOTIR-9429).
+  const fakeAws = provider === 'aws' && awsEc2Override() !== null;
+  if (provider === 'fake' || (selectedOrchestratorProvider() === 'fake' && !fakeAws)) {
     return FAKE_HOSTED_AGENT_IMAGE;
   }
   const image = rawHostedAgentImage();
