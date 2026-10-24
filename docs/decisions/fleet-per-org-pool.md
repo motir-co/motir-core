@@ -408,6 +408,9 @@ its GitHub org (MOTIR-8966, MOTIR-8974).
 - **Each kind has its own Fly↔AWS switch** (a feature flag, read on every boot) and flips on its own.
   A kind whose switch is on Fly boots exactly as today, on the process-wide Fly fleet. The Fly code
   stays.
+  - The agent runner's switch is `MOTIR_FLEET_AGENT_RUNNER_PROVIDER` (`aws` ⇒ its pool; anything
+    else ⇒ Fly), and its in-flight count per account is the live `hosted_agent` fleet slots carrying
+    that account (`fleet_in_flight_slot.fleet_shard_id`) (MOTIR-9421, 2026-10-24).
 - **Fly is never a backup.** There is no `backup` role and no overflow to Fly: a job of a kind switched
   to AWS never boots on Fly. Existing Fly-hosted agents are not migrated; only Motir's own orgs have
   them, and that they may stop working after the hoster flips is accepted (MOTIR-9356).
