@@ -58,6 +58,18 @@ async function manualCard(overrides: { assigneeId?: string | null } = {}) {
   );
 }
 
+async function agentCard() {
+  seq += 1;
+  return workItemsService.createWorkItem(
+    { projectId: fx.projectId, kind: 'task', title: `Build the adapter ${seq}`, type: 'code' },
+    fx.ctx,
+  );
+}
+
+function block(fromId: string, toId: string) {
+  return workItemsService.linkWorkItems({ fromId, toId, kind: 'is_blocked_by' }, fx.ctx);
+}
+
 async function starter() {
   const user = await createTestUser();
   await adminDb.workspaceMembership.create({
@@ -167,6 +179,63 @@ describe('raise', () => {
 
     expect((await raise(card.id, fx.ownerId)).raised).toBe(true);
     expect((await gatesOf(card.id)).map((g) => g.state).sort()).toEqual(['approved', 'awaiting']);
+  });
+
+  // MOTIR-9500: §6 withdraws the gate as `not_ready` when the card stops being one a
+  // person can start, so the raise must not open it in that same state.
+  it('raises nothing on a card with an OPEN `blocked_by`, and leaves its assignee alone', async () => {
+    const card = await manualCard();
+    const blocker = await agentCard();
+    await block(card.id, blocker.id);
+
+    const result = await raise(card.id, (await starter()).id);
+
+    expect(result).toEqual({
+      raised: false,
+      skipped: 'not_ready',
+      assignedToStarter: false,
+      routedToId: fx.ownerId,
+    });
+    expect(await gatesOf(card.id)).toEqual([]);
+    expect(
+      (await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id } })).assigneeId,
+    ).toBeNull();
+  });
+
+  it('raises once every blocker is done, or integrated on a session branch', async () => {
+    const card = await manualCard();
+    const finished = await agentCard();
+    const integrated = await agentCard();
+    await block(card.id, finished.id);
+    await block(card.id, integrated.id);
+    expect((await raise(card.id, fx.ownerId)).skipped).toBe('not_ready');
+
+    await workItemsService.updateStatus(finished.id, 'in_progress', fx.ctx);
+    await workItemsService.updateStatus(finished.id, 'done', fx.ctx);
+    expect((await raise(card.id, fx.ownerId)).skipped).toBe('not_ready');
+
+    await adminDb.workItem.update({
+      where: { id: integrated.id },
+      data: { sessionBranch: 'session/MOTIR-1-run' },
+    });
+    expect((await raise(card.id, fx.ownerId)).raised).toBe(true);
+  });
+
+  it('an archived blocker gates nothing', async () => {
+    const card = await manualCard();
+    const blocker = await agentCard();
+    await block(card.id, blocker.id);
+    await workItemsService.archiveWorkItem(blocker.id, fx.ctx);
+
+    expect((await raise(card.id, fx.ownerId)).raised).toBe(true);
+  });
+
+  it('raises nothing on a card standing in Blocked, even with no edges', async () => {
+    const card = await manualCard();
+    await workItemsService.updateStatus(card.id, 'blocked', fx.ctx);
+
+    expect((await raise(card.id, fx.ownerId)).skipped).toBe('not_ready');
+    expect(await gatesOf(card.id)).toEqual([]);
   });
 });
 

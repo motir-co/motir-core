@@ -79,6 +79,10 @@ export const NO_APP_FRAME = 'no_app_frame';
 // Slots of the shared stats array (BigInt64Array).
 const S_EPOCH = 0;
 const S_MAX_BASE = 1; // two windows: S_MAX_BASE + (epoch & 1)
+// The heartbeat value the window's longest block started from, so the reading
+// can pair that block with ITS capture rather than the window's (MOTIR-9499).
+const S_MAX_HB_BASE = 3; // two windows: S_MAX_HB_BASE + (epoch & 1)
+const STATS_SLOTS = 5;
 
 /** One stack frame as V8 reports it. */
 export interface RawFrame {
@@ -136,7 +140,7 @@ export interface LoopBlockReading {
 const WORKER_SOURCE = `
 const { workerData } = require('node:worker_threads');
 const inspector = require('node:inspector');
-const { hb, stats, port, thresholdMs, pollMs, S_EPOCH, S_MAX_BASE } = workerData;
+const { hb, stats, port, thresholdMs, pollMs, S_EPOCH, S_MAX_BASE, S_MAX_HB_BASE } = workerData;
 
 let capturing = false;
 let capturedEpoch = -1;
@@ -205,9 +209,15 @@ function capture(hbStart) {
     });
 }
 
-function bumpMax(ms) {
-  const slot = S_MAX_BASE + (Number(Atomics.load(stats, S_EPOCH)) & 1);
-  if (BigInt(ms) > Atomics.load(stats, slot)) Atomics.store(stats, slot, BigInt(ms));
+// The block's start is stored BEFORE its length: a reader that sees the new
+// length then also sees the block it belongs to (and re-reads to be sure).
+function bumpMax(ms, hbStart) {
+  const half = Number(Atomics.load(stats, S_EPOCH)) & 1;
+  const slot = S_MAX_BASE + half;
+  if (BigInt(ms) > Atomics.load(stats, slot)) {
+    Atomics.store(stats, S_MAX_HB_BASE + half, BigInt(hbStart));
+    Atomics.store(stats, slot, BigInt(ms));
+  }
 }
 
 setInterval(() => {
@@ -217,7 +227,7 @@ setInterval(() => {
   const stale = now - last;
   if (stale > thresholdMs) {
     if (!block) block = { hbStart: last, captured: false };
-    bumpMax(stale);
+    bumpMax(stale, block.hbStart);
     const epoch = Number(Atomics.load(stats, S_EPOCH));
     if (!capturing && capturedEpoch !== epoch) {
       capturedEpoch = epoch;
@@ -225,7 +235,7 @@ setInterval(() => {
       capture(block.hbStart);
     }
   } else if (block) {
-    bumpMax(last - block.hbStart);
+    bumpMax(last - block.hbStart, block.hbStart);
     if (block.captured) port.postMessage({ t: 'end', hbStart: block.hbStart, endedAt: last });
     block = null;
   }
@@ -255,7 +265,7 @@ export function startLoopBlockWatchdog(): void {
   if (watchdog) return;
   const thresholdMs = thresholdOverrideMs ?? BLOCK_THRESHOLD_MS;
   const heartbeat = new BigInt64Array(new SharedArrayBuffer(8));
-  const stats = new BigInt64Array(new SharedArrayBuffer(8 * 3));
+  const stats = new BigInt64Array(new SharedArrayBuffer(8 * STATS_SLOTS));
   const { port1, port2 } = new MessageChannel();
 
   // A named function declaration, so a pause that lands inside it is
@@ -277,6 +287,7 @@ export function startLoopBlockWatchdog(): void {
       pollMs: POLL_MS,
       S_EPOCH,
       S_MAX_BASE,
+      S_MAX_HB_BASE,
     },
     transferList: [port2],
   });
@@ -352,6 +363,7 @@ export function rollLoopBlockWindow(): void {
   drain(w);
   const next = epochOf(w) + 1;
   Atomics.store(w.stats, S_MAX_BASE + (next & 1), BigInt(0));
+  Atomics.store(w.stats, S_MAX_HB_BASE + (next & 1), BigInt(0));
   Atomics.store(w.stats, S_EPOCH, BigInt(next));
   w.captures = w.captures.filter((c) => c.epoch >= next - 1);
 }
@@ -403,10 +415,28 @@ export function frameTagOf(capture: RawCapture, thresholdMs: number): string {
   return top ? formatFrame(top) : NO_APP_FRAME;
 }
 
+/** A window's longest block: its length and the heartbeat value it started from. */
+function windowMax(w: Watchdog, epoch: number): { ms: number; hbStart: number } {
+  const half = epoch & 1;
+  // The worker writes the start, then the length; re-read until the start is
+  // the same on both sides of the length, so the pair is one block's.
+  for (;;) {
+    const hbStart = Number(Atomics.load(w.stats, S_MAX_HB_BASE + half));
+    const ms = Number(Atomics.load(w.stats, S_MAX_BASE + half));
+    if (Number(Atomics.load(w.stats, S_MAX_HB_BASE + half)) === hbStart) return { ms, hbStart };
+  }
+}
+
 /**
- * The longest block of the current or previous window, with the capture that
- * explains it. Null when the watchdog is not running or no block reached the
+ * The longest block of the current or previous window, with the capture taken
+ * OF THAT BLOCK. Null when the watchdog is not running or no block reached the
  * threshold.
+ *
+ * ⚠️ A window gets one capture, and it belongs to the window's FIRST block. When
+ * a later block is the longer one, it has no capture of its own, and the
+ * earlier block's frame does not explain it: the reading then carries the
+ * length alone, with the frame and age `unmeasured` (MOTIR-9499). A capture is
+ * matched to its block by the heartbeat value the block started from.
  */
 export function readLoopBlock(): LoopBlockReading | null {
   const w = watchdog;
@@ -414,22 +444,20 @@ export function readLoopBlock(): LoopBlockReading | null {
   drain(w);
   const now = Date.now();
   const epoch = epochOf(w);
-  const slot = (e: number) => Number(Atomics.load(w.stats, S_MAX_BASE + (e & 1)));
 
   // A block still in progress (or just ended, before the next heartbeat) is
-  // visible as a stale heartbeat even before the worker's next poll.
+  // visible as a stale heartbeat even before the worker's next poll; it started
+  // from the heartbeat value it left stale.
   const beatAt = Number(Atomics.load(w.heartbeat, 0));
   const ongoingMs = now - beatAt > w.thresholdMs ? now - beatAt : 0;
-  const current = Math.max(slot(epoch), ongoingMs);
-  const previous = epoch > 0 ? slot(epoch - 1) : 0;
-  const blockMs = Math.max(current, previous);
+  const recorded = windowMax(w, epoch);
+  const current = ongoingMs > recorded.ms ? { ms: ongoingMs, hbStart: beatAt } : recorded;
+  const previous = epoch > 0 ? windowMax(w, epoch - 1) : { ms: 0, hbStart: 0 };
+  const longest = current.ms >= previous.ms ? current : previous;
+  const blockMs = longest.ms;
   if (blockMs <= 0) return null;
 
-  const owner = current >= previous ? epoch : epoch - 1;
-  const capture =
-    w.captures.find((c) => c.epoch === owner) ??
-    w.captures.find((c) => c.epoch === (owner === epoch ? epoch - 1 : epoch)) ??
-    null;
+  const capture = w.captures.find((c) => c.hbStart === longest.hbStart) ?? null;
   if (!capture) return { blockMs, frame: null, ageS: null, context: null };
 
   const stillStale = beatAt === capture.hbStart;
