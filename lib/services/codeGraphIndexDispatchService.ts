@@ -12,6 +12,7 @@ import {
   type IndexPauseReason,
 } from '@/lib/ciFleet/indexAllowance';
 import { CodeGraphRunCredentialTooShortError } from '@/lib/ai/errors';
+import { fleetShardOrchestratorService } from '@/lib/services/fleetShardOrchestratorService';
 import {
   codeGraphIndexAdmissionService,
   type IndexAdmission,
@@ -609,6 +610,18 @@ export interface IndexSession {
    * what a sync saves would be polluted by runs that never reported.
    */
   readonly syncGranted?: boolean;
+  /**
+   * THE FLEET ACCOUNT the container was booted on (MOTIR-9448) — the admission's
+   * `shardId`, copied at boot so poll and settle reach the SAME account's
+   * orchestrator. A plain id, never an adapter: `orchestratorFor` rebuilds the
+   * orchestrator from it per step.
+   *
+   * ⚠️ OPTIONAL, FOR THE ROLLOUT, as `syncGranted` is. A run in flight across the
+   * deploy replays an `index-boot:<projectId>` memo written without it, and a
+   * session with no account means the process-wide fleet — exactly where that
+   * run's container was booted.
+   */
+  readonly shardId?: string;
   readonly attribution: {
     readonly orgId: string;
     readonly workspaceId: string;
@@ -1237,9 +1250,25 @@ export const codeGraphIndexDispatchService = {
 
     let fleet: IndexFleetConfig;
     let aiBaseUrl: string;
-    let orchestrator: ContainerOrchestrator;
+    let orchestrator: ContainerOrchestrator | undefined;
     let credential: Awaited<ReturnType<typeof mintCodeGraphRunCredential>>;
     let tarballUrl: string;
+
+    // ── The admitted ACCOUNT's orchestrator (MOTIR-9448), before anything is
+    // spent. An account that cannot be reached (its row gone, its credential
+    // unset) is a failed boot that gives the slot back — never a throw that
+    // strands it until the TTL, and never a quiet fall back to the process-wide
+    // fleet, which the admission did not count it against.
+    if (admission.shardId) {
+      try {
+        orchestrator = await fleetShardOrchestratorService.forShard(admission.shardId);
+      } catch (err) {
+        await codeGraphIndexAdmissionService.release(admission.slotRef, input.dispatchId);
+        const detail = `the fleet account ${admission.shardId} could not be reached: ${detailOf(err)}`;
+        return { phase: 'terminal', outcome: { outcome: 'provision_failed', detail } };
+      }
+    }
+
     try {
       // ── 0 · The deployment gate, BEFORE anything is spent ──────────────────
       fleet = indexFleetConfig();
@@ -1256,7 +1285,7 @@ export const codeGraphIndexDispatchService = {
       // grant, while the ledger recorded success. There is NO fallback between
       // the two: unset is a throw, here, before a machine is billed.
       aiBaseUrl = motirAiContainerBaseUrl();
-      orchestrator = getOrchestrator();
+      orchestrator ??= getOrchestrator();
 
       // ── 1 · Mint THIS run's motir-ai credential ────────────────────────────
       // Scoped to one (project, repo, run) for minutes, and the only motir-ai
@@ -1362,6 +1391,7 @@ export const codeGraphIndexDispatchService = {
         dispatchId: input.dispatchId,
         repoRef: input.repoRef,
         slotRef: admission.slotRef,
+        ...(admission.shardId ? { shardId: admission.shardId } : {}),
         // MOTIR-4945 — the MODE, recorded at the only moment it is knowable.
         //
         // ⚠️ THE SAME PREDICATE THE SPEC BRANCHED ON, deliberately, and it must
@@ -1465,7 +1495,9 @@ export const codeGraphIndexDispatchService = {
 
     let status;
     try {
-      status = await orchestratorFor(session).describe({
+      status = await (
+        await orchestratorFor(session)
+      ).describe({
         provider: session.handle.provider,
         id: session.handle.id,
         region: session.handle.region,
@@ -1476,7 +1508,7 @@ export const codeGraphIndexDispatchService = {
       // deadlines remain the real bound — this buys the loop the right to MISS a
       // few reads, never the right to run longer.
       const consecutiveReadFailures = previous.consecutiveReadFailures + 1;
-      const detail = detailOf(err);
+      const detail = `${detailOf(err)}${onAccount(session)}`;
       if (consecutiveReadFailures > MAX_CONSECUTIVE_READ_FAILURES) {
         // Give up on READING, but not on tearing down: a `done` verdict is what
         // routes this to teardown, which is why it returns rather than throws.
@@ -1592,12 +1624,24 @@ export const codeGraphIndexDispatchService = {
 
     let orchestrator: ContainerOrchestrator;
     try {
-      orchestrator = orchestratorFor(session);
+      orchestrator = await orchestratorFor(session);
     } catch (err) {
       console.error('[codeGraphIndexDispatchService] no orchestrator at teardown', {
         containerId: handle.id,
         repoRef: session.repoRef,
+        shardId: session.shardId ?? null,
       });
+      if (session.shardId) {
+        // ⚠️ AN ACCOUNT THAT CAN NO LONGER BE REACHED (MOTIR-9448) — its row
+        // gone or its key unreadable — will not become reachable on a retry, so
+        // its slot is given back rather than held to the TTL. The container may
+        // still run: the outcome says so and leaves it to the orphan reaper.
+        await codeGraphIndexAdmissionService.release(session.slotRef, session.dispatchId);
+        return {
+          outcome: 'teardown_failed',
+          detail: `the fleet account ${session.shardId} could not be reached at teardown for container ${handle.id}; left for the reaper: ${detailOf(err)}`,
+        };
+      }
       return {
         outcome: 'teardown_failed',
         detail: `no orchestrator at teardown for container ${handle.id}; left for the reaper: ${detailOf(err)}`,
@@ -2303,6 +2347,13 @@ function exitVerdictFor(verdict: Extract<IndexPollResult, { done: true }>): Inde
 /** The orchestrator a session's container lives on. Re-read per step rather than
  *  carried across the boundary: an adapter is not serializable, and the handle is
  *  — which is exactly why the port made it opaque. */
-function orchestratorFor(_session: IndexSession): ContainerOrchestrator {
-  return getOrchestrator();
+async function orchestratorFor(session: IndexSession): Promise<ContainerOrchestrator> {
+  // A session with no account — every Fly run, and every memo from before
+  // MOTIR-9448 — is the process-wide fleet; `forShard(null)` is that.
+  return fleetShardOrchestratorService.forShard(session.shardId ?? null);
+}
+
+/** `" on fleet account <id>"` for a session booted on one, for a failure detail. */
+function onAccount(session: IndexSession): string {
+  return session.shardId ? ` on fleet account ${session.shardId}` : '';
 }

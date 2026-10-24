@@ -39,7 +39,9 @@ import { projectsService } from '@/lib/services/projectsService';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomToken, randomInt } from '../helpers/random';
-import { Prisma } from '@/generated/prisma/client';
+import { Prisma, type FleetShard } from '@/generated/prisma/client';
+import { fakeOrchestratorForShard, resetShardFakes } from '@/lib/orchestrator';
+import { fleetShardOrchestratorService } from '@/lib/services/fleetShardOrchestratorService';
 import { buildFleetCostReadout, type FleetCostReadout } from '../../scripts/fleetCostReadoutQuery';
 
 /**
@@ -1017,6 +1019,158 @@ describe('pollIndexContainer — one read, no loop, and it never throws', () => 
 });
 
 // ── Settle, and the exit taxonomy ──────────────────────────────────────────
+
+// ── The admitted ACCOUNT's orchestrator (MOTIR-9448) ──────────────────────
+
+describe("boot, poll and settle address the admitted account's orchestrator", () => {
+  let created: string[] = [];
+
+  /** One account of the indexer's pool, as a real row (the accessor reads it). */
+  async function account(): Promise<FleetShard> {
+    const slug = randomToken(6).toLowerCase();
+    const row = await adminDb.fleetShard.create({
+      data: {
+        name: `idx-${slug}`,
+        fleetKind: 'code_graph_index',
+        provider: 'fly',
+        state: 'active',
+        githubOrg: 'motir-projects',
+        githubInstallationId: '556677',
+        flyOrg: 'motir',
+        flyApp: `motir-idx-${slug}`,
+        flyRegion: 'iad',
+        credentialRef: 'FLEET_SHARD_TEST_TOKEN',
+        machineLimit: 4,
+      },
+    });
+    created.push(row.id);
+    return row;
+  }
+
+  function onAccount(shardId: string, input = INPUT): IndexAdmission {
+    return { ...admissionFor(input), shardId };
+  }
+
+  async function bootOn(shardId: string, input = INPUT): Promise<IndexSession> {
+    const booted = await codeGraphIndexDispatchService.bootIndexContainer(
+      input,
+      onAccount(shardId, input),
+      FAST,
+    );
+    if (booted.phase !== 'supervising') throw new Error('expected a supervising boot');
+    return booted.session;
+  }
+
+  beforeEach(() => {
+    created = [];
+    resetShardFakes();
+    fleetShardOrchestratorService.resetCache();
+  });
+
+  afterEach(async () => {
+    await adminDb.fleetShard.deleteMany({ where: { id: { in: created } } });
+    resetShardFakes();
+    fleetShardOrchestratorService.resetCache();
+  });
+
+  it('boots on the account only, and the session carries the account', async () => {
+    const a = await account();
+
+    const session = await bootOn(a.id);
+
+    expect(fakeOrchestratorForShard(a.id).provisioned).toHaveLength(1);
+    expect(fakeOrchestrator.provisioned).toHaveLength(0);
+    expect(session.shardId).toBe(a.id);
+    expect(JSON.parse(JSON.stringify(session))).toEqual(session);
+  });
+
+  it('polls and settles each session on its own account, never crossing', async () => {
+    const [a, b] = [await account(), await account()];
+    const other = { ...INPUT, repoRef: 'moooon-B-V/motir-ai', repoName: 'motir-ai' };
+    const [onA, onB] = await Promise.all([bootOn(a.id), bootOn(b.id, other)]);
+    const describes = {
+      a: vi.spyOn(fakeOrchestratorForShard(a.id), 'describe'),
+      b: vi.spyOn(fakeOrchestratorForShard(b.id), 'describe'),
+      fly: vi.spyOn(fakeOrchestrator, 'describe'),
+    };
+
+    for (const [session, fake] of [
+      [onA, fakeOrchestratorForShard(a.id)],
+      [onB, fakeOrchestratorForShard(b.id)],
+    ] as const) {
+      fake.completeJob(fake.liveContainerIds()[0]!, { exitCode: 0 });
+      const polled = await codeGraphIndexDispatchService.pollIndexContainer(
+        session,
+        INITIAL_INDEX_POLL_STATE,
+        FAST,
+      );
+      if (!polled.done) throw new Error('expected a done verdict');
+      expect(
+        await codeGraphIndexDispatchService.settleIndexContainer(session, polled),
+      ).toMatchObject({ outcome: 'settled' });
+    }
+
+    expect(describes.a).toHaveBeenCalledTimes(1);
+    expect(describes.b).toHaveBeenCalledTimes(1);
+    expect(describes.fly).not.toHaveBeenCalled();
+    expect(fakeOrchestratorForShard(a.id).teardowns).toHaveLength(1);
+    expect(fakeOrchestratorForShard(b.id).teardowns).toHaveLength(1);
+    expect(fakeOrchestrator.teardowns).toHaveLength(0);
+    expect(released.sort()).toEqual([onA.slotRef, onB.slotRef].sort());
+  });
+
+  it('a session from a memo without the field is the process-wide fleet', async () => {
+    const booted = await codeGraphIndexDispatchService.bootIndexContainer(INPUT, ADMISSION, FAST);
+    if (booted.phase !== 'supervising') throw new Error('expected a supervising boot');
+    const memo = JSON.parse(JSON.stringify(booted.session)) as IndexSession;
+    expect(memo).not.toHaveProperty('shardId');
+    const describe = vi.spyOn(fakeOrchestrator, 'describe');
+
+    await codeGraphIndexDispatchService.pollIndexContainer(memo, INITIAL_INDEX_POLL_STATE, FAST);
+
+    expect(describe).toHaveBeenCalledTimes(1);
+  });
+
+  it('an account that cannot be reached at boot fails the boot, gives the slot back, and never falls back', async () => {
+    const booted = await codeGraphIndexDispatchService.bootIndexContainer(
+      INPUT,
+      onAccount('shard-that-is-gone'),
+      FAST,
+    );
+
+    expect(booted).toMatchObject({ phase: 'terminal', outcome: { outcome: 'provision_failed' } });
+    if (booted.phase !== 'terminal') throw new Error('expected a terminal boot');
+    expect(booted.outcome).toMatchObject({ detail: expect.stringContaining('shard-that-is-gone') });
+    expect(released).toEqual([ADMISSION.slotRef]);
+    expect(fakeOrchestrator.provisioned).toHaveLength(0);
+    // Nothing was spent: no credential was minted for a boot that cannot happen.
+    expect(motirAiCalls()).toEqual([]);
+  });
+
+  it('an account lost mid-run is never reported indexed, names the account, and frees the slot', async () => {
+    const a = await account();
+    const session = await bootOn(a.id);
+    await adminDb.fleetShard.delete({ where: { id: a.id } });
+    created = [];
+
+    let state = INITIAL_INDEX_POLL_STATE;
+    let polled;
+    for (let i = 0; i <= INDEX_FLEET_TIME_BUDGETS.maxConsecutiveReadFailures; i += 1) {
+      polled = await codeGraphIndexDispatchService.pollIndexContainer(session, state, FAST);
+      if (polled.done) break;
+      state = polled;
+    }
+    if (!polled?.done) throw new Error('expected a done verdict');
+    expect(polled.reason).not.toBe('job_completed');
+    expect(polled.failureDetail).toContain(a.id);
+
+    const settled = await codeGraphIndexDispatchService.settleIndexContainer(session, polled);
+    expect(settled).toMatchObject({ outcome: 'teardown_failed' });
+    if (settled.outcome !== 'teardown_failed') throw new Error('expected teardown_failed');
+    expect(settled.detail).toContain(a.id);
+    expect(released).toEqual([session.slotRef]);
+  });
+});
 
 // ── A pull failure learned AFTER the boot (MOTIR-9446) ────────────────────
 
