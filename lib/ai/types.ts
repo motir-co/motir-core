@@ -599,6 +599,10 @@ export interface JobContextBag {
   // `carriedAnswers` above (no-run turns only) it lets the answering session compose
   // and re-compose a plan offer's requirement.
   conversationTurns?: AskConversationTurn[];
+  // THE SAVED REQUIREMENT PAGE (MOTIR-9436 producer ↔ MOTIR-9434 consumer) — the page
+  // the confirmed no-target offer's requirement was written to. Rides the planning job
+  // beside `requirement`; motir-ai's briefing links it. Absent unless one was saved.
+  requirementPage?: { pageId: string; title: string };
 }
 
 /** One earlier turn of the conversation, as `ask_project` reads it. */

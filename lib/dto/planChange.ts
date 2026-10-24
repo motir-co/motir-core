@@ -581,6 +581,12 @@ export interface PlanAnswerOfferDto {
   /** The six-field requirement the answering session composed (MOTIR-9432). Present
    *  only on a `plan` offer with no target; absent otherwise, never `null`. */
   requirement?: SubmittedRequirement;
+  /** The page Confirm saved the requirement to (MOTIR-9436). Present only on a `plan`
+   *  offer with no target, once a confirm has written it; kept for a retry. */
+  requirementPage?: { pageId: string; title: string };
+  /** `true` when the last Confirm could not save the requirement page and started
+   *  nothing (MOTIR-9436); the offer is pending again. Absent otherwise. */
+  requirementSaveFailed?: true;
   /** The bug a `log_bug` offer would write (MOTIR-9322); absent on a `plan` offer.
    *  On a `log_bug` offer, `requestMd` is the new bug's title. */
   bug?: LogBugOfferDto;

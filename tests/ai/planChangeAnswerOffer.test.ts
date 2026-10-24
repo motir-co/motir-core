@@ -150,3 +150,42 @@ describe('toPlanChangeTurnDto — the composed requirement (MOTIR-9432)', () => 
     expect(offerOf(NO_TARGET)).toEqual(NO_TARGET);
   });
 });
+
+describe('toPlanChangeTurnDto — the saved page and failed save (MOTIR-9436)', () => {
+  const NO_TARGET = { ...UNDECIDED, targetKey: null };
+  const PAGE = { pageId: 'pg_1', title: 'Export reports' };
+
+  it('serves the recorded page and the failed-save flag on a no-target plan offer', () => {
+    expect(offerOf({ ...NO_TARGET, requirementPage: PAGE })).toEqual({
+      ...NO_TARGET,
+      requirementPage: PAGE,
+    });
+    expect(offerOf({ ...NO_TARGET, requirementSaveFailed: true })).toEqual({
+      ...NO_TARGET,
+      requirementSaveFailed: true,
+    });
+  });
+
+  it('drops a malformed page or flag alone, and the offer still reads', () => {
+    for (const requirementPage of [
+      'x',
+      7,
+      [],
+      {},
+      { pageId: '', title: 't' },
+      { pageId: 'p', title: '' },
+      { pageId: 3, title: 't' },
+    ]) {
+      expect(offerOf({ ...NO_TARGET, requirementPage })).toEqual(NO_TARGET);
+    }
+    for (const requirementSaveFailed of [false, 'true', 1, null]) {
+      expect(offerOf({ ...NO_TARGET, requirementSaveFailed })).toEqual(NO_TARGET);
+    }
+  });
+
+  it('never serves either on an offer with a target', () => {
+    expect(offerOf({ ...UNDECIDED, requirementPage: PAGE, requirementSaveFailed: true })).toEqual(
+      UNDECIDED,
+    );
+  });
+});

@@ -3139,7 +3139,14 @@ export const planChangeSessionsService = {
     pctx: ProjectContext,
     address: PlanChangeSessionAddress,
     requirement?: SubmittedRequirement,
-    opts: { planAgainOf?: string | null } = {},
+    opts: {
+      planAgainOf?: string | null;
+      /** The saved requirement page (MOTIR-9436): rides the job beside `requirement`. */
+      requirementPage?: { pageId: string; title: string };
+      /** Send NO carried answers (MOTIR-9436): a confirmed offer's composed requirement
+       *  already holds what Grill me settled, and a second copy would be folded in twice. */
+      omitCarriedAnswers?: boolean;
+    } = {},
   ): Promise<PlanChangeSubmitResultDto> {
     const session = await requireSession(pctx, address);
     // A guide conversation never plans (AMENDMENT 2, A2.2): refused before its
@@ -3253,11 +3260,13 @@ export const planChangeSessionsService = {
     // not grill that request again. Read now, at submit, so a Stop, a finish or Grill
     // me switched off all carry what was settled so far. A fresh run only: a plan
     // again re-plans what an earlier run already carried.
-    const carriedAnswers = claim ? undefined : await carriedAnswersFor(session, pctx);
+    const carriedAnswers =
+      claim || opts.omitCarriedAnswers ? undefined : await carriedAnswersFor(session, pctx);
     const submitOpts = {
       sessionId: session.id,
       ...(idempotencyKey ? { idempotencyKey } : {}),
       ...(carriedAnswers ? { carriedAnswers } : {}),
+      ...(opts.requirementPage ? { requirementPage: opts.requirementPage } : {}),
     };
     let submitted: { jobId: string; planId: string };
     try {
