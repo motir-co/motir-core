@@ -1,4 +1,5 @@
 import type { AuthoredBug } from '@/lib/ai/authoredBug';
+import type { SubmittedRequirement } from '@/lib/ai/types';
 import type { LogBugTargetKind } from '@/lib/ai/logBugOffer';
 import type { AttachmentDTO } from '@/lib/dto/attachments';
 import type { WorkItemRefMap } from '@/lib/dto/workItems';
@@ -577,6 +578,9 @@ export interface PlanAnswerOfferDto {
   /** The work item the offer would plan, or null when it carried none. On a
    *  `log_bug` offer, the key its write targets (null on a new bug). */
   targetKey: string | null;
+  /** The six-field requirement the answering session composed (MOTIR-9432). Present
+   *  only on a `plan` offer with no target; absent otherwise, never `null`. */
+  requirement?: SubmittedRequirement;
   /** The bug a `log_bug` offer would write (MOTIR-9322); absent on a `plan` offer.
    *  On a `log_bug` offer, `requestMd` is the new bug's title. */
   bug?: LogBugOfferDto;
@@ -606,6 +610,8 @@ export interface AnswerOfferInput {
   kind: AnswerOfferKindDto;
   requestMd: string;
   targetKey: string | null;
+  /** The composed requirement; present only on a `plan` offer with no target. */
+  requirement?: SubmittedRequirement;
   /** Present exactly on a `log_bug` offer. */
   bug?: LogBugOfferDto;
 }

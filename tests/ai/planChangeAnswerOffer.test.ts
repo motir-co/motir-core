@@ -109,3 +109,44 @@ describe('toPlanChangeTurnDto — the answer offer', () => {
     },
   );
 });
+
+describe('toPlanChangeTurnDto — the composed requirement (MOTIR-9432)', () => {
+  const REQUIREMENT = {
+    outcome: 'Plan from the pane.',
+    behaviour: 'Show it before Confirm.',
+    scopeEdge: '',
+    constraints: '',
+    acceptance: 'Six headings.',
+    assumptions: [{ id: 'r1', text: 'One pane.' }],
+  };
+  const NO_TARGET = { ...UNDECIDED, targetKey: null };
+
+  it('serves a stored requirement on a no-target plan offer exactly as stored', () => {
+    expect(offerOf({ ...NO_TARGET, requirement: REQUIREMENT })).toEqual({
+      ...NO_TARGET,
+      requirement: REQUIREMENT,
+    });
+  });
+
+  it('omits the key when the stored value does not narrow, and the offer still reads', () => {
+    for (const requirement of ['x', 7, [], {}, { note: 'x' }, null]) {
+      const offer = offerOf({ ...NO_TARGET, requirement });
+      expect(offer).toEqual(NO_TARGET);
+      expect(offer && 'requirement' in offer).toBe(false);
+    }
+  });
+
+  it('never serves one on an offer with a target', () => {
+    expect(offerOf({ ...UNDECIDED, requirement: REQUIREMENT })).toEqual(UNDECIDED);
+  });
+
+  it('never serves one on a log_bug offer', () => {
+    const bug = { target: { kind: 'new', key: null }, title: 'T', descriptionMd: 'D' };
+    const offer = offerOf({ ...NO_TARGET, kind: 'log_bug', bug, requirement: REQUIREMENT });
+    expect(offer?.requirement).toBeUndefined();
+  });
+
+  it('reads an offer stored before the field exactly as before', () => {
+    expect(offerOf(NO_TARGET)).toEqual(NO_TARGET);
+  });
+});

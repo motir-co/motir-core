@@ -23,6 +23,7 @@ import { InvalidAuthoredBugError, parseAuthoredBug, type AuthoredBug } from '@/l
 import { LOG_BUG_TARGET_KINDS, type LogBugTargetKind } from '@/lib/ai/logBugOffer';
 import type { WorkItemRefMap } from '@/lib/dto/workItems';
 import { readGuideTurnRecord } from '@/lib/ai/guideWorkItem';
+import { narrowSharpenedRequirement } from '@/lib/sharpening/requirement';
 import { parseCodeUnsearchableRepos } from '@/lib/planning/codeUnsearchable';
 
 // Prisma rows → API DTOs for the plan-change conversation (Story 7.30 ·
@@ -125,10 +126,17 @@ function toAnswerOfferDto(value: unknown): PlanAnswerOfferDto | null {
   // A `log_bug` offer is only as good as its bug: one that does not read is no offer.
   const bug = v.kind === 'log_bug' ? toLogBugOfferDto(v.bug) : null;
   if (v.kind === 'log_bug' && !bug) return null;
+  // The composed requirement (MOTIR-9432) rides a no-target `plan` offer alone. One
+  // that does not read is dropped; the offer itself still reads.
+  const requirement =
+    v.kind === 'plan' && fields.targetKey === null
+      ? narrowSharpenedRequirement(v.requirement)
+      : undefined;
   return {
     kind: v.kind as AnswerOfferKindDto,
     requestMd: v.requestMd,
     ...(fields as { [K in keyof typeof fields]: string | null }),
+    ...(requirement ? { requirement } : {}),
     ...(bug ? { bug } : {}),
   };
 }

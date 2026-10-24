@@ -576,6 +576,14 @@ export async function appendWithin(
                 kind: turn.answerOffer.kind,
                 requestMd: turn.answerOffer.requestMd,
                 targetKey: turn.answerOffer.targetKey,
+                // The composed requirement of a no-target `plan` offer (MOTIR-9432).
+                ...(turn.answerOffer.requirement
+                  ? {
+                      requirement: JSON.parse(
+                        JSON.stringify(turn.answerOffer.requirement),
+                      ) as Prisma.InputJsonObject,
+                    }
+                  : {}),
                 // The bug a `log_bug` offer would write (MOTIR-9322), stored whole so
                 // a confirm writes exactly what was checked here.
                 ...(turn.answerOffer.bug

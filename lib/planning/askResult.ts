@@ -1,4 +1,6 @@
 import { readLogBugOffer, type LogBugOfferClaim } from '@/lib/ai/logBugOffer';
+import type { RequirementRecommendation, SubmittedRequirement } from '@/lib/ai/types';
+import { narrowSharpenedRequirement } from '@/lib/sharpening/requirement';
 
 // The CONSUMING half of MOTIR-1817's boundary contract (MOTIR-1819): reading an
 // `ask_project` job's ANSWER — and its REDIRECT — off a motir-ai job result.
@@ -92,6 +94,10 @@ export interface AskPlanOffer {
   /** The turn plainly said "plan this" with a grounded target: it starts at once and
    *  stores no offer. A missing or non-boolean value reads `false`. */
   immediate: boolean;
+  /** The six-field requirement the answering session composed (MOTIR-9432), present
+   *  only when the envelope carried one that reads. The landing keeps it on a
+   *  no-target offer alone. */
+  requirement?: SubmittedRequirement;
 }
 
 // Bounds applied on READ, not merely trusted from the producer — this text
@@ -102,6 +108,8 @@ export const ASK_ANSWER_MAX_CHARS = 8000;
  *  on forty work items is not an answer a person can check, and the rail renders
  *  each as a chip. */
 export const ASK_MAX_CITATIONS = 20;
+/** A defensive cap on how many assumptions one composed requirement may carry. */
+export const ASK_REQUIREMENT_MAX_ASSUMPTIONS = 20;
 
 /** A work-item identifier, as the boundary is allowed to name one. Anchored on
  *  both ends: a value that merely CONTAINS a key is not a key. */
@@ -118,6 +126,41 @@ function boundedString(value: unknown, max: number): string | null {
   return trimmed.length <= max ? trimmed : `${trimmed.slice(0, max - 1).trimEnd()}…`;
 }
 
+/** A string trimmed and capped like `boundedString`, except that blank stays blank:
+ *  an empty `scopeEdge` or `constraints` is an answer, not a missing part. */
+function boundedPart(value: string, max: number): string {
+  const trimmed = value.trim();
+  return trimmed.length <= max ? trimmed : `${trimmed.slice(0, max - 1).trimEnd()}…`;
+}
+
+/** The composed requirement an offer carries, narrowed through the ONE shipped
+ *  narrowing and then bounded on read: every string part, and every assumption's
+ *  text, is trimmed and capped; the assumption list is capped in length. */
+function readRequirementField(value: unknown): SubmittedRequirement | undefined {
+  const narrowed = narrowSharpenedRequirement(value);
+  if (!narrowed) return undefined;
+  const { assumptions, ...parts } = narrowed;
+  const out: SubmittedRequirement = {};
+  for (const [part, text] of Object.entries(parts) as [
+    keyof Omit<SubmittedRequirement, 'assumptions'>,
+    string | undefined,
+  ][]) {
+    if (typeof text === 'string') out[part] = boundedPart(text, ASK_ANSWER_MAX_CHARS);
+  }
+  if (typeof assumptions === 'string') {
+    out.assumptions = boundedPart(assumptions, ASK_ANSWER_MAX_CHARS);
+  } else if (assumptions) {
+    out.assumptions = assumptions
+      .slice(0, ASK_REQUIREMENT_MAX_ASSUMPTIONS)
+      .map((entry): string | RequirementRecommendation =>
+        typeof entry === 'string'
+          ? boundedPart(entry, ASK_ANSWER_MAX_CHARS)
+          : { ...entry, text: boundedPart(entry.text, ASK_ANSWER_MAX_CHARS) },
+      );
+  }
+  return out;
+}
+
 /** The envelope's offer, or null when it is absent, of an unknown kind, or carries
  *  no request text. The target is kept only when it is key-shaped. A `log_bug`
  *  offer is read whole by `readLogBugOffer`, or not at all. */
@@ -127,11 +170,13 @@ function readOfferField(value: unknown): AskOffer | null {
   const requestMd = boundedString(value['requestText'], ASK_ANSWER_MAX_CHARS);
   if (!requestMd) return null;
   const target = typeof value['targetKey'] === 'string' ? value['targetKey'].trim() : '';
+  const requirement = readRequirementField(value['requirement']);
   return {
     kind: 'plan',
     requestMd,
     targetKey: WORK_ITEM_KEY.test(target) ? target : null,
     immediate: value['immediate'] === true,
+    ...(requirement ? { requirement } : {}),
   };
 }
 

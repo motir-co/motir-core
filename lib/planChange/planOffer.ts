@@ -22,6 +22,8 @@
 // resurrect a declined offer, so nothing here writes.
 
 /** The four states an offer can be in — the same four `GuideReplanOfferState` has. */
+import type { SubmittedRequirement } from '@/lib/ai/types';
+
 export type PlanOfferState = 'undecided' | 'superseded' | 'declined' | 'confirmed';
 
 /** Why an offer cannot start. A CLOSED set, defined here, in its fixed order. */
@@ -50,6 +52,8 @@ export interface PlanOfferRecord {
   kind: string;
   requestMd: string;
   targetKey: string | null;
+  /** The composed requirement a no-target `plan` offer carries (MOTIR-9432). */
+  requirement?: SubmittedRequirement;
   declinedAt: string | null;
   confirmedAt: string | null;
   confirmedSessionId: string | null;
