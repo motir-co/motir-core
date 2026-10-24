@@ -1,8 +1,12 @@
 import {
+  CreateRoleCommand,
+  GetRoleCommand,
+  GetRolePolicyCommand,
   GetUserCommand,
   CreateUserCommand,
   GetUserPolicyCommand,
   IAMClient,
+  PutRolePolicyCommand,
   PutUserPolicyCommand,
 } from '@aws-sdk/client-iam';
 import {
@@ -64,6 +68,10 @@ export const AWS_EC2_VCPU_QUOTA_CODE = 'L-1216C47A';
 
 /** The IAM user every account's runners boot with, and its inline policy. */
 export const AWS_RUNNER_IAM_USER = 'motir-fleet-runner';
+/** The runner's IAM ROLE in a member account an unattended add-shard created
+ *  (MOTIR-9460): the management role assumes it, so no person mints a key.
+ *  Roles and users are separate IAM namespaces; the name matches the user's. */
+export const AWS_RUNNER_IAM_ROLE = 'motir-fleet-runner';
 export const AWS_RUNNER_IAM_POLICY = 'motir-fleet-runner-ec2';
 
 /** Organizations, STS and IAM are global; their endpoints answer in us-east-1. */
@@ -72,6 +80,10 @@ const GLOBAL_REGION = 'us-east-1';
  *  add-shard takes well under it after the account exists. */
 const SESSION_SECONDS = 900;
 const SESSION_NAME = 'motir-add-shard';
+/** A runner session (MOTIR-9460): an hour, the role's maximum; the SDK renews it
+ *  through the credential provider before it lapses. */
+const RUNNER_SESSION_SECONDS = 3600;
+const RUNNER_SESSION_NAME = 'motir-fleet-runner';
 /** CreateAccount is asynchronous; AWS documents it as taking minutes. */
 export const AWS_CREATE_ACCOUNT_TIMEOUT_MS = 10 * 60_000;
 const CREATE_ACCOUNT_POLL_MS = 5_000;
@@ -205,6 +217,14 @@ export interface AwsManagementApi {
     regionId: string,
     quotaCode?: string,
   ): Promise<AwsQuotaIncreaseRequest | null>;
+  /** The runner's IAM ROLE and inline policy, trusting the management role
+   *  (MOTIR-9460); answers what it created. */
+  ensureRunnerRole(
+    credentials: AwsSessionCredentials,
+    policyDocument: AwsPolicyDocument,
+  ): Promise<{ created: string[] }>;
+  /** A runner session in the member account, from the management role. */
+  assumeRunnerRole(accountId: string): Promise<AwsSessionCredentials>;
   /** The runner's IAM user and inline policy; answers what it created. */
   ensureRunnerIamUser(
     credentials: AwsSessionCredentials,
@@ -332,6 +352,31 @@ export function createAwsManagementApi(
     return managementSession;
   }
 
+  /** Assume `roleName` in a member account from the management session,
+   *  retrying `AccessDenied` while a just-created role propagates. */
+  async function assumeInMember(
+    accountId: string,
+    roleName: string,
+    sessionName: string,
+  ): Promise<AwsSessionCredentials> {
+    const sts = client('sts', await managementRole());
+    const command = new AssumeRoleCommand({
+      RoleArn: `arn:aws:iam::${accountId}:role/${roleName}`,
+      RoleSessionName: sessionName,
+      DurationSeconds: roleName === AWS_RUNNER_IAM_ROLE ? RUNNER_SESSION_SECONDS : SESSION_SECONDS,
+    });
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        return sessionOf(await call<Parameters<typeof sessionOf>[0]>('sts', sts, command));
+      } catch (err) {
+        // A just-created account's role propagates within seconds.
+        if (!(err instanceof AwsManagementApiError) || err.awsCode !== 'AccessDenied') throw err;
+        if (attempt >= MEMBER_ROLE_ATTEMPTS) throw err;
+        await sleep(MEMBER_ROLE_RETRY_MS);
+      }
+    }
+  }
+
   async function organizations(): Promise<AwsSdkClient> {
     return client('organizations', await managementRole());
   }
@@ -422,22 +467,60 @@ export function createAwsManagementApi(
     waitForCreateAccount,
 
     async assumeMemberRole(accountId) {
-      const sts = client('sts', await managementRole());
-      const command = new AssumeRoleCommand({
-        RoleArn: `arn:aws:iam::${accountId}:role/${AWS_MEMBER_ROLE_NAME}`,
-        RoleSessionName: SESSION_NAME,
-        DurationSeconds: SESSION_SECONDS,
-      });
-      for (let attempt = 1; ; attempt += 1) {
-        try {
-          return sessionOf(await call<Parameters<typeof sessionOf>[0]>('sts', sts, command));
-        } catch (err) {
-          // A just-created account's role propagates within seconds.
-          if (!(err instanceof AwsManagementApiError) || err.awsCode !== 'AccessDenied') throw err;
-          if (attempt >= MEMBER_ROLE_ATTEMPTS) throw err;
-          await sleep(MEMBER_ROLE_RETRY_MS);
-        }
+      return assumeInMember(accountId, AWS_MEMBER_ROLE_NAME, SESSION_NAME);
+    },
+
+    async assumeRunnerRole(accountId) {
+      return assumeInMember(accountId, AWS_RUNNER_IAM_ROLE, RUNNER_SESSION_NAME);
+    },
+
+    async ensureRunnerRole(credentials, policyDocument) {
+      const iam = client('iam', credentials);
+      const created: string[] = [];
+      try {
+        await call('iam', iam, new GetRoleCommand({ RoleName: AWS_RUNNER_IAM_ROLE }));
+      } catch (err) {
+        if (!iamAbsent(err)) throw err;
+        await call(
+          'iam',
+          iam,
+          new CreateRoleCommand({
+            RoleName: AWS_RUNNER_IAM_ROLE,
+            AssumeRolePolicyDocument: JSON.stringify(awsRunnerTrustPolicy(management.roleArn)),
+            MaxSessionDuration: RUNNER_SESSION_SECONDS,
+            Tags: [{ Key: 'motir-role', Value: 'fleet-runner' }],
+          }),
+        );
+        created.push(`iam-role:${AWS_RUNNER_IAM_ROLE}`);
       }
+      const wanted = JSON.stringify(policyDocument);
+      let current: string | null = null;
+      try {
+        const answer = await call<{ PolicyDocument?: string }>(
+          'iam',
+          iam,
+          new GetRolePolicyCommand({
+            RoleName: AWS_RUNNER_IAM_ROLE,
+            PolicyName: AWS_RUNNER_IAM_POLICY,
+          }),
+        );
+        current = answer.PolicyDocument ? decodeURIComponent(answer.PolicyDocument) : null;
+      } catch (err) {
+        if (!iamAbsent(err)) throw err;
+      }
+      if (current === null || !samePolicy(current, wanted)) {
+        await call(
+          'iam',
+          iam,
+          new PutRolePolicyCommand({
+            RoleName: AWS_RUNNER_IAM_ROLE,
+            PolicyName: AWS_RUNNER_IAM_POLICY,
+            PolicyDocument: wanted,
+          }),
+        );
+        created.push(`iam-role-policy:${AWS_RUNNER_IAM_POLICY}`);
+      }
+      return { created };
     },
 
     async readVcpuQuota(credentials, regionId) {
@@ -512,9 +595,7 @@ export function createAwsManagementApi(
     async ensureRunnerIamUser(credentials, policyDocument) {
       const iam = client('iam', credentials);
       const created: string[] = [];
-      const absent = (err: unknown) =>
-        err instanceof AwsManagementApiError &&
-        (err.awsCode === 'NoSuchEntity' || err.awsCode === 'NoSuchEntityException');
+      const absent = iamAbsent;
 
       try {
         await call('iam', iam, new GetUserCommand({ UserName: AWS_RUNNER_IAM_USER }));
@@ -561,6 +642,28 @@ export function createAwsManagementApi(
       }
       return { created };
     },
+  };
+}
+
+function iamAbsent(err: unknown): boolean {
+  return (
+    err instanceof AwsManagementApiError &&
+    (err.awsCode === 'NoSuchEntity' || err.awsCode === 'NoSuchEntityException')
+  );
+}
+
+/** Who may assume the runner role: the management role add-shard and the
+ *  orchestrator run as, and nothing else (MOTIR-9460). */
+export function awsRunnerTrustPolicy(trustedRoleArn: string): AwsPolicyDocument {
+  return {
+    Version: '2012-10-17',
+    Statement: [
+      {
+        Effect: 'Allow',
+        Principal: { AWS: trustedRoleArn },
+        Action: 'sts:AssumeRole',
+      },
+    ],
   };
 }
 

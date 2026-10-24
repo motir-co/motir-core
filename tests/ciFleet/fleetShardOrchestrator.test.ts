@@ -205,6 +205,33 @@ describe('orchestratorForShard — the account row becomes its own adapter', () 
       }
     });
 
+    it('with no key, assumes the runner role from the management credential (MOTIR-9460)', async () => {
+      vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
+      vi.stubEnv('FLEET_SHARD_CI_RUNNER_USE1_1_ACCESS_KEY_ID', '');
+      vi.stubEnv('FLEET_SHARD_CI_RUNNER_USE1_1_SECRET_ACCESS_KEY', '');
+      vi.stubEnv('MOTIR_AWS_RUNNER_AMI_ID', 'ami-0123456789abcdef0');
+      vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', 'AKIAMANAGEMENT');
+      vi.stubEnv('AWS_ORG_ADMIN_SECRET_ACCESS_KEY', 'management-secret');
+      vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', 'arn:aws:iam::576360162297:role/motir-add-shard');
+      const account = await createAccount(AWS_ACCOUNT);
+
+      // Built without a call: the session is assumed when the SDK first signs.
+      expect(orchestratorForShard(account).provider).toBe('aws');
+    });
+
+    it('with neither a key nor the management credential, names both ways', async () => {
+      vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
+      vi.stubEnv('FLEET_SHARD_CI_RUNNER_USE1_1_ACCESS_KEY_ID', '');
+      vi.stubEnv('FLEET_SHARD_CI_RUNNER_USE1_1_SECRET_ACCESS_KEY', '');
+      vi.stubEnv('MOTIR_AWS_RUNNER_AMI_ID', 'ami-0123456789abcdef0');
+      vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', '');
+      const account = await createAccount(AWS_ACCOUNT);
+
+      expect(() => orchestratorForShard(account)).toThrow(
+        /FLEET_SHARD_CI_RUNNER_USE1_1_ACCESS_KEY_ID.*AWS_ORG_ADMIN_ACCESS_KEY_ID.*motir-fleet-runner/,
+      );
+    });
+
     it('refuses an aws row with no account id or region', async () => {
       await expect(createAccount({ ...AWS_ACCOUNT, awsRegion: null })).rejects.toMatchObject({
         code: 'FLEET_SHARD_INVALID',

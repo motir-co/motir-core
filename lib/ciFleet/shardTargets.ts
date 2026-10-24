@@ -251,6 +251,25 @@ export const DERIVED_TENANTS_PER_SHARD_TARGET = tenantsPerShard(TARGET_SHARD_LIM
  */
 export const SHARD_PAUSE_SECONDS = 120;
 
+/**
+ * The vCPU quota a NEW pool account of each kind asks AWS for at creation
+ * (Story MOTIR-9362 · MOTIR-9460) — pre-launch figures (the story's assumption
+ * r3): a CI runner account boots many short VMs; an agent runner, an agent host
+ * and an indexer account few. The unattended add-shard files the kind's raise
+ * the moment the account exists, so the spare is asking for its quota from then.
+ */
+export const POOL_ACCOUNT_RAISE_TARGET_VCPU: Readonly<Record<FleetWorkloadKind, number>> = {
+  ci_runner: 200,
+  agent_instance: 32,
+  hosted_agent: 32,
+  code_graph_index: 16,
+};
+
+/** The raise a new pool account of `kind` files. */
+export function poolAccountRaiseTargetVcpu(kind: FleetWorkloadKind): number {
+  return POOL_ACCOUNT_RAISE_TARGET_VCPU[kind];
+}
+
 /** Reads one fleet kind's Fly↔AWS switch: true = the kind boots on its pool. */
 export type FleetKindSwitchReader = () => boolean | Promise<boolean>;
 

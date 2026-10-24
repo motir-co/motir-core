@@ -1,4 +1,10 @@
 import {
+  AWS_MANAGEMENT_ENV,
+  AWS_RUNNER_IAM_ROLE,
+  awsCredentialsFromEnv,
+  awsManagementCredentials,
+  awsRuntimeKeyEnvNames,
+  createAwsManagementApi,
   createAwsOrchestrator,
   createEc2Api,
   createFakeOrchestrator,
@@ -19,6 +25,7 @@ import {
   INDEXER_IMAGE_ENV_VAR,
   OrchestratorNotConfiguredError,
   probeImagePull,
+  type AwsManagementApi,
   type ContainerOrchestrator,
   type FakeOrchestratorControls,
   type FleetInventory,
@@ -236,36 +243,63 @@ function flyOrchestratorForShard(shard: FleetShardDTO): ContainerOrchestrator {
 export const AWS_RUNNER_AMI_ENV_VAR = 'MOTIR_AWS_RUNNER_AMI_ID';
 
 /**
- * An AWS account's orchestrator (MOTIR-9276): its own IAM key, read from
+ * An AWS account's orchestrator (MOTIR-9276): the account's region, the fleet's
+ * AMI, and its runner credential — its own IAM key, read from
  * `<credentialRef>_ACCESS_KEY_ID` / `<credentialRef>_SECRET_ACCESS_KEY` (the
- * suffixes add-shard documents, MOTIR-9278), the fleet's AMI, and the account's
- * region. The shard tag is the account's name — what its network is tagged with.
+ * suffixes add-shard documents, MOTIR-9278), or, when no key is set, a session of
+ * the account's `motir-fleet-runner` ROLE assumed from the management credential
+ * (MOTIR-9460: an account the unattended add-shard created has no key at all).
+ * The SDK asks the provider again before the session lapses. The shard tag is
+ * the account's name — what its network is tagged with.
  */
 function awsOrchestratorForShard(shard: FleetShardDTO): ContainerOrchestrator {
-  const keyIdVar = `${shard.credentialRef}_ACCESS_KEY_ID`;
-  const secretVar = `${shard.credentialRef}_SECRET_ACCESS_KEY`;
-  const accessKeyId = process.env[keyIdVar]?.trim();
-  const secretAccessKey = process.env[secretVar]?.trim();
+  const keyNames = awsRuntimeKeyEnvNames(shard.credentialRef);
+  const key = awsCredentialsFromEnv(shard.credentialRef, process.env);
   const amiId = process.env[AWS_RUNNER_AMI_ENV_VAR]?.trim();
+  const management = key ? null : runnerRoleManagement();
   // Every missing variable at once, as `indexFleetConfig` does.
   const missing = [
-    ...(accessKeyId ? [] : [keyIdVar]),
-    ...(secretAccessKey ? [] : [secretVar]),
+    ...(key || management ? [] : [keyNames.accessKeyId, keyNames.secretAccessKey]),
     ...(amiId ? [] : [AWS_RUNNER_AMI_ENV_VAR]),
   ];
-  if (missing.length > 0 || !accessKeyId || !secretAccessKey || !amiId) {
-    throw new OrchestratorNotConfiguredError(`set ${missing.join(', ')}`);
+  if (missing.length > 0 || !amiId || (!key && !management)) {
+    throw new OrchestratorNotConfiguredError(
+      `set ${missing.join(', ')}` +
+        (key || management
+          ? ''
+          : ` (or ${Object.values(AWS_MANAGEMENT_ENV).join(', ')} to assume ${AWS_RUNNER_IAM_ROLE})`),
+    );
   }
   if (!shard.aws) {
     throw new OrchestratorNotConfiguredError(`fleet account ${shard.name} names no AWS location`);
   }
-  const { region } = shard.aws;
-  return createAwsOrchestrator({
-    ec2: createEc2Api({ accessKeyId, secretAccessKey, region }),
-    region,
-    shardTag: shard.name,
-    amiId,
-  });
+  const { accountId, region } = shard.aws;
+  const ec2 = key
+    ? createEc2Api({ ...key, region })
+    : createEc2Api({
+        region,
+        credentialProvider: async () => {
+          const session = await management!.assumeRunnerRole(accountId);
+          return {
+            accessKeyId: session.accessKeyId,
+            secretAccessKey: session.secretAccessKey,
+            sessionToken: session.sessionToken,
+            ...(session.expiration ? { expiration: session.expiration } : {}),
+          };
+        },
+      });
+  return createAwsOrchestrator({ ec2, region, shardTag: shard.name, amiId });
+}
+
+/** The management API the runner role is assumed through, or null when the
+ *  management credential is not set. */
+function runnerRoleManagement(): AwsManagementApi | null {
+  try {
+    return createAwsManagementApi(awsManagementCredentials(process.env));
+  } catch (err) {
+    if (err instanceof OrchestratorNotConfiguredError) return null;
+    throw err;
+  }
 }
 
 /**

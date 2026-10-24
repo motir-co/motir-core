@@ -203,3 +203,32 @@ export class QuotaRequestReadFailedError extends Error {
     this.name = 'QuotaRequestReadFailedError';
   }
 }
+
+/** AWS refused to create a fleet account's member account (MOTIR-9460) —
+ *  `CreateAccount` ended `FAILED` (an account limit, an email clash). `reason` is
+ *  AWS's `FailureReason` as text. A `FleetShardProvisioningRefusedError`, so the
+ *  person-run command reports it as before; the growth job (MOTIR-9462) tells it
+ *  apart to record a refused growth and back off. */
+export class FleetShardAccountRefusedError extends FleetShardProvisioningRefusedError {
+  constructor(
+    readonly accountName: string,
+    readonly reason: string,
+  ) {
+    super([`AWS refused to create the account ${accountName}: ${reason}`]);
+    this.name = 'FleetShardAccountRefusedError';
+  }
+}
+
+/** The management role could not assume a role in a member account (MOTIR-9460).
+ *  `reason` is AWS's error code, never a message that could carry a credential. */
+export class MemberRoleAssumeFailedError extends Error {
+  readonly code = 'MEMBER_ROLE_ASSUME_FAILED' as const;
+  constructor(
+    readonly accountId: string,
+    readonly roleName: string,
+    readonly reason: string,
+  ) {
+    super(`could not assume ${roleName} in AWS account ${accountId}: ${reason}`);
+    this.name = 'MemberRoleAssumeFailedError';
+  }
+}
