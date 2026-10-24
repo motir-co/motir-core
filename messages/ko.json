@@ -8490,6 +8490,20 @@
       "emptyBody": "이 프로젝트에서 한 질문과 시작한 계획이 여기에 표시됩니다.",
       "error": "대화를 불러올 수 없습니다.",
       "rowAria": "{title} · {status} · {when} 활동"
+    },
+    "requirementPane": {
+      "label": "계획할 요구사항",
+      "headings": {
+        "outcome": "결과",
+        "behaviour": "동작",
+        "scopeEdge": "범위 경계",
+        "constraints": "제약",
+        "acceptance": "수용 기준",
+        "assumptions": "가정"
+      },
+      "none": "내용 없음",
+      "correctionHint": "여기를 바꾸려면 대화에 수정 내용을 입력하세요.",
+      "notice": "이 제안에는 작성된 요구사항이 없습니다. 확인하면 계획 단계에서 작성합니다."
     }
   },
   "codeHealth": {

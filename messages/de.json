@@ -8496,6 +8496,20 @@
       "emptyBody": "Fragen, die du stellst, und Pläne, die du in diesem Projekt beginnst, werden hier aufgeführt.",
       "error": "Deine Gespräche konnten nicht geladen werden.",
       "rowAria": "{title} · {status} · aktiv {when}"
+    },
+    "requirementPane": {
+      "label": "Zu planende Anforderung",
+      "headings": {
+        "outcome": "Ergebnis",
+        "behaviour": "Verhalten",
+        "scopeEdge": "Abgrenzung",
+        "constraints": "Randbedingungen",
+        "acceptance": "Abnahme",
+        "assumptions": "Annahmen"
+      },
+      "none": "Nichts vorhanden",
+      "correctionHint": "Um hier etwas zu ändern, schreibe die Korrektur in die Unterhaltung.",
+      "notice": "Für dieses Angebot wurde keine Anforderung verfasst. Die Planung verfasst sie, sobald du bestätigst."
     }
   },
   "codeHealth": {

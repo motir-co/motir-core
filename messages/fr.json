@@ -8496,6 +8496,20 @@
       "emptyBody": "Les questions que vous posez et les plans que vous lancez dans ce projet apparaissent ici.",
       "error": "Impossible de charger vos conversations.",
       "rowAria": "{title} · {status} · active {when}"
+    },
+    "requirementPane": {
+      "label": "Exigence à planifier",
+      "headings": {
+        "outcome": "Résultat",
+        "behaviour": "Comportement",
+        "scopeEdge": "Limite du périmètre",
+        "constraints": "Contraintes",
+        "acceptance": "Acceptation",
+        "assumptions": "Hypothèses"
+      },
+      "none": "Rien ici",
+      "correctionHint": "Pour modifier quoi que ce soit ici, saisissez la correction dans la conversation.",
+      "notice": "Aucune exigence n’a été rédigée pour cette offre. La planification la rédigera à votre confirmation."
     }
   },
   "codeHealth": {

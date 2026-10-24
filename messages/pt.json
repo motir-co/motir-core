@@ -8496,6 +8496,20 @@
       "emptyBody": "As perguntas que você faz e os planos que você inicia neste projeto aparecem aqui.",
       "error": "Não foi possível carregar suas conversas.",
       "rowAria": "{title} · {status} · ativa {when}"
+    },
+    "requirementPane": {
+      "label": "Requisito a planejar",
+      "headings": {
+        "outcome": "Resultado",
+        "behaviour": "Comportamento",
+        "scopeEdge": "Limite do escopo",
+        "constraints": "Restrições",
+        "acceptance": "Aceitação",
+        "assumptions": "Premissas"
+      },
+      "none": "Nada aqui",
+      "correctionHint": "Para mudar algo aqui, escreva a correção na conversa.",
+      "notice": "Nenhum requisito foi redigido para esta oferta. O planejamento o redigirá quando você confirmar."
     }
   },
   "codeHealth": {

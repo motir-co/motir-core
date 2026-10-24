@@ -8496,6 +8496,20 @@
       "emptyBody": "Qui compaiono le domande che fai e i piani che avvii in questo progetto.",
       "error": "Impossibile caricare le tue conversazioni.",
       "rowAria": "{title} · {status} · attiva {when}"
+    },
+    "requirementPane": {
+      "label": "Requisito da pianificare",
+      "headings": {
+        "outcome": "Risultato",
+        "behaviour": "Comportamento",
+        "scopeEdge": "Limite dell’ambito",
+        "constraints": "Vincoli",
+        "acceptance": "Accettazione",
+        "assumptions": "Ipotesi"
+      },
+      "none": "Niente qui",
+      "correctionHint": "Per cambiare qualcosa qui, scrivi la correzione nella conversazione.",
+      "notice": "Per questa proposta non è stato scritto alcun requisito. La pianificazione lo scriverà quando confermi."
     }
   },
   "codeHealth": {

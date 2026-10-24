@@ -8493,6 +8493,20 @@
       "emptyBody": "このプロジェクトでした質問や開始した計画がここに表示されます。",
       "error": "会話を読み込めませんでした。",
       "rowAria": "{title} · {status} · {when}にアクティブ"
+    },
+    "requirementPane": {
+      "label": "計画する要件",
+      "headings": {
+        "outcome": "成果",
+        "behaviour": "振る舞い",
+        "scopeEdge": "対象外の範囲",
+        "constraints": "制約",
+        "acceptance": "受け入れ条件",
+        "assumptions": "前提"
+      },
+      "none": "ここには何もありません",
+      "correctionHint": "ここを変更するには、会話で修正内容を入力してください。",
+      "notice": "この提案には要件が作成されていません。確認すると、計画側が作成します。"
     }
   },
   "codeHealth": {

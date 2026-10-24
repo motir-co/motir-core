@@ -8496,6 +8496,20 @@
       "emptyBody": "Tutaj pojawiają się pytania, które zadajesz, i plany, które zaczynasz w tym projekcie.",
       "error": "Nie udało się wczytać Twoich rozmów.",
       "rowAria": "{title} · {status} · aktywna {when}"
+    },
+    "requirementPane": {
+      "label": "Wymaganie do zaplanowania",
+      "headings": {
+        "outcome": "Rezultat",
+        "behaviour": "Zachowanie",
+        "scopeEdge": "Granica zakresu",
+        "constraints": "Ograniczenia",
+        "acceptance": "Akceptacja",
+        "assumptions": "Założenia"
+      },
+      "none": "Brak treści",
+      "correctionHint": "Aby coś tu zmienić, wpisz poprawkę w rozmowie.",
+      "notice": "Dla tej propozycji nie napisano wymagania. Planowanie napisze je po potwierdzeniu."
     }
   },
   "codeHealth": {
