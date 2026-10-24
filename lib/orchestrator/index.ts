@@ -1,4 +1,5 @@
 import {
+  createAwsFleetInventory,
   createAwsOrchestrator,
   createEc2Api,
   createFakeOrchestrator,
@@ -20,6 +21,7 @@ import {
   OrchestratorNotConfiguredError,
   probeImagePull,
   type ContainerOrchestrator,
+  type Ec2Api,
   type FakeOrchestratorControls,
   type FleetInventory,
   type OrchestratorProvider,
@@ -241,30 +243,52 @@ export const AWS_RUNNER_AMI_ENV_VAR = 'MOTIR_AWS_RUNNER_AMI_ID';
  * suffixes add-shard documents, MOTIR-9278), the fleet's AMI, and the account's
  * region. The shard tag is the account's name — what its network is tagged with.
  */
-function awsOrchestratorForShard(shard: FleetShardDTO): ContainerOrchestrator {
+/**
+ * An AWS account's EC2 client and region, from its row and its key variables
+ * (`<credentialRef>_ACCESS_KEY_ID` / `_SECRET_ACCESS_KEY`) — the ONE place the
+ * orchestrator and the inventory of an account build it, so a kill and its
+ * settle land in the account the VM was listed in. `extra` names variables only
+ * the caller needs (the AMI, for a launch); every missing one is named at once,
+ * as `indexFleetConfig` does.
+ */
+function awsShardClient(
+  shard: FleetShardDTO,
+  extra: readonly string[] = [],
+): { ec2: Ec2Api; region: string; values: Record<string, string> } {
   const keyIdVar = `${shard.credentialRef}_ACCESS_KEY_ID`;
   const secretVar = `${shard.credentialRef}_SECRET_ACCESS_KEY`;
-  const accessKeyId = process.env[keyIdVar]?.trim();
-  const secretAccessKey = process.env[secretVar]?.trim();
-  const amiId = process.env[AWS_RUNNER_AMI_ENV_VAR]?.trim();
-  // Every missing variable at once, as `indexFleetConfig` does.
-  const missing = [
-    ...(accessKeyId ? [] : [keyIdVar]),
-    ...(secretAccessKey ? [] : [secretVar]),
-    ...(amiId ? [] : [AWS_RUNNER_AMI_ENV_VAR]),
-  ];
-  if (missing.length > 0 || !accessKeyId || !secretAccessKey || !amiId) {
+  const values: Record<string, string> = {};
+  const missing: string[] = [];
+  for (const name of [keyIdVar, secretVar, ...extra]) {
+    const value = process.env[name]?.trim();
+    if (value) values[name] = value;
+    else missing.push(name);
+  }
+  if (missing.length > 0) {
     throw new OrchestratorNotConfiguredError(`set ${missing.join(', ')}`);
   }
   if (!shard.aws) {
     throw new OrchestratorNotConfiguredError(`fleet account ${shard.name} names no AWS location`);
   }
   const { region } = shard.aws;
+  return {
+    ec2: createEc2Api({
+      accessKeyId: values[keyIdVar]!,
+      secretAccessKey: values[secretVar]!,
+      region,
+    }),
+    region,
+    values,
+  };
+}
+
+function awsOrchestratorForShard(shard: FleetShardDTO): ContainerOrchestrator {
+  const { ec2, region, values } = awsShardClient(shard, [AWS_RUNNER_AMI_ENV_VAR]);
   return createAwsOrchestrator({
-    ec2: createEc2Api({ accessKeyId, secretAccessKey, region }),
+    ec2,
     region,
     shardTag: shard.name,
-    amiId,
+    amiId: values[AWS_RUNNER_AMI_ENV_VAR]!,
   });
 }
 
@@ -299,10 +323,14 @@ export function inventoryForShard(shard: FleetShardDTO): FleetInventory | null {
   switch (shard.provider) {
     case 'fly':
       return null;
-    // No AWS listing yet: the AWS reaper sweeps each account by its shard tag,
-    // and the attribution reconciler does not read EC2.
-    case 'aws':
-      return null;
+    // The account's whole region, untagged instances included (MOTIR-9426), on
+    // the same EC2 client its orchestrator launches through. Under the fake
+    // orchestrator there is no EC2 to list.
+    case 'aws': {
+      if (selectedOrchestratorProvider() === 'fake') return null;
+      const { ec2, region } = awsShardClient(shard);
+      return createAwsFleetInventory({ ec2, region, accountName: shard.name });
+    }
     default: {
       const unrouted: never = shard.provider;
       return registeredAdapter(unrouted).inventory(shard);

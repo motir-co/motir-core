@@ -263,6 +263,14 @@ exception list**. It is scheduled after MOTIR-6932, as the debit is.
 list for one app skips that app and the pass continues with the rest. A listing error is never read as
 _"nothing is running"_. A failed destroy is alerted and retried on the next pass.
 
+**Every AWS account is walked too** (MOTIR-9426, 2026-10-24). After the Fly organisation, each `aws`
+fleet account of either kind is listed over its own EC2 client — the account's whole region, every
+instance, **no tag filter**, so a VM started by hand is judged like any other — with the table above
+unchanged. A hosted VM it kills is torn down through the account it was listed in, so its usage row,
+slot release, charge and `lost_supervision` end come from that account. An account whose credential
+cannot be read is alerted and skipped, and the pass walks the rest; a transient 429 or 5xx listing is
+asked once more before it alerts.
+
 ### §6 · What becomes of the old limits
 
 | Thing                                                    | Becomes                                                                                                                                                                                                                                                                                                                         |

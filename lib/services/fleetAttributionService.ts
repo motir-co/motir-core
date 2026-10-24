@@ -578,6 +578,7 @@ export const fleetAttributionService = {
         ageMs,
         verdict.reason,
         verdict.action,
+        inventory.provider,
       ),
     );
     return true;

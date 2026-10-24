@@ -31,6 +31,7 @@ export * from './userData';
 export * from './capacityErrors';
 export * from './credentials';
 export * from './management';
+export * from './inventory';
 
 // The AWS adapter (Story MOTIR-9270 · MOTIR-9276) — `ContainerOrchestrator` on
 // EC2, one VM per job, booted from the runner AMI into the shard's tagged network
