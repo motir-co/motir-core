@@ -41,7 +41,7 @@ import { useHostedRun } from './HostedRunProvider';
 type Load = { state: 'loading' } | { state: 'failed' } | { state: 'ok'; agents: AgentForCardDto[] };
 
 /** Whether a row can take the work — the read already says why not, if not. */
-const pickable = (a: AgentForCardDto): boolean => a.refusal === null;
+const pickable = (a: AgentForCardDto): boolean => a.refusal === null && !a.waitingForRoom;
 
 export function SendToAgentDoor() {
   const t = useTranslations('runs.agent');
@@ -248,6 +248,7 @@ function AgentRow({
 }) {
   const t = useTranslations('runs.agent.picker');
   const tState = useTranslations('myAgents.state');
+  const tWaiting = useTranslations('myAgents.waiting');
   const off = !pickable(agent);
   const busy = agent.refusal === 'agent_instance_run_active';
   const moving = agent.state === 'hibernating' || agent.state === 'deleting';
@@ -282,6 +283,9 @@ function AgentRow({
       </span>
       {busy ? (
         <RunTonePill tone="running">{t('busyPill')}</RunTonePill>
+      ) : agent.waitingForRoom ? (
+        // The waiting delta (MOTIR-9475): the neutral tone, as in My agents.
+        <RunTonePill tone="queued">{tWaiting('status')}</RunTonePill>
       ) : (
         <RunTonePill tone={AGENT_STATE_TONE[agent.state]}>{tState(agent.state)}</RunTonePill>
       )}
@@ -387,6 +391,8 @@ export function SignInCommand({ profileId }: { profileId: string }) {
 function WhyLine({ agent }: { agent: AgentForCardDto }) {
   const t = useTranslations('runs.agent.picker.off');
   const text = (() => {
+    // A boot waiting for room is shown disabled with its reason (the waiting delta, panel 5).
+    if (agent.waitingForRoom) return t('waitingForRoom');
     switch (agent.refusal) {
       case 'agent_instance_state_conflict':
         return agent.state === 'deleting' ? t('deleting') : t('hibernating');

@@ -404,6 +404,26 @@ describe('the picker', () => {
     expect(row('broken').getAttribute('aria-disabled')).toBeNull();
   });
 
+  it('an agent waiting for room is shown, cannot be pressed, and says why (MOTIR-9475)', async () => {
+    routes[AGENTS] = () => ({
+      status: 200,
+      body: {
+        agents: [
+          agent({ id: 'w1', name: 'waiting-one', state: 'starting', waitingForRoom: true }),
+          agent({ id: 'f1', name: 'free-one' }),
+        ],
+      },
+    });
+    await mount();
+    await openPicker();
+    expect(row('waiting-one').getAttribute('aria-disabled')).toBe('true');
+    expect(row('waiting-one').textContent).toContain('Waiting');
+    expect(within(row('waiting-one')).getByTestId('send-to-agent-why').textContent).toBe(
+      'This agent can run work once it’s running. It’s waiting for room.',
+    );
+    expect(row('free-one').getAttribute('aria-selected')).toBe('true');
+  });
+
   it('arrows move across the free rows only, and Enter sends the active one', async () => {
     routes[AGENTS] = () => ({
       status: 200,

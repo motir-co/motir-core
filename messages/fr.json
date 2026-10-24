@@ -12421,7 +12421,9 @@
         "machineStart": "Machine démarrée",
         "clone": "Clonage de {repository}",
         "terminalCheck": "Terminal vérifié",
-        "ready": "Prêt"
+        "ready": "Prêt",
+        "waiting": "En attente de place",
+        "roomFound": "Place trouvée"
       },
       "state": {
         "waiting": "En attente",
@@ -12456,9 +12458,24 @@
         "machineStart": "Démarrage de la machine…",
         "clone": "Clonage de {repository}…",
         "terminalCheck": "Vérification du terminal…",
-        "ready": "Préparation…"
+        "ready": "Préparation…",
+        "waiting": "En attente de place…",
+        "waitingWake": "En attente de place pour se réveiller…"
       },
-      "terminalClosed": "Le terminal reste fermé tant que l'agent ne s'exécute pas."
+      "terminalClosed": "Le terminal reste fermé tant que l'agent ne s'exécute pas.",
+      "waiting": {
+        "pool": "Toutes les machines pour les agents sont occupées en ce moment. Le vôtre sera créé dès qu’il y aura de la place.",
+        "account": "Les fichiers de cet agent sont à un seul endroit, il attend donc qu’il y ait de la place là-bas. Vos fichiers et votre connexion sont en sécurité.",
+        "detailPool": "Un nouvel agent — il démarre là où une place se libère en premier.",
+        "detailAccount": "Réveil — il ne peut démarrer que là où se trouvent ses fichiers.",
+        "since": "{minutes, plural, one {En attente depuis # minute} other {En attente depuis # minutes}} — Motir continue d’essayer tout seul."
+      }
+    },
+    "waiting": {
+      "status": "En attente",
+      "menuNotePool": "Le supprimer arrête l’attente. Rien n’a encore été créé.",
+      "menuNoteAccount": "Le supprimer arrête l’attente et supprime ses fichiers.",
+      "terminalTip": "Le terminal s’ouvre une fois l’agent en marche. Il attend de la place."
     }
   },
   "runs": {
@@ -12828,7 +12845,8 @@
           "deleting": "Il est en cours de suppression.",
           "signedOut": "Connectez-vous d'abord : ouvrez {name} et exécutez <cmd></cmd> dans son terminal. <link>Ouvrir {name}</link>",
           "imageTooOld": "Créé à partir d'une image plus ancienne qui ne peut pas traiter d'éléments de travail. Sa migration vers la nouvelle image — en conservant son répertoire personnel et sa connexion — est en préparation ; un nouvel agent peut les prendre dès maintenant.",
-          "cannotRun": "{agent} ne peut pas traiter un élément de travail seul — il n'a aucun mode sans surveillance que Motir puisse démarrer."
+          "cannotRun": "{agent} ne peut pas traiter un élément de travail seul — il n'a aucun mode sans surveillance que Motir puisse démarrer.",
+          "waitingForRoom": "Cet agent pourra travailler une fois en marche. Il attend de la place."
         }
       },
       "command": {

@@ -12421,7 +12421,9 @@
         "machineStart": "Maszyna uruchomiona",
         "clone": "Klonowanie {repository}",
         "terminalCheck": "Terminal sprawdzony",
-        "ready": "Gotowy"
+        "ready": "Gotowy",
+        "waiting": "Czeka na miejsce",
+        "roomFound": "Znaleziono miejsce"
       },
       "state": {
         "waiting": "Oczekuje",
@@ -12456,9 +12458,24 @@
         "machineStart": "Uruchamianie maszyny…",
         "clone": "Klonowanie {repository}…",
         "terminalCheck": "Sprawdzanie terminala…",
-        "ready": "Przygotowywanie…"
+        "ready": "Przygotowywanie…",
+        "waiting": "Czeka na miejsce…",
+        "waitingWake": "Czeka na miejsce, by się wybudzić…"
       },
-      "terminalClosed": "Terminal pozostaje zamknięty, dopóki agent nie działa."
+      "terminalClosed": "Terminal pozostaje zamknięty, dopóki agent nie działa.",
+      "waiting": {
+        "pool": "Wszystkie maszyny dla agentów są teraz zajęte. Twój zostanie utworzony, gdy tylko zwolni się miejsce.",
+        "account": "Pliki tego agenta są w jednym miejscu, więc czeka na wolne miejsce właśnie tam. Twoje pliki i logowanie są bezpieczne.",
+        "detailPool": "Nowy agent — uruchomi się tam, gdzie najpierw zwolni się miejsce.",
+        "detailAccount": "Wybudzanie — może się uruchomić tylko tam, gdzie są jego pliki.",
+        "since": "{minutes, plural, one {Czeka od # minuty} few {Czeka od # minut} many {Czeka od # minut} other {Czeka od # minuty}} — Motir sam ponawia próby."
+      }
+    },
+    "waiting": {
+      "status": "Oczekuje",
+      "menuNotePool": "Usunięcie przerywa oczekiwanie. Nic jeszcze nie zostało utworzone.",
+      "menuNoteAccount": "Usunięcie przerywa oczekiwanie i usuwa jego pliki.",
+      "terminalTip": "Terminal otworzy się, gdy agent będzie działać. Czeka na miejsce."
     }
   },
   "runs": {
@@ -12828,7 +12845,8 @@
           "deleting": "Jest usuwany.",
           "signedOut": "Najpierw się zaloguj: otwórz {name} i uruchom <cmd></cmd> w jego terminalu. <link>Otwórz {name}</link>",
           "imageTooOld": "Utworzony ze starszego obrazu, który nie obsługuje elementów roboczych. Przenoszenie go na nowszy obraz — z zachowaniem katalogu domowego i logowania — jest w przygotowaniu; nowy agent może je przyjmować już teraz.",
-          "cannotRun": "{agent} nie może samodzielnie pracować nad elementem roboczym — nie ma trybu bezobsługowego, który Motir mógłby uruchomić."
+          "cannotRun": "{agent} nie może samodzielnie pracować nad elementem roboczym — nie ma trybu bezobsługowego, który Motir mógłby uruchomić.",
+          "waitingForRoom": "Ten agent może wykonywać pracę, gdy będzie działać. Czeka na miejsce."
         }
       },
       "command": {

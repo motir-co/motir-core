@@ -12421,7 +12421,9 @@
         "machineStart": "Máquina iniciada",
         "clone": "Clonando {repository}",
         "terminalCheck": "Terminal verificado",
-        "ready": "Pronto"
+        "ready": "Pronto",
+        "waiting": "Aguardando espaço",
+        "roomFound": "Espaço encontrado"
       },
       "state": {
         "waiting": "Aguardando",
@@ -12456,9 +12458,24 @@
         "machineStart": "Iniciando a máquina…",
         "clone": "Clonando {repository}…",
         "terminalCheck": "Verificando o terminal…",
-        "ready": "Preparando…"
+        "ready": "Preparando…",
+        "waiting": "Aguardando espaço…",
+        "waitingWake": "Aguardando espaço para despertar…"
       },
-      "terminalClosed": "O terminal permanece fechado até que o agente esteja em execução."
+      "terminalClosed": "O terminal permanece fechado até que o agente esteja em execução.",
+      "waiting": {
+        "pool": "Todas as máquinas para agentes estão em uso agora. O seu será criado assim que houver espaço.",
+        "account": "Os arquivos deste agente ficam em um só lugar, então ele espera por espaço lá. Seus arquivos e seu login estão seguros.",
+        "detailPool": "Um agente novo — ele inicia onde houver espaço primeiro.",
+        "detailAccount": "Despertando — ele só pode iniciar onde estão os arquivos dele.",
+        "since": "{minutes, plural, one {Aguardando há # minuto} other {Aguardando há # minutos}} — o Motir continua tentando sozinho."
+      }
+    },
+    "waiting": {
+      "status": "Aguardando",
+      "menuNotePool": "Excluí-lo encerra a espera. Nada foi criado ainda.",
+      "menuNoteAccount": "Excluí-lo encerra a espera e exclui os arquivos dele.",
+      "terminalTip": "O terminal abre quando o agente estiver em execução. Ele está aguardando espaço."
     }
   },
   "runs": {
@@ -12828,7 +12845,8 @@
           "deleting": "Ele está sendo excluído.",
           "signedOut": "Entre primeiro: abra {name} e execute <cmd></cmd> no terminal dele. <link>Abrir {name}</link>",
           "imageTooOld": "Criado a partir de uma imagem mais antiga, que não consegue trabalhar em itens de trabalho. A migração para a imagem mais nova — mantendo o home e o login — está a caminho; um novo agente já pode assumi-los.",
-          "cannotRun": "O {agent} não consegue trabalhar em um item de trabalho sozinho — ele não tem um modo autônomo que o Motir possa iniciar."
+          "cannotRun": "O {agent} não consegue trabalhar em um item de trabalho sozinho — ele não tem um modo autônomo que o Motir possa iniciar.",
+          "waitingForRoom": "Este agente pode trabalhar quando estiver em execução. Ele está aguardando espaço."
         }
       },
       "command": {

@@ -12421,7 +12421,9 @@
         "machineStart": "Machine started",
         "clone": "Cloning {repository}",
         "terminalCheck": "Terminal checked",
-        "ready": "Ready"
+        "ready": "Ready",
+        "waiting": "Waiting for room",
+        "roomFound": "Room found"
       },
       "state": {
         "waiting": "Waiting",
@@ -12456,9 +12458,24 @@
         "machineStart": "Starting the machine…",
         "clone": "Cloning {repository}…",
         "terminalCheck": "Checking the terminal…",
-        "ready": "Getting ready…"
+        "ready": "Getting ready…",
+        "waiting": "Waiting for room…",
+        "waitingWake": "Waiting for room to wake…"
       },
-      "terminalClosed": "The terminal stays closed until the agent is running."
+      "terminalClosed": "The terminal stays closed until the agent is running.",
+      "waiting": {
+        "pool": "All machines for agents are in use right now. Yours will be created as soon as there is room.",
+        "account": "This agent’s files live in one place, so it waits for room there. Your files and your sign-in are safe.",
+        "detailPool": "A new agent — it starts wherever room frees up first.",
+        "detailAccount": "Waking — it can only start where its files are.",
+        "since": "{minutes, plural, one {Waiting for # minute} other {Waiting for # minutes}} — Motir keeps trying by itself."
+      }
+    },
+    "waiting": {
+      "status": "Waiting",
+      "menuNotePool": "Deleting it stops the wait. Nothing was created yet.",
+      "menuNoteAccount": "Deleting it stops the wait and deletes its files.",
+      "terminalTip": "The terminal opens once the agent is running. It’s waiting for room."
     }
   },
   "runs": {
@@ -12828,7 +12845,8 @@
           "deleting": "It’s being deleted.",
           "signedOut": "Sign in first: open {name} and run <cmd></cmd> in its terminal. <link>Open {name}</link>",
           "imageTooOld": "Made from an older image that can’t work on work items. Moving it to the newer image — keeping its home and sign-in — is on its way; a new agent can take them now.",
-          "cannotRun": "{agent} can’t work on a work item on its own — it has no unattended mode Motir can start."
+          "cannotRun": "{agent} can’t work on a work item on its own — it has no unattended mode Motir can start.",
+          "waitingForRoom": "This agent can run work once it’s running. It’s waiting for room."
         }
       },
       "command": {

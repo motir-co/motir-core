@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import type { AgentInstance } from '@/generated/prisma/client';
 import { assertWorkspaceFeatureEnabled } from '@/lib/featureFlags/evaluate';
-import { AGENT_LIST_LIMIT } from '@/lib/agentInstances/config';
+import { AGENT_LIST_LIMIT, parseWaitingReason } from '@/lib/agentInstances/config';
+import { agentInstanceBootRepository } from '@/lib/repositories/agentInstanceBootRepository';
 import {
   AgentInstanceImageTooOldError,
   AgentInstanceNotFoundError,
@@ -1119,6 +1120,17 @@ export const agentInstanceRunService = {
           tx,
         );
         const byAgent = new Map(running.map((r) => [r.agentInstanceId, r]));
+        // A boot waiting for room (MOTIR-9475) is read from its step in progress.
+        const waiting = new Set(
+          (
+            await agentInstanceBootRepository.listInProgressForInstances(
+              rows.filter((r) => r.state === 'starting' || r.state === 'waking').map((r) => r.id),
+              tx,
+            )
+          )
+            .filter((s) => parseWaitingReason(s.detail) !== null)
+            .map((s) => s.agentInstanceId),
+        );
         return {
           agents: rows.map((row) => {
             const run = byAgent.get(row.id) ?? null;
@@ -1136,6 +1148,7 @@ export const agentInstanceRunService = {
               // start re-asks live (below), so the picker must not refuse on it:
               // a row it offers is a row the start accepts (MOTIR-8869).
               agentRefusal(row, run, row.state === 'running' ? 'unknown' : row.signInState),
+              waiting.has(row.id),
             );
           }),
         };
