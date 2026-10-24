@@ -354,6 +354,73 @@ describe("the INDEXER image's preflight rides the same health check", () => {
   });
 });
 
+// ── THE HOSTED-AGENT IMAGE RIDES THE SAME SURFACE (MOTIR-9420) ──────────────
+//
+// The third pull path, probed anonymously the way an agent-runner VM pulls it.
+// Its verdict is recorded beside the other two, and only a definite refusal is
+// loud, with a message naming the hosted-agent image and its variable.
+
+describe("the HOSTED-AGENT image's preflight rides the same health check", () => {
+  const HOSTED_REPO = 'motir-co/motir-hosted-agent';
+  const HOSTED_IMAGE = `ghcr.io/${HOSTED_REPO}@sha256:${'b'.repeat(64)}`;
+
+  function stubFleet(hostedImage: string) {
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
+    vi.stubEnv('FLY_FLEET_API_TOKEN', 'fly_fleet_token');
+    vi.stubEnv('FLY_FLEET_APP', 'motir-ci-fleet');
+    vi.stubEnv('MOTIR_RUNNER_IMAGE', RUNNER_IMAGE);
+    vi.stubEnv('MOTIR_INDEXER_IMAGE', '');
+    vi.stubEnv('MOTIR_HOSTED_AGENT_IMAGE', hostedImage);
+  }
+
+  it('records the verdict on a healthy tick, beside the fleet and indexer ones', async () => {
+    await seedHealthyJobSchedules();
+    stubFleet(HOSTED_IMAGE);
+    vi.stubGlobal('fetch', registryServing([RUNNER_REPO, HOSTED_REPO]));
+
+    const engine = new JobTestEngine({ function: dailyHealthCheck });
+    const { result } = await engine.execute();
+
+    expect(result).toMatchObject({
+      ok: true,
+      fleet: { verdict: 'bootable', reference: RUNNER_IMAGE },
+      indexFleet: { verdict: 'not_applicable' },
+      hostedAgentImage: { verdict: 'bootable', reference: HOSTED_IMAGE },
+    });
+  });
+
+  it('records `not_applicable` on a deployment that runs no hosted agent', async () => {
+    await seedHealthyJobSchedules();
+    stubFleet('');
+    vi.stubGlobal('fetch', registryServing([RUNNER_REPO]));
+
+    const engine = new JobTestEngine({ function: dailyHealthCheck });
+    const { result } = await engine.execute();
+
+    expect(result).toMatchObject({ ok: true, hostedAgentImage: { verdict: 'not_applicable' } });
+  });
+
+  it('FAILS the run naming the hosted-agent image when it cannot be pulled anonymously', async () => {
+    await seedHealthyJobSchedules();
+    stubFleet(HOSTED_IMAGE);
+    // The runner is public; the hosted-agent package has gone private.
+    vi.stubGlobal('fetch', registryServing([RUNNER_REPO]));
+
+    const engine = new JobTestEngine({ function: dailyHealthCheck });
+    const { result, error } = (await engine.execute()) as {
+      result?: unknown;
+      error?: { name?: string; message?: string };
+    };
+
+    expect(result).toBeUndefined();
+    expect(error?.name).toBe('HostedAgentImageUnpullableError');
+    expect(error?.message).toContain(HOSTED_IMAGE);
+    expect(error?.message).toContain('MOTIR_HOSTED_AGENT_IMAGE');
+    expect(error?.message).toContain('anonymously');
+    expect(error?.message).not.toContain(RUNNER_IMAGE);
+  });
+});
+
 // ── THE THIRD FAULT ON THE SAME SURFACE (MOTIR-4518) ─────────────────────────
 //
 // Both probes above ask whether a container can BOOT. Neither has ever asked

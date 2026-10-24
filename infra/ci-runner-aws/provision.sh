@@ -18,7 +18,7 @@
 #
 # ── The scripts: copied, never rewritten ─────────────────────────────────────
 # The Packer file provisioner uploads `infra/ci-runner/entrypoint.sh`,
-# `start-dockerd.sh` and `job-started.sh` plus the two boot files into
+# `start-dockerd.sh` and `job-started.sh` plus the boot files into
 # ${STAGING}; they are installed below under the same names the Fly image uses,
 # byte for byte, so a change to the Fly entrypoint reaches this image on its
 # next build.
@@ -151,6 +151,11 @@ install_scripts() {
   install -m 0755 "${STAGING}/start-dockerd.sh" /usr/local/bin/motir-ci-runner-dockerd
   install -m 0755 "${STAGING}/job-started.sh" /usr/local/bin/motir-ci-runner-job-started.sh
   install -m 0755 "${STAGING}/motir-runner-prepare.sh" /usr/local/sbin/motir-runner-prepare
+  # Container mode (MOTIR-9419): the parser, the mode dispatch and the
+  # container entrypoint, root-owned and not writable by `runner`.
+  install -m 0755 -o root -g root "${STAGING}/parse-user-data.sh" /usr/local/sbin/motir-parse-user-data
+  install -m 0755 -o root -g root "${STAGING}/motir-vm-entrypoint.sh" /usr/local/bin/motir-vm-entrypoint
+  install -m 0755 -o root -g root "${STAGING}/motir-container-entrypoint.sh" /usr/local/bin/motir-container-entrypoint
   install -m 0644 "${STAGING}/motir-ci-runner.service" /etc/systemd/system/motir-ci-runner.service
   systemctl enable motir-ci-runner.service
   rm -rf "${STAGING}"

@@ -1,6 +1,7 @@
 // The runner's USER-DATA (Story MOTIR-9270 · MOTIR-9276) — the four `KEY=value`
-// lines the AMI's boot hook accepts (`infra/ci-runner-aws/boot/motir-runner-prepare.sh`,
-// `KNOWN_KEYS`), built from the spec's env.
+// lines the AMI's boot hook accepts (`infra/ci-runner-aws/boot/parse-user-data.sh`,
+// `CI_KEYS`), built from the spec's env. And, for a hosted agent run
+// (MOTIR-9422), the AMI's CONTAINER MODE: one digest-pinned image and its env.
 //
 // ⚠️ A REFUSAL, NOT A FILTER. A key outside the four is thrown, never dropped:
 // dropping it would hide a change to `buildSpec`, and a runner would boot without
@@ -38,7 +39,7 @@ const VALUE_PATTERN = /^[A-Za-z0-9+/=._:-]+$/;
 export class RunnerUserDataError extends Error {
   readonly code = 'AWS_RUNNER_USER_DATA_REFUSED' as const;
   constructor(
-    readonly reason: 'unexpected_key' | 'missing_key' | 'bad_value' | 'too_large',
+    readonly reason: 'unexpected_key' | 'missing_key' | 'bad_value' | 'too_large' | 'bad_image',
     readonly key: string | null,
   ) {
     super(
@@ -48,7 +49,9 @@ export class RunnerUserDataError extends Error {
           ? `The runner image does not accept ${key}; add it to the boot hook first.`
           : reason === 'missing_key'
             ? `The runner user-data has no ${key}.`
-            : `The runner user-data value for ${key} holds a character the image refuses (the value is not shown).`,
+            : reason === 'bad_image'
+              ? `The container image must be <registry>/<repo>@sha256:<64 hex>, with no tag (the value is not shown).`
+              : `The runner user-data value for ${key} holds a character the image refuses (the value is not shown).`,
     );
     this.name = 'RunnerUserDataError';
   }
@@ -72,9 +75,79 @@ export function buildRunnerUserData(env: Readonly<Record<string, string>>): stri
   return `${lines.join('\n')}\n`;
 }
 
+/** AWS's raw-size rule, shared by both builders. */
+function assertWithinLimit(userData: string): void {
+  if (Buffer.byteLength(userData, 'utf8') > USER_DATA_MAX_BYTES) {
+    throw new RunnerUserDataError('too_large', null);
+  }
+}
+
 /** The base64 `UserData` for RunInstances, refused above AWS's limit. */
 export function encodeUserData(userData: string): string {
-  const raw = Buffer.from(userData, 'utf8');
-  if (raw.length > USER_DATA_MAX_BYTES) throw new RunnerUserDataError('too_large', null);
-  return raw.toString('base64');
+  assertWithinLimit(userData);
+  return Buffer.from(userData, 'utf8').toString('base64');
+}
+
+/**
+ * THE ENV A HOSTED AGENT RUN MAY CARRY onto an agent-runner VM (MOTIR-9422) —
+ * exactly what the start paths put in the spec: `admitHostedRun`'s four, its
+ * `envAtAdmission`'s three credentials, and the continue / fix / review
+ * `extraEnv`. Like the CI keys it is a REFUSAL, never a filter: a start path that
+ * adds a key fails loudly here (`tests/hostedRuns/hostedAgentEnvAllowList.test.ts`
+ * pins the two lists together) instead of booting a run missing a variable.
+ */
+export const HOSTED_AGENT_ENV_NAMES = [
+  'MOTIR_API_URL',
+  'MOTIR_DISPATCH_RUN_ID',
+  'MOTIR_GATEWAY_URL',
+  'MOTIR_MODEL',
+  'MOTIR_REVIEW_GATE_ID',
+  'MOTIR_REVIEW_VERSION',
+  'MOTIR_RUN_KEY',
+  'MOTIR_RUN_MODE',
+  'MOTIR_RUN_TOKEN',
+  'MOTIR_WORK_ITEM_KEY',
+] as const;
+
+/** The AMI's container-mode image rule (`parse-user-data.sh`'s `IMAGE_RE`). */
+const CONTAINER_IMAGE_PATTERN =
+  /^[a-z0-9]+([._-][a-z0-9]+)*(:[0-9]+)?(\/[a-z0-9]+([._-][a-z0-9]+)*)+@sha256:[0-9a-f]{64}$/;
+
+/** A character that would forge a line or end the string in the AMI's parse. */
+const LINE_BREAKING = /[\n\r\0]/;
+
+/**
+ * The AMI's CONTAINER-MODE user-data (MOTIR-9422; contract in
+ * `infra/ci-runner-aws/README.md`): `MOTIR_BOOT_MODE=container`, the image, and
+ * one `MOTIR_ENV_<NAME>=<value>` line per env key, sorted, values unchanged —
+ * `docker --env-file` reads them literally. Refused before returning: an image
+ * not pinned by digest, a key outside {@link HOSTED_AGENT_ENV_NAMES}, a missing
+ * `MOTIR_DISPATCH_RUN_ID`, a value with a newline, carriage return or NUL, and a
+ * payload over AWS's 16 KB. A refusal names the KEY, never a value: the env
+ * carries the run token and the run key.
+ */
+export function buildContainerUserData(input: {
+  image: string;
+  env: Readonly<Record<string, string>>;
+}): string {
+  if (!CONTAINER_IMAGE_PATTERN.test(input.image)) {
+    throw new RunnerUserDataError('bad_image', 'MOTIR_CONTAINER_IMAGE');
+  }
+  const accepted = new Set<string>(HOSTED_AGENT_ENV_NAMES);
+  const keys = Object.keys(input.env).sort();
+  for (const key of keys) {
+    if (!accepted.has(key)) throw new RunnerUserDataError('unexpected_key', key);
+    if (LINE_BREAKING.test(input.env[key]!)) throw new RunnerUserDataError('bad_value', key);
+  }
+  if (!input.env['MOTIR_DISPATCH_RUN_ID']) {
+    throw new RunnerUserDataError('missing_key', 'MOTIR_DISPATCH_RUN_ID');
+  }
+  const lines = [
+    'MOTIR_BOOT_MODE=container',
+    `MOTIR_CONTAINER_IMAGE=${input.image}`,
+    ...keys.map((key) => `MOTIR_ENV_${key}=${input.env[key]}`),
+  ];
+  const userData = `${lines.join('\n')}\n`;
+  assertWithinLimit(userData);
+  return userData;
 }

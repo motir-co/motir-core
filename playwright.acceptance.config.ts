@@ -246,6 +246,22 @@ process.env['MOTIR_HOSTED_RUN_JOURNAL_PATH'] ??= MOTIR_HOSTED_RUN_JOURNAL_PATH;
 process.env['MOTIR_FAKE_CONTAINER_STATE_PATH'] ??= path.resolve(
   'out/playwright-output-acceptance/.fake-containers.json',
 );
+// Story MOTIR-9359 · MOTIR-9429 — the FAKE AWS: every `aws` fleet account's EC2
+// is one state file (`lib/test-fake-aws.ts`) behind the REAL AWS adapter and
+// inventory, shared by the webServer (boot), the worker (poll, settle, reap) and
+// the runner (the spec reads it and writes its controls into it). The switch
+// fixture is the agent-runner Fly↔AWS switch, re-read on every admission, because
+// a spec cannot change the server's environment between tests. The image is
+// digest-shaped because a fake-AWS boot builds REAL container user-data, which
+// takes nothing else; no lane process ever pulls it.
+process.env['MOTIR_FAKE_AWS_STATE_PATH'] ??= path.resolve(
+  'out/playwright-output-acceptance/.fake-aws.json',
+);
+process.env['MOTIR_FAKE_FLEET_SWITCH_PATH'] ??= path.resolve(
+  'out/playwright-output-acceptance/.fake-fleet-switch.json',
+);
+process.env['MOTIR_HOSTED_AGENT_IMAGE'] ??=
+  'ghcr.io/motir-co/motir-hosted-agent@sha256:e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0';
 // Story MOTIR-6860 · MOTIR-6877 — the agent instances' PERSISTENT fake fleet, on
 // the same terms: the webServer's route bundles each hold their own module copy,
 // so the machines and volumes must live in one file they all read, and the runner
@@ -601,6 +617,10 @@ export default defineConfig({
         MOTIR_HOSTED_RUN_JOURNAL_PATH,
         MOTIR_FAKE_CONTAINER_STATE_PATH: process.env['MOTIR_FAKE_CONTAINER_STATE_PATH']!,
         MOTIR_FAKE_PERSISTENT_STATE_PATH: process.env['MOTIR_FAKE_PERSISTENT_STATE_PATH']!,
+        // The fake AWS (MOTIR-9429) — see its block above this config.
+        MOTIR_FAKE_AWS_STATE_PATH: process.env['MOTIR_FAKE_AWS_STATE_PATH']!,
+        MOTIR_FAKE_FLEET_SWITCH_PATH: process.env['MOTIR_FAKE_FLEET_SWITCH_PATH']!,
+        MOTIR_HOSTED_AGENT_IMAGE: process.env['MOTIR_HOSTED_AGENT_IMAGE']!,
         E2E_HOSTED_RUN_STALL_WINDOW_MS: process.env['E2E_HOSTED_RUN_STALL_WINDOW_MS']!,
         // Story MOTIR-4928 · MOTIR-5264 — the MONITORING room's connect walk.
         // ⚠️ THE FAKE IS SELECTED HERE OR NOWHERE. This server is spawned, so a

@@ -1,6 +1,8 @@
 import {
+  createAwsFleetInventory,
   createAwsOrchestrator,
   createEc2Api,
+  Ec2ApiError,
   createFakeOrchestrator,
   createFlyOrchestrator,
   createUsageSink,
@@ -20,6 +22,7 @@ import {
   OrchestratorNotConfiguredError,
   probeImagePull,
   type ContainerOrchestrator,
+  type Ec2Api,
   type FakeOrchestratorControls,
   type FleetInventory,
   type OrchestratorProvider,
@@ -241,30 +244,101 @@ export const AWS_RUNNER_AMI_ENV_VAR = 'MOTIR_AWS_RUNNER_AMI_ID';
  * suffixes add-shard documents, MOTIR-9278), the fleet's AMI, and the account's
  * region. The shard tag is the account's name — what its network is tagged with.
  */
-function awsOrchestratorForShard(shard: FleetShardDTO): ContainerOrchestrator {
+/**
+ * An AWS account's EC2 client and region, from its row and its key variables
+ * (`<credentialRef>_ACCESS_KEY_ID` / `_SECRET_ACCESS_KEY`) — the ONE place the
+ * orchestrator and the inventory of an account build it, so a kill and its
+ * settle land in the account the VM was listed in. `extra` names variables only
+ * the caller needs (the AMI, for a launch); every missing one is named at once,
+ * as `indexFleetConfig` does.
+ */
+/**
+ * THE ACCEPTANCE LANE'S EC2 (MOTIR-9429): a factory `lib/test-fake-aws.ts`
+ * installs when `MOTIR_FAKE_AWS_STATE_PATH` is set, so the lane's three processes
+ * drive the REAL AWS adapter and inventory over one file-backed fake EC2. Given
+ * the caller's own `Ec2ApiError`, because the hook and the route that reads this
+ * are separate bundles with separate copies of the package, and the adapter tells
+ * a refusal by `instanceof`.
+ *
+ * Held on `globalThis` for the same reason `lib/blob/s3.ts`'s transport is: a
+ * module variable set at instrumentation is not the binding a route reads. Unset
+ * in every real deployment, and with it unset every line below is unchanged.
+ */
+export type AwsEc2Override = (
+  shard: FleetShardDTO,
+  errors: { Ec2ApiError: typeof Ec2ApiError },
+) => Ec2Api;
+
+const AWS_EC2_OVERRIDE_KEY = Symbol.for('motir.orchestrator.e2eAwsEc2');
+type AwsEc2OverrideHolder = { [AWS_EC2_OVERRIDE_KEY]?: AwsEc2Override };
+
+/** The lane's EC2 factory, or null outside it. */
+function awsEc2Override(): AwsEc2Override | null {
+  return (globalThis as AwsEc2OverrideHolder)[AWS_EC2_OVERRIDE_KEY] ?? null;
+}
+
+/** Install (or with `null`, remove) the lane's EC2 factory — tests and the lane only. */
+export function setAwsEc2OverrideForTests(factory: AwsEc2Override | null): void {
+  if (factory) (globalThis as AwsEc2OverrideHolder)[AWS_EC2_OVERRIDE_KEY] = factory;
+  else delete (globalThis as AwsEc2OverrideHolder)[AWS_EC2_OVERRIDE_KEY];
+}
+
+/** The AMI the lane's fake EC2 is handed: it boots nothing, so no image is read. */
+const FAKE_AWS_AMI_ID = 'ami-00000000000000000';
+
+/** Is this an `aws` account the lane's fake EC2 answers for? */
+function onFakeAws(shard: FleetShardDTO): boolean {
+  return shard.provider === 'aws' && awsEc2Override() !== null;
+}
+
+function awsShardClient(
+  shard: FleetShardDTO,
+  extra: readonly string[] = [],
+): { ec2: Ec2Api; region: string; values: Record<string, string> } {
+  const override = awsEc2Override();
+  if (override) {
+    // The lane carries no AWS key and no AMI; the fake needs neither.
+    if (!shard.aws) {
+      throw new OrchestratorNotConfiguredError(`fleet account ${shard.name} names no AWS location`);
+    }
+    const values: Record<string, string> = {};
+    for (const name of extra) values[name] = process.env[name]?.trim() || FAKE_AWS_AMI_ID;
+    return { ec2: override(shard, { Ec2ApiError }), region: shard.aws.region, values };
+  }
   const keyIdVar = `${shard.credentialRef}_ACCESS_KEY_ID`;
   const secretVar = `${shard.credentialRef}_SECRET_ACCESS_KEY`;
-  const accessKeyId = process.env[keyIdVar]?.trim();
-  const secretAccessKey = process.env[secretVar]?.trim();
-  const amiId = process.env[AWS_RUNNER_AMI_ENV_VAR]?.trim();
-  // Every missing variable at once, as `indexFleetConfig` does.
-  const missing = [
-    ...(accessKeyId ? [] : [keyIdVar]),
-    ...(secretAccessKey ? [] : [secretVar]),
-    ...(amiId ? [] : [AWS_RUNNER_AMI_ENV_VAR]),
-  ];
-  if (missing.length > 0 || !accessKeyId || !secretAccessKey || !amiId) {
+  const values: Record<string, string> = {};
+  const missing: string[] = [];
+  for (const name of [keyIdVar, secretVar, ...extra]) {
+    const value = process.env[name]?.trim();
+    if (value) values[name] = value;
+    else missing.push(name);
+  }
+  if (missing.length > 0) {
     throw new OrchestratorNotConfiguredError(`set ${missing.join(', ')}`);
   }
   if (!shard.aws) {
     throw new OrchestratorNotConfiguredError(`fleet account ${shard.name} names no AWS location`);
   }
   const { region } = shard.aws;
+  return {
+    ec2: createEc2Api({
+      accessKeyId: values[keyIdVar]!,
+      secretAccessKey: values[secretVar]!,
+      region,
+    }),
+    region,
+    values,
+  };
+}
+
+function awsOrchestratorForShard(shard: FleetShardDTO): ContainerOrchestrator {
+  const { ec2, region, values } = awsShardClient(shard, [AWS_RUNNER_AMI_ENV_VAR]);
   return createAwsOrchestrator({
-    ec2: createEc2Api({ accessKeyId, secretAccessKey, region }),
+    ec2,
     region,
     shardTag: shard.name,
-    amiId,
+    amiId: values[AWS_RUNNER_AMI_ENV_VAR]!,
   });
 }
 
@@ -277,7 +351,10 @@ function awsOrchestratorForShard(shard: FleetShardDTO): ContainerOrchestrator {
  * compile error here until it is routed (to the registry — one `case` line).
  */
 export function orchestratorForShard(shard: FleetShardDTO): ContainerOrchestrator {
-  if (selectedOrchestratorProvider() === 'fake') return fakeOrchestratorForShard(shard.id);
+  // Under the lane's fake EC2 an `aws` account runs the real adapter (MOTIR-9429).
+  if (selectedOrchestratorProvider() === 'fake' && !onFakeAws(shard)) {
+    return fakeOrchestratorForShard(shard.id);
+  }
   switch (shard.provider) {
     case 'fly':
       return flyOrchestratorForShard(shard);
@@ -299,10 +376,14 @@ export function inventoryForShard(shard: FleetShardDTO): FleetInventory | null {
   switch (shard.provider) {
     case 'fly':
       return null;
-    // No AWS listing yet: the AWS reaper sweeps each account by its shard tag,
-    // and the attribution reconciler does not read EC2.
-    case 'aws':
-      return null;
+    // The account's whole region, untagged instances included (MOTIR-9426), on
+    // the same EC2 client its orchestrator launches through. Under the fake
+    // orchestrator there is no EC2 to list.
+    case 'aws': {
+      if (selectedOrchestratorProvider() === 'fake' && !onFakeAws(shard)) return null;
+      const { ec2, region } = awsShardClient(shard);
+      return createAwsFleetInventory({ ec2, region, accountName: shard.name });
+    }
     default: {
       const unrouted: never = shard.provider;
       return registeredAdapter(unrouted).inventory(shard);
@@ -418,18 +499,82 @@ export function indexFleetConfig(): IndexFleetConfig {
 /** The env var holding the hosted-agent image (`hosted-agent-run.md` §6). */
 export const HOSTED_AGENT_IMAGE_ENV_VAR = 'MOTIR_HOSTED_AGENT_IMAGE';
 
+/** What the fake orchestrator answers for the hosted-agent image. */
+const FAKE_HOSTED_AGENT_IMAGE = 'motir/hosted-agent@sha256:fake';
+
+/** The variable's value, trimmed, or `''` when it is unset. */
+function rawHostedAgentImage(): string {
+  return process.env[HOSTED_AGENT_IMAGE_ENV_VAR]?.trim() ?? '';
+}
+
 /**
- * The hosted-agent workload's configuration (MOTIR-690): the orchestrator's region
- * and the image `MOTIR_HOSTED_AGENT_IMAGE` names — or the typed not-configured
- * error naming every missing variable at once, like {@link indexFleetConfig}.
+ * The registry host of an image reference, lower-cased: the first path segment
+ * when it looks like a host (a `.`, a `:` or `localhost`), Docker Hub otherwise —
+ * the same rule `docker pull` applies.
+ */
+function imageRegistryHost(image: string): string {
+  const first = image.split('/')[0] ?? '';
+  const isHost = image.includes('/') && (/[.:]/.test(first) || first === 'localhost');
+  return isHost ? first.toLowerCase() : 'docker.io';
+}
+
+/** An ECR registry host: `<account>.dkr.ecr[-fips].<region>.amazonaws.com[.cn]`. */
+const ECR_HOST = /^\d{12}\.dkr\.ecr(-fips)?\.[a-z0-9-]+\.amazonaws\.com(\.cn)?$/;
+
+/**
+ * THE HOSTED-AGENT IMAGE for a run on `provider`'s fleet (MOTIR-9420) — the
+ * pinned reference `MOTIR_HOSTED_AGENT_IMAGE` names, read on its own, with no
+ * Fly fleet variable required.
  *
- * ⚠️ A DIGEST, NEVER A TAG (`hosted-agent-run.md` §6), refused here rather than
- * trusted: a tag lets a publish change what a running deployment boots, and a
- * hosted run's image holds the agent a customer's code is handed to.
+ * ⚠️ ONE VARIABLE SERVES BOTH FLEETS (`hosted-agent-run.md` §6, amended
+ * 2026-10-24). A second `MOTIR_AWS_HOSTED_AGENT_IMAGE` would agree with this one
+ * today and drift at the next pin.
+ *
+ * ⚠️ A DIGEST, NEVER A TAG — on every provider: a tag lets a publish change what
+ * a running deployment boots, and a hosted run's image holds the agent a
+ * customer's code is handed to.
+ *
+ * ⚠️ ON AWS, ONLY A REGISTRY A STRANGER CAN PULL FROM. An agent-runner VM boots
+ * with no instance profile and no Fly org credential, so it pulls anonymously.
+ * A `registry.fly.io` mirror needs the Fly org credential and an ECR repository
+ * needs an IAM role; both are refused here by HOST, never by substring. Any other
+ * host is accepted: whether it really serves an anonymous pull is
+ * {@link verifyHostedAgentImagePullable}'s question, asked of the live registry.
+ */
+export function hostedAgentImage(provider: OrchestratorProvider): string {
+  // An `aws` boot on the lane's fake EC2 builds real user-data, which takes
+  // only a digest-pinned image (MOTIR-9429).
+  const fakeAws = provider === 'aws' && awsEc2Override() !== null;
+  if (provider === 'fake' || (selectedOrchestratorProvider() === 'fake' && !fakeAws)) {
+    return FAKE_HOSTED_AGENT_IMAGE;
+  }
+  const image = rawHostedAgentImage();
+  if (!image) throw new OrchestratorNotConfiguredError(`set ${HOSTED_AGENT_IMAGE_ENV_VAR}`);
+  if (!/@sha256:[0-9a-f]{64}$/.test(image)) {
+    throw new OrchestratorNotConfiguredError(
+      `${HOSTED_AGENT_IMAGE_ENV_VAR} must be pinned by digest (…@sha256:<64 hex>), not a tag`,
+    );
+  }
+  const host = imageRegistryHost(image);
+  if (provider === 'aws' && (host === FLY_REGISTRY_HOST || ECR_HOST.test(host))) {
+    throw new OrchestratorNotConfiguredError(
+      `${HOSTED_AGENT_IMAGE_ENV_VAR} names an image on ${host}, which an agent-runner VM ` +
+        `cannot pull: it pulls anonymously, with no instance profile and no Fly org ` +
+        `credential, so the image must stay on a public registry (ghcr.io)`,
+    );
+  }
+  return image;
+}
+
+/**
+ * The hosted-agent workload's configuration on the FLY fleet (MOTIR-690): the
+ * fleet's region and {@link hostedAgentImage}'s image — or the typed
+ * not-configured error naming every missing variable at once, like
+ * {@link indexFleetConfig}. The digest rule lives in `hostedAgentImage` alone.
  */
 export function hostedAgentFleetConfig(): IndexFleetConfig {
   if (selectedOrchestratorProvider() === 'fake') {
-    return { image: 'motir/hosted-agent@sha256:fake', region: 'iad' };
+    return { image: FAKE_HOSTED_AGENT_IMAGE, region: 'iad' };
   }
   const missing: string[] = [];
   let region = 'iad';
@@ -441,17 +586,11 @@ export function hostedAgentFleetConfig(): IndexFleetConfig {
     // `flyFleetConfig` throws nothing but this refusal.
     missing.push((err as OrchestratorNotConfiguredError).detail.replace(/^set /, ''));
   }
-  const image = process.env[HOSTED_AGENT_IMAGE_ENV_VAR]?.trim() ?? '';
-  if (!image) missing.push(HOSTED_AGENT_IMAGE_ENV_VAR);
+  if (!rawHostedAgentImage()) missing.push(HOSTED_AGENT_IMAGE_ENV_VAR);
   if (missing.length > 0) {
     throw new OrchestratorNotConfiguredError(`set ${missing.join(', ')}`);
   }
-  if (!/@sha256:[0-9a-f]{64}$/.test(image)) {
-    throw new OrchestratorNotConfiguredError(
-      `${HOSTED_AGENT_IMAGE_ENV_VAR} must be pinned by digest (…@sha256:<64 hex>), not a tag`,
-    );
-  }
-  return { image, region };
+  return { image: hostedAgentImage('fly'), region };
 }
 
 /**
@@ -535,7 +674,7 @@ export async function verifyFleetBootable(): Promise<FleetBootableVerdict> {
     };
   }
 
-  return probeToVerdict(image);
+  return probeToVerdict(image, flyRegistryCredential);
 }
 
 /**
@@ -586,8 +725,11 @@ const flyRegistryCredential: RegistryCredentialResolver = (registry) =>
  * CONFIGURATION, before there is an image to probe, and each path decides it
  * differently.
  */
-async function probeToVerdict(image: string): Promise<FleetBootableVerdict> {
-  const probe = await probeImagePull(image, flyRegistryCredential);
+async function probeToVerdict(
+  image: string,
+  resolveCredential: RegistryCredentialResolver | undefined,
+): Promise<FleetBootableVerdict> {
+  const probe = await probeImagePull(image, resolveCredential);
   if (probe.pullable === true) {
     return { verdict: 'bootable', reference: probe.reference, digest: probe.digest };
   }
@@ -660,7 +802,53 @@ export async function verifyIndexFleetBootable(): Promise<FleetBootableVerdict> 
     };
   }
 
-  return probeToVerdict(image);
+  return probeToVerdict(image, flyRegistryCredential);
+}
+
+/**
+ * CAN AN AGENT-RUNNER VM PULL THE HOSTED-AGENT IMAGE? — the third pull path's
+ * preflight (MOTIR-9420), the twin of {@link verifyIndexFleetBootable}.
+ *
+ * ⚠️ IT PASSES NO CREDENTIAL, ON PURPOSE. It asks the question an agent-runner
+ * VM will ask: that VM has no instance profile and no Fly org credential, so its
+ * `docker pull` is anonymous, and so is this probe — on a Bearer registry such as
+ * GHCR it fetches an anonymous token and nothing else. `flyRegistryCredential`
+ * is deliberately not used: a mirror only the Fly org can read would answer
+ * `bootable` here and strand every AWS run. The same anonymous answer is right
+ * for the Fly path, which pulls this public image anonymously too.
+ *
+ * `not_applicable` under the fake orchestrator or with the variable unset (a
+ * deployment that runs no hosted agent). A variable set to a reference no VM can
+ * pull — a tag, or a `registry.fly.io` / ECR host — is `unpullable`, with
+ * {@link hostedAgentImage}'s refusal as the detail: that is a definite answer.
+ *
+ * NEVER THROWS, for the reason its twins do not: the caller is a health check.
+ */
+export async function verifyHostedAgentImagePullable(): Promise<FleetBootableVerdict> {
+  if (selectedOrchestratorProvider() === 'fake') {
+    return {
+      verdict: 'not_applicable',
+      detail: 'the fake orchestrator is selected; no image is pulled',
+    };
+  }
+  const reference = rawHostedAgentImage();
+  if (!reference) {
+    return {
+      verdict: 'not_applicable',
+      detail: `this deployment runs no hosted agent (${HOSTED_AGENT_IMAGE_ENV_VAR} is unset)`,
+    };
+  }
+  let image: string;
+  try {
+    image = hostedAgentImage('aws');
+  } catch (err) {
+    return {
+      verdict: 'unpullable',
+      reference,
+      detail: (err as OrchestratorNotConfiguredError).detail,
+    };
+  }
+  return probeToVerdict(image, undefined);
 }
 
 // ── The BOUND half: the package's usage sink, closed over the app's meter ────

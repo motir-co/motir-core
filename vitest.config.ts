@@ -1645,6 +1645,13 @@ export default defineConfig({
         'lib/repositories/ciFleetAdmissionLockRepository.ts',
         'lib/repositories/fleetInFlightSlotRepository.ts',
         'lib/jobs/definitions/ciRunnerFleet.ts',
+        // Story MOTIR-9359 · MOTIR-9427 — the agent-runner pool: its switch, the
+        // per-account admission and the hosted-agent container's boot, poll and
+        // settle on the account. Their chain is `agentRunnerPoolStoryGate.test.ts`;
+        // pinned at the fleet's 90 floor below.
+        'lib/ciFleet/fleetKindSwitches.ts',
+        'lib/services/fleetShardAdmissionService.ts',
+        'lib/services/hostedAgentContainerService.ts',
         // Story MOTIR-8699 · MOTIR-8716 — Motir CI on the fleet for a CONNECTED org:
         // the org-target auth, the readiness verdict's GitHub reads, the org
         // Actions-variable client, the runner-target resolver, the readiness and
@@ -5884,6 +5891,10 @@ export default defineConfig({
           lines: 90,
         },
         'lib/jobs/definitions/ciRunnerFleet.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-9359 · MOTIR-9427 (see the include list).
+        'lib/ciFleet/fleetKindSwitches.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/fleetShardAdmissionService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/hostedAgentContainerService.ts': { branches: 90, functions: 90, lines: 90 },
         // Story MOTIR-1775 · MOTIR-1901 — the CI-minutes entitlement.
         'lib/ciMetering/allowance.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/services/ciAllowanceService.ts': { branches: 90, functions: 90, lines: 90 },

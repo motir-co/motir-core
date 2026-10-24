@@ -4,10 +4,19 @@ import {
   HostedAgentContainerUnpricedError,
 } from '@/lib/ciFleet/errors';
 import { fleetCeilingService, type FleetSlotVerdict } from '@/lib/services/fleetCeilingService';
+import {
+  classifyProvisionRefusal,
+  HOSTED_AGENT_SHARD_CAPACITY_DETAIL,
+} from '@/lib/services/fleetShardAdmissionService';
+import { fleetShardOrchestratorService } from '@/lib/services/fleetShardOrchestratorService';
+import { fleetShardService } from '@/lib/services/fleetShardService';
+import { agentRunnerOnPool } from '@/lib/ciFleet/fleetKindSwitches';
 import { hostedRunChargeService } from '@/lib/services/hostedRunChargeService';
 import {
   OrchestratorImageUnpullableError,
+  OrchestratorNotConfiguredError,
   getOrchestrator,
+  hostedAgentImage,
   recordContainerAccrual,
   recordContainerUsage,
 } from '@/lib/orchestrator';
@@ -77,6 +86,11 @@ import {
 //      whose price the lane multiplier depends on.
 //   4. A RUN OVER A CARD SET MAY SPAN REPOSITORIES (MOTIR-1790), so the settle can
 //      attribute the handle's seconds across repo SLICES (MOTIR-3255's shape).
+//   5. THE MACHINE LIVES ON AN ACCOUNT (MOTIR-9423 · MOTIR-9424). `boot` boots on
+//      the agent-runner account its slot chose (or the process-wide fleet when the
+//      switch is Fly), and `poll` and `settle` reach the container through that
+//      same account's orchestrator, read from `session.handle.shardId` — never
+//      through one process-wide adapter.
 //
 // ⚠️ THE METER STAYS COGS — NO ENTITLEMENT, NO CREDIT MATH AND NO `isMeta` BRANCH
 // HERE. What this seam writes is what the machine cost MOTIR, and it measures
@@ -315,6 +329,12 @@ export interface HostedAgentSession {
     readonly region: string;
     /** ISO-8601. */
     readonly createdAt: string;
+    /**
+     * The agent-runner account the container was booted on (MOTIR-9423). ABSENT
+     * for a container on the process-wide fleet — a legacy boot, and every session
+     * memoized before accounts existed, which therefore still reads as legacy.
+     */
+    readonly shardId?: string;
   };
   /** ISO-8601 — when the container was booted; the run timeout runs from it. */
   readonly bootedAt: string;
@@ -475,6 +495,69 @@ function sleepFor(ms: number): Promise<void> {
   return ms <= 0 ? Promise.resolve() : new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** Where one provision attempt runs: the orchestrator, and the image and region
+ *  that orchestrator is asked for. `shardId` null is the process-wide fleet. */
+interface BootTarget {
+  readonly orchestrator: ContainerOrchestrator;
+  readonly image: string;
+  readonly region: string;
+  readonly shardId: string | null;
+}
+
+/**
+ * The target a slot's account resolves to (MOTIR-9423). Null is the legacy
+ * target, exactly the objects a boot used before accounts: the process-wide
+ * orchestrator and the request's own image and region. An account id is that
+ * account's orchestrator, the image its provider can pull, and the account's
+ * own location — never the Fly fleet's config.
+ */
+async function resolveBootTarget(
+  fleetShardId: string | null,
+  request: HostedAgentContainerRequest,
+): Promise<BootTarget> {
+  if (fleetShardId === null) {
+    return {
+      orchestrator: getOrchestrator(),
+      image: request.image,
+      region: request.region,
+      shardId: null,
+    };
+  }
+  const shard = await fleetShardService.getShard(fleetShardId);
+  const region = shard.provider === 'aws' ? shard.aws?.region : shard.fly?.region;
+  if (!region) {
+    throw new OrchestratorNotConfiguredError(
+      `fleet account ${shard.id} (${shard.provider}) names no region to boot in`,
+    );
+  }
+  return {
+    orchestrator: fleetShardOrchestratorService.forShardRow(shard),
+    image: hostedAgentImage(shard.provider),
+    region,
+    shardId: shard.id,
+  };
+}
+
+/**
+ * The orchestrator of the account the session's container booted on (MOTIR-9424)
+ * — resolved per call, so a rotated account credential reaches a long run's next
+ * poll. A session with no `shardId` (a legacy boot, or a memo from before
+ * accounts) is the process-wide fleet. THROWS when the account cannot be read, or
+ * when its provider is not the one the container was booted through: a container
+ * is never described or torn down through another provider's adapter, where it
+ * would fail or, worse, address some other machine.
+ */
+async function orchestratorForSession(session: HostedAgentSession): Promise<ContainerOrchestrator> {
+  const orchestrator = await fleetShardOrchestratorService.forShard(session.handle.shardId ?? null);
+  if (orchestrator.provider !== session.handle.provider) {
+    throw new Error(
+      `container ${session.handle.id} was booted through ${session.handle.provider}, but its ` +
+        `account resolves to ${orchestrator.provider}; not reaching it through another provider`,
+    );
+  }
+  return orchestrator;
+}
+
 const INLINE_STEPS: MemoizingSteps = {
   run: async <T>(_id: string, fn: () => T | Promise<T>): Promise<T> => fn(),
 };
@@ -486,7 +569,10 @@ export const hostedAgentContainerService = {
    *
    * THROWS for the two refusals that are about the REQUEST — an unpriced machine
    * class and an out-of-bounds timeout — and for an unconfigured orchestrator.
-   * Each fires before a slot is reserved or a container provisioned, so a throw
+   * The timeout fires before the slot, and so does the price while the agent
+   * runner's switch is Fly; with it on, the price and the orchestrator are read
+   * against the slot's account (MOTIR-9423), so they fire after it and give it
+   * back first. No container is provisioned before any of them, so a throw
    * leaks nothing. A REFUSED provision is about this dispatch and comes back as a
    * terminal outcome, with the slot already released.
    */
@@ -503,20 +589,20 @@ export const hostedAgentContainerService = {
       );
     }
 
-    const orchestrator = getOrchestrator();
-
-    // ── 0 · Priced, or not booted ────────────────────────────────────────────
-    // Resolved against the provider that WILL run it, before the slot and before
-    // `provision`, so a refusal costs nothing at all.
-    if (!resolveContainerRate(orchestrator.provider, request.size, request.region, now())) {
-      throw new HostedAgentContainerUnpricedError(
-        orchestrator.provider,
-        request.size,
-        request.region,
-      );
+    // ── 0a · While the switch is Fly, priced before the slot, exactly as before ─
+    // The run will boot on the process-wide fleet, so the price is read against
+    // it before anything is reserved and a refusal costs nothing at all. With the
+    // switch on, the price is read against the slot's account below instead.
+    if (!agentRunnerOnPool()) {
+      const legacy = getOrchestrator();
+      if (!resolveContainerRate(legacy.provider, request.size, request.region, now())) {
+        throw new HostedAgentContainerUnpricedError(legacy.provider, request.size, request.region);
+      }
     }
 
     // ── 1 · Take a fleet slot, sized to THIS run ─────────────────────────────
+    // The slot names the account the run boots on (MOTIR-9421): null while the
+    // agent runner's switch is Fly.
     const verdict: FleetSlotVerdict = await fleetCeilingService.reserve(
       {
         workload: HOSTED_AGENT_WORKLOAD,
@@ -540,59 +626,136 @@ export const hostedAgentContainerService = {
     if (verdict.outcome === 'already_held') {
       return { phase: 'already_booting' };
     }
+    const releaseSlot = (): Promise<boolean> =>
+      fleetCeilingService.release(HOSTED_AGENT_WORKLOAD, request.dispatchId, request.runId);
+
+    // ── 0 · Where, and priced there, or not booted ───────────────────────────
+    // Resolved against the provider and region that WILL run the machine — the
+    // slot's account, or the process-wide fleet — so it runs after the slot and
+    // again after every move. A refusal (or an unresolvable target) gives the
+    // slot back before anything is provisioned and throws.
+    const targetFor = async (fleetShardId: string | null): Promise<BootTarget> => {
+      try {
+        const target = await resolveBootTarget(fleetShardId, request);
+        if (
+          !resolveContainerRate(target.orchestrator.provider, request.size, target.region, now())
+        ) {
+          throw new HostedAgentContainerUnpricedError(
+            target.orchestrator.provider,
+            request.size,
+            target.region,
+          );
+        }
+        return target;
+      } catch (err) {
+        await releaseSlot();
+        throw err;
+      }
+    };
+    let target = await targetFor(verdict.fleetShardId ?? null);
 
     // ── 1b · The run's credentials, minted only now that it is admitted ──────
     // (MOTIR-9381) A run that waited for room gets credentials whose life starts
     // at admission. A mint that throws gives the slot back and rethrows: no
-    // container was provisioned for it.
+    // container was provisioned for it. Minted ONCE: a move to another account
+    // boots with this same env, never a second mint.
     let env = request.env;
     if (options.envAtAdmission) {
       try {
         env = { ...env, ...(await options.envAtAdmission()) };
       } catch (err) {
-        await fleetCeilingService.release(HOSTED_AGENT_WORKLOAD, request.dispatchId, request.runId);
+        await releaseSlot();
         throw err;
       }
     }
 
-    // ── 2 · Boot exactly one container ───────────────────────────────────────
-    const spec: ContainerSpec = {
-      orgId: request.organizationId,
-      workspaceId: request.workspaceId,
-      projectId: request.projectId,
-      repoFullName: request.repoFullName,
-      workload: HOSTED_AGENT_WORKLOAD,
-      workflowJobId: NO_WORKFLOW_JOB,
-      image: request.image,
-      size: request.size,
-      env,
-      timeoutSeconds: request.timeoutSeconds,
-      region: request.region,
-    };
-
+    // ── 2 · Boot exactly one container — moving on an account's refusal ──────
+    // An ACCOUNT that refuses for capacity or an outage is paused, and the slot
+    // moves (under the admission lock) to the next account not yet tried; the
+    // provider call itself never holds that lock. A legacy target never moves.
+    const tried = new Set<string>();
     let handle: ContainerHandle;
-    try {
-      handle = await orchestrator.provision(spec);
-    } catch (err) {
-      // The port guarantees a failed `provision` left no container, so the slot
-      // stands for nothing and goes back now rather than at its TTL.
-      await fleetCeilingService.release(HOSTED_AGENT_WORKLOAD, request.dispatchId, request.runId);
-      if (err instanceof OrchestratorImageUnpullableError) {
-        return {
-          phase: 'terminal',
-          outcome: {
-            outcome: 'image_unpullable',
-            detail: `the hosted-agent image could not be pulled: ${detailOf(err)}`,
-          },
-        };
-      }
-      return {
-        phase: 'terminal',
-        outcome: {
-          outcome: 'provision_failed',
-          detail: `could not boot a hosted-agent container: ${detailOf(err)}`,
-        },
+    for (;;) {
+      const spec: ContainerSpec = {
+        orgId: request.organizationId,
+        workspaceId: request.workspaceId,
+        projectId: request.projectId,
+        repoFullName: request.repoFullName,
+        workload: HOSTED_AGENT_WORKLOAD,
+        workflowJobId: NO_WORKFLOW_JOB,
+        image: target.image,
+        size: request.size,
+        env,
+        timeoutSeconds: request.timeoutSeconds,
+        region: target.region,
       };
+      try {
+        handle = await target.orchestrator.provision(spec);
+        break;
+      } catch (err) {
+        const reason = target.shardId === null ? 'job_fault' : classifyProvisionRefusal(err);
+        if (target.shardId === null || reason === 'job_fault') {
+          // The port guarantees a failed `provision` left no container, so the
+          // slot stands for nothing and goes back now rather than at its TTL.
+          await releaseSlot();
+          if (err instanceof OrchestratorImageUnpullableError) {
+            return {
+              phase: 'terminal',
+              outcome: {
+                outcome: 'image_unpullable',
+                detail: `the hosted-agent image could not be pulled: ${detailOf(err)}`,
+              },
+            };
+          }
+          return {
+            phase: 'terminal',
+            outcome: {
+              outcome: 'provision_failed',
+              detail: `could not boot a hosted-agent container: ${detailOf(err)}`,
+            },
+          };
+        }
+
+        const refusedId = target.shardId;
+        tried.add(refusedId);
+        console.warn('[hostedAgentContainerService] an account refused the boot — moving the run', {
+          dispatchId: request.dispatchId,
+          shardId: refusedId,
+          reason,
+          detail: detailOf(err),
+        });
+        let nextId: string | null;
+        try {
+          nextId = await fleetCeilingService.moveHostedSlotAfterRefusal(
+            {
+              ref: request.dispatchId,
+              ownerRef: request.runId,
+              organizationId: request.organizationId,
+            },
+            refusedId,
+            reason,
+            tried,
+            now(),
+          );
+        } catch (moveErr) {
+          await releaseSlot();
+          throw moveErr;
+        }
+        if (nextId === null) {
+          // Every account of the pool refused or is full: the same deferral
+          // `reserve` answers for a full pool. Never Fly, never a failure.
+          await releaseSlot();
+          return {
+            phase: 'terminal',
+            outcome: {
+              outcome: 'admission_deferred',
+              reason: 'shard_capacity',
+              detail: HOSTED_AGENT_SHARD_CAPACITY_DETAIL,
+            },
+          };
+        }
+        target = await targetFor(nextId);
+      }
     }
 
     return {
@@ -603,6 +766,7 @@ export const hostedAgentContainerService = {
           id: handle.id,
           region: handle.region,
           createdAt: handle.createdAt.toISOString(),
+          ...(target.shardId !== null ? { shardId: target.shardId } : {}),
         },
         bootedAt: now().toISOString(),
         dispatchId: request.dispatchId,
@@ -666,7 +830,7 @@ export const hostedAgentContainerService = {
     let orchestrator: ContainerOrchestrator;
     let status;
     try {
-      orchestrator = getOrchestrator();
+      orchestrator = await orchestratorForSession(session);
       status = await orchestrator.describe(handleOf(session));
     } catch (err) {
       const consecutiveReadFailures = previous.consecutiveReadFailures + 1;
@@ -742,14 +906,13 @@ export const hostedAgentContainerService = {
 
     let usage: ContainerUsage;
     try {
-      usage = await getOrchestrator().teardown(
-        handle,
-        verdict.reason,
-        hostedAgentUsageAttribution(session, observedStartedAt),
-      );
+      usage = await (
+        await orchestratorForSession(session)
+      ).teardown(handle, verdict.reason, hostedAgentUsageAttribution(session, observedStartedAt));
     } catch (err) {
       console.error('[hostedAgentContainerService] could not tear down a hosted-agent container', {
         containerId: handle.id,
+        shardId: session.handle.shardId ?? null,
         reason: verdict.reason,
       });
       return {

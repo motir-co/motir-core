@@ -2,6 +2,7 @@ import {
   isIndexFleetConfigured,
   selectedOrchestratorProvider,
   verifyFleetBootable,
+  verifyHostedAgentImagePullable,
   verifyIndexFleetBootable,
   type FleetBootableVerdict,
 } from '@/lib/orchestrator';
@@ -57,6 +58,19 @@ export const fleetPreflightService = {
    */
   async checkIndexFleet(): Promise<FleetBootableVerdict> {
     return verifyIndexFleetBootable();
+  },
+
+  /**
+   * Can an agent-runner VM pull the configured HOSTED-AGENT image? (MOTIR-9420)
+   *
+   * The third pull path, given its own method for the reason the indexer's has
+   * one: a separate image, a separate variable and a separate failure mode. The
+   * probe is ANONYMOUS, the way the VM pulls it.
+   *
+   * Never throws, for the same reason {@link check} does not.
+   */
+  async checkHostedAgentImage(): Promise<FleetBootableVerdict> {
+    return verifyHostedAgentImagePullable();
   },
 
   /**

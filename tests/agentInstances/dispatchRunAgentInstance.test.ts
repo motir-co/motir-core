@@ -431,6 +431,7 @@ describe('the DTO, the liveness rule and the refusal’s status', () => {
         createdById: null,
         idempotencyKey: null,
         agentInstanceId: null,
+        fleetShardId: null,
         createdAt: now,
         updatedAt: now,
         cards: [],

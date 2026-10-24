@@ -22,6 +22,9 @@ const template = read('infra/ci-runner-aws/packer/runner.pkr.hcl');
 const provision = read('infra/ci-runner-aws/provision.sh');
 const prepare = read('infra/ci-runner-aws/boot/motir-runner-prepare.sh');
 const unit = read('infra/ci-runner-aws/boot/motir-ci-runner.service');
+const parser = read('infra/ci-runner-aws/boot/parse-user-data.sh');
+const vmEntrypoint = read('infra/ci-runner-aws/boot/motir-vm-entrypoint.sh');
+const containerEntrypoint = read('infra/ci-runner-aws/boot/motir-container-entrypoint.sh');
 const buildAmi = read('infra/ci-runner-aws/build-ami.sh');
 const readme = read('infra/ci-runner-aws/README.md');
 const workflowSource = read('.github/workflows/release-ci-runner-ami.yml');
@@ -286,10 +289,15 @@ describe('the boot hook — user-data in, the Docker volume mounted, the metadat
   });
 
   it('accepts exactly the four keys of the entrypoint’s contract and refuses any other', () => {
-    expect(body).toContain(
-      'KNOWN_KEYS=(ACTIONS_RUNNER_INPUT_JITCONFIG MOTIR_RUNNER_LABEL MOTIR_INTENT_ID MOTIR_WORKFLOW_JOB_ID)',
+    // The parse lives in parse-user-data.sh since MOTIR-9419; the hook calls it.
+    const parse = code(parser);
+    expect(parse).toContain(
+      'CI_KEYS=(ACTIONS_RUNNER_INPUT_JITCONFIG MOTIR_RUNNER_LABEL MOTIR_INTENT_ID MOTIR_WORKFLOW_JOB_ID)',
     );
-    expect(body).toContain('is_known_key "${key}" || die');
+    expect(parse).toContain('is_ci_key "${key}" || die');
+    expect(body).toContain('PARSER=/usr/local/sbin/motir-parse-user-data');
+    expect(body).toContain('"${PARSER}" "${raw}" "${STATE_DIR}"');
+    expect(body).not.toContain('KNOWN_KEYS');
     // The four keys are the ones the Fly entrypoint reads.
     const entrypoint = readFileSync(join(FLY_DIR, 'entrypoint.sh'), 'utf8');
     for (const key of [
@@ -304,9 +312,10 @@ describe('the boot hook — user-data in, the Docker volume mounted, the metadat
 
   it('writes the env file 0600, owned by root, before any value goes into it', () => {
     expect(body).toContain('install -d -m 0700 -o root -g root "${ENV_DIR}"');
-    expect(body).toMatch(
-      /chmod 0600 "\$\{tmp\}"[\s\S]*printf '%s=%s\\n' "\$\{key\}" "\$\{value\}" >>"\$\{tmp\}"/,
-    );
+    expect(body).toMatch(/chmod 0600 "\$\{tmp\}"[\s\S]*cat "\$\{STATE_DIR\}\/env" >>"\$\{tmp\}"/);
+    // The parser writes under umask 077 and the raw user-data copy is 0600 first.
+    expect(code(parser)).toMatch(/umask 077[\s\S]*TMP_DIR="\$\(mktemp -d/);
+    expect(body).toMatch(/chmod 0600 "\$\{raw\}"[\s\S]*printf '%s\\n' "\$\{data\}" >"\$\{raw\}"/);
     expect(body).toContain('chown root:root "${ENV_FILE}"');
     expect(body).toContain('chmod 0600 "${ENV_FILE}"');
     expect(body).toContain('ENV_DIR=/run/motir-ci-runner');
@@ -346,9 +355,16 @@ describe('the boot hook — user-data in, the Docker volume mounted, the metadat
   });
 });
 
-describe('the boot files download nothing, trace nothing, print no secret', () => {
-  const boot = { 'motir-runner-prepare.sh': code(prepare), 'motir-ci-runner.service': code(unit) };
+const boot = {
+  'motir-runner-prepare.sh': code(prepare),
+  'motir-ci-runner.service': code(unit),
+  'parse-user-data.sh': code(parser),
+  'motir-vm-entrypoint.sh': code(vmEntrypoint),
+};
+// Every boot file, the container entrypoint included (it pulls ONE image).
+const allBoot = { ...boot, 'motir-container-entrypoint.sh': code(containerEntrypoint) };
 
+describe('the boot files download nothing, trace nothing, print no secret', () => {
   it.each(Object.entries(boot))(
     '%s runs no package manager, pull or runner download',
     (_name, body) => {
@@ -368,20 +384,20 @@ describe('the boot files download nothing, trace nothing, print no secret', () =
     expect(code(prepare)).not.toMatch(/https?:\/\/(?!169\.254\.169\.254)/);
   });
 
-  it.each(Object.entries(boot))('%s never enables tracing', (_name, body) => {
+  it.each(Object.entries(allBoot))('%s never enables tracing', (_name, body) => {
     expect(body).not.toMatch(/set -[a-z]*x|set -o xtrace|bash -x/);
   });
 
   it('never prints a user-data value', () => {
     // A value is only ever written to the env file; every log or die line names
     // keys, never `${value}`, `${line}`, `${data}` or the JIT variable.
-    const messages = [...code(prepare).matchAll(/\b(?:log|die|echo)\s+"([^"]*)"/g)].map(
-      (m) => m[1]!,
+    const messages = Object.values(allBoot).flatMap((body) =>
+      [...body.matchAll(/\b(?:log|die|echo)\s+"([^"]*)"/g)].map((m) => m[1]!),
     );
-    expect(messages.length).toBeGreaterThan(5);
+    expect(messages.length).toBeGreaterThan(15);
     for (const message of messages) {
       expect(message).not.toMatch(
-        /\$\{?(value|line|data|user_data|ACTIONS_RUNNER_INPUT_JITCONFIG)\b/,
+        /\$\{?(value|line|data|user_data|raw|name|ACTIONS_RUNNER_INPUT_JITCONFIG)\b/,
       );
     }
   });
@@ -396,7 +412,7 @@ describe('the unit — one job, then the VM powers off', () => {
   it('prepares, then runs the Fly entrypoint with the env file the hook wrote', () => {
     expect(unit).toMatch(/^ExecStartPre=\/usr\/local\/sbin\/motir-runner-prepare$/m);
     expect(unit).toMatch(/^EnvironmentFile=-\/run\/motir-ci-runner\/env$/m);
-    expect(unit).toMatch(/^ExecStart=\/usr\/local\/bin\/motir-ci-runner-entrypoint$/m);
+    expect(unit).toMatch(/^ExecStart=\/usr\/local\/bin\/motir-vm-entrypoint$/m);
     expect(unit).toMatch(/^Restart=no$/m);
   });
 
@@ -497,6 +513,118 @@ describe('the release workflow', () => {
   it('the scripts the workflow runs are executable', () => {
     for (const script of awsFiles().filter((f) => f.endsWith('.sh'))) {
       expect(statSync(join(ROOT, script)).mode & 0o111, script).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe('container mode (MOTIR-9419) — the same AMI runs ONE digest-pinned image', () => {
+  const hook = code(prepare);
+  const parse = code(parser);
+  const entry = code(containerEntrypoint);
+  const dispatch = code(vmEntrypoint);
+
+  it('the hook parses, then writes the env file, mounts the disk and closes metadata, in that order', () => {
+    const main = hook.slice(hook.indexOf('main() {'));
+    const order = [
+      'read_user_data',
+      'parse_user_data',
+      'write_env_file',
+      'mount_docker_disk',
+      'block_metadata_service',
+    ].map((step) => main.indexOf(step));
+    expect(order.every((i) => i >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    // write_env_file adds the storage line whatever the mode: it reads the CI
+    // env file only when the parser wrote one.
+    const write = hook.slice(
+      hook.indexOf('write_env_file() {'),
+      hook.indexOf('scrub_cloud_init_copies() {'),
+    );
+    expect(write).toContain('if [ -f "${STATE_DIR}/env" ]; then');
+    expect(write).toContain('printf \'MOTIR_RUNNER_DOCKER_STORAGE=overlay2\\n\' >>"${tmp}"');
+    // The metadata block is unconditional: no mode test wraps it.
+    expect(hook.slice(hook.indexOf('block_metadata_service() {'))).not.toContain('mode');
+  });
+
+  it('the parser makes no network call and never evaluates user-data', () => {
+    expect(parse).not.toMatch(/\b(curl|wget|nc|ncat|ssh|docker)\b/);
+    expect(parse).not.toMatch(/\beval\b|\bsource\b|^\s*\.\s/m);
+    expect(parse).toContain('while IFS= read -r line');
+    expect(parse).toContain('key="${line%%=*}"');
+  });
+
+  it('the dispatch execs the CI entrypoint for ci, the container entrypoint for container, and refuses anything else', () => {
+    expect(dispatch).toContain('MODE_FILE=/run/motir/mode');
+    expect(dispatch).toContain('ci) exec /usr/local/bin/motir-ci-runner-entrypoint ;;');
+    expect(dispatch).toContain('container) exec /usr/local/bin/motir-container-entrypoint ;;');
+    expect(dispatch).toContain('*) die "unknown boot mode in ${MODE_FILE}" ;;');
+    expect(dispatch).toContain('die() { printf');
+    expect(dispatch).toMatch(/exit 1; \}/);
+  });
+
+  it('the container entrypoint starts dockerd, pulls by digest, checks RepoDigests, and creates an unprivileged container', () => {
+    const steps = [
+      '/usr/local/bin/motir-ci-runner-dockerd',
+      'docker pull --quiet "${image}"',
+      'docker image inspect --format \'{{range .RepoDigests}}{{println .}}{{end}}\' "${image}"',
+      'grep -qxF "${repo}@${digest}" <<<"${pulled}"',
+      'docker create --rm --env-file "${ENV_FILE}"',
+      'rm -f "${ENV_FILE}" "${IMAGE_FILE}"',
+      'exec docker start --attach "${NAME}"',
+    ].map((line) => {
+      const at = entry.indexOf(line);
+      expect(at, line).toBeGreaterThanOrEqual(0);
+      return at;
+    });
+    expect([...steps].sort((a, b) => a - b)).toEqual(steps);
+    expect(entry).toContain('--security-opt no-new-privileges --cap-drop ALL');
+    expect(entry).not.toMatch(
+      /--privileged|--network[ =]host|--net[ =]host|\s-v\s|--volume|--mount|docker\.sock/,
+    );
+    // The last executable line hands the process to the container.
+    expect(entry.trim().split('\n').at(-1)).toBe('exec docker start --attach "${NAME}"');
+  });
+
+  it('no boot file passes a container env value on a command line', () => {
+    for (const [name, body] of Object.entries(allBoot)) {
+      expect(body, name).not.toMatch(/docker (create|run)[^\n]*\s(-e|--env)\s/);
+      expect(body, name).not.toMatch(/\becho\s+"\$\{?value/);
+    }
+    // The env reaches the container only through --env-file.
+    expect(entry.match(/--env-file/g)?.length).toBe(1);
+  });
+
+  it('the template copies the three scripts and provision.sh installs them root-owned 0755', () => {
+    const installs: Record<string, string> = {
+      'parse-user-data.sh': '/usr/local/sbin/motir-parse-user-data',
+      'motir-vm-entrypoint.sh': '/usr/local/bin/motir-vm-entrypoint',
+      'motir-container-entrypoint.sh': '/usr/local/bin/motir-container-entrypoint',
+    };
+    for (const [script, dest] of Object.entries(installs)) {
+      expect(template).toContain(`source      = "\${path.root}/../boot/${script}"`);
+      expect(template).toContain(`destination = "/tmp/motir-ci-runner/${script}"`);
+      expect(provision).toContain(
+        `install -m 0755 -o root -g root "\${STAGING}/${script}" ${dest}`,
+      );
+      expect(workflowSource).toContain(`infra/ci-runner-aws/boot/${script}`);
+    }
+  });
+
+  it('the README documents the container-mode contract, and nothing in infra/ci-runner/ changed for it', () => {
+    for (const term of [
+      '## Container mode',
+      'MOTIR_BOOT_MODE=container',
+      'MOTIR_CONTAINER_IMAGE',
+      'MOTIR_ENV_<NAME>',
+      'anonymously',
+      'MOTIR_AWS_RUNNER_AMI_ID',
+    ]) {
+      expect(readme).toContain(term);
+    }
+    for (const file of readdirSync(FLY_DIR).filter((f) => f.endsWith('.sh'))) {
+      expect(readFileSync(join(FLY_DIR, file), 'utf8')).not.toMatch(
+        /MOTIR_BOOT_MODE|motir-vm-entrypoint/,
+      );
     }
   });
 });

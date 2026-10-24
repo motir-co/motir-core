@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   HOSTED_AGENT_IMAGE_ENV_VAR,
   hostedAgentFleetConfig,
+  hostedAgentImage,
   OrchestratorNotConfiguredError,
 } from '@/lib/orchestrator';
 
@@ -79,5 +80,69 @@ describe('hostedAgentFleetConfig', () => {
     vi.stubEnv('FLY_FLEET_REGION', 'ams');
     vi.stubEnv(HOSTED_AGENT_IMAGE_ENV_VAR, `  ${DIGEST_IMAGE}  `);
     expect(hostedAgentFleetConfig()).toEqual({ image: DIGEST_IMAGE, region: 'ams' });
+  });
+});
+
+// The image read ALONE (MOTIR-9420): one variable for both fleets, readable with
+// no Fly fleet variable set, and refused on AWS when it names a registry an
+// agent-runner VM — no instance profile, no Fly org credential — cannot pull from.
+describe('hostedAgentImage', () => {
+  const FLY_MIRROR = 'registry.fly.io/motir-hosted-agent@sha256:' + 'd'.repeat(64);
+  const ECR_IMAGE =
+    '123456789012.dkr.ecr.us-east-1.amazonaws.com/motir-hosted-agent@sha256:' + 'e'.repeat(64);
+
+  function refusal(provider: 'aws' | 'fly'): OrchestratorNotConfiguredError {
+    try {
+      hostedAgentImage(provider);
+    } catch (err) {
+      return err as OrchestratorNotConfiguredError;
+    }
+    throw new Error('expected a refusal');
+  }
+
+  it('returns the trimmed digest reference on AWS with every Fly fleet variable unset', () => {
+    vi.stubEnv(HOSTED_AGENT_IMAGE_ENV_VAR, `  ${DIGEST_IMAGE}\n`);
+    expect(hostedAgentImage('aws')).toBe(DIGEST_IMAGE);
+    expect(hostedAgentImage('fly')).toBe(DIGEST_IMAGE);
+  });
+
+  it.each(['aws', 'fly'] as const)('refuses a tag-pinned reference on %s', (provider) => {
+    vi.stubEnv(HOSTED_AGENT_IMAGE_ENV_VAR, 'ghcr.io/motir-co/motir-hosted-agent:main');
+    expect(refusal(provider)).toBeInstanceOf(OrchestratorNotConfiguredError);
+    expect(refusal(provider).message).toMatch(/pinned by digest/);
+  });
+
+  it.each(['aws', 'fly'] as const)('refuses an unset variable on %s, naming it', (provider) => {
+    vi.stubEnv(HOSTED_AGENT_IMAGE_ENV_VAR, undefined);
+    expect(refusal(provider)).toBeInstanceOf(OrchestratorNotConfiguredError);
+    expect(refusal(provider).detail).toBe(`set ${HOSTED_AGENT_IMAGE_ENV_VAR}`);
+  });
+
+  it.each([
+    ['a registry.fly.io mirror', FLY_MIRROR, 'registry.fly.io'],
+    ['an ECR repository', ECR_IMAGE, '123456789012.dkr.ecr.us-east-1.amazonaws.com'],
+  ])('refuses %s on AWS: an agent-runner VM pulls anonymously', (_case, image, host) => {
+    vi.stubEnv(HOSTED_AGENT_IMAGE_ENV_VAR, image);
+    const err = refusal('aws');
+    expect(err).toBeInstanceOf(OrchestratorNotConfiguredError);
+    expect(err.detail).toContain(host);
+    expect(err.detail).toContain('pulls anonymously');
+    expect(err.detail).toContain(HOSTED_AGENT_IMAGE_ENV_VAR);
+  });
+
+  it('accepts the registry.fly.io mirror on Fly, whose machines pull as the org', () => {
+    vi.stubEnv(HOSTED_AGENT_IMAGE_ENV_VAR, FLY_MIRROR);
+    expect(hostedAgentImage('fly')).toBe(FLY_MIRROR);
+  });
+
+  it('judges the HOST, never a substring: a ghcr.io path naming registry.fly.io is accepted', () => {
+    const image = 'ghcr.io/registry.fly.io/agent@sha256:' + 'f'.repeat(64);
+    vi.stubEnv(HOSTED_AGENT_IMAGE_ENV_VAR, image);
+    expect(hostedAgentImage('aws')).toBe(image);
+  });
+
+  it('answers the fake digest under the fake orchestrator', () => {
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fake');
+    expect(hostedAgentImage('aws')).toBe('motir/hosted-agent@sha256:fake');
   });
 });

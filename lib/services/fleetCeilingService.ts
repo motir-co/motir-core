@@ -1,4 +1,8 @@
-import type { Prisma } from '@/generated/prisma/client';
+import type {
+  FleetShardMoveReason,
+  FleetShardPauseReason,
+  Prisma,
+} from '@/generated/prisma/client';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { fleetInFlightSlotRepository as slots } from '@/lib/repositories/fleetInFlightSlotRepository';
 import {
@@ -11,6 +15,9 @@ import {
   type FleetWorkloadKind,
 } from '@/lib/ciFleet/workloads';
 import { fleetKillSwitchEngaged, fleetSlotTtlSeconds } from '@/lib/ciFleet/limits';
+// Wires the agent runner's Fly↔AWS switch before any admission reads it (MOTIR-9421).
+import '@/lib/ciFleet/fleetKindSwitches';
+import { fleetShardAdmissionService } from '@/lib/services/fleetShardAdmissionService';
 import { withOrgServiceWriteContext } from '@/lib/organizations/context';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
 import {
@@ -92,6 +99,9 @@ export type FleetSlotVerdict =
        *  `null` when none held it — an exempt org, or a workload no figure
        *  holds. */
       pool: number | null;
+      /** WHICH ACCOUNT of the fleet pool the container boots on (MOTIR-9421),
+       *  as written on the slot; `null` means the process-wide Fly fleet. */
+      fleetShardId: string | null;
     }
   /** This `(workload, ref)` already held a slot. Not an error: the take is
    *  idempotent, so a redelivery lands here rather than double-occupying. */
@@ -110,7 +120,10 @@ export type FleetSlotVerdict =
        *  `plan_unknown` (MOTIR-6909): the org has no paid AI plan, or it could
        *  not be read — a shared-pool workload is paid-AI-plan only. Since
        *  MOTIR-9373 `plan_unknown` is also the answer when the plan's figures
-       *  cannot be read, or its key has no caps row: never a default figure. */
+       *  cannot be read, or its key has no caps row: never a default figure.
+       *  `shard_capacity` (MOTIR-9421): the kind is on its pool and every
+       *  account of it is full, paused or absent; the detail is the kind's
+       *  words. Never sent to Fly while the switch is on. */
       reason:
         | 'ai_plan_required'
         | 'plan_unknown'
@@ -118,7 +131,8 @@ export type FleetSlotVerdict =
         | 'fleet_ceiling'
         | 'organization_required'
         | 'gate_unavailable'
-        | 'workload_cap';
+        | 'workload_cap'
+        | 'shard_capacity';
       detail: string;
     };
 
@@ -153,6 +167,21 @@ export interface FleetSlotRequest {
    * A guard that THROWS fails closed like any other count (`gate_unavailable`).
    */
   guard?: (tx: Prisma.TransactionClient, now: Date) => Promise<string | null>;
+}
+
+/**
+ * One system-context transaction holding `FLEET_ADMISSION_SCOPE` — the lock every
+ * read-derived admission decision is made under (`reserve`, and the hosted move
+ * after a refusal, MOTIR-9423). Throws when the lock cannot be taken.
+ */
+function withAdmissionLock<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+  return withSystemContext(async (tx) => {
+    await locks.ensureScope(FLEET_ADMISSION_SCOPE, tx);
+    if (!(await locks.lockScope(FLEET_ADMISSION_SCOPE, tx))) {
+      throw new Error('the fleet admission lock could not be taken');
+    }
+    return fn(tx);
+  });
 }
 
 function detailOf(err: unknown): string {
@@ -451,12 +480,7 @@ export const fleetCeilingService = {
     const ttlSeconds = request.ttlSeconds ?? fleetSlotTtlSeconds();
     const organizationId = request.organizationId;
     try {
-      return await withSystemContext(async (tx) => {
-        await locks.ensureScope(FLEET_ADMISSION_SCOPE, tx);
-        if (!(await locks.lockScope(FLEET_ADMISSION_SCOPE, tx))) {
-          throw new Error('the fleet admission lock could not be taken');
-        }
-
+      return await withAdmissionLock(async (tx) => {
         // An already-held slot is NOT a new container, so it must not be judged
         // against the pool — a redelivery of a job that is already running would
         // otherwise be refused capacity it is already occupying, and the caller
@@ -487,6 +511,23 @@ export const fleetCeilingService = {
           };
         }
 
+        // WHICH ACCOUNT (MOTIR-9421), after the plan cap so a run its plan
+        // refuses is told `plan_cap`, never `shard_capacity`; in this locked
+        // transaction so the account counted is the account written. A kind
+        // whose switch is Fly answers null. A throw fails closed below.
+        const placement = await fleetShardAdmissionService.chooseInTx(
+          { fleetKind: request.workload, organizationId },
+          now,
+          tx,
+        );
+        if ('deferred' in placement) {
+          return {
+            outcome: 'deferred' as const,
+            reason: 'shard_capacity' as const,
+            detail: placement.detail,
+          };
+        }
+
         const took = await slots.take(
           {
             workload: request.workload,
@@ -494,6 +535,7 @@ export const fleetCeilingService = {
             ownerRef: request.ownerRef ?? null,
             organizationId,
             workspaceId: request.workspaceId ?? null,
+            fleetShardId: placement.shardId,
             expiresAt: new Date(now.getTime() + ttlSeconds * 1_000),
           },
           tx,
@@ -503,7 +545,12 @@ export const fleetCeilingService = {
         // idempotent — the slot exists exactly once either way.
         if (!took) return { outcome: 'already_held' as const };
 
-        return { outcome: 'reserved' as const, census, pool: cap?.figure ?? null };
+        return {
+          outcome: 'reserved' as const,
+          census,
+          pool: cap?.figure ?? null,
+          fleetShardId: placement.shardId,
+        };
       });
     } catch (err) {
       // FAIL CLOSED. The transaction rolled back, so no slot was taken. An
@@ -519,6 +566,48 @@ export const fleetCeilingService = {
         detail: `the organization's in-flight count could not be established: ${detailOf(err)}`,
       };
     }
+  },
+
+  /**
+   * After the account `refusedShardId` refused a hosted-agent run's provision for
+   * capacity or an outage (MOTIR-9423): pause it, choose again among the
+   * `hosted_agent` accounts not in `tried`, and re-point the run's slot there —
+   * all under `FLEET_ADMISSION_SCOPE`, so the re-choice counts what it writes.
+   * Answers the next account, or null when none is left (the slot is then still
+   * held, on the refused account, and the caller releases it).
+   *
+   * The re-point is ownership-checked: a slot `ownerRef` does not hold is never
+   * moved, and the answer is then null. The lock covers the choice only; the
+   * caller provisions outside it.
+   */
+  async moveHostedSlotAfterRefusal(
+    slot: { ref: string; ownerRef: string; organizationId: string },
+    refusedShardId: string,
+    reason: FleetShardMoveReason & FleetShardPauseReason,
+    tried: ReadonlySet<string>,
+    now: Date,
+  ): Promise<string | null> {
+    return withAdmissionLock(async (tx) => {
+      let moved = true;
+      const next = await fleetShardAdmissionService.moveAfterRefusalInTx(
+        { fleetKind: 'hosted_agent', organizationId: slot.organizationId },
+        refusedShardId,
+        reason,
+        tried,
+        now,
+        tx,
+        async (nextShardId, _reason, moveTx) => {
+          moved = await slots.reassignShardInTx(
+            'hosted_agent',
+            slot.ref,
+            slot.ownerRef,
+            nextShardId,
+            moveTx,
+          );
+        },
+      );
+      return moved ? next : null;
+    });
   },
 
   /**

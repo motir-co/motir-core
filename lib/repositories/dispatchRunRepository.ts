@@ -914,6 +914,18 @@ export const dispatchRunRepository = {
   },
 
   /**
+   * Record the agent-runner account a hosted run's container booted on
+   * (MOTIR-9423) — null for the process-wide fleet. One update; `tx` required.
+   */
+  async recordFleetShard(
+    id: string,
+    fleetShardId: string | null,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await tx.dispatchRun.update({ where: { id }, data: { fleetShardId } });
+  },
+
+  /**
    * Record that the run is alive (MOTIR-6528). `tx` required — a write, and one
    * the locked terminal read must precede, so a heartbeat can never land on a
    * run the lapse reap has just closed.

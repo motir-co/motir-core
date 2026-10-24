@@ -53,7 +53,7 @@
 // `tests/build/nft-trace-guard.test.ts` asserts both halves of that, and
 // `ci.yml`'s build job greps its own build output for the warning.
 
-import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 
 /**
@@ -78,4 +78,15 @@ export function writeFixtureFileSync(path: string, contents: string): void {
 /** Append UTF-8 text to a fixture file (the JSONL journals). */
 export function appendFixtureFileSync(path: string, contents: string): void {
   appendFileSync(/* turbopackIgnore: true */ path, contents, 'utf8');
+}
+
+/**
+ * Replace a fixture file whole: write a sibling, then rename it over the path,
+ * so a reader in another process sees the old file or the new one and never half
+ * of one (the fake AWS's state, which three lane processes write, MOTIR-9429).
+ */
+export function replaceFixtureFileSync(path: string, contents: string): void {
+  const sibling = `${path}.${process.pid}.tmp`;
+  writeFileSync(/* turbopackIgnore: true */ sibling, contents);
+  renameSync(/* turbopackIgnore: true */ sibling, /* turbopackIgnore: true */ path);
 }
