@@ -146,6 +146,7 @@ async function ask(page: Page, text: string): Promise<{ outcome?: string }> {
 }
 
 const REQUEST = 'Plan a CSV export of the board’s visible columns for project admins.';
+const FIRST_ASSUMPTION = 'Archived cards are left out of the file.';
 const REQUIREMENT: SubmittedRequirement = {
   outcome: 'Project admins can download the board’s visible columns as a CSV file.',
   behaviour: 'Choosing Export on the board downloads one CSV with a column per visible column.',
@@ -153,7 +154,7 @@ const REQUIREMENT: SubmittedRequirement = {
   constraints: 'Admins only; the file is built on request, not stored.',
   acceptance: 'An admin presses Export and receives a CSV whose header row matches the board.',
   assumptions: [
-    { id: 'a1', text: 'Archived cards are left out of the file.' },
+    { id: 'a1', text: FIRST_ASSUMPTION },
     { id: 'a2', text: 'The file name carries the project key.' },
   ],
 };
@@ -235,7 +236,7 @@ test('A no-target plan offer shows its requirement before Confirm, saves it as a
         pane(page).getByRole('heading', { name: paneCopy.headings.outcome }),
       ).toBeVisible();
       await expect(pane(page)).toContainText(REQUIREMENT.outcome!);
-      await expect(pane(page)).toContainText(REQUIREMENT.assumptions![0]!.text);
+      await expect(pane(page)).toContainText(FIRST_ASSUMPTION);
       await expect(pane(page).getByTestId('requirement-correction-hint')).toHaveText(
         paneCopy.correctionHint,
       );
