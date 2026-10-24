@@ -68,6 +68,10 @@ export interface OrchestratorContractHarness {
   spec(overrides?: Partial<ContainerSpec>): ContainerSpec;
   /** The attribution matching `spec()`, with `overrides` applied. */
   attribution(overrides?: Partial<UsageAttribution>): UsageAttribution;
+  /** The workload case 12 provisions with no job id, and the spec fields it
+   *  needs. Omitted means the index workload; an adapter that does not boot the
+   *  indexer (AWS, MOTIR-9422) names a jobless workload it does boot. */
+  readonly joblessSpec?: Partial<ContainerSpec> & { workload: ContainerSpec['workload'] };
   /** The next provision fails at the provider. */
   failNextProvision(): void;
   /** The capacity reasons this provider can actually give. A reason left out is
@@ -298,19 +302,20 @@ export function describeOrchestratorContract(
       });
     });
 
-    it('12 · an index spec — no job id — provisions and meters as itself', async () => {
+    it('12 · a spec with no job id provisions and meters as itself', async () => {
+      const jobless = harness.joblessSpec ?? { workload: 'code_graph_index' as const };
       const handle = await orchestrator.provision(
-        harness.spec({ workload: 'code_graph_index', workflowJobId: null }),
+        harness.spec({ ...jobless, workflowJobId: null }),
       );
       expect(harness.liveContainerIds()).toEqual([handle.id]);
 
       const usage = await orchestrator.teardown(
         handle,
         'job_completed',
-        harness.attribution({ workload: 'code_graph_index', workflowJobId: null }),
+        harness.attribution({ workload: jobless.workload, workflowJobId: null }),
       );
 
-      expect(usage.workload).toBe('code_graph_index');
+      expect(usage.workload).toBe(jobless.workload);
       expect(usage.workflowJobId).toBeNull();
     });
 

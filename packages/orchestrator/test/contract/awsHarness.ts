@@ -28,6 +28,20 @@ export const AWS_SPEC_ENV: Readonly<Record<string, string>> = {
   MOTIR_WORKFLOW_JOB_ID: '44001',
 };
 
+/** A digest-pinned hosted-agent image (MOTIR-9422). */
+export const AWS_HOSTED_IMAGE = `ghcr.io/motir-co/motir-hosted-agent@sha256:${'a'.repeat(64)}`;
+
+/** The env a plain Run hosted provisions with (MOTIR-9422). */
+export const AWS_HOSTED_ENV: Readonly<Record<string, string>> = {
+  MOTIR_DISPATCH_RUN_ID: 'run-77',
+  MOTIR_WORK_ITEM_KEY: 'ACME-12',
+  MOTIR_API_URL: 'https://app.motir.test',
+  MOTIR_MODEL: 'anthropic/claude',
+  MOTIR_RUN_TOKEN: 'mtr_run_token_value',
+  MOTIR_GATEWAY_URL: 'https://gateway.motir.test',
+  MOTIR_RUN_KEY: 'rk_live_key_value',
+};
+
 export const AWS_SPEC: ContainerSpec = {
   orgId: 'org-1',
   workspaceId: 'ws-1',
@@ -68,6 +82,9 @@ export function awsHarness(): OrchestratorContractHarness {
       ec2.seedShardNetwork(AWS_SHARD_TAG, AWS_ZONES);
     },
     spec: (overrides = {}) => ({ ...AWS_SPEC, ...overrides }),
+    // The AWS adapter does not boot the indexer (MOTIR-9422): case 12 runs a
+    // hosted run, the jobless workload it does boot.
+    joblessSpec: { workload: 'hosted_agent', image: AWS_HOSTED_IMAGE, env: AWS_HOSTED_ENV },
     attribution: (overrides = {}) => ({ ...AWS_ATTRIBUTION, ...overrides }),
     // A 4xx: refused outright, not retried.
     failNextProvision: () => ec2.failNext('runInstances', 'InvalidParameterValue', 400),

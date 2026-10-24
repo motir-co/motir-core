@@ -25,7 +25,7 @@ import {
   classifyAwsLaunchError,
 } from './capacityErrors';
 import { AWS_SHARD_TAG_KEY } from './network';
-import { buildRunnerUserData, encodeUserData } from './userData';
+import { buildContainerUserData, buildRunnerUserData, encodeUserData } from './userData';
 
 export * from './userData';
 export * from './capacityErrors';
@@ -109,6 +109,10 @@ export class AwsInstanceSizeError extends Error {
   }
 }
 
+/** The tag naming the hosted run an instance serves (MOTIR-9422) — what the
+ *  reaper reads back to find the run and its paying org from AWS alone. */
+export const AWS_DISPATCH_RUN_TAG_KEY = 'motir_dispatch_run_id';
+
 const FLEET_VALUE_SET: ReadonlySet<string> = new Set(Object.values(FLEET_METADATA_VALUES));
 
 export interface AwsOrchestratorConfig {
@@ -182,6 +186,56 @@ function tagsFor(spec: ContainerSpec, shardTag: string): Ec2Tag[] {
   ];
 }
 
+/** A hosted run's tags (MOTIR-9422): the run it serves, and a name naming it. */
+function hostedAgentTagsFor(spec: ContainerSpec, shardTag: string, runId: string): Ec2Tag[] {
+  return [
+    { key: AWS_SHARD_TAG_KEY, value: shardTag },
+    { key: FLEET_METADATA_KEY, value: FLEET_METADATA_VALUES.hosted_agent },
+    { key: 'motir_org_id', value: spec.orgId },
+    { key: 'motir_project_id', value: spec.projectId },
+    { key: AWS_DISPATCH_RUN_TAG_KEY, value: runId },
+    { key: 'Name', value: `${NAME_PREFIXES.hosted_agent}-${runId}` },
+  ];
+}
+
+/** What one launch sends: the base64 user-data and the tags. */
+interface LaunchPayload {
+  readonly userData: string;
+  readonly tags: Ec2Tag[];
+}
+
+/**
+ * THE LAUNCH PAYLOAD PER WORKLOAD — total over the union, so a new workload is a
+ * compile error here. Every refusal throws before any EC2 call. The indexer and
+ * the agent hoster boot on AWS in their own stories; until then they are refused.
+ */
+const LAUNCH_PAYLOADS: Record<
+  ContainerSpec['workload'],
+  (spec: ContainerSpec, shardTag: string) => LaunchPayload
+> = {
+  ci_runner: (spec, shardTag) => ({
+    userData: encodeUserData(buildRunnerUserData(spec.env)),
+    tags: tagsFor(spec, shardTag),
+  }),
+  hosted_agent: (spec, shardTag) => {
+    const userData = buildContainerUserData({ image: spec.image, env: spec.env });
+    // The builder has refused a spec with no run id, so this is set.
+    const runId = spec.env['MOTIR_DISPATCH_RUN_ID']!;
+    return {
+      userData: encodeUserData(userData),
+      tags: hostedAgentTagsFor(spec, shardTag, runId),
+    };
+  },
+  code_graph_index: () => notOnAws('code_graph_index'),
+  agent_instance: () => notOnAws('agent_instance'),
+};
+
+function notOnAws(workload: ContainerSpec['workload']): never {
+  throw new OrchestratorNotConfiguredError(
+    `the aws orchestrator does not boot the ${workload} workload yet`,
+  );
+}
+
 /** An AWS adapter for ONE shard (one account, one region). */
 export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerOrchestrator {
   const { ec2, region, shardTag, amiId } = config;
@@ -233,7 +287,7 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
    */
   async function launchInSubnet(
     spec: ContainerSpec,
-    userData: string,
+    { userData, tags }: LaunchPayload,
     { subnetId, zone }: { subnetId: string; zone: string },
     securityGroupId: string,
   ): Promise<Ec2Instance> {
@@ -267,7 +321,7 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
                   },
                 ]
               : [],
-          tags: tagsFor(spec, shardTag),
+          tags,
         });
       } catch (err) {
         const retryable = err instanceof Ec2ApiError && err.retryable && !awsCapacityReason(err);
@@ -360,7 +414,7 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
       if (spec.size.cpus !== 2 || spec.size.memoryMb !== 8192) {
         throw new AwsInstanceSizeError(spec.size.cpus, spec.size.memoryMb);
       }
-      const userData = encodeUserData(buildRunnerUserData(spec.env));
+      const payload = LAUNCH_PAYLOADS[spec.workload](spec, shardTag);
 
       // THE ZONE WALK (MOTIR-9277): from this call's rotation index around the
       // list once, one RunInstances per zone, each with its own token (a refused
@@ -378,7 +432,7 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
         if (tried.has(subnet.zone)) continue;
         tried.add(subnet.zone);
         try {
-          return toHandle(await launchInSubnet(spec, userData, subnet, securityGroupId));
+          return toHandle(await launchInSubnet(spec, payload, subnet, securityGroupId));
         } catch (err) {
           if (!(err instanceof OrchestratorCapacityError) || err.reason !== 'out_of_stock')
             throw err;
