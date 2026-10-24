@@ -145,3 +145,19 @@ export class FleetQuotaRequestNotFoundError extends Error {
     this.name = 'FleetQuotaRequestNotFoundError';
   }
 }
+
+/** One account's live granted vCPU quota could not be read (MOTIR-9458). The
+ *  stored value is left as it was and is NOT a stand-in: the growth decision
+ *  skips an account it cannot read. `reason` is AWS's error code, never a
+ *  message that could carry a credential. */
+export class LiveQuotaReadFailedError extends Error {
+  readonly code = 'LIVE_QUOTA_READ_FAILED' as const;
+  constructor(
+    readonly shardId: string,
+    readonly shardName: string,
+    readonly reason: string,
+  ) {
+    super(`could not read the live vCPU quota of fleet account ${shardName}: ${reason}`);
+    this.name = 'LiveQuotaReadFailedError';
+  }
+}

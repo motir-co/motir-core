@@ -100,8 +100,14 @@ export class FakeOrganization implements AwsManagementApi {
   readonly inProgress = new Map<string, string>();
   readonly iamUsers = new Set<string>();
   quota = SHARD_VCPU_QUOTA_TARGET - 1_000;
+  /** Per member account: its granted quota, else `quota` (MOTIR-9458). */
+  readonly quotaByAccount = new Map<string, number>();
+  /** Per member account: the error its quota read throws (MOTIR-9458). */
+  readonly readFailures = new Map<string, Error>();
   createFailure: string | null = null;
   private seq = 0;
+  /** Which member account each answered session is for. */
+  private readonly sessionAccount = new WeakMap<AwsSessionCredentials, string>();
 
   /** `session` is what every member-role assumption answers. */
   constructor(private readonly session: AwsSessionCredentials) {}
@@ -138,14 +144,19 @@ export class FakeOrganization implements AwsManagementApi {
 
   async assumeMemberRole(accountId: string) {
     this.calls.push(`assumeMemberRole:${accountId}`);
-    return this.session;
+    const session = { ...this.session };
+    this.sessionAccount.set(session, accountId);
+    return session;
   }
 
   async readVcpuQuota(credentials: AwsSessionCredentials, regionId: string) {
     this.calls.push(
       `readVcpuQuota:${regionId}:${credentials.accessKeyId === this.session.accessKeyId}`,
     );
-    return this.quota;
+    const accountId = this.sessionAccount.get(credentials);
+    const failure = accountId ? this.readFailures.get(accountId) : undefined;
+    if (failure) throw failure;
+    return (accountId ? this.quotaByAccount.get(accountId) : undefined) ?? this.quota;
   }
 
   async ensureRunnerIamUser(_credentials: AwsSessionCredentials, policy: AwsPolicyDocument) {

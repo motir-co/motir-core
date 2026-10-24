@@ -1,6 +1,7 @@
 import type {
   FleetShard,
   FleetShardPauseReason,
+  FleetShardProvider,
   FleetShardRole,
   FleetShardState,
   Prisma,
@@ -36,17 +37,18 @@ export const fleetShardRepository = {
     return client.fleetShard.findUnique({ where: { name } });
   },
 
-  /** One role's accounts (`null`: every role), optionally of one kind and in one
-   *  state — oldest first. */
+  /** One role's accounts (`null`: every role), optionally of one kind, in one
+   *  state and on one provider — oldest first. */
   async listByRole(
     role: FleetShardRole | null,
-    filter: { fleetKind?: string; state?: FleetShardState },
+    filter: { fleetKind?: string; state?: FleetShardState; provider?: FleetShardProvider },
     tx?: Prisma.TransactionClient,
   ): Promise<FleetShard[]> {
     const client = tx ?? dbRead;
     return client.fleetShard.findMany({
       where: {
         ...(role !== null ? { role } : {}),
+        ...(filter.provider !== undefined ? { provider: filter.provider } : {}),
         ...(filter.fleetKind !== undefined ? { fleetKind: filter.fleetKind } : {}),
         ...(filter.state !== undefined ? { state: filter.state } : {}),
       },
