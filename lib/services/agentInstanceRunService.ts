@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import type { AgentInstance } from '@/generated/prisma/client';
 import { assertWorkspaceFeatureEnabled } from '@/lib/featureFlags/evaluate';
-import { AGENT_LIST_LIMIT } from '@/lib/agentInstances/config';
+import { AGENT_LIST_LIMIT, parseWaitingReason } from '@/lib/agentInstances/config';
+import { agentInstanceBootRepository } from '@/lib/repositories/agentInstanceBootRepository';
 import {
   AgentInstanceImageTooOldError,
   AgentInstanceNotFoundError,
@@ -63,7 +64,7 @@ import { sendEvent } from '@/lib/jobs/sendEvent';
 import { AGENT_RUN_END_DETAIL } from '@/lib/agentInstances/runEnd';
 import { toAgentForCardDto } from '@/lib/mappers/agentInstanceRunMappers';
 import { toDispatchRunAgentInstanceDto } from '@/lib/mappers/dispatchRunMappers';
-import { getPersistentOrchestrator, isPersistentOrchestratorConfigured } from '@/lib/orchestrator';
+import { isPersistentOrchestratorConfigured } from '@/lib/orchestrator';
 import { PermissionDeniedError } from '@/lib/projects/errors';
 import { agentInstanceRepository } from '@/lib/repositories/agentInstanceRepository';
 import { dispatchRunEventRepository } from '@/lib/repositories/dispatchRunEventRepository';
@@ -75,8 +76,9 @@ import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepositor
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import {
   agentInstanceClock,
-  agentInstanceHandle,
   agentInstanceLifecycleService,
+  agentInstanceReach,
+  type InstanceReach,
 } from '@/lib/services/agentInstanceLifecycleService';
 import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
@@ -496,7 +498,10 @@ export const agentInstanceRunService = {
     }
 
     // ── 5, 6 · The profile, the image, the sign-in ───────────────────────────
-    if (!isPersistentOrchestratorConfigured() || !isAgentTerminalConfigured()) {
+    // The process-wide lane's check applies to an agent on it; one placed on an
+    // account is reached through that account (MOTIR-9473).
+    const laneMissing = agent.fleetShardId === null && !isPersistentOrchestratorConfigured();
+    if (laneMissing || !isAgentTerminalConfigured()) {
       throw new AgentInstancesUnavailableError('an agent cannot be reached to start a run');
     }
     // A RUNNING agent is asked now (§4: the start's own live probe), and its answer
@@ -732,8 +737,22 @@ export const agentInstanceRunService = {
       return 'noop';
     }
     const agent = await readAgent(run.agentInstanceId);
-    const handle = agent ? agentInstanceHandle(agent) : null;
-    if (!agent || agent.deletedAt || agent.state !== 'running' || !handle) {
+    // The account the agent lives in (MOTIR-9473): one that cannot be reached
+    // refuses the run in words and is never sent to Fly.
+    let reach: InstanceReach | null = null;
+    if (agent && !agent.deletedAt && agent.state === 'running') {
+      try {
+        reach = await agentInstanceReach(agent);
+      } catch (err) {
+        await this.end(
+          dispatchRunId,
+          'failed',
+          `the agent's account can't be reached: ${detailOf(err)}`,
+        );
+        return 'failed';
+      }
+    }
+    if (!agent || agent.deletedAt || agent.state !== 'running' || !reach) {
       await this.end(dispatchRunId, 'failed', 'the agent stopped before the run could start');
       return 'failed';
     }
@@ -760,8 +779,8 @@ export const agentInstanceRunService = {
         dispatcherUserId: run.createdById,
         expiresAt: latestRunCredentialExpiry(run.startedAt),
       });
-      const result = await getPersistentOrchestrator().exec(
-        handle,
+      const result = await reach.orchestrator.exec(
+        reach.handle,
         agentRunLaunchCommand(target, dispatchRunId, run.command),
         {
           timeoutSeconds: AGENT_RUN_LAUNCH_TIMEOUT_SECONDS,
@@ -886,11 +905,11 @@ export const agentInstanceRunService = {
     agentInstanceId: string | null,
   ): Promise<'stopped' | 'unreachable'> {
     const agent = agentInstanceId ? await readAgent(agentInstanceId) : null;
-    const handle =
-      agent && !agent.deletedAt && agent.state === 'running' ? agentInstanceHandle(agent) : null;
-    if (!handle) return 'unreachable';
+    if (!agent || agent.deletedAt || agent.state !== 'running') return 'unreachable';
     try {
-      await getPersistentOrchestrator().exec(handle, agentRunStopCommand(dispatchRunId), {
+      const reach = await agentInstanceReach(agent);
+      if (!reach) return 'unreachable';
+      await reach.orchestrator.exec(reach.handle, agentRunStopCommand(dispatchRunId), {
         timeoutSeconds: AGENT_RUN_STOP_TIMEOUT_SECONDS,
       });
       return 'stopped';
@@ -1101,6 +1120,17 @@ export const agentInstanceRunService = {
           tx,
         );
         const byAgent = new Map(running.map((r) => [r.agentInstanceId, r]));
+        // A boot waiting for room (MOTIR-9475) is read from its step in progress.
+        const waiting = new Set(
+          (
+            await agentInstanceBootRepository.listInProgressForInstances(
+              rows.filter((r) => r.state === 'starting' || r.state === 'waking').map((r) => r.id),
+              tx,
+            )
+          )
+            .filter((s) => parseWaitingReason(s.detail) !== null)
+            .map((s) => s.agentInstanceId),
+        );
         return {
           agents: rows.map((row) => {
             const run = byAgent.get(row.id) ?? null;
@@ -1118,6 +1148,7 @@ export const agentInstanceRunService = {
               // start re-asks live (below), so the picker must not refuse on it:
               // a row it offers is a row the start accepts (MOTIR-8869).
               agentRefusal(row, run, row.state === 'running' ? 'unknown' : row.signInState),
+              waiting.has(row.id),
             );
           }),
         };

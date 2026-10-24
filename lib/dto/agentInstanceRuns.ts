@@ -68,6 +68,9 @@ export interface AgentForCardDto {
   runningRun: AgentRunningRunDto | null;
   /** Null when the agent can run a card now (waking it first if it sleeps). */
   refusal: AgentRunAgentRefusal | null;
+  /** Its boot waits for room in the pool (MOTIR-9475): the picker offers it disabled.
+   *  Always written by the read; optional so a hand-built row reads as not waiting. */
+  waitingForRoom?: boolean;
 }
 
 export interface AgentsForCardDto {

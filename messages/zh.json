@@ -12415,7 +12415,9 @@
         "machineStart": "启动机器",
         "clone": "克隆 {repository}",
         "terminalCheck": "检查终端",
-        "ready": "就绪"
+        "ready": "就绪",
+        "waiting": "等待空位",
+        "roomFound": "已找到空位"
       },
       "state": {
         "waiting": "等待中",
@@ -12450,9 +12452,24 @@
         "machineStart": "正在启动机器…",
         "clone": "正在克隆 {repository}…",
         "terminalCheck": "正在检查终端…",
-        "ready": "即将就绪…"
+        "ready": "即将就绪…",
+        "waiting": "正在等待空位…",
+        "waitingWake": "正在等待空位以唤醒…"
       },
-      "terminalClosed": "智能体运行后终端才会打开。"
+      "terminalClosed": "智能体运行后终端才会打开。",
+      "waiting": {
+        "pool": "目前所有用于智能体的机器都在使用中。一有空位就会创建你的智能体。",
+        "account": "这个智能体的文件存放在一个地方，所以它会在那里等待空位。你的文件和登录状态都是安全的。",
+        "detailPool": "新智能体——哪里先有空位，就在哪里启动。",
+        "detailAccount": "唤醒中——只能在它的文件所在的地方启动。",
+        "since": "{minutes, plural, other {已等待 # 分钟}}——Motir 会自动继续尝试。"
+      }
+    },
+    "waiting": {
+      "status": "等待中",
+      "menuNotePool": "删除它会停止等待。目前还没有创建任何内容。",
+      "menuNoteAccount": "删除它会停止等待，并删除它的文件。",
+      "terminalTip": "智能体运行后终端才会打开。它正在等待空位。"
     }
   },
   "runs": {
@@ -12822,7 +12839,8 @@
           "deleting": "它正在被删除。",
           "signedOut": "请先登录：打开 {name} 并在它的终端中运行 <cmd></cmd>。<link>打开 {name}</link>",
           "imageTooOld": "它由一个无法处理工作项的旧镜像创建。把它迁移到新镜像（保留它的主目录和登录）的功能即将推出；新建的智能体现在就可以处理工作项。",
-          "cannotRun": "{agent} 无法独立处理工作项——它没有 Motir 可以启动的无人值守模式。"
+          "cannotRun": "{agent} 无法独立处理工作项——它没有 Motir 可以启动的无人值守模式。",
+          "waitingForRoom": "这个智能体运行后才能执行工作。它正在等待空位。"
         }
       },
       "command": {

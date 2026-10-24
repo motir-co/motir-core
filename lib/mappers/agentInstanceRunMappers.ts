@@ -14,6 +14,7 @@ export function toAgentForCardDto(
   row: AgentInstance,
   runningRun: AgentRunningRunDto | null,
   refusal: AgentRunAgentRefusal | null,
+  waitingForRoom = false,
 ): AgentForCardDto {
   return {
     id: row.id,
@@ -27,5 +28,6 @@ export function toAgentForCardDto(
     signInCheckedAt: row.signInCheckedAt?.toISOString() ?? null,
     runningRun,
     refusal,
+    waitingForRoom,
   };
 }

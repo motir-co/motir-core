@@ -11,6 +11,7 @@ import { agentInstanceIntervalRepository } from '@/lib/repositories/agentInstanc
 import { agentInstanceRepository } from '@/lib/repositories/agentInstanceRepository';
 import { agentInstanceChargeService } from '@/lib/services/agentInstanceChargeService';
 import { agentInstanceLapseService } from '@/lib/services/agentInstanceLapseService';
+import { fleetShardOrchestratorService } from '@/lib/services/fleetShardOrchestratorService';
 import {
   agentInstanceClock,
   agentInstanceLifecycleService as lifecycle,
@@ -178,13 +179,45 @@ export const agentInstanceSweepService = {
       }
     };
 
-    if (isPersistentOrchestratorConfigured()) {
+    // WHO CAN BE REACHED (MOTIR-9473): an instance on the process-wide lane
+    // while that lane is configured, and one placed on a fleet account whose
+    // orchestrator resolves. An account that does not is skipped with its reason,
+    // once per pass, and never sent to Fly; the pass goes on.
+    const laneConfigured = isPersistentOrchestratorConfigured();
+    const accountReachable = new Map<string, boolean>();
+    const reachable = async (row: AgentInstance): Promise<boolean> => {
+      if (row.fleetShardId === null) return laneConfigured;
+      let ok = accountReachable.get(row.fleetShardId);
+      if (ok === undefined) {
+        try {
+          await fleetShardOrchestratorService.persistentOrchestratorFor(row);
+          ok = true;
+        } catch (err) {
+          ok = false;
+          console.warn('[agentInstanceSweep] skipped the instances of an unreachable account', {
+            fleetShardId: row.fleetShardId,
+            detail: err instanceof Error ? err.message : String(err),
+          });
+        }
+        accountReachable.set(row.fleetShardId, ok);
+      }
+      return ok;
+    };
+    const reachableOnly = async (rows: AgentInstance[]) => {
+      const kept: AgentInstance[] = [];
+      for (const row of rows) if (await reachable(row)) kept.push(row);
+      return kept;
+    };
+
+    {
       // 1 · Anything in motion: finish what an earlier request left pending.
-      const moving = await withSystemContext((tx) =>
-        agentInstanceRepository.listLiveInStates(
-          ['starting', 'waking', 'hibernating', 'deleting', 'updating'],
-          SWEEP_BATCH,
-          tx,
+      const moving = await reachableOnly(
+        await withSystemContext((tx) =>
+          agentInstanceRepository.listLiveInStates(
+            ['starting', 'waking', 'hibernating', 'deleting', 'updating'],
+            SWEEP_BATCH,
+            tx,
+          ),
         ),
       );
       const sweepNow = agentInstanceClock.now().getTime();
@@ -218,13 +251,17 @@ export const agentInstanceSweepService = {
 
       // 2a · Every running instance: reconcile it against its machine, then charge
       //      the minutes it has used so far — BEFORE any credit check below.
-      const running = await withSystemContext((tx) =>
-        agentInstanceRepository.listLiveInStates(['running'], SWEEP_BATCH, tx),
+      const running = await reachableOnly(
+        await withSystemContext((tx) =>
+          agentInstanceRepository.listLiveInStates(['running'], SWEEP_BATCH, tx),
+        ),
       );
       // Q7: an updating agent's machine runs and is charged — its interval rolls
       // like a running one's (the reconcile and the credit stop wait for it to settle).
-      const updating = await withSystemContext((tx) =>
-        agentInstanceRepository.listLiveInStates(['updating'], SWEEP_BATCH, tx),
+      const updating = await reachableOnly(
+        await withSystemContext((tx) =>
+          agentInstanceRepository.listLiveInStates(['updating'], SWEEP_BATCH, tx),
+        ),
       );
       for (const row of updating) {
         await guarded(async () => {
@@ -286,14 +323,20 @@ export const agentInstanceSweepService = {
       //     The MACHINE half moved to the attribution reconciler
       //     (`fleetAttributionService`, MOTIR-6925 — `fleet-per-org-pool.md` §6),
       //     so one rule, in one place, raises one alert for every machine Fly runs.
-      const apps = await withSystemContext((tx) => agentInstanceRepository.listDistinctApps(tx));
-      const orchestrator = getPersistentOrchestrator();
+      //     The process-wide apps only: a fleet account's inventory is the
+      //     reconciler's (MOTIR-9476).
+      const apps = laneConfigured
+        ? await withSystemContext((tx) => agentInstanceRepository.listDistinctApps(tx))
+        : [];
+      const orchestrator = laneConfigured ? getPersistentOrchestrator() : null;
       for (const app of apps) {
         await guarded(async () => {
           const owners = await withSystemContext((tx) =>
             agentInstanceRepository.listLiveInApp(app, tx),
           );
           const volumeIds = new Set(owners.flatMap((o) => (o.volumeId ? [o.volumeId] : [])));
+          /* v8 ignore next -- no app is listed while the lane is unconfigured */
+          if (!orchestrator) return;
           const inventory = await orchestrator.listPersistent(app);
           const old = (at: Date | null) =>
             at !== null && now.getTime() - at.getTime() >= ORPHAN_MIN_AGE_MS;

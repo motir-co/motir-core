@@ -51,11 +51,10 @@ describe('fakePersistentOrchestrator', () => {
     expect(fake.liveVolumeIds()).toEqual([a.volumeId, b.volumeId]);
   });
 
-  it('a refused provision creates nothing; a refused MACHINE create destroys its volume', async () => {
+  // A refused MACHINE create cleaning up its volume is a contract case
+  // (`test/contract/persistentContract.ts`); the whole-provision refusal is the fake's own control.
+  it('a refused provision creates nothing', async () => {
     fake.failNextProvision();
-    await expect(fake.provisionPersistent(SPEC)).rejects.toThrow(OrchestratorApiError);
-    expect(fake.liveVolumeIds()).toEqual([]);
-    fake.failNextMachineCreate();
     await expect(fake.provisionPersistent(SPEC)).rejects.toThrow(OrchestratorApiError);
     expect(fake.liveVolumeIds()).toEqual([]);
     expect(fake.liveMachineIds()).toEqual([]);
@@ -152,43 +151,20 @@ describe('fakePersistentOrchestrator', () => {
     expect(events[0]!.at).toBeInstanceOf(Date);
   });
 
-  it('records start after a start and nothing for a gone machine', async () => {
+  it('records a stop, an exit and a new start across a stop and a start', async () => {
     const h = await fake.provisionPersistent(SPEC);
     await fake.stop(h);
     await fake.start(h);
     const events = (await fake.describePersistent(h)).events;
     expect(events.map((e) => e.type)).toEqual(['launch', 'start', 'stop', 'exit', 'start']);
-    await fake.destroyPersistent(h);
-    expect((await fake.describePersistent(h)).events).toEqual([]);
   });
 
-  it('destroyPersistent takes the machine THEN the volume, idempotently', async () => {
+  // Machine-then-volume, idempotent destroys and the inventory read are contract
+  // cases; an armed destroy failure is the fake's own control.
+  it('a destroy armed to fail throws', async () => {
     const h = await fake.provisionPersistent(SPEC);
-    await fake.destroyPersistent(h);
-    await fake.destroyPersistent(h);
-    expect(fake.operations.slice(-2)).toEqual([
-      `machine:destroy:${h.machineId}`,
-      `volume:destroy:${h.volumeId}`,
-    ]);
-    expect(fake.liveMachineIds()).toEqual([]);
-    expect(fake.liveVolumeIds()).toEqual([]);
     fake.failNextDestroy();
     await expect(fake.destroyPersistent(h)).rejects.toThrow(OrchestratorApiError);
-  });
-
-  it('lists one app’s inventory and destroys orphans by id', async () => {
-    const h = await fake.provisionPersistent(SPEC);
-    await fake.provisionPersistent({ ...SPEC, orgId: 'org-2', instanceId: 'other' });
-    const inventory = await fake.listPersistent(h.app);
-    expect(inventory.machines).toEqual([
-      expect.objectContaining({ machineId: h.machineId, state: 'running', instanceId: 'inst-1' }),
-    ]);
-    expect(inventory.volumes).toHaveLength(1);
-    await fake.destroyMachine(h.app, h.machineId);
-    await fake.destroyMachine(h.app, h.machineId);
-    await fake.destroyVolume(h.app, h.volumeId);
-    await fake.destroyVolume(h.app, h.volumeId);
-    expect(await fake.listPersistent(h.app)).toEqual({ app: h.app, machines: [], volumes: [] });
   });
 });
 
@@ -387,7 +363,7 @@ describe('the terminal (agent-terminal.md Q2, Q8 · MOTIR-6939)', () => {
     try {
       const handle = await fake.provisionPersistent({ ...SPEC, terminal: TERMINAL });
       fake.setTerminalAddress(`ws://127.0.0.1:${port}/`);
-      const endpoint = fake.terminalEndpoint(handle);
+      const endpoint = await fake.terminalEndpoint(handle);
       expect(endpoint).toEqual({
         url: `ws://127.0.0.1:${port}/v1/terminal`,
         headers: { 'x-motir-machine-id': handle.machineId },
@@ -415,12 +391,12 @@ describe('the terminal (agent-terminal.md Q2, Q8 · MOTIR-6939)', () => {
 
   it('defaults the address to MOTIR_FAKE_TERMINAL_URL, then to 127.0.0.1:7681', async () => {
     const handle = await fake.provisionPersistent(SPEC);
-    expect(fake.terminalEndpoint(handle).url).toBe('ws://127.0.0.1:7681/v1/terminal');
+    expect((await fake.terminalEndpoint(handle)).url).toBe('ws://127.0.0.1:7681/v1/terminal');
     vi.stubEnv('MOTIR_FAKE_TERMINAL_URL', 'ws://localhost:9999');
-    expect(fake.terminalEndpoint(handle).url).toBe('ws://localhost:9999/v1/terminal');
+    expect((await fake.terminalEndpoint(handle)).url).toBe('ws://localhost:9999/v1/terminal');
     fake.reset();
     vi.stubEnv('MOTIR_FAKE_TERMINAL_URL', '');
-    expect(fake.terminalEndpoint(handle).url).toBe('ws://127.0.0.1:7681/v1/terminal');
+    expect((await fake.terminalEndpoint(handle)).url).toBe('ws://127.0.0.1:7681/v1/terminal');
   });
 });
 

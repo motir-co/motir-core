@@ -12421,7 +12421,9 @@
         "machineStart": "Macchina avviata",
         "clone": "Clonazione di {repository}",
         "terminalCheck": "Terminale verificato",
-        "ready": "Pronto"
+        "ready": "Pronto",
+        "waiting": "In attesa di spazio",
+        "roomFound": "Spazio trovato"
       },
       "state": {
         "waiting": "In attesa",
@@ -12456,9 +12458,24 @@
         "machineStart": "Avvio della macchina…",
         "clone": "Clonazione di {repository}…",
         "terminalCheck": "Verifica del terminale…",
-        "ready": "Preparazione…"
+        "ready": "Preparazione…",
+        "waiting": "In attesa di spazio…",
+        "waitingWake": "In attesa di spazio per risvegliarsi…"
       },
-      "terminalClosed": "Il terminale resta chiuso finché l’agente non è in funzione."
+      "terminalClosed": "Il terminale resta chiuso finché l’agente non è in funzione.",
+      "waiting": {
+        "pool": "Tutte le macchine per gli agenti sono in uso in questo momento. Il tuo verrà creato appena ci sarà spazio.",
+        "account": "I file di questo agente si trovano in un solo posto, quindi aspetta che lì si liberi spazio. I tuoi file e il tuo accesso sono al sicuro.",
+        "detailPool": "Un nuovo agente — si avvia dove si libera spazio per primo.",
+        "detailAccount": "Risveglio — può avviarsi solo dove si trovano i suoi file.",
+        "since": "{minutes, plural, one {In attesa da # minuto} other {In attesa da # minuti}} — Motir continua a provare da solo."
+      }
+    },
+    "waiting": {
+      "status": "In attesa",
+      "menuNotePool": "Eliminarlo interrompe l’attesa. Non è stato ancora creato nulla.",
+      "menuNoteAccount": "Eliminarlo interrompe l’attesa ed elimina i suoi file.",
+      "terminalTip": "Il terminale si apre quando l’agente è in esecuzione. È in attesa di spazio."
     }
   },
   "runs": {
@@ -12828,7 +12845,8 @@
           "deleting": "È in fase di eliminazione.",
           "signedOut": "Accedi prima: apri {name} ed esegui <cmd></cmd> nel suo terminale. <link>Apri {name}</link>",
           "imageTooOld": "Creato da un’immagine precedente che non può lavorare sugli elementi di lavoro. Lo spostamento sulla nuova immagine — mantenendo home e accesso — è in arrivo; un nuovo agente può prenderli già ora.",
-          "cannotRun": "{agent} non può lavorare da solo su un elemento di lavoro — non ha una modalità non presidiata che Motir possa avviare."
+          "cannotRun": "{agent} non può lavorare da solo su un elemento di lavoro — non ha una modalità non presidiata che Motir possa avviare.",
+          "waitingForRoom": "Questo agente potrà lavorare quando sarà in esecuzione. È in attesa di spazio."
         }
       },
       "command": {

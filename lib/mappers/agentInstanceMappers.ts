@@ -4,6 +4,7 @@ import type {
   AgentInstanceBootStep,
   AgentInstanceInterval,
 } from '@/generated/prisma/client';
+import { parseWaitingReason } from '@/lib/agentInstances/config';
 import type {
   AgentInstanceActiveRunDto,
   AgentInstanceBootDto,
@@ -74,7 +75,23 @@ export function toAgentInstanceBootStepDto(row: AgentInstanceBootStep): AgentIns
     startedAt: row.startedAt?.toISOString() ?? null,
     endedAt: row.endedAt?.toISOString() ?? null,
     detail: row.detail,
+    waiting: waitingOf(row),
+    waited: waitedOf(row),
   };
+}
+
+/** The waiting a step records (MOTIR-9474): an in-progress step with a reason code. */
+function waitingOf(row: AgentInstanceBootStep): AgentInstanceBootStepDto['waiting'] {
+  const reason = row.state === 'in_progress' ? parseWaitingReason(row.detail) : null;
+  return reason && row.startedAt ? { reason, since: row.startedAt.toISOString() } : null;
+}
+
+/** The wait a DONE step kept its reason code for: from the first refusal to the room. */
+function waitedOf(row: AgentInstanceBootStep): AgentInstanceBootStepDto['waited'] {
+  const reason = row.state === 'done' ? parseWaitingReason(row.detail) : null;
+  return reason && row.startedAt && row.endedAt
+    ? { reason, since: row.startedAt.toISOString(), until: row.endedAt.toISOString() }
+    : null;
 }
 
 /** A boot attempt and its steps → the boot read, steps in read-out (`ordinal`) order. */

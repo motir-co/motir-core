@@ -546,3 +546,68 @@ export function awsRunnerPolicyDocument(input: {
     ],
   };
 }
+
+/**
+ * What an AGENT-HOSTER key may do (Story MOTIR-9361 · MOTIR-9479): the runner's
+ * calls, plus what a persistent instance needs beyond a one-job VM — stop and
+ * start (hibernate, wake), read and rewrite its user-data (the config document,
+ * legal only while stopped), re-stamp its tags after launch, list and delete its
+ * home disk, and open the host agent's port on its own group (MOTIR-9470). Every action that takes a resource-level condition is held to
+ * the account's own `motir-shard` tag; `DescribeVolumes` (like every Describe)
+ * supports none, so it is `*`.
+ * https://docs.aws.amazon.com/service-authorization/latest/reference/list_amazonec2.html
+ */
+export function awsAgentHosterPolicyDocument(input: {
+  shardTag: string;
+  regionId: string;
+}): AwsPolicyDocument {
+  const runner = awsRunnerPolicyDocument(input);
+  const arn = (resource: string) => `arn:aws:ec2:${input.regionId}:*:${resource}`;
+  const own = { StringEquals: { [`aws:ResourceTag/${AWS_SHARD_TAG_KEY}`]: input.shardTag } };
+  return {
+    Version: '2012-10-17',
+    Statement: [
+      ...runner.Statement,
+      {
+        Sid: 'DescribeVolumes',
+        Effect: 'Allow',
+        Action: 'ec2:DescribeVolumes',
+        Resource: '*',
+      },
+      {
+        Sid: 'HibernateWakeAndConfigureOwn',
+        Effect: 'Allow',
+        Action: [
+          'ec2:StopInstances',
+          'ec2:StartInstances',
+          'ec2:DescribeInstanceAttribute',
+          'ec2:ModifyInstanceAttribute',
+        ],
+        Resource: arn('instance/*'),
+        Condition: own,
+      },
+      {
+        Sid: 'RestampOwn',
+        Effect: 'Allow',
+        Action: 'ec2:CreateTags',
+        Resource: arn('instance/*'),
+        Condition: own,
+      },
+      {
+        // MOTIR-9470: the host agent's one inbound rule (TCP 8443, mutual TLS).
+        Sid: 'OpenHostAgentPortOnOwnGroup',
+        Effect: 'Allow',
+        Action: 'ec2:AuthorizeSecurityGroupIngress',
+        Resource: arn('security-group/*'),
+        Condition: own,
+      },
+      {
+        Sid: 'DeleteOwnDisk',
+        Effect: 'Allow',
+        Action: 'ec2:DeleteVolume',
+        Resource: arn('volume/*'),
+        Condition: own,
+      },
+    ],
+  };
+}

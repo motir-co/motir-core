@@ -27,13 +27,34 @@ export class UnattributedMachineDestroyedError extends Error {
     readonly ageMs: number,
     readonly reason: AttributionKillReason,
     readonly action: 'destroyed' | 'stopped' = 'destroyed',
+    /** Whose machine it was: a hoster account's is an EC2 instance (MOTIR-9476). */
+    readonly provider: string = 'fly',
   ) {
     const verb = action === 'stopped' ? 'Stopped' : 'Destroyed';
+    const what = provider === 'aws' ? 'EC2 instance' : 'Fly machine';
     super(
-      `${verb} Fly machine ${machineId} (${machineName || 'unnamed'}) in ${app}, ` +
+      `${verb} ${what} ${machineId} (${machineName || 'unnamed'}) in ${app}, ` +
         `${describeAge(ageMs)} old: ${reason}.`,
     );
     this.name = 'UnattributedMachineDestroyedError';
+  }
+}
+
+/**
+ * One per DISK the reconciler deleted in an agent-hoster account (MOTIR-9476): an
+ * unattached EBS volume past the grace that no live agent instance names — the
+ * home disk a machine destroy left behind, or a failed teardown's. Names the
+ * account, the volume, its age and the reason; never a credential.
+ */
+export class UnattributedVolumeDestroyedError extends Error {
+  constructor(
+    readonly app: string,
+    readonly volumeId: string,
+    readonly ageMs: number,
+    readonly reason: AttributionKillReason,
+  ) {
+    super(`Destroyed EBS volume ${volumeId} in ${app}, ${describeAge(ageMs)} old: ${reason}.`);
+    this.name = 'UnattributedVolumeDestroyedError';
   }
 }
 

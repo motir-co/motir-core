@@ -12421,7 +12421,9 @@
         "machineStart": "Máquina iniciada",
         "clone": "Clonando {repository}",
         "terminalCheck": "Terminal comprobada",
-        "ready": "Listo"
+        "ready": "Listo",
+        "waiting": "Esperando espacio",
+        "roomFound": "Espacio encontrado"
       },
       "state": {
         "waiting": "En espera",
@@ -12456,9 +12458,24 @@
         "machineStart": "Iniciando la máquina…",
         "clone": "Clonando {repository}…",
         "terminalCheck": "Comprobando la terminal…",
-        "ready": "Preparándose…"
+        "ready": "Preparándose…",
+        "waiting": "Esperando espacio…",
+        "waitingWake": "Esperando espacio para despertar…"
       },
-      "terminalClosed": "La terminal permanece cerrada hasta que el Agente esté en ejecución."
+      "terminalClosed": "La terminal permanece cerrada hasta que el Agente esté en ejecución.",
+      "waiting": {
+        "pool": "Todas las máquinas para agentes están en uso ahora mismo. El tuyo se creará en cuanto haya espacio.",
+        "account": "Los archivos de este agente están en un solo lugar, así que espera a que haya espacio allí. Tus archivos y tu inicio de sesión están a salvo.",
+        "detailPool": "Un agente nuevo: arranca donde primero se libere espacio.",
+        "detailAccount": "Despertando: solo puede arrancar donde están sus archivos.",
+        "since": "{minutes, plural, one {Esperando desde hace # minuto} other {Esperando desde hace # minutos}}: Motir sigue intentándolo por sí solo."
+      }
+    },
+    "waiting": {
+      "status": "En espera",
+      "menuNotePool": "Eliminarlo detiene la espera. Todavía no se ha creado nada.",
+      "menuNoteAccount": "Eliminarlo detiene la espera y borra sus archivos.",
+      "terminalTip": "El terminal se abre cuando el agente está en marcha. Está esperando espacio."
     }
   },
   "runs": {
@@ -12828,7 +12845,8 @@
           "deleting": "Se está eliminando.",
           "signedOut": "Inicia sesión primero: abre {name} y ejecuta <cmd></cmd> en su terminal. <link>Abrir {name}</link>",
           "imageTooOld": "Creado a partir de una imagen antigua que no puede trabajar en elementos de trabajo. Pronto se podrá mover a la imagen nueva conservando su directorio personal y su inicio de sesión; un Agente nuevo ya puede tomarlos.",
-          "cannotRun": "{agent} no puede trabajar en un elemento de trabajo por sí solo: no tiene un modo desatendido que Motir pueda iniciar."
+          "cannotRun": "{agent} no puede trabajar en un elemento de trabajo por sí solo: no tiene un modo desatendido que Motir pueda iniciar.",
+          "waitingForRoom": "Este agente podrá trabajar cuando esté en marcha. Está esperando espacio."
         }
       },
       "command": {

@@ -17,6 +17,7 @@ import {
   SHARD_PAUSE_SECONDS,
   shardAdmissionCeiling,
 } from '@/lib/ciFleet/shardTargets';
+import { agentInstanceRepository } from '@/lib/repositories/agentInstanceRepository';
 import { ciRunnerProvisioningIntentRepository as intents } from '@/lib/repositories/ciRunnerProvisioningIntentRepository';
 import { fleetShardRepository } from '@/lib/repositories/fleetShardRepository';
 
@@ -67,6 +68,9 @@ type ShardInFlightCounter = (shardId: string, tx: Prisma.TransactionClient) => P
  *  and agent hoster stories add theirs when they put their kind on its pool. */
 const IN_FLIGHT_ON_SHARD: Partial<Record<FleetWorkloadKind, ShardInFlightCounter>> = {
   ci_runner: (shardId, tx) => intents.countInFlightForShardInTx(shardId, tx),
+  // The agent hoster (MOTIR-9471): every live instance placed on the account,
+  // a reservation included — placement writes it inside the counting transaction.
+  agent_instance: (shardId, tx) => agentInstanceRepository.countLiveOnFleetShard(shardId, tx),
 };
 
 /**
@@ -107,27 +111,33 @@ export const fleetShardAdmissionService = {
     );
   },
 
-  /** The accounts a job may use: the active shared accounts of its fleet kind. */
+  /** The accounts a job may use: the active shared accounts of its fleet kind.
+   *  The agent hoster's are its AWS accounts only (MOTIR-9471): with its switch
+   *  on, an instance never lands on Fly. */
   async selectionSetInTx(
     job: ShardPlacementJob,
     tx: Prisma.TransactionClient,
   ): Promise<FleetShard[]> {
-    return fleetShardRepository.listActiveForKindInTx(job.fleetKind, tx);
+    const shards = await fleetShardRepository.listActiveForKindInTx(job.fleetKind, tx);
+    return job.fleetKind === 'agent_instance'
+      ? shards.filter((shard) => shard.provider === 'aws')
+      : shards;
   },
 
   /**
    * Choose the job's account. Reads the kind's switch first; then takes the
    * account in the selection set, not paused and not excluded, with the largest
    * `effectiveCeiling − in-flight`. Ties go to the lowest id, so the choice is
-   * deterministic.
+   * deterministic. `switchRead: true` is a caller that already read the switch as
+   * on, once, for the whole decision (the agent placement, MOTIR-9471).
    */
   async chooseInTx(
     job: ShardPlacementJob,
     now: Date,
     tx: Prisma.TransactionClient,
-    options: { exclude?: ReadonlySet<string> } = {},
+    options: { exclude?: ReadonlySet<string>; switchRead?: true } = {},
   ): Promise<ShardPlacement> {
-    if (!(await fleetKindOnPool(job.fleetKind))) return { shardId: null };
+    if (!options.switchRead && !(await fleetKindOnPool(job.fleetKind))) return { shardId: null };
 
     const countInFlight = IN_FLIGHT_ON_SHARD[job.fleetKind];
     if (!countInFlight) {

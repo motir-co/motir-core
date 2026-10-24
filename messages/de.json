@@ -12421,7 +12421,9 @@
         "machineStart": "Maschine gestartet",
         "clone": "{repository} wird geklont",
         "terminalCheck": "Terminal geprüft",
-        "ready": "Bereit"
+        "ready": "Bereit",
+        "waiting": "Wartet auf Platz",
+        "roomFound": "Platz gefunden"
       },
       "state": {
         "waiting": "Wartet",
@@ -12456,9 +12458,24 @@
         "machineStart": "Maschine wird gestartet…",
         "clone": "{repository} wird geklont…",
         "terminalCheck": "Terminal wird geprüft…",
-        "ready": "Wird vorbereitet…"
+        "ready": "Wird vorbereitet…",
+        "waiting": "Wartet auf Platz…",
+        "waitingWake": "Wartet auf Platz zum Aufwecken…"
       },
-      "terminalClosed": "Das Terminal bleibt geschlossen, bis der Agent läuft."
+      "terminalClosed": "Das Terminal bleibt geschlossen, bis der Agent läuft.",
+      "waiting": {
+        "pool": "Alle Maschinen für Agents sind gerade belegt. Ihrer wird erstellt, sobald Platz frei ist.",
+        "account": "Die Dateien dieses Agents liegen an einem Ort, deshalb wartet er dort auf Platz. Ihre Dateien und Ihre Anmeldung sind sicher.",
+        "detailPool": "Ein neuer Agent — er startet dort, wo zuerst Platz frei wird.",
+        "detailAccount": "Wird aufgeweckt — er kann nur dort starten, wo seine Dateien liegen.",
+        "since": "{minutes, plural, one {Wartet seit # Minute} other {Wartet seit # Minuten}} — Motir versucht es von selbst weiter."
+      }
+    },
+    "waiting": {
+      "status": "Wartet",
+      "menuNotePool": "Löschen beendet das Warten. Es wurde noch nichts erstellt.",
+      "menuNoteAccount": "Löschen beendet das Warten und löscht seine Dateien.",
+      "terminalTip": "Das Terminal öffnet sich, sobald der Agent läuft. Er wartet auf Platz."
     }
   },
   "runs": {
@@ -12828,7 +12845,8 @@
           "deleting": "Er wird gerade gelöscht.",
           "signedOut": "Melden Sie sich zuerst an: Öffnen Sie {name} und führen Sie in seinem Terminal <cmd></cmd> aus. <link>{name} öffnen</link>",
           "imageTooOld": "Aus einem älteren Image erstellt, das keine Arbeitselemente bearbeiten kann. Das Umstellen auf das neuere Image — unter Beibehaltung von Home-Verzeichnis und Anmeldung — ist in Arbeit; ein neuer Agent kann sie schon jetzt übernehmen.",
-          "cannotRun": "{agent} kann ein Arbeitselement nicht selbstständig bearbeiten — es hat keinen unbeaufsichtigten Modus, den Motir starten kann."
+          "cannotRun": "{agent} kann ein Arbeitselement nicht selbstständig bearbeiten — es hat keinen unbeaufsichtigten Modus, den Motir starten kann.",
+          "waitingForRoom": "Dieser Agent kann Arbeit ausführen, sobald er läuft. Er wartet auf Platz."
         }
       },
       "command": {

@@ -331,6 +331,8 @@ describe('toAgentInstanceBootDto', () => {
       startedAt: T0.toISOString(),
       endedAt: at(3).toISOString(),
       detail: null,
+      waiting: null,
+      waited: null,
     });
     expect(dto.steps[2]).toMatchObject({
       repository: 'owner/repo-a',

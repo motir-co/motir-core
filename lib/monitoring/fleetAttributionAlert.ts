@@ -2,6 +2,7 @@ import * as Sentry from '@sentry/nextjs';
 import type {
   FleetInventoryUnavailableError,
   UnattributedMachineDestroyedError,
+  UnattributedVolumeDestroyedError,
 } from '@/lib/ciFleet/attributionErrors';
 
 /**
@@ -16,11 +17,22 @@ import type {
  * with no DSN never called `Sentry.init`, so every call is a no-op there.
  */
 export function alertFleetAttribution(
-  error: UnattributedMachineDestroyedError | FleetInventoryUnavailableError,
+  error:
+    | UnattributedMachineDestroyedError
+    | UnattributedVolumeDestroyedError
+    | FleetInventoryUnavailableError,
 ): void {
   try {
-    const perMachine = error.name === 'UnattributedMachineDestroyedError';
-    const machineId = perMachine ? (error as UnattributedMachineDestroyedError).machineId : '';
+    // A deleted disk is one issue per disk, as a machine is (MOTIR-9476).
+    const perMachine =
+      error.name === 'UnattributedMachineDestroyedError' ||
+      error.name === 'UnattributedVolumeDestroyedError';
+    const machineId =
+      error.name === 'UnattributedMachineDestroyedError'
+        ? (error as UnattributedMachineDestroyedError).machineId
+        : error.name === 'UnattributedVolumeDestroyedError'
+          ? (error as UnattributedVolumeDestroyedError).volumeId
+          : '';
     Sentry.captureException(error, {
       level: perMachine ? 'warning' : 'error',
       tags: { fleet_app: error.app, fleet_alert: error.name },

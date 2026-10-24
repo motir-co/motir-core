@@ -14,6 +14,7 @@ import {
   OrchestratorNotConfiguredError,
   awsCredentialsFromEnv,
   awsManagementCredentials,
+  awsAgentHosterPolicyDocument,
   awsRunnerPolicyDocument,
   awsRuntimeKeyEnvNames,
   createAwsManagementApi,
@@ -561,6 +562,36 @@ describe('awsRunnerPolicyDocument', () => {
       'arn:aws:ec2:us-east-1:*:instance/*',
       'arn:aws:ec2:us-east-1:*:volume/*',
     ]);
+  });
+});
+
+describe('awsAgentHosterPolicyDocument', () => {
+  it('adds the persistent instance’s calls to the runner’s, each held to the account’s tag', () => {
+    const doc = awsAgentHosterPolicyDocument({ shardTag: 'h1', regionId: 'us-east-1' });
+    const runner = awsRunnerPolicyDocument({ shardTag: 'h1', regionId: 'us-east-1' });
+    expect(doc.Statement.slice(0, runner.Statement.length)).toEqual(runner.Statement);
+    const added = doc.Statement.slice(runner.Statement.length);
+    expect(new Set(added.flatMap((s) => [s['Action']].flat()))).toEqual(
+      new Set([
+        'ec2:DescribeVolumes',
+        'ec2:StopInstances',
+        'ec2:StartInstances',
+        'ec2:DescribeInstanceAttribute',
+        'ec2:ModifyInstanceAttribute',
+        'ec2:CreateTags',
+        'ec2:DeleteVolume',
+        'ec2:AuthorizeSecurityGroupIngress',
+      ]),
+    );
+    for (const statement of added.filter((s) => s['Sid'] !== 'DescribeVolumes')) {
+      expect(statement['Condition']).toEqual({
+        StringEquals: { 'aws:ResourceTag/motir-shard': 'h1' },
+      });
+    }
+    expect(added.find((s) => s['Sid'] === 'DeleteOwnDisk')!['Resource']).toBe(
+      'arn:aws:ec2:us-east-1:*:volume/*',
+    );
+    expect(JSON.stringify(doc)).not.toMatch(/iam:|CreateAccessKey|ec2:\*/);
   });
 });
 

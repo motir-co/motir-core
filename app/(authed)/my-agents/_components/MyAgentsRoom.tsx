@@ -526,6 +526,23 @@ function useRowLine() {
   };
 }
 
+/** Why a booting row waits for room (MOTIR-9475), or null while it does not. */
+function waitingOf(row: AgentInstanceListItemDto): 'pool' | 'account' | null {
+  return row.state === 'starting' || row.state === 'waking'
+    ? (row.bootStep?.waiting ?? null)
+    : null;
+}
+
+/** The row's state pill: _Waiting_, in the neutral tone, while its boot waits for room. */
+function AgentStatePill({ row }: { row: AgentInstanceListItemDto }) {
+  const t = useTranslations('myAgents');
+  return waitingOf(row) ? (
+    <RunTonePill tone="queued">{t('waiting.status')}</RunTonePill>
+  ) : (
+    <RunTonePill tone={AGENT_STATE_TONE[row.state]}>{t(`state.${row.state}`)}</RunTonePill>
+  );
+}
+
 function RowLine({ line }: { line: { text: string; danger: boolean } | null }) {
   if (!line) return null;
   return (
@@ -669,9 +686,7 @@ function AgentTable({
                 {projectName}
               </td>
               <td className={`${td} whitespace-nowrap`}>
-                <RunTonePill tone={AGENT_STATE_TONE[row.state]}>
-                  {t(`state.${row.state}`)}
-                </RunTonePill>
+                <AgentStatePill row={row} />
               </td>
               <td
                 className={`${td} text-right text-sm whitespace-nowrap text-(--el-text) tabular-nums`}
@@ -688,6 +703,7 @@ function AgentTable({
                   name={row.name}
                   state={row.state}
                   wakeNeedsPlan={row.scheduledDeletionAt !== null}
+                  waiting={waitingOf(row)}
                   onMove={(m) => onMove(row, m)}
                 />
               </td>
@@ -742,6 +758,7 @@ function AgentCards({
                 name={row.name}
                 state={row.state}
                 wakeNeedsPlan={row.scheduledDeletionAt !== null}
+                waiting={waitingOf(row)}
                 onMove={(m) => onMove(row, m)}
               />
             </span>
@@ -750,7 +767,7 @@ function AgentCards({
             <span>
               {row.profileName} · {projectName}
             </span>
-            <RunTonePill tone={AGENT_STATE_TONE[row.state]}>{t(`state.${row.state}`)}</RunTonePill>
+            <AgentStatePill row={row} />
           </div>
           <AgentImageVersion agent={row} />
           <div className="flex items-center justify-between gap-2 text-sm text-(--el-text-secondary)">

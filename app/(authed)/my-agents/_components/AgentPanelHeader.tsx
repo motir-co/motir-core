@@ -60,6 +60,7 @@ export function AgentPanelHeader({
   onHibernate,
   onDelete,
   onUpdate,
+  waiting = false,
 }: {
   agent: AgentInstanceListItemDto;
   projectName: string;
@@ -70,6 +71,8 @@ export function AgentPanelHeader({
   onDelete: () => void;
   /** Open the Update confirmation (MOTIR-6953). */
   onUpdate: () => void;
+  /** The boot waits for room (MOTIR-9475): the pill reads _Waiting_, the neutral tone. */
+  waiting?: boolean;
 }) {
   const t = useTranslations('myAgents');
   const runActive = agent.activeRun !== null;
@@ -99,8 +102,8 @@ export function AgentPanelHeader({
             className="m-0 flex flex-wrap items-center gap-2 font-serif text-lg font-semibold text-(--el-text) focus-visible:outline-none"
           >
             {agent.name}
-            <RunTonePill tone={AGENT_STATE_TONE[agent.state]}>
-              {t(`state.${agent.state}`)}
+            <RunTonePill tone={waiting ? 'queued' : AGENT_STATE_TONE[agent.state]}>
+              {waiting ? t('waiting.status') : t(`state.${agent.state}`)}
             </RunTonePill>
           </h2>
           <p className="mt-0.5 mb-0 text-[0.8125rem] text-(--el-text-secondary)">

@@ -12415,7 +12415,9 @@
         "machineStart": "머신 시작됨",
         "clone": "{repository} 복제",
         "terminalCheck": "터미널 확인됨",
-        "ready": "준비 완료"
+        "ready": "준비 완료",
+        "waiting": "자리를 기다리는 중",
+        "roomFound": "자리를 찾았습니다"
       },
       "state": {
         "waiting": "대기 중",
@@ -12450,9 +12452,24 @@
         "machineStart": "머신을 시작하는 중…",
         "clone": "{repository}을(를) 복제하는 중…",
         "terminalCheck": "터미널을 확인하는 중…",
-        "ready": "준비하는 중…"
+        "ready": "준비하는 중…",
+        "waiting": "자리를 기다리는 중…",
+        "waitingWake": "깨어날 자리를 기다리는 중…"
       },
-      "terminalClosed": "에이전트가 실행될 때까지 터미널은 닫혀 있습니다."
+      "terminalClosed": "에이전트가 실행될 때까지 터미널은 닫혀 있습니다.",
+      "waiting": {
+        "pool": "지금은 에이전트용 머신이 모두 사용 중입니다. 자리가 나는 대로 에이전트를 만듭니다.",
+        "account": "이 에이전트의 파일은 한곳에 있으므로 그곳에 자리가 나기를 기다립니다. 파일과 로그인 상태는 안전합니다.",
+        "detailPool": "새 에이전트 — 가장 먼저 자리가 나는 곳에서 시작합니다.",
+        "detailAccount": "깨우는 중 — 파일이 있는 곳에서만 시작할 수 있습니다.",
+        "since": "{minutes, plural, other {#분째 기다리는 중}} — Motir가 알아서 계속 시도합니다."
+      }
+    },
+    "waiting": {
+      "status": "대기 중",
+      "menuNotePool": "삭제하면 대기가 끝납니다. 아직 아무것도 만들어지지 않았습니다.",
+      "menuNoteAccount": "삭제하면 대기가 끝나고 파일도 삭제됩니다.",
+      "terminalTip": "터미널은 에이전트가 실행 중일 때 열립니다. 지금은 자리를 기다리는 중입니다."
     }
   },
   "runs": {
@@ -12822,7 +12839,8 @@
           "deleting": "삭제하는 중입니다.",
           "signedOut": "먼저 로그인하세요: {name}을(를) 열고 터미널에서 <cmd></cmd>을(를) 실행하세요. <link>{name} 열기</link>",
           "imageTooOld": "작업 항목을 처리할 수 없는 이전 이미지로 만들어졌습니다. 홈과 로그인을 유지한 채 최신 이미지로 옮기는 기능이 준비 중이며, 지금은 새 에이전트가 작업 항목을 맡을 수 있습니다.",
-          "cannotRun": "{agent}은(는) 작업 항목을 단독으로 처리할 수 없습니다 — Motir가 시작할 수 있는 무인 모드가 없습니다."
+          "cannotRun": "{agent}은(는) 작업 항목을 단독으로 처리할 수 없습니다 — Motir가 시작할 수 있는 무인 모드가 없습니다.",
+          "waitingForRoom": "이 에이전트는 실행 중이 되면 작업할 수 있습니다. 지금은 자리를 기다리는 중입니다."
         }
       },
       "command": {
