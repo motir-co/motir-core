@@ -13,6 +13,7 @@ import {
 } from '@/lib/ciFleet/indexAllowance';
 import { CodeGraphRunCredentialTooShortError } from '@/lib/ai/errors';
 import { fleetShardOrchestratorService } from '@/lib/services/fleetShardOrchestratorService';
+import { fleetShardService } from '@/lib/services/fleetShardService';
 import { classifyProvisionRefusal } from '@/lib/services/fleetShardAdmissionService';
 import { fleetShardRepository } from '@/lib/repositories/fleetShardRepository';
 import { SHARD_PAUSE_SECONDS } from '@/lib/ciFleet/shardTargets';
@@ -1271,9 +1272,14 @@ export const codeGraphIndexDispatchService = {
     // unset) is a failed boot that gives the slot back — never a throw that
     // strands it until the TTL, and never a quiet fall back to the process-wide
     // fleet, which the admission did not count it against.
+    // The account's region, too (MOTIR-9502): an AWS account refuses a spec for
+    // any region but its own, and the process-wide fleet's is Fly's.
+    let accountRegion: string | undefined;
     if (admission.shardId) {
       try {
-        orchestrator = await fleetShardOrchestratorService.forShard(admission.shardId);
+        const shard = await fleetShardService.getShard(admission.shardId);
+        orchestrator = fleetShardOrchestratorService.forShardRow(shard);
+        accountRegion = shard.aws?.region ?? shard.fly?.region;
       } catch (err) {
         await codeGraphIndexAdmissionService.release(admission.slotRef, input.dispatchId);
         const detail = `the fleet account ${admission.shardId} could not be reached: ${detailOf(err)}`;
@@ -1284,6 +1290,7 @@ export const codeGraphIndexDispatchService = {
     try {
       // ── 0 · The deployment gate, BEFORE anything is spent ──────────────────
       fleet = indexFleetConfig();
+      if (accountRegion) fleet = { ...fleet, region: accountRegion };
       // ⚠️ THE *CONTAINER'S* ACCESSOR, NOT motir-core's OWN (MOTIR-4518). These
       // are two different addresses for one service because the two callers sit
       // in two different organizations: motir-core reaches motir-ai at
