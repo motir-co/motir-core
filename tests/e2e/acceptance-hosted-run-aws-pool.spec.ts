@@ -204,13 +204,14 @@ const instanceState = (account: { id: string }, instanceId: string) =>
 
 const runRow = (id: string) => adminDb.dispatchRun.findUniqueOrThrow({ where: { id } });
 
+/** A run's `log` bodies, oldest first, without the trailing newline the server writes. */
 const runLogs = async (dispatchRunId: string) =>
   (
     await adminDb.dispatchRunEvent.findMany({
       where: { dispatchRunId, kind: 'log' },
       orderBy: { createdAt: 'asc' },
     })
-  ).map((e) => e.body ?? '');
+  ).map((e) => (e.body ?? '').trimEnd());
 
 /**
  * The container's side of one run, played with the run's own credential. Once
