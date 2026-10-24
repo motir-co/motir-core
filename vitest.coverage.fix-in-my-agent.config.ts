@@ -82,7 +82,7 @@ export const SHARED_NOT_FLOORED = [
   // `tests/components/RunModal.test.tsx`.
   'app/*/runs/_components/RunModal.tsx',
   // Server components — rendered by Next, reached by the E2E
-  // (`tests/e2e/acceptance-fix-in-my-agent.spec.ts`), not by Vitest.
+  // (`tests/e2e/regression-fix-in-my-agent.spec.ts`), not by Vitest.
   'app/*/items/*/_components/LateSections.tsx',
   'app/*/settings/project/hosted-agent/page.tsx',
   /**

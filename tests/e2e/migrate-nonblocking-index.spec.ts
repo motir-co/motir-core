@@ -22,7 +22,7 @@ import {
   E2E_INDEX_REPOS,
   claimIndexRun,
   indexRepoRef,
-  recordIndexFailedRun,
+  recordIndexFailed,
   recordIndexRunning,
   seedConnectedRepos,
   type IndexSeedRepo,
@@ -98,11 +98,15 @@ async function reachImportStep(
   const workspaceId = ws.id;
   if (locale !== 'en') await adminDb.user.update({ where: { email }, data: { locale } });
 
+  // ⚠️ BOTH STATES ARE SEEDED `running` UNTIL CONNECT HAS ADVANCED (MOTIR-9444).
+  // Connect's kick (`CONNECT.ensureKicked`) enqueues a REAL index job unless an
+  // index is in flight in the workspace or one succeeded for the ref, and a
+  // failed run is neither. That job's claim overwrote the seeded one, and the
+  // first read raced it: `failed` when the read won, `queued` when the job won.
+  // A run in flight covers the kick, so nothing but this spec writes the claim,
+  // and the failure lands after Connect, where a real one would.
   await seedConnectedRepos(workspaceId, [repo]);
-  const runRow =
-    index === 'running'
-      ? await recordIndexRunning(workspaceId)
-      : await recordIndexFailedRun(workspaceId, indexRepoRef(repo));
+  const runRow = await recordIndexRunning(workspaceId);
   await claimIndexRun(workspaceId, repo, runRow);
 
   await page.goto('/onboarding/migrate');
@@ -129,11 +133,18 @@ async function reachImportStep(
   let advanced = page.waitForResponse((r) => isPost(r, '/advance'));
   await proceed.click();
   expect((await advanced).status()).toBe(200);
+  // The kick has run and found the index in flight; now the claimed run fails.
+  if (index === 'failed') await recordIndexFailed(workspaceId, indexRepoRef(repo), runRow);
 
-  // Index is not a stop: the first read lists the repository still unfinished,
-  // and Next is open anyway.
-  const first = await waitForIndexStatus(page, (s) => s.total === 1);
-  expect(repoStatus(first, repo)).toBe(index === 'running' ? 'indexing' : 'failed');
+  // Index is not a stop: a read lists the repository still unfinished, and Next
+  // is open anyway. The failed case waits for the read that carries the
+  // failure, since a poll may still have seen the run in flight.
+  const expected = index === 'running' ? 'indexing' : 'failed';
+  const first = await waitForIndexStatus(
+    page,
+    (s) => s.total === 1 && repoStatus(s, repo) === expected,
+  );
+  expect(repoStatus(first, repo)).toBe(expected);
   expect(first.allIndexed).toBe(false);
   const next = page.getByRole('button', { name: msg(locale, 'onboardingMigrate.index.next') });
   await expect(next).toBeEnabled();

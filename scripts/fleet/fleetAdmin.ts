@@ -15,6 +15,10 @@
  * (--ceiling <n> | --clear)`, `disable --name <account> --reason <text>` and
  * `enable --name <account>`, each with `--operator <email>`.
  *
+ * `--provider aws` (MOTIR-9278) adds an AWS Organizations member account named
+ * `--name`, in `--region` (default `us-east-1`); `--account-email <email>` is
+ * required only when that account must be created.
+ *
  * `add-shard` walks `fleetShardProvisioningService.addShard`'s steps, printing one
  * line per step (`done` · `already` · `pending: <what a person must do>`) and a
  * **Pending manual steps** list. Re-running the same command resumes.
@@ -52,6 +56,8 @@ const USAGE = [
   '  fleet-admin add-shard --provider <provider> --fleet-kind <kind> --name <name> --region <region>',
   '    --github-org <org> (--create-org --admin-login <login> [--billing-email <email>] | --existing-org)',
   '    --operator <email> [provider options]',
+  '    --provider aws: --region defaults to us-east-1; --account-email <email> is the new',
+  "      member account's root email, required only when no AWS account has the name",
   '  fleet-admin refresh-limits --name <account> --operator <email>',
   '  fleet-admin set-ceiling --name <account> (--ceiling <n> | --clear) --operator <email>',
   '  fleet-admin disable --name <account> --reason <text> --operator <email>',
@@ -96,11 +102,14 @@ function printResult(result: ShardProvisioningResult, io: FleetAdminIo): number 
 async function addShard(args: string[], io: FleetAdminIo): Promise<number> {
   // Two passes: the shared options name the provider, whose own options are then
   // accepted strictly.
+  // The first pass knows no provider option, so it reads `--account-email x` as a
+  // flag and `x` as a positional: positionals are allowed HERE, and the strict
+  // second pass refuses any that are really stray.
   const first = parseArgs({
     args,
     options: SHARED_OPTIONS,
     strict: false,
-    allowPositionals: false,
+    allowPositionals: true,
   });
   const providerName = typeof first.values.provider === 'string' ? first.values.provider : '';
   const provider = findShardProvisioningProvider(providerName);

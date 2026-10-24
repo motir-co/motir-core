@@ -13,7 +13,7 @@ import { WORKBENCH_STREAM_PATH } from '@/lib/live/sources/workbenchStreamSource'
 // ⚠️ A DOCUMENT LOAD IS COUNTED BY ITS REQUEST, NOT BY `framenavigated`.
 // Playwright fires `framenavigated` for Next's same-document re-render too, so a
 // count of that event cannot tell a refresh from a load —
-// `acceptance-workbench-live.spec.ts` measured exactly that on its first green
+// `regression-workbench-live.spec.ts` measured exactly that on its first green
 // walk. A request whose `resourceType()` is `document` is a new document, and
 // the window marker (`stampDocument`) is the second, independent witness.
 //

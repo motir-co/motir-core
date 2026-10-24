@@ -57,6 +57,8 @@ export interface CreateFleetShardInput {
   flyOrg?: string | null;
   flyApp?: string | null;
   flyRegion?: string | null;
+  awsAccountId?: string | null;
+  awsRegion?: string | null;
   credentialRef: string;
   limits?: FleetShardLimitsInput;
   limitsSource?: FleetShardLimitsSourceInput;
@@ -122,9 +124,18 @@ function validateIdentity(input: CreateFleetShardInput): void {
   }
 }
 
-/** The provider's own invariants — for `fly`, its location and machine limit. */
+/** The provider's own invariants — for `fly`, its location and machine limit;
+ *  for `aws`, its account id and region. */
 function validateProvider(input: CreateFleetShardInput, limits: FleetShardLimitsDTO): void {
-  if (input.provider !== 'fly') return;
+  if (input.provider === 'aws') {
+    if (!present(input.awsAccountId) || !present(input.awsRegion)) {
+      throw new FleetShardInvalidError(
+        'awsLocation',
+        'an aws account names its account id and region',
+      );
+    }
+    return;
+  }
   if (!present(input.flyOrg) || !present(input.flyApp) || !present(input.flyRegion)) {
     throw new FleetShardInvalidError('flyLocation', 'a fly account names its org, app and region');
   }
@@ -163,6 +174,8 @@ export const fleetShardService = {
             flyOrg: input.flyOrg ?? null,
             flyApp: input.flyApp ?? null,
             flyRegion: input.flyRegion ?? null,
+            awsAccountId: input.awsAccountId ?? null,
+            awsRegion: input.awsRegion ?? null,
             credentialRef: input.credentialRef,
             ...limits,
             limitsSource,

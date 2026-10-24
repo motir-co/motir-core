@@ -14,7 +14,7 @@ import { adminDb } from './db-reset';
 import { createTestPerson } from './testPerson';
 
 // THE TRANSLATION-STORY seed (Story MOTIR-7735 · MOTIR-8125), for the receipt
-// `acceptance-translation-story.spec.ts` records.
+// `regression-translation-story.spec.ts` records.
 //
 // Two organisations. The first holds three Chinese work items and four people:
 // its owner reading in Deutsch (A), a second Deutsch reader (B), a 中文 reader

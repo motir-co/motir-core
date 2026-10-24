@@ -129,7 +129,7 @@ describe('orchestratorForShard — the account row becomes its own adapter', () 
   it('routes any other provider through the registry, handing it the WHOLE account', async () => {
     vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
     const row = await createAccount();
-    // A provider the enum does not hold yet — what the AWS adapter will be.
+    // A provider the enum does not hold.
     const account = { ...row, provider: 'stub' } as unknown as FleetShardDTO;
     expect(() => orchestratorForShard(account)).toThrow(/no stub adapter is registered/);
 
@@ -154,6 +154,63 @@ describe('orchestratorForShard — the account row becomes its own adapter', () 
     } finally {
       unregisterShardAdapter('stub');
     }
+  });
+
+  describe('an aws account (MOTIR-9276)', () => {
+    const AWS_ACCOUNT: Partial<CreateFleetShardInput> = {
+      name: 'ci-runner-use1-1',
+      provider: 'aws',
+      flyOrg: null,
+      flyApp: null,
+      flyRegion: null,
+      awsAccountId: '123456789012',
+      awsRegion: 'us-east-1',
+      credentialRef: 'FLEET_SHARD_CI_RUNNER_USE1_1',
+      limits: { vcpuQuota: 640 },
+    };
+
+    it('builds an AWS orchestrator from the row when its key and the AMI are set', async () => {
+      vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
+      vi.stubEnv('FLEET_SHARD_CI_RUNNER_USE1_1_ACCESS_KEY_ID', 'AKIAEXAMPLE');
+      vi.stubEnv('FLEET_SHARD_CI_RUNNER_USE1_1_SECRET_ACCESS_KEY', 'secret-example');
+      vi.stubEnv('MOTIR_AWS_RUNNER_AMI_ID', 'ami-0123456789abcdef0');
+      const account = await createAccount(AWS_ACCOUNT);
+
+      expect(account.aws).toEqual({ accountId: '123456789012', region: 'us-east-1' });
+      expect(orchestratorForShard(account).provider).toBe('aws');
+      expect(inventoryForShard(account)).toBeNull();
+    });
+
+    it('names EVERY missing variable at once', async () => {
+      vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
+      vi.stubEnv('FLEET_SHARD_CI_RUNNER_USE1_1_ACCESS_KEY_ID', '');
+      vi.stubEnv('FLEET_SHARD_CI_RUNNER_USE1_1_SECRET_ACCESS_KEY', '');
+      vi.stubEnv('MOTIR_AWS_RUNNER_AMI_ID', '');
+      const account = await createAccount(AWS_ACCOUNT);
+
+      const thrown = (() => {
+        try {
+          orchestratorForShard(account);
+        } catch (err) {
+          return err as Error;
+        }
+      })();
+      expect(thrown).toBeInstanceOf(OrchestratorNotConfiguredError);
+      for (const name of [
+        'FLEET_SHARD_CI_RUNNER_USE1_1_ACCESS_KEY_ID',
+        'FLEET_SHARD_CI_RUNNER_USE1_1_SECRET_ACCESS_KEY',
+        'MOTIR_AWS_RUNNER_AMI_ID',
+      ]) {
+        expect(thrown!.message).toContain(name);
+      }
+    });
+
+    it('refuses an aws row with no account id or region', async () => {
+      await expect(createAccount({ ...AWS_ACCOUNT, awsRegion: null })).rejects.toMatchObject({
+        code: 'FLEET_SHARD_INVALID',
+        field: 'awsLocation',
+      });
+    });
   });
 
   it('lists no Fly account separately — the organisation walk already covers it', async () => {

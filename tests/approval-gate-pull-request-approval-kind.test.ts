@@ -16,6 +16,7 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { makeWorkItemFixture, type WorkItemFixture } from './fixtures';
 import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
+import { expectEachHopAnnounced } from './helpers/transitionedEvents';
 
 // THE `pull_request_approval` KIND, REGISTERED (Story MOTIR-4909 · MOTIR-5481), against a
 // REAL Postgres. The handler over a card's delivery SET: approving writes `approved`, the
@@ -157,10 +158,17 @@ describe('deciding the gate', () => {
   it('APPROVE moves an in-review card to `approved` and names the exact commits approved', async () => {
     const { item, gate } = await storyWithGate();
 
-    const result = await approvalGatesService.decide(
-      { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'ui' },
-      fx.ctx,
+    // The `approved` it writes is announced after the commit (Bug MOTIR-9415).
+    const { result, hops } = await expectEachHopAnnounced(
+      item.id,
+      { workspaceId: fx.workspaceId, actorId: fx.ownerId },
+      () =>
+        approvalGatesService.decide(
+          { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'ui' },
+          fx.ctx,
+        ),
     );
+    expect(hops).toEqual([{ fromStatusKey: 'in_review', toStatusKey: 'approved' }]);
 
     expect(result.gate.state).toBe('approved');
     expect(result.effect.statusWritten).toBe('approved');

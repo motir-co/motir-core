@@ -489,7 +489,7 @@ describe('the late stack — the page listens for a decision made in the overlay
 // carries the question is the merge gate's, so a story whose pull requests are open and
 // not yet green had neither: the receipt rendered as a subject with no verbs, and the
 // awaiting question had no door on the item page at all. Found while recording this
-// story's receipt (`tests/e2e/acceptance-gate.spec.ts`).
+// story's receipt (`tests/e2e/regression-gate.spec.ts`).
 describe('a story run — the acceptance question is asked where it can be answered (MOTIR-5792)', () => {
   const EVIDENCE = {
     id: 'ae-1',

@@ -8,7 +8,7 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 import type { RunInMyAgentSeed } from './run-in-my-agent-seed';
 
 // FIX IN MY AGENT — the acceptance seams that are not the product's (Story MOTIR-8981 ·
-// MOTIR-9056), for `acceptance-fix-in-my-agent.spec.ts`.
+// MOTIR-9056), for `regression-fix-in-my-agent.spec.ts`.
 //
 // The red and the green are check rows written the way `fix-hosted-seed.ts` writes
 // them, then settled through the SHIPPED recomputes (`recomputeWorkItemCiState`,

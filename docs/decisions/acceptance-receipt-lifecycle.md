@@ -26,6 +26,9 @@
   recording and moves the story; it does not freeze the story, and it does not
   evict the spec. **§2's `approved → REFUSED` row, §3's trigger, §4's layers 1
   and 3, and §6 are superseded by it** — read it before those sections.
+  2026-10-24, **AMENDMENT 2** (MOTIR-9411) — a third route, **MOVE**, into the
+  regression lane that keeps the acceptance lane's triggers. **§3's two-route
+  table is widened by it.**
 
 > Convention (set by `work-item-type-taxonomy.md`, followed by
 > `billing-tiering.md` / `acceptance-video.md` / `design-result.md`): a decision
@@ -344,6 +347,39 @@ part 3 alone leaves a reworked story unable to re-record.
 **Unchanged:** §1 (the entity split), §5 (a design result is not a receipt), and
 the rule that a red acceptance spec is DISPOSITIONED, never edited to describe
 today.
+
+### AMENDMENT 2 (2026-10-24, MOTIR-9411) — MOVE: a done story's spec keeps its triggers
+
+**What happened.** AMENDMENT 1 stopped evicting a spec when its receipt was
+approved, and nothing else forced the §3 disposition. The lane grew from 26 specs
+(2026-08-13) to 158, every one of them for a done story. Measured on 2026-10-23:
+the lane is the slowest CI workflow (a green PR run of 113 minutes wall clock,
+348 runner-minutes on 10 legs), and about 136 minutes of its specs are pacing
+holds that no regression run needs.
+
+**Why PROMOTE was the wrong default for them.** §3 promotes into a lane that
+runs on EVERY pull request. The acceptance lane does not: a PR or queue entry
+runs it only when it touches the lane's own paths (MOTIR-4257), and `push: main`
+runs it in full (MOTIR-2760). Promoting 150 specs into the main or cloud lane,
+even with the holds stripped, moves about an hour and a half of browser tests
+onto every app PR. That trades a cost paid once per merge for a larger one paid
+on every pull request.
+
+**The decision.** §3 gains a third route:
+
+| Route    | What it means                                                                                                                                                                                                                                                 | Choose it when                                                                                                        |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| **MOVE** | Rename `acceptance-<x>.spec.ts` to `regression-<x>.spec.ts` and swap its import to `_helpers/promoted-regression`. **Keep every assertion.** It runs under `playwright.regression.config.ts`: the acceptance lane's cloud-on server, no pacing, no recording. | The flow needs the acceptance lane's server or is not worth a place on every PR, and no other spec already covers it. |
+
+The regression lane has the acceptance lane's triggers: lane-touching PRs and queue
+entries, and every push to `main`. It is one of the needs of `Acceptance complete`,
+so it is gated by the same required check. PROMOTE and RETIRE stand as they
+were. MOVE is the default for a done story's spec, PROMOTE is for a flow that
+earns a place on every PR, and RETIRE is for a flow already covered elsewhere.
+The acceptance lane goes back to holding only stories in flight.
+
+**Still rejected:** leaving a done story's spec in the acceptance lane. That
+is the state this amendment cleans up.
 
 ---
 

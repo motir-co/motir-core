@@ -75,7 +75,7 @@ export interface SharpenWriteBackRecord {
 
 /** The control file: the spec writes the fixtures, the seam appends the journals. */
 export interface SharpenControl {
-  /** Fixtures keyed by the session's scope ref — a plan id or a work-item key. */
+  /** Fixtures keyed by the session's scope ref — a plan id or a conversation id. */
   targets?: Record<string, SharpenTargetFixture>;
   /** For a target with no entry. Absent ⇒ `determinate`. */
   default?: SharpenTargetFixture;
@@ -184,7 +184,7 @@ export function recordAction(ctx: SharpenJobContext): {
 /** The write-back body — `buildSharpenWriteBack`, byte for byte. */
 export function buildWriteBack(
   jobId: string,
-  scope: SharpenJobContext['scope'],
+  planId: string,
   settled: SettledAnswer[],
   assumptions: SharpenAssumption[],
 ): SharpeningWriteBackInput {
@@ -196,13 +196,27 @@ export function buildWriteBack(
   }
   return {
     jobId,
-    scope: scope.kind === 'plan' ? { planId: scope.ref } : { workItemKey: scope.ref },
+    scope: { planId },
     requirement,
     plannerAssumptions: assumptions.map((a) => ({
       question: a.question,
       recommendation: a.recommendation,
     })),
   };
+}
+
+/** motir-ai's request normalisation (`normaliseRequest`). */
+function normaliseRequest(s: string): string {
+  return s.toLowerCase().replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/\s+/g, ' ').trim();
+}
+
+/** Do the run's carried answers cover every one of its requests —
+ *  `carriedCoversRequests`, as motir-ai reads it. */
+function carriedCoversRun(ctx: SharpenJobContext): boolean {
+  const run = ctx.run;
+  if (!run?.carried) return false;
+  const known = new Set(run.carried.requests.map(normaliseRequest));
+  return run.requests.every((r) => known.has(normaliseRequest(r)));
 }
 
 /**
@@ -223,16 +237,26 @@ export function planSharpenTurn(
     return {
       failed: false,
       turn: { kind, question: null, ...recorded, writeBack: null },
-      writeBack: nothing
-        ? null
-        : buildWriteBack(jobId, ctx.scope, recorded.settled, recorded.assumptions),
+      // A conversation has no plan yet, so it owes no write-back (MOTIR-9314).
+      writeBack:
+        nothing || ctx.scope.kind !== 'plan'
+          ? null
+          : buildWriteBack(jobId, ctx.scope.ref, recorded.settled, recorded.assumptions),
     };
   };
   if (ctx.action === 'stop') return end('stopped');
+  // The conversation already grilled this very request (`carriedAnswersCoverRun`,
+  // MOTIR-9313): nothing is left to ask.
+  if (ctx.action === 'start' && carriedCoversRun(ctx)) return end('nothing_to_ask');
   if (fixture.mode === 'determinate')
     return end(ctx.action === 'start' ? 'nothing_to_ask' : 'finished');
 
+  // What is already settled — the carried answers, then this session's own
+  // (`knownAnswers`): a carried question is never asked again.
+  const carried = ctx.run?.carried;
   const done = new Set([
+    ...(carried?.settled ?? []).map((s) => s.questionId),
+    ...(carried?.assumptions ?? []).map((a) => a.questionId),
     ...recorded.settled.map((s) => s.questionId),
     ...recorded.assumptions.map((a) => a.questionId),
   ]);

@@ -33,10 +33,11 @@ import { AiPaywall } from '@/components/ai/AiPaywall';
 import { PlanChangeComposer } from '@/components/planning/PlanChangeComposer';
 import { GrillMeControl } from '@/components/planning/GrillMeControl';
 import { SharpenThread } from '@/components/planning/SharpenThread';
+import { ConversationGrill } from '@/components/planning/ConversationGrill';
 import { useGrillOptIn } from '@/components/planning/useGrillOptIn';
 import { grillFailedAfterHandoff } from '@/lib/planning/grillHandoff';
 import { MOTIR_AI_UNAVAILABLE } from '@/lib/planning/submitStartingUp';
-import { useGrillSession } from '@/components/planning/useGrillSession';
+import { useGrillSession, type GrillOffer } from '@/components/planning/useGrillSession';
 import { StalePlanNotice } from '@/components/planning/StalePlanNotice';
 import { PlanActRecord, runningBarLine } from '@/components/planning/PlanActRecord';
 import { PlanNarration, narrationHeadLines } from '@/components/planning/PlanNarration';
@@ -685,11 +686,78 @@ export function PlanChangeRail({
     active: conversing,
     personTurns: userTurns.length,
   });
+  // GRILL ME BEFORE PLANNING (Story MOTIR-9221 · Subtask MOTIR-9316; design § Grill me
+  // before planning): a SECOND instance of the hook, over the conversation itself.
+  // With the switch on, an answer carrying a plan offer opens a grilling and the
+  // offer is HELD — drawn under the thread, with what was settled, once it ends.
+  // Its one input is the conversation's LATEST plan offer; the hold is the hook's.
+  const latestOfferIndex = turns.findLastIndex(
+    (turn) => turn.role === 'assistant' && turn.offer?.kind === 'plan',
+  );
+  const latestOfferTurn = latestOfferIndex >= 0 ? turns[latestOfferIndex]! : null;
+  const grillOffer: GrillOffer | null =
+    latestOfferTurn && latestOfferTurn.offer
+      ? {
+          turnId: latestOfferTurn.id,
+          createdAt: latestOfferTurn.createdAt,
+          personTurnsBefore: turns.slice(0, latestOfferIndex).filter((turn) => turn.role === 'user')
+            .length,
+          // Only an offer the person could confirm is grilled over: one that cannot
+          // start draws its cannot-start line, and never holds.
+          grillable:
+            (latestOfferTurn.offer.state ?? 'undecided') === 'undecided' &&
+            !latestOfferTurn.offer.cannotStart &&
+            offerAnswerable(turns, latestOfferIndex, {
+              canContinue: !ended && !state.readOnly,
+              hasActions: Boolean(onConfirmPlanOffer && onDeclinePlanOffer),
+            }),
+        }
+      : null;
+  const convGrill = useGrillSession({
+    on: grillOptIn.on,
+    planId: null,
+    active: false,
+    personTurns: userTurns.length,
+    conversation: state.session
+      ? {
+          id: state.session.id,
+          offer: grillOffer,
+          enabled: beforeAnyRun && !state.readOnly && !ended && state.session.origin !== 'guide',
+        }
+      : null,
+  });
+  const heldOfferTurnId = convGrill.hold && latestOfferTurn ? latestOfferTurn.id : null;
+  const convGrillSession =
+    convGrill.session?.scope.kind === 'conversation' && heldOfferTurnId ? convGrill.session : null;
   const [grillOwnWords, setGrillOwnWords] = useState(false);
   // The session's question, on the rail's question surface — only in the
   // conversation phase. The hand-off hides it; what was settled stays stored.
+  // Before planning, the conversation grilling's own question takes that place.
   const grillQuestion =
     conversing && grill.session?.status === 'open' ? (grill.session.pendingQuestion ?? null) : null;
+  const convQuestion =
+    convGrill.hold === 'held' && convGrillSession?.status === 'open'
+      ? (convGrillSession.pendingQuestion ?? null)
+      : null;
+  /** The plan offer row's inputs for the answer turn at `i` (MOTIR-9294). */
+  const planOfferPropsFor = (
+    turn: PlanChangeTurnDto,
+    i: number,
+  ): Omit<PlanOfferProps, 'turnId' | 'offer' | 'workItemRefs'> => ({
+    answerable: offerAnswerable(turns, i, {
+      canContinue: !ended && !state.readOnly,
+      hasActions: Boolean(onConfirmPlanOffer && onDeclinePlanOffer),
+    }),
+    answering: offerAnsweringTurnId === turn.id,
+    // An ASK turn running holds the row still; a planning run does not — that is
+    // the mid-planning confirm's whole case.
+    busy: state.phase === 'deciding' || (state.phase === 'streaming' && !state.planId),
+    midPlanning: offerMidPlanning,
+    refusal: offerRefusal?.turnId === turn.id ? offerRefusal.code : null,
+    sessionTargetKeys: state.session?.targetKeys ?? [],
+    ...(onConfirmPlanOffer ? { onConfirm: onConfirmPlanOffer } : {}),
+    ...(onDeclinePlanOffer ? { onDecline: onDeclinePlanOffer } : {}),
+  });
   // The first failure this viewer saw on this session: a newer one is *failed again*.
   const [firstFailure, setFirstFailure] = useState<{ sessionId: string; at: string } | null>(null);
   const failureSessionId = state.session?.id ?? null;
@@ -797,7 +865,7 @@ export function PlanChangeRail({
   });
   const composerPlaceholder = heldBlocks
     ? ts('refused.placeholder', { key: held.target })
-    : grillQuestion
+    : grillQuestion || convQuestion
       ? tGrill(grillOwnWords ? 'ownWordsPlaceholder' : 'composerPlaceholder')
       : question || isOpenUnclear(runPause)
         ? tc('composerPlaceholderAnswer')
@@ -1126,27 +1194,54 @@ export function PlanChangeRail({
               }
               planOffer={
                 turn.role === 'assistant' &&
-                (turn.offer?.kind === 'plan' || turn.offer?.kind === 'log_bug')
-                  ? {
-                      answerable: offerAnswerable(turns, i, {
-                        canContinue: !ended && !state.readOnly,
-                        hasActions: Boolean(onConfirmPlanOffer && onDeclinePlanOffer),
-                      }),
-                      answering: offerAnsweringTurnId === turn.id,
-                      // An ASK turn running holds the row still; a planning run does
-                      // not — that is the mid-planning confirm's whole case.
-                      busy:
-                        state.phase === 'deciding' ||
-                        (state.phase === 'streaming' && !state.planId),
-                      midPlanning: offerMidPlanning,
-                      refusal: offerRefusal?.turnId === turn.id ? offerRefusal.code : null,
-                      sessionTargetKeys: state.session?.targetKeys ?? [],
-                      ...(onConfirmPlanOffer ? { onConfirm: onConfirmPlanOffer } : {}),
-                      ...(onDeclinePlanOffer ? { onDecline: onDeclinePlanOffer } : {}),
-                    }
+                (turn.offer?.kind === 'plan' || turn.offer?.kind === 'log_bug') &&
+                turn.id !== heldOfferTurnId
+                  ? planOfferPropsFor(turn, i)
                   : null
               }
             />
+            {/* GRILL ME BEFORE PLANNING: the grilling over this answer's offer, and
+                the offer itself — held while it is open, shown once it ended. */}
+            {turn.id === heldOfferTurnId && convGrill.hold && turn.offer ? (
+              <ConversationGrill
+                session={convGrillSession}
+                hold={convGrill.hold}
+                pending={convGrill.pending}
+                error={convGrill.error}
+                endedBySwitch={convGrill.endedBySwitch}
+                {...(question || grillQuestion ? {} : { anchorId: PENDING_QUESTION_ID })}
+                onAct={(action, opts) => {
+                  setGrillOwnWords(false);
+                  convGrill.act(action, opts);
+                }}
+                onStop={convGrill.stop}
+                onSomethingElse={() => {
+                  setGrillOwnWords(true);
+                  railRef.current?.querySelector('textarea')?.focus();
+                }}
+                onRetry={convGrill.retry}
+                offer={
+                  <PlanOffer
+                    turnId={turn.id}
+                    offer={turn.offer}
+                    workItemRefs={state.session?.workItemRefs ?? {}}
+                    {...planOfferPropsFor(turn, i)}
+                    settled={
+                      convGrillSession && convGrillSession.status === 'ended'
+                        ? {
+                            settled: convGrillSession.settled,
+                            assumptions: convGrillSession.assumptions,
+                            empty:
+                              convGrillSession.endReason === 'nothing_to_ask'
+                                ? 'clearEnough'
+                                : 'nothingSettled',
+                          }
+                        : null
+                    }
+                  />
+                }
+              />
+            ) : null}
             {/* THE COPIED DIVIDER (AMENDMENT 23 §6; MOTIR-7633 sheet 3), under the
               last turn carried over from the ended session. */}
             {copied > 0 && i === copied - 1 && state.session?.copiedFromSessionId ? (
@@ -1218,7 +1313,6 @@ export function PlanChangeRail({
             session={grill.session}
             pending={grill.pending}
             error={grill.error}
-            cardKey={state.session?.targetKeys[0] ?? null}
             {...(question ? {} : { anchorId: PENDING_QUESTION_ID })}
             onAct={(action, opts) => {
               setGrillOwnWords(false);
@@ -1665,11 +1759,22 @@ export function PlanChangeRail({
               grill.act('own_words', { text });
               return;
             }
+            // BEFORE PLANNING, the same — and while the grilling holds an offer with
+            // no question pending (loading, a failed turn, out of credits), a typed
+            // message reaches nobody: a "yes" must never start the held plan.
+            if (convQuestion) {
+              setGrillOwnWords(false);
+              convGrill.act('own_words', { text });
+              return;
+            }
+            if (convGrill.hold === 'held') return;
             if (initialDraft && userTurns.length === 0) setSeededSend(text);
             setLastSent(text);
             onSend(text);
           }}
           placeholder={composerPlaceholder}
+          // A held message stays in the field (the send above reached nobody).
+          clearOnSubmit={!(convGrill.hold === 'held' && !convQuestion)}
           autoFocus={askingForReason || initialDraftCaret !== undefined}
           {...(initialDraftCaret !== undefined ? { caretAt: initialDraftCaret } : {})}
           // ⚠️ NO LONGER `busy` (MOTIR-4274). The composer stays LIVE while a run
@@ -1700,7 +1805,10 @@ export function PlanChangeRail({
               <GrillMeControl
                 on={grillOptIn.on}
                 onChange={grillOptIn.setOn}
-                hint={grill.session?.status !== 'open' && !grill.pending}
+                hint={
+                  grill.session?.status !== 'open' && !grill.pending && convGrill.hold !== 'held'
+                }
+                beforePlanning={beforeAnyRun}
               />
             ) : null
           }

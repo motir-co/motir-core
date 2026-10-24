@@ -13,18 +13,14 @@ import type {
 import { PlanNotFoundError } from '@/lib/plans/errors';
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 import { planSharpeningService } from '@/lib/services/planSharpeningService';
-import {
-  SharpeningInputInvalidError,
-  SharpeningPlanClosedError,
-  SharpeningTargetFinishedError,
-} from '@/lib/sharpening/errors';
-import { StaleWorkItemError, WorkItemNotFoundError } from '@/lib/workItems/errors';
+import { SharpeningInputInvalidError, SharpeningPlanClosedError } from '@/lib/sharpening/errors';
 
 // PUT /api/internal/ai/plan-sharpening (Task MOTIR-1101 · Subtask MOTIR-8175) —
 // the door motir-ai's grilling session writes the answers a person SETTLED
-// through: onto a plan's `sharpenedRequirement` (and its `add` proposals'
-// bodies), or into one committed work item's `## Acceptance criteria` and
-// `## Assumptions` sections. The body is `SharpeningWriteBackInput`, carrying
+// through: onto a plan's `sharpenedRequirement` and its `add` proposals'
+// bodies. There is no work-item scope (retired, MOTIR-9314): Motir AI never edits
+// a committed card as the person — a change to one reaches it through the plan
+// the person approves. The body is `SharpeningWriteBackInput`, carrying
 // the CUMULATIVE state; the write is idempotent (`planSharpeningService`).
 //
 // Service-to-service only (§4a service bearer + §4b job token), acting as the
@@ -35,13 +31,12 @@ import { StaleWorkItemError, WorkItemNotFoundError } from '@/lib/workItems/error
 // Typed errors → status (problem JSON `{ code, message }`):
 //   JobAuthError                          → 401
 //   malformed body / scope / jobId        → 400 SHARPENING_INVALID
+//                                           (a `{ workItemKey }` scope included)
 //   ProjectNotFoundError / PermissionDeniedError
 //                                         → 404 / 403 (the plan gate, `ai:view_plan`)
-//   ProjectAccessDeniedError              → 404 browse / 403 edit
-//   PlanNotFoundError / WorkItemNotFoundError → 404
+//   ProjectAccessDeniedError              → 404 browse / 403
+//   PlanNotFoundError                     → 404
 //   SharpeningPlanClosedError             → 409 SHARPENING_PLAN_CLOSED
-//   SharpeningTargetFinishedError         → 409 SHARPENING_TARGET_FINISHED
-//   StaleWorkItemError                    → 409 (edited concurrently, retries spent)
 //   SharpeningInputInvalidError           → 422 SHARPENING_INPUT_INVALID
 export async function PUT(req: Request): Promise<Response> {
   let auth;
@@ -67,19 +62,11 @@ export async function PUT(req: Request): Promise<Response> {
   } catch (err) {
     const gate = aiPlanGateErrorResponse(err);
     if (gate) return gate;
-    if (err instanceof PlanNotFoundError || err instanceof WorkItemNotFoundError) {
-      return problem(err.code, err.message, 404);
-    }
+    if (err instanceof PlanNotFoundError) return problem(err.code, err.message, 404);
     if (err instanceof ProjectAccessDeniedError) {
       return problem(err.code, err.message, err.kind === 'browse' ? 404 : 403);
     }
-    if (
-      err instanceof SharpeningPlanClosedError ||
-      err instanceof SharpeningTargetFinishedError ||
-      err instanceof StaleWorkItemError
-    ) {
-      return problem(err.code, err.message, 409);
-    }
+    if (err instanceof SharpeningPlanClosedError) return problem(err.code, err.message, 409);
     if (err instanceof SharpeningInputInvalidError) {
       return problem(err.code, err.message, 422);
     }
@@ -117,20 +104,11 @@ function parseInput(body: unknown): SharpeningWriteBackInput | string {
   if (!isObject(body)) return 'request body must be a JSON object';
   if (typeof body.jobId !== 'string' || !body.jobId) return '`jobId` is required.';
 
-  let scope: SharpeningScope;
   const s = body.scope;
-  if (isObject(s) && typeof s.planId === 'string' && s.planId && !('workItemKey' in s)) {
-    scope = { planId: s.planId };
-  } else if (
-    isObject(s) &&
-    typeof s.workItemKey === 'string' &&
-    s.workItemKey &&
-    !('planId' in s)
-  ) {
-    scope = { workItemKey: s.workItemKey };
-  } else {
-    return '`scope` must be `{ planId }` or `{ workItemKey }`.';
+  if (!isObject(s) || typeof s.planId !== 'string' || !s.planId || Object.keys(s).length !== 1) {
+    return '`scope` must be `{ planId }`.';
   }
+  const scope: SharpeningScope = { planId: s.planId };
 
   const r = body.requirement ?? {};
   if (!isObject(r)) return '`requirement` must be an object.';

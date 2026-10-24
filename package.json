@@ -90,6 +90,7 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:cloud": "playwright test --config playwright.cloud.config.ts",
+    "test:e2e:regression": "playwright test --config playwright.regression.config.ts",
     "test:e2e:observability": "playwright test -c playwright.observability.config.ts",
     "prepare": "husky",
     "postinstall": "prisma generate && pnpm --filter @motir/design-system build && pnpm --filter @motir/brand build && pnpm --filter @motir/orchestrator build && pnpm --filter @motir/pages build",

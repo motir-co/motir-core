@@ -9,9 +9,9 @@ import type {
 import { routingTargetId } from '@/lib/approvalGates/routing';
 import { designEvidenceRepository } from '@/lib/repositories/designEvidenceRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
-import { workItemsService } from '@/lib/services/workItemsService';
 import { requireArgsCard, requireGateCard } from './gateCard';
 import { returnCardToTodo } from './returnToTodo';
+import { applyGateTransition } from './gateTransition';
 
 // THE `design_result` HANDLER — the registry's first and, in this build, only
 // member (Story MOTIR-4778 · Subtask MOTIR-4790; ADR
@@ -176,7 +176,8 @@ export const designResultGateHandler: GateHandler<DesignEvidence> = {
    * second status writer, and the two would eventually disagree about one row in
    * a way that is very hard to trace.
    */
-  async approve({ gate, ctx, tx, resolvedStatusKey }: GateEffectArgs): Promise<GateEffect> {
+  async approve(args: GateEffectArgs): Promise<GateEffect> {
+    const { gate, tx, resolvedStatusKey } = args;
     const openPullRequests = await workItemDeliveryRepository.countOpenByWorkItem(
       requireGateCard(gate, 'designResultHandler'),
       tx,
@@ -199,11 +200,10 @@ export const designResultGateHandler: GateHandler<DesignEvidence> = {
     // rule 5). It exempts THIS gate only.
     // Never meets MARKED_CARD_CANNOT_REOPEN (MOTIR-6681): the target is the done
     // category, and the obsolescence mark refuses only a move OUT of it.
-    await workItemsService.applyStatusTransition(
+    await applyGateTransition(
+      args,
       requireGateCard(gate, 'designResultHandler'),
       resolvedStatusKey,
-      ctx,
-      tx,
       {
         decidingGateId: gate.id,
       },

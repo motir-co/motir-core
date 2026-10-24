@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { expectEachHopAnnounced } from '../helpers/transitionedEvents';
 import { linkPr } from '../helpers/prLink';
 import { DECIDED_WITHOUT_A_READER } from '@/lib/approvalGates/stamp';
 import { AcceptanceEvidenceStoryClosedError } from '@/lib/acceptanceEvidence/errors';
@@ -169,8 +170,15 @@ describe('the effect — approval writes `done` only when nothing is left for th
   it('a story with nothing under it: approval stamps the receipt and writes `done` — TERMINAL', async () => {
     const story = await makeStory('in_review');
     const evidence = await publish(story.id);
+    const gate = await awaitingGate(story.id);
 
-    const result = await decide((await awaitingGate(story.id)).id, 'approve');
+    // The `done` it writes is announced after the commit (Bug MOTIR-9415).
+    const { result, hops } = await expectEachHopAnnounced(
+      story.id,
+      { workspaceId: fx.workspaceId, actorId: fx.ctx.userId },
+      () => decide(gate.id, 'approve'),
+    );
+    expect(hops).toEqual([{ fromStatusKey: 'in_review', toStatusKey: 'done' }]);
 
     expect(result.effect).toEqual({ statusWritten: 'done' });
     expect(result.gate.state).toBe('approved');

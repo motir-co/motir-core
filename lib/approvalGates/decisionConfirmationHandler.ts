@@ -12,6 +12,7 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { pageVersionRepository } from '@/lib/repositories/pageVersionRepository';
 import { pageStoreFor } from '@/lib/pages';
 import { requireArgsCard, requireGateCard } from './gateCard';
+import { applyGateTransition } from './gateTransition';
 
 // THE `decision_confirmation` HANDLER (Story MOTIR-5871 · Subtask MOTIR-5954; ADR
 // `docs/decisions/approval-gates.md` §1's MOTIR-5952 amendment, the handler row).
@@ -84,7 +85,7 @@ export const decisionConfirmationGateHandler: GateHandler<ParsedDecision> = {
    * exactly as well, stamping `{ kind: 'none' }` (point 8: never a precondition).
    */
   async approve(args: GateEffectArgs): Promise<GateEffect> {
-    const { gate, ctx, tx, resolvedStatusKey } = args;
+    const { gate, tx, resolvedStatusKey } = args;
     const subject = await this.resolveSubject(args);
     if (!subject) throw new ApprovalGateStaleSubjectError(gate.id, ['subject']);
     const confirmedRecord = await resolveDecisionRecord(
@@ -105,19 +106,13 @@ export const decisionConfirmationGateHandler: GateHandler<ParsedDecision> = {
         confirmedRecord,
       };
     }
-    // ⚠️ IMPORTED HERE, NOT AT THE TOP — the `workItemsService` → `approvalGatesService`
-    // → registry → handler cycle; the same lazy import `decisionChoiceHandler` makes.
-    const { workItemsService } = await import('@/lib/services/workItemsService');
     // Never meets MARKED_CARD_CANNOT_REOPEN (MOTIR-6681): the target is the done
     // category, and the obsolescence mark refuses only a move OUT of it.
-    await workItemsService.applyStatusTransition(
+    await applyGateTransition(
+      args,
       requireGateCard(gate, 'decisionConfirmationHandler'),
       resolvedStatusKey,
-      ctx,
-      tx,
-      {
-        decidingGateId: gate.id,
-      },
+      { decidingGateId: gate.id },
     );
     return { statusWritten: resolvedStatusKey, confirmedRecord };
   },
@@ -134,23 +129,19 @@ export const decisionConfirmationGateHandler: GateHandler<ParsedDecision> = {
    * A subject that stopped parsing under the lock is stale, exactly as for Confirm.
    */
   async overturn(args: GateEffectArgs): Promise<GateEffect> {
-    const { gate, ctx, tx, resolvedStatusKey } = args;
+    const { gate, resolvedStatusKey } = args;
     const subject = await this.resolveSubject(args);
     if (!subject) throw new ApprovalGateStaleSubjectError(gate.id, ['subject']);
     if (resolvedStatusKey === null) {
       return { statusWritten: null, statusDeferredReason: 'no_status_in_target_category' };
     }
-    const { workItemsService } = await import('@/lib/services/workItemsService');
     // Never meets MARKED_CARD_CANNOT_REOPEN (MOTIR-6681): the target is the done
     // category, and the obsolescence mark refuses only a move OUT of it.
-    await workItemsService.applyStatusTransition(
+    await applyGateTransition(
+      args,
       requireGateCard(gate, 'decisionConfirmationHandler'),
       resolvedStatusKey,
-      ctx,
-      tx,
-      {
-        decidingGateId: gate.id,
-      },
+      { decidingGateId: gate.id },
     );
     return { statusWritten: resolvedStatusKey };
   },

@@ -360,14 +360,14 @@ const DEADLINE_IRRELEVANT: ReadonlyMap<string, string> = new Map([
       'job registry), which spends no budget either.',
   ],
   [
-    'tests/e2e/acceptance-my-agents.spec.ts',
+    'tests/e2e/regression-my-agents.spec.ts',
     'Its one 429 is not a rate limit at all: it is the agent lane’s PERSONAL LIMIT ' +
       '(`AgentInstanceStartRefusedError` `user_cap`, `lib/agentInstances/errorResponse.ts` — ' +
       '"429 for a cap"), decided by a count of the owner’s live agents in the database. ' +
       'No rate-limit budget is spent and no store is resolved (MOTIR-6877).',
   ],
   [
-    'tests/e2e/acceptance-plan-caps.spec.ts',
+    'tests/e2e/regression-plan-caps.spec.ts',
     'Its one 429 is the agent lane’s PERSONAL LIMIT under the org’s plan ' +
       '(`AgentInstanceStartRefusedError` `user_cap` carrying the plan’s figure, ' +
       '`lib/agentInstances/errorResponse.ts`), decided by a count of the owner’s live agents ' +
@@ -382,7 +382,7 @@ const DEADLINE_IRRELEVANT: ReadonlyMap<string, string> = new Map([
       'limiter and no store is resolved.',
   ],
   [
-    'tests/e2e/acceptance-visitor-requested-features.spec.ts',
+    'tests/e2e/regression-visitor-requested-features.spec.ts',
     'Its one 429 is a refusal the SPEC hands back: `page.route` fulfils the upvote POST ' +
       'with a 429 so the Requested features row’s restore-and-say-so arm is walked ' +
       '(MOTIR-6770). The lane runs with `E2E_DISABLE_RATE_LIMIT`, so no budget is spent ' +

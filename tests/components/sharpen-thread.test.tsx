@@ -103,14 +103,7 @@ function render(props: Partial<SharpenThreadProps> = {}) {
     onRetry: vi.fn(),
   };
   renderWithIntl(
-    <SharpenThread
-      session={session()}
-      pending={false}
-      error={null}
-      cardKey="ACME-58"
-      {...handlers}
-      {...props}
-    />,
+    <SharpenThread session={session()} pending={false} error={null} {...handlers} {...props} />,
   );
   return handlers;
 }
@@ -235,7 +228,7 @@ describe('the end and the summary', () => {
     expect(assumed.textContent).toContain('Remove everywhere');
   });
 
-  it('names the plan and the card the answers were written to, with a link to the card', () => {
+  it('names the plan alone as where the answers were written — never a card (MOTIR-9314)', () => {
     render({
       session: session({ ...ENDED, endReason: 'finished', writeBack: { ok: true } }),
     });
@@ -243,24 +236,14 @@ describe('the end and the summary', () => {
       "That's everything I needed to ask.",
     );
     const written = screen.getByTestId('sharpen-written');
-    expect(written.textContent).toBe("Written to the plan's requirement and to ACME-58.");
-    expect(written.querySelector('a')?.getAttribute('href')).toBe('/items/ACME-58');
-  });
-
-  it('a project-wide run names only the plan', () => {
-    render({
-      cardKey: null,
-      session: session({ ...ENDED, endReason: 'finished', writeBack: { ok: true } }),
-    });
-    expect(screen.getByTestId('sharpen-written').textContent).toBe(
-      "Written to the plan's requirement.",
-    );
+    expect(written.textContent).toBe("Written to the plan's requirement.");
+    expect(written.querySelector('a')).toBeNull();
   });
 
   it('says it is writing until the write-back reports, and says so when it failed', () => {
     render({ session: session({ ...ENDED, endReason: 'finished' }) });
     expect(screen.getByTestId('sharpen-writing').textContent).toBe(
-      "Writing your answers to the plan's requirement and to ACME-58…",
+      "Writing your answers to the plan's requirement…",
     );
     cleanup();
     render({

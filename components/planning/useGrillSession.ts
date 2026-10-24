@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { SharpenAction } from '@/lib/ai/types';
 import type { SharpenDoorResult, SharpenSessionDto } from '@/lib/dto/sharpen';
 import {
+  getLatestConversationSharpen,
   getOpenSharpen,
   openSharpen,
   resubmitSharpen,
@@ -32,6 +33,13 @@ import { PlanEditsClientError } from '@/lib/planning/planEditsClient';
 // One act at a time: while a turn's job is in flight every act is refused here
 // (the door refuses a second one too — SHARPEN_TURN_IN_FLIGHT), except Stop,
 // which is always reachable.
+//
+// BEFORE PLANNING (Story MOTIR-9221 · Subtask MOTIR-9316; design § Grill me before
+// planning). Given a `conversation` and no `planId`, the hook grills the
+// plan-change conversation itself: a round opens when an answer carrying a plan
+// offer arrives after the switch went on, and the offer is HELD until that
+// grilling ends. The in-run path is untouched: it reads only `planId` / `active`,
+// and the rail runs one instance of this hook for each.
 
 const SETTLE_POLL_MS = 1000;
 
@@ -51,6 +59,34 @@ export interface GrillSession {
   stop: () => void;
   /** Re-run the turn whose job failed (Try again). */
   retry: () => void;
+  /** Before planning: whether the conversation's latest plan offer is HELD while it
+   *  is grilled, SHOWN after a grilling over it ended, or neither (null). */
+  hold: OfferHold;
+  /** The ended session was stopped by switching Grill me off (this tab only). */
+  endedBySwitch: boolean;
+}
+
+/** The latest plan offer in the conversation, as the before-planning grilling reads it. */
+export interface GrillOffer {
+  turnId: string;
+  /** The answer turn's `createdAt` — a session created at or after it covers it. */
+  createdAt: string;
+  /** How many person turns came before the answer — it arrived after the arm when
+   *  this is past the count the switch was turned on at. */
+  personTurnsBefore: number;
+  /** An undecided `plan` offer that can start: the only kind a grilling holds. */
+  grillable: boolean;
+}
+
+export type OfferHold = 'held' | 'shown' | null;
+
+/** A conversation session that began at or after the offer's answer was grilling it. */
+export function coversOffer(session: SharpenSessionDto | null, offer: GrillOffer): boolean {
+  return (
+    session !== null &&
+    session.scope.kind === 'conversation' &&
+    session.createdAt >= offer.createdAt
+  );
 }
 
 interface Args {
@@ -62,6 +98,9 @@ interface Args {
   active: boolean;
   /** How many person turns the plan-change conversation has. */
   personTurns: number;
+  /** Before planning: the conversation to grill, its latest plan offer, and whether
+   *  a grilling may open there (a non-guide conversation holding no plan). */
+  conversation?: { id: string; offer: GrillOffer | null; enabled: boolean } | null;
 }
 
 function codeOf(err: unknown): string | null {
@@ -88,10 +127,43 @@ function failedPersonTurnId(session: SharpenSessionDto): string | null {
   return null;
 }
 
-export function useGrillSession({ on, planId, active, personTurns }: Args): GrillSession {
+export function useGrillSession({
+  on,
+  planId,
+  active,
+  personTurns,
+  conversation = null,
+}: Args): GrillSession {
   const [session, setSession] = useState<SharpenSessionDto | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<GrillError>(null);
+  // BEFORE PLANNING: the person-turn count the switch was turned on at, the
+  // conversation whose latest session has been read, the offer a Stop gave up on
+  // before any session opened, and the session a switch-off stopped.
+  const [convArmedAt, setConvArmedAt] = useState<number | null>(on ? personTurns : null);
+  const [prevOn, setPrevOn] = useState(on);
+  const [readFor, setReadFor] = useState<string | null>(null);
+  const [dismissedOffer, setDismissedOffer] = useState<string | null>(null);
+  const [switchStopped, setSwitchStopped] = useState<string | null>(null);
+  // Adjusted DURING RENDER (React's derived-state pattern), so the arm and the
+  // switch-off mark land in the same frame the switch moved.
+  if (on !== prevOn) {
+    setPrevOn(on);
+    setConvArmedAt(on ? personTurns : null);
+    if (!on && session?.status === 'open' && session.scope.kind === 'conversation') {
+      setSwitchStopped(session.id);
+    }
+  }
+  const convId = !planId && conversation ? conversation.id : null;
+  const offer = convId ? (conversation?.offer ?? null) : null;
+  const covered = offer !== null && coversOffer(session, offer);
+  const armedForOffer =
+    offer !== null && convArmedAt !== null && offer.personTurnsBefore > convArmedAt;
+  // Primitives for the effects: the caller builds `offer` afresh every render.
+  const hasOffer = offer !== null;
+  const offerId = offer?.turnId ?? null;
+  const offerGrillable = offer?.grillable ?? false;
+  const convEnabled = Boolean(conversation?.enabled);
 
   // THE ARM: the person-turn count at the moment the mode was turned on (or the
   // mount found it on). A session opens only for a person turn past it.
@@ -103,6 +175,7 @@ export function useGrillSession({ on, planId, active, personTurns }: Args): Gril
   const abortRef = useRef<AbortController | null>(null);
   const mountedRef = useRef(true);
   const resumeTriedRef = useRef<string | null>(null);
+  const openedForOfferRef = useRef<string | null>(null);
   const sessionRef = useRef(session);
   sessionRef.current = session;
 
@@ -220,6 +293,52 @@ export function useGrillSession({ on, planId, active, personTurns }: Args): Gril
     queueMicrotask(() => void run(() => openSharpen({ planId })));
   }, [on, active, planId, personTurns, session, run]);
 
+  // BEFORE PLANNING — RESUME, sending nothing: the caller's latest session on the
+  // conversation, open or ended, read once per conversation that holds an offer. An
+  // open one is drawn as it stands; an ended one lists what it settled on the offer.
+  useEffect(() => {
+    if (!convId || !hasOffer || readFor === convId) return;
+    const controller = new AbortController();
+    void getLatestConversationSharpen(convId, controller.signal)
+      .then((latest) => {
+        if (!mountedRef.current || controller.signal.aborted) return;
+        if (latest) {
+          setSession((cur) => cur ?? latest);
+          if (latest.status === 'open' && latest.inFlight?.jobId) {
+            void follow(latest.id, latest.inFlight.jobId);
+          }
+        }
+        setReadFor(convId);
+      })
+      .catch(() => {
+        // Nothing to resume is not an error the person needs to see.
+        if (mountedRef.current && !controller.signal.aborted) setReadFor(convId);
+      });
+    return () => controller.abort();
+  }, [convId, hasOffer, readFor, follow]);
+
+  // BEFORE PLANNING — OPEN A ROUND: on, over a grillable offer that arrived after the
+  // switch, once the latest session is read and none covers it yet.
+  useEffect(() => {
+    if (!convId || !offerId || !convEnabled || !on || busyRef.current) return;
+    if (!offerGrillable || !armedForOffer || readFor !== convId) return;
+    if (covered || dismissedOffer === offerId) return;
+    if (openedForOfferRef.current === offerId) return;
+    openedForOfferRef.current = offerId;
+    queueMicrotask(() => void run(() => openSharpen({ conversationId: convId })));
+  }, [
+    convId,
+    offerId,
+    convEnabled,
+    on,
+    offerGrillable,
+    armedForOffer,
+    readFor,
+    covered,
+    dismissedOffer,
+    run,
+  ]);
+
   const act = useCallback<GrillSession['act']>(
     (action, opts = {}) => {
       const open = sessionRef.current;
@@ -231,19 +350,54 @@ export function useGrillSession({ on, planId, active, personTurns }: Args): Gril
 
   const stop = useCallback(() => {
     const open = sessionRef.current;
+    // Before planning, a round whose open failed has no session to stop: Stop gives
+    // up on grilling that offer, and the offer is shown as planned.
+    if ((!open || open.status !== 'open') && offerId && !covered) {
+      setDismissedOffer(offerId);
+      setError(null);
+      return;
+    }
     if (!open || open.status !== 'open') return;
     // Stop is reachable while an act is in flight: the walk ends at its boundary.
     abortRef.current?.abort();
     void run(() => sharpenAct(open.id, 'stop'));
-  }, [run]);
+  }, [run, offerId, covered]);
 
   const retry = useCallback(() => {
     const open = sessionRef.current;
+    // Before planning, an open that failed is tried again as the open itself.
+    if (convId && offerId && !covered && !busyRef.current) {
+      void run(() => openSharpen({ conversationId: convId }));
+      return;
+    }
     if (!open || busyRef.current) return;
     const turnId = failedPersonTurnId(open) ?? open.inFlight?.turnId ?? null;
     if (!turnId) return;
     void run(() => resubmitSharpen(open.id, turnId));
-  }, [run]);
+  }, [run, convId, offerId, covered]);
 
-  return { session, pending, error, act, stop, retry };
+  // THE HOLD, derived every render so Stop, the switch, a reload and the lease need
+  // no bookkeeping of their own: a session over the offer holds it while open and
+  // shows it once ended; before one opens, an armed grillable offer is held.
+  const hold: OfferHold =
+    offer === null
+      ? null
+      : covered
+        ? session!.status === 'open'
+          ? 'held'
+          : 'shown'
+        : convEnabled && on && offerGrillable && armedForOffer && dismissedOffer !== offerId
+          ? 'held'
+          : null;
+
+  return {
+    session,
+    pending,
+    error,
+    act,
+    stop,
+    retry,
+    hold,
+    endedBySwitch: session !== null && switchStopped === session.id,
+  };
 }

@@ -906,6 +906,16 @@ export const planChangeSessionRepository = {
     return tx.planChangeSession.update({ where: { id }, data });
   },
 
+  /** Move an OPEN session's `lastActivityAt` — a Grill me turn on the conversation
+   *  (MOTIR-9314). An ended session is left as it ended. Answers whether it moved. */
+  async touchOpen(id: string, at: Date, tx: Prisma.TransactionClient): Promise<boolean> {
+    const { count } = await tx.planChangeSession.updateMany({
+      where: { id, endedAt: null },
+      data: { lastActivityAt: at },
+    });
+    return count > 0;
+  },
+
   /**
    * ONE PAGE of the Plans page's session list (MOTIR-6025, AMENDMENT 17 §8),
    * newest activity first, in ONE statement: each session with its starter, its

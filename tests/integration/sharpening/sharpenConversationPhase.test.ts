@@ -9,7 +9,6 @@ import type { SharpenSessionDto } from '@/lib/dto/sharpen';
 import type { PlanChangeConversationState } from '@/lib/hooks/usePlanChangeConversation';
 import { planRunPhase } from '@/lib/planning/planRunPhase';
 import type { ProjectContext } from '@/lib/projects';
-import { SHARPENED_BLOCK_START } from '@/lib/sharpening/managedBlock';
 import {
   createTestUser,
   createTestWorkItem,
@@ -22,7 +21,8 @@ import { addToProjectAs } from '../../helpers/workspaceRoleFixtures';
 
 // Task MOTIR-1101 · Subtask MOTIR-8448 — the "Grill me" control's session over
 // the run's OWN plan, the phase gate's three states, and the settled answers
-// landing on the plan and on the card being planned.
+// landing on the plan — never on the card being planned (Story MOTIR-9221 ·
+// MOTIR-9314).
 //
 // Real Postgres and the shipped route handlers. motir-ai is faked at the CLIENT
 // boundary only (`submitJob` / `getJob`, and `streamJob` for the relay the run's
@@ -652,8 +652,6 @@ describe('the phase gate’s three states', () => {
 
 // ── the settled answers landing ──────────────────────────────────────────────
 
-const count = (haystack: string, needle: string) => haystack.split(needle).length - 1;
-
 describe('the settled answers landing', () => {
   it('a project-wide run lands on the plan alone; the plan stays generating', async () => {
     const bystander = await anchorCard();
@@ -683,8 +681,9 @@ describe('the settled answers landing', () => {
     expect(await cardBody(bystander.id)).toBe('Hand-written body.\n');
   });
 
-  it('an anchored run lands on the plan AND on the card being planned, from the one plan-scope session; a repeat is byte-identical', async () => {
+  it('an anchored run lands on the plan alone; the card being planned is untouched, and a repeat is byte-identical (MOTIR-9314)', async () => {
     const card = await anchorCard();
+    const cardBefore = await cardBody(card.id);
     const run = await startAnchoredRun(card);
     const { sessionId } = await grillWithQuestion(run.planId);
     expect((await readById(sessionId)).scope).toEqual({ kind: 'plan', planId: run.planId });
@@ -698,22 +697,11 @@ describe('the settled answers landing', () => {
       ...REQUIREMENT,
       plannerAssumptions: PLANNER,
     });
-
-    const body = await cardBody(card.id);
-    expect(body.startsWith('Hand-written body.\n')).toBe(true);
-    expect(count(body, SHARPENED_BLOCK_START)).toBe(2);
-    expect(body).toMatch(/## Acceptance criteria\n\n<!-- motir:sharpened:start -->\n/);
-    expect(body).toMatch(/## Assumptions\n\n<!-- motir:sharpened:start -->\n/);
-    expect(body).toContain("- Planner's assumption — Which date format? — ISO 8601");
-    expect(body).toContain('- What if a preset is empty? — The export says so');
-    expect(body).not.toContain("Planner's assumption — What if a preset is empty?");
-    expect(body).not.toContain("Planner's assumption — Who exports presets?");
+    expect(await cardBody(card.id)).toBe(cardBefore);
 
     // motir-ai repeating the identical write.
     expect((await putWriteBack(stopJobId, run.planId)).status).toBe(200);
-    const again = await cardBody(card.id);
-    expect(again).toBe(body);
-    expect(count(again, SHARPENED_BLOCK_START)).toBe(2);
+    expect(await cardBody(card.id)).toBe(cardBefore);
   });
 
   it('a decided plan refuses the landing: the session still ends with its answers, writeBack ok:false names the refusal, plan and card untouched', async () => {
@@ -740,7 +728,7 @@ describe('the settled answers landing', () => {
     expect(await cardBody(card.id)).toBe(cardBefore);
   });
 
-  it('a finished card refuses its leg: the session keeps its answers, writeBack ok:false names the refusal, the card is untouched', async () => {
+  it('a finished card no longer refuses the landing: the plan takes the answers, the card is untouched (MOTIR-9314)', async () => {
     const card = await anchorCard();
     const run = await startAnchoredRun(card);
     const { sessionId } = await grillWithQuestion(run.planId);
@@ -748,22 +736,16 @@ describe('the settled answers landing', () => {
 
     await adminDb.workItem.update({ where: { id: card.id }, data: { status: 'done' } });
     const cardBefore = await cardBody(card.id);
-    const planStatus = (await plansService.getPlan(run.planId, fx.ctx)).status;
 
     const ended = await settle(sessionId, stopJobId);
     expect(ended.session).toMatchObject({
       status: 'ended',
       settled: SETTLED,
       assumptions: ASSUMPTIONS,
-      writeBack: { ok: false, error: 'SHARPENING_TARGET_FINISHED' },
+      writeBack: { ok: true },
     });
     expect(await cardBody(card.id)).toBe(cardBefore);
-    // ⚠️ The plan leg is NOT byte-identical here, and that is the shipped design
-    // (MOTIR-8449: "the plan leg commits first … a finished anchor keeps the card
-    // refusal"), not this card's "plan and card byte-identical" reading. Asserted
-    // as shipped so a change to that ordering is a visible decision.
     const plan = await plansService.getPlan(run.planId, fx.ctx);
-    expect(plan.status).toBe(planStatus);
     expect(plan.sharpenedRequirement).toMatchObject({
       ...REQUIREMENT,
       plannerAssumptions: PLANNER,

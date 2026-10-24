@@ -7,7 +7,7 @@ import { adminDb } from './db-reset';
 import { createReader, type OrgSeed, type Person } from './translation-seed';
 
 // THE AUTO-TRANSLATE-STORY seed (Story MOTIR-7738 · MOTIR-8836), for the receipt
-// `acceptance-auto-translate-story.spec.ts` records. It builds on the on-demand
+// `regression-auto-translate-story.spec.ts` records. It builds on the on-demand
 // story's helpers (`translation-seed.ts`: readers, organisations, sign-in, the
 // token, the jobs mock's record and outcomes, the billing mock's figure) and adds
 // only what differs: items whose fields record ENGLISH (the shipped seeder records

@@ -70,7 +70,7 @@ export type FleetWorkloadKind =
 /** Which implementation is behind the port. `fake` is a first-class member, not
  *  a test artifact: §4's rule 2 requires it to ship alongside the Fly adapter,
  *  because a port with one implementation has never been shown to be a port. */
-export type OrchestratorProvider = 'fly' | 'runs_on' | 'arc' | 'fake';
+export type OrchestratorProvider = 'fly' | 'aws' | 'runs_on' | 'arc' | 'fake';
 
 /**
  * The machine class. Fixed by `ci-minutes-allowance.md` §M to be

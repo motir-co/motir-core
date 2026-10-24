@@ -18,7 +18,7 @@ import en from '@/messages/en.json';
 // AN ACCEPTANCE VIDEO SENT BACK IS A VERDICT — THE ACCEPTANCE RECEIPT (Story MOTIR-6071 ·
 // Subtask MOTIR-6508; `docs/decisions/acceptance-refusal-verdict.md`; design MOTIR-6500
 // `approval-control--acceptance-verdict.mock.html`). It mirrors MOTIR-6429's
-// `acceptance-design-verdict.spec.ts`.
+// `regression-design-verdict.spec.ts`.
 //
 // ── WHAT A REVIEWER IS WATCHING FOR ─────────────────────────────────────────
 //

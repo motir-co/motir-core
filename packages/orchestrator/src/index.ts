@@ -35,3 +35,6 @@ export * from './adapters/fly/persistent';
 export * from './adapters/fake/persistent';
 export * from './adapters/fly/inventory';
 export * from './adapters/fake/inventory';
+export * from './adapters/aws/ec2Client';
+export * from './adapters/aws/network';
+export * from './adapters/aws';

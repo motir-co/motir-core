@@ -3505,6 +3505,10 @@ export function usePlanChangeConversation({
           setState((s) => (s.session?.id === read.id ? { ...s, session: read } : s));
           return;
         }
+        // The run in flight NOW is the one a mid-planning confirm stops. Taken before
+        // the awaits: a turn the person sends while they are out puts its own
+        // controller on `abortRef`, and aborting that one dropped the turn (MOTIR-9409).
+        const inFlight = abortRef.current;
         const started = await answerPlanOffer(session.id, turnId, 'confirm');
         // A `log_bug` offer (MOTIR-9323) made its one write: no run follows, and the
         // thread the door answered already carries the landing on the offer's turn.
@@ -3518,7 +3522,8 @@ export function usePlanChangeConversation({
         if (!mountedRef.current) return;
         // The run in flight (a mid-planning confirm) was stopped by the door; its
         // stream stops being followed here before the new one is.
-        abortRef.current?.abort();
+        inFlight?.abort();
+        if (abortRef.current === inFlight) abortRef.current = null;
         if (read.id !== session.id) {
           adoptedSessionRef.current = read.id;
           lastAskTurnRef.current = null;

@@ -10,7 +10,7 @@ import {
 // THE ROUTE IS GONE — the arm where that is OBSERVABLE
 // (Story MOTIR-4101 · Subtask MOTIR-4105).
 //
-// ── ⚠️ WHY THIS FILE EXISTS BESIDE `acceptance-legal-gone.spec.ts` ──────────
+// ── ⚠️ WHY THIS FILE EXISTS BESIDE `regression-legal-gone.spec.ts` ──────────
 //
 // Two shipped mechanisms compete for `/legal` on the application host: the route
 // MOTIR-4103 deleted, and MOTIR-3884's redirect to the public site. Which one
@@ -108,7 +108,7 @@ test('@smoke self-host: /legal is gone from the app host, and sign-up still read
   expect(health.documentCount).toBe(0);
 
   // ── 4. AND THE SURFACES THAT NAMED THEM STILL READ ─────────────────────────
-  // Shared with `acceptance-legal-gone.spec.ts` so the two cannot drift: the
+  // Shared with `regression-legal-gone.spec.ts` so the two cannot drift: the
   // notice is ABSENT rather than re-flowed (`public-surface-hosts.md`
   // AMENDMENT 2 §D), and the card's foot still reads as a foot.
   await startSignedOut(page);

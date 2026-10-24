@@ -4,6 +4,7 @@ import { DECIDED_WITHOUT_A_READER } from '@/lib/approvalGates/stamp';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { expectEachHopAnnounced } from '../helpers/transitionedEvents';
 
 // THE DECIDE DOOR TAKES A CHOICE (Story MOTIR-4914 · Subtask MOTIR-5893; ADR
 // `approval-gates.md` §1's MOTIR-5887 amendment, points 5–7). Real Postgres, the
@@ -28,7 +29,6 @@ vi.mock('@/lib/projects', async (importOriginal) => ({
   getActiveProject: async () => activeProject.current,
 }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
-vi.mock('@/lib/jobs/sendEvent', () => ({ sendEvent: async () => {} }));
 
 const { workItemsService } = await import('@/lib/services/workItemsService');
 const { approvalGatesService } = await import('@/lib/services/approvalGatesService');
@@ -119,7 +119,13 @@ const CHOSEN = {
 describe('choose — the route', () => {
   it('writes done, records the option as outcomeRef and stamps chosenOption', async () => {
     const { item, gateId, stamp } = await waitingChoice();
-    const res = await post(gateId, { decision: 'choose', optionId: 'our-own-postgres', stamp });
+    // The `done` it writes is announced after the commit (Bug MOTIR-9415).
+    const { result: res, hops } = await expectEachHopAnnounced(
+      item.id,
+      { workspaceId: fx.workspaceId, actorId: fx.ownerId },
+      () => post(gateId, { decision: 'choose', optionId: 'our-own-postgres', stamp }),
+    );
+    expect(hops).toEqual([{ fromStatusKey: 'in_review', toStatusKey: 'done' }]);
 
     expect(res.status).toBe(200);
     const body = (await res.json()) as { gate: { state: string; chosenOption: unknown } };
@@ -180,11 +186,18 @@ describe('choose — the route', () => {
 
   it('None of these is changes_requested, moves nothing and stamps no pick', async () => {
     const { item, gateId, stamp } = await waitingChoice();
-    const res = await post(gateId, {
-      decision: 'request_changes',
-      noteMd: 'Neither — what about the customer’s own bucket?',
-      stamp,
-    });
+    // A decision that writes no status announces none.
+    const { result: res, hops } = await expectEachHopAnnounced(
+      item.id,
+      { workspaceId: fx.workspaceId, actorId: fx.ownerId },
+      () =>
+        post(gateId, {
+          decision: 'request_changes',
+          noteMd: 'Neither — what about the customer’s own bucket?',
+          stamp,
+        }),
+    );
+    expect(hops).toEqual([]);
     expect(res.status).toBe(200);
     const row = await gateRow(gateId);
     expect(row).toMatchObject({ state: 'changes_requested', outcomeRef: null });

@@ -10,7 +10,7 @@ import { seedGithubInstallation } from './github-seed';
 import { E2E_PROVISIONING_ORG } from './github-const';
 
 // THE ACCEPTANCE-GATE E2E SEED (Story MOTIR-4949 · Subtask MOTIR-5792), for the receipt
-// `acceptance-gate.spec.ts` records.
+// `regression-gate.spec.ts` records.
 //
 // WHAT GOES THROUGH THE PRODUCT, AND WHAT IS PLANTED:
 //   * the people, workspace, project, memberships, stories and their E2E subtasks — their

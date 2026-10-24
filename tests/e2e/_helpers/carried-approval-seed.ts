@@ -9,7 +9,7 @@ import { createTestPerson } from './testPerson';
 import { seedGithubInstallation } from './github-seed';
 import { E2E_PROVISIONING_ORG } from './github-const';
 
-// THE CARRIED-APPROVAL SEED (Bug MOTIR-5986), for `acceptance-carried-approval-merges.spec.ts`.
+// THE CARRIED-APPROVAL SEED (Bug MOTIR-5986), for `regression-carried-approval-merges.spec.ts`.
 //
 // ONE shape: a DESIGN card mid-run in a `manual` project, with work waiting on it and two
 // repositories its pull requests will open in. Everything the walk decides is left to the

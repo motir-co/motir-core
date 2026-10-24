@@ -2,7 +2,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { db } from '@/lib/db';
 import type { ProjectContext } from '@/lib/projects';
-import { createTestWorkItem, makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
+import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
@@ -131,10 +131,11 @@ describe('POST /api/ai/sharpen', () => {
 
   it.each([
     ['invalid JSON', '{nope'],
-    ['no planId, itemKey or sessionId', '{}'],
+    ['no planId, conversationId or sessionId', '{}'],
+    ['the retired itemKey (MOTIR-9314)', JSON.stringify({ itemKey: 'PROD-1' })],
     ['a turnId without a sessionId', JSON.stringify({ turnId: 't' })],
     ['an unknown action', JSON.stringify({ sessionId: 's', action: 'shout' })],
-    ['both planId and itemKey', JSON.stringify({ planId: 'p', itemKey: 'PROD-1' })],
+    ['both planId and conversationId', JSON.stringify({ planId: 'p', conversationId: 'c' })],
   ])('400 for %s', async (_label, raw) => {
     expect((await POST(post('/api/ai/sharpen', raw))).status).toBe(400);
   });
@@ -170,17 +171,31 @@ describe('POST /api/ai/sharpen', () => {
     expect(((await inFlight.json()) as { code: string }).code).toBe('SHARPEN_TURN_IN_FLIGHT');
   });
 
-  it('409 SHARPEN_TARGET_CLOSED for a done item; 404 for an unknown key', async () => {
-    const item = await createTestWorkItem(fx, { kind: 'task', title: 'Export' });
-    await adminDb.workItem.update({ where: { id: item.id }, data: { status: 'done' } });
+  it('409 SHARPEN_TARGET_CLOSED for an ended conversation; 404 for an unknown one', async () => {
+    const ended = await adminDb.planChangeSession.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        createdById: fx.ownerId,
+        endedAt: new Date(),
+        endReason: 'idle',
+      },
+    });
+    await adminDb.planChangeTurn.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        sessionId: ended.id,
+        seq: 0,
+        role: 'user',
+        body: 'Export',
+      },
+    });
     const closed = await POST(
-      post('/api/ai/sharpen', JSON.stringify({ itemKey: item.identifier })),
+      post('/api/ai/sharpen', JSON.stringify({ conversationId: ended.id })),
     );
     expect(closed.status).toBe(409);
     expect(((await closed.json()) as { code: string }).code).toBe('SHARPEN_TARGET_CLOSED');
-    const missing = await POST(
-      post('/api/ai/sharpen', JSON.stringify({ itemKey: `${fx.projectIdentifier}-999` })),
-    );
+    const missing = await POST(post('/api/ai/sharpen', JSON.stringify({ conversationId: 'nope' })));
     expect(missing.status).toBe(404);
   });
 });
@@ -210,6 +225,41 @@ describe('the reads', () => {
 
   it('GET without exactly one target is a 400', async () => {
     expect((await GET(new Request(`${BASE}/api/ai/sharpen`))).status).toBe(400);
+  });
+
+  it('GET ?conversationId=&latest=1 answers the latest session there; `latest` needs a conversation (MOTIR-9316)', async () => {
+    const conversation = await adminDb.planChangeSession.create({
+      data: { workspaceId: fx.workspaceId, projectId: fx.projectId, createdById: fx.ownerId },
+    });
+    await adminDb.planChangeTurn.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        sessionId: conversation.id,
+        seq: 0,
+        role: 'user',
+        body: 'Add a CSV export',
+      },
+    });
+    const latestUrl = `${BASE}/api/ai/sharpen?conversationId=${conversation.id}&latest=1`;
+    const none = await GET(new Request(latestUrl));
+    expect(none.status).toBe(200);
+    expect(await none.json()).toBeNull();
+
+    const opened = (await (
+      await POST(post('/api/ai/sharpen', JSON.stringify({ conversationId: conversation.id })))
+    ).json()) as { session: { id: string } };
+    const open = (await (await GET(new Request(latestUrl))).json()) as {
+      id: string;
+      status: string;
+      scope: { kind: string };
+    };
+    expect(open.id).toBe(opened.session.id);
+    expect(open.status).toBe('open');
+    expect(open.scope.kind).toBe('conversation');
+
+    const planId = await plannedPlan();
+    const onPlan = await GET(new Request(`${BASE}/api/ai/sharpen?planId=${planId}&latest=1`));
+    expect(onPlan.status).toBe(400);
   });
 });
 

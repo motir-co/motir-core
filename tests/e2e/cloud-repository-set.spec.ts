@@ -27,7 +27,7 @@
 // FROZEN (`docs/decisions/acceptance-receipt-lifecycle.md`), and this file's job
 // since MOTIR-2769 is to go red when a regression lands. **Story MOTIR-5010's own
 // receipt is a different instrument in a different lane** —
-// `tests/e2e/acceptance-repository-report.spec.ts`, which declares
+// `tests/e2e/regression-repository-report.spec.ts`, which declares
 // `acceptanceStory('MOTIR-5010')` and runs under `playwright.acceptance.config.ts`.
 // The two are not "two walks over one surface": one is a regression check that
 // runs on every pull request, the other is one recorded run a person approves.

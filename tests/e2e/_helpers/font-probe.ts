@@ -1,5 +1,5 @@
 // FONT PROBES for the acceptance lane, moved out of
-// `acceptance-font-sets.spec.ts` by MOTIR-7901 so the per-language font-set
+// `regression-font-sets.spec.ts` by MOTIR-7901 so the per-language font-set
 // receipt (MOTIR-7733) and the per-language font-pick receipt (MOTIR-7736) read
 // faces with one implementation rather than two copies that drift. Unchanged,
 // except that the readers needing the registry take it from the spec (below).

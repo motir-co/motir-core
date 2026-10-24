@@ -2,10 +2,11 @@
 
 import { useState } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
-import { CircleCheck, Lock } from 'lucide-react';
+import { Bot, Check, CircleCheck, Lock, User } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { MarkdownView } from '@/components/ui/MarkdownView';
 import { WorkItemRefChip } from '@/components/markdown/WorkItemRefChip';
+import type { SettledAnswer, SharpenAssumption } from '@/lib/ai/types';
 import type { PlanAnswerOfferDto, PlanChangeSessionDto } from '@/lib/dto/planChange';
 import { answerRefusalKey, cannotStartKey, logBugRefusalKey } from '@/lib/planning/planOfferRow';
 
@@ -31,6 +32,19 @@ import { answerRefusalKey, cannotStartKey, logBugRefusalKey } from '@/lib/planni
 // Decline are the plan offer's own buttons and handlers. What it wrote is the debug
 // outcome line in the answer bubble (MOTIR-7064), drawn from the turn's landing.
 
+/**
+ * What a grilling before planning settled (Story MOTIR-9221 · Subtask MOTIR-9316;
+ * design § Grill me before planning) — drawn between the target row and the actions
+ * of the offer it held. With nothing settled, one line stands in the list's place:
+ * `clearEnough` when there was nothing to ask, `nothingSettled` when the grilling was
+ * stopped or switched off before any answer.
+ */
+export interface PlanOfferSettled {
+  settled: readonly SettledAnswer[];
+  assumptions: readonly SharpenAssumption[];
+  empty: 'clearEnough' | 'nothingSettled';
+}
+
 /** A long request clamps to this many characters' worth of room until *Show all*. */
 const CLAMP_AT = 480;
 
@@ -53,6 +67,8 @@ export interface PlanOfferProps {
   refusal: string | null;
   onConfirm?: (turnId: string) => void;
   onDecline?: (turnId: string) => void;
+  /** The grilling this offer was held for, once it ended — null on every other offer. */
+  settled?: PlanOfferSettled | null;
 }
 
 function sameKey(a: string, b: string): boolean {
@@ -81,6 +97,68 @@ function TargetChip({
         </span>
       )}
     </span>
+  );
+}
+
+/** One settled line, in the grilling summary's line style: the person's on the accent
+ *  rule, the planner's on the dashed one. */
+function SettledLine({
+  byPlanner,
+  question,
+  answer,
+}: {
+  byPlanner: boolean;
+  question: string;
+  answer: string;
+}) {
+  const t = useTranslations('sharpen.summary');
+  return (
+    <div
+      className={`flex flex-col items-start gap-0.5 border-l-2 py-0.5 pl-2.5 ${
+        byPlanner ? 'border-dashed border-(--el-border-strong)' : 'border-(--el-accent)'
+      }`}
+      data-testid={byPlanner ? 'plan-offer-settled-assumption' : 'plan-offer-settled-answer'}
+    >
+      {byPlanner ? (
+        <span className="inline-flex items-center gap-1 rounded-(--radius-badge) border border-dashed border-(--el-border-strong) px-(--spacing-chip-x) text-xs font-semibold text-(--el-text-secondary)">
+          <Bot className="size-3" aria-hidden />
+          {t('plannersAssumption')}
+        </span>
+      ) : (
+        <span className="inline-flex items-center gap-1 rounded-(--radius-badge) bg-(--el-accent) px-(--spacing-chip-x) text-xs font-semibold text-(--el-accent-text)">
+          <User className="size-3" aria-hidden />
+          {t('youAnswered')}
+        </span>
+      )}
+      <span className="text-xs text-(--el-text-secondary)">{question}</span>
+      <span className="text-sm text-(--el-text)">{answer}</span>
+    </div>
+  );
+}
+
+function SettledBlock({ settled }: { settled: PlanOfferSettled }) {
+  const t = useTranslations('planningWorkspace.planOffer');
+  if (settled.settled.length === 0 && settled.assumptions.length === 0) {
+    return (
+      <p
+        className="flex items-start gap-1.5 border-l-2 border-(--el-border-strong) pl-2 text-xs text-(--el-text)"
+        data-testid="plan-offer-clear"
+      >
+        <Check className="mt-px size-3.5 flex-none" aria-hidden />
+        <span>{t(settled.empty)}</span>
+      </p>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-1.5" data-testid="plan-offer-settled">
+      <p className="text-xs font-semibold text-(--el-text-secondary)">{t('settledHeading')}</p>
+      {settled.settled.map((a) => (
+        <SettledLine key={a.questionId} byPlanner={false} question={a.question} answer={a.answer} />
+      ))}
+      {settled.assumptions.map((a) => (
+        <SettledLine key={a.questionId} byPlanner question={a.question} answer={a.recommendation} />
+      ))}
+    </div>
   );
 }
 
@@ -151,6 +229,7 @@ export function PlanOffer({
   refusal,
   onConfirm,
   onDecline,
+  settled = null,
 }: PlanOfferProps) {
   const t = useTranslations('planningWorkspace.planOffer');
   const tb = useTranslations('planningWorkspace.logBugOffer');
@@ -275,6 +354,8 @@ export function PlanOffer({
           ) : null}
         </div>
       )}
+
+      {settled ? <SettledBlock settled={settled} /> : null}
 
       {state === 'confirmed' ? (
         <div className="flex flex-col gap-1.5" data-testid="plan-offer-confirmed">

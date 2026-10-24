@@ -10,7 +10,7 @@ import { CLI_TOKEN_GRANT } from '@/lib/mcp/toolPermissions';
 import { createTestPerson } from './testPerson';
 
 // THE CONTENT-LANGUAGE seed (Story MOTIR-7731 · MOTIR-8100), for the receipt
-// `acceptance-content-language.spec.ts` records.
+// `regression-content-language.spec.ts` records.
 //
 // An organisation as the content-language migration leaves an existing one —
 // created with no language named, so it reads `en` — with its owner, a plain

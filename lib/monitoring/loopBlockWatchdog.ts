@@ -361,7 +361,8 @@ export function rollLoopBlockWindow(): void {
 /**
  * Frames the capture should NOT name: Node internals, dependencies, and the
  * heartbeat callback itself. A frame with no URL is evaluated code (a test
- * runner's module wrapper, an `eval`) and is application code, not a library.
+ * runner's module wrapper, an `eval`) and is application code, not a library,
+ * though `frameTagOf` names it only when no app frame with a URL is on the stack.
  */
 function isAppFrame(frame: RawFrame): boolean {
   if (frame.fn === HEARTBEAT_FN) return false;
@@ -389,10 +390,16 @@ export function pauseInterruptedJs(capture: RawCapture, thresholdMs: number): bo
   return capture.frames[0]?.fn !== HEARTBEAT_FN;
 }
 
-/** The frame tag a capture reads. */
+/**
+ * The frame tag a capture reads. An app frame with a URL outranks a URL-less one
+ * above it: the pause can land inside evaluated code (a runner's getter) called
+ * from the function that holds the loop, and the tag should name that function
+ * (MOTIR-9443). A URL-less frame is named only when no app frame has a URL.
+ */
 export function frameTagOf(capture: RawCapture, thresholdMs: number): string {
   if (!pauseInterruptedJs(capture, thresholdMs)) return NOT_IN_JS;
-  const top = capture.frames.find(isAppFrame);
+  const appFrames = capture.frames.filter(isAppFrame);
+  const top = appFrames.find((frame) => frame.url !== '') ?? appFrames[0];
   return top ? formatFrame(top) : NO_APP_FRAME;
 }
 

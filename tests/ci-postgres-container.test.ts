@@ -67,6 +67,10 @@ describe('CI Postgres container (MOTIR-1742)', () => {
       // app. The matrix does not multiply the entry — a matrix is one job.
       'acceptance-tests.yml:acceptance',
       'acceptance-tests.yml:build',
+      // The regression lane (MOTIR-9411): the same build-then-shards shape, for
+      // the same two reasons.
+      'acceptance-tests.yml:regression',
+      'acceptance-tests.yml:regression-build',
       'ci.yml:build',
       'ci.yml:e2e',
       // The volume legs, split out of `e2e` by MOTIR-3148 so they can be gated

@@ -16,10 +16,13 @@ import type {
 //     flips the row, never the answer's body;
 //   * a confirm landing on another conversation swaps the overlay onto it and tells
 //     the host, then follows the run it started;
-//   * a refusal is recorded on the offer's turn, in the row's own code.
+//   * a refusal is recorded on the offer's turn, in the row's own code;
+//   * a confirm stops only the run that was in flight when it was pressed, never a
+//     turn sent while its door is out (MOTIR-9409).
 
-const { open, readSession, answerOffer, stream, fetchReview } = vi.hoisted(() => ({
+const { open, readSession, answerOffer, stream, fetchReview, submitAsk } = vi.hoisted(() => ({
   open: vi.fn(),
+  submitAsk: vi.fn(),
   readSession: vi.fn(),
   answerOffer: vi.fn(),
   stream: vi.fn(),
@@ -39,7 +42,7 @@ vi.mock('@/lib/planning/planChangeClient', () => ({
   resumeContextualSession: vi.fn(async () => ({ session: null, planId: null })),
   submitContextualPlan: vi.fn(),
   resubmitContextualPlan: vi.fn(),
-  submitAskTurn: vi.fn(),
+  submitAskTurn: submitAsk,
   rerunAskTurn: vi.fn(),
   settleAskJob: vi.fn(),
   submitPlanChange: vi.fn(),
@@ -261,6 +264,59 @@ describe('Confirm', () => {
     });
     expect(result.current.state.offerAnsweringTurnId).toBeNull();
     expect(stream).not.toHaveBeenCalled();
+  });
+
+  it('a turn sent while the door is out is not aborted (MOTIR-9409)', async () => {
+    const door = deferred<{ sessionId: string; jobId: string; planId: string }>();
+    answerOffer.mockReturnValue(door.promise);
+    readSession.mockResolvedValue(
+      session('s1', offer({ state: 'confirmed', confirmedSessionId: 's1' })),
+    );
+    const signals: AbortSignal[] = [];
+    submitAsk.mockImplementation((_body: string, signal: AbortSignal) => {
+      signals.push(signal);
+      return new Promise(() => {});
+    });
+    const { result } = await mounted();
+
+    let confirming!: Promise<void>;
+    await act(async () => {
+      confirming = result.current.confirmPlanOffer('t1');
+    });
+    await act(async () => {
+      void result.current.send('yes, plan it');
+    });
+    await waitFor(() => expect(signals).toHaveLength(1));
+
+    await act(async () => {
+      door.resolve({ sessionId: 's1', jobId: 'job-7', planId: 'plan-7' });
+      await confirming;
+    });
+    await waitFor(() => expect(stream).toHaveBeenCalled());
+    expect(signals[0]!.aborted).toBe(false);
+  });
+
+  it('a mid-planning confirm still stops the run in flight when it was pressed', async () => {
+    answerOffer.mockResolvedValue({ sessionId: 's1', jobId: 'job-7', planId: 'plan-7' });
+    readSession.mockResolvedValue(
+      session('s1', offer({ state: 'confirmed', confirmedSessionId: 's1' })),
+    );
+    const signals: AbortSignal[] = [];
+    submitAsk.mockImplementation((_body: string, signal: AbortSignal) => {
+      signals.push(signal);
+      return new Promise(() => {});
+    });
+    const { result } = await mounted();
+
+    await act(async () => {
+      void result.current.send('plan the digest');
+    });
+    await waitFor(() => expect(signals).toHaveLength(1));
+    await act(async () => {
+      await result.current.confirmPlanOffer('t1');
+    });
+    expect(signals[0]!.aborted).toBe(true);
+    await waitFor(() => expect(stream).toHaveBeenCalled());
   });
 
   it('does nothing on a read-only or ended conversation', async () => {

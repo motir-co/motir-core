@@ -10,7 +10,7 @@ import { openAgentSession, publishDesignResult } from './design-approval-seed';
 import { seedHostedRun, type HostedRunSeed } from './hosted-run-seed';
 
 // THE TO-RESUME E2E SEED (Story MOTIR-7701 · Subtask MOTIR-7715), for
-// `acceptance-to-resume.spec.ts`.
+// `regression-to-resume.spec.ts`.
 //
 // `hosted-run-seed.ts`'s workspace — an owner, a project, a `created`-state repository
 // the hosted pre-flight can write, a paid AI plan — plus, per story the spec walks, the

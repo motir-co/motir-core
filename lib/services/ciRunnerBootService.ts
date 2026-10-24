@@ -1333,7 +1333,7 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
       encodedJitConfig: jit.encodedJitConfig,
       timeoutSeconds: Math.ceil(jobTimeoutMs / 1000),
       orchestrator: through,
-      ...(shard ? { region: shard.fly?.region ?? '' } : {}),
+      ...(shard ? { region: shard.fly?.region ?? shard.aws?.region ?? '' } : {}),
     });
 
   // THE IN-BOOT MOVE (AMENDMENT 1, MOTIR-8968). An account that refuses for

@@ -11,7 +11,7 @@ import { workspacesService } from '@/lib/services/workspacesService';
 
 // DELETING AN ORGANIZATION — the regression half of the story's browser flow
 // (Story MOTIR-6306 · Subtask MOTIR-6405, cases 3 and 5). The happy path (cases
-// 1, 2 and 4) is the acceptance receipt, `acceptance-org-deletion.spec.ts`.
+// 1, 2 and 4) is the acceptance receipt, `regression-org-deletion.spec.ts`.
 //
 //   3 · an Admin of a closing org sees the bar — naming who scheduled it, with the
 //       export link and NO Cancel — and no Danger zone; a member of an org that

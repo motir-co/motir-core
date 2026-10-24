@@ -63,6 +63,9 @@ export interface ContainerRate {
  *  direction (it under-reports Motir's cost rather than inventing one). */
 const FLEET_PRICED_FROM = new Date('2026-08-01T00:00:00.000Z');
 
+/** When the AWS row takes effect — the day it was read and the adapter landed. */
+const AWS_PRICED_FROM = new Date('2026-10-24T00:00:00.000Z');
+
 /**
  * Additional RAM, per second, per the 4 GB the fleet runner adds on top of
  * `performance-2x`'s included 4 GB to reach §M's 8 GB.
@@ -126,6 +129,28 @@ export const CONTAINER_RATES: readonly ContainerRate[] = [
     usdPerSecond: '0.000032556049',
     effectiveFrom: FLEET_PRICED_FROM,
     source: 'https://fly.io/docs/about/pricing/ (read 2026-08-02)',
+  },
+  {
+    // AWS (MOTIR-9276): one runner VM in us-east-1, as the adapter launches it —
+    // the instance, its two gp3 volumes (the AMI's 30 GB root and the 20 GB Docker
+    // disk, both DeleteOnTermination) and its hourly public IPv4 address. Read
+    // from AWS's own price files on 2026-10-24:
+    //   m6i.large, Linux, on-demand        $0.096/h      → $0.000026666667/s
+    //   gp3 storage $0.08/GB-month × 50 GB  (730 h month) → $0.000001522070/s
+    //   in-use public IPv4                 $0.005/h      → $0.000001388889/s
+    // gp3's baseline 3,000 IOPS / 125 MB/s is free and the fleet provisions no
+    // more. A Docker disk sized other than 20 GB is a new row, not a code edit.
+    provider: 'aws',
+    cpuKind: 'performance',
+    cpus: 2,
+    memoryMb: 8192,
+    region: 'us-east-1',
+    usdPerSecond: '0.000029577626',
+    effectiveFrom: AWS_PRICED_FROM,
+    source:
+      'https://aws.amazon.com/ec2/pricing/on-demand/ (m6i.large, us-east-1), ' +
+      'https://aws.amazon.com/ebs/pricing/ (gp3), https://aws.amazon.com/vpc/pricing/ ' +
+      '(public IPv4) — read 2026-10-24',
   },
   {
     // The FAKE adapter prices at the `iad` row it stands in for, so a test drives

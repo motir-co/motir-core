@@ -1,8 +1,8 @@
 import type { GateEffect, GateEffectArgs } from '@/lib/approvalGates/registry';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
-import { workItemsService } from '@/lib/services/workItemsService';
 import { requireGateCard } from './gateCard';
+import { applyGateTransition } from './gateTransition';
 
 // A GATE-OWNED RETURN TO TO DO (Story MOTIR-6070 · MOTIR-6423;
 // `docs/decisions/design-refusal-verdict.md` §1 and §2).
@@ -38,9 +38,10 @@ const RETURN_CATEGORY = 'todo';
  * still recorded by the door — and says so with `no_status_in_target_category`.
  */
 export async function returnCardToTodo(
-  { gate, item, ctx, tx }: Pick<GateEffectArgs, 'gate' | 'item' | 'ctx' | 'tx'>,
+  args: Pick<GateEffectArgs, 'gate' | 'item' | 'ctx' | 'tx' | 'appliedTransitions'>,
   where: string,
 ): Promise<GateEffect> {
+  const { gate, item, tx } = args;
   const workItemId = requireGateCard(gate, where);
   const statuses = await workflowsRepository.findStatuses(gate.projectId, gate.workspaceId, tx);
   // A CLOSED CARD IS NEVER SENT BACK, and this asserts it rather than handling it: a
@@ -65,7 +66,7 @@ export async function returnCardToTodo(
   // MARKED_CARD_CANNOT_REOPEN (MOTIR-6681) PROPAGATES: a person's refusal press. A
   // card marked under the rule is done-category and was refused above; only a LEGACY
   // card marked while open reaches here, and the person is told to clear the mark.
-  await workItemsService.applyStatusTransition(workItemId, target.key, ctx, tx, {
+  await applyGateTransition(args, workItemId, target.key, {
     system: true,
     decidingGateId: gate.id,
   });

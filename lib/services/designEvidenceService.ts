@@ -48,6 +48,8 @@ import type {
   DesignUploadTokensDTO,
 } from '@/lib/dto/designEvidence';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import type { AppliedGateTransition } from '@/lib/approvalGates/registry';
+import { emitAppliedGateTransitions } from '@/lib/approvalGates/gateTransition';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 /**
@@ -619,6 +621,9 @@ async function persistEvidence(
   },
   ctx: ServiceContext,
 ) {
+  // The system approval's status hops (below), announced once this publish commits
+  // (Bug MOTIR-9415) — `approveBySystem` runs in this transaction and cannot.
+  const appliedTransitions: AppliedGateTransition[] = [];
   return withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, async (tx) => {
     // ⚠️ THE AUTHORITATIVE "DOES WORK WAIT ON THIS?" READ — INSIDE the write's own
     // transaction (MOTIR-5491; AMENDMENT 4 Q2). The callers pre-check the same
@@ -871,7 +876,7 @@ async function persistEvidence(
     // this service for the pin.
     if (systemApproves) {
       const { approvalGatesService } = await import('@/lib/services/approvalGatesService');
-      await approvalGatesService.approveBySystem(raised.id, ctx, tx);
+      await approvalGatesService.approveBySystem(raised.id, ctx, tx, appliedTransitions);
     }
 
     // Re-read so the caller gets the evidence WITH its just-inserted assets.
@@ -879,6 +884,7 @@ async function persistEvidence(
     // statements above, and nothing between can remove it.
     return (await designEvidenceRepository.findById(evidence.id, tx))!;
   }).then(async (persisted) => {
+    await emitAppliedGateTransitions(appliedTransitions, ctx);
     // TO RESUME (MOTIR-7707): with design approval switched off the gate above was
     // approved by the system, which releases a parent run that stopped at this
     // design. After the commit, in the close's lock order —
