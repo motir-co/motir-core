@@ -1093,5 +1093,21 @@
  *
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.74.0` after MOTIR-9031's
  *   `1.73.0`. If a sibling has taken it since, RENUMBER this entry.
+ *
+ * - `1.75.0` — MOTIR-9493 (Story MOTIR-9486) adds the page resource: `createPage`
+ *   (`POST /api/v1/projects/{projectKey}/pages`, `page:edit`, `201` with `Page`) and
+ *   `getPage` (`GET /api/v1/pages/{pageId}`, `page:view`, `200` with `Page`) — a page's
+ *   title, placement, `revision` and markdown body, over the same `pagesService` doors as
+ *   the MCP `create_page` / `get_page`. The page refusal codes (`PAGE_NOT_FOUND`,
+ *   `CROSS_PROJECT_PAGE_PARENT`, `PAGE_PARENT_ARCHIVED`, `PAGE_PARENT_NOT_ALLOWED`,
+ *   `PAGE_DEPTH_EXCEEDED`, `PAGE_TITLE_TOO_LONG`, `PAGE_BODY_TOO_LARGE`, …) are the
+ *   package's own.
+ *
+ *   Additive: two new operations, a new component and new codes for new conditions (§8's
+ *   allowed list).
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.75.0` after MOTIR-9052's
+ *   `1.74.0`. If a sibling has taken it since, RENUMBER this entry — it names the
+ *   OPERATIONS.
  */
-export const V1_CONTRACT_VERSION = '1.74.0';
+export const V1_CONTRACT_VERSION = '1.75.0';
