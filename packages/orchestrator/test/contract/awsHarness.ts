@@ -36,7 +36,7 @@ export const AWS_HOSTED_ENV: Readonly<Record<string, string>> = {
   MOTIR_DISPATCH_RUN_ID: 'run-77',
   MOTIR_WORK_ITEM_KEY: 'ACME-12',
   MOTIR_API_URL: 'https://app.motir.test',
-  MOTIR_MODEL: 'anthropic/claude',
+  MOTIR_MODEL: 'test-model',
   MOTIR_RUN_TOKEN: 'mtr_run_token_value',
   MOTIR_GATEWAY_URL: 'https://gateway.motir.test',
   MOTIR_RUN_KEY: 'rk_live_key_value',
