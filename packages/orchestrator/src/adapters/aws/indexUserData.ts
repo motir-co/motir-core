@@ -21,8 +21,18 @@ import { parseImageReference } from '../../imagePull';
 // to the console and powers off. The adapter's `describe` reads the console of a
 // stopped index VM and reports `imagePullFailed`. Every other line of the script,
 // the container's own output included, goes to a log file on the VM, never the
-// console. That way an indexed repository's content cannot forge the marker, and
-// the exit-code channel stays free for its own card.
+// console. That way an indexed repository's content cannot forge the marker.
+//
+// THE EXIT-CODE CHANNEL (MOTIR-9449) is the same console with a DIFFERENT marker:
+// once `docker run` returns, the script writes {@link AWS_INDEX_EXIT_MARKER} and the
+// code, and only then powers off. A pull failure writes its own marker and never
+// this one, so a pull failure is never read as an exit code. The ordering closes
+// the race with teardown: an index VM launches with
+// `InstanceInitiatedShutdownBehavior: 'stop'` (a runner keeps `terminate`), so the
+// power-off leaves it STOPPED — no compute billed, console still readable — and
+// only the adapter's `teardown` terminates it, which the dispatcher calls at
+// settle, after a describe has returned the final code. A stopped index VM nobody
+// settles is still a fleet instance in a live state, so the orphan reaper ends it.
 //
 // ⚠️ THE PAYLOAD CARRIES THE RUN CREDENTIAL and two pre-signed URLs. Nothing here
 // logs it, and no refusal names a value: it names the KEY only. IMDSv2 with a hop
@@ -31,6 +41,10 @@ import { parseImageReference } from '../../imagePull';
 
 /** The console line an index VM writes when it cannot pull its image. */
 export const AWS_INDEX_PULL_FAILED_MARKER = 'MOTIR_INDEX_BOOT: image_pull_failed';
+
+/** The console line an index VM writes when its container returns, before the
+ *  code: `MOTIR_INDEX_BOOT: exit_code=0`. */
+export const AWS_INDEX_EXIT_MARKER = 'MOTIR_INDEX_BOOT: exit_code=';
 
 /** The comment line naming the image the script pulls. The fake EC2 reads it to
  *  decide whether the pull succeeds; nothing in AWS does. */
@@ -112,9 +126,27 @@ export function buildIndexUserData(spec: {
     '  exit 0',
     'fi',
     'docker run --rm --env-file /run/motir-index.env "$IMAGE"',
+    'code=$?',
+    // Written before the power-off, so a VM that reads stopped has written it.
+    `console "${AWS_INDEX_EXIT_MARKER}$code"`,
+    'sync',
     'shutdown -h now',
     '',
   ].join('\n');
+}
+
+/** The container's exit code from a console read: the LAST exit marker on a line
+ *  of its own, or null when there is none (a VM that never got that far). */
+export function consoleExitCode(output: string | null): number | null {
+  let code: number | null = null;
+  for (const line of (output ?? '').split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith(AWS_INDEX_EXIT_MARKER)) continue;
+    const value = trimmed.slice(AWS_INDEX_EXIT_MARKER.length);
+    // A process exit status is 0–255; anything else is not this script's line.
+    if (/^\d{1,3}$/.test(value) && Number(value) <= 255) code = Number(value);
+  }
+  return code;
 }
 
 /** Whether a console read holds the pull-failure marker on a line of its own. */

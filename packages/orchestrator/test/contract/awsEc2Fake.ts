@@ -1,5 +1,6 @@
 import {
   AWS_INDEX_IMAGE_COMMENT,
+  AWS_INDEX_EXIT_MARKER,
   AWS_INDEX_PULL_FAILED_MARKER,
   Ec2ApiError,
   type Ec2Api,
@@ -32,8 +33,11 @@ import {
 //
 // AN INDEX VM (MOTIR-9446) runs its boot script's pull: the fake reads the image
 // the script names, and when that image was marked unpullable the VM writes the
-// pull-failure marker to its console and powers off (terminated, as the launch's
-// `terminate` behaviour makes it), exactly the two facts the adapter reads.
+// pull-failure marker to its console and powers off, exactly the two facts the
+// adapter reads. Its container's exit (MOTIR-9449) is scripted per instance with
+// `exitIndexContainer`: the exit marker on the console, then the power-off. A
+// power-off follows the launch's `InstanceInitiatedShutdownBehavior` — an index
+// VM's `stop` leaves it `stopped`, a runner's `terminate` ends it.
 
 export interface FakeCall {
   readonly method: string;
@@ -193,6 +197,24 @@ export class AwsEc2Fake implements Ec2Api {
       .split('\n')
       .find((l) => l.startsWith(AWS_INDEX_IMAGE_COMMENT));
     return line ? line.slice(AWS_INDEX_IMAGE_COMMENT.length) : null;
+  }
+
+  /** An index VM's container returns `code`: the boot script writes the exit
+   *  marker to the console, then powers the VM off. */
+  exitIndexContainer(instanceId: string, code: number): void {
+    const before = this.consoles.get(instanceId) ?? '[  12.3] cloud-init\n';
+    this.consoles.set(instanceId, `${before}${AWS_INDEX_EXIT_MARKER}${code}\n`);
+    this.powerOff(instanceId);
+  }
+
+  /** The VM powers itself off: `stopped` or `terminated`, as its launch asked. */
+  powerOff(instanceId: string): void {
+    const behaviour = this.instance(instanceId).request.instanceInitiatedShutdownBehavior;
+    this.setState(
+      instanceId,
+      behaviour === 'stop' ? 'stopped' : 'terminated',
+      'Client.InstanceInitiatedShutdown: Instance initiated shutdown',
+    );
   }
 
   /** The instance's VM powers off with `terminate` behaviour — a finished job. */
@@ -466,7 +488,7 @@ export class AwsEc2Fake implements Ec2Api {
     if (image !== null && this.unpullableImages.has(image)) {
       // The pull fails on the VM: the marker on its console, then a power-off.
       this.consoles.set(instanceId, `[  12.3] cloud-init\n${AWS_INDEX_PULL_FAILED_MARKER}\n`);
-      this.setState(instanceId, 'terminated', 'Client.InstanceInitiatedShutdown');
+      this.powerOff(instanceId);
     }
     if (this.failNextAfterCreate) {
       const code = this.failNextAfterCreate;

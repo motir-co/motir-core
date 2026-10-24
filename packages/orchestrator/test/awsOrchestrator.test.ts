@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  AWS_INDEX_EXIT_MARKER,
   AWS_INDEX_PULL_FAILED_MARKER,
   AWS_REAP_PAGE_SIZE,
   AwsInstanceSizeError,
@@ -10,6 +11,7 @@ import {
   IndexUserDataError,
   RunnerUserDataError,
   buildIndexUserData,
+  consoleExitCode,
   consoleShowsPullFailure,
   createAwsOrchestrator,
   transitionTimeOf,
@@ -646,7 +648,8 @@ describe('an index VM boots the indexer image by digest (MOTIR-9446)', () => {
       subnetId: `subnet-${AWS_SHARD_TAG}-us-east-1a`,
       securityGroupIds: [`sg-${AWS_SHARD_TAG}`],
       metadataOptions: { httpTokens: 'required', httpPutResponseHopLimit: 1 },
-      instanceInitiatedShutdownBehavior: 'terminate',
+      // Held stopped after its power-off, so describe reads the exit code first.
+      instanceInitiatedShutdownBehavior: 'stop',
     });
     // The shard's network: a public IP on launch and a group with no inbound rule.
     expect(ec2.subnets.get(request.subnetId)!.mapPublicIpOnLaunch).toBe(true);
@@ -759,6 +762,115 @@ describe('an index VM boots the indexer image by digest (MOTIR-9446)', () => {
     expect(consoleShowsPullFailure(`boot\n${AWS_INDEX_PULL_FAILED_MARKER}\r\n`)).toBe(true);
     expect(consoleShowsPullFailure(`echo ${AWS_INDEX_PULL_FAILED_MARKER} later`)).toBe(false);
     expect(consoleShowsPullFailure(null)).toBe(false);
+  });
+});
+
+describe('an index VM reports its exit code through describe (MOTIR-9449)', () => {
+  async function bootIndex() {
+    const orchestrator = adapter({ indexerAmiId: INDEXER_AMI_ID });
+    return { orchestrator, handle: await orchestrator.provision(INDEX_SPEC) };
+  }
+
+  it.each([0, 10, 20, 30, 137])(
+    'a container that exits %i reads stopped with that code, and the VM still exists',
+    async (code) => {
+      const { orchestrator, handle } = await bootIndex();
+      ec2.exitIndexContainer(handle.id, code);
+
+      const status = await orchestrator.describe(handle);
+      expect(status).toMatchObject({
+        exists: true,
+        state: 'stopped',
+        terminal: true,
+        exitCode: code,
+      });
+      expect(status).not.toHaveProperty('imagePullFailed');
+      // The power-off stopped it; nothing has terminated it.
+      expect(ec2.count('terminateInstances')).toBe(0);
+    },
+  );
+
+  it('the script writes the code to the console before it powers off', async () => {
+    const { handle } = await bootIndex();
+    const script = scriptOf(handle.id);
+    const run = script.indexOf('docker run');
+    const marker = script.indexOf(AWS_INDEX_EXIT_MARKER);
+    const lastShutdown = script.lastIndexOf('shutdown -h now');
+    expect(run).toBeGreaterThan(0);
+    expect(script.slice(run)).toContain('code=$?');
+    expect(marker).toBeGreaterThan(run);
+    expect(lastShutdown).toBeGreaterThan(marker);
+  });
+
+  it('a running VM reports no code, and a stopping one is not yet terminal', async () => {
+    const { orchestrator, handle } = await bootIndex();
+    expect(await orchestrator.describe(handle)).toMatchObject({ terminal: false, exitCode: null });
+
+    ec2.setState(handle.id, 'stopping');
+    expect(await orchestrator.describe(handle)).toMatchObject({ terminal: false, exitCode: null });
+    expect(ec2.count('getConsoleOutput')).toBe(0);
+  });
+
+  it('a VM that stopped with no marker on its console reads as no code', async () => {
+    const { orchestrator, handle } = await bootIndex();
+    ec2.powerOff(handle.id);
+    expect(await orchestrator.describe(handle)).toMatchObject({
+      state: 'stopped',
+      terminal: true,
+      exitCode: null,
+    });
+  });
+
+  it('teardown right after the exit: the describe before it has the code, and the VM ends', async () => {
+    const { orchestrator, handle } = await bootIndex();
+    ec2.exitIndexContainer(handle.id, 20);
+
+    // Settle's order: the final describe, then teardown.
+    expect((await orchestrator.describe(handle)).exitCode).toBe(20);
+    await orchestrator.teardown(handle, 'job_completed', AWS_ATTRIBUTION);
+    expect(ec2.instances.get(handle.id)!.state).toBe('terminated');
+
+    // A terminated VM's console is still read until it ages out; once gone, unobserved.
+    expect((await orchestrator.describe(handle)).exitCode).toBe(20);
+    ec2.ageOut(handle.id);
+    expect(await orchestrator.describe(handle)).toMatchObject({ exists: false, exitCode: null });
+  });
+
+  it('a pull failure is never read as an exit code', async () => {
+    ec2.markImageUnpullable(INDEX_IMAGE);
+    const { orchestrator, handle } = await bootIndex();
+    expect(await orchestrator.describe(handle)).toMatchObject({
+      state: 'stopped',
+      imagePullFailed: true,
+      exitCode: null,
+    });
+  });
+
+  it('an unreadable console is no code, never a guess', async () => {
+    const { orchestrator, handle } = await bootIndex();
+    ec2.exitIndexContainer(handle.id, 0);
+    ec2.failNext('getConsoleOutput', 'UnauthorizedOperation', 403);
+    expect((await orchestrator.describe(handle)).exitCode).toBeNull();
+  });
+
+  it('a runner VM still launches with terminate and reports no code', async () => {
+    const orchestrator = adapter({ indexerAmiId: INDEXER_AMI_ID });
+    const handle = await orchestrator.provision(AWS_SPEC);
+    expect(ec2.requestOf(handle.id).instanceInitiatedShutdownBehavior).toBe('terminate');
+    ec2.powerOff(handle.id);
+    expect(await orchestrator.describe(handle)).toMatchObject({ exists: false, exitCode: null });
+    expect(ec2.count('getConsoleOutput')).toBe(0);
+  });
+
+  it('reads the last exit marker on a line of its own, 0–255 only', () => {
+    expect(consoleExitCode(`boot\n${AWS_INDEX_EXIT_MARKER}10\r\n`)).toBe(10);
+    expect(consoleExitCode(`${AWS_INDEX_EXIT_MARKER}1\n${AWS_INDEX_EXIT_MARKER}0\n`)).toBe(0);
+    expect(consoleExitCode(`echo ${AWS_INDEX_EXIT_MARKER}0`)).toBeNull();
+    expect(consoleExitCode(`${AWS_INDEX_EXIT_MARKER}256`)).toBeNull();
+    expect(consoleExitCode(`${AWS_INDEX_EXIT_MARKER}-1`)).toBeNull();
+    expect(consoleExitCode(`${AWS_INDEX_EXIT_MARKER}`)).toBeNull();
+    expect(consoleExitCode(`${AWS_INDEX_PULL_FAILED_MARKER}`)).toBeNull();
+    expect(consoleExitCode(null)).toBeNull();
   });
 });
 

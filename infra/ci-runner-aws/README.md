@@ -59,6 +59,12 @@ aws ssm get-parameter --region us-east-1 --name /aws/service/ecs/optimized-ami/a
 fly secrets set -a motir-core MOTIR_AWS_INDEXER_AMI_ID=ami-…
 ```
 
+An index VM writes the indexer's exit code (or, when the pull fails, a pull-failure line) to its
+serial console, then powers off. Unlike a runner it launches with shutdown behaviour `stop`, so a
+finished index VM shows as **stopped** in the EC2 console until Motir has read the code and
+terminates it at settle. A stopped `motir-index-…` instance that stays stopped is one nobody
+settled; the orphan reaper terminates it.
+
 To check the template locally without credentials:
 
 ```sh

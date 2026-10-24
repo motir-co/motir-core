@@ -26,7 +26,7 @@ import {
 } from './capacityErrors';
 import { AWS_SHARD_TAG_KEY } from './network';
 import { buildRunnerUserData, encodeUserData } from './userData';
-import { buildIndexUserData, consoleShowsPullFailure } from './indexUserData';
+import { buildIndexUserData, consoleExitCode, consoleShowsPullFailure } from './indexUserData';
 
 export * from './userData';
 export * from './indexUserData';
@@ -45,8 +45,8 @@ export * from './management';
 // for free:
 //
 //   1. AN INSTANCE DOES NOT STOP ON ITS OWN. The AMI powers the VM off when the
-//      runner exits and every launch says `InstanceInitiatedShutdownBehavior:
-//      'terminate'`, so a finished job reads as terminal instead of billing to
+//      runner exits and every runner launch says `InstanceInitiatedShutdownBehavior:
+//      'terminate'` (an index VM's says `stop`, below), so a finished job reads as terminal instead of billing to
 //      the one-hour timeout.
 //   2. A TERMINATED INSTANCE LINGERS for about an hour in DescribeInstances. It
 //      reads as `exists: false, state: 'destroyed'`, the port's "gone".
@@ -61,8 +61,11 @@ export * from './management';
 // `code_graph_index` spec boots the stock Docker-host AMI (`indexerAmiId`) with a
 // script that pulls the indexer image by digest and runs it (`./indexUserData.ts`
 // names the AMI and why). Same size, same network, same tags and the same
-// launch/zone walk as a runner. Its one extra signal is a failed pull, read from
-// the VM's serial console once it has stopped and reported as `imagePullFailed`.
+// launch/zone walk as a runner. Its signals are read from the VM's serial console
+// once it has stopped: a failed pull, reported as `imagePullFailed`, and the
+// indexer's exit code (MOTIR-9449), reported as `exitCode`. Unlike a runner it
+// launches with `InstanceInitiatedShutdownBehavior: 'stop'`, so its power-off
+// leaves it stopped and readable until `teardown` terminates it at settle.
 
 /** The machine class the fleet's one size maps to — 2 vCPU / 8 GiB, x86. */
 export const AWS_DEFAULT_INSTANCE_TYPE = 'm6i.large';
@@ -161,20 +164,36 @@ function isIndexInstance(instance: Ec2Instance): boolean {
   return tagOf(instance, FLEET_METADATA_KEY) === FLEET_METADATA_VALUES.code_graph_index;
 }
 
-/** The AMI and user-data one spec launches with, or a refusal before any call. */
+interface LaunchPlan {
+  readonly imageId: string;
+  readonly userData: string;
+  readonly shutdownBehavior: 'terminate' | 'stop';
+}
+
+/** The AMI, user-data and power-off behaviour one spec launches with, or a
+ *  refusal before any call. */
 function launchPlan(
   spec: ContainerSpec,
   config: Pick<AwsOrchestratorConfig, 'amiId' | 'indexerAmiId'>,
-): { imageId: string; userData: string } {
+): LaunchPlan {
   if (spec.workload !== 'code_graph_index') {
-    return { imageId: config.amiId, userData: encodeUserData(buildRunnerUserData(spec.env)) };
+    return {
+      imageId: config.amiId,
+      userData: encodeUserData(buildRunnerUserData(spec.env)),
+      shutdownBehavior: 'terminate',
+    };
   }
   if (!config.indexerAmiId) {
     throw new OrchestratorNotConfiguredError(
       'this aws account has no indexer AMI (set MOTIR_AWS_INDEXER_AMI_ID)',
     );
   }
-  return { imageId: config.indexerAmiId, userData: encodeUserData(buildIndexUserData(spec)) };
+  return {
+    imageId: config.indexerAmiId,
+    userData: encodeUserData(buildIndexUserData(spec)),
+    // Held stopped until teardown, so describe can read the exit code first.
+    shutdownBehavior: 'stop',
+  };
 }
 
 /**
@@ -265,7 +284,7 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
    */
   async function launchInSubnet(
     spec: ContainerSpec,
-    { imageId, userData }: { imageId: string; userData: string },
+    { imageId, userData, shutdownBehavior }: LaunchPlan,
     { subnetId, zone }: { subnetId: string; zone: string },
     securityGroupId: string,
   ): Promise<Ec2Instance> {
@@ -287,7 +306,7 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
             httpPutResponseHopLimit: 1,
             httpEndpoint: 'enabled',
           },
-          instanceInitiatedShutdownBehavior: 'terminate',
+          instanceInitiatedShutdownBehavior: shutdownBehavior,
           blockDeviceMappings:
             spec.dockerVolumeGb && spec.dockerVolumeGb > 0
               ? [
@@ -364,21 +383,27 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
   }
 
   /**
-   * Did this stopped index VM fail to pull its image? Read from its console, the
-   * one channel a VM with no inbound rule and no credentials has. A console that
-   * cannot be read is "not known", never a pull failure: the run then ends as any
-   * other stop does.
+   * What a stopped index VM reported on its console — the one channel a VM with
+   * no inbound rule and no credentials has: whether its pull failed, and the
+   * indexer's exit code. A pull failure carries no exit code. A console that
+   * cannot be read is "not known" for both, never a pull failure: the run then
+   * ends as a stop whose code was not observed.
    */
-  async function pullFailed(instance: Ec2Instance): Promise<boolean> {
+  async function indexOutcome(
+    instance: Ec2Instance,
+  ): Promise<{ imagePullFailed?: true; exitCode: number | null }> {
+    let output: string | null;
     try {
-      return consoleShowsPullFailure(await ec2.getConsoleOutput(instance.instanceId));
+      output = await ec2.getConsoleOutput(instance.instanceId);
     } catch (err) {
       console.warn('[awsOrchestrator] could not read an index VM console', {
         instanceId: instance.instanceId,
         detail: err instanceof Ec2ApiError ? err.code : 'unknown',
       });
-      return false;
+      return { exitCode: null };
     }
+    if (consoleShowsPullFailure(output)) return { imagePullFailed: true, exitCode: null };
+    return { exitCode: consoleExitCode(output) };
   }
 
   function gone(handle: ContainerHandle): ContainerStatus {
@@ -441,14 +466,17 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
     async describe(handle: ContainerHandle): Promise<ContainerStatus> {
       const instance = await readInstance(handle.id);
       if (!instance) return gone(handle);
-      const stopped = instance.state === 'terminated' || TERMINAL_STATES.has(instance.state);
+      const index = isIndexInstance(instance);
+      // An index VM that is still `stopping` has not finished: its console is read
+      // once it reads `stopped`, so the code is never judged missing too early.
+      const terminal =
+        TERMINAL_STATES.has(instance.state) && !(index && instance.state === 'stopping');
+      const stopped = instance.state === 'terminated' || terminal;
       // Only a stopped index VM is asked: one console read per stop, not per poll.
-      const pull = stopped && isIndexInstance(instance) && (await pullFailed(instance));
-      const failure = pull ? { imagePullFailed: true } : {};
-      if (instance.state === 'terminated') return { ...gone(handle), ...failure };
-      const terminal = TERMINAL_STATES.has(instance.state);
+      const outcome = stopped && index ? await indexOutcome(instance) : { exitCode: null };
+      if (instance.state === 'terminated') return { ...gone(handle), ...outcome };
       return {
-        ...failure,
+        ...outcome,
         handleId: handle.id,
         exists: true,
         state: instance.state,
@@ -456,8 +484,6 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
         createdAt: instance.launchTime ?? handle.createdAt,
         startedAt: startedAtOf(instance),
         stoppedAt: terminal ? transitionTimeOf(instance.stateTransitionReason) : null,
-        // EC2 reports no exit status; the port documents null as an answer.
-        exitCode: null,
       };
     },
 
