@@ -8413,7 +8413,11 @@
         "outOfCredits": "Je organisatie heeft geen AI-tegoed meer, dus de planning kan niet starten.",
         "targetUnavailable": "Je kunt {key} niet meer openen, dus de planning kan niet starten.",
         "generic": "De planning kan niet starten vanuit dit voorstel."
-      }
+      },
+      "held": "Motir AI biedt aan te plannen zodra deze vragen klaar zijn.",
+      "settledHeading": "Wat je antwoorden hebben vastgelegd",
+      "clearEnough": "Duidelijk genoeg om zo te plannen.",
+      "nothingSettled": "Er is niets vastgelegd, dus het verzoek wordt gepland zoals het er staat."
     },
     "logBugOffer": {
       "label": "Aanbod om een bug vast te leggen",
@@ -8466,9 +8470,11 @@
           "title": "Ondervraag me",
           "body1": "Voordat er gepland wordt, vraagt Motir AI je wat je wilt, één vraag tegelijk: hoe het moet werken, de andere manieren om hetzelfde te doen en wat er gebeurt als er iets misgaat.",
           "body2": "Elke vraag heeft een paar antwoorden om uit te kiezen, waarvan één aanbevolen. Sla er een over, laat de planner beslissen of stop wanneer je wilt.",
-          "body3": "Wat je vastlegt, wordt in de vereiste van het plan geschreven, en de planning begint daarmee."
+          "body3": "Wat je vastlegt, wordt in de vereiste van het plan geschreven, en de planning begint daarmee.",
+          "beforePlanning": "Zolang er nog geen plan is, stelt Motir AI eerst zijn vragen voordat het aanbiedt te plannen, en het voorstel toont wat je hebt vastgelegd."
         },
-        "hint": "Je volgende bericht start het ondervragen."
+        "hint": "Je volgende bericht start het ondervragen.",
+        "hintBeforePlanning": "Wanneer Motir AI zou aanbieden te plannen, stelt het eerst zijn vragen."
       }
     },
     "follow": {
@@ -14883,15 +14889,18 @@
       },
       "youAnswered": "Jouw antwoord",
       "plannersAssumption": "Aanname van de planner",
-      "writing": "Je antwoorden worden in de vereiste van het plan en in <item></item> geschreven…",
       "writingPlanOnly": "Je antwoorden worden in de vereiste van het plan geschreven…",
-      "written": "Geschreven in de vereiste van het plan en in <item></item>.",
       "writtenPlanOnly": "Geschreven in de vereiste van het plan.",
       "failed": "Je antwoorden zijn niet geschreven. Ze staan hier nog.",
       "copy": "Antwoorden kopiëren"
     },
     "error": "Die vraag is niet aangekomen. Je antwoorden tot nu toe blijven bewaard: probeer het opnieuw.",
-    "retry": "Opnieuw proberen"
+    "retry": "Opnieuw proberen",
+    "conversation": {
+      "nothingToAsk": "Ik heb niets te vragen — dit is duidelijk genoeg om zo te plannen.",
+      "stoppedNoAnswer": "Je hebt het ondervragen gestopt vóór een antwoord.",
+      "switchedOff": "Je hebt Ondervraag me uitgezet, dus de vragen zijn gestopt."
+    }
   },
   "itemTranslation": {
     "groupLabel": "Vertaling",

@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { db } from '@/lib/db';
@@ -5,11 +7,7 @@ import { PermissionDeniedError, ProjectAccessDeniedError } from '@/lib/projects/
 import { planSharpeningService } from '@/lib/services/planSharpeningService';
 import { plansService } from '@/lib/services/plansService';
 import { SHARPENED_BLOCK_START } from '@/lib/sharpening/managedBlock';
-import {
-  SharpeningInputInvalidError,
-  SharpeningPlanClosedError,
-  SharpeningTargetFinishedError,
-} from '@/lib/sharpening/errors';
+import { SharpeningInputInvalidError, SharpeningPlanClosedError } from '@/lib/sharpening/errors';
 import type { SharpeningWriteBackInput } from '@/lib/dto/plans';
 import {
   createTestUser,
@@ -22,7 +20,8 @@ import { truncateAuthTables } from '../../helpers/db';
 import { addToProjectAs } from '../../helpers/workspaceRoleFixtures';
 
 // Task MOTIR-1101 · Subtask MOTIR-8175 — the Sharpen write-back service's two
-// scopes and their refusals, on a real Postgres.
+// plan scope and its refusals, on a real Postgres. The work-item scope and the
+// anchor leg are retired (Story MOTIR-9221 · MOTIR-9314).
 
 beforeEach(async () => {
   await truncateAuthTables();
@@ -218,144 +217,31 @@ describe('plan scope', () => {
   });
 });
 
-describe('work-item scope', () => {
-  async function itemWithBody(fx: WorkItemFixture, body: string) {
-    const row = await createTestWorkItem(fx, { kind: 'task', title: 'Export invoices' });
-    await adminDb.workItem.update({ where: { id: row.id }, data: { descriptionMd: body } });
-    return row;
-  }
-
-  function itemInput(key: string): SharpeningWriteBackInput {
-    return {
-      jobId: 'job-1',
-      scope: { workItemKey: key },
-      requirement: REQUIREMENT,
-      plannerAssumptions: PLANNER,
-    };
-  }
-
-  async function bodyOf(id: string): Promise<string> {
-    return (await adminDb.workItem.findUniqueOrThrow({ where: { id } })).descriptionMd ?? '';
-  }
-
-  it('writes both blocks, keeps the hand-written text, and records one history row', async () => {
-    const fx = await makeWorkItemFixture();
-    const hand = '## Acceptance criteria\n\n- Hand-written criterion.\n';
-    const row = await itemWithBody(fx, hand);
-
-    await planSharpeningService.writeBack(itemInput(row.identifier), fx.ctx);
-    const body = await bodyOf(row.id);
-    expect(body).toContain('- Hand-written criterion.');
-    expect(count(body, SHARPENED_BLOCK_START)).toBe(2);
-    // Canonical order: behaviour before acceptance.
-    expect(body.indexOf('A CSV downloads')).toBeLessThan(body.indexOf('empty-state'));
-    expect(body).toContain("- Planner's assumption — Which date format? — ISO 8601");
-    // A person's answers carry no planner prefix.
-    expect(body).not.toMatch(/Planner's assumption — What happens on export/);
-
-    const revisions = await adminDb.workItemRevision.findMany({
-      where: { workItemId: row.id, changeKind: 'updated' },
-    });
-    expect(revisions).toHaveLength(1);
-    expect(revisions[0]!.changedById).toBe(fx.ctx.userId);
-
-    // Again: byte-identical, and no second history row.
-    await planSharpeningService.writeBack(itemInput(row.identifier), fx.ctx);
-    expect(await bodyOf(row.id)).toBe(body);
-    expect(
-      await adminDb.workItemRevision.count({
-        where: { workItemId: row.id, changeKind: 'updated' },
-      }),
-    ).toBe(1);
-
-    // A superset replaces the block.
-    const superset = itemInput(row.identifier);
-    superset.requirement = { ...REQUIREMENT, constraints: '- Which store? — Postgres.' };
-    await planSharpeningService.writeBack(superset, fx.ctx);
-    const after = await bodyOf(row.id);
-    expect(count(after, SHARPENED_BLOCK_START)).toBe(2);
-    expect(after).toContain('- Which store? — Postgres.');
-  });
-
-  it.each(['done', 'cancelled'])('refuses a %s item and leaves it unchanged', async (status) => {
-    const fx = await makeWorkItemFixture();
-    const row = await itemWithBody(fx, 'Body.\n');
-    await adminDb.workItem.update({ where: { id: row.id }, data: { status } });
-
-    await expect(
-      planSharpeningService.writeBack(itemInput(row.identifier), fx.ctx),
-    ).rejects.toBeInstanceOf(SharpeningTargetFinishedError);
-    expect(await bodyOf(row.id)).toBe('Body.\n');
-  });
-
-  it('refuses a user who can browse but not edit, and writes nothing', async () => {
-    const fx = await makeWorkItemFixture();
-    const row = await itemWithBody(fx, 'Body.\n');
-    const viewer = await createTestUser();
-    await adminDb.workspaceMembership.create({
-      data: { userId: viewer.id, workspaceId: fx.workspaceId, workspaceRole: 'member' },
-    });
-    await addToProjectAs({
-      key: fx.projectIdentifier,
-      actorUserId: fx.ownerId,
-      ctx: fx.ctx,
-      targetUserId: viewer.id,
-      role: 'viewer',
-    });
-
-    const err = await planSharpeningService
-      .writeBack(itemInput(row.identifier), { userId: viewer.id, workspaceId: fx.workspaceId })
-      .catch((e: unknown) => e);
-    expect(err).toBeInstanceOf(ProjectAccessDeniedError);
-    expect((err as ProjectAccessDeniedError).kind).toBe('edit');
-    expect(await bodyOf(row.id)).toBe('Body.\n');
-  });
-
-  it('refuses perItem on work-item scope and a malformed key', async () => {
-    const fx = await makeWorkItemFixture();
-    const row = await itemWithBody(fx, 'Body.\n');
-    await expect(
-      planSharpeningService.writeBack(
-        {
-          ...itemInput(row.identifier),
-          perItem: [{ planItemId: 'x', acceptance: [], assumptions: [] }],
-        },
-        fx.ctx,
-      ),
-    ).rejects.toBeInstanceOf(SharpeningInputInvalidError);
-    await expect(
-      planSharpeningService.writeBack(itemInput('not a key'), fx.ctx),
-    ).rejects.toBeInstanceOf(SharpeningInputInvalidError);
-    expect(await bodyOf(row.id)).toBe('Body.\n');
-  });
-});
-
-// Subtask MOTIR-8449 — a plan-scope call's second leg: the card being planned
-// (the plan's run session's `targetKeys[0]`) takes the same blocks.
-describe('plan scope — the card being planned', () => {
-  async function anchoredPlan(fx: WorkItemFixture, targetKeys: string[] | null): Promise<string> {
+describe('no work item is edited (Story MOTIR-9221 · MOTIR-9314)', () => {
+  async function anchoredPlan(fx: WorkItemFixture, targetKeys: string[]): Promise<string> {
     const plan = await plansService.createPlan(
       fx.projectId,
       { title: 'Sharpen', authorSource: 'native', authorHarness: 'Motir' },
       fx.ctx,
     );
-    if (targetKeys) {
-      const session = await adminDb.planChangeSession.create({
-        data: {
-          workspaceId: fx.workspaceId,
-          projectId: fx.projectId,
-          scopeKey: targetKeys.join(','),
-          targetKeys,
-        },
-      });
-      await adminDb.plan.update({ where: { id: plan.id }, data: { sessionId: session.id } });
-    }
+    const session = await adminDb.planChangeSession.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        scopeKey: targetKeys.join(','),
+        targetKeys,
+      },
+    });
+    await adminDb.plan.update({ where: { id: plan.id }, data: { sessionId: session.id } });
     return plan.id;
   }
 
-  async function card(fx: WorkItemFixture, body = 'Hand-written body.\n') {
+  async function card(fx: WorkItemFixture) {
     const row = await createTestWorkItem(fx, { kind: 'task', title: 'Export invoices' });
-    await adminDb.workItem.update({ where: { id: row.id }, data: { descriptionMd: body } });
+    await adminDb.workItem.update({
+      where: { id: row.id },
+      data: { descriptionMd: 'Hand-written body.\n' },
+    });
     return row;
   }
 
@@ -363,125 +249,34 @@ describe('plan scope — the card being planned', () => {
     return (await adminDb.workItem.findUniqueOrThrow({ where: { id } })).descriptionMd ?? '';
   }
 
-  async function revisionsOf(id: string): Promise<number> {
-    return adminDb.workItemRevision.count({ where: { workItemId: id, changeKind: 'updated' } });
-  }
-
-  it('lands on the plan AND on the anchor card, with the work-item scope’s blocks', async () => {
+  it('a plan whose run targets a card lands on the plan alone: the card and its history are untouched', async () => {
     const fx = await makeWorkItemFixture();
     const anchor = await card(fx);
-    const other = await card(fx);
-    const planId = await anchoredPlan(fx, [anchor.identifier, other.identifier].sort());
-    const first = [anchor.identifier, other.identifier].sort()[0]!;
-    const landed = first === anchor.identifier ? anchor : other;
-    const untouched = first === anchor.identifier ? other : anchor;
-
-    const result = await planSharpeningService.writeBack(planInput(planId), fx.ctx);
-    expect(await storedRequirement(planId)).toEqual({
-      ...REQUIREMENT,
-      plannerAssumptions: PLANNER,
-      settledAt: result.settledAt,
-    });
-
-    const body = await bodyOf(landed.id);
-    expect(body.startsWith('Hand-written body.\n')).toBe(true);
-    expect(count(body, SHARPENED_BLOCK_START)).toBe(2);
-    expect(body).toMatch(
-      /## Acceptance criteria\n\n<!-- motir:sharpened:start -->\n- What happens/,
-    );
-    expect(body).toContain("- Planner's assumption — Which date format? — ISO 8601");
-    // Only the FIRST anchor is the card being planned.
-    expect(await bodyOf(untouched.id)).toBe('Hand-written body.\n');
-
-    // The same blocks the work-item scope writes for the same input.
-    const twin = await card(fx);
-    await planSharpeningService.writeBack(
-      {
-        jobId: 'job-1',
-        scope: { workItemKey: twin.identifier },
-        requirement: REQUIREMENT,
-        plannerAssumptions: PLANNER,
-      },
-      fx.ctx,
-    );
-    expect(await bodyOf(twin.id)).toBe(body);
-
-    // An ordinary edit: one history row, by the token's user; status unchanged.
-    const revisions = await adminDb.workItemRevision.findMany({
-      where: { workItemId: landed.id, changeKind: 'updated' },
-    });
-    expect(revisions).toHaveLength(1);
-    expect(revisions[0]!.changedById).toBe(fx.ctx.userId);
-    expect((await adminDb.workItem.findUniqueOrThrow({ where: { id: landed.id } })).status).toBe(
-      landed.status,
-    );
-  });
-
-  it('is idempotent on both legs, and a superset replaces the card’s blocks', async () => {
-    const fx = await makeWorkItemFixture();
-    const anchor = await card(fx, '## Acceptance criteria\n\n- Hand-written criterion.\n');
     const planId = await anchoredPlan(fx, [anchor.identifier]);
 
-    await planSharpeningService.writeBack(planInput(planId), fx.ctx);
-    const body = await bodyOf(anchor.id);
-    const stored = (await storedRequirement(planId)) as Record<string, unknown>;
-    await planSharpeningService.writeBack(planInput(planId), fx.ctx);
-    expect(await bodyOf(anchor.id)).toBe(body);
-    const again = (await storedRequirement(planId)) as Record<string, unknown>;
-    expect({ ...again, settledAt: null }).toEqual({ ...stored, settledAt: null });
-    expect(await revisionsOf(anchor.id)).toBe(1);
-
-    const superset = planInput(planId);
-    superset.requirement = { ...REQUIREMENT, constraints: '- Which store? — Postgres.' };
-    await planSharpeningService.writeBack(superset, fx.ctx);
-    const after = await bodyOf(anchor.id);
-    expect(count(after, SHARPENED_BLOCK_START)).toBe(2);
-    expect(after).toContain('- Which store? — Postgres.');
-    expect(after).toContain('- Hand-written criterion.');
-  });
-
-  it.each([
-    ['no run session', null],
-    ['a project-wide session', []],
-    ['an anchor that no longer resolves', ['ZZZ-999']],
-  ] as const)('with %s, lands on the plan alone', async (_label, keys) => {
-    const fx = await makeWorkItemFixture();
-    const bystander = await card(fx);
-    const planId = await anchoredPlan(fx, keys === null ? null : [...keys]);
-
     const result = await planSharpeningService.writeBack(planInput(planId), fx.ctx);
-    expect((await storedRequirement(planId)) as unknown).toMatchObject({
+    expect(result.scope).toEqual({ planId });
+    expect(await storedRequirement(planId)).toMatchObject({
+      ...REQUIREMENT,
       settledAt: result.settledAt,
     });
-    expect(await bodyOf(bystander.id)).toBe('Hand-written body.\n');
+    expect(await bodyOf(anchor.id)).toBe('Hand-written body.\n');
     expect(await adminDb.workItemRevision.count({ where: { changeKind: 'updated' } })).toBe(0);
   });
 
-  it('refuses a finished anchor after the plan leg landed, and a retry changes nothing', async () => {
+  it('a finished target card no longer refuses the write-back', async () => {
     const fx = await makeWorkItemFixture();
     const anchor = await card(fx);
     await adminDb.workItem.update({ where: { id: anchor.id }, data: { status: 'done' } });
     const planId = await anchoredPlan(fx, [anchor.identifier]);
-
-    await expect(planSharpeningService.writeBack(planInput(planId), fx.ctx)).rejects.toBeInstanceOf(
-      SharpeningTargetFinishedError,
-    );
-    const stored = (await storedRequirement(planId)) as Record<string, unknown>;
-    expect(stored).toMatchObject(REQUIREMENT);
-    expect(await bodyOf(anchor.id)).toBe('Hand-written body.\n');
-
-    await expect(planSharpeningService.writeBack(planInput(planId), fx.ctx)).rejects.toBeInstanceOf(
-      SharpeningTargetFinishedError,
-    );
-    const again = (await storedRequirement(planId)) as Record<string, unknown>;
-    expect({ ...again, settledAt: null }).toEqual({ ...stored, settledAt: null });
+    await planSharpeningService.writeBack(planInput(planId), fx.ctx);
+    expect(await storedRequirement(planId)).toMatchObject(REQUIREMENT);
     expect(await bodyOf(anchor.id)).toBe('Hand-written body.\n');
   });
 
-  it('refuses a user who can browse but not edit, writing neither leg', async () => {
+  it('refuses a viewer, who may not view the plan,, and writes nothing', async () => {
     const fx = await makeWorkItemFixture();
-    const anchor = await card(fx);
-    const planId = await anchoredPlan(fx, [anchor.identifier]);
+    const planId = await anchoredPlan(fx, []);
     const viewer = await createTestUser();
     await adminDb.workspaceMembership.create({
       data: { userId: viewer.id, workspaceId: fx.workspaceId, workspaceRole: 'member' },
@@ -493,9 +288,6 @@ describe('plan scope — the card being planned', () => {
       targetUserId: viewer.id,
       role: 'viewer',
     });
-
-    // A viewer may browse the project; the plan gate (`ai:view_plan`) or the
-    // edit gate refuses them before either leg writes.
     const err = await planSharpeningService
       .writeBack(planInput(planId), { userId: viewer.id, workspaceId: fx.workspaceId })
       .catch((e: unknown) => e);
@@ -503,6 +295,19 @@ describe('plan scope — the card being planned', () => {
       true,
     );
     expect(await storedRequirement(planId)).toBeNull();
-    expect(await bodyOf(anchor.id)).toBe('Hand-written body.\n');
+  });
+
+  it('no Sharpen code path writes a work item', () => {
+    const files = [
+      'lib/services/planSharpeningService.ts',
+      'lib/services/aiSharpenService.ts',
+      'app/api/internal/ai/plan-sharpening/route.ts',
+      'app/api/ai/sharpen/route.ts',
+    ];
+    for (const f of files) {
+      const src = readFileSync(path.join(process.cwd(), f), 'utf8');
+      expect(src, f).not.toMatch(/workItemsService\s*\.\s*updateWorkItem/);
+      expect(src, f).not.toMatch(/workItemRepository\s*\.\s*update/);
+    }
   });
 });

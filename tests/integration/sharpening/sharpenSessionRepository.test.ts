@@ -13,12 +13,7 @@ import { sharpenSessionRepository } from '@/lib/repositories/sharpenSessionRepos
 import { sharpenTurnRepository } from '@/lib/repositories/sharpenTurnRepository';
 import { plansService } from '@/lib/services/plansService';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
-import {
-  createTestUser,
-  createTestWorkItem,
-  makeWorkItemFixture,
-  type WorkItemFixture,
-} from '../../fixtures';
+import { createTestUser, makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
@@ -49,6 +44,30 @@ async function sqlStateOfRejection(p: Promise<unknown>): Promise<string | undefi
 
 async function planOf(fx: WorkItemFixture): Promise<string> {
   return (await plansService.createPlan(fx.projectId, { title: 'Sharpen me' }, fx.ctx)).id;
+}
+
+/** A plan-change conversation the person owns — a `conversation` scope's target. */
+async function conversationOf(fx: WorkItemFixture): Promise<string> {
+  return (
+    await adminDb.planChangeSession.create({
+      data: { workspaceId: fx.workspaceId, projectId: fx.projectId, createdById: fx.ownerId },
+    })
+  ).id;
+}
+
+function openConversationSession(fx: WorkItemFixture, planChangeSessionId: string) {
+  return inWs(fx, (tx) =>
+    sharpenSessionRepository.create(
+      {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        createdById: fx.ownerId,
+        scopeKind: 'conversation',
+        planChangeSessionId,
+      },
+      tx,
+    ),
+  );
 }
 
 function openPlanSession(fx: WorkItemFixture, planId: string, userId = fx.ownerId) {
@@ -85,10 +104,10 @@ describe('the scope CHECK', () => {
     expect(state).toBe(CHECK_VIOLATION);
   });
 
-  it('refuses a session with BOTH a plan id and a work-item id', async () => {
+  it('refuses a session with BOTH a plan id and a conversation id', async () => {
     const fx = await makeWorkItemFixture({ identifier: 'SCB' });
     const planId = await planOf(fx);
-    const item = await createTestWorkItem(fx, { kind: 'task', title: 'Card' });
+    const conversationId = await conversationOf(fx);
     const state = await sqlStateOfRejection(
       inWs(fx, (tx) =>
         sharpenSessionRepository.create(
@@ -96,9 +115,9 @@ describe('the scope CHECK', () => {
             workspaceId: fx.workspaceId,
             projectId: fx.projectId,
             createdById: fx.ownerId,
-            scopeKind: 'work_item',
+            scopeKind: 'conversation',
             planId,
-            workItemId: item.id,
+            planChangeSessionId: conversationId,
           },
           tx,
         ),
@@ -107,7 +126,7 @@ describe('the scope CHECK', () => {
     expect(state).toBe(CHECK_VIOLATION);
   });
 
-  it('refuses a work-item scope that names only a plan', async () => {
+  it('refuses a conversation scope that names only a plan', async () => {
     const fx = await makeWorkItemFixture({ identifier: 'SCC' });
     const planId = await planOf(fx);
     const state = await sqlStateOfRejection(
@@ -117,7 +136,7 @@ describe('the scope CHECK', () => {
             workspaceId: fx.workspaceId,
             projectId: fx.projectId,
             createdById: fx.ownerId,
-            scopeKind: 'work_item',
+            scopeKind: 'conversation',
             planId,
           },
           tx,
@@ -144,24 +163,13 @@ describe('one OPEN session per person per target', () => {
     expect(second.status).toBe('open');
   });
 
-  it('holds the same rule for a work-item target', async () => {
+  it('holds the same rule for a conversation target (MOTIR-9314)', async () => {
     const fx = await makeWorkItemFixture({ identifier: 'OPW' });
-    const item = await createTestWorkItem(fx, { kind: 'task', title: 'Card' });
-    const open = () =>
-      inWs(fx, (tx) =>
-        sharpenSessionRepository.create(
-          {
-            workspaceId: fx.workspaceId,
-            projectId: fx.projectId,
-            createdById: fx.ownerId,
-            scopeKind: 'work_item',
-            workItemId: item.id,
-          },
-          tx,
-        ),
-      );
-    const first = await open();
-    expect(await sqlStateOfRejection(open())).toBe(UNIQUE_VIOLATION);
+    const conversationId = await conversationOf(fx);
+    const first = await openConversationSession(fx, conversationId);
+    expect(await sqlStateOfRejection(openConversationSession(fx, conversationId))).toBe(
+      UNIQUE_VIOLATION,
+    );
     await inWs(fx, (tx) =>
       sharpenSessionRepository.updateState(
         first.id,
@@ -169,7 +177,10 @@ describe('one OPEN session per person per target', () => {
         tx,
       ),
     );
-    await expect(open()).resolves.toMatchObject({ status: 'open', workItemId: item.id });
+    await expect(openConversationSession(fx, conversationId)).resolves.toMatchObject({
+      status: 'open',
+      planChangeSessionId: conversationId,
+    });
   });
 
   it('lets two different people each hold an open session on the same plan', async () => {
@@ -216,6 +227,39 @@ describe('findOpenForUser', () => {
       sharpenSessionRepository.findOpenForUser({ planId }, fx.ownerId, fx.workspaceId, tx),
     );
     expect(found).toBeNull();
+  });
+});
+
+describe('a conversation target', () => {
+  it('findLatestByConversation answers the newest session, ended or open, of that person only', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'LAT' });
+    const conversationId = await conversationOf(fx);
+    const first = await openConversationSession(fx, conversationId);
+    await inWs(fx, (tx) =>
+      sharpenSessionRepository.updateState(first.id, { status: 'ended', endReason: 'stopped' }, tx),
+    );
+    const latest = (userId: string) =>
+      inWs(fx, (tx) =>
+        sharpenSessionRepository.findLatestByConversation(
+          conversationId,
+          userId,
+          fx.workspaceId,
+          tx,
+        ),
+      );
+    expect((await latest(fx.ownerId))?.id).toBe(first.id);
+    const second = await openConversationSession(fx, conversationId);
+    expect((await latest(fx.ownerId))?.id).toBe(second.id);
+    const other = await createTestUser({ name: 'Teammate' });
+    expect(await latest(other.id)).toBeNull();
+  });
+
+  it('a deleted conversation takes its grilling sessions with it', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'CAS' });
+    const conversationId = await conversationOf(fx);
+    const session = await openConversationSession(fx, conversationId);
+    await adminDb.planChangeSession.delete({ where: { id: conversationId } });
+    expect(await adminDb.sharpenSession.findUnique({ where: { id: session.id } })).toBeNull();
   });
 });
 

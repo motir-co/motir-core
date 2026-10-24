@@ -8413,7 +8413,11 @@
         "outOfCredits": "Sua organização está sem créditos de AI, então o planejamento não pode começar.",
         "targetUnavailable": "Você não pode mais abrir {key}, então o planejamento não pode começar.",
         "generic": "O planejamento não pode começar a partir desta proposta."
-      }
+      },
+      "held": "O Motir AI vai propor o planejamento quando estas perguntas terminarem.",
+      "settledHeading": "O que suas respostas definiram",
+      "clearEnough": "Claro o bastante para planejar como está.",
+      "nothingSettled": "Nada foi definido, então o pedido é planejado como está."
     },
     "logBugOffer": {
       "label": "Oferta para registrar um bug",
@@ -8466,9 +8470,11 @@
           "title": "Me questione",
           "body1": "Antes de planejar, o Motir AI pergunta o que você quer, uma pergunta por vez: como deve funcionar, as outras formas de fazer a mesma coisa e o que acontece quando algo dá errado.",
           "body2": "Cada pergunta tem algumas respostas para escolher, uma recomendada. Pule qualquer uma, deixe o planejador decidir ou pare quando quiser.",
-          "body3": "O que você definir é escrito no requisito do plano, e o planejamento começa a partir disso."
+          "body3": "O que você definir é escrito no requisito do plano, e o planejamento começa a partir disso.",
+          "beforePlanning": "Enquanto não há um plano, o Motir AI faz as perguntas antes de propor o planejamento, e a proposta mostra o que você definiu."
         },
-        "hint": "Sua próxima mensagem inicia as perguntas."
+        "hint": "Sua próxima mensagem inicia as perguntas.",
+        "hintBeforePlanning": "Quando o Motir AI for propor o planejamento, ele faz as perguntas primeiro."
       }
     },
     "follow": {
@@ -14883,15 +14889,18 @@
       },
       "youAnswered": "Sua resposta",
       "plannersAssumption": "Suposição do planejador",
-      "writing": "Escrevendo suas respostas no requisito do plano e em <item></item>…",
       "writingPlanOnly": "Escrevendo suas respostas no requisito do plano…",
-      "written": "Escrito no requisito do plano e em <item></item>.",
       "writtenPlanOnly": "Escrito no requisito do plano.",
       "failed": "Suas respostas não foram escritas. Elas continuam aqui.",
       "copy": "Copiar respostas"
     },
     "error": "Essa pergunta não chegou. Suas respostas até agora foram mantidas — tente de novo.",
-    "retry": "Tentar de novo"
+    "retry": "Tentar de novo",
+    "conversation": {
+      "nothingToAsk": "Não tenho nada a perguntar: isto está claro o bastante para planejar como está.",
+      "stoppedNoAnswer": "Você parou as perguntas antes de qualquer resposta.",
+      "switchedOff": "Você desativou Me questione, então as perguntas pararam."
+    }
   },
   "itemTranslation": {
     "groupLabel": "Tradução",

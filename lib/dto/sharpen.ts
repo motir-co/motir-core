@@ -26,9 +26,9 @@ export interface SharpenTurnDto {
 
 /** What a Sharpen session is about. */
 export interface SharpenScopeDto {
-  kind: 'plan' | 'work_item';
+  kind: 'plan' | 'conversation';
   planId?: string;
-  itemKey?: string;
+  conversationId?: string;
 }
 
 export interface SharpenSessionDto {
@@ -57,6 +57,20 @@ export interface SharpenDoorResult {
   jobId: string | null;
   turnId: string | null;
   session: SharpenSessionDto;
+}
+
+/** What a person's grilling on a conversation settled (MOTIR-9314) — their latest
+ *  session there, open or ended. Read by the plan submit to carry the answers
+ *  into the run. */
+export interface SharpenConversationSettledDto {
+  sessionId: string;
+  status: 'open' | 'ended';
+  endReason: 'nothing_to_ask' | 'finished' | 'stopped' | null;
+  settled: SettledAnswer[];
+  assumptions: SharpenAssumption[];
+  /** The conversation's person turns the grilling was given: every one written
+   *  before its latest turn. A turn written after is a later request. */
+  requests: string[];
 }
 
 /** What settling a job answers. */

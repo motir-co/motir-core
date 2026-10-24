@@ -26,6 +26,9 @@ export interface GrillMeControlProps {
   /** Draw the "Your next message starts the grilling." hint (on, before the next message). */
   hint?: boolean;
   disabled?: boolean;
+  /** The conversation holds no plan yet (MOTIR-9316): the pre-planning hint, and the
+   *  popover's extra last paragraph. Inside a run both stay as shipped. */
+  beforePlanning?: boolean;
 }
 
 export function GrillMeControl({
@@ -33,6 +36,7 @@ export function GrillMeControl({
   onChange,
   hint = false,
   disabled = false,
+  beforePlanning = false,
 }: GrillMeControlProps) {
   const t = useTranslations('planningWorkspace.grill.control');
   const labelId = useId();
@@ -84,12 +88,20 @@ export function GrillMeControl({
             <p className="mt-2 text-sm leading-relaxed text-(--el-text-secondary)">
               {t('popover.body3')}
             </p>
+            {beforePlanning ? (
+              <p
+                className="mt-2 text-sm leading-relaxed text-(--el-text-secondary)"
+                data-testid="grill-me-explanation-before-planning"
+              >
+                {t('popover.beforePlanning')}
+              </p>
+            ) : null}
           </Popover.Content>
         </Popover>
       </div>
       {on && hint ? (
         <p className="text-xs text-(--el-text-secondary)" data-testid="grill-me-hint">
-          {t('hint')}
+          {t(beforePlanning ? 'hintBeforePlanning' : 'hint')}
         </p>
       ) : null}
     </div>

@@ -4,16 +4,6 @@
 // these; `app/api/internal/ai/plan-sharpening/route.ts` maps each `code` to a
 // status.
 
-/** The work item is in a `done`-category status (done, cancelled) — a
- *  finished card is not rewritten by a late answer. → 409 */
-export class SharpeningTargetFinishedError extends Error {
-  readonly code = 'SHARPENING_TARGET_FINISHED' as const;
-  constructor(readonly workItemKey: string) {
-    super(`${workItemKey} is finished; its acceptance and assumptions are no longer written.`);
-    this.name = 'SharpeningTargetFinishedError';
-  }
-}
-
 /** The plan has been decided (approved, declined) — it is no longer editable,
  *  so nothing is written to it. → 409 */
 export class SharpeningPlanClosedError extends Error {
@@ -27,9 +17,8 @@ export class SharpeningPlanClosedError extends Error {
   }
 }
 
-/** The write-back names something the door cannot write: a malformed work-item
- *  key, a `perItem` on work-item scope, or a `perItem` proposal that is not an
- *  `add` of this plan. → 422 */
+/** The write-back names something the door cannot write: a `perItem` proposal
+ *  that is not an `add` of this plan. → 422 */
 export class SharpeningInputInvalidError extends Error {
   readonly code = 'SHARPENING_INPUT_INVALID' as const;
   constructor(message: string) {

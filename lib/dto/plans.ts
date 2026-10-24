@@ -956,8 +956,8 @@ export interface SharpenedRequirementDto extends SubmittedRequirement {
   settledAt: string;
 }
 
-/** Where a Sharpen write-back lands — a plan, or one committed work item. */
-export type SharpeningScope = { planId: string } | { workItemKey: string };
+/** Where a Sharpen write-back lands — a plan (the work-item scope is retired, MOTIR-9314). */
+export type SharpeningScope = { planId: string };
 
 /**
  * The body motir-ai's grilling session sends core's internal write-back door,

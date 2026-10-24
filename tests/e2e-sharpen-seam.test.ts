@@ -242,11 +242,9 @@ describe('scripted', () => {
   });
 
   it('stop writes back exactly what was settled before it, with core’s two credentials', async () => {
-    seed({ targets: { 'MOTIR-7': { mode: 'scripted', questions: SCRIPT } } });
-    const item = (prev: SharpenTurnResult | null, a: SharpenAction, x = {}) => ({
-      ...next(prev, a, x, 'MOTIR-7'),
-      scope: { kind: 'work_item' as const, ref: 'MOTIR-7' },
-    });
+    seed({ targets: { 'plan-7': { mode: 'scripted', questions: SCRIPT } } });
+    const item = (prev: SharpenTurnResult | null, a: SharpenAction, x = {}) =>
+      next(prev, a, x, 'plan-7');
     const t1 = await turn(item(null, 'start'));
     const t2 = await turn(item(t1.result, 'own_words', { text: 'Only admins.' }));
     expect(t2.result?.question?.id).toBe('q2');
@@ -261,10 +259,52 @@ describe('scripted', () => {
     expect(core.calls[0]!.headers['x-motir-job-token']).toBe('job-token');
     expect(core.calls[0]!.body).toEqual({
       jobId: stop.jobId,
-      scope: { workItemKey: 'MOTIR-7' },
+      scope: { planId: 'plan-7' },
       requirement: { behaviour: '- Who starts the export? — Only admins.' },
       plannerAssumptions: [],
     });
+  });
+
+  it('a conversation’s grilling settles answers and writes nothing back (MOTIR-9314)', async () => {
+    seed({ targets: { 'conv-1': { mode: 'scripted', questions: SCRIPT } } });
+    const conv = (prev: SharpenTurnResult | null, a: SharpenAction, x = {}) => ({
+      ...next(prev, a, x, 'conv-1'),
+      scope: { kind: 'conversation' as const, ref: 'conv-1' },
+    });
+    const t1 = await turn(conv(null, 'start'));
+    const t2 = await turn(conv(t1.result, 'answer', { readingId: 'a' }));
+    const stop = await turn(conv(t2.result, 'stop'));
+    expect(stop.result?.kind).toBe('stopped');
+    expect(stop.result?.settled.map((s) => s.questionId)).toEqual(['q1']);
+    expect(stop.result?.writeBack).toBeNull();
+    expect(core.calls).toEqual([]);
+  });
+
+  it('an in-run turn never asks a carried question, and ends at once when the carried answers cover its requests (MOTIR-9319)', async () => {
+    seed({ default: { mode: 'scripted', questions: SCRIPT } });
+    const q1 = SCRIPT[0]!;
+    const carried = {
+      requests: ['Export the board'],
+      settled: [
+        {
+          questionId: q1.id,
+          question: q1.text,
+          answer: q1.readings[0]!.label,
+          topic: q1.topic,
+          readingId: q1.readings[0]!.id,
+        },
+      ],
+      assumptions: [],
+    };
+    const run = (requests: string[]) => ({
+      run: { planId: 'plan-1', requests, card: null, carried },
+    });
+    const covered = await turn(next(null, 'start', run(['export  the BOARD'])));
+    expect(covered.result?.kind).toBe('nothing_to_ask');
+    expect(covered.result?.question).toBeNull();
+    const later = await turn(next(null, 'start', run(['Export the board', 'Also weekly'])));
+    expect(later.result?.kind).toBe('question');
+    expect(later.result?.question?.id).toBe(SCRIPT[1]!.id);
   });
 
   it('stop with nothing settled ends with no write-back', async () => {
