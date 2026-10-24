@@ -54,8 +54,8 @@ beforeAll(async () => {
 let server: Server;
 let port: number;
 let logLines: string[];
-let onRequest: ReturnType<typeof vi.fn>;
-let onUpgrade: ReturnType<typeof vi.fn>;
+let onRequest: ReturnType<typeof vi.fn<(...args: unknown[]) => void>>;
+let onUpgrade: ReturnType<typeof vi.fn<(...args: unknown[]) => void>>;
 let run: ReturnType<typeof vi.fn<RunInContainer>>;
 let terminal: { server: HttpServer; wss: WebSocketServer; port: number; headers: string[] };
 
@@ -238,7 +238,8 @@ describe('GET /v1/terminal', () => {
       ca: ca.certPem,
       cert: client.certPem,
       key: client.keyPem,
-      checkServerIdentity: () => undefined,
+      // Handed to `tls.connect`, where `undefined` accepts the name; `ws` types it as boolean.
+      checkServerIdentity: (() => undefined) as unknown as () => boolean,
       headers: { 'Motir-Relay': 'relay-token' },
     });
   }
