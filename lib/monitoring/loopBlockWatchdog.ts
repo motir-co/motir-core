@@ -49,6 +49,15 @@ import {
 // and never when its top frame is the heartbeat's own callback. Anything else
 // reads `not_in_js`, with its stack kept in the event's `contexts`.
 //
+// ⚠️ A STALE HEARTBEAT IS NOT PROOF THE BLOCK IS STILL RUNNING (MOTIR-9498).
+// The heartbeat stays stale after a JS block ends, until its own timer runs, and
+// the macrotasks queued during the block (the P2028 rejection, pg socket reads)
+// run first. A pause requested just before the block ends lands promptly on that
+// follow-on code and passes every check above. So the worker pauses TWICE,
+// CONFIRM_GAP_MS apart, and the tag names only a frame on both stacks while the
+// heartbeat never moved: code that was still running at the second pause, not
+// something that ran once on the way out of the block.
+
 // ⚠️ MODULE-LOCAL STATE, ON PURPOSE (the MOTIR-7007 rule, stated). Like the
 // event-loop monitor it rides on, the watchdog is started and read in the same
 // module evaluation (the server's Sentry config, the worker's single bundle),
@@ -64,6 +73,8 @@ const HEARTBEAT_MS = 100;
 const POLL_MS = 100;
 /** A request the main thread answered later than this was not served mid-block. */
 const PROMPT_PAUSE_MS = 250;
+/** First pause resumed → confirming pause sent. Longer than the code a block hands on to. */
+const CONFIRM_GAP_MS = 50;
 /** At most this many frames ride in the event's `contexts`. */
 export const MAX_CONTEXT_FRAMES = 50;
 const MAX_FRAME_CHARS = 200;
@@ -79,6 +90,8 @@ export const NO_APP_FRAME = 'no_app_frame';
 // Slots of the shared stats array (BigInt64Array).
 const S_EPOCH = 0;
 const S_MAX_BASE = 1; // two windows: S_MAX_BASE + (epoch & 1)
+/** How far the current capture has got: 1 probed, 2 first pause, 3 confirming pause. */
+const S_STAGE = 3;
 
 /** One stack frame as V8 reports it. */
 export interface RawFrame {
@@ -102,7 +115,26 @@ export interface RawCapture {
   readonly staleAtPausedMs: number;
   /** `Debugger.paused` → `Debugger.resume` answered: how long the main thread was held. */
   readonly holdMs: number;
+  /** The first pause's stack, top first. */
   readonly frames: readonly RawFrame[];
+  /** The confirming pause; null until it has arrived (or when it never did). */
+  readonly confirm: RawConfirm | null;
+}
+
+/** The confirming pause, CONFIRM_GAP_MS after the first resumed. */
+export interface RawConfirm {
+  /** `Debugger.pause` sent → `Debugger.paused`, in ms. */
+  readonly pauseMs: number;
+  /** The heartbeat value when it arrived. */
+  readonly hb: number;
+  readonly holdMs: number;
+  /** Its stack, top first. */
+  readonly frames: readonly RawFrame[];
+}
+
+interface RawConfirmMessage extends RawConfirm {
+  readonly t: 'confirm';
+  readonly hbStart: number;
 }
 
 interface RawBlockEnd {
@@ -114,6 +146,7 @@ interface RawBlockEnd {
 interface Capture extends RawCapture {
   readonly epoch: number;
   endedAt: number | null;
+  confirm: RawConfirm | null;
 }
 
 /** The reading a P2028 carries. */
@@ -136,67 +169,96 @@ export interface LoopBlockReading {
 const WORKER_SOURCE = `
 const { workerData } = require('node:worker_threads');
 const inspector = require('node:inspector');
-const { hb, stats, port, thresholdMs, pollMs, S_EPOCH, S_MAX_BASE } = workerData;
+const { hb, stats, port, thresholdMs, pollMs, confirmGapMs, S_EPOCH, S_MAX_BASE, S_STAGE } =
+  workerData;
 
 let capturing = false;
 let capturedEpoch = -1;
 let block = null; // { hbStart, captured }
 
+function setStage(n) {
+  Atomics.store(stats, S_STAGE, BigInt(n));
+}
+
 function capture(hbStart) {
   capturing = true;
+  setStage(0);
   const session = new inspector.Session();
   session.connectToMainThread();
   const post = (method) =>
     new Promise((resolve, reject) =>
       session.post(method, (err, res) => (err ? reject(err) : resolve(res))),
     );
-  let probeMs = 0;
-  let pauseRequestedAt = 0;
-  let settle;
-  const done = new Promise((resolve) => (settle = resolve));
-  // ALWAYS resume — even a pause that lands long after we stopped waiting — or
-  // the main thread would stay paused.
-  session.once('Debugger.paused', (msg) => {
-    const pausedAt = Date.now();
-    const stale = pausedAt - Number(Atomics.load(hb, 0));
-    const frames = msg.params.callFrames.map((f) => ({
-      fn: f.functionName,
-      url: f.url,
-      line: f.location.lineNumber + 1,
-      col: f.location.columnNumber + 1,
-    }));
-    post('Debugger.resume').then(
-      () => {
-        port.postMessage({
-          t: 'capture',
-          hbStart,
-          probeMs,
-          pauseMs: pausedAt - pauseRequestedAt,
-          staleAtPausedMs: stale,
-          holdMs: Date.now() - pausedAt,
-          frames,
-        });
-        settle();
-      },
-      () => settle(),
-    );
-  });
+  // One pause: ALWAYS resumed — even one that lands long after we stopped
+  // waiting — or the main thread would stay paused.
+  const pauseOnce = (stage) =>
+    new Promise((resolve, reject) => {
+      let requestedAt = 0;
+      session.once('Debugger.paused', (msg) => {
+        const pausedAt = Date.now();
+        const hbAtPaused = Number(Atomics.load(hb, 0));
+        const frames = msg.params.callFrames.map((f) => ({
+          fn: f.functionName,
+          url: f.url,
+          line: f.location.lineNumber + 1,
+          col: f.location.columnNumber + 1,
+        }));
+        setStage(stage);
+        post('Debugger.resume').then(
+          () =>
+            resolve({
+              pauseMs: pausedAt - requestedAt,
+              staleMs: pausedAt - hbAtPaused,
+              hbAtPaused,
+              holdMs: Date.now() - pausedAt,
+              frames,
+            }),
+          reject,
+        );
+      });
+      requestedAt = Date.now();
+      post('Debugger.pause').catch(reject);
+    });
   // A cheap request first: the main thread answers it from the same interrupt a
   // pause rides on, so how long it takes says whether V8 could interrupt the
   // block at all. Debugger.enable cannot say, because replaying every parsed
   // script to the session is slow on a big app even when the thread is free.
+  let probeMs = 0;
   const probeStartedAt = Date.now();
-  post('Runtime.getHeapUsage')
+  return post('Runtime.getHeapUsage')
     .then(() => {
       probeMs = Date.now() - probeStartedAt;
+      setStage(1);
       return post('Debugger.enable');
     })
-    .then(() => {
-      pauseRequestedAt = Date.now();
-      return post('Debugger.pause');
+    .then(() => pauseOnce(2))
+    .then((first) => {
+      // Posted now, so a read right after a block that ended before the
+      // confirming pause still finds the capture (as not_in_js).
+      port.postMessage({
+        t: 'capture',
+        hbStart,
+        probeMs,
+        pauseMs: first.pauseMs,
+        staleAtPausedMs: first.staleMs,
+        holdMs: first.holdMs,
+        frames: first.frames,
+        confirm: null,
+      });
+      return new Promise((resolve) => setTimeout(resolve, confirmGapMs));
     })
-    .catch(() => settle());
-  return done
+    .then(() => pauseOnce(3))
+    .then((confirm) => {
+      port.postMessage({
+        t: 'confirm',
+        hbStart,
+        pauseMs: confirm.pauseMs,
+        hb: confirm.hbAtPaused,
+        holdMs: confirm.holdMs,
+        frames: confirm.frames,
+      });
+    })
+    .catch(() => {})
     .then(() => post('Debugger.disable'))
     .catch(() => {})
     .then(() => {
@@ -255,7 +317,7 @@ export function startLoopBlockWatchdog(): void {
   if (watchdog) return;
   const thresholdMs = thresholdOverrideMs ?? BLOCK_THRESHOLD_MS;
   const heartbeat = new BigInt64Array(new SharedArrayBuffer(8));
-  const stats = new BigInt64Array(new SharedArrayBuffer(8 * 3));
+  const stats = new BigInt64Array(new SharedArrayBuffer(8 * 4));
   const { port1, port2 } = new MessageChannel();
 
   // A named function declaration, so a pause that lands inside it is
@@ -275,8 +337,10 @@ export function startLoopBlockWatchdog(): void {
       port: port2,
       thresholdMs,
       pollMs: POLL_MS,
+      confirmGapMs: CONFIRM_GAP_MS,
       S_EPOCH,
       S_MAX_BASE,
+      S_STAGE,
     },
     transferList: [port2],
   });
@@ -330,11 +394,22 @@ function drain(w: Watchdog): void {
   for (;;) {
     const received = receiveMessageOnPort(w.port);
     if (!received) return;
-    const message = received.message as RawCapture | RawBlockEnd;
+    const message = received.message as RawCapture | RawConfirmMessage | RawBlockEnd;
     if (message.t === 'capture') {
-      w.captures.push({ ...message, epoch: epochOf(w), endedAt: null });
-      w.captureCount += 1;
+      w.captures.push({ ...message, epoch: epochOf(w), endedAt: null, confirm: null });
       w.lastHold = message.holdMs;
+    } else if (message.t === 'confirm') {
+      const match = w.captures.find((c) => c.hbStart === message.hbStart);
+      if (match) {
+        match.confirm = {
+          pauseMs: message.pauseMs,
+          hb: message.hb,
+          holdMs: message.holdMs,
+          frames: message.frames,
+        };
+        w.captureCount += 1;
+        w.lastHold = Math.max(w.lastHold, message.holdMs);
+      }
     } else if (message.t === 'end') {
       const match = w.captures.find((c) => c.hbStart === message.hbStart);
       if (match) match.endedAt = message.endedAt;
@@ -379,26 +454,98 @@ export function formatFrame(frame: RawFrame): string {
   return text.length > MAX_FRAME_CHARS ? text.slice(0, MAX_FRAME_CHARS) : text;
 }
 
-/**
- * Did the pause interrupt the block, rather than land after it? Only a pause
- * that arrived promptly, while the heartbeat was still stale, and not inside the
- * heartbeat callback, names the code that held the loop.
- */
-export function pauseInterruptedJs(capture: RawCapture, thresholdMs: number): boolean {
-  if (capture.probeMs > PROMPT_PAUSE_MS || capture.pauseMs > PROMPT_PAUSE_MS) return false;
-  if (capture.staleAtPausedMs <= thresholdMs) return false;
-  return capture.frames[0]?.fn !== HEARTBEAT_FN;
+/** Same function: a frame still running sits at a different line on each pause. */
+function sameFunction(a: RawFrame, b: RawFrame): boolean {
+  return a.fn === b.fn && a.url === b.url;
 }
 
 /**
- * The frame tag a capture reads. An app frame with a URL outranks a URL-less one
- * above it: the pause can land inside evaluated code (a runner's getter) called
- * from the function that holds the loop, and the tag should name that function
- * (MOTIR-9443). A URL-less frame is named only when no app frame has a URL.
+ * The frames that were on BOTH pauses' stacks, top first: the shared outer frames
+ * (caller frames sit at the same call site), plus the innermost frame both
+ * pauses were still inside, at the first pause's line. Code that ran only after
+ * the block, or only at one of the pauses, is not in it.
+ */
+export function framesOnBothPauses(capture: RawCapture): readonly RawFrame[] {
+  const a = capture.frames;
+  const b = capture.confirm?.frames ?? [];
+  let shared = 0;
+  while (shared < a.length && shared < b.length) {
+    const fa = a[a.length - 1 - shared]!;
+    const fb = b[b.length - 1 - shared]!;
+    if (!sameFunction(fa, fb)) break;
+    shared += 1;
+    if (fa.line !== fb.line) break; // still running here, on another statement
+  }
+  return a.slice(a.length - shared);
+}
+
+/** A frame with a source URL outside Node: application or library code. */
+function hasUserlandUrl(frame: RawFrame): boolean {
+  return frame.url !== '' && !frame.url.startsWith('node:');
+}
+
+/**
+ * Node's event-loop dispatchers. Each stays on the stack across every callback
+ * it runs back to back, so two pauses in two different follow-ons share it, and
+ * as a builtin from the startup snapshot it carries no URL.
+ */
+const EVENT_LOOP_DISPATCHERS = new Set([
+  'processImmediate',
+  'processTimers',
+  'listOnTimeout',
+  'processTicksAndRejections',
+  'runNextTicks',
+  'runMicrotasks',
+]);
+
+/**
+ * The shared frames that can stand for the code that held the loop. Never a
+ * `node:` frame or a dispatcher; and when a shared frame has a userland URL, no
+ * URL-less frame below the outermost such one, which is Node's own plumbing
+ * under the callback (URL-less frames ABOVE it are evaluated code, MOTIR-9443).
+ */
+function nameableShared(capture: RawCapture): readonly RawFrame[] {
+  const shared = framesOnBothPauses(capture);
+  let outermost = -1;
+  shared.forEach((frame, i) => {
+    if (hasUserlandUrl(frame)) outermost = i;
+  });
+  const scope = outermost >= 0 ? shared.slice(0, outermost + 1) : shared;
+  return scope.filter(
+    (frame) =>
+      !frame.url.startsWith('node:') && !(frame.url === '' && EVENT_LOOP_DISPATCHERS.has(frame.fn)),
+  );
+}
+
+/**
+ * Did the pause interrupt the block, rather than land after it? Both pauses must
+ * have arrived promptly, with the heartbeat still stale from the block and never
+ * inside the heartbeat callback, and their stacks must share a frame of
+ * application or library code, not just Node's dispatcher under two different
+ * callbacks: the code that held the loop was still running when the confirming
+ * pause landed (MOTIR-9498).
+ */
+export function pauseInterruptedJs(capture: RawCapture, thresholdMs: number): boolean {
+  if (capture.probeMs > PROMPT_PAUSE_MS || capture.pauseMs > PROMPT_PAUSE_MS) return false;
+  const confirm = capture.confirm;
+  if (!confirm || confirm.pauseMs > PROMPT_PAUSE_MS) return false;
+  if (capture.staleAtPausedMs <= thresholdMs) return false;
+  if (confirm.hb !== capture.hbStart) return false;
+  if (capture.frames[0]?.fn === HEARTBEAT_FN) return false;
+  if (confirm.frames[0]?.fn === HEARTBEAT_FN) return false;
+  return nameableShared(capture).length > 0;
+}
+
+/**
+ * The frame tag a capture reads, named from the frames on both pauses' stacks.
+ * An app frame with a URL outranks a URL-less one above it: the pause can land
+ * inside evaluated code (a runner's getter) called from the function that holds
+ * the loop, and the tag should name that function (MOTIR-9443). A URL-less frame
+ * is named only when no app frame has a URL.
  */
 export function frameTagOf(capture: RawCapture, thresholdMs: number): string {
   if (!pauseInterruptedJs(capture, thresholdMs)) return NOT_IN_JS;
-  const appFrames = capture.frames.filter(isAppFrame);
+  const appFrames = nameableShared(capture).filter(isAppFrame);
   const top = appFrames.find((frame) => frame.url !== '') ?? appFrames[0];
   return top ? formatFrame(top) : NO_APP_FRAME;
 }
@@ -454,7 +601,7 @@ export const __forTests = {
   setThresholdMs(ms: number | null): void {
     thresholdOverrideMs = ms;
   },
-  /** Captures taken since start (drained from the worker). */
+  /** Captures taken since start, both pauses landed (drained from the worker). */
   captureCount(): number {
     const w = watchdog;
     if (!w) return 0;
@@ -467,6 +614,10 @@ export const __forTests = {
     if (!w) return 0;
     drain(w);
     return w.lastHold;
+  },
+  /** How far the current capture has got: 0 none, 1 probed, 2 first pause, 3 confirming pause. */
+  captureStage(): number {
+    return watchdog ? Number(Atomics.load(watchdog.stats, S_STAGE)) : 0;
   },
   /** The worker's thread id, or null when none runs. */
   threadId(): number | null {
