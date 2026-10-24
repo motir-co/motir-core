@@ -11,6 +11,7 @@ import {
 import { fleetKindOnPool, poolAccountRaiseTargetVcpu } from '@/lib/ciFleet/shardTargets';
 import { FLEET_WORKLOAD_KINDS, type FleetWorkloadKind } from '@/lib/ciFleet/workloads';
 import { fleetAutomationPrincipal } from '@/lib/fleetShards/fleetAutomationPrincipal';
+import { scrubSecrets } from '@/lib/fleetShards/scrubSecrets';
 import { fleetGrowthEventRepository } from '@/lib/repositories/fleetGrowthEventRepository';
 import { fleetGrowthLockRepository } from '@/lib/repositories/fleetGrowthLockRepository';
 import { fleetQuotaRequestRepository } from '@/lib/repositories/fleetQuotaRequestRepository';
@@ -149,8 +150,14 @@ async function promoteInTx(spare: FleetShard, tx: Prisma.TransactionClient): Pro
   if (spare.state !== 'active') await fleetShardRepository.updateState(spare.id, 'active', tx);
 }
 
-/** Why a create did not happen, as text that cannot carry a credential. */
+/** Why a create did not happen, as text that cannot carry a credential. AWS's
+ *  own reason is free text, so it is scrubbed before the event, the audit row and
+ *  the alert see it (MOTIR-9464's seam test seeds one carrying a key id). */
 function refusalReason(err: unknown): string {
+  return scrubSecrets(rawRefusalReason(err));
+}
+
+function rawRefusalReason(err: unknown): string {
   if (err instanceof FleetShardAccountRefusedError) return err.reason;
   if (err && typeof err === 'object' && 'problems' in err && Array.isArray(err.problems)) {
     return (err.problems as unknown[]).map(String).join('; ');
