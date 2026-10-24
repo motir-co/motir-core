@@ -1,11 +1,9 @@
 'use client';
 
-import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { Bot, Check, Copy } from 'lucide-react';
 
 import { Button } from '@/components/ui/Button';
-import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 import type { GrillingBranch, SettledAnswer, SharpenAssumption } from '@/lib/ai/types';
 import type { SharpenSessionDto } from '@/lib/dto/sharpen';
 
@@ -20,9 +18,9 @@ import type { SharpenSessionDto } from '@/lib/dto/sharpen';
 // solid, the planner's dashed.
 //
 // Beneath it, the write-back's result — automatic, never a button: Writing… while
-// the session's write-back has not reported, Written (naming the plan and the
-// card being planned, a link) once it has, and Failed with Copy answers when it
-// did not land.
+// the session's write-back has not reported, Written (to the plan's requirement —
+// never a card: Motir AI does not edit a card as the person, MOTIR-9314) once it
+// has, and Failed with Copy answers when it did not land.
 
 const GROUP_OF: Record<GrillingBranch, 'behaviour' | 'scopeEdge' | 'constraints' | 'acceptance'> = {
   workflow: 'behaviour',
@@ -34,8 +32,6 @@ const GROUPS = ['behaviour', 'scopeEdge', 'constraints', 'acceptance'] as const;
 
 export interface SharpenSummaryProps {
   session: SharpenSessionDto;
-  /** The card the run is planning (its conversation's anchor), or null. */
-  cardKey: string | null;
 }
 
 function answersText(settled: SettledAnswer[], assumptions: SharpenAssumption[]): string {
@@ -45,9 +41,8 @@ function answersText(settled: SettledAnswer[], assumptions: SharpenAssumption[])
   ].join('\n');
 }
 
-export function SharpenSummary({ session, cardKey }: SharpenSummaryProps) {
+export function SharpenSummary({ session }: SharpenSummaryProps) {
   const t = useTranslations('sharpen.summary');
-  const routes = useReaderRoutes();
   const { settled, assumptions } = session;
   if (settled.length === 0 && assumptions.length === 0) return null;
 
@@ -57,14 +52,6 @@ export function SharpenSummary({ session, cardKey }: SharpenSummaryProps) {
     byGroup.set(group, [...(byGroup.get(group) ?? []), answer]);
   }
   const writeBack = session.writeBack;
-  const card = cardKey ? (
-    <Link
-      href={routes.item(cardKey)}
-      className="font-semibold text-(--el-link) underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
-    >
-      {cardKey}
-    </Link>
-  ) : null;
 
   return (
     <div className="flex flex-col gap-2 pl-9">
@@ -133,7 +120,7 @@ export function SharpenSummary({ session, cardKey }: SharpenSummaryProps) {
           className="text-xs text-(--el-text-secondary)"
           data-testid="sharpen-writing"
         >
-          {card ? t.rich('writing', { item: () => cardKey }) : t('writingPlanOnly')}
+          {t('writingPlanOnly')}
         </p>
       ) : writeBack.ok ? (
         <p
@@ -141,7 +128,7 @@ export function SharpenSummary({ session, cardKey }: SharpenSummaryProps) {
           data-testid="sharpen-written"
           className="rounded-(--radius-control) bg-(--el-success-surface) px-(--spacing-control-x) py-(--spacing-control-y) text-sm text-(--el-text-strong)"
         >
-          {card ? t.rich('written', { item: () => card }) : t('writtenPlanOnly')}
+          {t('writtenPlanOnly')}
         </p>
       ) : (
         <div

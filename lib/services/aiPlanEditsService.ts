@@ -9,7 +9,12 @@ import {
 import { ONBOARDING_CONTEXT_FIELD, onboardingContextFor } from '@/lib/ai/onboardingContext';
 import { resolveProjectRepoContext } from '@/lib/ai/projectRepoContext';
 import { MotirAiError } from '@/lib/ai/errors';
-import type { JobContextBag, JobStreamEvent, SubmittedRequirement } from '@/lib/ai/types';
+import type {
+  CarriedAnswers,
+  JobContextBag,
+  JobStreamEvent,
+  SubmittedRequirement,
+} from '@/lib/ai/types';
 import type { ProjectContext } from '@/lib/projects';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import {
@@ -131,6 +136,13 @@ export interface PlanEditSubmitOptions {
    * Absent ⇒ one attempt, as every other planning door still sends.
    */
   idempotencyKey?: string;
+  /**
+   * The conversation's CARRIED ANSWERS (Story MOTIR-9221 · MOTIR-9315) — what its
+   * grilling settled before this run. `submitAugment` / `submitContextual` put it on
+   * `context.carriedAnswers`, beside `requirement` and never merged into it, and
+   * only when present.
+   */
+  carriedAnswers?: CarriedAnswers;
 }
 
 /**
@@ -456,7 +468,16 @@ export const aiPlanEditsService = {
     opts: PlanEditSubmitOptions = {},
   ): Promise<PlanEditSubmitResult> {
     await assertCanPlan(ctx);
-    return submitPlanEditJob({ prompt, ...(requirement ? { requirement } : {}) }, ctx, opts);
+    const { carriedAnswers, ...rest } = opts;
+    return submitPlanEditJob(
+      {
+        prompt,
+        ...(requirement ? { requirement } : {}),
+        ...(carriedAnswers ? { carriedAnswers } : {}),
+      },
+      ctx,
+      rest,
+    );
   },
 
   /**
@@ -496,10 +517,16 @@ export const aiPlanEditsService = {
     opts: PlanEditSubmitOptions = {},
   ): Promise<PlanEditSubmitResult> {
     await assertCanPlan(ctx);
+    const { carriedAnswers, ...rest } = opts;
     return submitPlanEditJob(
-      { prompt, targetKeys: [...targetKeys], ...(requirement ? { requirement } : {}) },
+      {
+        prompt,
+        targetKeys: [...targetKeys],
+        ...(requirement ? { requirement } : {}),
+        ...(carriedAnswers ? { carriedAnswers } : {}),
+      },
       ctx,
-      opts,
+      rest,
     );
   },
 

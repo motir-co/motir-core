@@ -8,16 +8,28 @@ import type {
   SettledAnswer,
   SharpenAction,
   SharpenAssumption,
+  SharpenConversationContext,
   SharpenJobContext,
   SharpenQuestion,
   SharpenRunContext,
 } from '@/lib/ai/types';
-import type { SharpenDoorResult, SharpenSessionDto, SharpenSettleResult } from '@/lib/dto/sharpen';
-import { inFlightTurn, isFailedRecord, toSharpenSessionDto } from '@/lib/mappers/sharpenMappers';
+import type {
+  SharpenConversationSettledDto,
+  SharpenDoorResult,
+  SharpenSessionDto,
+  SharpenSettleResult,
+} from '@/lib/dto/sharpen';
+import {
+  inFlightTurn,
+  isFailedRecord,
+  toCarriedAnswers,
+  toSharpenSessionDto,
+} from '@/lib/mappers/sharpenMappers';
 import { PlanNotFoundError } from '@/lib/plans/errors';
 import { sqlStateOf } from '@/lib/prisma/sqlstate';
 import type { ProjectContext } from '@/lib/projects';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
+import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
 import { planChangeTurnRepository } from '@/lib/repositories/planChangeTurnRepository';
 import { planRepository } from '@/lib/repositories/planRepository';
 import {
@@ -26,9 +38,8 @@ import {
 } from '@/lib/repositories/sharpenSessionRepository';
 import { sharpenTurnRepository } from '@/lib/repositories/sharpenTurnRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { planTargetLockService } from '@/lib/services/planTargetLockService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
-import { workflowsService } from '@/lib/services/workflowsService';
-import { workItemsService } from '@/lib/services/workItemsService';
 import {
   SharpenActionInvalidError,
   SharpenSessionEndedError,
@@ -39,12 +50,12 @@ import {
   SharpenTurnNotFoundError,
 } from '@/lib/sharpening/errors';
 import { narrowSharpenedRequirement } from '@/lib/sharpening/requirement';
-import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 
 // The SHARPEN session door (Task MOTIR-1101 · Subtask MOTIR-8181) — the motir-core
-// side of a Sharpen grilling session on a plan or one committed work item. It is
+// side of a Sharpen grilling session on a plan, or on a plan-change CONVERSATION
+// that has no plan yet (Story MOTIR-9221 · MOTIR-9314). It is
 // the Guide me through door's shape (`aiGuideService` + `guideLandingService`):
 // ONE `sharpen_turn` job per person action, submitted OUTSIDE the write
 // transaction and then bound to its turn, and a replay-safe `settle` the client
@@ -54,11 +65,12 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 //  1. the target resolves in the ACTIVE project and the caller may browse it —
 //     else {@link SharpenTargetNotAvailableError} (404, no existence leak);
 //  2. `ai:plan`;
-//  3. plan: `ai:view_plan` + `work_item:edit`; item: `work_item:edit` — the
-//     answers are written back onto the target, so a viewer cannot sharpen;
+//  3. plan: `ai:view_plan`. No `work_item:edit` on either target: Motir AI never
+//     edits a card as the person (MOTIR-9314) — a plan's answers land in its
+//     requirement and proposals, and a conversation's are only stored;
 //  4. the target is open — a `generating`, `planned` or `stale` plan (never an
-//     `approved` or `declined` one); an item neither archived nor in a
-//     `done`-category status — else {@link SharpenTargetClosedError};
+//     `approved` or `declined` one); a conversation not ended — else
+//     {@link SharpenTargetClosedError};
 //  5. Motir AI is configured.
 //
 // ── STATE IS THE SERVER'S ─────────────────────────────────────────────────────
@@ -73,15 +85,30 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 //
 // Core never writes the requirement itself: motir-ai's handler writes back through
 // `PUT /api/internal/ai/plan-sharpening` at the end, and core stores the
-// `writeBack` outcome it reports.
+// `writeBack` outcome it reports. A CONVERSATION session writes nothing back (there
+// is no plan yet): its answers stay on the session row, linked to the conversation,
+// until the plan the person confirms carries them (`getSettledForConversation`).
+//
+// ── A CONVERSATION'S LEASE ────────────────────────────────────────────────────
+// Every person turn and every landed planner turn of a conversation session moves
+// the conversation's `lastActivityAt` and refreshes any target lock it holds, in
+// the same transaction, so the 30-minute idle close measures from the last
+// grilling turn too. Nothing else about the conversation is written: no plan, no
+// origin, no gate — it stays question-only.
 
 /** What a door call is about, as the client names it. */
-export type SharpenTargetInput = { planId: string } | { itemKey: string };
+export type SharpenTargetInput = { planId: string } | { conversationId: string };
 
 /** A target resolved and browse-gated in the active project. */
 type Target =
   | { kind: 'plan'; planId: string; ref: string; state: string }
-  | { kind: 'work_item'; workItemId: string; ref: string; state: string };
+  | { kind: 'conversation'; conversationId: string; ref: string; state: string };
+
+/** What a job is grounded in: the run a plan stands inside, or the conversation. */
+interface Grounding {
+  run?: SharpenRunContext;
+  conversation?: SharpenConversationContext;
+}
 
 // A plan is open while an answer may still be written to it. A planning run in
 // its conversation phase is writing its own plan, so that plan is `generating` —
@@ -110,12 +137,13 @@ function bindCtx(ctx: ProjectContext) {
 }
 
 function targetRef(target: Target): SharpenTargetRef {
-  return target.kind === 'plan' ? { planId: target.planId } : { workItemId: target.workItemId };
+  return target.kind === 'plan'
+    ? { planId: target.planId }
+    : { planChangeSessionId: target.conversationId };
 }
 
 function isNotAvailable(err: unknown): boolean {
   return (
-    err instanceof WorkItemNotFoundError ||
     err instanceof PlanNotFoundError ||
     err instanceof ProjectAccessDeniedError ||
     err instanceof ProjectNotFoundError
@@ -131,20 +159,27 @@ async function resolvePlan(planId: string, ctx: ProjectContext): Promise<Target>
   return { kind: 'plan', planId: plan.id, ref: plan.id, state: plan.status };
 }
 
-async function resolveItem(itemKey: string, ctx: ProjectContext): Promise<Target> {
-  const item = await workItemsService.getWorkItemByIdentifier(
-    ctx.projectId,
-    itemKey.trim().toUpperCase(),
-    actorOf(ctx),
+/** The caller's OWN conversation in the active project. An ENDED one still
+ *  resolves, so gate 4 refuses it as closed (and a stop is still accepted). */
+async function resolveConversation(conversationId: string, ctx: ProjectContext): Promise<Target> {
+  const session = await withWorkspaceContext(bindCtx(ctx), (tx) =>
+    planChangeSessionRepository.findByIdInProject(
+      conversationId,
+      ctx.projectId,
+      ctx.workspaceId,
+      tx,
+    ),
   );
-  if (item.projectId !== ctx.projectId) throw new SharpenTargetNotAvailableError();
-  let state = 'open';
-  if (item.archivedAt) state = 'archived';
-  else {
-    const terminal = await workflowsService.getTerminalStatusKeys(ctx.projectId, ctx.workspaceId);
-    if (terminal.has(item.status)) state = item.status;
+  if (!session || session.createdById !== ctx.userId || session.origin !== 'conversation') {
+    throw new SharpenTargetNotAvailableError();
   }
-  return { kind: 'work_item', workItemId: item.id, ref: item.identifier, state };
+  await projectAccessService.assertCanBrowse(session.projectId, actorOf(ctx));
+  return {
+    kind: 'conversation',
+    conversationId: session.id,
+    ref: session.id,
+    state: session.endedAt ? 'ended' : 'open',
+  };
 }
 
 /** Gate 1: resolve and browse-gate the target. */
@@ -152,7 +187,7 @@ async function resolveTarget(input: SharpenTargetInput, ctx: ProjectContext): Pr
   try {
     return 'planId' in input
       ? await resolvePlan(input.planId, ctx)
-      : await resolveItem(input.itemKey, ctx);
+      : await resolveConversation(input.conversationId, ctx);
   } catch (err) {
     if (isNotAvailable(err)) throw new SharpenTargetNotAvailableError();
     throw err;
@@ -166,7 +201,6 @@ async function assertSharpenable(target: Target, ctx: ProjectContext, forStop = 
   if (target.kind === 'plan') {
     await projectAccessService.assertPermission(ctx.projectId, actor, 'ai:view_plan');
   }
-  await projectAccessService.assertPermission(ctx.projectId, actor, 'work_item:edit');
   const open =
     target.kind === 'plan' ? OPEN_PLAN_STATUSES.has(target.state) : target.state === 'open';
   if (!open && !forStop) throw new SharpenTargetClosedError(target.ref, target.state);
@@ -194,11 +228,8 @@ async function ownSession(
 /** The target a stored session is about, re-resolved (and browse-gated) now. */
 async function targetOfSession(row: SharpenSession, ctx: ProjectContext): Promise<Target> {
   if (row.planId) return resolveTarget({ planId: row.planId }, ctx);
-  const item = await withWorkspaceContext(bindCtx(ctx), (tx) =>
-    workItemRepository.findById(row.workItemId!, tx),
-  );
-  if (!item) throw new SharpenTargetNotAvailableError();
-  return resolveTarget({ itemKey: item.identifier }, ctx);
+  if (!row.planChangeSessionId) throw new SharpenTargetNotAvailableError();
+  return resolveTarget({ conversationId: row.planChangeSessionId }, ctx);
 }
 
 async function readDto(
@@ -208,8 +239,7 @@ async function readDto(
 ): Promise<SharpenSessionDto> {
   const row = await ownSession(sessionId, ctx, tx);
   const turns = await sharpenTurnRepository.listTurns(row.id, tx);
-  const item = row.workItemId ? await workItemRepository.findById(row.workItemId, tx) : null;
-  return toSharpenSessionDto(row, turns, item?.identifier ?? null);
+  return toSharpenSessionDto(row, turns);
 }
 
 function loadDto(sessionId: string, ctx: ProjectContext): Promise<SharpenSessionDto> {
@@ -217,17 +247,74 @@ function loadDto(sessionId: string, ctx: ProjectContext): Promise<SharpenSession
 }
 
 /**
+ * The caller's latest grilling on a conversation (MOTIR-9314), open or ended, with
+ * the person turns it was given: every one written by its latest turn. A turn
+ * written after that is a later, different request (MOTIR-9315) — except the turns
+ * that STARTED the plan offer this grilling held (MOTIR-9319): the typed yes and the
+ * request the start appends are the grilled request being confirmed, so a run
+ * started from that offer does not grill it again. Null when they never grilled it.
+ */
+/** The confirmed plan offer a grilling that began at `grilledAt` held — the latest
+ *  `plan` offer answered before it — with when it was confirmed and its request. */
+function heldOfferStart(
+  turns: readonly { role: string; createdAt: Date; answerOffer: unknown }[],
+  grilledAt: Date,
+): { confirmedAt: Date; requestMd: string } | null {
+  for (let i = turns.length - 1; i >= 0; i -= 1) {
+    const turn = turns[i]!;
+    if (turn.role !== 'assistant' || turn.createdAt > grilledAt) continue;
+    const offer = turn.answerOffer as { kind?: string; requestMd?: string; confirmedAt?: string };
+    if (offer?.kind !== 'plan') continue;
+    if (!offer.confirmedAt || typeof offer.requestMd !== 'string') return null;
+    return { confirmedAt: new Date(offer.confirmedAt), requestMd: offer.requestMd.trim() };
+  }
+  return null;
+}
+
+async function settledOnConversation(
+  conversationId: string,
+  ctx: ProjectContext,
+  tx: Prisma.TransactionClient,
+): Promise<SharpenConversationSettledDto | null> {
+  const row = await sharpenSessionRepository.findLatestByConversation(
+    conversationId,
+    ctx.userId,
+    ctx.workspaceId,
+    tx,
+  );
+  if (!row) return null;
+  const turns = await planChangeTurnRepository.listBySessionId(conversationId, ctx.workspaceId, tx);
+  const started = heldOfferStart(turns, row.createdAt);
+  return {
+    sessionId: row.id,
+    status: row.status,
+    endReason: row.endReason,
+    settled: (row.settled as unknown as SettledAnswer[]) ?? [],
+    assumptions: (row.assumptions as unknown as SharpenAssumption[]) ?? [],
+    requests: turns
+      .filter(
+        (t) =>
+          t.role === 'user' &&
+          t.body.trim() &&
+          (t.createdAt <= row.lastActivityAt ||
+            (started !== null &&
+              (t.createdAt <= started.confirmedAt || t.body.trim() === started.requestMd))),
+      )
+      .map((t) => t.body),
+  };
+}
+
+/**
  * The RUN a plan session stands inside (Subtask MOTIR-8450) — the plan, the
  * person's own requests of the conversation writing it, its anchor card and the
  * requirement already settled on it. Read from stored state only. `undefined`
- * (so the key is ABSENT on the wire) for a work-item session, for a plan with no
- * conversation behind it, and for a conversation with no person turn yet.
+ * (so the key is ABSENT on the wire) for a plan with no conversation behind it,
+ * and for a conversation with no person turn yet.
  */
 async function runContextFor(
-  target: Target,
+  target: Extract<Target, { kind: 'plan' }>,
   ctx: ProjectContext,
 ): Promise<SharpenRunContext | undefined> {
-  if (target.kind !== 'plan') return undefined;
   return withWorkspaceContext(bindCtx(ctx), async (tx) => {
     const subject = await planRepository.findHoldSubject(target.planId, tx);
     if (!subject?.sessionId) return undefined;
@@ -245,13 +332,63 @@ async function runContextFor(
       : null;
     const plan = await planRepository.findById(target.planId, ctx.workspaceId, tx);
     const requirement = narrowSharpenedRequirement(plan?.sharpenedRequirement);
+    // What the conversation was grilled on before this run (MOTIR-9315), so the
+    // run's own grilling does not ask that request again.
+    const carried = toCarriedAnswers(await settledOnConversation(subject.sessionId, ctx, tx));
     return {
       planId: target.planId,
       requests,
       card: anchor ? { key: anchor.identifier, title: anchor.title } : null,
       ...(requirement ? { requirement } : {}),
+      ...(carried ? { carried } : {}),
     };
   });
+}
+
+/**
+ * The CONVERSATION a conversation session grills (MOTIR-9314) — the person's own
+ * turns verbatim and in order, the latest grounded answer (the last `assistant`
+ * turn) and the conversation's anchor card. Read from stored state only.
+ * `undefined` while the conversation has no person turn: there is nothing to grill.
+ */
+async function conversationContextFor(
+  conversationId: string,
+  ctx: ProjectContext,
+): Promise<SharpenConversationContext | undefined> {
+  return withWorkspaceContext(bindCtx(ctx), async (tx) => {
+    const turns = await planChangeTurnRepository.listBySessionId(
+      conversationId,
+      ctx.workspaceId,
+      tx,
+    );
+    const requests = turns.filter((t) => t.role === 'user').map((t) => t.body);
+    if (requests.length === 0) return undefined;
+    const answer = [...turns].reverse().find((t) => t.role === 'assistant');
+    const session = await planChangeSessionRepository.findById(conversationId, ctx.workspaceId, tx);
+    const cardKey = session?.targetKeys[0] ?? null;
+    const card = cardKey
+      ? await workItemRepository.findByIdentifier(ctx.projectId, cardKey, tx)
+      : null;
+    return {
+      requests,
+      readAnswer: answer?.body ?? null,
+      card: card ? { key: card.identifier, title: card.title } : null,
+    };
+  });
+}
+
+/** What a job on this target is grounded in. A conversation with no person turn
+ *  cannot be grilled — refused before anything is written. */
+async function groundingFor(target: Target, ctx: ProjectContext): Promise<Grounding> {
+  if (target.kind === 'plan') {
+    const run = await runContextFor(target, ctx);
+    return run ? { run } : {};
+  }
+  const conversation = await conversationContextFor(target.conversationId, ctx);
+  if (!conversation) {
+    throw new SharpenActionInvalidError('Ask Motir AI something first: there is nothing to grill.');
+  }
+  return { conversation };
 }
 
 /** The `context.sharpen` a job reads — built from STORED state only. */
@@ -260,7 +397,7 @@ function jobContext(
   row: SharpenSession,
   before: readonly SharpenTurn[],
   turn: SharpenTurn,
-  run: SharpenRunContext | undefined,
+  grounding: Grounding,
 ): SharpenJobContext {
   const action = turn.action ?? 'start';
   return {
@@ -275,7 +412,8 @@ function jobContext(
     action,
     ...(action === 'answer' && turn.readingId ? { readingId: turn.readingId } : {}),
     ...(action === 'own_words' ? { text: turn.body } : {}),
-    ...(run ? { run } : {}),
+    ...(grounding.run ? { run: grounding.run } : {}),
+    ...(grounding.conversation ? { conversation: grounding.conversation } : {}),
   };
 }
 
@@ -305,6 +443,19 @@ async function submitAndBind(
   return jobId;
 }
 
+/**
+ * A conversation session's turn keeps its conversation alive: `lastActivityAt`
+ * moves (the idle close measures from it) and any target lock the conversation
+ * holds is refreshed with it, as every conversation turn does. An ended
+ * conversation is left as it ended. No-op for a plan session.
+ */
+async function touchConversation(row: SharpenSession, now: Date, tx: Prisma.TransactionClient) {
+  if (!row.planChangeSessionId) return;
+  const touched = await planChangeSessionRepository.touchOpen(row.planChangeSessionId, now, tx);
+  if (touched)
+    await planTargetLockService.refreshForSessionWithin(row.planChangeSessionId, now, tx);
+}
+
 /** Append one person turn under the session's row lock. */
 async function appendPersonTurn(
   row: SharpenSession,
@@ -326,7 +477,9 @@ async function appendPersonTurn(
     },
     tx,
   );
-  await sharpenSessionRepository.updateState(row.id, { lastActivityAt: new Date() }, tx);
+  const now = new Date();
+  await sharpenSessionRepository.updateState(row.id, { lastActivityAt: now }, tx);
+  await touchConversation(row, now, tx);
   return appended;
 }
 
@@ -453,6 +606,7 @@ async function land(
     const turns = await sharpenTurnRepository.listTurns(row.id, tx);
     const person = turns.find((t) => t.role === 'person' && t.jobId === jobId);
     const failed = 'failure' in outcome;
+    await touchConversation(row, new Date(), tx);
     await sharpenTurnRepository.appendTurn(
       row.id,
       await sharpenTurnRepository.nextSeq(row.id, tx),
@@ -483,7 +637,8 @@ async function land(
           ? {
               status: 'ended' as const,
               endReason: r.kind as 'nothing_to_ask' | 'finished' | 'stopped',
-              writeBack: r.writeBack,
+              // A conversation has no plan to write to: nothing was written back.
+              writeBack: row.planChangeSessionId ? null : r.writeBack,
             }
           : {}),
       },
@@ -509,13 +664,14 @@ async function readResult(
 
 export const aiSharpenService = {
   /**
-   * OPEN a Sharpen session on a plan or a work item. The caller's open session
+   * OPEN a Sharpen session on a plan or a conversation. The caller's open session
    * on that target is RESUMED and nothing is sent; otherwise a session and its
    * `start` turn are stored and the first job runs, so the planner asks first.
    */
   async open(input: SharpenTargetInput, ctx: ProjectContext): Promise<SharpenDoorResult> {
     const target = await resolveTarget(input, ctx);
     await assertSharpenable(target, ctx);
+    const grounding = await groundingFor(target, ctx);
     let written: OpenWrite;
     try {
       written = await openWrite(target, ctx);
@@ -529,11 +685,7 @@ export const aiSharpenService = {
       return { outcome: 'resumed', jobId: null, turnId: null, session };
     }
     const { row, turn } = written;
-    const jobId = await submitAndBind(
-      jobContext(target, row, [], turn, await runContextFor(target, ctx)),
-      turn.id,
-      ctx,
-    );
+    const jobId = await submitAndBind(jobContext(target, row, [], turn, grounding), turn.id, ctx);
     return { outcome: 'sharpening', jobId, turnId: turn.id, session: await loadDto(row.id, ctx) };
   },
 
@@ -550,9 +702,10 @@ export const aiSharpenService = {
     const stored = await withWorkspaceContext(bindCtx(ctx), (tx) => ownSession(sessionId, ctx, tx));
     const target = await targetOfSession(stored, ctx);
     await assertSharpenable(target, ctx, action === 'stop');
+    const grounding = await groundingFor(target, ctx);
     const { row, before, turn } = await actWrite(sessionId, action, opts, ctx);
     const jobId = await submitAndBind(
-      jobContext(target, row, before, turn, await runContextFor(target, ctx)),
+      jobContext(target, row, before, turn, grounding),
       turn.id,
       ctx,
     );
@@ -583,7 +736,7 @@ export const aiSharpenService = {
     await assertSharpenable(target, ctx, turn.action === 'stop');
     const before = turns.filter((t) => t.seq < turn.seq);
     const jobId = await submitAndBind(
-      jobContext(target, row, before, turn, await runContextFor(target, ctx)),
+      jobContext(target, row, before, turn, await groundingFor(target, ctx)),
       turn.id,
       ctx,
     );
@@ -637,5 +790,34 @@ export const aiSharpenService = {
       sharpenSessionRepository.findOpenForUser(targetRef(target), ctx.userId, ctx.workspaceId, tx),
     );
     return row ? loadDto(row.id, ctx) : null;
+  },
+
+  /**
+   * What the caller's grilling on a conversation settled (MOTIR-9314): their latest
+   * session there, open or ended — its answers, assumptions and end reason — or null
+   * when they never grilled it. The same browse gate as every door read; the plan
+   * submit reads it to carry the answers into the run.
+   */
+  async getSettledForConversation(
+    conversationId: string,
+    ctx: ProjectContext,
+  ): Promise<SharpenConversationSettledDto | null> {
+    await projectAccessService.assertPermission(ctx.projectId, actorOf(ctx), 'project:browse');
+    const target = await resolveTarget({ conversationId }, ctx);
+    return withWorkspaceContext(bindCtx(ctx), (tx) => settledOnConversation(target.ref, ctx, tx));
+  },
+
+  /**
+   * The caller's LATEST grilling on a conversation as the rail draws it (MOTIR-9316),
+   * open or ended, or null. The read behind `getSettledForConversation`, so the rail
+   * that lists what was settled after a reload reads the same session the plan
+   * submit carries.
+   */
+  async getLatestForConversation(
+    conversationId: string,
+    ctx: ProjectContext,
+  ): Promise<SharpenSessionDto | null> {
+    const latest = await aiSharpenService.getSettledForConversation(conversationId, ctx);
+    return latest ? loadDto(latest.sessionId, ctx) : null;
   },
 };

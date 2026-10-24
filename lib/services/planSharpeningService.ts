@@ -1,6 +1,5 @@
 import type { SubmittedRequirement } from '@/lib/ai/types';
 import type {
-  PlannerAssumptionDto,
   SharpenedRequirementDto,
   SharpeningWriteBackInput,
   SharpeningWriteBackResult,
@@ -8,18 +7,10 @@ import type {
 import { PlanNotFoundError } from '@/lib/plans/errors';
 import { planItemRepository } from '@/lib/repositories/planItemRepository';
 import { planRepository } from '@/lib/repositories/planRepository';
-import { trimTrailingNewlines, upsertSharpenedBlock } from '@/lib/sharpening/managedBlock';
-import {
-  SharpeningInputInvalidError,
-  SharpeningPlanClosedError,
-  SharpeningTargetFinishedError,
-} from '@/lib/sharpening/errors';
+import { upsertSharpenedBlock } from '@/lib/sharpening/managedBlock';
+import { SharpeningInputInvalidError, SharpeningPlanClosedError } from '@/lib/sharpening/errors';
 import { plansService } from '@/lib/services/plansService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
-import { projectsService } from '@/lib/services/projectsService';
-import { workflowsService } from '@/lib/services/workflowsService';
-import { workItemsService } from '@/lib/services/workItemsService';
-import { StaleWorkItemError, WorkItemNotFoundError } from '@/lib/workItems/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 
@@ -33,47 +24,23 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 // every answer and one call at stop leave the same result, and a person's
 // hand-written text is never touched.
 //
-// Both scopes act as the JOB TOKEN'S USER, never a system context: a person who
-// may not edit the target cannot have it edited for them.
+// It acts as the JOB TOKEN'S USER, never a system context, and lands on the
+// PLAN only: `ai:view_plan` on the plan's project; legal while `generating`,
+// `planned` or `stale`; the requirement and every `perItem` proposal edit in ONE
+// transaction under the plan's row lock.
 //
-//   • plan scope      → `ai:view_plan` (the plan gate) + edit on the plan's
-//                       project; legal while `generating`, `planned` or `stale`; the
-//                       requirement and every `perItem` proposal edit in ONE
-//                       transaction under the plan's row lock.
-//   • work-item scope → `work_item:edit` on the item's project (the ordinary
-//                       work-item update path, which also records the history
-//                       row); refused on a `done`-category status.
-//
-// A plan-scope call has a SECOND LEG (Subtask MOTIR-8449): the card being
-// planned — the plan's ANCHOR, its run session's `targetKeys[0]`, the same
-// derivation `PlanHoldDTO.anchorKey` documents — takes the same two managed
-// blocks the work-item scope writes, through the same writer
-// (`sharpenWorkItemBody`), so the two landings cannot drift. The anchor is read
-// from the plan's own run, never from the request, so a caller cannot choose
-// it. The legs run in order:
-//   1. the plan leg, in its own transaction under the plan's row lock — the
-//      primary landing, since the run writes its plan from the requirement;
-//   2. the anchor leg, AFTER that transaction commits (`updateWorkItem` opens
-//      its own). No anchor (no run session, or a project-wide one) or an anchor
-//      that no longer resolves writes nothing for the card and still succeeds.
-//      A finished anchor raises the shipped card refusal — the plan leg has
-//      already landed and is not rolled back, and because both legs are
-//      cumulative and idempotent a retry lands them byte-identically.
-//
-// ⚠️ DELIBERATELY NOT A `modify` PROPOSAL on a committed work item: the person
-// running Sharpen is the one answering, so the answers are their own direct
-// edit, made under their own permission — there is nobody else to approve it.
+// ⚠️ NO WORK ITEM IS EDITED (Story MOTIR-9221 · MOTIR-9314). The work-item scope
+// and the plan scope's anchor leg are retired: Motir AI does not edit a card as if
+// it were the person, and a grilling can span several targets, so there is no one
+// card to put its answers on. A change to a committed card reaches it through the
+// plan the person approves.
 
 /** The headings the two managed blocks live under. */
 const ACCEPTANCE_HEADING = 'Acceptance criteria';
 const ASSUMPTIONS_HEADING = 'Assumptions';
 
-/** How a planner assumption reads in a body, so a reader can tell it from an
- *  answer the person gave. */
-const PLANNER_ASSUMPTION_PREFIX = "Planner's assumption —";
-
-/** The requirement parts that render under `## Acceptance criteria`, in order.
- *  `assumptions` renders under its own heading. */
+/** The five string requirement parts, in canonical order (`assumptions` is the
+ *  sixth, a string or a list). */
 const ACCEPTANCE_PARTS = [
   'outcome',
   'behaviour',
@@ -87,47 +54,7 @@ const ACCEPTANCE_PARTS = [
  *  "Sharpening still writes to it"). A decided plan is refused. */
 const EDITABLE_PLAN_STATUSES = new Set(['generating', 'planned', 'stale']);
 
-/** How many times a work-item write is retried after a concurrent edit moved
- *  the row between the read and the write. */
-const STALE_RETRIES = 3;
-
-const WORK_ITEM_KEY = /^[A-Za-z][A-Za-z0-9]*-\d+$/;
-
-function nonBlank(text: string | undefined): text is string {
-  return typeof text === 'string' && text.trim().length > 0;
-}
-
-/** The `## Acceptance criteria` block's content: every present requirement
- *  part's lines, in canonical order. Empty when nothing was settled. */
-export function acceptanceContent(requirement: Partial<SubmittedRequirement>): string {
-  return ACCEPTANCE_PARTS.map((part) => requirement[part])
-    .filter(nonBlank)
-    .map(trimTrailingNewlines)
-    .join('\n');
-}
-
-/** The `## Assumptions` block's content: the requirement's own assumptions
- *  lines, then each planner assumption, prefixed. */
-export function assumptionsContent(
-  requirement: Partial<SubmittedRequirement>,
-  plannerAssumptions: readonly PlannerAssumptionDto[],
-): string {
-  const lines: string[] = [];
-  const own = requirement.assumptions;
-  if (Array.isArray(own)) {
-    // A list (MOTIR-9160): one bullet per recommendation.
-    for (const r of own) {
-      const text = typeof r === 'string' ? r : r.text;
-      if (nonBlank(text)) lines.push(`- ${text.trim()}`);
-    }
-  } else if (nonBlank(own)) lines.push(trimTrailingNewlines(own));
-  for (const a of plannerAssumptions) {
-    lines.push(`- ${PLANNER_ASSUMPTION_PREFIX} ${a.question} — ${a.recommendation}`);
-  }
-  return lines.join('\n');
-}
-
-/** Write both blocks into a body; a block with no content is not written (a
+/** Write both blocks into a proposal body; a block with no content is not written (a
  *  cumulative call never removes what an earlier one settled). */
 function sharpenBody(body: string, acceptance: string, assumptions: string): string {
   let next = body;
@@ -144,34 +71,22 @@ function bulletLines(lines: readonly string[]): string {
     .join('\n');
 }
 
+/** The plan's requirement and its `perItem` proposals, in one transaction. */
 async function writeBackToPlan(
   planId: string,
   input: SharpeningWriteBackInput,
   ctx: ServiceContext,
 ): Promise<string> {
-  const { settledAt, projectId, anchorKey } = await writeThePlanLeg(planId, input, ctx);
-  if (anchorKey) await writeTheAnchorLeg(projectId, anchorKey, input, ctx);
-  return settledAt;
-}
-
-/** Leg 1: the plan's requirement and its `perItem` proposals, in one
- *  transaction. Answers the plan's anchor for leg 2, read in that transaction. */
-async function writeThePlanLeg(
-  planId: string,
-  input: SharpeningWriteBackInput,
-  ctx: ServiceContext,
-): Promise<{ settledAt: string; projectId: string; anchorKey: string | null }> {
   const plan = await withWorkspaceContext(ctx, (tx) =>
     planRepository.findById(planId, ctx.workspaceId, tx),
   );
   if (!plan) throw new PlanNotFoundError(planId);
-  // The project comes from the PLAN row. The plan gate first — a person who
-  // may not browse sees a 404 — then the write on the project.
+  // The project comes from the PLAN row. The plan gate — a person who may not
+  // browse sees a 404. No `work_item:edit`: no work item is written.
   await projectAccessService.assertPermission(plan.projectId, ctx, 'ai:view_plan');
-  await projectAccessService.assertCanEdit(plan.projectId, ctx);
 
   const settledAt = new Date().toISOString();
-  const anchorKey = await withWorkspaceContext(
+  await withWorkspaceContext(
     { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
     async (tx) => {
       const locked = await planRepository.lockById(planId, tx);
@@ -226,29 +141,9 @@ async function writeThePlanLeg(
         settledAt,
       };
       await planRepository.setSharpenedRequirement(planId, stored, tx);
-
-      // The card being planned: the run session's first anchor key, or none.
-      const subject = await planRepository.findHoldSubject(planId, tx);
-      return subject?.session?.targetKeys[0] ?? null;
     },
   );
-  return { settledAt, projectId: plan.projectId, anchorKey };
-}
-
-/** Leg 2: the card being planned takes the same blocks the work-item scope
- *  writes. An anchor the project no longer has is skipped, not refused. */
-async function writeTheAnchorLeg(
-  projectId: string,
-  anchorKey: string,
-  input: SharpeningWriteBackInput,
-  ctx: ServiceContext,
-): Promise<void> {
-  try {
-    await sharpenWorkItemBody(projectId, anchorKey, input, ctx);
-  } catch (err) {
-    if (err instanceof WorkItemNotFoundError) return;
-    throw err;
-  }
+  return settledAt;
 }
 
 /** Only the six requirement parts: the five that are strings, and `assumptions`
@@ -265,58 +160,6 @@ function pickRequirement(r: Partial<SubmittedRequirement>): Partial<SubmittedReq
   return out;
 }
 
-async function writeBackToWorkItem(
-  rawKey: string,
-  input: SharpeningWriteBackInput,
-  ctx: ServiceContext,
-): Promise<void> {
-  const key = rawKey.trim().toUpperCase();
-  if (!WORK_ITEM_KEY.test(key)) {
-    throw new SharpeningInputInvalidError('`scope.workItemKey` must look like `MOTIR-123`.');
-  }
-  const project = await projectsService.getByKey(key.slice(0, key.lastIndexOf('-')), ctx);
-  await sharpenWorkItemBody(project.id, key, input, ctx);
-}
-
-/** The ONE card writer both landings use: the edit gate, the finished-card
- *  refusal, the managed-block merge and the ordinary update path with its
- *  stale-row retry. */
-async function sharpenWorkItemBody(
-  projectId: string,
-  key: string,
-  input: SharpeningWriteBackInput,
-  ctx: ServiceContext,
-): Promise<void> {
-  const acceptance = acceptanceContent(input.requirement);
-  const assumptions = assumptionsContent(input.requirement, input.plannerAssumptions);
-
-  for (let attempt = 1; ; attempt += 1) {
-    const item = await workItemsService.getWorkItemByIdentifier(projectId, key, ctx);
-    // Edit first, status second: a person who may not edit learns nothing
-    // about where the card stands.
-    await projectAccessService.assertCanEdit(item.projectId, ctx);
-    const terminal = await workflowsService.getTerminalStatusKeys(item.projectId, ctx.workspaceId);
-    if (terminal.has(item.status)) throw new SharpeningTargetFinishedError(item.identifier);
-
-    const current = item.descriptionMd ?? '';
-    const next = sharpenBody(current, acceptance, assumptions);
-    if (next === current) return;
-    try {
-      // The ordinary update path: the `work_item:edit` gate, the history row and
-      // the activity all apply as for any edit. `expectedUpdatedAt` turns a
-      // concurrent edit (or a status move to done) between the read above and
-      // this write into a retry against the fresh row, never a lost update.
-      await workItemsService.updateWorkItem(item.id, { descriptionMd: next }, ctx, {
-        expectedUpdatedAt: item.updatedAt,
-      });
-      return;
-    } catch (err) {
-      if (err instanceof StaleWorkItemError && attempt < STALE_RETRIES) continue;
-      throw err;
-    }
-  }
-}
-
 export const planSharpeningService = {
   /**
    * Store what a Sharpen session has settled so far on its target. Idempotent
@@ -327,17 +170,7 @@ export const planSharpeningService = {
     input: SharpeningWriteBackInput,
     ctx: ServiceContext,
   ): Promise<SharpeningWriteBackResult> {
-    if ('planId' in input.scope) {
-      const settledAt = await writeBackToPlan(input.scope.planId, input, ctx);
-      return { scope: { planId: input.scope.planId }, settledAt };
-    }
-    if (input.perItem && input.perItem.length > 0) {
-      throw new SharpeningInputInvalidError('`perItem` is only accepted on plan scope.');
-    }
-    await writeBackToWorkItem(input.scope.workItemKey, input, ctx);
-    return {
-      scope: { workItemKey: input.scope.workItemKey },
-      settledAt: new Date().toISOString(),
-    };
+    const settledAt = await writeBackToPlan(input.scope.planId, input, ctx);
+    return { scope: { planId: input.scope.planId }, settledAt };
   },
 };

@@ -8,7 +8,6 @@ import type { SharpenQuestion } from '@/lib/ai/types';
 import type { SharpenSettleResult } from '@/lib/dto/sharpen';
 import type { SharpenedRequirementDto } from '@/lib/dto/plans';
 import type { SharpenControl, SharpenTargetFixture } from '@/lib/test-sharpen-mock';
-import { escapeRegExp } from '@/lib/utils/regexp';
 import en from '@/messages/en.json';
 
 // THE "GRILL ME" JOURNEY, shared by its two specs (Task MOTIR-1101 · Subtask
@@ -152,9 +151,6 @@ export const thread = (page: Page) => rail(page).getByTestId('sharpen-thread');
 export const summary = (page: Page) => rail(page).getByTestId('sharpen-summary');
 export const conversationPhase = (page: Page) => rail(page).getByTestId('plan-conversation-phase');
 export const handoff = (page: Page) => rail(page).getByTestId('plan-handoff');
-/** The card's description as the item page renders it. */
-export const cardDescription = (page: Page) =>
-  page.getByRole('main').getByLabel('Work item description');
 
 // ── The door signals ─────────────────────────────────────────────────────────
 
@@ -269,33 +265,5 @@ export async function cardBody(key: string): Promise<string | null> {
   return item.descriptionMd;
 }
 
-/** The line a settled answer lands as, in the requirement and on the card. */
+/** The line a settled answer lands as in the plan's requirement. */
 export const answerLine = (q: SharpenQuestion, label: string) => `${q.text} — ${label}`;
-/** The line a planner assumption lands as on the card. */
-export const assumptionLine = (q: SharpenQuestion) =>
-  `Planner's assumption — ${q.text} — ${recommended(q).label}`;
-
-/** The card page, loaded fresh: the answers sit under "Acceptance criteria" and
- *  the planner's assumptions under "Assumptions", in that order. */
-export async function expectCardCarries(
-  page: Page,
-  key: string,
-  answers: readonly string[],
-  assumptions: readonly string[],
-  timeout: number,
-): Promise<void> {
-  await page.goto(`/items/${key}`);
-  const body = cardDescription(page);
-  await expect(body).toBeVisible({ timeout });
-  await expect(body.getByRole('heading', { name: 'Acceptance criteria' })).toBeVisible();
-  await expect(body.getByRole('heading', { name: 'Assumptions' })).toBeVisible();
-  const pattern = new RegExp(
-    [
-      'Acceptance criteria',
-      ...answers.map(escapeRegExp),
-      'Assumptions',
-      ...assumptions.map(escapeRegExp),
-    ].join('[\\s\\S]*'),
-  );
-  await expect(body).toHaveText(pattern);
-}

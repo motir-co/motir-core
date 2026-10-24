@@ -5,7 +5,6 @@ import { describe, expect, it } from 'vitest';
 // existed still reads, as ONE recommendation; nothing here splits prose.
 
 import { isRecommendationList, narrowSharpenedRequirement } from '@/lib/sharpening/requirement';
-import { assumptionsContent } from '@/lib/services/planSharpeningService';
 
 describe('isRecommendationList', () => {
   it('accepts strings and { text, id? } entries, and the empty list', () => {
@@ -41,18 +40,5 @@ describe('narrowSharpenedRequirement', () => {
     expect(narrowSharpenedRequirement({ outcome: 'o', assumptions: [{ id: 'x' }] })).toEqual({
       outcome: 'o',
     });
-  });
-});
-
-describe('assumptionsContent', () => {
-  it('renders a list as one bullet per recommendation, then the planner assumptions', () => {
-    const body = assumptionsContent({ assumptions: ['one', { id: 'r2', text: ' two ' }, ' '] }, [
-      { question: 'Q?', recommendation: 'A' },
-    ]);
-    expect(body).toBe("- one\n- two\n- Planner's assumption — Q? — A");
-  });
-
-  it('renders a string as it always did', () => {
-    expect(assumptionsContent({ assumptions: '- one\n- two\n' }, [])).toBe('- one\n- two');
   });
 });

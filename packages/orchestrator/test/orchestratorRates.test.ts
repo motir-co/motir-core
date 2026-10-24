@@ -350,3 +350,58 @@ describe('the port’s typed errors name the PROVIDER and never the raw body', (
     expect(err.message).toContain('FLY_FLEET_API_TOKEN');
   });
 });
+
+// ── The AWS row (MOTIR-9276) ────────────────────────────────────────────────
+
+describe('the aws / us-east-1 row', () => {
+  const AWS_HANDLE: ContainerHandle = {
+    provider: 'aws',
+    id: 'i-0abc',
+    region: 'us-east-1',
+    createdAt: new Date('2026-10-25T10:00:00.000Z'),
+  };
+
+  it('resolves for the fleet size after it took effect, and not before', () => {
+    const rate = resolveContainerRate(
+      'aws',
+      FLEET_CONTAINER_SIZE,
+      'us-east-1',
+      new Date('2026-10-25T00:00:00.000Z'),
+    );
+    expect(rate?.usdPerSecond).toBe('0.000029577626');
+    expect(rate?.effectiveFrom).toEqual(new Date('2026-10-24T00:00:00.000Z'));
+    expect(
+      resolveContainerRate('aws', FLEET_CONTAINER_SIZE, 'us-east-1', new Date('2026-10-23')),
+    ).toBeNull();
+  });
+
+  it('is the sum of its cited parts: instance, two gp3 volumes, public IPv4', () => {
+    // $0.096/h + $0.08 × 50 GB per 730 h + $0.005/h, per second.
+    const parts = 0.096 / 3600 + (0.08 * 50) / (730 * 3600) + 0.005 / 3600;
+    expect(Number('0.000029577626')).toBeCloseTo(parts, 12);
+  });
+
+  it('cites the AWS pricing pages and the day they were read', () => {
+    const rate = CONTAINER_RATES.find((r) => r.provider === 'aws')!;
+    expect(rate.source).toContain('https://aws.amazon.com/ec2/pricing/on-demand/');
+    expect(rate.source).toContain('https://aws.amazon.com/ebs/pricing/');
+    expect(rate.source).toContain('https://aws.amazon.com/vpc/pricing/');
+    expect(rate.source).toContain('2026-10-24');
+  });
+
+  it('prices an AWS usage row — not unpriced', () => {
+    const usage = buildContainerUsage({
+      handle: AWS_HANDLE,
+      attribution: ATTRIBUTION,
+      reason: 'job_completed',
+      lifecycle: {
+        createdAt: AWS_HANDLE.createdAt,
+        startedAt: AWS_HANDLE.createdAt,
+        stoppedAt: new Date('2026-10-25T10:10:00.000Z'),
+        terminalState: 'destroyed',
+      },
+    });
+    expect(isUnpriced(usage)).toBe(false);
+    expect(usage.costUsd).toBe('0.0177465756');
+  });
+});

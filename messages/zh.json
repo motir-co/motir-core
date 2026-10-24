@@ -8407,7 +8407,11 @@
         "outOfCredits": "所在组织的 AI 额度已用完，因此无法开始规划。",
         "targetUnavailable": "已无法打开 {key}，因此无法开始规划。",
         "generic": "无法从这条提议开始规划。"
-      }
+      },
+      "held": "这几问答完后，Motir AI 会提议规划。",
+      "settledHeading": "你的回答确定了这些",
+      "clearEnough": "已足够清楚，可以按原样规划。",
+      "nothingSettled": "没有确定任何内容，所以会按请求原样规划。"
     },
     "logBugOffer": {
       "label": "提议记录缺陷",
@@ -8460,9 +8464,11 @@
           "title": "追问我",
           "body1": "开始规划前，Motir AI 会一次只问一件事，问清楚你想要的东西：它应该怎样运作、做同一件事的其他方式，以及出错时会发生什么。",
           "body2": "每一问都有几个可选答案，其中一个是推荐答案。可以跳过任意一问、让规划者决定，或随时停止。",
-          "body3": "你确定下来的内容会写入计划的需求，规划从这里开始。"
+          "body3": "你确定下来的内容会写入计划的需求，规划从这里开始。",
+          "beforePlanning": "还没有计划时，Motir AI 会先提问，再提议规划；提议会列出你确定的内容。"
         },
-        "hint": "你的下一条消息会开始追问。"
+        "hint": "你的下一条消息会开始追问。",
+        "hintBeforePlanning": "Motir AI 要提议规划时，会先提问。"
       }
     },
     "follow": {
@@ -14877,15 +14883,18 @@
       },
       "youAnswered": "你的回答",
       "plannersAssumption": "规划者的假设",
-      "writing": "正在把你的回答写入计划的需求和 <item></item>…",
       "writingPlanOnly": "正在把你的回答写入计划的需求…",
-      "written": "已写入计划的需求和 <item></item>。",
       "writtenPlanOnly": "已写入计划的需求。",
       "failed": "你的回答没有写入。它们仍保留在这里。",
       "copy": "复制回答"
     },
     "error": "这一问没有送达。你目前的回答都已保留，请重试。",
-    "retry": "重试"
+    "retry": "重试",
+    "conversation": {
+      "nothingToAsk": "没有需要问的：这已经足够清楚，可以按原样规划。",
+      "stoppedNoAnswer": "你在回答任何一问之前停止了追问。",
+      "switchedOff": "你关闭了追问我，所以提问已停止。"
+    }
   },
   "itemTranslation": {
     "groupLabel": "翻译",

@@ -25,7 +25,7 @@ export interface SharpenSessionCreate {
   createdById: string;
   scopeKind: SharpenScopeKind;
   planId?: string | null;
-  workItemId?: string | null;
+  planChangeSessionId?: string | null;
 }
 
 /**
@@ -43,7 +43,7 @@ export interface SharpenSessionStatePatch {
 }
 
 /** Which target an open-session read is about. */
-export type SharpenTargetRef = { planId: string } | { workItemId: string };
+export type SharpenTargetRef = { planId: string } | { planChangeSessionId: string };
 
 function nullableJson(value: unknown): Prisma.InputJsonValue | typeof Prisma.DbNull {
   return value === null ? Prisma.DbNull : (value as Prisma.InputJsonValue);
@@ -74,7 +74,7 @@ export const sharpenSessionRepository = {
         createdById: data.createdById,
         scopeKind: data.scopeKind,
         planId: data.planId ?? null,
-        workItemId: data.workItemId ?? null,
+        planChangeSessionId: data.planChangeSessionId ?? null,
       },
     });
   },
@@ -111,6 +111,20 @@ export const sharpenSessionRepository = {
   ): Promise<SharpenSession | null> {
     return tx.sharpenSession.findFirst({
       where: { ...target, workspaceId, createdById: userId, status: 'open' },
+    });
+  },
+
+  /** This person's LATEST session on a conversation, open or ended, or null —
+   *  the settled read the plan submit carries into the run (MOTIR-9314). */
+  async findLatestByConversation(
+    planChangeSessionId: string,
+    userId: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<SharpenSession | null> {
+    return tx.sharpenSession.findFirst({
+      where: { planChangeSessionId, workspaceId, createdById: userId },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
   },
 

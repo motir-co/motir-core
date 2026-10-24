@@ -4,15 +4,9 @@ import { db } from '@/lib/db';
 import { mintJobToken } from '@/lib/ai/jobToken';
 import { plansService } from '@/lib/services/plansService';
 import { SHARPENED_BLOCK_START } from '@/lib/sharpening/managedBlock';
-import {
-  createTestUser,
-  createTestWorkItem,
-  makeWorkItemFixture,
-  type WorkItemFixture,
-} from '../../fixtures';
+import { createTestWorkItem, makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
-import { addToProjectAs } from '../../helpers/workspaceRoleFixtures';
 
 // Task MOTIR-1101 · Subtask MOTIR-8175 — the transport of
 // `PUT /api/internal/ai/plan-sharpening`: the job-token auth, the body guards,
@@ -203,59 +197,22 @@ describe('PUT /api/internal/ai/plan-sharpening', () => {
     expect((await res.json()).code).toBe('SHARPENING_INPUT_INVALID');
   });
 
-  describe('work-item scope', () => {
-    function itemBody(key: string): string {
-      return JSON.stringify({
+  it('400 SHARPENING_INVALID for the retired work-item scope; the card is not written (MOTIR-9314)', async () => {
+    const fx = await makeWorkItemFixture();
+    const row = await createTestWorkItem(fx, { kind: 'task', title: 'Export' });
+    const res = await put(
+      fx,
+      JSON.stringify({
         jobId: 'job-1',
-        scope: { workItemKey: key },
+        scope: { workItemKey: row.identifier },
         requirement: REQUIREMENT,
         plannerAssumptions: PLANNER,
-      });
-    }
-
-    it('200 and the blocks land; 409 SHARPENING_TARGET_FINISHED once done', async () => {
-      const fx = await makeWorkItemFixture();
-      const row = await createTestWorkItem(fx, { kind: 'task', title: 'Export' });
-
-      const res = await put(fx, itemBody(row.identifier));
-      expect(res.status).toBe(200);
-      expect((await res.json()).scope).toEqual({ workItemKey: row.identifier });
-      const body = (await adminDb.workItem.findUniqueOrThrow({ where: { id: row.id } }))
-        .descriptionMd!;
-      expect(body).toContain("- Planner's assumption — Which date format? — ISO 8601");
-
-      await adminDb.workItem.update({ where: { id: row.id }, data: { status: 'done' } });
-      const done = await put(fx, itemBody(row.identifier));
-      expect(done.status).toBe(409);
-      expect((await done.json()).code).toBe('SHARPENING_TARGET_FINISHED');
-    });
-
-    it('403 for a token user who can browse but not edit; nothing is written', async () => {
-      const fx = await makeWorkItemFixture();
-      const row = await createTestWorkItem(fx, { kind: 'task', title: 'Export' });
-      const viewer = await createTestUser();
-      await adminDb.workspaceMembership.create({
-        data: { userId: viewer.id, workspaceId: fx.workspaceId, workspaceRole: 'member' },
-      });
-      await addToProjectAs({
-        key: fx.projectIdentifier,
-        actorUserId: fx.ownerId,
-        ctx: fx.ctx,
-        targetUserId: viewer.id,
-        role: 'viewer',
-      });
-
-      const res = await put(fx, itemBody(row.identifier), { userId: viewer.id });
-      expect(res.status).toBe(403);
-      expect(
-        (await adminDb.workItem.findUniqueOrThrow({ where: { id: row.id } })).descriptionMd,
-      ).toBe(row.descriptionMd);
-    });
-
-    it('404 for a key that names no item', async () => {
-      const fx = await makeWorkItemFixture();
-      const res = await put(fx, itemBody(`${fx.projectIdentifier}-999`));
-      expect(res.status).toBe(404);
-    });
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect((await res.json()).code).toBe('SHARPENING_INVALID');
+    expect(
+      (await adminDb.workItem.findUniqueOrThrow({ where: { id: row.id } })).descriptionMd,
+    ).toBe(row.descriptionMd);
   });
 });

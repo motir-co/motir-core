@@ -8413,7 +8413,11 @@
         "outOfCredits": "Votre organisation n’a plus de crédits AI, la planification ne peut donc pas démarrer.",
         "targetUnavailable": "Vous ne pouvez plus ouvrir {key}, la planification ne peut donc pas démarrer.",
         "generic": "La planification ne peut pas démarrer à partir de cette offre."
-      }
+      },
+      "held": "Motir AI proposera de planifier une fois ces questions terminées.",
+      "settledHeading": "Ce que vos réponses ont arrêté",
+      "clearEnough": "Assez clair pour être planifié tel quel.",
+      "nothingSettled": "Rien n’a été arrêté, la requête est donc planifiée telle quelle."
     },
     "logBugOffer": {
       "label": "Proposition de consigner un bug",
@@ -8466,9 +8470,11 @@
           "title": "Cuisine-moi",
           "body1": "Avant de planifier, Motir AI vous interroge sur ce que vous voulez, une question à la fois : comment cela doit fonctionner, les autres façons de faire la même chose et ce qui se passe quand les choses tournent mal.",
           "body2": "Chaque question propose quelques réponses, dont une recommandée. Passez celles que vous voulez, laissez le planificateur décider ou arrêtez quand vous le souhaitez.",
-          "body3": "Ce que vous arrêtez est écrit dans l’exigence du plan, et la planification part de là."
+          "body3": "Ce que vous arrêtez est écrit dans l’exigence du plan, et la planification part de là.",
+          "beforePlanning": "Tant qu’aucun plan n’existe, Motir AI pose ses questions avant de proposer de planifier, et l’offre reprend ce que vous avez arrêté."
         },
-        "hint": "Votre prochain message lance les questions."
+        "hint": "Votre prochain message lance les questions.",
+        "hintBeforePlanning": "Quand Motir AI s’apprête à proposer de planifier, il pose d’abord ses questions."
       }
     },
     "follow": {
@@ -14883,15 +14889,18 @@
       },
       "youAnswered": "Votre réponse",
       "plannersAssumption": "Hypothèse du planificateur",
-      "writing": "Écriture de vos réponses dans l’exigence du plan et dans <item></item>…",
       "writingPlanOnly": "Écriture de vos réponses dans l’exigence du plan…",
-      "written": "Écrit dans l’exigence du plan et dans <item></item>.",
       "writtenPlanOnly": "Écrit dans l’exigence du plan.",
       "failed": "Vos réponses n’ont pas été écrites. Elles sont toujours ici.",
       "copy": "Copier les réponses"
     },
     "error": "Cette question n’est pas arrivée. Vos réponses jusqu’ici sont conservées : réessayez.",
-    "retry": "Réessayer"
+    "retry": "Réessayer",
+    "conversation": {
+      "nothingToAsk": "Je n’ai rien à demander — c’est assez clair pour être planifié tel quel.",
+      "stoppedNoAnswer": "Vous avez arrêté les questions avant toute réponse.",
+      "switchedOff": "Vous avez désactivé Cuisine-moi, les questions se sont donc arrêtées."
+    }
   },
   "itemTranslation": {
     "groupLabel": "Traduction",

@@ -206,10 +206,3 @@ export async function claimIndexRun(
     data: { indexingRunId: runId },
   });
 }
-
-/** A FAILED index run, returned by id so a repo can claim it. */
-export async function recordIndexFailedRun(workspaceId: string, repoRef: string): Promise<string> {
-  const runId = await recordIndexRunning(workspaceId);
-  await recordIndexFailed(workspaceId, repoRef, runId);
-  return runId;
-}

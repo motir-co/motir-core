@@ -1,6 +1,15 @@
 import type { SharpenSession, SharpenTurn } from '@/generated/prisma/client';
-import type { SettledAnswer, SharpenAssumption, SharpenQuestion } from '@/lib/ai/types';
-import type { SharpenSessionDto, SharpenTurnDto } from '@/lib/dto/sharpen';
+import type {
+  CarriedAnswers,
+  SettledAnswer,
+  SharpenAssumption,
+  SharpenQuestion,
+} from '@/lib/ai/types';
+import type {
+  SharpenConversationSettledDto,
+  SharpenSessionDto,
+  SharpenTurnDto,
+} from '@/lib/dto/sharpen';
 
 // Sharpen session rows → DTO (Task MOTIR-1101 · Subtask MOTIR-8181). The store's
 // JSON columns are opaque to the repository; this is where they are typed. Every
@@ -48,7 +57,6 @@ export function inFlightTurn(turns: readonly SharpenTurn[]): SharpenTurn | null 
 export function toSharpenSessionDto(
   row: SharpenSession,
   turns: readonly SharpenTurn[],
-  itemKey: string | null,
 ): SharpenSessionDto {
   const inFlight = inFlightTurn(turns);
   return {
@@ -56,7 +64,7 @@ export function toSharpenSessionDto(
     scope:
       row.scopeKind === 'plan'
         ? { kind: 'plan', planId: row.planId ?? undefined }
-        : { kind: 'work_item', itemKey: itemKey ?? undefined },
+        : { kind: 'conversation', conversationId: row.planChangeSessionId ?? undefined },
     status: row.status,
     endReason: row.endReason,
     pendingQuestion: (row.pendingQuestion as SharpenQuestion | null) ?? null,
@@ -68,5 +76,36 @@ export function toSharpenSessionDto(
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     lastActivityAt: row.lastActivityAt.toISOString(),
+  };
+}
+
+/** The most carried answers (and, separately, assumptions) motir-ai reads. */
+const CARRIED_ENTRIES_MAX = 50;
+
+/**
+ * A conversation's settled set as the CARRIED ANSWERS a planning run reads
+ * (MOTIR-9315), or `undefined` when there is nothing to carry: no grilling, one
+ * that settled nothing, or no person turn it was given for.
+ */
+export function toCarriedAnswers(
+  settled: SharpenConversationSettledDto | null,
+): CarriedAnswers | undefined {
+  if (!settled || settled.requests.length === 0) return undefined;
+  if (settled.settled.length === 0 && settled.assumptions.length === 0) return undefined;
+  return {
+    requests: settled.requests,
+    settled: settled.settled.slice(0, CARRIED_ENTRIES_MAX).map((s) => ({
+      questionId: s.questionId,
+      question: s.question,
+      answer: s.answer,
+      topic: s.topic,
+      readingId: s.readingId,
+    })),
+    assumptions: settled.assumptions.slice(0, CARRIED_ENTRIES_MAX).map((a) => ({
+      questionId: a.questionId,
+      question: a.question,
+      recommendation: a.recommendation,
+      why: a.why,
+    })),
   };
 }

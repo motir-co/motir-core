@@ -385,7 +385,7 @@ export const fleetShardProvisioningService = {
     const ctx: ProviderStepContext = {
       name: shard.name,
       fleetKind: shard.fleetKind,
-      region: shard.fly?.region ?? '',
+      region: shard.fly?.region ?? shard.aws?.region ?? '',
       options: {},
       credentialRef: shard.credentialRef,
       shard,

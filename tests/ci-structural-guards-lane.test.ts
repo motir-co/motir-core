@@ -193,6 +193,9 @@ const SELF_WALKING_MEMBERS = [
   // MOTIR-4299 / MOTIR-4300. Its own `readdirSync` over four roots; it imports no
   // scanner, so nothing derives it.
   'tests/ciFleet/orchestratorPortBoundary.test.ts',
+  // MOTIR-9280. Its own `readdirSync` over the package's `src`, `lib` and `app`;
+  // it imports only `importGraph`'s `stripComments` — so nothing derives it.
+  'tests/ciFleet/awsSdkBoundary.test.ts',
   // MOTIR-4751. Its own `readdirSync` over the acceptance config's `testDir`;
   // the only thing it imports is `importGraph`'s `specifiersOf`, which parses
   // text handed to it and reaches no filesystem of its own — so, like the

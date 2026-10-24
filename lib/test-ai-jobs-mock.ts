@@ -41,6 +41,7 @@
 // citations, the next answers honestly with none, the third redirects to a plan
 // change — without a second harness and without a timing assumption.
 
+import type { CarriedAnswers } from '@/lib/ai/types';
 import { readFixtureFileSync, writeFixtureFileSync } from '@/lib/test-fixture-file';
 import type { MockAgent } from 'undici';
 
@@ -307,6 +308,9 @@ export interface SubmittedJob {
    */
   contentLanguage?: string;
   personLanguage?: string;
+  /** A `plan` submit's `context.carriedAnswers` (Story MOTIR-9221 · MOTIR-9319) — what
+   *  the conversation's grilling settled before the run, as motir-core sent it. */
+  carriedAnswers?: CarriedAnswers;
 }
 
 /**
@@ -411,6 +415,9 @@ function recordSubmit(kind: string, rawBody: string, refused = false): number {
       ...(snapshot.runPlanId !== undefined ? { runPlanId: snapshot.runPlanId } : {}),
       ...(snapshot.runReadable !== undefined ? { runReadable: snapshot.runReadable } : {}),
       ...(kind === 'plan' && snapshot.planId !== undefined ? { planId: snapshot.planId } : {}),
+      ...(kind === 'plan' && carriedAnswersOf(rawBody)
+        ? { carriedAnswers: carriedAnswersOf(rawBody)! }
+        : {}),
       ...(translate ? { translate } : {}),
       ...tenantLanguagesOf(rawBody),
       ...(idempotencyKeyOf(rawBody) ? { idempotencyKey: idempotencyKeyOf(rawBody)! } : {}),
@@ -495,6 +502,17 @@ function submitContext(rawBody: string): {
     };
   } catch {
     return {};
+  }
+}
+
+/** The `context.carriedAnswers` a submit body carried, or null. */
+function carriedAnswersOf(rawBody: string): CarriedAnswers | null {
+  try {
+    const carried = (JSON.parse(rawBody) as { context?: { carriedAnswers?: unknown } }).context
+      ?.carriedAnswers;
+    return typeof carried === 'object' && carried !== null ? (carried as CarriedAnswers) : null;
+  } catch {
+    return null;
   }
 }
 

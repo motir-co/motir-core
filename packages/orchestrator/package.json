@@ -34,6 +34,11 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@aws-sdk/client-ec2": "^3.1156.0",
+    "@aws-sdk/client-iam": "^3.1156.0",
+    "@aws-sdk/client-organizations": "^3.1156.0",
+    "@aws-sdk/client-service-quotas": "^3.1156.0",
+    "@aws-sdk/client-sts": "^3.1156.0",
     "decimal.js": "^10.6.0"
   },
   "devDependencies": {
