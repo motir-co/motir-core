@@ -172,8 +172,17 @@ export const agentTerminalRelayService = {
 
     // An instance placed on a fleet account (MOTIR-9470) is dialled where that
     // account says — an AWS one over mutual TLS; one with no account is the
-    // process-wide Fly app, as before.
-    const shard = row.fleetShardId ? await fleetShardService.getShard(row.fleetShardId) : null;
+    // process-wide Fly app, as before. An account that is not on record cannot
+    // be dialled, and is never sent to Fly instead: the not-running close
+    // (MOTIR-9473).
+    let shard: Awaited<ReturnType<typeof fleetShardService.getShard>> | null = null;
+    if (row.fleetShardId) {
+      try {
+        shard = await fleetShardService.getShard(row.fleetShardId);
+      } catch {
+        return refuse(TERMINAL_CLOSE.notRunning);
+      }
+    }
     const handle = {
       provider:
         shard && selectedOrchestratorProvider() !== 'fake'

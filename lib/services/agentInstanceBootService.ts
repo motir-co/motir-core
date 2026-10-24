@@ -35,6 +35,7 @@ import { agentInstanceClock, armIdleTimer } from '@/lib/services/agentInstanceAc
 import {
   agentInstanceBootSteps as steps,
   agentInstanceLifecycleService,
+  type InstanceReach,
 } from '@/lib/services/agentInstanceLifecycleService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
@@ -338,9 +339,15 @@ async function advanceClones(
   pass: Pass,
   pending: AgentInstanceBootStep[],
 ): Promise<AgentBootPassVerdict | null> {
-  const handle = steps.handleOf(pass.row);
+  // Every clone is an exec through the instance's own account (MOTIR-9473).
+  let reach: InstanceReach | null;
+  try {
+    reach = await steps.reachOf(pass.row);
+  } catch {
+    return { next: 'defer', deferUntil: nextPoll() };
+  }
   /* v8 ignore next -- the machine started, so the handle is set */
-  if (!handle) return { next: 'defer', deferUntil: nextPoll() };
+  if (!reach) return { next: 'defer', deferUntil: nextPoll() };
   let credentials: InstanceCloneCredential[];
   try {
     credentials = await mintProjectReadCredentials(pass.row.projectId, pass.row.workspaceId);
@@ -388,7 +395,7 @@ async function advanceClones(
       });
       let failed: string | null;
       try {
-        failed = await steps.cloneRepository(handle, step.repository, credential.token);
+        failed = await steps.cloneRepository(reach, step.repository, credential.token);
       } catch (err) {
         failed = steps.describeError(err);
       }
@@ -411,8 +418,12 @@ async function advanceClones(
 
 /** `terminal_check`: the probes, `done` with the terminal's answer — `skipped` with the terminal off. */
 async function advanceTerminalCheck(pass: Pass, step: AgentInstanceBootStep): Promise<void> {
-  const handle = steps.handleOf(pass.row);
-  if (!steps.isTerminalOnQuietly() || !handle) {
+  // The probes go to the instance's own account (MOTIR-9473); one that cannot be
+  // resolved skips the check, as a probe that could not run does.
+  const reach = steps.isTerminalOnQuietly()
+    ? await steps.reachOf(pass.row).catch(() => null)
+    : null;
+  if (!reach) {
     await pass.record(step, { state: 'skipped', endedAt: agentInstanceClock.now() });
     return;
   }
@@ -422,8 +433,8 @@ async function advanceTerminalCheck(pass: Pass, step: AgentInstanceBootStep): Pr
     endedAt: null,
     detail: null,
   });
-  await steps.probeTerminalServer(pass.row, handle);
-  await steps.probeRunCapabilities(pass.row, handle);
+  await steps.probeTerminalServer(pass.row, reach);
+  await steps.probeRunCapabilities(pass.row, reach);
   const probed = await steps.reload(pass.row);
   await pass.record(running, {
     state: 'done',

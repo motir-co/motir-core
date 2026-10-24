@@ -523,12 +523,14 @@ export const agentInstanceRepository = {
   },
 
   /**
-   * Every instance app any record (live or deleted) has ever named — the
-   * reconcile walks each one. Distinct, sorted for a stable pass.
+   * Every PROCESS-WIDE instance app any record (live or deleted) has ever named —
+   * the orphan-volume pass walks each one. Distinct, sorted for a stable pass. An
+   * instance placed on a fleet account is in none of them: its account's own
+   * inventory is the reconciler's (MOTIR-9473, MOTIR-9476).
    */
   async listDistinctApps(tx: Prisma.TransactionClient): Promise<string[]> {
     const rows = await tx.agentInstance.findMany({
-      where: { flyApp: { not: null } },
+      where: { flyApp: { not: null }, fleetShardId: null },
       distinct: ['flyApp'],
       select: { flyApp: true },
       orderBy: { flyApp: 'asc' },

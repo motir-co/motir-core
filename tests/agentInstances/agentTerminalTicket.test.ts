@@ -12,6 +12,7 @@ import {
   agentTerminalClock,
   agentTerminalRelayService as relayService,
 } from '@/lib/services/agentTerminalRelayService';
+import { fleetShardService } from '@/lib/services/fleetShardService';
 import { relayMachineId } from '@/lib/agentTerminal/relay/machineId';
 import { agentTerminalConnectionRepository } from '@/lib/repositories/agentTerminalConnectionRepository';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
@@ -319,6 +320,43 @@ describe('the relay’s redeem (Q3)', () => {
     if (!verdict.ok) return;
     expect(verdict.target.dial.url).toBe('ws://127.0.0.1:7999/v1/terminal');
     expect(verdict.target.dial).not.toHaveProperty('tls');
+    await adminDb.agentInstance.update({
+      where: { id },
+      data: { fleetShardId: null, availabilityZone: null },
+    });
+    await adminDb.fleetShard.delete({ where: { id: shard.id } });
+    fleet.setTerminalAddress(null);
+  });
+
+  it('closes not-running, and dials nothing, for an account that is not on record (MOTIR-9473)', async () => {
+    fleet.setTerminalAddress('ws://127.0.0.1:7999');
+    const id = await running();
+    const shard = await adminDb.fleetShard.create({
+      data: {
+        name: 'agent-hoster-gone',
+        fleetKind: 'agent_instance',
+        provider: 'aws',
+        state: 'active',
+        githubOrg: 'motir-co',
+        githubInstallationId: '556677',
+        awsAccountId: '111100000043',
+        awsRegion: 'us-east-1',
+        credentialRef: 'FLEET_SHARD_GONE',
+      },
+    });
+    await adminDb.agentInstance.update({
+      where: { id },
+      data: { fleetShardId: shard.id, availabilityZone: 'us-east-1a' },
+    });
+    const getShard = vi
+      .spyOn(fleetShardService, 'getShard')
+      .mockRejectedValueOnce(new Error('fleet account not found'));
+    const { ticket } = await ticketFor(id);
+    expect(await relayService.authorizeConnection(ticket)).toEqual({
+      ok: false,
+      closeCode: TERMINAL_CLOSE.notRunning,
+    });
+    getShard.mockRestore();
     await adminDb.agentInstance.update({
       where: { id },
       data: { fleetShardId: null, availabilityZone: null },

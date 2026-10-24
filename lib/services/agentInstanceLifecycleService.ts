@@ -292,6 +292,20 @@ async function routeOf(row: AgentInstance): Promise<{
   return { orchestrator, handle: handleFor(row, orchestrator) };
 }
 
+/** An instance's machine and the orchestrator of its own account — what every
+ *  exec, probe and image move is sent through (MOTIR-9473). */
+export interface InstanceReach {
+  readonly orchestrator: PersistentContainerOrchestrator;
+  readonly handle: PersistentContainerHandle;
+}
+
+/** {@link routeOf}, or null before the machine exists. Exported for the run
+ *  service, which execs its launcher and its stop through the same account. */
+export async function agentInstanceReach(row: AgentInstance): Promise<InstanceReach | null> {
+  const { orchestrator, handle } = await routeOf(row);
+  return handle ? { orchestrator, handle } : null;
+}
+
 function stopReasonOf(
   endReason: AgentInstanceIntervalEndReason | null,
 ): AgentInstanceStopReason | null {
@@ -721,12 +735,12 @@ function cloneFailureDetail(result: { exitCode: number; stderr: string }, token:
  * Returns null on success, else the failure's words with the token scrubbed.
  */
 async function cloneRepository(
-  handle: PersistentContainerHandle,
+  reach: InstanceReach,
   repository: string,
   token: string,
 ): Promise<string | null> {
-  const result = await getPersistentOrchestrator().exec(
-    handle,
+  const result = await reach.orchestrator.exec(
+    reach.handle,
     buildCloneCommand([repository], token),
     { timeoutSeconds: CLONE_EXEC_TIMEOUT_SECONDS },
   );
@@ -742,14 +756,11 @@ async function cloneRepository(
  * usable either way, and a probe that could not run leaves `unknown` for the
  * next boot. Skipped while the terminal is off on this deployment.
  */
-async function probeTerminalServer(
-  row: AgentInstance,
-  handle: PersistentContainerHandle,
-): Promise<void> {
+async function probeTerminalServer(row: AgentInstance, reach: InstanceReach): Promise<void> {
   if (row.terminalServerDigest === row.imageDigest) return;
   try {
     if (!isAgentTerminalConfigured()) return;
-    const result = await getPersistentOrchestrator().exec(handle, AGENT_TERMINAL_PROBE_COMMAND, {
+    const result = await reach.orchestrator.exec(reach.handle, AGENT_TERMINAL_PROBE_COMMAND, {
       timeoutSeconds: 30,
     });
     // A negative code is an exec whose answer carried no exit code: not an answer.
@@ -777,11 +788,11 @@ async function probeTerminalServer(
  */
 async function probeSignIn(
   row: AgentInstance,
-  handle: PersistentContainerHandle,
+  reach: InstanceReach,
 ): Promise<AgentSignInAnswer | null> {
   try {
     const state = parseSignInAnswer(
-      await getPersistentOrchestrator().exec(handle, AGENT_SIGN_IN_COMMAND, {
+      await reach.orchestrator.exec(reach.handle, AGENT_SIGN_IN_COMMAND, {
         timeoutSeconds: AGENT_SIGN_IN_TIMEOUT_SECONDS,
       }),
     );
@@ -810,18 +821,13 @@ async function probeSignIn(
  * sign-in, every boot. Never fails the boot. Skipped while the terminal is off:
  * the launcher is the terminal server's, so there is nothing to ask.
  */
-async function probeRunCapabilities(
-  row: AgentInstance,
-  handle: PersistentContainerHandle,
-): Promise<void> {
+async function probeRunCapabilities(row: AgentInstance, reach: InstanceReach): Promise<void> {
   if (!isTerminalOnQuietly()) return;
   try {
     if (row.runLauncherDigest !== row.imageDigest) {
-      const result = await getPersistentOrchestrator().exec(
-        handle,
-        AGENT_RUN_LAUNCHER_PROBE_COMMAND,
-        { timeoutSeconds: 30 },
-      );
+      const result = await reach.orchestrator.exec(reach.handle, AGENT_RUN_LAUNCHER_PROBE_COMMAND, {
+        timeoutSeconds: 30,
+      });
       if (result.exitCode >= 0) {
         await withWorkspaceServiceContext(row.workspaceId, (tx) =>
           agentInstanceRepository.recordRunLauncher(
@@ -838,7 +844,7 @@ async function probeRunCapabilities(
       detail: describeError(err),
     });
   }
-  await probeSignIn(row, handle);
+  await probeSignIn(row, reach);
 }
 
 /** {@link isAgentTerminalConfigured}, reading a misconfigured key as "off" (the probes never throw). */
@@ -1029,11 +1035,11 @@ async function beginRollback(row: AgentInstance, detail: string): Promise<void> 
     ),
   );
   if (recorded !== 1) return;
-  const handle = handleOf(row);
-  /* v8 ignore next -- an updating agent always has a handle. */
-  if (!handle) return;
   try {
-    await getPersistentOrchestrator().moveImage(handle, imageRef(row, row.imageDigest), {
+    const reach = await agentInstanceReach(row);
+    /* v8 ignore next -- an updating agent always has a handle. */
+    if (!reach) return;
+    await reach.orchestrator.moveImage(reach.handle, imageRef(row, row.imageDigest), {
       launch: true,
     });
   } catch (err) {
@@ -1056,6 +1062,7 @@ export const agentInstanceBootSteps = {
   /** The caller's own agent in the project, or `AgentInstanceNotFoundError` (§8's gate). */
   handleOf,
   routeOf,
+  reachOf: agentInstanceReach,
   reload,
   failInstance,
   bootFailureReason,
@@ -1519,7 +1526,7 @@ export const agentInstanceLifecycleService = {
         const { orchestrator, handle } = await routeOf(row);
         // §4 (MOTIR-7026): the last sign-in answer before the volume goes quiet is
         // what a start reads while the agent sleeps. Best effort, never a refusal.
-        if (handle && isTerminalOnQuietly()) await probeSignIn(row, handle);
+        if (handle && isTerminalOnQuietly()) await probeSignIn(row, { orchestrator, handle });
         if (handle) await orchestrator.stop(handle);
       } catch (err) {
         console.warn('[agentInstanceLifecycle] stop failed; the sweep will settle it', {
@@ -1791,10 +1798,12 @@ export const agentInstanceLifecycleService = {
     }
 
     const fresh = await reload(row);
-    const handle = handleOf(fresh);
-    if (handle) {
+    if (fresh.machineId) {
       try {
-        await getPersistentOrchestrator().moveImage(handle, imageRef(fresh, newest.digest), {
+        const reach = await agentInstanceReach(fresh);
+        /* v8 ignore next -- a row with a machine id has its whole handle. */
+        if (!reach) throw new Error('the agent has no machine');
+        await reach.orchestrator.moveImage(reach.handle, imageRef(fresh, newest.digest), {
           launch: true,
         });
       } catch (err) {
@@ -1840,10 +1849,15 @@ export const agentInstanceLifecycleService = {
   async settleUpdate(instanceId: string): Promise<'running' | 'failed' | 'pending' | 'noop'> {
     const row = await withSystemContext((tx) => agentInstanceRepository.findById(instanceId, tx));
     if (!row || row.deletedAt || row.state !== 'updating') return 'noop';
-    const handle = handleOf(row);
+    let reach: InstanceReach | null;
+    try {
+      reach = await agentInstanceReach(row);
+    } catch {
+      return 'pending';
+    }
     /* v8 ignore next -- an updating agent always has a handle. */
-    if (!handle) return 'pending';
-    const orchestrator = getPersistentOrchestrator();
+    if (!reach) return 'pending';
+    const { orchestrator, handle } = reach;
     let status;
     try {
       status = await orchestrator.describePersistent(handle);
@@ -1874,8 +1888,8 @@ export const agentInstanceLifecycleService = {
       const liveness = await orchestrator.checkLiveness(handle, livenessCommandFor(row.profileId));
       const asTarget: AgentInstance = { ...row, imageDigest: target };
       const terminalBefore = row.terminalServer;
-      await probeTerminalServer(asTarget, handle);
-      await probeRunCapabilities(asTarget, handle);
+      await probeTerminalServer(asTarget, reach);
+      await probeRunCapabilities(asTarget, reach);
       const probed = await reload(row);
       const terminalLost =
         terminalBefore === 'present' &&
@@ -1916,7 +1930,7 @@ export const agentInstanceLifecycleService = {
       });
       if (!moved) return 'noop';
       // The probes for the digest it is back on (already recorded, usually a no-op).
-      await probeTerminalServer(row, handle);
+      await probeTerminalServer(row, reach);
       await armIdleTimer(row);
       return 'running';
     }
@@ -2058,9 +2072,18 @@ export const agentInstanceLifecycleService = {
   async probeSignIn(instanceId: string): Promise<AgentSignInAnswer | null> {
     const row = await withSystemContext((tx) => agentInstanceRepository.findById(instanceId, tx));
     if (!row || row.deletedAt || row.state !== 'running') return null;
-    const handle = handleOf(row);
-    if (!handle) return null;
-    return probeSignIn(row, handle);
+    let reach: InstanceReach | null;
+    try {
+      reach = await agentInstanceReach(row);
+    } catch (err) {
+      console.warn('[agentInstanceLifecycle] the sign-in query has no account to ask', {
+        instanceId: row.id,
+        detail: describeError(err),
+      });
+      return null;
+    }
+    if (!reach) return null;
+    return probeSignIn(row, reach);
   },
 
   /** Bump the idle signal (§2) — the later stories' relay and runs call it. */
@@ -2138,11 +2161,13 @@ export const agentInstanceLifecycleService = {
   async reconcileRunning(instanceId: string): Promise<'ok' | 'hibernated' | 'failed' | 'noop'> {
     const row = await withSystemContext((tx) => agentInstanceRepository.findById(instanceId, tx));
     if (!row || row.deletedAt || row.state !== 'running') return 'noop';
-    const handle = handleOf(row);
-    if (!handle) return 'noop';
     let status;
     try {
-      status = await getPersistentOrchestrator().describePersistent(handle);
+      // Its own account (MOTIR-9473); one that cannot be resolved is skipped and
+      // read again next pass, never asked of Fly.
+      const reach = await agentInstanceReach(row);
+      if (!reach) return 'noop';
+      status = await reach.orchestrator.describePersistent(reach.handle);
     } catch {
       return 'noop';
     }
