@@ -525,9 +525,11 @@ export function PlanningWorkspaceOverlay({
     if (!open || substrate === null || justReturned || routingAskedRef.current) return;
     routingAskedRef.current = true;
     const controller = new AbortController();
+    let answered = false;
     void (async () => {
       const resolution = await resolveOnboardingRouting({ signal: controller.signal });
       if (controller.signal.aborted) return;
+      answered = true;
       if (resolution.kind === 'none') return setRouted('clear');
       if (!resolution.read.ok) {
         // A MALFORMED verdict is declined, not guessed at: the safe route is the
@@ -545,7 +547,15 @@ export function PlanningWorkspaceOverlay({
       // session and the planner asks (Yue, 2026-09-07).
       setRouted(verdict.outcome === 'continue' ? 'clear' : verdict);
     })();
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+      // ⚠️ AN ASK ABORTED BEFORE IT ANSWERED WAS NEVER ASKED (MOTIR-9414). The
+      // cleanup runs on ANY dependency change — a route refresh hands `substrate`
+      // a new identity — and the run that follows it must be free to ask again,
+      // or the window holds the reading state for good. An answered ask keeps the
+      // guard: that is the one-dispatch-per-open rule above.
+      if (!answered) routingAskedRef.current = false;
+    };
   }, [open, substrate, justReturned, tr, routingAttempt]);
 
   // ── THE WAIT (MOTIR-4829) ──────────────────────────────────────────────────
