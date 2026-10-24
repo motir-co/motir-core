@@ -1,4 +1,6 @@
 import {
+  AWS_INDEX_IMAGE_COMMENT,
+  AWS_INDEX_PULL_FAILED_MARKER,
   Ec2ApiError,
   type Ec2Api,
   type Ec2AvailabilityZone,
@@ -27,6 +29,11 @@ import {
 // made; a launched instance reads `running` (or stays `pending`); a terminated one
 // stays describable as `terminated` until it AGES OUT, after which its id is
 // `InvalidInstanceID.NotFound`; and DescribeInstances pages by `maxResults`.
+//
+// AN INDEX VM (MOTIR-9446) runs its boot script's pull: the fake reads the image
+// the script names, and when that image was marked unpullable the VM writes the
+// pull-failure marker to its console and powers off (terminated, as the launch's
+// `terminate` behaviour makes it), exactly the two facts the adapter reads.
 
 export interface FakeCall {
   readonly method: string;
@@ -87,6 +94,10 @@ export class AwsEc2Fake implements Ec2Api {
   private readonly outOfStockZones = new Set<string>();
   private seq = 0;
   private readonly failures = new Map<string, string>();
+  /** Image references no VM can pull. */
+  private readonly unpullableImages = new Set<string>();
+  /** Each instance's serial console, as GetConsoleOutput reads it. */
+  readonly consoles = new Map<string, string>();
 
   /** The next call of `method` throws an `Ec2ApiError` with `code`. */
   failNext(method: keyof Ec2Api, code = 'InternalError', httpStatus = 500): void {
@@ -104,10 +115,12 @@ export class AwsEc2Fake implements Ec2Api {
       this.securityGroups,
       this.instances,
       this.byToken,
+      this.consoles,
     ]) {
       map.clear();
     }
     this.failures.clear();
+    this.unpullableImages.clear();
     this.leaveNextPending = false;
     this.failNextAfterCreate = null;
     this.arrangedRefusals.length = 0;
@@ -165,6 +178,21 @@ export class AwsEc2Fake implements Ec2Api {
   /** The next RunInstances makes its instance, then answers `code` as a 5xx. */
   failNextRunAfterCreate(code = 'InternalError'): void {
     this.failNextAfterCreate = code;
+  }
+
+  /** No VM can pull `image`: an index VM booted for it fails its pull. */
+  markImageUnpullable(image: string): void {
+    this.unpullableImages.add(image);
+  }
+
+  /** The image an index VM's boot script pulls, or null for any other launch. */
+  indexImageOf(instanceId: string): string | null {
+    const script = Buffer.from(this.instance(instanceId).request.userData ?? '', 'base64');
+    const line = script
+      .toString('utf8')
+      .split('\n')
+      .find((l) => l.startsWith(AWS_INDEX_IMAGE_COMMENT));
+    return line ? line.slice(AWS_INDEX_IMAGE_COMMENT.length) : null;
   }
 
   /** The instance's VM powers off with `terminate` behaviour — a finished job. */
@@ -434,6 +462,12 @@ export class AwsEc2Fake implements Ec2Api {
     });
     this.leaveNextPending = false;
     this.byToken.set(input.clientToken, instanceId);
+    const image = this.indexImageOf(instanceId);
+    if (image !== null && this.unpullableImages.has(image)) {
+      // The pull fails on the VM: the marker on its console, then a power-off.
+      this.consoles.set(instanceId, `[  12.3] cloud-init\n${AWS_INDEX_PULL_FAILED_MARKER}\n`);
+      this.setState(instanceId, 'terminated', 'Client.InstanceInitiatedShutdown');
+    }
     if (this.failNextAfterCreate) {
       const code = this.failNextAfterCreate;
       this.failNextAfterCreate = null;
@@ -483,6 +517,14 @@ export class AwsEc2Fake implements Ec2Api {
         this.setState(id, 'terminated', userInitiated(new Date()));
       }
     }
+  }
+
+  async getConsoleOutput(instanceId: string) {
+    this.record('getConsoleOutput', instanceId);
+    if (!this.instances.has(instanceId)) {
+      throw new Ec2ApiError('InvalidInstanceID.NotFound', 400, false);
+    }
+    return this.consoles.get(instanceId) ?? null;
   }
 
   /** What DescribeInstances reports — the instance without its recorded request. */

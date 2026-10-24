@@ -15,6 +15,7 @@ import {
   DescribeSubnetsCommand,
   DescribeVpcsCommand,
   EC2Client,
+  GetConsoleOutputCommand,
   ModifySubnetAttributeCommand,
   RunInstancesCommand,
   TerminateInstancesCommand,
@@ -237,6 +238,11 @@ export interface Ec2Api {
   ): Promise<{ instances: Ec2Instance[]; nextToken: string | null }>;
   /** https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_TerminateInstances.html */
   terminateInstances(instanceIds: readonly string[]): Promise<void>;
+  /** https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_GetConsoleOutput.html —
+   *  the instance's serial console, decoded, with `Latest` (a Nitro instance's
+   *  most recent output). Null when EC2 holds none yet. An unknown id throws as
+   *  `describeInstances` does. */
+  getConsoleOutput(instanceId: string): Promise<string | null>;
 }
 
 /** The slice of `EC2Client` the factory uses — what a test stubs. */
@@ -320,8 +326,13 @@ export function createEc2Api(
 
 type Send = <T>(command: unknown) => Promise<T>;
 
-type NetworkCalls = Omit<Ec2Api, 'runInstances' | 'describeInstances' | 'terminateInstances'>;
-type InstanceCalls = Pick<Ec2Api, 'runInstances' | 'describeInstances' | 'terminateInstances'>;
+type InstanceCallName =
+  | 'runInstances'
+  | 'describeInstances'
+  | 'terminateInstances'
+  | 'getConsoleOutput';
+type NetworkCalls = Omit<Ec2Api, InstanceCallName>;
+type InstanceCalls = Pick<Ec2Api, InstanceCallName>;
 
 function toInstance(i: Instance): Ec2Instance {
   return {
@@ -397,6 +408,12 @@ function instanceCalls(send: Send): InstanceCalls {
     },
     async terminateInstances(instanceIds) {
       await send(new TerminateInstancesCommand({ InstanceIds: [...instanceIds] }));
+    },
+    async getConsoleOutput(instanceId) {
+      const out = await send<{ Output?: string }>(
+        new GetConsoleOutputCommand({ InstanceId: instanceId, Latest: true }),
+      );
+      return out.Output ? Buffer.from(out.Output, 'base64').toString('utf8') : null;
     },
   };
 }

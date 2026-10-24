@@ -1018,6 +1018,58 @@ describe('pollIndexContainer — one read, no loop, and it never throws', () => 
 
 // ── Settle, and the exit taxonomy ──────────────────────────────────────────
 
+// ── A pull failure learned AFTER the boot (MOTIR-9446) ────────────────────
+
+describe('an image the VM could not pull ends the run as image_unpullable', () => {
+  /** The provider's answer once the VM has stopped on a failed pull — what the
+   *  AWS adapter reports after reading the VM's console. */
+  function pullFailsOnTheVm(): void {
+    const describe = fakeOrchestrator.describe.bind(fakeOrchestrator);
+    vi.spyOn(fakeOrchestrator, 'describe').mockImplementation(async (handle) => ({
+      ...(await describe(handle)),
+      terminal: true,
+      state: 'destroyed',
+      exitCode: null,
+      imagePullFailed: true,
+    }));
+  }
+
+  it('reports image_unpullable, not provision_failed, and gives the slot back', async () => {
+    pullFailsOnTheVm();
+
+    const outcome = await codeGraphIndexDispatchService.runIndexContainer(INPUT, FAST);
+
+    expect(outcome).toMatchObject({ outcome: 'image_unpullable' });
+    if (outcome.outcome !== 'image_unpullable') throw new Error('expected image_unpullable');
+    expect(outcome.detail).toContain('could not be pulled');
+    // The slot is released, so the next admission for this repo is not held by it.
+    expect(releasedBy).toEqual([{ slotRef: ADMISSION.slotRef, dispatchId: INPUT.dispatchId }]);
+    // Torn down, and not re-dispatched: every retry would hit the same image.
+    expect(fakeOrchestrator.liveContainerIds()).toEqual([]);
+    expect(fakeOrchestrator.provisioned).toHaveLength(1);
+    expect(fakeOrchestrator.teardowns).toHaveLength(1);
+  });
+
+  it('the poll verdict carries the condition across the step boundary', async () => {
+    const booted = await codeGraphIndexDispatchService.bootIndexContainer(INPUT, ADMISSION, FAST);
+    if (booted.phase !== 'supervising') throw new Error('expected a supervising boot');
+    pullFailsOnTheVm();
+
+    const polled = await codeGraphIndexDispatchService.pollIndexContainer(
+      booted.session,
+      INITIAL_INDEX_POLL_STATE,
+      FAST,
+    );
+
+    expect(polled).toMatchObject({
+      done: true,
+      reason: 'provision_failed',
+      imageUnpullable: true,
+    });
+    expect(JSON.parse(JSON.stringify(polled))).toEqual(polled);
+  });
+});
+
 describe('every path out of supervision tears the container down', () => {
   it('leaves nothing running after boot → failure → settle', async () => {
     fakeOrchestrator.setBootBehaviour('never_start');

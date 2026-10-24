@@ -26,8 +26,10 @@ import {
 } from './capacityErrors';
 import { AWS_SHARD_TAG_KEY } from './network';
 import { buildRunnerUserData, encodeUserData } from './userData';
+import { buildIndexUserData, consoleShowsPullFailure } from './indexUserData';
 
 export * from './userData';
+export * from './indexUserData';
 export * from './capacityErrors';
 export * from './credentials';
 export * from './management';
@@ -54,6 +56,13 @@ export * from './management';
 //
 // ⚠️ SHARD-BLIND AND ENVIRONMENT-BLIND. The composition root reads the account's
 // key and the AMI id and hands this a plain config.
+//
+// AN INDEX VM (MOTIR-9446) is the one launch that is not a runner: a
+// `code_graph_index` spec boots the stock Docker-host AMI (`indexerAmiId`) with a
+// script that pulls the indexer image by digest and runs it (`./indexUserData.ts`
+// names the AMI and why). Same size, same network, same tags and the same
+// launch/zone walk as a runner. Its one extra signal is a failed pull, read from
+// the VM's serial console once it has stopped and reported as `imagePullFailed`.
 
 /** The machine class the fleet's one size maps to — 2 vCPU / 8 GiB, x86. */
 export const AWS_DEFAULT_INSTANCE_TYPE = 'm6i.large';
@@ -119,6 +128,9 @@ export interface AwsOrchestratorConfig {
   readonly shardTag: string;
   /** The runner AMI (`MOTIR_AWS_RUNNER_AMI_ID`). */
   readonly amiId: string;
+  /** The Docker-host AMI an index VM boots (`MOTIR_AWS_INDEXER_AMI_ID`). Unset
+   *  refuses a `code_graph_index` spec before any EC2 call. */
+  readonly indexerAmiId?: string;
   /** Overrides {@link AWS_DEFAULT_INSTANCE_TYPE}. */
   readonly instanceType?: string;
   /** Overrides {@link AWS_REAP_PAGE_SIZE}. */
@@ -143,6 +155,26 @@ function isGone(err: unknown): boolean {
 
 function tagOf(instance: Ec2Instance, key: string): string | undefined {
   return instance.tags.find((t) => t.key === key)?.value;
+}
+
+function isIndexInstance(instance: Ec2Instance): boolean {
+  return tagOf(instance, FLEET_METADATA_KEY) === FLEET_METADATA_VALUES.code_graph_index;
+}
+
+/** The AMI and user-data one spec launches with, or a refusal before any call. */
+function launchPlan(
+  spec: ContainerSpec,
+  config: Pick<AwsOrchestratorConfig, 'amiId' | 'indexerAmiId'>,
+): { imageId: string; userData: string } {
+  if (spec.workload !== 'code_graph_index') {
+    return { imageId: config.amiId, userData: encodeUserData(buildRunnerUserData(spec.env)) };
+  }
+  if (!config.indexerAmiId) {
+    throw new OrchestratorNotConfiguredError(
+      'this aws account has no indexer AMI (set MOTIR_AWS_INDEXER_AMI_ID)',
+    );
+  }
+  return { imageId: config.indexerAmiId, userData: encodeUserData(buildIndexUserData(spec)) };
 }
 
 /**
@@ -184,7 +216,7 @@ function tagsFor(spec: ContainerSpec, shardTag: string): Ec2Tag[] {
 
 /** An AWS adapter for ONE shard (one account, one region). */
 export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerOrchestrator {
-  const { ec2, region, shardTag, amiId } = config;
+  const { ec2, region, shardTag } = config;
   const instanceType = config.instanceType ?? AWS_DEFAULT_INSTANCE_TYPE;
   const pageSize = config.reapPageSize ?? AWS_REAP_PAGE_SIZE;
   const clientToken = config.clientToken ?? (() => randomUUID());
@@ -233,7 +265,7 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
    */
   async function launchInSubnet(
     spec: ContainerSpec,
-    userData: string,
+    { imageId, userData }: { imageId: string; userData: string },
     { subnetId, zone }: { subnetId: string; zone: string },
     securityGroupId: string,
   ): Promise<Ec2Instance> {
@@ -242,7 +274,7 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
       try {
         return await ec2.runInstances({
           clientToken: token,
-          imageId: amiId,
+          imageId,
           instanceType,
           subnetId,
           securityGroupIds: [securityGroupId],
@@ -331,6 +363,24 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
     });
   }
 
+  /**
+   * Did this stopped index VM fail to pull its image? Read from its console, the
+   * one channel a VM with no inbound rule and no credentials has. A console that
+   * cannot be read is "not known", never a pull failure: the run then ends as any
+   * other stop does.
+   */
+  async function pullFailed(instance: Ec2Instance): Promise<boolean> {
+    try {
+      return consoleShowsPullFailure(await ec2.getConsoleOutput(instance.instanceId));
+    } catch (err) {
+      console.warn('[awsOrchestrator] could not read an index VM console', {
+        instanceId: instance.instanceId,
+        detail: err instanceof Ec2ApiError ? err.code : 'unknown',
+      });
+      return false;
+    }
+  }
+
   function gone(handle: ContainerHandle): ContainerStatus {
     return {
       handleId: handle.id,
@@ -360,7 +410,7 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
       if (spec.size.cpus !== 2 || spec.size.memoryMb !== 8192) {
         throw new AwsInstanceSizeError(spec.size.cpus, spec.size.memoryMb);
       }
-      const userData = encodeUserData(buildRunnerUserData(spec.env));
+      const plan = launchPlan(spec, config);
 
       // THE ZONE WALK (MOTIR-9277): from this call's rotation index around the
       // list once, one RunInstances per zone, each with its own token (a refused
@@ -378,7 +428,7 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
         if (tried.has(subnet.zone)) continue;
         tried.add(subnet.zone);
         try {
-          return toHandle(await launchInSubnet(spec, userData, subnet, securityGroupId));
+          return toHandle(await launchInSubnet(spec, plan, subnet, securityGroupId));
         } catch (err) {
           if (!(err instanceof OrchestratorCapacityError) || err.reason !== 'out_of_stock')
             throw err;
@@ -390,9 +440,15 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
 
     async describe(handle: ContainerHandle): Promise<ContainerStatus> {
       const instance = await readInstance(handle.id);
-      if (!instance || instance.state === 'terminated') return gone(handle);
+      if (!instance) return gone(handle);
+      const stopped = instance.state === 'terminated' || TERMINAL_STATES.has(instance.state);
+      // Only a stopped index VM is asked: one console read per stop, not per poll.
+      const pull = stopped && isIndexInstance(instance) && (await pullFailed(instance));
+      const failure = pull ? { imagePullFailed: true } : {};
+      if (instance.state === 'terminated') return { ...gone(handle), ...failure };
       const terminal = TERMINAL_STATES.has(instance.state);
       return {
+        ...failure,
         handleId: handle.id,
         exists: true,
         state: instance.state,

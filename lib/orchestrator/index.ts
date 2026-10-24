@@ -235,6 +235,11 @@ function flyOrchestratorForShard(shard: FleetShardDTO): ContainerOrchestrator {
 /** The env var naming the runner AMI every AWS account boots (MOTIR-9272). */
 export const AWS_RUNNER_AMI_ENV_VAR = 'MOTIR_AWS_RUNNER_AMI_ID';
 
+/** The env var naming the Docker-host AMI an AWS index VM boots (MOTIR-9446) —
+ *  the ECS-optimized Amazon Linux 2023 AMI. Optional: unset, the account still
+ *  boots runners and refuses an index spec as not configured. */
+export const AWS_INDEXER_AMI_ENV_VAR = 'MOTIR_AWS_INDEXER_AMI_ID';
+
 /**
  * An AWS account's orchestrator (MOTIR-9276): its own IAM key, read from
  * `<credentialRef>_ACCESS_KEY_ID` / `<credentialRef>_SECRET_ACCESS_KEY` (the
@@ -265,6 +270,7 @@ function awsOrchestratorForShard(shard: FleetShardDTO): ContainerOrchestrator {
     region,
     shardTag: shard.name,
     amiId,
+    indexerAmiId: process.env[AWS_INDEXER_AMI_ENV_VAR]?.trim() || undefined,
   });
 }
 

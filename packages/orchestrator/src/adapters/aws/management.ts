@@ -535,6 +535,16 @@ export function awsRunnerPolicyDocument(input: {
         Condition: { StringEquals: { 'ec2:CreateAction': 'RunInstances' } },
       },
       {
+        // An index VM's pull failure is read from its console (MOTIR-9446).
+        Sid: 'ConsoleOfOwn',
+        Effect: 'Allow',
+        Action: 'ec2:GetConsoleOutput',
+        Resource: arn('instance/*'),
+        Condition: {
+          StringEquals: { [`aws:ResourceTag/${AWS_SHARD_TAG_KEY}`]: input.shardTag },
+        },
+      },
+      {
         Sid: 'TerminateOwn',
         Effect: 'Allow',
         Action: 'ec2:TerminateInstances',

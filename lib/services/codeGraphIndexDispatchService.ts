@@ -636,6 +636,11 @@ export type IndexPollResult =
       /** Set when supervision ended for a reason of its own (a deadline, an
        *  unreadable provider) rather than because the container stopped. */
       failureDetail: string | null;
+      /** The container stopped because its image could not be pulled — learned
+       *  after `provision` returned, on a provider that pulls on its VM (AWS,
+       *  MOTIR-9446). The settle reports `image_unpullable`. Absent on every
+       *  memo written before it existed, which reads as "not known". */
+      imageUnpullable?: boolean;
     };
 
 /** The starting point of the poll loop — no reads yet, nothing observed. */
@@ -1527,6 +1532,18 @@ export const codeGraphIndexDispatchService = {
       // that never happened — a provisioning failure even though the provider
       // reported success.
       const observed = startedAt ?? status.startedAt?.toISOString() ?? null;
+      if (status.imagePullFailed) {
+        // The VM booted but could not pull the image (MOTIR-9446): the same
+        // condition a create-time refusal reports, so it ends the same way.
+        return {
+          done: true,
+          reason: 'provision_failed',
+          startedAt: observed,
+          exitCode: null,
+          failureDetail: 'the indexer image could not be pulled on the VM',
+          imageUnpullable: true,
+        };
+      }
       return {
         done: true,
         reason: observed ? 'job_completed' : 'provision_failed',
@@ -1653,6 +1670,19 @@ export const codeGraphIndexDispatchService = {
     // names a (repo × project) that another run could be holding. Passing the ref
     // alone is how a settle used to free a live container's capacity.
     await codeGraphIndexAdmissionService.release(session.slotRef, session.dispatchId);
+
+    if (verdict.imageUnpullable) {
+      // Reported as the boot-time refusal is: a human fixes the image, and every
+      // queued index would hit it the same way. The cost row is written above.
+      console.error('[codeGraphIndexDispatchService] the indexer image is not pullable', {
+        repoRef: session.repoRef,
+        containerId: handle.id,
+      });
+      return {
+        outcome: 'image_unpullable',
+        detail: verdict.failureDetail ?? 'the indexer image could not be pulled',
+      };
+    }
 
     return {
       outcome: 'settled',

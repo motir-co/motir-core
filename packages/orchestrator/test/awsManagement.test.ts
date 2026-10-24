@@ -548,11 +548,16 @@ describe('awsRunnerPolicyDocument', () => {
         'ec2:RunInstances',
         'ec2:CreateTags',
         'ec2:TerminateInstances',
+        'ec2:GetConsoleOutput',
       ]),
     );
     expect(JSON.stringify(doc)).not.toMatch(/iam:|CreateAccessKey|ec2:\*/);
     const terminate = doc.Statement.find((s) => s['Sid'] === 'TerminateOwn')!;
     expect(terminate['Condition']).toEqual({
+      StringEquals: { 'aws:ResourceTag/motir-shard': 's1' },
+    });
+    const console_ = doc.Statement.find((s) => s['Sid'] === 'ConsoleOfOwn')!;
+    expect(console_['Condition']).toEqual({
       StringEquals: { 'aws:ResourceTag/motir-shard': 's1' },
     });
     const launch = doc.Statement.find((s) => s['Sid'] === 'LaunchTagged')!;
