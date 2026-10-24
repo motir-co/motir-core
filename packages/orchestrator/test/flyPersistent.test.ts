@@ -495,16 +495,8 @@ describe('describePersistent', () => {
     expect(exited.stoppedAt?.toISOString()).toBe('2026-10-02T12:57:10.000Z');
   });
 
-  it('reports a machine Fly no longer has as `gone`, and throws on a failed read', async () => {
-    handler = () => json(404, {});
-    expect(await flyPersistentOrchestrator.describePersistent(HANDLE)).toEqual({
-      machineId: 'm-1',
-      state: 'gone',
-      providerState: '',
-      startedAt: null,
-      stoppedAt: null,
-      events: [],
-    });
+  // A gone machine describing as `gone` is a contract case.
+  it('throws on a machine read that is neither 200 nor 404', async () => {
     handler = () => json(500, { error: 'down' });
     await expect(flyPersistentOrchestrator.describePersistent(HANDLE)).rejects.toThrow(
       OrchestratorApiError,
@@ -554,9 +546,8 @@ describe('destroyPersistent', () => {
     expect(calls.filter((c) => c.method === 'GET')).toHaveLength(VOLUME_RELEASE_ATTEMPTS);
   });
 
-  it('is idempotent — a 404 on the machine and on the volume is the end state', async () => {
-    handler = () => json(404, {});
-    await expect(flyPersistentOrchestrator.destroyPersistent(HANDLE)).resolves.toBeUndefined();
+  // A 404 on the machine and on the volume being the end state is a contract case.
+  it('throws on a volume or machine delete Fly refuses with anything but 404', async () => {
     handler = (call) =>
       call.url.includes('/volumes/') ? json(500, { error: 'busy' }) : json(404, {});
     await expect(flyPersistentOrchestrator.destroyPersistent(HANDLE)).rejects.toThrow(/busy/);
@@ -617,18 +608,9 @@ describe('listPersistent — the reconcile’s read', () => {
     ]);
   });
 
-  it('reads an app that does not exist as empty, and a machine with no metadata as unowned', async () => {
-    handler = () => json(404, {});
-    expect(await flyPersistentOrchestrator.listPersistent(APP)).toEqual({
-      app: APP,
-      machines: [],
-      volumes: [],
-    });
-    handler = (call) =>
-      call.url.endsWith('/machines') ? json(200, [flyMachine('started')]) : json(404, {});
-    const inventory = await flyPersistentOrchestrator.listPersistent(APP);
-    expect(inventory.machines[0]!.instanceId).toBeNull();
-    expect(inventory.volumes).toEqual([]);
+  // An app that does not exist listing empty, and a machine with no metadata
+  // listing with no instance id, are contract cases.
+  it('throws on a list Fly refuses with anything but 404', async () => {
     handler = (call) =>
       call.url.endsWith('/machines') ? json(200, {}) : json(500, { error: 'x' });
     await expect(flyPersistentOrchestrator.listPersistent(APP)).rejects.toThrow(

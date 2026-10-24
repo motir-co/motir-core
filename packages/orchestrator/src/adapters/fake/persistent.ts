@@ -72,6 +72,8 @@ interface FakePersistentMachine {
   configVersion: number;
   /** The key id stamped beside it. */
   keyId?: string | null;
+  /** Created by hand outside Motir, with no instance metadata (the reconcile's untracked machine). */
+  untracked?: boolean;
 }
 
 interface FakeStore {
@@ -118,6 +120,12 @@ export interface FakePersistentControls {
   completeBoot(machineId: string): void;
   /** The machine vanished outside Motir (destroyed in the console, host lost). Its volume stays. */
   destroyOutside(machineId: string): void;
+  /**
+   * A machine created BY HAND in `app`, outside Motir: running, with no volume and
+   * no instance metadata, so `listPersistent` reports it with `instanceId: null`
+   * (MOTIR-9467 — the reconcile's untracked machine). Answers its id.
+   */
+  createOutside(app: string): string;
   /** The machine stopped behind Motir's back (a crash with no restart, an operator). */
   stopOutside(machineId: string): void;
   /**
@@ -351,6 +359,36 @@ export const fakePersistentOrchestrator: PersistentContainerOrchestrator & FakeP
       }
       save();
     },
+    createOutside(app) {
+      load();
+      if (!store.apps.includes(app)) store.apps.push(app);
+      const machineId = nextId('fake-instance');
+      const at = now();
+      store.machines[machineId] = {
+        handle: { provider: 'fake', app, machineId, volumeId: '', region: 'iad', createdAt: at },
+        spec: {
+          orgId: '',
+          workspaceId: '',
+          projectId: '',
+          instanceId: '',
+          image: '',
+          size: { cpuKind: 'shared', cpus: 1, memoryMb: 256 },
+          env: {},
+          region: 'iad',
+          volumeSizeGb: 0,
+          mountPath: '',
+          terminal: null,
+        },
+        state: 'running',
+        startedAt: at.toISOString(),
+        stoppedAt: null,
+        starts: 1,
+        configVersion: 0,
+        untracked: true,
+      };
+      save();
+      return machineId;
+    },
     stopOutside(machineId) {
       const machine = machineOrThrow(machineId);
       machine.state = 'stopped';
@@ -582,7 +620,7 @@ export const fakePersistentOrchestrator: PersistentContainerOrchestrator & FakeP
           .map((m) => ({
             machineId: m.handle.machineId,
             state: m.state,
-            instanceId: m.spec.instanceId,
+            instanceId: m.untracked ? null : m.spec.instanceId,
             createdAt:
               m.handle.createdAt instanceof Date
                 ? m.handle.createdAt
