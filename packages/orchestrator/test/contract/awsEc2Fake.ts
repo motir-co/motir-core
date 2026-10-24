@@ -36,6 +36,13 @@ import {
 // and DETACHES the others (`available`); and DeleteVolume refuses an attached
 // volume with `VolumeInUse`. Every instant is read from `now`, so a test moves
 // the clock rather than sleeping.
+//
+// USER-DATA and TAG WRITES (MOTIR-9479) are the upkeep's: each instance keeps the
+// user-data it was launched with (raw text), DescribeInstanceAttribute reads it,
+// ModifyInstanceAttribute replaces it ONLY while the instance is `stopped`
+// (`IncorrectInstanceState` otherwise, as EC2 refuses), CreateTags adds or
+// overwrites tags on instances and volumes, and DescribeVolumes pages like
+// DescribeInstances.
 
 export interface FakeCall {
   readonly method: string;
@@ -86,6 +93,10 @@ export class AwsEc2Fake implements Ec2Api {
   /** The next terminate leaves its instance `shutting-down`, holding its volumes,
    *  until {@link finishTermination}. */
   holdNextTerminate = false;
+  /** The next stop leaves its instance `stopping` until {@link setState}. */
+  holdNextStop = false;
+  /** Each instance's user-data, raw text, by id. */
+  readonly userData = new Map<string, string>();
   /** Every instance ever launched, terminated ones included, by id. */
   readonly instances = new Map<string, Ec2Instance & { request: Ec2RunInstanceInput }>();
   /** The instance each `ClientToken` made. */
@@ -121,12 +132,14 @@ export class AwsEc2Fake implements Ec2Api {
       this.instances,
       this.byToken,
       this.volumes,
+      this.userData,
     ]) {
       map.clear();
     }
     this.failures.clear();
     this.leaveNextPending = false;
     this.holdNextTerminate = false;
+    this.holdNextStop = false;
     this.now = () => new Date();
     this.failNextAfterCreate = null;
     this.arrangedRefusals.length = 0;
@@ -493,6 +506,7 @@ export class AwsEc2Fake implements Ec2Api {
       request: input,
     });
     this.leaveNextPending = false;
+    this.userData.set(instanceId, Buffer.from(input.userData, 'base64').toString('utf8'));
     this.byToken.set(input.clientToken, instanceId);
     if (this.failNextAfterCreate) {
       const code = this.failNextAfterCreate;
@@ -561,6 +575,11 @@ export class AwsEc2Fake implements Ec2Api {
     for (const id of instanceIds) {
       const instance = this.instances.get(id)!;
       if (instance.state === 'stopped' || instance.state === 'stopping') continue;
+      if (this.holdNextStop) {
+        this.holdNextStop = false;
+        this.setState(id, 'stopping', null);
+        continue;
+      }
       this.setState(id, 'stopped', userInitiated(this.now()));
     }
   }
@@ -587,12 +606,20 @@ export class AwsEc2Fake implements Ec2Api {
     }
   }
 
-  async describeVolumes(input: { volumeIds?: readonly string[]; filters?: readonly Ec2Filter[] }) {
+  async describeVolumes(input: {
+    volumeIds?: readonly string[];
+    filters?: readonly Ec2Filter[];
+    maxResults?: number;
+    nextToken?: string;
+  }) {
     this.record('describeVolumes', input);
+    if (input.volumeIds && input.maxResults) {
+      throw new Ec2ApiError('InvalidParameterCombination', 400, false);
+    }
     for (const id of input.volumeIds ?? []) {
       if (!this.volumes.has(id)) throw new Ec2ApiError('InvalidVolume.NotFound', 400, false);
     }
-    return [...this.volumes.values()]
+    const matching = [...this.volumes.values()]
       .filter((v) => !input.volumeIds || input.volumeIds.includes(v.volumeId))
       .filter((v) =>
         matches(input.filters ?? [], v.tags, {
@@ -602,6 +629,43 @@ export class AwsEc2Fake implements Ec2Api {
         }),
       )
       .map(({ deleteOnTermination: _d, ...v }) => ({ ...v, tags: [...v.tags] }));
+    const start = input.nextToken ? Number(input.nextToken) : 0;
+    const end = start + (input.maxResults ?? matching.length);
+    return {
+      volumes: matching.slice(start, end),
+      nextToken: end < matching.length ? String(end) : null,
+    };
+  }
+
+  async describeInstanceUserData(instanceId: string) {
+    this.record('describeInstanceUserData', instanceId);
+    if (!this.instances.has(instanceId)) {
+      throw new Ec2ApiError('InvalidInstanceID.NotFound', 400, false);
+    }
+    return this.userData.get(instanceId) || null;
+  }
+
+  async modifyInstanceUserData(instanceId: string, userData: string) {
+    this.record('modifyInstanceUserData', { instanceId, userData });
+    const instance = this.instances.get(instanceId);
+    if (!instance) throw new Ec2ApiError('InvalidInstanceID.NotFound', 400, false);
+    if (instance.state !== 'stopped') throw new Ec2ApiError('IncorrectInstanceState', 400, false);
+    this.userData.set(instanceId, userData);
+  }
+
+  async createTags(resourceIds: readonly string[], tags: readonly Ec2Tag[]) {
+    this.record('createTags', { resourceIds, tags });
+    const merge = (have: readonly Ec2Tag[]) => [
+      ...have.filter((t) => !tags.some((n) => n.key === t.key)),
+      ...tags,
+    ];
+    for (const id of resourceIds) {
+      const instance = this.instances.get(id);
+      const volume = this.volumes.get(id);
+      if (instance) this.instances.set(id, { ...instance, tags: merge(instance.tags) });
+      else if (volume) this.volumes.set(id, { ...volume, tags: merge(volume.tags) });
+      else throw new Ec2ApiError('InvalidID', 400, false);
+    }
   }
 
   async deleteVolume(volumeId: string) {

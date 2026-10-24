@@ -10,10 +10,10 @@ import type { PersistentContractHarness } from './persistentContract';
 // (MOTIR-9469), over the in-memory EC2 of `awsEc2Fake.ts` with the account's
 // network seeded by tag.
 //
-// `exec` and `list` are PENDING: the reach card (MOTIR-9470) and the upkeep card
-// (MOTIR-9479) implement them and define their controls, so cases 8, 9, 12 and
-// 14 skip for this adapter until then. A machine made by hand is a planted
-// instance with the account's tag and no instance id.
+// `exec` is PENDING: the reach card (MOTIR-9470) implements it and defines its
+// controls, so cases 8 and 9 skip for this adapter until then. The listing
+// (MOTIR-9479) runs: a machine made by hand is a planted instance with the
+// account's tag and no instance id.
 
 export const AWS_HOSTER_SHARD_TAG = 'agent-hoster-use1-1';
 export const AWS_HOSTER_AMI_ID = 'ami-0fedcba9876543210';
@@ -52,7 +52,7 @@ export function awsPersistentHarness(): PersistentContractHarness {
     tags.some((t) => t.key === 'motir-shard' && t.value === app);
   return {
     orchestrator,
-    pending: ['exec', 'list'],
+    pending: ['exec'],
     reset() {
       ec2.clear();
       clock = START;

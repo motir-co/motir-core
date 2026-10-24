@@ -488,7 +488,7 @@ describe('destroyMachine / destroyVolume — the orphan clean-up', () => {
   });
 });
 
-describe('the operations the reach and upkeep cards own', () => {
+describe('the operations the reach card owns', () => {
   it('each throws one named not_implemented error', async () => {
     const orchestrator = adapter();
     const handle: PersistentContainerHandle = {
@@ -504,20 +504,7 @@ describe('the operations the reach and upkeep cards own', () => {
       status: 501,
       message: expect.stringContaining('not_implemented'),
     };
-    await expect(orchestrator.listPersistent(SHARD)).rejects.toMatchObject(refusal);
     await expect(orchestrator.exec(handle, ['true'])).rejects.toMatchObject(refusal);
-    await expect(
-      orchestrator.ensureMachineConfig(handle, {
-        version: 1,
-        keyId: 'k',
-        command: [],
-        env: {},
-        service: { internalPort: 1, ports: [], autostart: false, autostop: 'off' },
-      }),
-    ).rejects.toMatchObject(refusal);
-    await expect(orchestrator.moveImage(handle, 'x', { launch: false })).rejects.toMatchObject(
-      refusal,
-    );
     await expect(orchestrator.checkLiveness(handle, ['true'])).rejects.toMatchObject(refusal);
     expect(() => orchestrator.terminalEndpoint(handle)).toThrow(/not_implemented/);
     expect(orchestrator.appNameFor('any-org')).toBe(SHARD);

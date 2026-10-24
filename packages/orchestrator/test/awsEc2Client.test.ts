@@ -488,7 +488,7 @@ describe('createEc2Api — the persistent calls (MOTIR-9469)', () => {
       },
     });
     const ec2 = createEc2Api(CONFIG, factory);
-    expect(await ec2.describeVolumes({ volumeIds: ['vol-1'] })).toEqual([
+    expect((await ec2.describeVolumes({ volumeIds: ['vol-1'] })).volumes).toEqual([
       {
         volumeId: 'vol-1',
         state: 'in-use',
@@ -508,15 +508,70 @@ describe('createEc2Api — the persistent calls (MOTIR-9469)', () => {
         tags: [],
       },
     ]);
-    await ec2.describeVolumes({ filters: [{ name: 'tag:motir-shard', values: ['ci-1'] }] });
+    await ec2.describeVolumes({
+      filters: [{ name: 'tag:motir-shard', values: ['ci-1'] }],
+      maxResults: 5,
+      nextToken: 'p1',
+    });
     await ec2.deleteVolume('vol-1');
     expect(sent.slice(0, 3)).toEqual([
       { command: 'DescribeVolumesCommand', input: { Filters: undefined, VolumeIds: ['vol-1'] } },
       {
         command: 'DescribeVolumesCommand',
-        input: { Filters: [{ Name: 'tag:motir-shard', Values: ['ci-1'] }] },
+        input: {
+          Filters: [{ Name: 'tag:motir-shard', Values: ['ci-1'] }],
+          MaxResults: 5,
+          NextToken: 'p1',
+        },
       },
       { command: 'DeleteVolumeCommand', input: { VolumeId: 'vol-1' } },
     ]);
+  });
+
+  it('pages volumes, reading a last page as nextToken null', async () => {
+    const { factory } = stub({ DescribeVolumesCommand: { NextToken: 'p2' } });
+    expect(await createEc2Api(CONFIG, factory).describeVolumes({})).toEqual({
+      volumes: [],
+      nextToken: 'p2',
+    });
+    const last = stub({ DescribeVolumesCommand: {} });
+    expect(await createEc2Api(CONFIG, last.factory).describeVolumes({})).toEqual({
+      volumes: [],
+      nextToken: null,
+    });
+  });
+});
+
+describe('createEc2Api — the upkeep calls (MOTIR-9479)', () => {
+  it('reads the user-data decoded, and an instance without one as null', async () => {
+    const { sent, factory } = stub({
+      DescribeInstanceAttributeCommand: {
+        UserData: { Value: Buffer.from('#!/bin/bash\n').toString('base64') },
+      },
+    });
+    expect(await createEc2Api(CONFIG, factory).describeInstanceUserData('i-1')).toBe(
+      '#!/bin/bash\n',
+    );
+    expect(sent[0]).toEqual({
+      command: 'DescribeInstanceAttributeCommand',
+      input: { InstanceId: 'i-1', Attribute: 'userData' },
+    });
+    const none = stub({ DescribeInstanceAttributeCommand: { UserData: {} } });
+    expect(await createEc2Api(CONFIG, none.factory).describeInstanceUserData('i-1')).toBeNull();
+  });
+
+  it('writes the user-data as raw bytes, and tags resources', async () => {
+    const { sent, factory } = stub({});
+    const ec2 = createEc2Api(CONFIG, factory);
+    await ec2.modifyInstanceUserData('i-1', '#!/bin/bash\n');
+    await ec2.createTags(['i-1'], [{ key: 'motir_image', value: 'img' }]);
+    expect(sent[0]!.command).toBe('ModifyInstanceAttributeCommand');
+    const input = sent[0]!.input as { InstanceId: string; UserData: { Value: Uint8Array } };
+    expect(input.InstanceId).toBe('i-1');
+    expect(Buffer.from(input.UserData.Value).toString('utf8')).toBe('#!/bin/bash\n');
+    expect(sent[1]).toEqual({
+      command: 'CreateTagsCommand',
+      input: { Resources: ['i-1'], Tags: [{ Key: 'motir_image', Value: 'img' }] },
+    });
   });
 });

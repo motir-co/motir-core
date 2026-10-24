@@ -6,8 +6,10 @@ import {
   CreateRouteTableCommand,
   CreateSecurityGroupCommand,
   CreateSubnetCommand,
+  CreateTagsCommand,
   CreateVpcCommand,
   DescribeAvailabilityZonesCommand,
+  DescribeInstanceAttributeCommand,
   DescribeInstancesCommand,
   DescribeInternetGatewaysCommand,
   DescribeRouteTablesCommand,
@@ -17,6 +19,7 @@ import {
   DescribeVolumesCommand,
   DescribeVpcsCommand,
   EC2Client,
+  ModifyInstanceAttributeCommand,
   ModifySubnetAttributeCommand,
   RunInstancesCommand,
   StartInstancesCommand,
@@ -269,10 +272,24 @@ export interface Ec2Api {
   describeVolumes(input: {
     volumeIds?: readonly string[];
     filters?: readonly Ec2Filter[];
-  }): Promise<Ec2Volume[]>;
+    /** Page size (EC2 takes 5–500); not allowed together with `volumeIds`. */
+    maxResults?: number;
+    nextToken?: string;
+  }): Promise<{ volumes: Ec2Volume[]; nextToken: string | null }>;
   /** https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_DeleteVolume.html —
    *  an attached volume is `VolumeInUse`; an unknown one `InvalidVolume.NotFound`. */
   deleteVolume(volumeId: string): Promise<void>;
+  /** https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_DescribeInstanceAttribute.html —
+   *  the instance's user-data as RAW text (EC2 answers it base64; this decodes),
+   *  null when it has none. An unknown id is `InvalidInstanceID.NotFound`. */
+  describeInstanceUserData(instanceId: string): Promise<string | null>;
+  /** https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_ModifyInstanceAttribute.html —
+   *  replace the user-data with RAW `userData` (the SDK base64-encodes a blob
+   *  attribute). EC2 allows it only on a stopped instance: `IncorrectInstanceState`. */
+  modifyInstanceUserData(instanceId: string, userData: string): Promise<void>;
+  /** https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_CreateTags.html —
+   *  adds or overwrites each tag on each resource. */
+  createTags(resourceIds: readonly string[], tags: readonly Ec2Tag[]): Promise<void>;
 }
 
 /** The slice of `EC2Client` the factory uses — what a test stubs. */
@@ -363,7 +380,10 @@ type InstanceMethod =
   | 'stopInstances'
   | 'startInstances'
   | 'describeVolumes'
-  | 'deleteVolume';
+  | 'deleteVolume'
+  | 'describeInstanceUserData'
+  | 'modifyInstanceUserData'
+  | 'createTags';
 type NetworkCalls = Omit<Ec2Api, InstanceMethod>;
 type InstanceCalls = Pick<Ec2Api, InstanceMethod>;
 
@@ -471,17 +491,45 @@ function instanceCalls(send: Send): InstanceCalls {
     async startInstances(instanceIds) {
       await send(new StartInstancesCommand({ InstanceIds: [...instanceIds] }));
     },
-    async describeVolumes({ volumeIds, filters = [] }) {
-      const out = await send<{ Volumes?: Volume[] }>(
+    async describeVolumes({ volumeIds, filters = [], maxResults, nextToken }) {
+      const out = await send<{ Volumes?: Volume[]; NextToken?: string }>(
         new DescribeVolumesCommand({
           Filters: sdkFilters(filters),
           ...(volumeIds ? { VolumeIds: [...volumeIds] } : {}),
+          ...(maxResults ? { MaxResults: maxResults } : {}),
+          ...(nextToken ? { NextToken: nextToken } : {}),
         }),
       );
-      return (out.Volumes ?? []).map(toVolume);
+      return { volumes: (out.Volumes ?? []).map(toVolume), nextToken: out.NextToken || null };
     },
     async deleteVolume(volumeId) {
       await send(new DeleteVolumeCommand({ VolumeId: volumeId }));
+    },
+    async describeInstanceUserData(instanceId) {
+      const out = await send<{ UserData?: { Value?: string } }>(
+        new DescribeInstanceAttributeCommand({ InstanceId: instanceId, Attribute: 'userData' }),
+      );
+      const value = out.UserData?.Value;
+      return value ? Buffer.from(value, 'base64').toString('utf8') : null;
+    },
+    async modifyInstanceUserData(instanceId, userData) {
+      // `BlobAttributeValue.Value` is a blob: the SDK base64-encodes it on the
+      // wire, so it is handed the raw bytes ("If you are using an AWS SDK or
+      // command line tool, base64-encoding is performed for you").
+      await send(
+        new ModifyInstanceAttributeCommand({
+          InstanceId: instanceId,
+          UserData: { Value: Buffer.from(userData, 'utf8') },
+        }),
+      );
+    },
+    async createTags(resourceIds, tags) {
+      await send(
+        new CreateTagsCommand({
+          Resources: [...resourceIds],
+          Tags: tags.map((t) => ({ Key: t.key, Value: t.value })),
+        }),
+      );
     },
   };
 }

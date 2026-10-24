@@ -3,6 +3,7 @@ import {
   AWS_RUNNER_IAM_USER,
   AwsAccountCreationRefusedError,
   awsCredentialsFromEnv,
+  awsAgentHosterPolicyDocument,
   awsManagementCredentials,
   awsRunnerPolicyDocument,
   awsRuntimeKeyEnvNames,
@@ -195,9 +196,13 @@ export function createAwsShardProvisioningProvider(
     async runtimeCredential(ctx) {
       const credentials = await memberCredentials(ctx);
       const region = regionOf(ctx);
+      // An agent-hoster account's instances persist — hibernate, wake, rewrite
+      // their config, delete their disk — so its key carries those calls too.
+      const policy =
+        ctx.fleetKind === 'agent_instance' ? awsAgentHosterPolicyDocument : awsRunnerPolicyDocument;
       const { created } = await api().ensureRunnerIamUser(
         credentials,
-        awsRunnerPolicyDocument({ shardTag: ctx.name, regionId: region }),
+        policy({ shardTag: ctx.name, regionId: region }),
       );
       const key = awsCredentialsFromEnv(ctx.credentialRef, deps.env());
       if (!key) return { created, confirmed: false };

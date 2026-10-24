@@ -16,22 +16,42 @@ import type {
   PersistentExecResult,
   PersistentLivenessResult,
   PersistentMachineEvent,
+  PersistentTerminalConfig,
   PersistentTerminalEndpoint,
 } from '../../types';
 import { FLEET_METADATA_KEY, FLEET_METADATA_VALUES } from '../fly';
-import { INSTANCE_METADATA_KEY, instanceMachineName } from '../fly/persistent';
+import {
+  INSTANCE_METADATA_KEY,
+  MACHINE_CONFIG_METADATA_KEY,
+  TERMINAL_KEY_ID_METADATA_KEY,
+  instanceMachineName,
+  isMachineConfigCurrent,
+} from '../fly/persistent';
 import { awsApiError, classifyAwsLaunchError } from './capacityErrors';
-import { Ec2ApiError, type Ec2Api, type Ec2Instance, type Ec2Tag } from './ec2Client';
+import {
+  Ec2ApiError,
+  type Ec2Api,
+  type Ec2Filter,
+  type Ec2Instance,
+  type Ec2Tag,
+  type Ec2Volume,
+} from './ec2Client';
 import { AWS_DEFAULT_INSTANCE_TYPE, AwsInstanceSizeError, transitionTimeOf } from './index';
 import { AWS_SHARD_TAG_KEY } from './network';
-import { buildInstanceUserData, encodeInstanceUserData } from './persistentUserData';
+import {
+  encodeInstanceUserData,
+  instanceConfigOf,
+  parseInstanceUserData,
+  renderInstanceUserData,
+  type AwsInstanceConfig,
+} from './persistentUserData';
 
 // The AWS adapter's PERSISTENT half (Story MOTIR-9361 · MOTIR-9469) — an agent
 // instance as ONE EC2 instance and ONE EBS home disk, in one zone of one
-// account, for the instance's life. This card is its lifecycle and its disk;
-// the reach channel (exec, liveness, the terminal) and the upkeep (config,
-// image move, the tag listing) are MOTIR-9470 / MOTIR-9479, and until they land
-// those methods throw one named `not_implemented` error rather than answering.
+// account, for the instance's life. MOTIR-9469 is its lifecycle and its disk;
+// MOTIR-9479 its upkeep (the config document, ensure config, image move, the tag
+// listing). The reach channel (exec, liveness, the terminal) is MOTIR-9470, and
+// until it lands those methods throw one named `not_implemented` error.
 //
 // What EC2 gives differently from Fly, and how the port's guarantees still hold:
 //
@@ -58,6 +78,12 @@ import { buildInstanceUserData, encodeInstanceUserData } from './persistentUserD
 //      attached (`VolumeInUse`, DeleteVolume,
 //      https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_DeleteVolume.html),
 //      and a terminating instance holds it until it reads `terminated`.
+//   6. THE CONFIG IS THE USER-DATA. EC2 keeps no machine config, so the
+//      instance's image, env, mount and terminal live in ONE document in its
+//      user-data (`persistentUserData.ts`), re-read on every boot. Ensure-config
+//      and the image move read it, replace one field and write it back — legal
+//      only on a STOPPED instance — and the stamp (terminal version and key id)
+//      and the image are mirrored as tags so a check costs one describe.
 //
 // ⚠️ SHARD-BLIND AND ENVIRONMENT-BLIND, like the ephemeral adapter: the
 // composition root reads the account's key and the AMI id and hands this a plain
@@ -72,6 +98,16 @@ export const AWS_IMAGE_TAG_KEY = 'motir_image';
 /** How many times one provision sends RunInstances (same ClientToken) on a
  *  transport error or a 5xx before it gives up. */
 export const AWS_PERSISTENT_LAUNCH_ATTEMPTS = 3;
+
+/** The instance tags stamping the terminal config it carries (Q8's stamp). */
+export const AWS_TERMINAL_VERSION_TAG_KEY = 'motir_terminal_version';
+export const AWS_TERMINAL_KEY_ID_TAG_KEY = TERMINAL_KEY_ID_METADATA_KEY;
+
+/** How many reads an image move waits for a stopping instance. */
+export const AWS_STOP_WAIT_ATTEMPTS = 30;
+
+/** The page size of the tag listing (DescribeInstances takes 5–1000, DescribeVolumes 5–500). */
+export const AWS_LIST_PAGE_SIZE = 200;
 
 /** How many reads `destroyPersistent` waits for a terminating instance. */
 export const AWS_TERMINATE_WAIT_ATTEMPTS = 30;
@@ -162,8 +198,27 @@ function notImplemented(): never {
   throw new OrchestratorApiError('aws', 501, 'not_implemented');
 }
 
-function tagOf(instance: Ec2Instance, key: string): string | undefined {
-  return instance.tags.find((t) => t.key === key)?.value;
+function tagOf(resource: { tags: readonly Ec2Tag[] }, key: string): string | undefined {
+  return resource.tags.find((t) => t.key === key)?.value;
+}
+
+/** The tags that stamp `terminal` on an instance. */
+function terminalStampTags(terminal: PersistentTerminalConfig): Ec2Tag[] {
+  return [
+    { key: AWS_TERMINAL_VERSION_TAG_KEY, value: String(terminal.version) },
+    { key: AWS_TERMINAL_KEY_ID_TAG_KEY, value: terminal.keyId },
+  ];
+}
+
+/** An instance's stamp in the Fly adapter's metadata vocabulary, so both
+ *  providers decide 'current' with ONE function. */
+function stampOf(instance: Ec2Instance): Record<string, string> {
+  const version = tagOf(instance, AWS_TERMINAL_VERSION_TAG_KEY);
+  const keyId = tagOf(instance, AWS_TERMINAL_KEY_ID_TAG_KEY);
+  return {
+    ...(version !== undefined ? { [MACHINE_CONFIG_METADATA_KEY]: version } : {}),
+    ...(keyId !== undefined ? { [TERMINAL_KEY_ID_METADATA_KEY]: keyId } : {}),
+  };
 }
 
 /** An AWS persistent adapter for ONE account (one region). */
@@ -186,6 +241,7 @@ export function createAwsPersistentOrchestrator(
       { key: 'motir_project_id', value: spec.projectId },
       { key: 'Name', value: instanceMachineName(spec.instanceId) },
       { key: AWS_IMAGE_TAG_KEY, value: spec.image },
+      ...(spec.terminal ? terminalStampTags(spec.terminal) : []),
     ];
   }
 
@@ -320,6 +376,81 @@ export function createAwsPersistentOrchestrator(
     }
   }
 
+  /** The instance, refusing one EC2 no longer knows (or terminated) as gone. */
+  async function requireInstance(id: string): Promise<Ec2Instance> {
+    const instance = await readInstance(id);
+    if (!instance || instance.state === 'terminated') {
+      throw new OrchestratorApiError('aws', 404, 'InvalidInstanceID.NotFound');
+    }
+    return instance;
+  }
+
+  /** The document the instance boots from. */
+  async function readConfig(id: string): Promise<AwsInstanceConfig> {
+    let text: string | null;
+    try {
+      text = await ec2.describeInstanceUserData(id);
+    } catch (err) {
+      throw awsApiError(err);
+    }
+    return parseInstanceUserData(text ?? '');
+  }
+
+  /** Write the document back (the instance must be stopped), then the tags that
+   *  mirror it. A refusal throws the AWS code and sends nothing more. */
+  async function writeConfig(id: string, next: AwsInstanceConfig, tags: Ec2Tag[]): Promise<void> {
+    const text = renderInstanceUserData(next);
+    try {
+      await ec2.modifyInstanceUserData(id, text);
+      if (tags.length > 0) await ec2.createTags([id], tags);
+    } catch (err) {
+      throw awsApiError(err);
+    }
+  }
+
+  /** Wait until EC2 reports the instance stopped. */
+  async function awaitStopped(id: string): Promise<void> {
+    for (let attempt = 1; ; attempt += 1) {
+      const instance = await requireInstance(id);
+      if (instance.state === 'stopped') return;
+      if (attempt >= AWS_STOP_WAIT_ATTEMPTS) {
+        throw new OrchestratorApiError('aws', null, 'InstanceNotStopped');
+      }
+      await sleep(AWS_PERSISTENT_POLL_MS);
+    }
+  }
+
+  /** Every page of a tag listing. */
+  async function allInstances(filters: Ec2Filter[]): Promise<Ec2Instance[]> {
+    const out: Ec2Instance[] = [];
+    let nextToken: string | undefined;
+    do {
+      const page = await ec2.describeInstances({
+        filters,
+        maxResults: AWS_LIST_PAGE_SIZE,
+        ...(nextToken ? { nextToken } : {}),
+      });
+      out.push(...page.instances);
+      nextToken = page.nextToken ?? undefined;
+    } while (nextToken);
+    return out;
+  }
+
+  async function allVolumes(filters: Ec2Filter[]): Promise<Ec2Volume[]> {
+    const out: Ec2Volume[] = [];
+    let nextToken: string | undefined;
+    do {
+      const page = await ec2.describeVolumes({
+        filters,
+        maxResults: AWS_LIST_PAGE_SIZE,
+        ...(nextToken ? { nextToken } : {}),
+      });
+      out.push(...page.volumes);
+      nextToken = page.nextToken ?? undefined;
+    } while (nextToken);
+    return out;
+  }
+
   function gone(handle: PersistentContainerHandle): PersistentContainerStatus {
     return {
       machineId: handle.machineId,
@@ -354,7 +485,7 @@ export function createAwsPersistentOrchestrator(
       }
       const instanceType = instanceTypeFor(spec.size);
       if (!instanceType) throw new AwsInstanceSizeError(spec.size.cpus, spec.size.memoryMb);
-      const userData = encodeInstanceUserData(buildInstanceUserData(spec));
+      const userData = encodeInstanceUserData(renderInstanceUserData(instanceConfigOf(spec)));
 
       const launched = await launch(spec, zone, instanceType, userData);
       // RunInstances answers the mapping it made; when it did not, describe it.
@@ -451,21 +582,95 @@ export function createAwsPersistentOrchestrator(
       await deleteVolume(volumeId, false);
     },
 
-    // ── MOTIR-9470 (reach) and MOTIR-9479 (upkeep) ─────────────────────────────
-    listPersistent(): Promise<PersistentAppInventory> {
-      return Promise.resolve().then(notImplemented);
+    /** Every machine and disk tagged with the account (`app` is the shard tag),
+     *  terminated machines left out. A machine made by hand with only the shard
+     *  tag lists with `instanceId: null` — how the reconciler finds it. */
+    async listPersistent(app: string): Promise<PersistentAppInventory> {
+      const byShard: Ec2Filter[] = [{ name: `tag:${AWS_SHARD_TAG_KEY}`, values: [app] }];
+      let instances: Ec2Instance[];
+      let volumes: Ec2Volume[];
+      try {
+        instances = await allInstances(byShard);
+        volumes = await allVolumes(byShard);
+      } catch (err) {
+        throw awsApiError(err);
+      }
+      return {
+        app,
+        machines: instances
+          .filter((i) => i.state !== 'terminated')
+          .map((i) => ({
+            machineId: i.instanceId,
+            state: toAwsPersistentState(i.state),
+            instanceId: tagOf(i, INSTANCE_METADATA_KEY) ?? null,
+            createdAt: i.launchTime,
+          })),
+        volumes: volumes.map((v) => ({
+          volumeId: v.volumeId,
+          name: tagOf(v, 'Name') ?? v.volumeId,
+          attachedMachineId: v.attachedInstanceId,
+          createdAt: v.createTime,
+        })),
+      };
     },
+
+    /** Q8 on EC2: the stamp tags decide 'current' exactly as Fly's metadata does;
+     *  otherwise the STOPPED instance's document has its terminal block replaced
+     *  (image, mount, env kept) and the stamp rewritten. Never starts it. */
+    async ensureMachineConfig(
+      handle: PersistentContainerHandle,
+      terminal: PersistentTerminalConfig,
+    ): Promise<'updated' | 'current'> {
+      const instance = await requireInstance(handle.machineId);
+      if (isMachineConfigCurrent(stampOf(instance), terminal)) return 'current';
+      if (instance.state !== 'stopped') {
+        // EC2 refuses a user-data change on any other state; a wake calls this
+        // BEFORE start, so a running machine here is the caller's mistake.
+        throw new OrchestratorApiError('aws', 409, 'instance_not_stopped');
+      }
+      const current = await readConfig(handle.machineId);
+      await writeConfig(handle.machineId, { ...current, terminal }, terminalStampTags(terminal));
+      return 'updated';
+    },
+
+    /** agent-image-update.md Q2 on EC2: the SAME instance and disk, the document
+     *  read with ONLY its image replaced. A running instance is stopped, written
+     *  and started (EC2 changes user-data only while stopped; the per-boot script
+     *  pulls the new image). A failure after the stop leaves it stopped on the old
+     *  document, which the image-update settle reads through describe. */
+    async moveImage(
+      handle: PersistentContainerHandle,
+      image: string,
+      options: { launch: boolean },
+    ): Promise<void> {
+      await requireInstance(handle.machineId);
+      if (options.launch) {
+        try {
+          await ec2.stopInstances([handle.machineId]);
+        } catch (err) {
+          throw awsApiError(err);
+        }
+        await awaitStopped(handle.machineId);
+      }
+      const current = await readConfig(handle.machineId);
+      await writeConfig(handle.machineId, { ...current, image }, [
+        { key: AWS_IMAGE_TAG_KEY, value: image },
+      ]);
+      if (options.launch) {
+        try {
+          await ec2.startInstances([handle.machineId]);
+        } catch (err) {
+          throw classifyCapacity(err, null);
+        }
+      }
+    },
+
+    // ── MOTIR-9470 (reach) ─────────────────────────────────────────────────────
     exec(): Promise<PersistentExecResult> {
-      return Promise.resolve().then(notImplemented);
-    },
-    ensureMachineConfig(): Promise<'updated' | 'current'> {
       return Promise.resolve().then(notImplemented);
     },
     terminalEndpoint(): PersistentTerminalEndpoint {
       return notImplemented();
-    },
-    moveImage(): Promise<void> {
-      return Promise.resolve().then(notImplemented);
     },
     checkLiveness(): Promise<PersistentLivenessResult> {
       return Promise.resolve().then(notImplemented);
