@@ -277,7 +277,8 @@ export const agentInstanceRepository = {
   },
 
   /**
-   * Write the handle beside the placement that reserved it (MOTIR-9471) — only
+   * Write the handle, and the account's region, beside the placement that
+   * reserved it (MOTIR-9471, MOTIR-9472) — only
    * while the row is live, still placed on `fleetShardId` and has no machine yet.
    * `applied: false` means the placement is no longer this call's: what it
    * provisioned must be destroyed. `tx` required.
@@ -285,7 +286,7 @@ export const agentInstanceRepository = {
   async setPlacedHandle(
     id: string,
     fleetShardId: string,
-    handle: AgentInstanceHandleColumns,
+    handle: AgentInstanceHandleColumns & { region: string },
     tx: Prisma.TransactionClient,
   ): Promise<{ applied: boolean }> {
     const result = await tx.agentInstance.updateMany({

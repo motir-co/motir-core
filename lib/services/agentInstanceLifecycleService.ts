@@ -84,7 +84,14 @@ import type {
   AgentInstanceListPageDto,
   AgentInstanceStopReason,
 } from '@/lib/dto/agentInstances';
-import { getPersistentOrchestrator, isPersistentOrchestratorConfigured } from '@/lib/orchestrator';
+import {
+  getPersistentOrchestrator,
+  isPersistentOrchestratorConfigured,
+  persistentOrchestratorForShard,
+  type PersistentContainerOrchestrator,
+} from '@/lib/orchestrator';
+import { agentInstancePlacementService } from '@/lib/services/agentInstancePlacementService';
+import { fleetShardOrchestratorService } from '@/lib/services/fleetShardOrchestratorService';
 import { agentInstanceIntervalRepository } from '@/lib/repositories/agentInstanceIntervalRepository';
 import {
   agentInstanceRepository,
@@ -246,16 +253,43 @@ export function agentInstanceHandle(row: AgentInstance): PersistentContainerHand
   return handleOf(row);
 }
 
+/** The handle through the PROCESS-WIDE orchestrator — for the paths the second
+ *  routing card owns (run, exec, sweep, image update, liveness); create, wake,
+ *  hibernate, boot and delete use {@link routeOf} (MOTIR-9472). */
 function handleOf(row: AgentInstance): PersistentContainerHandle | null {
+  return handleFor(row, getPersistentOrchestrator());
+}
+
+/** The handle the row names, through the orchestrator it was resolved to: its
+ *  provider, and the zone the row records (none for an unplaced instance). */
+function handleFor(
+  row: AgentInstance,
+  orchestrator: Pick<PersistentContainerOrchestrator, 'provider'>,
+): PersistentContainerHandle | null {
   if (!row.flyApp || !row.machineId || !row.volumeId) return null;
   return {
-    provider: getPersistentOrchestrator().provider,
+    provider: orchestrator.provider,
     app: row.flyApp,
     machineId: row.machineId,
     volumeId: row.volumeId,
     region: row.region,
     createdAt: row.createdAt,
+    ...(row.availabilityZone ? { availabilityZone: row.availabilityZone } : {}),
   };
+}
+
+/**
+ * WHERE ONE INSTANCE IS REACHED (Story MOTIR-9361 · MOTIR-9472): the orchestrator
+ * of the account recorded on the row — never the agent hoster's switch — and the
+ * handle through it. Resolved per operation from the row that operation read, so
+ * a retried stop or delete lands on the same account.
+ */
+async function routeOf(row: AgentInstance): Promise<{
+  orchestrator: PersistentContainerOrchestrator;
+  handle: PersistentContainerHandle | null;
+}> {
+  const orchestrator = await fleetShardOrchestratorService.persistentOrchestratorFor(row);
+  return { orchestrator, handle: handleFor(row, orchestrator) };
 }
 
 function stopReasonOf(
@@ -624,10 +658,12 @@ async function failInstance(
   );
   if (!moved) return;
   await closeOpenInterval(row, agentInstanceClock.now(), 'lost');
-  const handle = handleOf(row);
-  if (!handle) return;
+  if (!row.machineId) return;
   try {
-    await getPersistentOrchestrator().stop(handle);
+    // Its own account's orchestrator (MOTIR-9472); an account that cannot be
+    // resolved is logged like a refused stop, never sent to Fly.
+    const { orchestrator, handle } = await routeOf(row);
+    if (handle) await orchestrator.stop(handle);
   } catch (err) {
     console.warn(
       '[agentInstanceLifecycle] stop after failure failed; the reconciler will stop it',
@@ -948,8 +984,8 @@ async function alignMachineImage(
   row: AgentInstance,
   handle: PersistentContainerHandle,
   target: string | null,
+  orchestrator: PersistentContainerOrchestrator,
 ): Promise<void> {
-  const orchestrator = getPersistentOrchestrator();
   const want = imageRef(row, target ?? row.imageDigest);
   const status = await orchestrator.describePersistent(handle);
   if (!status.image || status.image === want) return;
@@ -1019,6 +1055,7 @@ async function beginRollback(row: AgentInstance, detail: string): Promise<void> 
 export const agentInstanceBootSteps = {
   /** The caller's own agent in the project, or `AgentInstanceNotFoundError` (§8's gate). */
   handleOf,
+  routeOf,
   reload,
   failInstance,
   bootFailureReason,
@@ -1247,33 +1284,47 @@ export const agentInstanceLifecycleService = {
     }
 
     try {
-      const handle = await orchestrator.provisionPersistent({
-        orgId: project.organizationId,
-        workspaceId: project.workspaceId,
-        projectId: project.id,
-        instanceId,
-        image: pinnedImageReference(imageTag, imageDigest),
-        size: FLEET_CONTAINER_SIZE,
-        // No credential of the user's, and none of Motir's: the instance knows only
-        // which record it is (§9's rule — Motir never pre-fills a sign-in).
-        env: { MOTIR_INSTANCE_ID: instanceId },
-        region,
-        volumeSizeGb: INSTANCE_VOLUME_SIZE_GB,
-        mountPath: INSTANCE_HOME_PATH,
-        // agent-terminal.md Q2–Q4: the terminal server as the main process, its
-        // public service, and the per-instance key (`MOTIR_TERMINAL_KEY`) — a key
-        // that opens only this machine's shell, never a credential of the user's.
-        terminal,
-        // With the terminal off, a main process that stays up (MOTIR-7336).
-        idleCommand: terminal ? null : AGENT_IDLE_COMMAND,
-      });
-      await withWorkspaceServiceContext(project.workspaceId, (tx) =>
-        agentInstanceRepository.setHandle(
+      // WHERE IT LIVES (MOTIR-9472): placement reads the agent hoster's switch,
+      // once, here. Fly is today's path; an AWS account records itself and the
+      // handle; a full pool creates nothing anywhere and leaves the boot where it
+      // is before any machine exists, for the waiting card to take up.
+      const placed = await agentInstancePlacementService.placeAndProvision(
+        {
           instanceId,
-          { flyApp: handle.app, machineId: handle.machineId, volumeId: handle.volumeId },
-          tx,
-        ),
+          organizationId: project.organizationId,
+          workspaceId: project.workspaceId,
+          spec: {
+            orgId: project.organizationId,
+            workspaceId: project.workspaceId,
+            projectId: project.id,
+            instanceId,
+            image: pinnedImageReference(imageTag, imageDigest),
+            size: FLEET_CONTAINER_SIZE,
+            // No credential of the user's, and none of Motir's: the instance knows only
+            // which record it is (§9's rule — Motir never pre-fills a sign-in).
+            env: { MOTIR_INSTANCE_ID: instanceId },
+            volumeSizeGb: INSTANCE_VOLUME_SIZE_GB,
+            mountPath: INSTANCE_HOME_PATH,
+            // agent-terminal.md Q2–Q4: the terminal server as the main process, its
+            // public service, and the per-instance key (`MOTIR_TERMINAL_KEY`) — a key
+            // that opens only this machine's shell, never a credential of the user's.
+            terminal,
+            // With the terminal off, a main process that stays up (MOTIR-7336).
+            idleCommand: terminal ? null : AGENT_IDLE_COMMAND,
+          },
+        },
+        { persistentOrchestratorForShard, flyOrchestrator: () => orchestrator },
       );
+      if (placed.outcome === 'fly') {
+        const { handle } = placed;
+        await withWorkspaceServiceContext(project.workspaceId, (tx) =>
+          agentInstanceRepository.setHandle(
+            instanceId,
+            { flyApp: handle.app, machineId: handle.machineId, volumeId: handle.volumeId },
+            tx,
+          ),
+        );
+      }
     } catch (err) {
       const detail = describeError(err);
       if (boot) await agentInstanceBootService.recordProvision(row, boot.attempt, detail);
@@ -1305,7 +1356,9 @@ export const agentInstanceLifecycleService = {
     const target = row.state === 'hibernated' ? row.targetImageDigest : null;
     const to: AgentInstanceState = target ? 'updating' : 'waking';
     const enterFrom: AgentInstanceState[] = target ? ['hibernated'] : from;
-    const handle = handleOf(row);
+    if (!row.machineId) throw new AgentInstanceStateConflictError(row.id, row.state, 'woken');
+    // A wake never chooses: it goes back to the account the row records (MOTIR-9472).
+    const { orchestrator, handle } = await routeOf(row);
     if (!handle) throw new AgentInstanceStateConflictError(row.id, row.state, 'woken');
 
     await assertPaidAiPlan(project.organizationId);
@@ -1377,9 +1430,9 @@ export const agentInstanceLifecycleService = {
       // agent-terminal.md Q8: an agent whose machine config predates the current
       // one is brought up to date BEFORE the start (the machine stays stopped
       // while it is rewritten, its image digest and home volume untouched).
-      if (terminal) await getPersistentOrchestrator().ensureMachineConfig(handle, terminal);
-      await alignMachineImage(row, handle, target);
-      await getPersistentOrchestrator().start(handle);
+      if (terminal) await orchestrator.ensureMachineConfig(handle, terminal);
+      await alignMachineImage(row, handle, target, orchestrator);
+      await orchestrator.start(handle);
     } catch (err) {
       const detail = describeError(err);
       if (boot) await agentInstanceBootService.recordProvision(row, boot.attempt, detail);
@@ -1461,13 +1514,13 @@ export const agentInstanceLifecycleService = {
     ) {
       return false;
     }
-    const handle = handleOf(row);
-    if (handle) {
-      // §4 (MOTIR-7026): the last sign-in answer before the volume goes quiet is
-      // what a start reads while the agent sleeps. Best effort, never a refusal.
-      if (isTerminalOnQuietly()) await probeSignIn(row, handle);
+    if (row.machineId) {
       try {
-        await getPersistentOrchestrator().stop(handle);
+        const { orchestrator, handle } = await routeOf(row);
+        // §4 (MOTIR-7026): the last sign-in answer before the volume goes quiet is
+        // what a start reads while the agent sleeps. Best effort, never a refusal.
+        if (handle && isTerminalOnQuietly()) await probeSignIn(row, handle);
+        if (handle) await orchestrator.stop(handle);
       } catch (err) {
         console.warn('[agentInstanceLifecycle] stop failed; the sweep will settle it', {
           instanceId: row.id,
@@ -1916,10 +1969,17 @@ export const agentInstanceLifecycleService = {
   ): Promise<'hibernated' | 'failed' | 'pending' | 'noop'> {
     const row = await withSystemContext((tx) => agentInstanceRepository.findById(instanceId, tx));
     if (!row || row.deletedAt || row.state !== 'hibernating') return 'noop';
-    const handle = handleOf(row);
     /* v8 ignore next -- a hibernating instance was running, so it has a handle. */
+    if (!row.machineId) return 'pending';
+    let orchestrator: PersistentContainerOrchestrator;
+    let handle: PersistentContainerHandle | null;
+    try {
+      ({ orchestrator, handle } = await routeOf(row));
+    } catch {
+      return 'pending';
+    }
+    /* v8 ignore next -- a row with a machine id has its whole handle. */
     if (!handle) return 'pending';
-    const orchestrator = getPersistentOrchestrator();
     let status;
     try {
       status = await orchestrator.describePersistent(handle);
@@ -1970,10 +2030,11 @@ export const agentInstanceLifecycleService = {
   async settleDelete(instanceId: string): Promise<'deleted' | 'pending' | 'noop'> {
     const row = await withSystemContext((tx) => agentInstanceRepository.findById(instanceId, tx));
     if (!row || row.deletedAt || row.state !== 'deleting') return 'noop';
-    const handle = handleOf(row);
-    if (handle) {
+    if (row.machineId) {
       try {
-        await getPersistentOrchestrator().destroyPersistent(handle);
+        // Machine then disk, on the account the row records (MOTIR-9472).
+        const { orchestrator, handle } = await routeOf(row);
+        if (handle) await orchestrator.destroyPersistent(handle);
       } catch (err) {
         console.warn('[agentInstanceLifecycle] destroy failed; the sweep will retry it', {
           instanceId: row.id,

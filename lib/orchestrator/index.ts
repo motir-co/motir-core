@@ -225,9 +225,41 @@ export function fakeOrchestratorForShard(
   return fake;
 }
 
+/** A persistent fake for one account: the shared persistent fake, seen through
+ *  a view that records which of its operations THIS account was asked for
+ *  (MOTIR-9472). One store holds every machine, so a handle is found whichever
+ *  view it is passed to; `calls` tells a test where an instance was routed. */
+export type ShardPersistentFake = PersistentContainerOrchestrator & {
+  readonly calls: string[];
+};
+
+const persistentShardFakes = new Map<string, ShardPersistentFake>();
+
+/** The persistent fake standing in for one account — created on first use. */
+export function fakePersistentOrchestratorForShard(shardId: string): ShardPersistentFake {
+  let fake = persistentShardFakes.get(shardId);
+  if (!fake) {
+    const calls: string[] = [];
+    fake = new Proxy(fakePersistentOrchestrator, {
+      get(target, prop, receiver) {
+        if (prop === 'calls') return calls;
+        const value: unknown = Reflect.get(target, prop, receiver);
+        if (typeof value !== 'function' || typeof prop !== 'string') return value;
+        return (...args: unknown[]) => {
+          calls.push(prop);
+          return (value as (...a: unknown[]) => unknown).apply(target, args);
+        };
+      },
+    }) as unknown as ShardPersistentFake;
+    persistentShardFakes.set(shardId, fake);
+  }
+  return fake;
+}
+
 /** Forget every account's fake — for tests. */
 export function resetShardFakes(): void {
   shardFakes.clear();
+  persistentShardFakes.clear();
 }
 
 function flyOrchestratorForShard(shard: FleetShardDTO): ContainerOrchestrator {
@@ -368,13 +400,15 @@ export async function hosterTerminalEndpointFor(
  * The PERSISTENT orchestrator for ONE account — where its agent instances live
  * (Story MOTIR-9361 · MOTIR-9469). An `aws` account gets its own adapter over its
  * own key and the hoster AMI; a `fly` account is the process-wide Fly instance
- * lane, exactly what {@link getPersistentOrchestrator} returns. Nothing calls it
- * yet: the routing cards read the account recorded on the instance and come here.
+ * lane, exactly what {@link getPersistentOrchestrator} returns. Reached through
+ * `fleetShardOrchestratorService.persistentOrchestratorFor`, which reads the
+ * account recorded on the instance (MOTIR-9472).
  */
 export function persistentOrchestratorForShard(
   shard: FleetShardDTO,
 ): PersistentContainerOrchestrator {
-  if (selectedOrchestratorProvider() === 'fake') return fakePersistentOrchestrator;
+  if (selectedOrchestratorProvider() === 'fake')
+    return fakePersistentOrchestratorForShard(shard.id);
   switch (shard.provider) {
     case 'fly':
       return getPersistentOrchestrator();

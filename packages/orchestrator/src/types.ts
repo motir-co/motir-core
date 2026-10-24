@@ -640,6 +640,12 @@ export interface PersistentContainerHandle {
   readonly volumeId: string;
   readonly region: string;
   readonly createdAt: Date;
+  /**
+   * The zone the instance's disk is in, from the record (MOTIR-9472) — set for an
+   * instance placed on an AWS hoster account, absent on Fly and the fake. The
+   * adapters address a machine by its id and never require it.
+   */
+  readonly availabilityZone?: string;
 }
 
 /**

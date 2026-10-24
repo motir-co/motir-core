@@ -12,6 +12,7 @@ import { machineCreditsFor } from '@/lib/hostedRuns/machineRate';
 import { recordContainerUsage, selectedOrchestratorProvider } from '@/lib/orchestrator';
 import { agentInstanceIntervalRepository } from '@/lib/repositories/agentInstanceIntervalRepository';
 import { agentInstanceRepository } from '@/lib/repositories/agentInstanceRepository';
+import { fleetShardRepository } from '@/lib/repositories/fleetShardRepository';
 import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // AN AGENT INSTANCE'S RUNNING INTERVAL IS CHARGED (Story MOTIR-6860 · MOTIR-6873;
@@ -63,10 +64,15 @@ export const agentInstanceChargeService = {
       const interval = await agentInstanceIntervalRepository.findById(intervalId, tx);
       if (!interval) return null;
       const instance = await agentInstanceRepository.findById(interval.agentInstanceId, tx);
-      return instance ? { interval, instance } : null;
+      if (!instance) return null;
+      // The account it lives in names the meter's provider (MOTIR-9472).
+      const shard = instance.fleetShardId
+        ? await fleetShardRepository.findById(instance.fleetShardId, tx)
+        : null;
+      return { interval, instance, shardProvider: shard?.provider ?? null };
     });
     if (!found) return { outcome: 'noop' };
-    const { interval, instance } = found;
+    const { interval, instance, shardProvider } = found;
     if (!interval.endedAt || interval.chargeOutcome !== 'pending') return { outcome: 'noop' };
 
     const billableSeconds = interval.billableSeconds ?? 0;
@@ -87,7 +93,10 @@ export const agentInstanceChargeService = {
     // The COGS meter — Motir's own cost of the interval, keyed by the interval so
     // a replay is a duplicate rather than a second row. Best-effort: a meter that
     // fails must not stop the customer's charge, and it logs its own failure.
-    const provider = selectedOrchestratorProvider();
+    // An instance on an AWS hoster account is metered as `aws`, not as the
+    // process-wide provider; price and minutes are the same either way.
+    const selected = selectedOrchestratorProvider();
+    const provider = shardProvider && selected !== 'fake' ? shardProvider : selected;
     const built = buildContainerUsage({
       handle: {
         provider,

@@ -220,7 +220,12 @@ export const agentInstancePlacementService = {
         return agentInstanceRepository.setPlacedHandle(
           input.instanceId,
           shard.id,
-          { flyApp: handle.app, machineId: handle.machineId, volumeId: handle.volumeId },
+          {
+            flyApp: handle.app,
+            machineId: handle.machineId,
+            volumeId: handle.volumeId,
+            region: handle.region,
+          },
           tx,
         );
       });

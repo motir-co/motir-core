@@ -24,7 +24,6 @@ import {
   toAgentInstanceBootDto,
   toAgentInstanceBootStepDto,
 } from '@/lib/mappers/agentInstanceMappers';
-import { getPersistentOrchestrator } from '@/lib/orchestrator';
 import {
   agentInstanceBootRepository,
   type AgentInstanceBootStepCreateInput,
@@ -261,7 +260,15 @@ async function advanceMachineStart(
   pass: Pass,
   step: AgentInstanceBootStep,
 ): Promise<AgentBootPassVerdict | null> {
-  const handle = steps.handleOf(pass.row);
+  // The account the row records (MOTIR-9472); one that cannot be resolved is read
+  // again next poll, and the boot's deadline bounds it.
+  let route: Awaited<ReturnType<typeof steps.routeOf>>;
+  try {
+    route = await steps.routeOf(pass.row);
+  } catch {
+    return { next: 'defer', deferUntil: nextPoll() };
+  }
+  const { orchestrator, handle } = route;
   /* v8 ignore next -- `provision` is done only once the handle is set */
   if (!handle) return { next: 'defer', deferUntil: nextPoll() };
   let current = step;
@@ -273,7 +280,7 @@ async function advanceMachineStart(
   }
   let status: PersistentContainerStatus;
   try {
-    status = await getPersistentOrchestrator().describePersistent(handle);
+    status = await orchestrator.describePersistent(handle);
   } catch {
     return { next: 'defer', deferUntil: nextPoll() };
   }

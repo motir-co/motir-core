@@ -11,6 +11,7 @@ import { db } from '@/lib/db';
 import type { FleetShardDTO } from '@/lib/dto/fleetShard';
 import {
   fakeOrchestratorForShard,
+  fakePersistentOrchestratorForShard,
   getOrchestrator,
   getPersistentOrchestrator,
   hosterTerminalEndpointFor,
@@ -518,7 +519,11 @@ describe('persistentOrchestratorForShard — where an account’s agent instance
 
   it('a fly row is the process-wide Fly instance lane, and the fake answers while it is selected', async () => {
     const account = await createAccount();
-    expect(persistentOrchestratorForShard(account)).toBe(fakePersistentOrchestrator);
+    // Under the fake, each account gets its own view of the shared fake (MOTIR-9472).
+    expect(persistentOrchestratorForShard(account)).toBe(
+      fakePersistentOrchestratorForShard(account.id),
+    );
+    expect(persistentOrchestratorForShard(account).provider).toBe('fake');
     vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
     vi.stubEnv('FLY_INSTANCES_API_TOKEN', 'instances-token');
     expect(persistentOrchestratorForShard(account)).toBe(getPersistentOrchestrator());
