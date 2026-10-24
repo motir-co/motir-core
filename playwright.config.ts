@@ -191,11 +191,14 @@ export default defineConfig({
   // lane (playwright.cloud.config.ts) — excluded here so this off-cloud suite
   // never boots them (they 404 without MOTIR_CLOUD, and turning it on globally
   // would break unrelated at-scale/menu specs). The self-host-ABSENT billing spec
-  // (billing-selfhost) is off-cloud and DOES run in this lane.
+  // (billing-selfhost) is off-cloud and DOES run in this lane. The done stories'
+  // acceptance specs run in their own lane too (playwright.regression.config.ts,
+  // MOTIR-9411), on the acceptance lane's triggers rather than on every PR.
   testIgnore: [
     '**/billing-cloud.spec.ts',
     '**/cloud-*.spec.ts',
     '**/acceptance*.spec.ts',
+    '**/regression-*.spec.ts',
     '**/observability-*.spec.ts',
   ],
   // MOTIR-2617 — bulk-leg membership comes from MEASURED per-spec cost, not from

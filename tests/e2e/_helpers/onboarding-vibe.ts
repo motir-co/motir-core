@@ -13,7 +13,7 @@ const WAVE_BAND_PATH = /\sd="([^"]+)"/.exec(
 
 // The assertions the onboarding-vibe walk makes on EVERY screen (Story
 // MOTIR-8238 · MOTIR-8257), shared by the acceptance walk
-// (`acceptance-onboarding-vibe.spec.ts`) and the nine-language sweep
+// (`regression-onboarding-vibe.spec.ts`) and the nine-language sweep
 // (`onboarding-locale-sweep.spec.ts`), so the two cannot disagree about what
 // "the lockup is there" means.
 

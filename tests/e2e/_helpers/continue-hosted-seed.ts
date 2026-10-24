@@ -12,7 +12,7 @@ import {
 } from './hosted-run-seed';
 
 // THE CONTINUE-HOSTED E2E SEED (Story MOTIR-6527 · Subtask MOTIR-6798), for
-// `acceptance-continue-hosted.spec.ts`.
+// `regression-continue-hosted.spec.ts`.
 //
 // It is `hosted-run-seed.ts`'s workspace (an owner, a project, a `created`-state
 // repository the hosted pre-flight can write) plus what a continue needs on top:

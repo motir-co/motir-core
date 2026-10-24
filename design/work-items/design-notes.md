@@ -8233,7 +8233,7 @@ re-derive it:
 
 **A DECIDED receipt stays in the block whatever the checks are doing**, because a line about a
 decision already made strands no question — which is what Panel B already draws. The walk that
-shows this is `tests/e2e/acceptance-gate.spec.ts`; the guard is
+shows this is `tests/e2e/regression-gate.spec.ts`; the guard is
 `tests/components/late-stack-development-block.test.tsx`.
 
 ### AMENDMENT (MOTIR-5792, 2026-09-19) — the standalone section's DECIDED state is the shared frame

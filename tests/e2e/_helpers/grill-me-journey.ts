@@ -13,7 +13,7 @@ import en from '@/messages/en.json';
 
 // THE "GRILL ME" JOURNEY, shared by its two specs (Task MOTIR-1101 · Subtask
 // MOTIR-8179): `cloud-grill-me.spec.ts` (the regression cases, every PR) and
-// `acceptance-grill-me.spec.ts` (the story's watchable receipt). Specs never
+// `regression-grill-me.spec.ts` (the story's watchable receipt). Specs never
 // import each other, so the fixture writer, the locators, the ask and the
 // authoritative reads live here.
 //

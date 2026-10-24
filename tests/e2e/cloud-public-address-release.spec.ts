@@ -27,7 +27,7 @@ import { projectAccessData } from '@/tests/helpers/projectAccess';
  * RELEASING A WORKSPACE SUBDOMAIN — the browser-level acceptance
  * (Story MOTIR-4451 · Subtask MOTIR-4457).
  *
- * `acceptance-public-address.spec.ts` (MOTIR-4225) walks claim → add a custom
+ * `regression-public-address.spec.ts` (MOTIR-4225) walks claim → add a custom
  * domain → certificate states → make primary → rename, with the old address
  * still redirecting. This spec is the step it could not reach because it did not
  * exist: **release**, and the reservation that outlives it.

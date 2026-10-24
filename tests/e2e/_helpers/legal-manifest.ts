@@ -13,7 +13,7 @@ import type { LegalDocument } from '@/lib/legal/documents';
 //     `listLegalDocuments()` itself to learn the published versions — and a
 //     runner reading a DIFFERENT manifest from the server would compare the
 //     screen against versions the screen never had.
-//   * `acceptance-legal-manifest.spec.ts` PUTs it through `/api/_test/legal-manifest`
+//   * `regression-legal-manifest.spec.ts` PUTs it through `/api/_test/legal-manifest`
 //     mid-recording, because that lane's job is to show the transition.
 //
 // ⚠️ THE HOST IS DELIBERATELY UNREACHABLE. `public.motir.e2e` resolves nowhere,
@@ -131,7 +131,7 @@ export async function readLegalHealth(
 //
 // Two acceptance specs now walk the same three surfaces — `acceptance-legal-
 // manifest.spec.ts` (MOTIR-4015, the manifest arriving) and
-// `acceptance-legal-gone.spec.ts` (MOTIR-4105, the documents leaving) — and a
+// `regression-legal-gone.spec.ts` (MOTIR-4105, the documents leaving) — and a
 // third asserts the self-host arm in the main lane. The assertions themselves
 // are the same sentences about the same DOM, so they live here once.
 //

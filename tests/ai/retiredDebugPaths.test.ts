@@ -74,11 +74,11 @@ const RETIRED_ALLOWED: Record<string, { names: string[]; why: string }> = {
     names: ['a debugging settle member', 'a debugged settle member'],
     why: 'asserts a stale settle result of those shapes is ignored',
   },
-  'tests/e2e/acceptance-ask-single-read.spec.ts': {
+  'tests/e2e/regression-ask-single-read.spec.ts': {
     names: ['a debug_bug submit'],
     why: 'the story spec asserts no debug_bug job is ever submitted',
   },
-  'tests/e2e/acceptance-debug-with-motir-ai.spec.ts': {
+  'tests/e2e/regression-debug-with-motir-ai.spec.ts': {
     names: ['a debug_bug submit'],
     why: 'the bug-offer receipt asserts no debug_bug job is ever submitted',
   },
@@ -106,7 +106,7 @@ const INTENT_ALLOWED: Record<string, string> = {
   'tests/components/plan-change-rail-restart.test.tsx': 'seeds a stored confirm',
   'tests/ai/askEveryTurnReads.test.ts': 'seeds stored turns and stale results',
   'tests/ai/askSingleReadGate.test.ts': 'seeds stored turns and stale results',
-  'tests/e2e/acceptance-ask-single-read.spec.ts': 'seeds a stored debug turn and a stored confirm',
+  'tests/e2e/regression-ask-single-read.spec.ts': 'seeds a stored debug turn and a stored confirm',
   'tests/ai/planChangeSessionsCoverage.test.ts': 'seeds a stored debug turn',
   'tests/planning/planSessionRestart.test.ts': 'reads a stale result and a stored confirm',
   'tests/planning/askResult.test.ts': 'readAskOutcome’s stale-result arms',

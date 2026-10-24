@@ -450,8 +450,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-approved-status.spec.ts::getByTestId::'board'::1",
-      "file": "tests/e2e/acceptance-approved-status.spec.ts",
+      "id": "tests/e2e/regression-approved-status.spec.ts::getByTestId::'board'::1",
+      "file": "tests/e2e/regression-approved-status.spec.ts",
       "method": "getByTestId",
       "arg": "'board'",
       "occurrence": 1,
@@ -462,8 +462,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-approved-status.spec.ts::getByTestId::`board-column-${columnId}`::1",
-      "file": "tests/e2e/acceptance-approved-status.spec.ts",
+      "id": "tests/e2e/regression-approved-status.spec.ts::getByTestId::`board-column-${columnId}`::1",
+      "file": "tests/e2e/regression-approved-status.spec.ts",
       "method": "getByTestId",
       "arg": "`board-column-${columnId}`",
       "occurrence": 1,
@@ -474,8 +474,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-approved-status.spec.ts::getByTestId::`board-column-${approvedColumn.id}`::1",
-      "file": "tests/e2e/acceptance-approved-status.spec.ts",
+      "id": "tests/e2e/regression-approved-status.spec.ts::getByTestId::`board-column-${approvedColumn.id}`::1",
+      "file": "tests/e2e/regression-approved-status.spec.ts",
       "method": "getByTestId",
       "arg": "`board-column-${approvedColumn.id}`",
       "occurrence": 1,
@@ -486,8 +486,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-approved-status.spec.ts::getByTestId::`board-count-${approvedColumn.id}`::1",
-      "file": "tests/e2e/acceptance-approved-status.spec.ts",
+      "id": "tests/e2e/regression-approved-status.spec.ts::getByTestId::`board-count-${approvedColumn.id}`::1",
+      "file": "tests/e2e/regression-approved-status.spec.ts",
       "method": "getByTestId",
       "arg": "`board-count-${approvedColumn.id}`",
       "occurrence": 1,
@@ -498,8 +498,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-approved-status.spec.ts::getByTestId::`board-column-${approvedColumn.id}`::2",
-      "file": "tests/e2e/acceptance-approved-status.spec.ts",
+      "id": "tests/e2e/regression-approved-status.spec.ts::getByTestId::`board-column-${approvedColumn.id}`::2",
+      "file": "tests/e2e/regression-approved-status.spec.ts",
       "method": "getByTestId",
       "arg": "`board-column-${approvedColumn.id}`",
       "occurrence": 2,
@@ -510,8 +510,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-approved-status.spec.ts::getByTestId::`board-card-${neighbourDoing.identifier}`::1",
-      "file": "tests/e2e/acceptance-approved-status.spec.ts",
+      "id": "tests/e2e/regression-approved-status.spec.ts::getByTestId::`board-card-${neighbourDoing.identifier}`::1",
+      "file": "tests/e2e/regression-approved-status.spec.ts",
       "method": "getByTestId",
       "arg": "`board-card-${neighbourDoing.identifier}`",
       "occurrence": 1,
@@ -522,8 +522,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-approved-status.spec.ts::getByTestId::`board-card-${neighbourReview.identifier}`::1",
-      "file": "tests/e2e/acceptance-approved-status.spec.ts",
+      "id": "tests/e2e/regression-approved-status.spec.ts::getByTestId::`board-card-${neighbourReview.identifier}`::1",
+      "file": "tests/e2e/regression-approved-status.spec.ts",
       "method": "getByTestId",
       "arg": "`board-card-${neighbourReview.identifier}`",
       "occurrence": 1,
@@ -534,8 +534,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-approved-status.spec.ts::getByTestId::`board-count-${approvedColumn.id}`::2",
-      "file": "tests/e2e/acceptance-approved-status.spec.ts",
+      "id": "tests/e2e/regression-approved-status.spec.ts::getByTestId::`board-count-${approvedColumn.id}`::2",
+      "file": "tests/e2e/regression-approved-status.spec.ts",
       "method": "getByTestId",
       "arg": "`board-count-${approvedColumn.id}`",
       "occurrence": 2,
@@ -546,8 +546,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-approved-status.spec.ts::getByTestId::'workbench-page'::1",
-      "file": "tests/e2e/acceptance-approved-status.spec.ts",
+      "id": "tests/e2e/regression-approved-status.spec.ts::getByTestId::'workbench-page'::1",
+      "file": "tests/e2e/regression-approved-status.spec.ts",
       "method": "getByTestId",
       "arg": "'workbench-page'",
       "occurrence": 1,
@@ -558,8 +558,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-approved-status.spec.ts::getByTestId::'workbench-tab-in-progress'::1",
-      "file": "tests/e2e/acceptance-approved-status.spec.ts",
+      "id": "tests/e2e/regression-approved-status.spec.ts::getByTestId::'workbench-tab-in-progress'::1",
+      "file": "tests/e2e/regression-approved-status.spec.ts",
       "method": "getByTestId",
       "arg": "'workbench-tab-in-progress'",
       "occurrence": 1,
@@ -570,8 +570,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-approved-status.spec.ts::getByTestId::'workbench-tab-in-progress'::2",
-      "file": "tests/e2e/acceptance-approved-status.spec.ts",
+      "id": "tests/e2e/regression-approved-status.spec.ts::getByTestId::'workbench-tab-in-progress'::2",
+      "file": "tests/e2e/regression-approved-status.spec.ts",
       "method": "getByTestId",
       "arg": "'workbench-tab-in-progress'",
       "occurrence": 2,
@@ -582,8 +582,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-approved-status.spec.ts::getByTestId::`workbench-row-${card.identifier}`::1",
-      "file": "tests/e2e/acceptance-approved-status.spec.ts",
+      "id": "tests/e2e/regression-approved-status.spec.ts::getByTestId::`workbench-row-${card.identifier}`::1",
+      "file": "tests/e2e/regression-approved-status.spec.ts",
       "method": "getByTestId",
       "arg": "`workbench-row-${card.identifier}`",
       "occurrence": 1,
@@ -594,8 +594,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-approved-status.spec.ts::getByTestId::'workbench-tab-finished'::1",
-      "file": "tests/e2e/acceptance-approved-status.spec.ts",
+      "id": "tests/e2e/regression-approved-status.spec.ts::getByTestId::'workbench-tab-finished'::1",
+      "file": "tests/e2e/regression-approved-status.spec.ts",
       "method": "getByTestId",
       "arg": "'workbench-tab-finished'",
       "occurrence": 1,
@@ -606,8 +606,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-approved-status.spec.ts::getByTestId::'workbench-tab-finished'::2",
-      "file": "tests/e2e/acceptance-approved-status.spec.ts",
+      "id": "tests/e2e/regression-approved-status.spec.ts::getByTestId::'workbench-tab-finished'::2",
+      "file": "tests/e2e/regression-approved-status.spec.ts",
       "method": "getByTestId",
       "arg": "'workbench-tab-finished'",
       "occurrence": 2,
@@ -618,8 +618,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-approved-status.spec.ts::getByTestId::`workbench-row-${card.identifier}`::2",
-      "file": "tests/e2e/acceptance-approved-status.spec.ts",
+      "id": "tests/e2e/regression-approved-status.spec.ts::getByTestId::`workbench-row-${card.identifier}`::2",
+      "file": "tests/e2e/regression-approved-status.spec.ts",
       "method": "getByTestId",
       "arg": "`workbench-row-${card.identifier}`",
       "occurrence": 2,
@@ -630,8 +630,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-approved-status.spec.ts::getByTestId::`board-card-${dependent.identifier}`::1",
-      "file": "tests/e2e/acceptance-approved-status.spec.ts",
+      "id": "tests/e2e/regression-approved-status.spec.ts::getByTestId::`board-card-${dependent.identifier}`::1",
+      "file": "tests/e2e/regression-approved-status.spec.ts",
       "method": "getByTestId",
       "arg": "`board-card-${dependent.identifier}`",
       "occurrence": 1,
@@ -642,8 +642,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-approved-status.spec.ts::getByTestId::`board-column-${doneColumn.id}`::1",
-      "file": "tests/e2e/acceptance-approved-status.spec.ts",
+      "id": "tests/e2e/regression-approved-status.spec.ts::getByTestId::`board-column-${doneColumn.id}`::1",
+      "file": "tests/e2e/regression-approved-status.spec.ts",
       "method": "getByTestId",
       "arg": "`board-column-${doneColumn.id}`",
       "occurrence": 1,
@@ -654,8 +654,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-approved-status.spec.ts::getByTestId::`board-count-${approvedColumn.id}`::3",
-      "file": "tests/e2e/acceptance-approved-status.spec.ts",
+      "id": "tests/e2e/regression-approved-status.spec.ts::getByTestId::`board-count-${approvedColumn.id}`::3",
+      "file": "tests/e2e/regression-approved-status.spec.ts",
       "method": "getByTestId",
       "arg": "`board-count-${approvedColumn.id}`",
       "occurrence": 3,
@@ -666,8 +666,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-approved-status.spec.ts::getByTestId::`board-card-${dependent.identifier}`::2",
-      "file": "tests/e2e/acceptance-approved-status.spec.ts",
+      "id": "tests/e2e/regression-approved-status.spec.ts::getByTestId::`board-card-${dependent.identifier}`::2",
+      "file": "tests/e2e/regression-approved-status.spec.ts",
       "method": "getByTestId",
       "arg": "`board-card-${dependent.identifier}`",
       "occurrence": 2,
@@ -678,8 +678,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-approved-status.spec.ts::getByTestId::'board'::2",
-      "file": "tests/e2e/acceptance-approved-status.spec.ts",
+      "id": "tests/e2e/regression-approved-status.spec.ts::getByTestId::'board'::2",
+      "file": "tests/e2e/regression-approved-status.spec.ts",
       "method": "getByTestId",
       "arg": "'board'",
       "occurrence": 2,
@@ -690,8 +690,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-approved-status.spec.ts::getByTestId::`board-column-${approvedColumn.id}`::3",
-      "file": "tests/e2e/acceptance-approved-status.spec.ts",
+      "id": "tests/e2e/regression-approved-status.spec.ts::getByTestId::`board-column-${approvedColumn.id}`::3",
+      "file": "tests/e2e/regression-approved-status.spec.ts",
       "method": "getByTestId",
       "arg": "`board-column-${approvedColumn.id}`",
       "occurrence": 3,
@@ -702,8 +702,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-approved-status.spec.ts::getByTestId::'board-skeleton'::1",
-      "file": "tests/e2e/acceptance-approved-status.spec.ts",
+      "id": "tests/e2e/regression-approved-status.spec.ts::getByTestId::'board-skeleton'::1",
+      "file": "tests/e2e/regression-approved-status.spec.ts",
       "method": "getByTestId",
       "arg": "'board-skeleton'",
       "occurrence": 1,
@@ -714,8 +714,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-approved-status.spec.ts::getByTestId::'board'::3",
-      "file": "tests/e2e/acceptance-approved-status.spec.ts",
+      "id": "tests/e2e/regression-approved-status.spec.ts::getByTestId::'board'::3",
+      "file": "tests/e2e/regression-approved-status.spec.ts",
       "method": "getByTestId",
       "arg": "'board'",
       "occurrence": 3,
@@ -726,8 +726,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-approved-status.spec.ts::getByText::'Couldn’t load the board'::1",
-      "file": "tests/e2e/acceptance-approved-status.spec.ts",
+      "id": "tests/e2e/regression-approved-status.spec.ts::getByText::'Couldn’t load the board'::1",
+      "file": "tests/e2e/regression-approved-status.spec.ts",
       "method": "getByText",
       "arg": "'Couldn’t load the board'",
       "occurrence": 1,
@@ -930,8 +930,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-help-menu.spec.ts::getByTestId::'workbench-page'::1",
-      "file": "tests/e2e/acceptance-help-menu.spec.ts",
+      "id": "tests/e2e/regression-help-menu.spec.ts::getByTestId::'workbench-page'::1",
+      "file": "tests/e2e/regression-help-menu.spec.ts",
       "method": "getByTestId",
       "arg": "'workbench-page'",
       "occurrence": 1,
@@ -942,8 +942,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-help-menu.spec.ts::getByTestId::'workbench-page'::2",
-      "file": "tests/e2e/acceptance-help-menu.spec.ts",
+      "id": "tests/e2e/regression-help-menu.spec.ts::getByTestId::'workbench-page'::2",
+      "file": "tests/e2e/regression-help-menu.spec.ts",
       "method": "getByTestId",
       "arg": "'workbench-page'",
       "occurrence": 2,
@@ -954,8 +954,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-help-menu.spec.ts::getByTestId::'workbench-page'::3",
-      "file": "tests/e2e/acceptance-help-menu.spec.ts",
+      "id": "tests/e2e/regression-help-menu.spec.ts::getByTestId::'workbench-page'::3",
+      "file": "tests/e2e/regression-help-menu.spec.ts",
       "method": "getByTestId",
       "arg": "'workbench-page'",
       "occurrence": 3,
@@ -966,8 +966,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-internal-billing.spec.ts::getByText::admin.idleTitle::1",
-      "file": "tests/e2e/acceptance-internal-billing.spec.ts",
+      "id": "tests/e2e/regression-internal-billing.spec.ts::getByText::admin.idleTitle::1",
+      "file": "tests/e2e/regression-internal-billing.spec.ts",
       "method": "getByText",
       "arg": "admin.idleTitle",
       "occurrence": 1,
@@ -978,8 +978,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-internal-billing.spec.ts::getByText::/recorded in the audit log/::1",
-      "file": "tests/e2e/acceptance-internal-billing.spec.ts",
+      "id": "tests/e2e/regression-internal-billing.spec.ts::getByText::/recorded in the audit log/::1",
+      "file": "tests/e2e/regression-internal-billing.spec.ts",
       "method": "getByText",
       "arg": "/recorded in the audit log/",
       "occurrence": 1,
@@ -990,8 +990,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-internal-billing.spec.ts::getByText::admin.chip.internalBilling, { exact: true }::1",
-      "file": "tests/e2e/acceptance-internal-billing.spec.ts",
+      "id": "tests/e2e/regression-internal-billing.spec.ts::getByText::admin.chip.internalBilling, { exact: true }::1",
+      "file": "tests/e2e/regression-internal-billing.spec.ts",
       "method": "getByText",
       "arg": "admin.chip.internalBilling, { exact: true }",
       "occurrence": 1,
@@ -1002,8 +1002,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-internal-billing.spec.ts::getByText::REASON::1",
-      "file": "tests/e2e/acceptance-internal-billing.spec.ts",
+      "id": "tests/e2e/regression-internal-billing.spec.ts::getByText::REASON::1",
+      "file": "tests/e2e/regression-internal-billing.spec.ts",
       "method": "getByText",
       "arg": "REASON",
       "occurrence": 1,
@@ -1014,8 +1014,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-internal-billing.spec.ts::getByText::'403'::1",
-      "file": "tests/e2e/acceptance-internal-billing.spec.ts",
+      "id": "tests/e2e/regression-internal-billing.spec.ts::getByText::'403'::1",
+      "file": "tests/e2e/regression-internal-billing.spec.ts",
       "method": "getByText",
       "arg": "'403'",
       "occurrence": 1,
@@ -1026,8 +1026,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-internal-billing.spec.ts::getByText::sum.balance::1",
-      "file": "tests/e2e/acceptance-internal-billing.spec.ts",
+      "id": "tests/e2e/regression-internal-billing.spec.ts::getByText::sum.balance::1",
+      "file": "tests/e2e/regression-internal-billing.spec.ts",
       "method": "getByText",
       "arg": "sum.balance",
       "occurrence": 1,
@@ -1038,8 +1038,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-internal-billing.spec.ts::getByText::sum.balance::2",
-      "file": "tests/e2e/acceptance-internal-billing.spec.ts",
+      "id": "tests/e2e/regression-internal-billing.spec.ts::getByText::sum.balance::2",
+      "file": "tests/e2e/regression-internal-billing.spec.ts",
       "method": "getByText",
       "arg": "sum.balance",
       "occurrence": 2,
@@ -1050,8 +1050,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-internal-billing.spec.ts::getByText::sum.internalBilling, { exact: true }::1",
-      "file": "tests/e2e/acceptance-internal-billing.spec.ts",
+      "id": "tests/e2e/regression-internal-billing.spec.ts::getByText::sum.internalBilling, { exact: true }::1",
+      "file": "tests/e2e/regression-internal-billing.spec.ts",
       "method": "getByText",
       "arg": "sum.internalBilling, { exact: true }",
       "occurrence": 1,
@@ -1062,8 +1062,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-internal-billing.spec.ts::getByText::/of this month.s .* allotment remaining/::1",
-      "file": "tests/e2e/acceptance-internal-billing.spec.ts",
+      "id": "tests/e2e/regression-internal-billing.spec.ts::getByText::/of this month.s .* allotment remaining/::1",
+      "file": "tests/e2e/regression-internal-billing.spec.ts",
       "method": "getByText",
       "arg": "/of this month.s .* allotment remaining/",
       "occurrence": 1,
@@ -1074,8 +1074,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-internal-billing.spec.ts::getByText::enMessages.aiUsage.byModel.title::1",
-      "file": "tests/e2e/acceptance-internal-billing.spec.ts",
+      "id": "tests/e2e/regression-internal-billing.spec.ts::getByText::enMessages.aiUsage.byModel.title::1",
+      "file": "tests/e2e/regression-internal-billing.spec.ts",
       "method": "getByText",
       "arg": "enMessages.aiUsage.byModel.title",
       "occurrence": 1,
@@ -1086,8 +1086,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-internal-billing.spec.ts::getByText::'claude-opus-4-8'::1",
-      "file": "tests/e2e/acceptance-internal-billing.spec.ts",
+      "id": "tests/e2e/regression-internal-billing.spec.ts::getByText::'claude-opus-4-8'::1",
+      "file": "tests/e2e/regression-internal-billing.spec.ts",
       "method": "getByText",
       "arg": "'claude-opus-4-8'",
       "occurrence": 1,
@@ -1098,8 +1098,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-internal-billing.spec.ts::getByText::sum.searchThisMonth::1",
-      "file": "tests/e2e/acceptance-internal-billing.spec.ts",
+      "id": "tests/e2e/regression-internal-billing.spec.ts::getByText::sum.searchThisMonth::1",
+      "file": "tests/e2e/regression-internal-billing.spec.ts",
       "method": "getByText",
       "arg": "sum.searchThisMonth",
       "occurrence": 1,
@@ -1110,8 +1110,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-internal-billing.spec.ts::getByText::low.title::1",
-      "file": "tests/e2e/acceptance-internal-billing.spec.ts",
+      "id": "tests/e2e/regression-internal-billing.spec.ts::getByText::low.title::1",
+      "file": "tests/e2e/regression-internal-billing.spec.ts",
       "method": "getByText",
       "arg": "low.title",
       "occurrence": 1,
@@ -1122,8 +1122,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-internal-billing.spec.ts::getByText::sum.internalBilling, { exact: true }::2",
-      "file": "tests/e2e/acceptance-internal-billing.spec.ts",
+      "id": "tests/e2e/regression-internal-billing.spec.ts::getByText::sum.internalBilling, { exact: true }::2",
+      "file": "tests/e2e/regression-internal-billing.spec.ts",
       "method": "getByText",
       "arg": "sum.internalBilling, { exact: true }",
       "occurrence": 2,
@@ -1134,8 +1134,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-internal-billing.spec.ts::getByText::low.title::2",
-      "file": "tests/e2e/acceptance-internal-billing.spec.ts",
+      "id": "tests/e2e/regression-internal-billing.spec.ts::getByText::low.title::2",
+      "file": "tests/e2e/regression-internal-billing.spec.ts",
       "method": "getByText",
       "arg": "low.title",
       "occurrence": 2,
@@ -1146,8 +1146,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-internal-billing.spec.ts::getByText::/^\\S+ created$/::1",
-      "file": "tests/e2e/acceptance-internal-billing.spec.ts",
+      "id": "tests/e2e/regression-internal-billing.spec.ts::getByText::/^\\S+ created$/::1",
+      "file": "tests/e2e/regression-internal-billing.spec.ts",
       "method": "getByText",
       "arg": "/^\\S+ created$/",
       "occurrence": 1,
@@ -1158,8 +1158,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-internal-billing.spec.ts::getByText::bill.internalBilling.badge::1",
-      "file": "tests/e2e/acceptance-internal-billing.spec.ts",
+      "id": "tests/e2e/regression-internal-billing.spec.ts::getByText::bill.internalBilling.badge::1",
+      "file": "tests/e2e/regression-internal-billing.spec.ts",
       "method": "getByText",
       "arg": "bill.internalBilling.badge",
       "occurrence": 1,
@@ -1170,8 +1170,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-internal-billing.spec.ts::getByText::admin.chip.internalBilling, { exact: true }::2",
-      "file": "tests/e2e/acceptance-internal-billing.spec.ts",
+      "id": "tests/e2e/regression-internal-billing.spec.ts::getByText::admin.chip.internalBilling, { exact: true }::2",
+      "file": "tests/e2e/regression-internal-billing.spec.ts",
       "method": "getByText",
       "arg": "admin.chip.internalBilling, { exact: true }",
       "occurrence": 2,
@@ -1182,8 +1182,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-internal-billing.spec.ts::getByText::REASON::2",
-      "file": "tests/e2e/acceptance-internal-billing.spec.ts",
+      "id": "tests/e2e/regression-internal-billing.spec.ts::getByText::REASON::2",
+      "file": "tests/e2e/regression-internal-billing.spec.ts",
       "method": "getByText",
       "arg": "REASON",
       "occurrence": 2,
@@ -1194,8 +1194,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-internal-billing.spec.ts::getByText::'Moved to a paying plan'::1",
-      "file": "tests/e2e/acceptance-internal-billing.spec.ts",
+      "id": "tests/e2e/regression-internal-billing.spec.ts::getByText::'Moved to a paying plan'::1",
+      "file": "tests/e2e/regression-internal-billing.spec.ts",
       "method": "getByText",
       "arg": "'Moved to a paying plan'",
       "occurrence": 1,
@@ -1206,8 +1206,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-legal-gone.spec.ts::getByPlaceholder::'Email address'::1",
-      "file": "tests/e2e/acceptance-legal-gone.spec.ts",
+      "id": "tests/e2e/regression-legal-gone.spec.ts::getByPlaceholder::'Email address'::1",
+      "file": "tests/e2e/regression-legal-gone.spec.ts",
       "method": "getByPlaceholder",
       "arg": "'Email address'",
       "occurrence": 1,
@@ -1218,8 +1218,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-legal-gone.spec.ts::getByTestId::'workbench-page'::1",
-      "file": "tests/e2e/acceptance-legal-gone.spec.ts",
+      "id": "tests/e2e/regression-legal-gone.spec.ts::getByTestId::'workbench-page'::1",
+      "file": "tests/e2e/regression-legal-gone.spec.ts",
       "method": "getByTestId",
       "arg": "'workbench-page'",
       "occurrence": 1,
@@ -1230,8 +1230,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-legal-gone.spec.ts::getByText::`${STALE_VERSION} → ${published.version}`::1",
-      "file": "tests/e2e/acceptance-legal-gone.spec.ts",
+      "id": "tests/e2e/regression-legal-gone.spec.ts::getByText::`${STALE_VERSION} → ${published.version}`::1",
+      "file": "tests/e2e/regression-legal-gone.spec.ts",
       "method": "getByText",
       "arg": "`${STALE_VERSION} → ${published.version}`",
       "occurrence": 1,
@@ -1242,8 +1242,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-legal-gone.spec.ts::getByTestId::'workbench-page'::2",
-      "file": "tests/e2e/acceptance-legal-gone.spec.ts",
+      "id": "tests/e2e/regression-legal-gone.spec.ts::getByTestId::'workbench-page'::2",
+      "file": "tests/e2e/regression-legal-gone.spec.ts",
       "method": "getByTestId",
       "arg": "'workbench-page'",
       "occurrence": 2,
@@ -1254,8 +1254,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-legal-gone.spec.ts::getByTestId::'workbench-page'::3",
-      "file": "tests/e2e/acceptance-legal-gone.spec.ts",
+      "id": "tests/e2e/regression-legal-gone.spec.ts::getByTestId::'workbench-page'::3",
+      "file": "tests/e2e/regression-legal-gone.spec.ts",
       "method": "getByTestId",
       "arg": "'workbench-page'",
       "occurrence": 3,
@@ -1266,8 +1266,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-legal-gone.spec.ts::getByTestId::'workbench-page'::4",
-      "file": "tests/e2e/acceptance-legal-gone.spec.ts",
+      "id": "tests/e2e/regression-legal-gone.spec.ts::getByTestId::'workbench-page'::4",
+      "file": "tests/e2e/regression-legal-gone.spec.ts",
       "method": "getByTestId",
       "arg": "'workbench-page'",
       "occurrence": 4,
@@ -1278,8 +1278,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-legal-manifest.spec.ts::getByTestId::'workbench-page'::1",
-      "file": "tests/e2e/acceptance-legal-manifest.spec.ts",
+      "id": "tests/e2e/regression-legal-manifest.spec.ts::getByTestId::'workbench-page'::1",
+      "file": "tests/e2e/regression-legal-manifest.spec.ts",
       "method": "getByTestId",
       "arg": "'workbench-page'",
       "occurrence": 1,
@@ -1290,8 +1290,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-legal-manifest.spec.ts::getByTestId::'workbench-page'::2",
-      "file": "tests/e2e/acceptance-legal-manifest.spec.ts",
+      "id": "tests/e2e/regression-legal-manifest.spec.ts::getByTestId::'workbench-page'::2",
+      "file": "tests/e2e/regression-legal-manifest.spec.ts",
       "method": "getByTestId",
       "arg": "'workbench-page'",
       "occurrence": 2,
@@ -1302,8 +1302,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-legal-manifest.spec.ts::getByText::`${STALE_VERSION} → ${published.version}`::1",
-      "file": "tests/e2e/acceptance-legal-manifest.spec.ts",
+      "id": "tests/e2e/regression-legal-manifest.spec.ts::getByText::`${STALE_VERSION} → ${published.version}`::1",
+      "file": "tests/e2e/regression-legal-manifest.spec.ts",
       "method": "getByText",
       "arg": "`${STALE_VERSION} → ${published.version}`",
       "occurrence": 1,
@@ -1314,8 +1314,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-legal-manifest.spec.ts::getByTestId::'workbench-page'::3",
-      "file": "tests/e2e/acceptance-legal-manifest.spec.ts",
+      "id": "tests/e2e/regression-legal-manifest.spec.ts::getByTestId::'workbench-page'::3",
+      "file": "tests/e2e/regression-legal-manifest.spec.ts",
       "method": "getByTestId",
       "arg": "'workbench-page'",
       "occurrence": 3,
@@ -1326,8 +1326,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-legal-manifest.spec.ts::getByTestId::'workbench-page'::4",
-      "file": "tests/e2e/acceptance-legal-manifest.spec.ts",
+      "id": "tests/e2e/regression-legal-manifest.spec.ts::getByTestId::'workbench-page'::4",
+      "file": "tests/e2e/regression-legal-manifest.spec.ts",
       "method": "getByTestId",
       "arg": "'workbench-page'",
       "occurrence": 4,
@@ -1338,8 +1338,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-onboarding-routing.spec.ts::getByTestId::'planning-reading-state'::1",
-      "file": "tests/e2e/acceptance-onboarding-routing.spec.ts",
+      "id": "tests/e2e/regression-onboarding-routing.spec.ts::getByTestId::'planning-reading-state'::1",
+      "file": "tests/e2e/regression-onboarding-routing.spec.ts",
       "method": "getByTestId",
       "arg": "'planning-reading-state'",
       "occurrence": 1,
@@ -1350,8 +1350,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-onboarding-routing.spec.ts::getByTestId::'planning-handoff'::1",
-      "file": "tests/e2e/acceptance-onboarding-routing.spec.ts",
+      "id": "tests/e2e/regression-onboarding-routing.spec.ts::getByTestId::'planning-handoff'::1",
+      "file": "tests/e2e/regression-onboarding-routing.spec.ts",
       "method": "getByTestId",
       "arg": "'planning-handoff'",
       "occurrence": 1,
@@ -1362,8 +1362,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-onboarding-routing.spec.ts::getByTestId::'planning-indexing-banner'::1",
-      "file": "tests/e2e/acceptance-onboarding-routing.spec.ts",
+      "id": "tests/e2e/regression-onboarding-routing.spec.ts::getByTestId::'planning-indexing-banner'::1",
+      "file": "tests/e2e/regression-onboarding-routing.spec.ts",
       "method": "getByTestId",
       "arg": "'planning-indexing-banner'",
       "occurrence": 1,
@@ -1374,8 +1374,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-onboarding-routing.spec.ts::getByTestId::'planning-indexing-turn'::1",
-      "file": "tests/e2e/acceptance-onboarding-routing.spec.ts",
+      "id": "tests/e2e/regression-onboarding-routing.spec.ts::getByTestId::'planning-indexing-turn'::1",
+      "file": "tests/e2e/regression-onboarding-routing.spec.ts",
       "method": "getByTestId",
       "arg": "'planning-indexing-turn'",
       "occurrence": 1,
@@ -1386,8 +1386,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-onboarding-routing.spec.ts::getByTestId::'migrate-rail-collapsed'::1",
-      "file": "tests/e2e/acceptance-onboarding-routing.spec.ts",
+      "id": "tests/e2e/regression-onboarding-routing.spec.ts::getByTestId::'migrate-rail-collapsed'::1",
+      "file": "tests/e2e/regression-onboarding-routing.spec.ts",
       "method": "getByTestId",
       "arg": "'migrate-rail-collapsed'",
       "occurrence": 1,
@@ -1398,8 +1398,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-onboarding-routing.spec.ts::getByTestId::'planning-indexing-exit'::1",
-      "file": "tests/e2e/acceptance-onboarding-routing.spec.ts",
+      "id": "tests/e2e/regression-onboarding-routing.spec.ts::getByTestId::'planning-indexing-exit'::1",
+      "file": "tests/e2e/regression-onboarding-routing.spec.ts",
       "method": "getByTestId",
       "arg": "'planning-indexing-exit'",
       "occurrence": 1,
@@ -1566,8 +1566,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-proposal-peek.spec.ts::getByTestId::'proposal-peek'::1",
-      "file": "tests/e2e/acceptance-proposal-peek.spec.ts",
+      "id": "tests/e2e/regression-proposal-peek.spec.ts::getByTestId::'proposal-peek'::1",
+      "file": "tests/e2e/regression-proposal-peek.spec.ts",
       "method": "getByTestId",
       "arg": "'proposal-peek'",
       "occurrence": 1,
@@ -1578,8 +1578,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-proposal-peek.spec.ts::getByTestId::'plan-proposal-list'::1",
-      "file": "tests/e2e/acceptance-proposal-peek.spec.ts",
+      "id": "tests/e2e/regression-proposal-peek.spec.ts::getByTestId::'plan-proposal-list'::1",
+      "file": "tests/e2e/regression-proposal-peek.spec.ts",
       "method": "getByTestId",
       "arg": "'plan-proposal-list'",
       "occurrence": 1,
@@ -1590,8 +1590,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-proposal-peek.spec.ts::getByTestId::'quick-view-op'::1",
-      "file": "tests/e2e/acceptance-proposal-peek.spec.ts",
+      "id": "tests/e2e/regression-proposal-peek.spec.ts::getByTestId::'quick-view-op'::1",
+      "file": "tests/e2e/regression-proposal-peek.spec.ts",
       "method": "getByTestId",
       "arg": "'quick-view-op'",
       "occurrence": 1,
@@ -1602,8 +1602,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-proposal-peek.spec.ts::getByTestId::'quick-view-proposal-foot'::1",
-      "file": "tests/e2e/acceptance-proposal-peek.spec.ts",
+      "id": "tests/e2e/regression-proposal-peek.spec.ts::getByTestId::'quick-view-proposal-foot'::1",
+      "file": "tests/e2e/regression-proposal-peek.spec.ts",
       "method": "getByTestId",
       "arg": "'quick-view-proposal-foot'",
       "occurrence": 1,
@@ -1614,8 +1614,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-proposal-peek.spec.ts::getByTestId::'quick-view-proposal-new'::1",
-      "file": "tests/e2e/acceptance-proposal-peek.spec.ts",
+      "id": "tests/e2e/regression-proposal-peek.spec.ts::getByTestId::'quick-view-proposal-new'::1",
+      "file": "tests/e2e/regression-proposal-peek.spec.ts",
       "method": "getByTestId",
       "arg": "'quick-view-proposal-new'",
       "occurrence": 1,
@@ -1626,8 +1626,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-proposal-peek.spec.ts::getByTestId::'quick-view-op'::2",
-      "file": "tests/e2e/acceptance-proposal-peek.spec.ts",
+      "id": "tests/e2e/regression-proposal-peek.spec.ts::getByTestId::'quick-view-op'::2",
+      "file": "tests/e2e/regression-proposal-peek.spec.ts",
       "method": "getByTestId",
       "arg": "'quick-view-op'",
       "occurrence": 2,
@@ -1638,8 +1638,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-proposal-peek.spec.ts::getByTestId::'quick-view-open-full'::1",
-      "file": "tests/e2e/acceptance-proposal-peek.spec.ts",
+      "id": "tests/e2e/regression-proposal-peek.spec.ts::getByTestId::'quick-view-open-full'::1",
+      "file": "tests/e2e/regression-proposal-peek.spec.ts",
       "method": "getByTestId",
       "arg": "'quick-view-open-full'",
       "occurrence": 1,
@@ -1650,8 +1650,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-proposal-peek.spec.ts::getByTestId::'quick-view-op'::3",
-      "file": "tests/e2e/acceptance-proposal-peek.spec.ts",
+      "id": "tests/e2e/regression-proposal-peek.spec.ts::getByTestId::'quick-view-op'::3",
+      "file": "tests/e2e/regression-proposal-peek.spec.ts",
       "method": "getByTestId",
       "arg": "'quick-view-op'",
       "occurrence": 3,
@@ -1662,8 +1662,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-proposal-peek.spec.ts::getByTestId::'quick-view-proposal-foot'::2",
-      "file": "tests/e2e/acceptance-proposal-peek.spec.ts",
+      "id": "tests/e2e/regression-proposal-peek.spec.ts::getByTestId::'quick-view-proposal-foot'::2",
+      "file": "tests/e2e/regression-proposal-peek.spec.ts",
       "method": "getByTestId",
       "arg": "'quick-view-proposal-foot'",
       "occurrence": 2,
@@ -1674,8 +1674,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-proposed-todos.spec.ts::getByTestId::'proposal-peek'::1",
-      "file": "tests/e2e/acceptance-proposed-todos.spec.ts",
+      "id": "tests/e2e/regression-proposed-todos.spec.ts::getByTestId::'proposal-peek'::1",
+      "file": "tests/e2e/regression-proposed-todos.spec.ts",
       "method": "getByTestId",
       "arg": "'proposal-peek'",
       "occurrence": 1,
@@ -1686,8 +1686,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-proposed-todos.spec.ts::getByTestId::'proposal-todos'::1",
-      "file": "tests/e2e/acceptance-proposed-todos.spec.ts",
+      "id": "tests/e2e/regression-proposed-todos.spec.ts::getByTestId::'proposal-todos'::1",
+      "file": "tests/e2e/regression-proposed-todos.spec.ts",
       "method": "getByTestId",
       "arg": "'proposal-todos'",
       "occurrence": 1,
@@ -1698,8 +1698,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-proposed-todos.spec.ts::getByTestId::'proposal-todos-list'::1",
-      "file": "tests/e2e/acceptance-proposed-todos.spec.ts",
+      "id": "tests/e2e/regression-proposed-todos.spec.ts::getByTestId::'proposal-todos-list'::1",
+      "file": "tests/e2e/regression-proposed-todos.spec.ts",
       "method": "getByTestId",
       "arg": "'proposal-todos-list'",
       "occurrence": 1,
@@ -1710,8 +1710,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-proposed-todos.spec.ts::getByTestId::'plan-proposal-list'::1",
-      "file": "tests/e2e/acceptance-proposed-todos.spec.ts",
+      "id": "tests/e2e/regression-proposed-todos.spec.ts::getByTestId::'plan-proposal-list'::1",
+      "file": "tests/e2e/regression-proposed-todos.spec.ts",
       "method": "getByTestId",
       "arg": "'plan-proposal-list'",
       "occurrence": 1,
@@ -1722,8 +1722,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-proposed-todos.spec.ts::getByTestId::'proposal-todos-progress'::1",
-      "file": "tests/e2e/acceptance-proposed-todos.spec.ts",
+      "id": "tests/e2e/regression-proposed-todos.spec.ts::getByTestId::'proposal-todos-progress'::1",
+      "file": "tests/e2e/regression-proposed-todos.spec.ts",
       "method": "getByTestId",
       "arg": "'proposal-todos-progress'",
       "occurrence": 1,
@@ -1734,8 +1734,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-proposed-todos.spec.ts::getByTestId::'plan-status-pill'::1",
-      "file": "tests/e2e/acceptance-proposed-todos.spec.ts",
+      "id": "tests/e2e/regression-proposed-todos.spec.ts::getByTestId::'plan-status-pill'::1",
+      "file": "tests/e2e/regression-proposed-todos.spec.ts",
       "method": "getByTestId",
       "arg": "'plan-status-pill'",
       "occurrence": 1,
@@ -1746,8 +1746,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-proposed-todos.spec.ts::getByTestId::'todo-row'::1",
-      "file": "tests/e2e/acceptance-proposed-todos.spec.ts",
+      "id": "tests/e2e/regression-proposed-todos.spec.ts::getByTestId::'todo-row'::1",
+      "file": "tests/e2e/regression-proposed-todos.spec.ts",
       "method": "getByTestId",
       "arg": "'todo-row'",
       "occurrence": 1,
@@ -1758,8 +1758,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-proposed-todos.spec.ts::getByTestId::'todo-list'::1",
-      "file": "tests/e2e/acceptance-proposed-todos.spec.ts",
+      "id": "tests/e2e/regression-proposed-todos.spec.ts::getByTestId::'todo-list'::1",
+      "file": "tests/e2e/regression-proposed-todos.spec.ts",
       "method": "getByTestId",
       "arg": "'todo-list'",
       "occurrence": 1,
@@ -1770,8 +1770,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-proposed-todos.spec.ts::getByTestId::'todo-progress'::1",
-      "file": "tests/e2e/acceptance-proposed-todos.spec.ts",
+      "id": "tests/e2e/regression-proposed-todos.spec.ts::getByTestId::'todo-progress'::1",
+      "file": "tests/e2e/regression-proposed-todos.spec.ts",
       "method": "getByTestId",
       "arg": "'todo-progress'",
       "occurrence": 1,
@@ -1782,8 +1782,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-proposed-todos.spec.ts::getByTestId::'todo-row'::2",
-      "file": "tests/e2e/acceptance-proposed-todos.spec.ts",
+      "id": "tests/e2e/regression-proposed-todos.spec.ts::getByTestId::'todo-row'::2",
+      "file": "tests/e2e/regression-proposed-todos.spec.ts",
       "method": "getByTestId",
       "arg": "'todo-row'",
       "occurrence": 2,
@@ -1794,8 +1794,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-proposed-todos.spec.ts::getByTestId::'todo-progress'::2",
-      "file": "tests/e2e/acceptance-proposed-todos.spec.ts",
+      "id": "tests/e2e/regression-proposed-todos.spec.ts::getByTestId::'todo-progress'::2",
+      "file": "tests/e2e/regression-proposed-todos.spec.ts",
       "method": "getByTestId",
       "arg": "'todo-progress'",
       "occurrence": 2,
@@ -1806,8 +1806,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-public-address.spec.ts::getByText::/is reserved/::1",
-      "file": "tests/e2e/acceptance-public-address.spec.ts",
+      "id": "tests/e2e/regression-public-address.spec.ts::getByText::/is reserved/::1",
+      "file": "tests/e2e/regression-public-address.spec.ts",
       "method": "getByText",
       "arg": "/is reserved/",
       "occurrence": 1,
@@ -1818,8 +1818,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-public-address.spec.ts::getByText::`acme.${BASE}/${identifier}`::1",
-      "file": "tests/e2e/acceptance-public-address.spec.ts",
+      "id": "tests/e2e/regression-public-address.spec.ts::getByText::`acme.${BASE}/${identifier}`::1",
+      "file": "tests/e2e/regression-public-address.spec.ts",
       "method": "getByText",
       "arg": "`acme.${BASE}/${identifier}`",
       "occurrence": 1,
@@ -1830,8 +1830,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-public-address.spec.ts::getByText::`acme.${BASE}/${identifier}`::2",
-      "file": "tests/e2e/acceptance-public-address.spec.ts",
+      "id": "tests/e2e/regression-public-address.spec.ts::getByText::`acme.${BASE}/${identifier}`::2",
+      "file": "tests/e2e/regression-public-address.spec.ts",
       "method": "getByText",
       "arg": "`acme.${BASE}/${identifier}`",
       "occurrence": 2,
@@ -1842,8 +1842,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-public-address.spec.ts::getByText::'Active'::1",
-      "file": "tests/e2e/acceptance-public-address.spec.ts",
+      "id": "tests/e2e/regression-public-address.spec.ts::getByText::'Active'::1",
+      "file": "tests/e2e/regression-public-address.spec.ts",
       "method": "getByText",
       "arg": "'Active'",
       "occurrence": 1,
@@ -1854,8 +1854,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-public-address.spec.ts::getByText::'roadmap.acme.test'::1",
-      "file": "tests/e2e/acceptance-public-address.spec.ts",
+      "id": "tests/e2e/regression-public-address.spec.ts::getByText::'roadmap.acme.test'::1",
+      "file": "tests/e2e/regression-public-address.spec.ts",
       "method": "getByText",
       "arg": "'roadmap.acme.test'",
       "occurrence": 1,
@@ -1866,8 +1866,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-public-address.spec.ts::getByText::'Not verified'::1",
-      "file": "tests/e2e/acceptance-public-address.spec.ts",
+      "id": "tests/e2e/regression-public-address.spec.ts::getByText::'Not verified'::1",
+      "file": "tests/e2e/regression-public-address.spec.ts",
       "method": "getByText",
       "arg": "'Not verified'",
       "occurrence": 1,
@@ -1878,8 +1878,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-public-address.spec.ts::getByText::'Live'::1",
-      "file": "tests/e2e/acceptance-public-address.spec.ts",
+      "id": "tests/e2e/regression-public-address.spec.ts::getByText::'Live'::1",
+      "file": "tests/e2e/regression-public-address.spec.ts",
       "method": "getByText",
       "arg": "'Live'",
       "occurrence": 1,
@@ -1890,8 +1890,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-public-address.spec.ts::getByText::'Every other address redirects here.'::1",
-      "file": "tests/e2e/acceptance-public-address.spec.ts",
+      "id": "tests/e2e/regression-public-address.spec.ts::getByText::'Every other address redirects here.'::1",
+      "file": "tests/e2e/regression-public-address.spec.ts",
       "method": "getByText",
       "arg": "'Every other address redirects here.'",
       "occurrence": 1,
@@ -1902,8 +1902,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-public-address.spec.ts::getByText::'Primary'::1",
-      "file": "tests/e2e/acceptance-public-address.spec.ts",
+      "id": "tests/e2e/regression-public-address.spec.ts::getByText::'Primary'::1",
+      "file": "tests/e2e/regression-public-address.spec.ts",
       "method": "getByText",
       "arg": "'Primary'",
       "occurrence": 1,
@@ -1914,8 +1914,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-public-address.spec.ts::getByText::/never released/::1",
-      "file": "tests/e2e/acceptance-public-address.spec.ts",
+      "id": "tests/e2e/regression-public-address.spec.ts::getByText::/never released/::1",
+      "file": "tests/e2e/regression-public-address.spec.ts",
       "method": "getByText",
       "arg": "/never released/",
       "occurrence": 1,
@@ -1926,8 +1926,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-public-address.spec.ts::getByText::/renames left after this one/::1",
-      "file": "tests/e2e/acceptance-public-address.spec.ts",
+      "id": "tests/e2e/regression-public-address.spec.ts::getByText::/renames left after this one/::1",
+      "file": "tests/e2e/regression-public-address.spec.ts",
       "method": "getByText",
       "arg": "/renames left after this one/",
       "occurrence": 1,
@@ -1938,8 +1938,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-public-address.spec.ts::getByText::`acme-inc.${BASE}/${identifier}`::1",
-      "file": "tests/e2e/acceptance-public-address.spec.ts",
+      "id": "tests/e2e/regression-public-address.spec.ts::getByText::`acme-inc.${BASE}/${identifier}`::1",
+      "file": "tests/e2e/regression-public-address.spec.ts",
       "method": "getByText",
       "arg": "`acme-inc.${BASE}/${identifier}`",
       "occurrence": 1,
@@ -1950,8 +1950,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-public-address.spec.ts::getByText::`acme.${BASE}`::1",
-      "file": "tests/e2e/acceptance-public-address.spec.ts",
+      "id": "tests/e2e/regression-public-address.spec.ts::getByText::`acme.${BASE}`::1",
+      "file": "tests/e2e/regression-public-address.spec.ts",
       "method": "getByText",
       "arg": "`acme.${BASE}`",
       "occurrence": 1,
@@ -1962,8 +1962,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-public-address.spec.ts::getByText::'Redirects here', { exact: true }::1",
-      "file": "tests/e2e/acceptance-public-address.spec.ts",
+      "id": "tests/e2e/regression-public-address.spec.ts::getByText::'Redirects here', { exact: true }::1",
+      "file": "tests/e2e/regression-public-address.spec.ts",
       "method": "getByText",
       "arg": "'Redirects here', { exact: true }",
       "occurrence": 1,
@@ -1974,8 +1974,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-repository-report.spec.ts::getByTestId::'repo-setup-status'::1",
-      "file": "tests/e2e/acceptance-repository-report.spec.ts",
+      "id": "tests/e2e/regression-repository-report.spec.ts::getByTestId::'repo-setup-status'::1",
+      "file": "tests/e2e/regression-repository-report.spec.ts",
       "method": "getByTestId",
       "arg": "'repo-setup-status'",
       "occurrence": 1,
@@ -1986,8 +1986,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-repository-report.spec.ts::getByTestId::'repo-access-report'::1",
-      "file": "tests/e2e/acceptance-repository-report.spec.ts",
+      "id": "tests/e2e/regression-repository-report.spec.ts::getByTestId::'repo-access-report'::1",
+      "file": "tests/e2e/regression-repository-report.spec.ts",
       "method": "getByTestId",
       "arg": "'repo-access-report'",
       "occurrence": 1,
@@ -1998,8 +1998,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-repository-report.spec.ts::getByText::/^Added \\d+ items? to your backlog$/::1",
-      "file": "tests/e2e/acceptance-repository-report.spec.ts",
+      "id": "tests/e2e/regression-repository-report.spec.ts::getByText::/^Added \\d+ items? to your backlog$/::1",
+      "file": "tests/e2e/regression-repository-report.spec.ts",
       "method": "getByText",
       "arg": "/^Added \\d+ items? to your backlog$/",
       "occurrence": 1,
@@ -2010,8 +2010,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-repository-report.spec.ts::getByText::/^Added \\d+ items? to your backlog$/::2",
-      "file": "tests/e2e/acceptance-repository-report.spec.ts",
+      "id": "tests/e2e/regression-repository-report.spec.ts::getByText::/^Added \\d+ items? to your backlog$/::2",
+      "file": "tests/e2e/regression-repository-report.spec.ts",
       "method": "getByText",
       "arg": "/^Added \\d+ items? to your backlog$/",
       "occurrence": 2,
@@ -2022,8 +2022,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-repository-report.spec.ts::getByText::/It's yours\\./::1",
-      "file": "tests/e2e/acceptance-repository-report.spec.ts",
+      "id": "tests/e2e/regression-repository-report.spec.ts::getByText::/It's yours\\./::1",
+      "file": "tests/e2e/regression-repository-report.spec.ts",
       "method": "getByText",
       "arg": "/It's yours\\./",
       "occurrence": 1,
@@ -2034,8 +2034,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-repository-report.spec.ts::getByText::/move it to your own GitHub whenever you want/::1",
-      "file": "tests/e2e/acceptance-repository-report.spec.ts",
+      "id": "tests/e2e/regression-repository-report.spec.ts::getByText::/move it to your own GitHub whenever you want/::1",
+      "file": "tests/e2e/regression-repository-report.spec.ts",
       "method": "getByText",
       "arg": "/move it to your own GitHub whenever you want/",
       "occurrence": 1,
@@ -2046,8 +2046,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-repository-report.spec.ts::getByText::'This is the account Motir invited'::1",
-      "file": "tests/e2e/acceptance-repository-report.spec.ts",
+      "id": "tests/e2e/regression-repository-report.spec.ts::getByText::'This is the account Motir invited'::1",
+      "file": "tests/e2e/regression-repository-report.spec.ts",
       "method": "getByText",
       "arg": "'This is the account Motir invited'",
       "occurrence": 1,
@@ -2058,8 +2058,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-repository-report.spec.ts::getByText::/Accept the invitation on GitHub/::1",
-      "file": "tests/e2e/acceptance-repository-report.spec.ts",
+      "id": "tests/e2e/regression-repository-report.spec.ts::getByText::/Accept the invitation on GitHub/::1",
+      "file": "tests/e2e/regression-repository-report.spec.ts",
       "method": "getByText",
       "arg": "/Accept the invitation on GitHub/",
       "occurrence": 1,
@@ -2070,8 +2070,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-repository-report.spec.ts::getByText::'Finish setting up access', { exact: true }::1",
-      "file": "tests/e2e/acceptance-repository-report.spec.ts",
+      "id": "tests/e2e/regression-repository-report.spec.ts::getByText::'Finish setting up access', { exact: true }::1",
+      "file": "tests/e2e/regression-repository-report.spec.ts",
       "method": "getByText",
       "arg": "'Finish setting up access', { exact: true }",
       "occurrence": 1,
@@ -2082,8 +2082,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-repository-report.spec.ts::getByText::'This is the account Motir invited'::2",
-      "file": "tests/e2e/acceptance-repository-report.spec.ts",
+      "id": "tests/e2e/regression-repository-report.spec.ts::getByText::'This is the account Motir invited'::2",
+      "file": "tests/e2e/regression-repository-report.spec.ts",
       "method": "getByText",
       "arg": "'This is the account Motir invited'",
       "occurrence": 2,
@@ -2094,8 +2094,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-repository-tenancy.spec.ts::getByText::pick.segment.connect, { exact: true }::1",
-      "file": "tests/e2e/acceptance-repository-tenancy.spec.ts",
+      "id": "tests/e2e/regression-repository-tenancy.spec.ts::getByText::pick.segment.connect, { exact: true }::1",
+      "file": "tests/e2e/regression-repository-tenancy.spec.ts",
       "method": "getByText",
       "arg": "pick.segment.connect, { exact: true }",
       "occurrence": 1,
@@ -2106,8 +2106,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-repository-tenancy.spec.ts::getByText::/lands in .* at the same time/::1",
-      "file": "tests/e2e/acceptance-repository-tenancy.spec.ts",
+      "id": "tests/e2e/regression-repository-tenancy.spec.ts::getByText::/lands in .* at the same time/::1",
+      "file": "tests/e2e/regression-repository-tenancy.spec.ts",
       "method": "getByText",
       "arg": "/lands in .* at the same time/",
       "occurrence": 1,
@@ -2118,8 +2118,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-repository-tenancy.spec.ts::getByText::/already connected/::1",
-      "file": "tests/e2e/acceptance-repository-tenancy.spec.ts",
+      "id": "tests/e2e/regression-repository-tenancy.spec.ts::getByText::/already connected/::1",
+      "file": "tests/e2e/regression-repository-tenancy.spec.ts",
       "method": "getByText",
       "arg": "/already connected/",
       "occurrence": 1,
@@ -2130,8 +2130,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-repository-tenancy.spec.ts::getByText::/already connected/::2",
-      "file": "tests/e2e/acceptance-repository-tenancy.spec.ts",
+      "id": "tests/e2e/regression-repository-tenancy.spec.ts::getByText::/already connected/::2",
+      "file": "tests/e2e/regression-repository-tenancy.spec.ts",
       "method": "getByText",
       "arg": "/already connected/",
       "occurrence": 2,
@@ -2142,8 +2142,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-repository-tenancy.spec.ts::getByText::repoRef::1",
-      "file": "tests/e2e/acceptance-repository-tenancy.spec.ts",
+      "id": "tests/e2e/regression-repository-tenancy.spec.ts::getByText::repoRef::1",
+      "file": "tests/e2e/regression-repository-tenancy.spec.ts",
       "method": "getByText",
       "arg": "repoRef",
       "occurrence": 1,
@@ -2154,8 +2154,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-repository-tenancy.spec.ts::getByText::pick.alreadyIndexed, { exact: true }::1",
-      "file": "tests/e2e/acceptance-repository-tenancy.spec.ts",
+      "id": "tests/e2e/regression-repository-tenancy.spec.ts::getByText::pick.alreadyIndexed, { exact: true }::1",
+      "file": "tests/e2e/regression-repository-tenancy.spec.ts",
       "method": "getByText",
       "arg": "pick.alreadyIndexed, { exact: true }",
       "occurrence": 1,
@@ -2166,8 +2166,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-repository-tenancy.spec.ts::getByText::repoRef::2",
-      "file": "tests/e2e/acceptance-repository-tenancy.spec.ts",
+      "id": "tests/e2e/regression-repository-tenancy.spec.ts::getByText::repoRef::2",
+      "file": "tests/e2e/regression-repository-tenancy.spec.ts",
       "method": "getByText",
       "arg": "repoRef",
       "occurrence": 2,
@@ -2178,8 +2178,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-repository-tenancy.spec.ts::getByText::repoRef::3",
-      "file": "tests/e2e/acceptance-repository-tenancy.spec.ts",
+      "id": "tests/e2e/regression-repository-tenancy.spec.ts::getByText::repoRef::3",
+      "file": "tests/e2e/regression-repository-tenancy.spec.ts",
       "method": "getByText",
       "arg": "repoRef",
       "occurrence": 3,
@@ -2190,8 +2190,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-repository-tenancy.spec.ts::getByText::/other projects keep it/::1",
-      "file": "tests/e2e/acceptance-repository-tenancy.spec.ts",
+      "id": "tests/e2e/regression-repository-tenancy.spec.ts::getByText::/other projects keep it/::1",
+      "file": "tests/e2e/regression-repository-tenancy.spec.ts",
       "method": "getByText",
       "arg": "/other projects keep it/",
       "occurrence": 1,
@@ -2202,8 +2202,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-repository-tenancy.spec.ts::getByText::/1 project loses this repository/::1",
-      "file": "tests/e2e/acceptance-repository-tenancy.spec.ts",
+      "id": "tests/e2e/regression-repository-tenancy.spec.ts::getByText::/1 project loses this repository/::1",
+      "file": "tests/e2e/regression-repository-tenancy.spec.ts",
       "method": "getByText",
       "arg": "/1 project loses this repository/",
       "occurrence": 1,
@@ -2214,8 +2214,8 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/acceptance-repository-tenancy.spec.ts::getByText::/cancels the removal/::1",
-      "file": "tests/e2e/acceptance-repository-tenancy.spec.ts",
+      "id": "tests/e2e/regression-repository-tenancy.spec.ts::getByText::/cancels the removal/::1",
+      "file": "tests/e2e/regression-repository-tenancy.spec.ts",
       "method": "getByText",
       "arg": "/cancels the removal/",
       "occurrence": 1,

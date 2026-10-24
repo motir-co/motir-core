@@ -52,16 +52,17 @@
     "outDir": ".tsout/e2e",
     "tsBuildInfoFile": ".tsout/e2e/tsconfig.tsbuildinfo"
   },
-  // The specs Playwright discovers, and the three configs it is invoked with.
-  // All three share `testDir: 'tests/e2e'` and partition it by `testMatch` /
+  // The specs Playwright discovers, and the four configs it is invoked with.
+  // All four share `testDir: 'tests/e2e'` and partition it by `testMatch` /
   // `testIgnore`, so the spec glob is the whole discovered set for every lane.
   "include": [
     "tests/e2e/**/*.spec.ts",
     "playwright.config.ts",
     "playwright.acceptance.config.ts",
+    "playwright.regression.config.ts",
     "playwright.cloud.config.ts"
   ],
-  // One module from the design system, by source: `acceptance-font-sets.spec.ts`
+  // One module from the design system, by source: `regression-font-sets.spec.ts`
   // reads the font-set registry at run time, and the package's `exports` offer
   // only an ESM `import` condition, which Playwright's CommonJS loader cannot
   // resolve. The module imports nothing, so it brings no closure with it.

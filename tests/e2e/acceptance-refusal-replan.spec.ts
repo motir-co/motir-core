@@ -36,7 +36,7 @@ import en from '@/messages/en.json';
 //
 //   * The agent's decision: its pull request and green checks are SIGNED deliveries to the
 //     real webhook route, and the link CAPTURES the decision document through the GitHub
-//     merge seam — `acceptance-decision-gate.spec.ts`'s arrangement, one card of it.
+//     merge seam — `regression-decision-gate.spec.ts`'s arrangement, one card of it.
 //   * The person's decision and the choice raise their gates on create, through the
 //     service, into the SAME project, so one reader walks all three refusals.
 //   * The planner's send reaches motir-ai through the lane's jobs mock

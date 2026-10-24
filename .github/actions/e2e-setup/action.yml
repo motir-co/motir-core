@@ -26,6 +26,13 @@ inputs:
       another workflow's job or read its artifacts.
     required: false
     default: download
+  next-build-artifact:
+    description: >-
+      The name of the `.next/` artifact `download` takes. One workflow run can
+      build twice (the acceptance workflow builds once per lane, MOTIR-9411),
+      and upload-artifact refuses a second artifact under a name already taken.
+    required: false
+    default: next-build
 
 runs:
   using: composite
@@ -66,7 +73,7 @@ runs:
       if: inputs.next-build == 'download'
       uses: actions/download-artifact@v7
       with:
-        name: next-build
+        name: ${{ inputs.next-build-artifact }}
         path: .next
     # The auth module reads BETTER_AUTH_SECRET, GOOGLE_CLIENT_ID, and
     # GOOGLE_CLIENT_SECRET at import time — the same reason `pnpm build`

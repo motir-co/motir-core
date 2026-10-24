@@ -13,7 +13,7 @@ import enMessages from '@/messages/en.json';
 
 /**
  * THE FLEET MONITOR'S REFUSALS AND QUIET STATES (Story MOTIR-6905 · MOTIR-7322) —
- * the regression twin of `acceptance-fleet-monitor.spec.ts`, which films the
+ * the regression twin of `regression-fleet-monitor.spec.ts`, which films the
  * happy path (read → mismatch → stop → zero, the other org unchanged).
  *
  * ⚠️ IN THE CLOUD LANE ON PURPOSE. Off-cloud the Fleet section renders one

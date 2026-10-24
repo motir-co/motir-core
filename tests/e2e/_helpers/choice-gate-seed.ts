@@ -6,7 +6,7 @@ import { createTestPerson } from './testPerson';
 import { addToProjectAs } from '../../helpers/workspaceRoleFixtures';
 
 // THE CHOICE GATE E2E SEED (Story MOTIR-4914 · Subtask MOTIR-5899), for the acceptance
-// receipt `acceptance-choice-gate.spec.ts` records.
+// receipt `regression-choice-gate.spec.ts` records.
 //
 // WHAT GOES THROUGH A SERVICE, AND WHAT IS LEFT TO THE SPEC. The people, the workspace,
 // the project and the choice work items are created through their services — and that

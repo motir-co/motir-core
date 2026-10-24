@@ -67,7 +67,7 @@ import {
 // a real anchored plan run held in its conversation phase by the SSE frame
 // server, the real Sharpen door and write-back, and motir-ai's `sharpen_turn`
 // played from a SCRIPT — so nothing here asserts which question motir-ai would
-// choose. `acceptance-grill-me.spec.ts` is the same journey recorded as the
+// choose. `regression-grill-me.spec.ts` is the same journey recorded as the
 // story's receipt.
 //
 // ── Determinism ─────────────────────────────────────────────────────────────

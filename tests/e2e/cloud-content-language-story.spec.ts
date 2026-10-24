@@ -319,7 +319,7 @@ async function keyOf(title: string): Promise<string> {
 /**
  * Change the organisation's content language through the General card's control
  * and its confirm — the predecessor story's control, driven as
- * `acceptance-content-language.spec.ts` drives it. The PATCH's 200 is the signal.
+ * `regression-content-language.spec.ts` drives it. The PATCH's 200 is the signal.
  */
 async function changeContentLanguage(
   page: Page,

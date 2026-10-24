@@ -24,8 +24,8 @@ import en from '@/messages/en.json';
 
 // The plan-progress HARNESS (MOTIR-8419) — the door-driving, poll-waiting,
 // geometry and motion-recorder plumbing two acceptance specs share:
-// `acceptance-plan-progress.spec.ts` (MOTIR-7820's receipt, where every helper
-// here was written) and `acceptance-plan-at-work.spec.ts` (MOTIR-8413's). It was
+// `regression-plan-progress.spec.ts` (MOTIR-7820's receipt, where every helper
+// here was written) and `regression-plan-at-work.spec.ts` (MOTIR-8413's). It was
 // EXTRACTED, not rewritten: each helper is the receipt's own, moved here so the
 // door-driving and poll-waiting logic keeps one implementation. What each one
 // does, and why the hosted step is a service call rather than an HTTP call, is

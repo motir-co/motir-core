@@ -28,6 +28,20 @@ const ROOT = join(__dirname, '..');
 /** Every Playwright config at the repo root — a new lane is covered unasked. */
 const CONFIGS = readdirSync(ROOT).filter((f) => /^playwright(\..+)?\.config\.ts$/.test(f));
 
+/**
+ * The source that starts `config`'s server. A config that declares no
+ * `webServer` of its own and spreads another lane's config runs THAT config's
+ * server (`playwright.regression.config.ts` is the acceptance lane's, MOTIR-9411),
+ * so the flag is checked where the command is written.
+ */
+function serverSourceOf(config: string): string {
+  const source = readFileSync(join(ROOT, config), 'utf8');
+  if (/^\s*webServer:/m.test(source)) return source;
+  const parent = /^import (\w+) from '\.\/(playwright\.[\w.]+\.config)';$/m.exec(source);
+  if (parent && source.includes(`...${parent[1]},`)) return serverSourceOf(`${parent[2]}.ts`);
+  return source;
+}
+
 describe('every E2E `next start` carries the keep-alive flag', () => {
   it('finds the lanes it guards', () => {
     expect(CONFIGS).toEqual(
@@ -40,7 +54,7 @@ describe('every E2E `next start` carries the keep-alive flag', () => {
   });
 
   it.each(CONFIGS)('%s', (config) => {
-    const source = readFileSync(join(ROOT, config), 'utf8');
+    const source = serverSourceOf(config);
     // Only a COMMAND says `next start --port`; the prose around it says `next start`.
     const starts = [...source.matchAll(/next start --port \$\{PORT\}[^`'\n]*/g)].map((m) => m[0]);
     expect(starts.length, `${config} starts no server`).toBeGreaterThan(0);

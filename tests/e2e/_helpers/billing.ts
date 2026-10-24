@@ -45,7 +45,7 @@ export async function seedBillingOwner(page: Page, email: string): Promise<Billi
   // about, and every one of its seven callers navigates explicitly afterwards.
   // Paying for the landing here bought nothing and spent budget the acceptance
   // lane measures in seconds (its per-test timeout is 90s, and
-  // `acceptance-repository-tenancy.spec.ts` runs close enough to it that the
+  // `regression-repository-tenancy.spec.ts` runs close enough to it that the
   // extra navigation tipped it over under CI load).
   await signUpToOnboarding(page, email);
   const local = email.split('@')[0]!;

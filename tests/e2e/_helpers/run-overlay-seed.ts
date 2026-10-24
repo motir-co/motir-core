@@ -6,7 +6,7 @@ import { apiTokensService } from '@/lib/services/apiTokensService';
 import { createTestPerson } from './testPerson';
 
 // THE RUN-OVERLAY E2E SEED (Story MOTIR-8982 · Subtask MOTIR-9076), for the
-// acceptance receipt `acceptance-runs-overlay.spec.ts` records.
+// acceptance receipt `regression-runs-overlay.spec.ts` records.
 //
 // WHAT GOES THROUGH A SERVICE, AND WHAT IS LEFT TO THE SPEC:
 //   * the person, workspace, project, membership and cards — their services;

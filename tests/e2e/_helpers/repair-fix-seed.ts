@@ -9,7 +9,7 @@ import { seedGithubInstallation } from './github-seed';
 import { E2E_PROVISIONING_ORG } from './github-const';
 
 // THE REPAIR E2E SEED (Story MOTIR-5460 · Subtask MOTIR-5468), for the acceptance
-// receipt `acceptance-repair-fix.spec.ts` records.
+// receipt `regression-repair-fix.spec.ts` records.
 //
 // WHAT GOES THROUGH A SERVICE, AND WHAT IS LEFT TO THE SPEC:
 //   * the two people, workspace, project, membership and cards — their services;

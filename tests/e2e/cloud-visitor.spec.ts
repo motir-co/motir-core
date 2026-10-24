@@ -4,7 +4,7 @@ import { seedVisitorProject, VISITOR_PASSWORD, type VisitorSeed } from './_helpe
 
 // THE VISITOR VIEW, END TO END (Story MOTIR-6170 · Subtask MOTIR-6651) — the
 // story's `## Verification` recipe as a regression walk, unpaced. Its paced twin,
-// `acceptance-visitor.spec.ts`, is the story's acceptance receipt.
+// `regression-visitor.spec.ts`, is the story's acceptance receipt.
 //
 // ⚠️ THIS LANE, AND ONLY THIS LANE. Public projects are a cloud capability: with
 // `MOTIR_CLOUD` off every `/p/<id>/<view>` is correctly not-found, so this walk in

@@ -1,7 +1,7 @@
 // The onboarding vibe, in the nine newer languages (Story MOTIR-8238 ·
 // MOTIR-8257).
 //
-// The acceptance walk (`acceptance-onboarding-vibe.spec.ts`) films English and
+// The acceptance walk (`regression-onboarding-vibe.spec.ts`) films English and
 // Chinese. This sweep is the regression half for the other nine: one account,
 // switched into each language in turn, visits the four page-shaped onboarding
 // screens — the entrance, How Motir works, the migrate wizard and the importer —

@@ -6,7 +6,7 @@ import { E2E_PROVISIONING_ORG } from './github-const';
 
 /**
  * The FLEET MONITOR's seeded estate (Story MOTIR-6905 · MOTIR-7322) — shared by
- * the story's acceptance walk (`acceptance-fleet-monitor.spec.ts`) and its
+ * the story's acceptance walk (`regression-fleet-monitor.spec.ts`) and its
  * cloud-lane regression twin (`cloud-admin-fleet.spec.ts`).
  *
  * Everything here is a ROW, written straight to the database the lane's server

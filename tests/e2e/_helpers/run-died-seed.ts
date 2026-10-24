@@ -6,7 +6,7 @@ import { apiTokensService } from '@/lib/services/apiTokensService';
 import { createTestPerson } from './testPerson';
 
 // THE RUN-DIED E2E SEED (Story MOTIR-6526 · Subtask MOTIR-6536), for the acceptance
-// receipt `acceptance-run-died-continue.spec.ts` records.
+// receipt `regression-run-died-continue.spec.ts` records.
 //
 // WHAT GOES THROUGH A SERVICE, AND WHAT IS LEFT TO THE SPEC:
 //   * the two people, workspace, project, membership and cards — their services;
