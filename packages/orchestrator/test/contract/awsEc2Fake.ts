@@ -260,6 +260,31 @@ export class AwsEc2Fake implements Ec2Api {
     return instanceId;
   }
 
+  /** Put a volume in the fake directly — a disk a failed teardown or a hand
+   *  create left, unattached unless `attachedInstanceId` says (MOTIR-9476). */
+  plantVolume(volume: Partial<Ec2Volume> = {}): string {
+    const volumeId = volume.volumeId ?? this.nextId('vol');
+    this.volumes.set(volumeId, {
+      volumeId,
+      state: volume.attachedInstanceId ? 'in-use' : 'available',
+      availabilityZone: 'us-east-1a',
+      sizeGb: 50,
+      attachedInstanceId: null,
+      createTime: this.now(),
+      tags: [],
+      ...volume,
+      deleteOnTermination: false,
+    });
+    return volumeId;
+  }
+
+  /** The volume was created at `createTime` — null for one EC2 gives no instant. */
+  backdateVolume(volumeId: string, createTime: Date | null): void {
+    const volume = this.volumes.get(volumeId);
+    if (!volume) throw new Error(`awsEc2Fake: no volume ${volumeId}`);
+    this.volumes.set(volumeId, { ...volume, createTime });
+  }
+
   /** A terminate held by {@link holdNextTerminate} completes: terminated, and its
    *  volumes taken or detached. */
   finishTermination(instanceId: string): void {

@@ -1,5 +1,6 @@
 import {
   awsTerminalEndpoint,
+  createAwsFleetInventory,
   createAwsOrchestrator,
   createAwsPersistentOrchestrator,
   createEc2Api,
@@ -456,10 +457,15 @@ export function inventoryForShard(shard: FleetShardDTO): FleetInventory | null {
   switch (shard.provider) {
     case 'fly':
       return null;
-    // No AWS listing yet: the AWS reaper sweeps each account by its shard tag,
-    // and the attribution reconciler does not read EC2.
-    case 'aws':
-      return null;
+    // An agent-hoster account is listed whole — every instance and every disk —
+    // over its own key (MOTIR-9476), the credential convention of
+    // `persistentOrchestratorForShard` without the AMI or the hoster CA. A CI
+    // runner account has no listing yet: the AWS reaper sweeps it by its tag.
+    case 'aws': {
+      if (shard.fleetKind !== 'agent_instance') return null;
+      const { ec2, region } = awsAccount(shard, []);
+      return createAwsFleetInventory({ ec2, region, shardTag: shard.name });
+    }
     default: {
       const unrouted: never = shard.provider;
       return registeredAdapter(unrouted).inventory(shard);

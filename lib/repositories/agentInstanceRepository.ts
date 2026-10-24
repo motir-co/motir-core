@@ -523,6 +523,39 @@ export const agentInstanceRepository = {
   },
 
   /**
+   * The record — live OR deleted — that names this machine IN THIS fleet account
+   * (MOTIR-9476): the reconciler's read for a hoster account, keyed on the
+   * account and never on the Fly app column, so the same id recorded on another
+   * account's instance does not attribute it. The newest wins.
+   */
+  async findByMachineInShard(
+    fleetShardId: string,
+    machineId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<AgentInstance | null> {
+    return tx.agentInstance.findFirst({
+      where: { fleetShardId, machineId },
+      orderBy: { createdAt: 'desc' },
+    });
+  },
+
+  /**
+   * The NON-DELETED record that names this disk in this fleet account
+   * (MOTIR-9476) — what keeps a detached home disk from being taken for an
+   * orphan. A deleted record owns no disk.
+   */
+  async findByVolumeInShard(
+    fleetShardId: string,
+    volumeId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<AgentInstance | null> {
+    return tx.agentInstance.findFirst({
+      where: { fleetShardId, volumeId, deletedAt: null },
+      orderBy: { createdAt: 'desc' },
+    });
+  },
+
+  /**
    * Every PROCESS-WIDE instance app any record (live or deleted) has ever named —
    * the orphan-volume pass walks each one. Distinct, sorted for a stable pass. An
    * instance placed on a fleet account is in none of them: its account's own

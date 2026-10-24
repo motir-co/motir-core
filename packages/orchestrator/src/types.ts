@@ -909,4 +909,21 @@ export interface FleetInventory {
   /** Stop one machine — for a PERSISTENT machine whose record owns it but says it
    *  should be resting (§5: stopped, never destroyed). Idempotent. */
   stopMachine(app: string, machineId: string): Promise<void>;
+  /** Every disk in one app, attached or not (MOTIR-9476) — for a provider whose
+   *  disks outlive their machine. Absent where the machine listing covers them. */
+  listVolumes?(app: string): Promise<InventoryVolume[]>;
+  /** Delete one disk. Idempotent on one already gone; a disk still attached is
+   *  refused, never force-detached. */
+  destroyVolume?(app: string, volumeId: string): Promise<void>;
+}
+
+/** One disk as the inventory lists it (MOTIR-9476). */
+export interface InventoryVolume {
+  readonly volumeId: string;
+  /** The provider's own state word (EC2: `available`, `in-use`, …). */
+  readonly state: string;
+  readonly attachedMachineId: string | null;
+  /** Null when the provider omits it — such a disk is alerted, never deleted. */
+  readonly createdAt: Date | null;
+  readonly tags: Readonly<Record<string, string>>;
 }
