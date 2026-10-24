@@ -3,7 +3,10 @@ import type { AddressInfo } from 'node:net';
 import type { ErrorEvent } from '@sentry/nextjs';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db, dbPool } from '@/lib/db';
-import { BLOCK_THRESHOLD_MS } from '@/lib/monitoring/loopBlockWatchdog';
+import {
+  BLOCK_THRESHOLD_MS,
+  __forTests as watchdogForTests,
+} from '@/lib/monitoring/loopBlockWatchdog';
 import { PROCESS_PRESSURE_TAG } from '@/lib/monitoring/processPressure';
 import { serverBeforeSend, serverSentryInitOptions } from '@/lib/monitoring/serverInit';
 import {
@@ -98,14 +101,42 @@ describe('the GC / heap / CPU readings (MOTIR-8264)', () => {
 });
 
 describe('the blocking stack (MOTIR-8265)', () => {
-  /** Hold the loop in a NAMED synchronous function the capture can point at. */
+  /** How long past `ms` the block may run while it waits for the capture. */
+  const CAPTURE_WAIT_MS = 10_000;
+  /** How often the block looks for the capture. */
+  const CAPTURE_POLL_MS = 200;
+
+  /**
+   * Hold the loop in a NAMED synchronous function the capture can point at — for
+   * at least `ms`, and on until the watchdog has recorded a capture of this block.
+   *
+   * The watchdog does not promise a capture for every block it measures: its
+   * worker sees the stale heartbeat only after the threshold, then needs a few
+   * inspector round trips, and on a loaded CI runner that can outlast the rest
+   * of the block. Then the block reads `unmeasured` (MOTIR-9484), or the pause
+   * lands on whatever ran after it (MOTIR-9498). Spinning until the capture is drained —
+   * synchronously, as the read does — keeps the pause inside this function, so
+   * the test asserts what the capture names rather than how fast the runner is.
+   *
+   * The spin looks for the capture only every CAPTURE_POLL_MS. Between looks it
+   * calls nothing but `Date.now()`, so the pause lands in this frame and not in
+   * the helper that looks, which would sit above it on the stack.
+   */
   function blockLoopForTest(ms: number): void {
+    const capturesBefore = watchdogForTests.captureCount();
     const until = Date.now() + ms;
-    while (Date.now() < until) {
-      // spin
+    const giveUpAt = until + CAPTURE_WAIT_MS;
+    let nextLookAt = until;
+    for (;;) {
+      const now = Date.now();
+      if (now < nextLookAt) continue;
+      if (watchdogForTests.captureCount() > capturesBefore || now >= giveUpAt) return;
+      nextLookAt = Date.now() + CAPTURE_POLL_MS;
     }
   }
-  const BLOCK_MS = BLOCK_THRESHOLD_MS + 800;
+  // Long enough past the threshold that the capture has normally landed by the
+  // first look, so the pause rarely meets the look itself on the stack.
+  const BLOCK_MS = BLOCK_THRESHOLD_MS + 3000;
 
   it('reads `unmeasured` x3 when nothing blocked the loop — never a zero', () => {
     const tags = transactionStallTags(Object.assign(new Error('x'), { code: 'P2028' }))!;
@@ -115,6 +146,15 @@ describe('the blocking stack (MOTIR-8265)', () => {
   });
 
   it('names the blocking function on a real P2028, read with no await before it', async () => {
+    // Warm the client first. Its first transaction instantiates Prisma's query
+    // compiler, which can itself hold the loop past the threshold on a loaded
+    // runner and take the window's one capture (MOTIR-9499). A fresh watchdog
+    // then starts with nothing captured.
+    await db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT 1`;
+    });
+    stopTransactionStallMonitor();
+    startTransactionStallMonitor();
     // The watchdog thread needs a moment to come up and the first heartbeat to land.
     await sleep(300);
     const err = await rejectionOf(
@@ -132,6 +172,10 @@ describe('the blocking stack (MOTIR-8265)', () => {
     // Read in the very tick the rejection is handled: the capture was taken
     // during the block and must already be readable, with no sleep to wait on.
     const tags = transactionStallTags(err)!;
+    expect(
+      watchdogForTests.captureCount(),
+      'the watchdog never captured the block',
+    ).toBeGreaterThan(0);
     expect(numericTag(tags, STALL_TAG.loopBlockMs)).toBeGreaterThanOrEqual(BLOCK_MS - 100);
     expect(tags[STALL_TAG.loopBlockFrame]).toContain('blockLoopForTest');
     numericTag(tags, STALL_TAG.loopBlockAgeS);
