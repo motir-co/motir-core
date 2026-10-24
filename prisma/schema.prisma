@@ -11473,6 +11473,16 @@ model FleetInFlightSlot {
   /// behaviour.
   ownerRef String? @map("owner_ref")
 
+  /// The FLEET ACCOUNT the container this slot stands for boots on (MOTIR-9445),
+  /// chosen by admission in the same transaction as the take, so boot, poll,
+  /// settle and reap address that account's orchestrator. NULL = the
+  /// process-wide fleet — every row written before accounts existed, every
+  /// workload that does not place by account, and every index while the
+  /// `code_graph_index` switch is Fly. Unlike the organisation above it IS a
+  /// foreign key, RESTRICT for the reason the CI intent's is: an account with a
+  /// container counted against it cannot vanish from under it.
+  fleetShardId String? @map("fleet_shard_id")
+
   claimedAt DateTime @default(now()) @map("claimed_at")
 
   /// ⚠️ A SAFETY NET, NOT THE RELEASE MECHANISM. Release is an explicit delete
@@ -11487,6 +11497,8 @@ model FleetInFlightSlot {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  fleetShard FleetShard? @relation(fields: [fleetShardId], references: [id], onDelete: Restrict)
+
   /// Idempotent take: one slot per (workload, ref), forever.
   @@unique([workload, ref])
   /// The ceiling's read — count live rows for one workload. Ordered
@@ -11494,6 +11506,9 @@ model FleetInFlightSlot {
   @@index([workload, expiresAt])
   /// The per-organisation pool count (MOTIR-6907), read under the fleet lock.
   @@index([organizationId, expiresAt])
+  /// The per-account count admission chooses an account by (MOTIR-9445), read
+  /// under the fleet lock.
+  @@index([fleetShardId, expiresAt])
   @@map("fleet_in_flight_slot")
 }
 
@@ -11623,6 +11638,8 @@ model FleetShard {
 
   /// The CI intents whose containers were booted in this account (MOTIR-8964).
   ciRunnerIntents CiRunnerProvisioningIntent[]
+  /// The slot-backed containers admitted onto this account (MOTIR-9445).
+  inFlightSlots   FleetInFlightSlot[]
 
   /// One Fly location is one account.
   @@unique([provider, flyOrg, flyApp])

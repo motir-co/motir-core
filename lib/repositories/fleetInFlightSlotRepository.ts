@@ -25,6 +25,10 @@ export interface FleetInFlightSlotTakeInput {
    *  (MOTIR-6907): a slot with no org is a container no org's pool bounds. */
   organizationId: string;
   workspaceId?: string | null;
+  /** The fleet account the container boots on (MOTIR-9445), chosen in the same
+   *  transaction as the take. Omit it, or pass null, for the process-wide
+   *  fleet. */
+  fleetShardId?: string | null;
   /** When this slot stops being counted if it is never released. NOT the
    *  release mechanism — see the model comment. */
   expiresAt: Date;
@@ -57,7 +61,7 @@ export const fleetInFlightSlotRepository = {
     const inserted = await tx.$executeRaw`
       INSERT INTO "fleet_in_flight_slot"
         ("id", "workload", "ref", "owner_ref", "organization_id", "workspace_id",
-         "claimed_at", "expires_at", "created_at", "updated_at")
+         "fleet_shard_id", "claimed_at", "expires_at", "created_at", "updated_at")
       VALUES (
         ${randomUUID()},
         ${data.workload},
@@ -65,6 +69,7 @@ export const fleetInFlightSlotRepository = {
         ${data.ownerRef ?? null},
         ${data.organizationId},
         ${data.workspaceId ?? null},
+        ${data.fleetShardId ?? null},
         NOW(), ${data.expiresAt}, NOW(), NOW()
       )
       ON CONFLICT ("workload", "ref") DO NOTHING
@@ -191,6 +196,27 @@ export const fleetInFlightSlotRepository = {
   ): Promise<number> {
     return tx.fleetInFlightSlot.count({
       where: { workload, expiresAt: { gt: now } },
+    });
+  },
+
+  /**
+   * How many LIVE slots of one workload are counted against one fleet account —
+   * the per-account count admission chooses an account by (MOTIR-9445, the
+   * `code_graph_index` entry of `fleetShardAdmissionService`'s in-flight
+   * counters).
+   *
+   * ⚠️ The same locking contract as {@link countLiveForWorkload}: read under the
+   * `fleet` admission lock, in the same transaction as the take that records the
+   * chosen account. Rides `[fleet_shard_id, expires_at]`.
+   */
+  async countLiveForWorkloadOnShard(
+    workload: string,
+    fleetShardId: string,
+    now: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    return tx.fleetInFlightSlot.count({
+      where: { workload, fleetShardId, expiresAt: { gt: now } },
     });
   },
 

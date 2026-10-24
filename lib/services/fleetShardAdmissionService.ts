@@ -18,6 +18,7 @@ import {
   shardAdmissionCeiling,
 } from '@/lib/ciFleet/shardTargets';
 import { ciRunnerProvisioningIntentRepository as intents } from '@/lib/repositories/ciRunnerProvisioningIntentRepository';
+import { fleetInFlightSlotRepository as slots } from '@/lib/repositories/fleetInFlightSlotRepository';
 import { fleetShardRepository } from '@/lib/repositories/fleetShardRepository';
 
 // WHICH ACCOUNT A JOB'S MACHINE BOOTS ON (Story MOTIR-8953 · MOTIR-8968) — the
@@ -60,13 +61,21 @@ export type ProvisionRefusal = FleetShardMoveReason | 'job_fault';
 export const SHARD_CAPACITY_DETAIL =
   "Motir's CI capacity is full right now. This job starts when a runner finishes.";
 
-/** Counts one kind's containers in flight on one account. */
-type ShardInFlightCounter = (shardId: string, tx: Prisma.TransactionClient) => Promise<number>;
+/** Counts one kind's containers in flight on one account at `now`. */
+type ShardInFlightCounter = (
+  shardId: string,
+  now: Date,
+  tx: Prisma.TransactionClient,
+) => Promise<number>;
 
-/** Each kind's per-account counter. CI is wired here; the agent runner, indexer
- *  and agent hoster stories add theirs when they put their kind on its pool. */
+/** Each kind's per-account counter. CI and the indexer are wired here; the agent
+ *  runner and agent hoster stories add theirs when they put their kind on its
+ *  pool. The indexer counts its LIVE slots recorded on the account (MOTIR-9445):
+ *  admission writes the account on the slot in the transaction that chose it. */
 const IN_FLIGHT_ON_SHARD: Partial<Record<FleetWorkloadKind, ShardInFlightCounter>> = {
-  ci_runner: (shardId, tx) => intents.countInFlightForShardInTx(shardId, tx),
+  ci_runner: (shardId, _now, tx) => intents.countInFlightForShardInTx(shardId, tx),
+  code_graph_index: (shardId, now, tx) =>
+    slots.countLiveForWorkloadOnShard('code_graph_index', shardId, now, tx),
 };
 
 /**
@@ -138,7 +147,7 @@ export const fleetShardAdmissionService = {
     for (const shard of await this.selectionSetInTx(job, tx)) {
       if (options.exclude?.has(shard.id)) continue;
       if (shard.admissionPausedUntil && shard.admissionPausedUntil > now) continue;
-      const headroom = this.effectiveCeiling(shard) - (await countInFlight(shard.id, tx));
+      const headroom = this.effectiveCeiling(shard) - (await countInFlight(shard.id, now, tx));
       if (headroom <= 0) continue;
       if (
         best === null ||
