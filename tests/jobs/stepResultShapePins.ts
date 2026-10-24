@@ -228,10 +228,10 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ childIds: Array<string>; itemId: string; outcome: "cascaded"; postDatedIds?: Array<string> | undefined; toStatus: string } | { itemId: string; outcome: "access_denied" } | { itemId: string; outcome: "no_matching_status" } | { itemId: string; outcome: "no_open_children" } | { itemId: string; outcome: "post_dated_only"; postDatedIds: Array<string> } | { itemId: string; outcome: "toggle_off" } | { outcome: "not_done" } | { outcome: "unresolvable" }',
   },
-  'catch-up-paused-indexes': {
+  'catch-up-paused-indexes-v2': {
     file: 'lib/jobs/definitions/codeGraphIndexCatchUp.ts',
     shape:
-      '{ organizationsAsked: number; outcomes: Array<{ organizationId: string; outcome: "action_failed" | "ask_failed" | "head_unknown" | "index_enqueued" | "pause_cleared" | "refresh_enqueued" | "still_stopped"; repoRef: string }>; scanned: number }',
+      '{ organizationsAsked: number; outcomes: Array<{ organizationId: string; outcome: "action_failed" | "ask_failed" | "head_unknown" | "index_enqueued" | "pause_cleared" | "pool_still_full" | "refresh_enqueued" | "still_stopped"; repoRef: string }>; scanned: number }',
   },
   'deliver-digest': {
     file: 'lib/jobs/definitions/publicFollowDigestDeliver.ts',
@@ -774,6 +774,13 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
  * table.
  */
 export const RETIRED_STEP_IDS: Record<string, RetiredStepId> = {
+  'catch-up-paused-indexes': {
+    shape:
+      '{ organizationsAsked: number; outcomes: Array<{ organizationId: string; outcome: "action_failed" | "ask_failed" | "head_unknown" | "index_enqueued" | "pause_cleared" | "refresh_enqueued" | "still_stopped"; repoRef: string }>; scanned: number }',
+    supersededBy: 'catch-up-paused-indexes-v2',
+    reason:
+      'MOTIR-9451 added `pool_still_full` to the catch-up sweep’s outcome union (an index paused because every account of the indexer’s AWS pool was full is left paused while the pool has no room). A memo written under the old id carries the narrower shape; the sweep is an idempotent recompute from live pauses whose enqueues the refresh job’s debounce coalesces, so re-executing it under the new id on a resumed run is safe.',
+  },
   'reconcile-abandoned-plans-v2': {
     shape:
       '{ declined: number; outcomes: Array<{ outcome: "awaiting_resume"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "silent" } | { outcome: "declined"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "silent" } | { outcome: "left_as_is"; planId: string; projectId: string; reason: "ai_unreachable" | "job_in_flight" | "revision_held" | "row_moved" | "session_waiting" | "writing" } | { outcome: "revision_failed"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "silent" } | { outcome: "revision_released"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "silent" }>; scanned: number }',

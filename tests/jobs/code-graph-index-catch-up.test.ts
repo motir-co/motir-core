@@ -486,7 +486,7 @@ describe('the job', () => {
       (ctx as { step: { run: { mock: { calls: unknown[][] } } } }).step.run.mock.calls.map(
         (c) => c[0],
       ),
-    ).toContain('catch-up-paused-indexes');
+    ).toContain('catch-up-paused-indexes-v2');
   });
 });
 
