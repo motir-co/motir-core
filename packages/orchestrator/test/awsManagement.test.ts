@@ -566,6 +566,27 @@ describe('awsRunnerPolicyDocument', () => {
       'arn:aws:ec2:us-east-1:*:instance/*',
       'arn:aws:ec2:us-east-1:*:volume/*',
     ]);
+    // A runner account may terminate only shard-tagged instances.
+    expect(doc.Statement.some((s) => s['Sid'] === 'TerminateAnyInAccount')).toBe(false);
+    const tagAtLaunch = doc.Statement.find((s) => s['Sid'] === 'TagAtLaunch')!;
+    expect(tagAtLaunch['Resource']).toContain('arn:aws:ec2:us-east-1:*:network-interface/*');
+  });
+
+  it('an indexer account may also terminate an untagged instance (MOTIR-9450)', () => {
+    const doc = awsRunnerPolicyDocument({
+      shardTag: 'indexer-use1-1',
+      regionId: 'us-east-1',
+      reapUntagged: true,
+    });
+    const any = doc.Statement.find((s) => s['Sid'] === 'TerminateAnyInAccount')!;
+    expect(any).toMatchObject({
+      Effect: 'Allow',
+      Action: 'ec2:TerminateInstances',
+      Resource: 'arn:aws:ec2:us-east-1:*:instance/*',
+    });
+    expect(any).not.toHaveProperty('Condition');
+    // Nothing else widens: the same actions as a runner account.
+    expect(JSON.stringify(doc)).not.toMatch(/iam:|CreateAccessKey|ec2:\*/);
   });
 });
 

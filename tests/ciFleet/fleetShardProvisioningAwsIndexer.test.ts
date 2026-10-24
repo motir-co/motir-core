@@ -300,10 +300,12 @@ describe('add-shard --provider aws --fleet-kind code_graph_index', () => {
     await run(args());
 
     // The document the account's IAM user was given is the shared one, scoped to
-    // this account's tag: no branch per kind.
+    // this account's tag — plus, for an indexer account, the terminate the
+    // attribution pass needs to reap an untagged VM (MOTIR-9450).
     const expected = JSON.stringify(
-      awsRunnerPolicyDocument({ shardTag: NAME, regionId: 'us-east-1' }),
+      awsRunnerPolicyDocument({ shardTag: NAME, regionId: 'us-east-1', reapUntagged: true }),
     );
+    expect(expected).toContain('TerminateAnyInAccount');
     expect([...organization.iamUsers]).toEqual([expected]);
     const policy = expected;
     for (const action of [

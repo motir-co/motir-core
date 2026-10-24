@@ -491,11 +491,19 @@ export interface AwsPolicyDocument {
  * support no resource-level permission, so they are `*`; a launch must TAG its
  * instance and volume with the shard (`aws:RequestTag`), and a terminate reaches
  * only the shard's own instances (`aws:ResourceTag`).
+ *
+ * AN INDEXER-POOL ACCOUNT (`reapUntagged`, MOTIR-9450) may also terminate an
+ * instance that does NOT carry the shard tag: the attribution pass lists every
+ * instance in such an account and must be able to end an untagged one, the leak
+ * it exists to find. The account is Motir's own and holds nothing but index VMs,
+ * which is what makes that safe; a CI-runner account keeps the tag-scoped
+ * terminate only.
  * https://docs.aws.amazon.com/service-authorization/latest/reference/list_amazonec2.html
  */
 export function awsRunnerPolicyDocument(input: {
   shardTag: string;
   regionId: string;
+  reapUntagged?: boolean;
 }): AwsPolicyDocument {
   const arn = (resource: string, account = '*') =>
     `arn:aws:ec2:${input.regionId}:${account}:${resource}`;
@@ -531,7 +539,8 @@ export function awsRunnerPolicyDocument(input: {
         Sid: 'TagAtLaunch',
         Effect: 'Allow',
         Action: 'ec2:CreateTags',
-        Resource: [arn('instance/*'), arn('volume/*')],
+        // An index VM tags its network interface too (MOTIR-9450).
+        Resource: [arn('instance/*'), arn('volume/*'), arn('network-interface/*')],
         Condition: { StringEquals: { 'ec2:CreateAction': 'RunInstances' } },
       },
       {
@@ -553,6 +562,16 @@ export function awsRunnerPolicyDocument(input: {
           StringEquals: { [`aws:ResourceTag/${AWS_SHARD_TAG_KEY}`]: input.shardTag },
         },
       },
+      ...(input.reapUntagged
+        ? [
+            {
+              Sid: 'TerminateAnyInAccount',
+              Effect: 'Allow',
+              Action: 'ec2:TerminateInstances',
+              Resource: arn('instance/*'),
+            },
+          ]
+        : []),
     ],
   };
 }

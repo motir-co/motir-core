@@ -293,6 +293,12 @@ export class AwsEc2Fake implements Ec2Api {
     }
   }
 
+  /** Start this fake's ids at `start`, so two fakes standing in for two accounts
+   *  never mint the same instance id — EC2's ids are unique across accounts. */
+  idsFrom(start: number): void {
+    this.seq = start;
+  }
+
   protected nextId(prefix: string): string {
     this.seq += 1;
     return `${prefix}-${this.seq.toString(16).padStart(8, '0')}`;

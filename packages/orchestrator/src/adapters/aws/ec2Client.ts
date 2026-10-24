@@ -165,6 +165,9 @@ export interface Ec2RunInstanceInput {
   readonly blockDeviceMappings: readonly Ec2BlockDeviceMapping[];
   /** Written on the instance AND its volumes in the same call. */
   readonly tags: readonly Ec2Tag[];
+  /** Also write `tags` on the launch's network interface (an index VM's, so cost
+   *  tooling sees every billed resource — MOTIR-9450). A runner's launch omits it. */
+  readonly tagNetworkInterface?: boolean;
 }
 
 export interface Ec2DescribeInstancesInput {
@@ -382,6 +385,7 @@ function instanceCalls(send: Send): InstanceCalls {
           TagSpecifications: [
             ...sdkTagSpecs('instance', input.tags),
             ...sdkTagSpecs('volume', input.tags),
+            ...(input.tagNetworkInterface ? sdkTagSpecs('network-interface', input.tags) : []),
           ],
         }),
       );
