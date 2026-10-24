@@ -86,6 +86,11 @@ import {
 //      whose price the lane multiplier depends on.
 //   4. A RUN OVER A CARD SET MAY SPAN REPOSITORIES (MOTIR-1790), so the settle can
 //      attribute the handle's seconds across repo SLICES (MOTIR-3255's shape).
+//   5. THE MACHINE LIVES ON AN ACCOUNT (MOTIR-9423 · MOTIR-9424). `boot` boots on
+//      the agent-runner account its slot chose (or the process-wide fleet when the
+//      switch is Fly), and `poll` and `settle` reach the container through that
+//      same account's orchestrator, read from `session.handle.shardId` — never
+//      through one process-wide adapter.
 //
 // ⚠️ THE METER STAYS COGS — NO ENTITLEMENT, NO CREDIT MATH AND NO `isMeta` BRANCH
 // HERE. What this seam writes is what the machine cost MOTIR, and it measures
@@ -533,6 +538,26 @@ async function resolveBootTarget(
   };
 }
 
+/**
+ * The orchestrator of the account the session's container booted on (MOTIR-9424)
+ * — resolved per call, so a rotated account credential reaches a long run's next
+ * poll. A session with no `shardId` (a legacy boot, or a memo from before
+ * accounts) is the process-wide fleet. THROWS when the account cannot be read, or
+ * when its provider is not the one the container was booted through: a container
+ * is never described or torn down through another provider's adapter, where it
+ * would fail or, worse, address some other machine.
+ */
+async function orchestratorForSession(session: HostedAgentSession): Promise<ContainerOrchestrator> {
+  const orchestrator = await fleetShardOrchestratorService.forShard(session.handle.shardId ?? null);
+  if (orchestrator.provider !== session.handle.provider) {
+    throw new Error(
+      `container ${session.handle.id} was booted through ${session.handle.provider}, but its ` +
+        `account resolves to ${orchestrator.provider}; not reaching it through another provider`,
+    );
+  }
+  return orchestrator;
+}
+
 const INLINE_STEPS: MemoizingSteps = {
   run: async <T>(_id: string, fn: () => T | Promise<T>): Promise<T> => fn(),
 };
@@ -805,7 +830,7 @@ export const hostedAgentContainerService = {
     let orchestrator: ContainerOrchestrator;
     let status;
     try {
-      orchestrator = getOrchestrator();
+      orchestrator = await orchestratorForSession(session);
       status = await orchestrator.describe(handleOf(session));
     } catch (err) {
       const consecutiveReadFailures = previous.consecutiveReadFailures + 1;
@@ -881,14 +906,13 @@ export const hostedAgentContainerService = {
 
     let usage: ContainerUsage;
     try {
-      usage = await getOrchestrator().teardown(
-        handle,
-        verdict.reason,
-        hostedAgentUsageAttribution(session, observedStartedAt),
-      );
+      usage = await (
+        await orchestratorForSession(session)
+      ).teardown(handle, verdict.reason, hostedAgentUsageAttribution(session, observedStartedAt));
     } catch (err) {
       console.error('[hostedAgentContainerService] could not tear down a hosted-agent container', {
         containerId: handle.id,
+        shardId: session.handle.shardId ?? null,
         reason: verdict.reason,
       });
       return {

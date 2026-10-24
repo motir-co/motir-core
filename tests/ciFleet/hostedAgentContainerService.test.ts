@@ -19,6 +19,7 @@ import {
   HostedAgentContainerUnpricedError,
 } from '@/lib/ciFleet/errors';
 import { fleetCeilingService } from '@/lib/services/fleetCeilingService';
+import { hostedRunChargeService } from '@/lib/services/hostedRunChargeService';
 import { supervisionSweepService } from '@/lib/services/supervisionSweepService';
 import { SUPERVISION_KINDS, isSupervisionKind } from '@/lib/jobs/supervision/driver';
 import { jobSupervisionRepository } from '@/lib/repositories/jobSupervisionRepository';
@@ -34,6 +35,7 @@ import {
   OrchestratorImageUnpullableError,
   OrchestratorTimeoutError,
   fakeOrchestrator,
+  type ContainerOrchestrator,
   type OrchestratorCapacityReason,
 } from '@motir/orchestrator';
 import type { FleetShard } from '@/generated/prisma/client';
@@ -762,5 +764,212 @@ describe('a hosted run boots on the account its slot chose (MOTIR-9423)', () => 
     ) as HostedAgentSession;
     expect(memo.handle.shardId).toBeUndefined();
     expect(JSON.parse(JSON.stringify(memo))).toEqual(memo);
+  });
+});
+
+// ── SUPERVISED ON ITS ACCOUNT (MOTIR-9424) ────────────────────────────────────
+// poll and settle resolve the account the session booted on; the timeout, the
+// cancel (a liveness verdict) and the cost rows carry no orchestrator call of
+// their own, so each is driven end to end against the account's fake while the
+// legacy fake must receive nothing.
+
+describe('a hosted run is supervised on its account (MOTIR-9424)', () => {
+  beforeEach(() => {
+    vi.stubEnv('GITHUB_FALLBACK_ORG', 'motir-projects');
+    vi.stubEnv(AGENT_RUNNER_PROVIDER_ENV_VAR, 'aws');
+  });
+
+  /** A session booted on account A, with B present and idle. */
+  async function bootedOnA() {
+    const a = await agentAccount(5);
+    const b = await agentAccount(5);
+    const booted = await hostedAgentContainerService.boot(requestFor());
+    if (booted.phase !== 'supervising') throw new Error('expected a supervising boot');
+    expect(booted.session.handle.shardId).toBe(a.id);
+    const describes = {
+      a: vi.spyOn(accountFake(a), 'describe'),
+      b: vi.spyOn(accountFake(b), 'describe'),
+      legacy: vi.spyOn(fakeOrchestrator, 'describe'),
+    };
+    const teardowns = {
+      a: vi.spyOn(accountFake(a), 'teardown'),
+      b: vi.spyOn(accountFake(b), 'teardown'),
+      legacy: vi.spyOn(fakeOrchestrator, 'teardown'),
+    };
+    return { a, b, session: booted.session, describes, teardowns };
+  }
+
+  const settleVerdict = (reason: 'job_completed' | 'job_timed_out' = 'job_completed') =>
+    ({ done: true, reason, startedAt: null, exitCode: 0, failureDetail: null }) as const;
+
+  it('polls through A only', async () => {
+    const { session, describes } = await bootedOnA();
+    const polled = await hostedAgentContainerService.poll(session);
+    expect(polled).toMatchObject({ done: false, consecutiveReadFailures: 0 });
+    expect(describes.a).toHaveBeenCalledTimes(1);
+    expect(describes.b).not.toHaveBeenCalled();
+    expect(describes.legacy).not.toHaveBeenCalled();
+  });
+
+  it('settles on A: A tears down, the row is written, the slot goes back, the legacy fake is untouched', async () => {
+    const { a, session, teardowns } = await bootedOnA();
+    const outcome = await hostedAgentContainerService.settle(session, settleVerdict());
+    expect(outcome.outcome).toBe('settled');
+    expect(teardowns.a).toHaveBeenCalledTimes(1);
+    expect(teardowns.a.mock.calls[0]![1]).toBe('job_completed');
+    expect(teardowns.legacy).not.toHaveBeenCalled();
+    expect(accountFake(a).liveContainerIds()).toEqual([]);
+    expect(await adminDb.ciContainerUsage.count({ where: { handleId: session.handle.id } })).toBe(
+      1,
+    );
+    expect(await adminDb.fleetInFlightSlot.count()).toBe(0);
+  });
+
+  it('a run on A that outlives its timeout is settled job_timed_out on A', async () => {
+    const { session, teardowns } = await bootedOnA();
+    const late = new Date(new Date(session.bootedAt).getTime() + session.timeoutSeconds * 1000 + 1);
+    const outcome = await hostedAgentContainerService.run(requestFor(), {
+      ...FAST,
+      booted: session,
+      now: () => late,
+      sleep: async () => {},
+    });
+    expect(outcome).toMatchObject({ outcome: 'settled', reason: 'job_timed_out' });
+    expect(teardowns.a).toHaveBeenCalledTimes(1);
+    expect(teardowns.a.mock.calls[0]![1]).toBe('job_timed_out');
+    expect(teardowns.legacy).not.toHaveBeenCalled();
+  });
+
+  it('a run on A that is cancelled (gate_revoked) is torn down on A with that reason', async () => {
+    const { session, teardowns } = await bootedOnA();
+    const outcome = await hostedAgentContainerService.run(requestFor(), {
+      ...FAST,
+      booted: session,
+      sleep: async () => {},
+      liveness: async () => ({ reason: 'gate_revoked', detail: 'the dispatcher cancelled' }),
+    });
+    expect(outcome).toMatchObject({ outcome: 'settled', reason: 'gate_revoked' });
+    expect(teardowns.a.mock.calls.map((c) => c[1])).toEqual(['gate_revoked']);
+    expect(teardowns.legacy).not.toHaveBeenCalled();
+  });
+
+  it('a session with no shardId (today’s memo) is polled and settled on the legacy fake', async () => {
+    const { a, session, describes, teardowns } = await bootedOnA();
+    const legacyBoot = await (async () => {
+      vi.stubEnv(AGENT_RUNNER_PROVIDER_ENV_VAR, 'fly');
+      const booted = await hostedAgentContainerService.boot(requestFor());
+      if (booted.phase !== 'supervising') throw new Error('expected a supervising boot');
+      return booted.session;
+    })();
+    const memo = JSON.parse(JSON.stringify(legacyBoot)) as HostedAgentSession;
+    expect(memo.handle.shardId).toBeUndefined();
+
+    expect((await hostedAgentContainerService.poll(memo)).done).toBe(false);
+    expect(await hostedAgentContainerService.settle(memo, settleVerdict())).toMatchObject({
+      outcome: 'settled',
+    });
+    expect(describes.legacy).toHaveBeenCalledTimes(1);
+    expect(teardowns.legacy).toHaveBeenCalledTimes(1);
+    expect(describes.a).not.toHaveBeenCalled();
+    expect(teardowns.a).not.toHaveBeenCalled();
+    expect(accountFake(a).liveContainerIds()).toEqual([session.handle.id]);
+  });
+
+  it('an account that cannot be read: poll counts a read failure, settle keeps the slot', async () => {
+    const { session } = await bootedOnA();
+    const lost: HostedAgentSession = {
+      ...session,
+      handle: { ...session.handle, shardId: 'no-such-account' },
+    };
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await expect(
+      hostedAgentContainerService.poll(lost, {
+        done: false,
+        startedAt: null,
+        consecutiveReadFailures: 2,
+      }),
+    ).resolves.toEqual({ done: false, startedAt: null, consecutiveReadFailures: 3 });
+    expect(await hostedAgentContainerService.settle(lost, settleVerdict())).toMatchObject({
+      outcome: 'teardown_failed',
+    });
+    expect(await adminDb.fleetInFlightSlot.count()).toBe(1);
+  });
+
+  it('a provider mismatch reaches neither describe nor teardown, and names both providers', async () => {
+    const { session, describes, teardowns } = await bootedOnA();
+    const mismatched: HostedAgentSession = {
+      ...session,
+      handle: { ...session.handle, provider: 'aws' },
+    };
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const polled = await hostedAgentContainerService.poll(mismatched);
+    expect(polled).toMatchObject({ done: false, consecutiveReadFailures: 1 });
+    const settled = await hostedAgentContainerService.settle(mismatched, settleVerdict());
+    expect(settled.outcome).toBe('teardown_failed');
+    const detail = (settled as { detail: string }).detail;
+    expect(detail).toContain('aws');
+    expect(detail).toContain('fake');
+    expect(detail).toContain(session.handle.id);
+    expect(detail).not.toContain('FLEET_SHARD_TEST_TOKEN');
+    expect(describes.a).not.toHaveBeenCalled();
+    expect(teardowns.a).not.toHaveBeenCalled();
+    expect(await adminDb.fleetInFlightSlot.count()).toBe(1);
+  });
+
+  it('on an AWS account, the checkpoint and the settle row are priced at the AWS row, then the run is charged', async () => {
+    const { a, session } = await bootedOnA();
+    // A's fake, answering as the AWS adapter does: handles on `aws`, in the
+    // account's region. The fake meters from the handle it is given, so the
+    // rows are priced exactly as the AWS adapter's would be.
+    const fake = accountFake(a);
+    const awsLike: ContainerOrchestrator = {
+      ...fake,
+      provider: 'aws',
+      describe: (handle) => fake.describe(handle),
+      teardown: (handle, reason, attribution) => fake.teardown(handle, reason, attribution),
+    } as ContainerOrchestrator;
+    const forShard = vi
+      .spyOn(fleetShardOrchestratorService, 'forShard')
+      .mockImplementation(async (id) => (id === a.id ? awsLike : fakeOrchestrator));
+    const onAws: HostedAgentSession = {
+      ...session,
+      dispatchRunId: null,
+      handle: { ...session.handle, provider: 'aws', region: 'us-east-1' },
+    };
+    const charge = vi
+      .spyOn(hostedRunChargeService, 'chargeMachineTime')
+      .mockResolvedValue({ outcome: 'skipped' } as never);
+    const observedAt = new Date(new Date(session.handle.createdAt).getTime() + 120_000);
+
+    await hostedAgentContainerService.poll(onAws, INITIAL_HOSTED_AGENT_POLL_STATE, {
+      now: () => observedAt,
+    });
+    const checkpoint = await adminDb.ciContainerUsage.findFirstOrThrow({
+      where: { handleId: session.handle.id },
+    });
+    expect(checkpoint).toMatchObject({ containerProvider: 'aws', containerRegion: 'us-east-1' });
+    expect(checkpoint.usdPerSecond.toString()).toBe('0.000029577626');
+
+    const run = await adminDb.dispatchRun.create({
+      data: { workspaceId: tenant.workspaceId, projectId: tenant.projectId, command: 'run' },
+    });
+    const withRun: HostedAgentSession = { ...onAws, dispatchRunId: run.id };
+    const outcome = await hostedAgentContainerService.run(requestFor(), {
+      ...FAST,
+      booted: withRun,
+      sleep: async () => {
+        const live = fake.liveContainerIds();
+        if (live[0]) fake.completeJob(live[0], { exitCode: 0 });
+      },
+    });
+    if (outcome.outcome !== 'settled') throw new Error(`expected settled, got ${outcome.outcome}`);
+    expect(outcome.usage).toMatchObject({ provider: 'aws', region: 'us-east-1' });
+    expect(outcome.costUsd).not.toBe('0');
+    expect(forShard).toHaveBeenCalledWith(a.id);
+    expect(charge).toHaveBeenCalledWith(withRun.dispatchRunId, expect.anything());
   });
 });
