@@ -300,6 +300,36 @@ describe('the Stopped orgs list (AC 4) — server-paged, filtered, searched, lon
     await adminDb.githubRepo.update({ where: { id: org.repoIds[0]! }, data: { archived: true } });
     expect((await enabled()).stopped.counts.all).toBe(0);
   });
+
+  it('a full indexer pool is not a stopped org, and does not move a stopped org’s row (MOTIR-9451)', async () => {
+    await pause((await seedOrg('Pool only')).repoIds[0]!, 'paused_index_pool_full', 6);
+    const both = await seedOrg('Both', 2);
+    await pause(both.repoIds[0]!, 'paused_index_no_credit', 2);
+    // Older, and more behind: it would win both columns if it were counted.
+    await pause(both.repoIds[1]!, 'paused_index_pool_full', 9);
+    await adminDb.githubRepo.update({
+      where: { id: both.repoIds[1]! },
+      data: {
+        indexedHeadSha: GRAPH,
+        defaultBranchHeadSha: HEAD,
+        commitsBehind: 77,
+        commitsBehindBaseSha: GRAPH,
+        commitsBehindHeadSha: HEAD,
+      },
+    });
+
+    const dto = await enabled();
+    expect(dto.stopped.rows.map((r) => r.organizationName)).toEqual(['Both']);
+    expect(dto.stopped.rows[0]).toMatchObject({
+      reason: 'no_credit',
+      pausedRepos: 1,
+      graphBehind: null,
+    });
+    expect(Date.now() - new Date(dto.stopped.rows[0]!.stoppedSince).getTime()).toBeLessThan(
+      3 * DAY,
+    );
+    expect(dto.stopped.counts.all).toBe(1);
+  });
 });
 
 describe('the ways this section can lie (AC 6)', () => {

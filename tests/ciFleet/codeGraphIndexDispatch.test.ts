@@ -22,6 +22,7 @@ import {
 } from '@/lib/services/codeGraphIndexAdmissionService';
 import {
   FLEET_CONTAINER_SIZE,
+  OrchestratorApiError,
   OrchestratorImageUnpullableError,
   OrchestratorNotConfiguredError,
   exitCodeOf,
@@ -41,6 +42,7 @@ import { truncateAuthTables } from '../helpers/db';
 import { randomToken, randomInt } from '../helpers/random';
 import { Prisma, type FleetShard } from '@/generated/prisma/client';
 import { fakeOrchestratorForShard, resetShardFakes } from '@/lib/orchestrator';
+import { SHARD_PAUSE_SECONDS } from '@/lib/ciFleet/shardTargets';
 import { fleetShardOrchestratorService } from '@/lib/services/fleetShardOrchestratorService';
 import { buildFleetCostReadout, type FleetCostReadout } from '../../scripts/fleetCostReadoutQuery';
 
@@ -1169,6 +1171,108 @@ describe("boot, poll and settle address the admitted account's orchestrator", ()
     if (settled.outcome !== 'teardown_failed') throw new Error('expected teardown_failed');
     expect(settled.detail).toContain(a.id);
     expect(released).toEqual([session.slotRef]);
+  });
+
+  // ── A capacity refusal at boot is a full account, not a failed run (MOTIR-9451)
+
+  /** The next admission names `shardId`, as the real gate would after the pause. */
+  function nextAdmitOn(shardId: string): void {
+    vi.mocked(codeGraphIndexAdmissionService.admit).mockResolvedValueOnce({
+      outcome: 'admitted',
+      admission: onAccount(shardId),
+      census: {
+        total: 1,
+        byWorkload: { ci_runner: 0, code_graph_index: 1, hosted_agent: 0, agent_instance: 0 },
+      },
+    });
+  }
+
+  it('a capacity refusal pauses the account, gives the slot back and boots on another account', async () => {
+    const [a, b] = [await account(), await account()];
+    fakeOrchestratorForShard(a.id).failNextProvisionForCapacity('out_of_stock');
+    nextAdmitOn(b.id);
+
+    const booted = await codeGraphIndexDispatchService.bootIndexContainer(
+      INPUT,
+      onAccount(a.id),
+      FAST,
+    );
+
+    expect(booted.phase).toBe('supervising');
+    if (booted.phase !== 'supervising') throw new Error('expected a supervising boot');
+    expect(booted.session.shardId).toBe(b.id);
+    expect(fakeOrchestratorForShard(b.id).provisioned).toHaveLength(1);
+    expect(fakeOrchestrator.provisioned).toHaveLength(0);
+    // The refused account's slot went back before the re-admission took another.
+    expect(released).toEqual([ADMISSION.slotRef]);
+    const paused = await adminDb.fleetShard.findUniqueOrThrow({ where: { id: a.id } });
+    expect(paused.admissionPausedReason).toBe('capacity_refused');
+    const pausedForMs = paused.admissionPausedUntil!.getTime() - Date.now();
+    expect(pausedForMs).toBeGreaterThan((SHARD_PAUSE_SECONDS - 10) * 1000);
+    expect(pausedForMs).toBeLessThanOrEqual(SHARD_PAUSE_SECONDS * 1000);
+  });
+
+  it('when no other account has room it defers pool_full — never provision_failed, never Fly', async () => {
+    const a = await account();
+    fakeOrchestratorForShard(a.id).failNextProvisionForCapacity('quota_exceeded');
+    vi.mocked(codeGraphIndexAdmissionService.admit).mockResolvedValue({
+      outcome: 'deferred',
+      reason: 'pool_full',
+      detail: 'every indexer account is full',
+    });
+
+    const booted = await codeGraphIndexDispatchService.bootIndexContainer(
+      INPUT,
+      onAccount(a.id),
+      FAST,
+    );
+
+    expect(booted).toMatchObject({
+      phase: 'terminal',
+      outcome: { outcome: 'admission_deferred', reason: 'pool_full' },
+    });
+    expect(fakeOrchestrator.provisioned).toHaveLength(0);
+    expect(released).toEqual([ADMISSION.slotRef]);
+    expect(
+      (await adminDb.fleetShard.findUniqueOrThrow({ where: { id: a.id } })).admissionPausedReason,
+    ).toBe('capacity_refused');
+  });
+
+  it('a provider that is down on the account is the same move; a job fault is still provision_failed', async () => {
+    const [a, b] = [await account(), await account()];
+    fakeOrchestratorForShard(a.id).failNextProvision('fly 503');
+    nextAdmitOn(b.id);
+    const moved = await codeGraphIndexDispatchService.bootIndexContainer(
+      INPUT,
+      onAccount(a.id),
+      FAST,
+    );
+    expect(moved).toMatchObject({ phase: 'supervising', session: { shardId: b.id } });
+    expect(
+      (await adminDb.fleetShard.findUniqueOrThrow({ where: { id: a.id } })).admissionPausedReason,
+    ).toBe('provider_unavailable');
+
+    // A refusal that is the job's own (a 4xx) moves nowhere.
+    const c = await account();
+    vi.spyOn(fakeOrchestratorForShard(c.id), 'provision').mockRejectedValueOnce(
+      new OrchestratorApiError('fake', 422, 'bad spec'),
+    );
+    const failed = await codeGraphIndexDispatchService.bootIndexContainer(
+      INPUT,
+      onAccount(c.id),
+      FAST,
+    );
+    expect(failed).toMatchObject({ phase: 'terminal', outcome: { outcome: 'provision_failed' } });
+    expect(
+      (await adminDb.fleetShard.findUniqueOrThrow({ where: { id: c.id } })).admissionPausedUntil,
+    ).toBeNull();
+  });
+
+  it('with the switch off a capacity refusal is still provision_failed', async () => {
+    fakeOrchestrator.failNextProvisionForCapacity('out_of_stock');
+    const booted = await codeGraphIndexDispatchService.bootIndexContainer(INPUT, ADMISSION, FAST);
+    expect(booted).toMatchObject({ phase: 'terminal', outcome: { outcome: 'provision_failed' } });
+    expect(vi.mocked(codeGraphIndexAdmissionService.admit)).not.toHaveBeenCalled();
   });
 });
 

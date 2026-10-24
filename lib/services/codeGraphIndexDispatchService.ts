@@ -13,6 +13,10 @@ import {
 } from '@/lib/ciFleet/indexAllowance';
 import { CodeGraphRunCredentialTooShortError } from '@/lib/ai/errors';
 import { fleetShardOrchestratorService } from '@/lib/services/fleetShardOrchestratorService';
+import { classifyProvisionRefusal } from '@/lib/services/fleetShardAdmissionService';
+import { fleetShardRepository } from '@/lib/repositories/fleetShardRepository';
+import { SHARD_PAUSE_SECONDS } from '@/lib/ciFleet/shardTargets';
+import { withSystemContext } from '@/lib/workspaces/context';
 import {
   codeGraphIndexAdmissionService,
   type IndexAdmission,
@@ -471,7 +475,15 @@ export const INLINE_STEPS: SupervisionSteps = {
 };
 
 /** Seams the tests drive. Defaults are the constants above. */
+/** How many accounts one boot may move past after capacity refusals before it
+ *  defers `pool_full` (MOTIR-9451). Each refusal also pauses its account, so in
+ *  practice admission runs out of accounts first; this is the runaway guard. */
+export const MAX_INDEX_READMISSIONS = 5;
+
 export interface IndexSupervisionOptions {
+  /** Internal (MOTIR-9451): how many capacity refusals this boot has already
+   *  re-admitted past. */
+  indexReadmissions?: number;
   /**
    * The durable-step seam (MOTIR-3484). A job passes its `ctx.step`; everything
    * else passes nothing and gets {@link INLINE_STEPS}.
@@ -1363,6 +1375,23 @@ export const codeGraphIndexDispatchService = {
       // The port guarantees a failed `provision` left no container behind, so
       // the slot stands for nothing and is released rather than aged out.
       await codeGraphIndexAdmissionService.release(admission.slotRef, input.dispatchId);
+      // ⚠️ AN ACCOUNT THAT REFUSED FOR CAPACITY IS A FULL ACCOUNT, NOT A FAILED
+      // RUN (MOTIR-9451). The headroom count thought it had room and the
+      // provider said otherwise: pause it for SHARD_PAUSE_SECONDS, as CI's
+      // `moveAfterRefusalInTx` does, and go back to admission, which skips the
+      // paused account and picks another — or defers `pool_full`, which the job
+      // records as a pause. Never `provision_failed`, never Fly. A run with no
+      // account (the switch off) keeps today's `provision_failed`.
+      const refusal = admission.shardId ? classifyProvisionRefusal(err) : 'job_fault';
+      if (admission.shardId && refusal !== 'job_fault') {
+        return codeGraphIndexDispatchService.readmitAfterRefusal(
+          input,
+          admission.shardId,
+          refusal,
+          err,
+          options,
+        );
+      }
       if (err instanceof OrchestratorImageUnpullableError) {
         const detail = `the indexer image could not be pulled: ${detailOf(err)}`;
         console.error('[codeGraphIndexDispatchService] the indexer image is not pullable', {
@@ -2221,6 +2250,65 @@ export const codeGraphIndexDispatchService = {
    * wait on it would turn one bad read into a dropped index — the outcome the
    * whole rule exists to forbid.
    */
+  /**
+   * After an admitted account refused the provision for capacity (or could not
+   * be reached), pause it and admit again (MOTIR-9451). The pause is what makes
+   * this finite: each refusal takes one account out of the choice for
+   * SHARD_PAUSE_SECONDS, so the walk ends on an account that boots or on a
+   * `pool_full` deferral, which `advanceIndexContainer`'s caller records as a
+   * pending repository. Runs inside the `index-boot` step, so a replayed pass
+   * reads the result rather than walking again.
+   */
+  async readmitAfterRefusal(
+    input: IndexDispatchInput,
+    refusedShardId: string,
+    reason: 'capacity_refused' | 'provider_unavailable',
+    err: unknown,
+    options: IndexSupervisionOptions,
+  ): Promise<IndexBootResult> {
+    const now = options.now ?? (() => new Date());
+    console.warn('[codeGraphIndexDispatchService] an indexer account refused the boot', {
+      repoRef: input.repoRef,
+      shardId: refusedShardId,
+      reason,
+      detail: detailOf(err),
+    });
+    await withSystemContext((tx) =>
+      fleetShardRepository.pauseInTx(
+        refusedShardId,
+        new Date(now().getTime() + SHARD_PAUSE_SECONDS * 1000),
+        reason,
+        tx,
+      ),
+    );
+    const readmissions = (options.indexReadmissions ?? 0) + 1;
+    if (readmissions > MAX_INDEX_READMISSIONS) {
+      return {
+        phase: 'terminal',
+        outcome: {
+          outcome: 'admission_deferred',
+          reason: 'pool_full',
+          detail: `${readmissions - 1} indexer accounts refused this boot for capacity`,
+        },
+      };
+    }
+    const verdict = await codeGraphIndexDispatchService.waitForAdmission(
+      input,
+      options.sleep ?? sleepFor,
+      options,
+    );
+    if (verdict.outcome === 'deferred') {
+      return {
+        phase: 'terminal',
+        outcome: { outcome: 'admission_deferred', reason: verdict.reason, detail: verdict.detail },
+      };
+    }
+    return codeGraphIndexDispatchService.bootIndexContainer(input, verdict.admission, {
+      ...options,
+      indexReadmissions: readmissions,
+    });
+  },
+
   async waitForAdmission(
     input: IndexDispatchInput,
     sleep: (ms: number) => Promise<void>,
