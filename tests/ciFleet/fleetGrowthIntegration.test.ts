@@ -36,6 +36,7 @@ import { runFleetAdmin } from '@/scripts/fleet/fleetAdmin';
 import { createTestUser } from '../fixtures/userFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { findSecrets } from '../helpers/secretScan';
 import {
   ADD_SHARD_ENTERPRISE_SLUG as SLUG,
   FakeOrganization,
@@ -560,31 +561,11 @@ describe('no secret reaches any sink', () => {
       await adminDb.platformAuditLog.count({ where: { action: 'fleet.shard.quota_request' } }),
     ).toBe(1);
 
-    const seeded = [...Object.values(LEAKED), ...Object.values(SECRETS)];
-    for (const [sink, value] of sinks) {
-      const text = JSON.stringify(value);
-      for (const secret of seeded) {
-        expect(text.includes(secret), `${sink} carries ${secret}`).toBe(false);
-      }
-      expect(credentialKeys(value), `${sink} has a credential-named field`).toEqual([]);
-    }
+    expect(findSecrets(sinks, [...Object.values(LEAKED), ...Object.values(SECRETS)])).toEqual([]);
   });
 });
 
 // ── helpers ──────────────────────────────────────────────────────────────────
-
-/** Every object key, at any depth, named for a credential. */
-function credentialKeys(value: unknown, found: string[] = []): string[] {
-  if (Array.isArray(value)) {
-    for (const item of value) credentialKeys(item, found);
-  } else if (value && typeof value === 'object' && !(value instanceof Date)) {
-    for (const [key, inner] of Object.entries(value)) {
-      if (/secret|token|password|accesskey|privatekey|credentials?$/i.test(key)) found.push(key);
-      credentialKeys(inner, found);
-    }
-  }
-  return found;
-}
 
 interface Tenant {
   workspaceId: string;
