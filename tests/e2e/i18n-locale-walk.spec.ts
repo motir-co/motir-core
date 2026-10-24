@@ -3,7 +3,7 @@
 //
 // Nine languages × seven surfaces is far past any video budget, so this walk is
 // the main-lane half of the story E2E: evidence for the gate, not footage for a
-// person (the receipt is `acceptance-eleven-languages.spec.ts`).
+// person (the receipt is `regression-eleven-languages.spec.ts`).
 //
 // One test per language. Each signs the seeded person in from a browser whose
 // `locale` is that language, saves it as the ACCOUNT language through the UI

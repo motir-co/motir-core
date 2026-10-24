@@ -4,6 +4,7 @@ import { DECIDED_WITHOUT_A_READER } from '@/lib/approvalGates/stamp';
 import { createTestUser, makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { expectEachHopAnnounced } from '../helpers/transitionedEvents';
 
 // THE `manual_work` GATE (Story MOTIR-7460 · Subtask MOTIR-7474;
 // `docs/decisions/manual-work-gate.md`). Real Postgres, the real services: a manual card
@@ -14,7 +15,6 @@ import { truncateAuthTables } from '../helpers/db';
 // a write nobody decided.
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
-vi.mock('@/lib/jobs/sendEvent', () => ({ sendEvent: async () => {} }));
 
 const { workItemsService } = await import('@/lib/services/workItemsService');
 const { approvalGatesService } = await import('@/lib/services/approvalGatesService');
@@ -176,17 +176,51 @@ describe('Mark done', () => {
     const gate = await raisedGate(card.id);
     expect(await statusOf(card.id)).toBe('todo');
 
-    const result = await approvalGatesService.decide(
-      { gateId: gate.id, decision: 'approve', source: 'ui', stamp: DECIDED_WITHOUT_A_READER },
-      fx.ctx,
+    // Every hop the walk took announces itself after the commit (Bug MOTIR-9415).
+    const { result, hops } = await expectEachHopAnnounced(
+      card.id,
+      { workspaceId: fx.workspaceId, actorId: fx.ownerId },
+      () =>
+        approvalGatesService.decide(
+          { gateId: gate.id, decision: 'approve', source: 'ui', stamp: DECIDED_WITHOUT_A_READER },
+          fx.ctx,
+        ),
     );
 
     expect(result.gate.state).toBe('approved');
     expect(await statusOf(card.id)).toBe('done');
+    expect(hops.map((hop) => hop.toStatusKey)).toContain('done');
     expect((await gatesOf(card.id))[0]).toMatchObject({
       state: 'approved',
       decidedById: fx.ownerId,
     });
+  });
+
+  it('a decision that rolls back after its hops announces none of them', async () => {
+    const card = await manualCard();
+    const gate = await raisedGate(card.id);
+    // The decision's own write is the door's LAST statement, so failing it rolls back
+    // every hop the walk had already applied in the transaction.
+    const spy = vi
+      .spyOn(approvalGateRepository, 'decide')
+      .mockRejectedValueOnce(new Error('the deciding write failed'));
+
+    const { hops } = await expectEachHopAnnounced(
+      card.id,
+      { workspaceId: fx.workspaceId, actorId: fx.ownerId },
+      () =>
+        expect(
+          approvalGatesService.decide(
+            { gateId: gate.id, decision: 'approve', source: 'ui', stamp: DECIDED_WITHOUT_A_READER },
+            fx.ctx,
+          ),
+        ).rejects.toThrow('the deciding write failed'),
+    );
+    spy.mockRestore();
+
+    expect(hops).toEqual([]);
+    expect(await statusOf(card.id)).toBe('todo');
+    expect((await gatesOf(card.id))[0]!.state).toBe('awaiting');
   });
 
   it('Request changes is refused by name, and nothing moves', async () => {

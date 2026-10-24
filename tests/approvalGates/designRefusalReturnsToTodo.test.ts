@@ -7,6 +7,7 @@ import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { ensureWorkWaitsOn } from '@/tests/helpers/designWaits';
 import { truncateAuthTables } from '../helpers/db';
+import { expectEachHopAnnounced } from '../helpers/transitionedEvents';
 
 // A DESIGN SENT BACK GOES TO TO DO, on either verdict (Story MOTIR-6070 · Subtask
 // MOTIR-6423; `docs/decisions/design-refusal-verdict.md` §1 and §2), against a REAL
@@ -191,7 +192,13 @@ describe('Workflow A — a design in review, sent back, goes to To do on EITHER 
       const v1 = await publish('v1');
       const gate = await designGateFor(v1.id);
 
-      const result = await refuse(gate.id, verdict);
+      // The return to To do is announced after the commit (Bug MOTIR-9415).
+      const { result, hops } = await expectEachHopAnnounced(
+        card.id,
+        { workspaceId: fx.workspaceId, actorId: fx.ownerId },
+        () => refuse(gate.id, verdict),
+      );
+      expect(hops).toEqual([{ fromStatusKey: 'in_review', toStatusKey: 'todo' }]);
 
       expect(result.effect).toEqual({ statusWritten: 'todo' });
       expect(result.gate).toMatchObject({
@@ -293,17 +300,24 @@ describe('what the refusal leaves alone', () => {
     const design = await designGateFor(v1.id);
     const merge = await openPullRequestWithMergeGate();
 
-    const result = await approvalGatesService.decide(
-      {
-        stamp: DECIDED_WITHOUT_A_READER,
-        gateId: design.id,
-        decision: 'request_changes',
-        source: 'github',
-        noteMd: null,
-      },
-      fx.ctx,
-      SYNCED,
+    // Nothing moves, so nothing is announced.
+    const { result, hops } = await expectEachHopAnnounced(
+      card.id,
+      { workspaceId: fx.workspaceId, actorId: fx.ownerId },
+      () =>
+        approvalGatesService.decide(
+          {
+            stamp: DECIDED_WITHOUT_A_READER,
+            gateId: design.id,
+            decision: 'request_changes',
+            source: 'github',
+            noteMd: null,
+          },
+          fx.ctx,
+          SYNCED,
+        ),
     );
+    expect(hops).toEqual([]);
 
     expect(result.effect).toEqual({
       statusWritten: null,

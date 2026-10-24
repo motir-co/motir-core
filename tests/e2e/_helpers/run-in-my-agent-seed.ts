@@ -7,7 +7,7 @@ import { claudeCredentialFile, runReleaseFile, runRepositoryFile } from './agent
 import { workItemsService } from '@/lib/services/workItemsService';
 
 // RUN A READY CARD IN YOUR OWN AGENT — the acceptance seed (Story MOTIR-6864 ·
-// MOTIR-7031), for `acceptance-run-in-my-agent.spec.ts`.
+// MOTIR-7031), for `regression-run-in-my-agent.spec.ts`.
 //
 // It is `my-agents-seed.ts`'s owner and project (the persistent fake fleet, the
 // credit pre-flight answered by the lane's motir-ai mock) plus what a run needs

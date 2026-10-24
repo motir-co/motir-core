@@ -195,7 +195,7 @@ const SESSION_COOKIE_MARKER = 'better-auth';
  * server render and client render disagree, React re-renders the card and a
  * hidden copy of the server's input can stay in the DOM beside the live one,
  * so `getByPlaceholder('Email address')` resolves to two elements and fails
- * strict mode (merge-queue run 37821281731, `acceptance-choice-gate.spec.ts`).
+ * strict mode (merge-queue run 37821281731, `regression-choice-gate.spec.ts`).
  * The accessibility tree excludes the hidden copy, so `getByRole` finds one.
  */
 export function emailBox(page: Page): Locator {

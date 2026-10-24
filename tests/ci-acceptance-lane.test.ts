@@ -888,7 +888,11 @@ describe('the shard count is DERIVED from the lane (MOTIR-2908)', () => {
     specCount: number,
     eventName: 'pull_request' | 'push' | 'merge_group',
     changedFiles: readonly string[] = ['tests/e2e/acceptance-story-1.spec.ts'],
-    { bsdSeq = false, mergeDiff }: { bsdSeq?: boolean; mergeDiff?: readonly string[] } = {},
+    {
+      bsdSeq = false,
+      mergeDiff,
+      regressionSpecs = 0,
+    }: { bsdSeq?: boolean; mergeDiff?: readonly string[]; regressionSpecs?: number } = {},
   ): Record<string, string> & { stdout: string; summary: string } {
     const dir = mkdtempSync(join(tmpdir(), 'acceptance-gate-'));
     try {
@@ -908,6 +912,10 @@ describe('the shard count is DERIVED from the lane (MOTIR-2908)', () => {
       mkdirSync(join(dir, 'tests/e2e'), { recursive: true });
       for (let i = 1; i <= specCount; i++) {
         writeFileSync(join(dir, `tests/e2e/acceptance-story-${i}.spec.ts`), '');
+      }
+      // The regression lane's members (MOTIR-9411), counted by the same step.
+      for (let i = 1; i <= regressionSpecs; i++) {
+        writeFileSync(join(dir, `tests/e2e/regression-story-${i}.spec.ts`), '');
       }
       // A member of the MAIN lane, not this one: `testMatch` is on the BASENAME,
       // so `acceptance` must be a PREFIX. Counting it would hold the baseline
@@ -1225,6 +1233,102 @@ describe('the shard count is DERIVED from the lane (MOTIR-2908)', () => {
     // the lane rather than being skipped.
     expect(runGate(1, 'merge_group', ['components/x.tsx']).run).toBe('true');
   });
+
+  // ── The REGRESSION lane's gate (MOTIR-9411) ─────────────────────────────
+  // The done stories' specs keep the acceptance lane's triggers. These cases
+  // run the same executed step, so a regression gate that drifted from those
+  // triggers — onto every PR, or off `main` — goes red here.
+  describe("the regression lane keeps the acceptance lane's triggers (MOTIR-9411)", () => {
+    const appOnly = ['components/x.tsx', 'lib/dto/y.ts'];
+
+    it('runs on a push to main, sized at one leg per spec up to ten', () => {
+      const small = runGate(0, 'push', appOnly, { regressionSpecs: 3 });
+      expect(small.regression_run).toBe('true');
+      expect(small.regression_count).toBe('3');
+      expect(small.regression_legs).toBe('3');
+      expect(JSON.parse(small.regression_shards!)).toEqual([1, 2, 3]);
+      const big = runGate(0, 'push', appOnly, { regressionSpecs: 154 });
+      expect(big.regression_legs).toBe('10');
+      expect(JSON.parse(big.regression_shards!)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    });
+
+    it('stays off an ordinary pull request, and runs on one that touches the lane', () => {
+      expect(runGate(0, 'pull_request', appOnly, { regressionSpecs: 5 }).regression_run).toBe(
+        'false',
+      );
+      for (const touched of [
+        'tests/e2e/regression-story-1.spec.ts',
+        'playwright.regression.config.ts',
+        'playwright.acceptance.config.ts',
+        'tests/e2e/_helpers/promoted-regression.ts',
+        '.github/actions/e2e-setup/action.yml',
+      ]) {
+        expect(
+          runGate(0, 'pull_request', [...appOnly, touched], { regressionSpecs: 5 }).regression_run,
+          touched,
+        ).toBe('true');
+      }
+    });
+
+    it('gates a queue entry on its own diff, and fails open without one', () => {
+      expect(
+        runGate(0, 'merge_group', undefined, { regressionSpecs: 5, mergeDiff: appOnly })
+          .regression_run,
+      ).toBe('false');
+      expect(
+        runGate(0, 'merge_group', undefined, {
+          regressionSpecs: 5,
+          mergeDiff: [...appOnly, 'tests/e2e/regression-story-2.spec.ts'],
+        }).regression_run,
+      ).toBe('true');
+      expect(runGate(0, 'merge_group', appOnly, { regressionSpecs: 5 }).regression_run).toBe(
+        'true',
+      );
+    });
+
+    it('runs nothing when the lane is empty, and leaves the acceptance gate as it was', () => {
+      const empty = runGate(0, 'push', appOnly);
+      expect(empty.regression_run).toBe('false');
+      expect(empty.regression_legs).toBe('1');
+      const both = runGate(2, 'push', appOnly, { regressionSpecs: 4 });
+      expect(both.run).toBe('true');
+      expect(both.count).toBe('2');
+      expect(both.regression_count).toBe('4');
+    });
+  });
+});
+
+describe("the regression lane's jobs (MOTIR-9411)", () => {
+  const jobs = jobsOf(acceptanceWorkflow);
+  const regressionBuild = jobs.get('regression-build');
+  const regression = jobs.get('regression');
+  const complete = jobs.get('acceptance-complete');
+
+  it('builds once for its own shards, under its own artifact name', () => {
+    expect(regressionBuild).toBeDefined();
+    expect(regressionBuild).toMatch(
+      /^\s*if:\s*needs\.membership\.outputs\.regression_run == 'true'\s*$/m,
+    );
+    expect(regressionBuild).toMatch(/name:\s*next-build-regression\s*$/m);
+    expect(regression).toMatch(/needs:\s*\[membership, regression-build\]/);
+    expect(regression).toMatch(/next-build-artifact:\s*next-build-regression\s*$/m);
+  });
+
+  it('runs the regression config on its own shard count, and publishes nothing', () => {
+    expect(regression).toContain('--config playwright.regression.config.ts');
+    expect(regression).toContain('needs.membership.outputs.regression_shards');
+    expect(regression).toContain(
+      '--shard=${{ matrix.shard }}/${{ needs.membership.outputs.regression_legs }}',
+    );
+    expect(codeOf(regression!)).not.toContain('upload-acceptance-video');
+    expect(codeOf(regression!)).not.toContain('id-token');
+  });
+
+  it('is part of the required aggregate', () => {
+    expect(complete).toMatch(
+      /needs:\s*\[membership, build, acceptance, regression-build, regression\]/,
+    );
+  });
 });
 
 describe('the shared E2E setup composite (MOTIR-1949)', () => {
@@ -1261,7 +1365,11 @@ describe('the shared E2E setup composite (MOTIR-1949)', () => {
   });
 
   it('carries the setup the lanes depend on', () => {
-    expect(action).toContain('name: next-build'); // the pre-built .next/ (MOTIR-1706)
+    // The pre-built .next/ (MOTIR-1706), under the name its `build` job uploads.
+    // The name is an input since MOTIR-9411, because this workflow builds once
+    // per lane and two artifacts cannot share a name.
+    expect(action).toContain('name: ${{ inputs.next-build-artifact }}');
+    expect(action).toMatch(/next-build-artifact:[\s\S]*?default: next-build\n/);
     expect(action).toContain('pnpm prisma migrate deploy');
     expect(action).toContain('packages.microsoft.com'); // MOTIR-1679
     // ⚠️ `--with-deps` is GONE, deliberately (MOTIR-3128). It bolted an apt

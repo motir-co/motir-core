@@ -47,7 +47,7 @@ import { seedApprovalsRoom, type ApprovalsRoomSeed } from './_helpers/approvals-
 // custom role holding only the key has Project alone. The assertions are unchanged
 // (the disposition is KEEP, per `CLAUDE.md` § acceptance receipts). A reader who
 // truly lacks the key — a custom role without it — and the Viewer / Member / custom
-// walk across all three rooms are `acceptance-rooms-view-tabs.spec.ts`'s.
+// walk across all three rooms are `regression-rooms-view-tabs.spec.ts`'s.
 //
 // ── THE DOOR IS PART OF THE ACCEPTANCE ──────────────────────────────────────
 //

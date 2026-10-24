@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { expectEachHopAnnounced } from '../helpers/transitionedEvents';
 
 // OVERTURN — THE REFUSAL ARM, BUILT (Story MOTIR-5871 · Subtask MOTIR-5956; ADR
 // `approval-gates.md` §1's MOTIR-5952 amendment, points 6–7). Real Postgres, the real
@@ -28,7 +29,6 @@ vi.mock('@/lib/projects', async (importOriginal) => ({
   getActiveProject: async () => activeProject.current,
 }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
-vi.mock('@/lib/jobs/sendEvent', () => ({ sendEvent: async () => {} }));
 
 const { workItemsService } = await import('@/lib/services/workItemsService');
 const { approvalGatesService } = await import('@/lib/services/approvalGatesService');
@@ -110,11 +110,18 @@ const gateRow = (id: string) => adminDb.approvalGate.findUniqueOrThrow({ where: 
 describe('overturn — the route', () => {
   it('stamps overturned with the note and the audit set, writes cancelled, and derives the owed re-plan', async () => {
     const { item, gateId, stamp } = await waitingDecision();
-    const res = await post(gateId, {
-      decision: 'overturn',
-      noteMd: 'We agreed to keep Postgres and add a cache in front of it.',
-      stamp,
-    });
+    // The `cancelled` it writes is announced after the commit (Bug MOTIR-9415).
+    const { result: res, hops } = await expectEachHopAnnounced(
+      item.id,
+      { workspaceId: fx.workspaceId, actorId: fx.ownerId },
+      () =>
+        post(gateId, {
+          decision: 'overturn',
+          noteMd: 'We agreed to keep Postgres and add a cache in front of it.',
+          stamp,
+        }),
+    );
+    expect(hops).toEqual([{ fromStatusKey: 'in_review', toStatusKey: 'cancelled' }]);
 
     expect(res.status).toBe(200);
     const json = (await res.json()) as {

@@ -402,6 +402,10 @@ jobs:
       # scalar, for the `--shard=i/N` denominator and the job name.
       shards: ${{ steps.gate.outputs.shards }}
       legs: ${{ steps.gate.outputs.legs }}
+      regression_run: ${{ steps.gate.outputs.regression_run }}
+      regression_count: ${{ steps.gate.outputs.regression_count }}
+      regression_shards: ${{ steps.gate.outputs.regression_shards }}
+      regression_legs: ${{ steps.gate.outputs.regression_legs }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -533,6 +537,59 @@ jobs:
           echo "count=${COUNT}" >> "$GITHUB_OUTPUT"
           echo "legs=${LEGS}" >> "$GITHUB_OUTPUT"
           echo "shards=${SHARDS}" >> "$GITHUB_OUTPUT"
+          # ── The REGRESSION lane's membership (MOTIR-9411) ───────────────────
+          # The same question for `playwright.regression.config.ts`. The done
+          # stories' specs keep the acceptance lane's triggers: a PR or queue
+          # entry runs them only when it touches the lane's own paths, a push
+          # to `main` runs them all, and an empty lane runs nothing.
+          #
+          # The diff is read again rather than reused from above, because the
+          # acceptance branch reads it only while ITS lane holds a spec.
+          REGRESSION_COUNT=$(find tests/e2e -maxdepth 1 -name 'regression-*.spec.ts' -type f | wc -l | tr -d ' ')
+          echo "regression specs in the lane: ${REGRESSION_COUNT}"
+          REGRESSION_PATHS='^tests/e2e/regression-[^/]*\.spec\.ts$|^\.github/workflows/acceptance-tests\.yml$|^\.github/actions/e2e-setup/action\.yml$|^playwright\.(acceptance|regression)\.config\.ts$|^tests/e2e/_helpers/(promoted-regression|acceptance-video|acceptance-diagnostics)\.ts$'
+          if [ "${REGRESSION_COUNT}" -lt 1 ]; then
+            REGRESSION_RUN=false
+          elif [ "${EVENT_NAME}" = 'pull_request' ]; then
+            REGRESSION_CHANGED=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" \
+              --paginate -q '.[].filename')
+            if printf '%s\n' "${REGRESSION_CHANGED}" | grep -qE "${REGRESSION_PATHS}"
+            then
+              REGRESSION_RUN=true
+            else
+              REGRESSION_RUN=false
+            fi
+          elif [ "${EVENT_NAME}" = 'merge_group' ]; then
+            # FAIL OPEN, as above: an entry whose diff cannot be taken runs.
+            REGRESSION_RUN=true
+            if [ -n "${MERGE_BASE_SHA:-}" ] && [ -n "${MERGE_HEAD_SHA:-}" ] \
+              && REGRESSION_CHANGED=$(git diff --name-only "${MERGE_BASE_SHA}...${MERGE_HEAD_SHA}" 2>/dev/null) \
+              && [ -n "${REGRESSION_CHANGED}" ]; then
+              if ! printf '%s\n' "${REGRESSION_CHANGED}" | grep -qE "${REGRESSION_PATHS}"; then
+                REGRESSION_RUN=false
+              fi
+            else
+              echo "::warning::No usable merge_group diff -- running the regression lane."
+            fi
+          else
+            REGRESSION_RUN=true
+          fi
+          # Ten legs, not fourteen: nothing here holds for a viewer, so each leg
+          # runs its slice at machine speed.
+          REGRESSION_MAX_LEGS=10
+          if [ "${REGRESSION_COUNT}" -lt 1 ]; then
+            REGRESSION_LEGS=1
+          elif [ "${REGRESSION_COUNT}" -gt "${REGRESSION_MAX_LEGS}" ]; then
+            REGRESSION_LEGS="${REGRESSION_MAX_LEGS}"
+          else
+            REGRESSION_LEGS="${REGRESSION_COUNT}"
+          fi
+          REGRESSION_SHARDS="[$(seq 1 "${REGRESSION_LEGS}" | paste -sd, -)]"
+          echo "regression legs=${REGRESSION_LEGS} shards=${REGRESSION_SHARDS} run=${REGRESSION_RUN}"
+          echo "regression_run=${REGRESSION_RUN}" >> "$GITHUB_OUTPUT"
+          echo "regression_count=${REGRESSION_COUNT}" >> "$GITHUB_OUTPUT"
+          echo "regression_legs=${REGRESSION_LEGS}" >> "$GITHUB_OUTPUT"
+          echo "regression_shards=${REGRESSION_SHARDS}" >> "$GITHUB_OUTPUT"
           {
             echo "### Acceptance lane membership"
             echo ""
@@ -553,6 +610,14 @@ jobs:
               echo ""
               echo "The lane is empty, so this baseline stopped here rather than"
               echo "spending machine-minutes to run zero tests (MOTIR-2760)."
+            fi
+            echo ""
+            echo "### Regression lane membership"
+            echo ""
+            echo "- specs in the lane: **${REGRESSION_COUNT}**"
+            echo "- running the lane: **${REGRESSION_RUN}**"
+            if [ "${REGRESSION_RUN}" = 'true' ]; then
+              echo "- shard legs: **${REGRESSION_LEGS}** (capped at ${REGRESSION_MAX_LEGS})"
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -927,6 +992,184 @@ jobs:
           path: out/playwright-report-acceptance
           retention-days: 7
 
+  # ── THE REGRESSION LANE (MOTIR-9411) ──────────────────────────────────────
+  #
+  # The done stories' acceptance specs, renamed `regression-*.spec.ts` and run
+  # without pacing or recording by `playwright.regression.config.ts`. They keep
+  # the acceptance lane's TRIGGERS — a PR or queue entry that touches the lane's
+  # own paths, and every push to `main` — so moving them out of the receipt lane
+  # puts nothing new on an ordinary pull request. The gate is the `membership`
+  # step above (its `regression_*` outputs).
+  #
+  # Its OWN build job, and not a second consumer of `build`, so neither lane's
+  # shards ever run because the OTHER lane's gate opened: `acceptance` carries no
+  # job-level `if:` (the MOTIR-1949 guard) and is gated only through `build`. The
+  # artifact takes its own name because upload-artifact refuses a second
+  # artifact under a name already taken in the same run.
+  regression-build:
+    name: Next.js build (regression)
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
+    # Observed 5.5–6.5 min on its first runs (PR #3776) → 15, the same ceiling
+    # as the acceptance `build` it mirrors: one `pnpm build`, nothing else.
+    timeout-minutes: 15
+    needs: membership
+    if: needs.membership.outputs.regression_run == 'true'
+    env:
+      DATABASE_URL: postgresql://prodect:prodect@localhost:5432/prodect
+      BETTER_AUTH_SECRET: ci-e2e-only-not-a-real-secret-do-not-reuse
+      GOOGLE_CLIENT_ID: ci-e2e-placeholder
+      GOOGLE_CLIENT_SECRET: ci-e2e-placeholder
+      EMAIL_PROVIDER: file
+      EMAIL_OUTBOX_PATH: /tmp/motir-test-emails.jsonl
+      E2E_PROD_HARNESS: '1'
+      HUSKY: '0'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Start Postgres
+        uses: ./.github/actions/postgres
+      - uses: ./.github/actions/pnpm
+      - name: Cache node_modules
+        id: cache-node-modules-regression-build
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Cache Prisma client
+        id: cache-prisma-regression-build
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules/.prisma
+            node_modules/@prisma/client
+          key: ${{ runner.os }}-prisma-client-${{ hashFiles('prisma/schema.prisma') }}
+      - run: pnpm install --frozen-lockfile
+        if: steps.cache-node-modules-regression-build.outputs.cache-hit != 'true'
+      - run: pnpm prisma generate
+        if: steps.cache-prisma-regression-build.outputs.cache-hit != 'true'
+      - run: pnpm build
+      - name: Upload .next/ build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: next-build-regression
+          path: .next
+          retention-days: 1
+          include-hidden-files: true
+
+  # The regression shards. Derived from `acceptance` above with the recording
+  # half removed: no owned-spec list, no receipt publish, no OIDC token. Video
+  # and trace are kept only for a failure (`playwright.regression.config.ts`).
+  regression:
+    name: Playwright E2E (regression) ${{ matrix.shard }}/${{ needs.membership.outputs.regression_legs }}
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
+    # Observed 8.4–18.3 min per green leg on its first runs (PR #3776, ten legs,
+    # no pacing) → 55, the acceptance shards' ceiling. Kept that high because a
+    # leg's slice moves as the lane grows, and the build download alone has taken
+    # up to 14 min on this fleet (see the acceptance shard's note).
+    timeout-minutes: 55
+    needs: [membership, regression-build]
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.membership.outputs.regression_shards) }}
+    permissions:
+      contents: read
+    env:
+      DATABASE_URL: postgresql://prodect:prodect@localhost:5432/prodect
+      BETTER_AUTH_SECRET: ci-e2e-only-not-a-real-secret-do-not-reuse
+      GOOGLE_CLIENT_ID: ci-e2e-placeholder
+      GOOGLE_CLIENT_SECRET: ci-e2e-placeholder
+      EMAIL_PROVIDER: file
+      EMAIL_OUTBOX_PATH: /tmp/motir-test-emails.jsonl
+      E2E_PROD_HARNESS: '1'
+      E2E_TEST_OAUTH: '1'
+      E2E_TEST_OAUTH_USER_PATH: /tmp/motir-test-oauth-user.json
+      HUSKY: '0'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Start Postgres
+        uses: ./.github/actions/postgres
+      - uses: ./.github/actions/e2e-setup
+        with:
+          next-build: download
+          next-build-artifact: next-build-regression
+      - name: Restore the CJK font from the cache
+        id: cjk-font-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.cache/motir-cjk-font
+          key: ${{ runner.os }}-cjk-font-noto-sans-2.004-b76b0433-faa5f365
+      - name: Install a CJK font for the zh assertions and font probes
+        id: cjk-font
+        shell: bash
+        env:
+          CACHE_HIT: ${{ steps.cjk-font-cache.outputs.cache-hit }}
+          FONT_REF: Sans2.004
+          FONT_SUMS: |
+            b76b0433203017ca80401b2ee0dd69350349871c4b19d504c34dbdd80541690a  NotoSansCJK-Regular.ttc
+            faa5f3656a78b2e2d450d27fe8382c778bc2b6bb5ea29c986664a6a435056ceb  NotoSansCJK-Bold.ttc
+        run: |
+          if fc-list :lang=zh 2>/dev/null | grep -q .; then echo "a CJK font is present"; exit 0; fi
+          command -v fc-match >/dev/null || { echo "::error::fontconfig (fc-match) is not on this runner"; exit 1; }
+          FONT_DIR="$HOME/.cache/motir-cjk-font"
+          mkdir -p "$FONT_DIR"
+          probe() {
+            for q in sans-serif serif monospace 'sans-serif:charset=2014' 'sans-serif:charset=2026' 'monospace:charset=2014'; do
+              printf '%s=%s\n' "$q" "$(fc-match -f '%{family[0]}' "$q" 2>/dev/null)"
+            done
+          }
+          before="$(probe)"
+          echo "fallbacks before:"; echo "$before"
+          if (cd "$FONT_DIR" && printf '%s' "$FONT_SUMS" | sha256sum --check --quiet --strict >/dev/null 2>&1); then
+            echo "CJK font restored from the cache"
+          else
+            [ "$CACHE_HIT" = "true" ] && echo "::warning::the cached CJK font failed its checksum; fetching it again"
+            while read -r sum file; do
+              [ -n "$file" ] || continue
+              url="https://raw.githubusercontent.com/notofonts/noto-cjk/${FONT_REF}/Sans/OTC/${file}"
+              if ! curl -fsSL --retry 3 --retry-all-errors --connect-timeout 20 --max-time 180 -o "$FONT_DIR/$file" "$url"; then
+                echo "::error::could not fetch the CJK font: ${url} (expected sha256 ${sum})"; exit 1
+              fi
+              got="$(sha256sum "$FONT_DIR/$file" | cut -d' ' -f1)"
+              if [ "$got" != "$sum" ]; then
+                echo "::error::the CJK font from ${url} has sha256 ${got}, expected ${sum}"; exit 1
+              fi
+            done <<< "$FONT_SUMS"
+            echo "fetched=true" >> "$GITHUB_OUTPUT"
+          fi
+          sudo install -d -m 755 /usr/local/share/fonts/noto-cjk
+          sudo install -m 644 "$FONT_DIR"/NotoSansCJK-*.ttc /usr/local/share/fonts/noto-cjk/
+          sudo fc-cache -f >/dev/null
+          [ -n "$(fc-list :lang=zh)" ] || { echo "::error::the CJK font is installed but fontconfig finds no zh face"; exit 1; }
+          {
+            echo '<?xml version="1.0"?><!DOCTYPE fontconfig SYSTEM "fonts.dtd"><fontconfig>'
+            for generic in sans-serif serif monospace; do
+              family="$(printf '%s\n' "$before" | sed -n "s/^${generic}=//p")"
+              [ -n "$family" ] && echo "<alias binding=\"strong\"><family>${generic}</family><prefer><family>${family}</family></prefer></alias>"
+            done
+            echo '</fontconfig>'
+          } | sudo tee /etc/fonts/conf.d/99-latin-before-cjk.conf >/dev/null
+          sudo fc-cache -f >/dev/null
+          after="$(probe)"
+          echo "fallbacks after:"; echo "$after"
+          if [ "$before" != "$after" ]; then
+            echo "::error::installing the CJK font changed a Latin fallback"; exit 1
+          fi
+      - name: Save the CJK font to the cache
+        if: steps.cjk-font.outputs.fetched == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/motir-cjk-font
+          key: ${{ steps.cjk-font-cache.outputs.cache-primary-key }}
+      - name: Run E2E (regression)
+        run: pnpm test:e2e --config playwright.regression.config.ts --pass-with-no-tests --shard=${{ matrix.shard }}/${{ needs.membership.outputs.regression_legs }}
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report-regression-shard-${{ matrix.shard }}
+          path: out/playwright-report-regression
+          retention-days: 7
+
   # ── THE REQUIRED CONTEXT (MOTIR-4257) ───────────────────────────────────────
   #
   # One aggregate the ruleset can name, for the same reason `ci.yml` has
@@ -948,7 +1191,7 @@ jobs:
   acceptance-complete:
     name: Acceptance complete
     if: always()
-    needs: [membership, build, acceptance]
+    needs: [membership, build, acceptance, regression-build, regression]
     runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Observed <0.1 min → 10 (the short-job floor) — MEASURED on this lane's
     # first run, not copied from `ci-complete`: 04:05:41 → 04:05:43, two

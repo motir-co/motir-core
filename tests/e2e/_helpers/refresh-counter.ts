@@ -20,7 +20,7 @@ import type { Page, Request } from '@playwright/test';
 //   · DOCUMENT LOADS. A request of resource type `document` on the main frame.
 //     ⚠️ NOT `framenavigated`, which Playwright also fires for Next's
 //     client-side re-render: MOTIR-5245's spec counted one "navigation" for the
-//     very refresh its story caused (`acceptance-workbench-live.spec.ts`,
+//     very refresh its story caused (`regression-workbench-live.spec.ts`,
 //     `stampDocument`). A `document` request is a load and nothing else.
 //   · STREAM NUDGES. `/api/workbench/stream` frames that name at least one moved
 //     tab — the frames `useWorkbenchLiveStream` turns into a nudge. A frame

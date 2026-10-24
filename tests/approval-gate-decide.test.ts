@@ -18,6 +18,7 @@ import { adminDb } from './helpers/adminDb';
 import type { PermissionKey } from '@/lib/permissions/catalog';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { truncateAuthTables } from './helpers/db';
+import { expectEachHopAnnounced } from './helpers/transitionedEvents';
 import {
   addToProjectAs,
   createCustomRoleAs,
@@ -177,10 +178,17 @@ describe('approvalGatesService.decide — approve, the terminal act (ADR §8 Wor
     // BEFORE: the blocker is not done, so the dependent is not startable.
     await expect(workItemsService.isReady(dependent.id, fx.ctx)).resolves.toBe(false);
 
-    const result = await approvalGatesService.decide(
-      { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'ui' },
-      fx.ctx,
+    // The `done` it writes is announced after the commit (Bug MOTIR-9415).
+    const { result, hops } = await expectEachHopAnnounced(
+      item.id,
+      { workspaceId: fx.workspaceId, actorId: fx.ownerId },
+      () =>
+        approvalGatesService.decide(
+          { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'ui' },
+          fx.ctx,
+        ),
     );
+    expect(hops).toEqual([{ fromStatusKey: 'in_review', toStatusKey: 'done' }]);
 
     expect(result.effect.statusWritten).toBe('done');
 

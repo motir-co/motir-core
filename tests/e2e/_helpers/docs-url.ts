@@ -7,7 +7,7 @@ import type { APIRequestContext, Page } from '@playwright/test';
 // absolute `MOTIR_DOCS_URL` and renders nothing when it is unset. Every
 // Playwright lane in this repository CONFIGURES one — the main lane and the
 // cloud lane at `https://public.motir.e2e/docs`, the acceptance lane at
-// `https://motir.co/docs` — because `acceptance-legal-manifest.spec.ts` reads
+// `https://motir.co/docs` — because `regression-legal-manifest.spec.ts` reads
 // the Docs row as the CONTROL for Legal's absence, and a lane with no docs url
 // leaves that control unmounted.
 //

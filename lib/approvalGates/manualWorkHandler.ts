@@ -11,6 +11,7 @@ import { isManualReadyItem } from '@/lib/dto/ready';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { requireArgsCard, requireGateCard } from './gateCard';
+import { applyGateTransition } from './gateTransition';
 
 // THE `manual_work` HANDLER (Story MOTIR-7460 · Subtask MOTIR-7474;
 // `docs/decisions/manual-work-gate.md` §1, §4, §5).
@@ -71,7 +72,7 @@ export const manualWorkGateHandler: GateHandler<WorkItem> = {
 
   /** MARK DONE — write the project's Done and decide the gate (§4). */
   async approve(args: GateEffectArgs): Promise<GateEffect> {
-    const { gate, ctx, tx, resolvedStatusKey } = args;
+    const { gate, tx, resolvedStatusKey } = args;
     const cardId = requireGateCard(gate, 'manualWorkHandler');
     const openPullRequests = await workItemDeliveryRepository.countOpenByWorkItem(cardId, tx);
     if (openPullRequests > 0) {
@@ -81,11 +82,8 @@ export const manualWorkGateHandler: GateHandler<WorkItem> = {
       return { statusWritten: null, statusDeferredReason: 'no_status_in_target_category' };
     }
     // ⚠️ IMPORTED HERE, NOT AT THE TOP — the `workItemsService` → `approvalGatesService`
-    // → registry → this module cycle `decisionChoiceHandler` documents.
-    const [{ workItemsService }, { hopsToStatus }] = await Promise.all([
-      import('@/lib/services/workItemsService'),
-      import('@/lib/services/manualWorkGateService'),
-    ]);
+    // → registry → this module cycle `gateTransition` documents.
+    const { hopsToStatus } = await import('@/lib/services/manualWorkGateService');
     // A run SKIPPED this card, so it usually stands in To do — and no workflow declares
     // To do → Done. Mark done walks the declared edges there, each one a real transition
     // with its own revision; a card with no road to Done refuses on the direct move, as
@@ -96,9 +94,7 @@ export const manualWorkGateHandler: GateHandler<WorkItem> = {
     // without it the guard would refuse the very move Mark done exists to make — and on
     // a hop that leaves review, the pull-back rule withdraws only the OTHER questions.
     for (const key of hops) {
-      await workItemsService.applyStatusTransition(cardId, key, ctx, tx, {
-        decidingGateId: gate.id,
-      });
+      await applyGateTransition(args, cardId, key, { decidingGateId: gate.id });
     }
     return { statusWritten: resolvedStatusKey };
   },

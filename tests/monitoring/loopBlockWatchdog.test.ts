@@ -157,6 +157,33 @@ describe('classifying a capture (pure)', () => {
     expect(tag).toMatch(/app\/route\.ts:7 GET$/);
   });
 
+  // MOTIR-9443: the pause can land inside a URL-less evaluated frame (a test
+  // runner's getter) above the function that holds the loop. Name the frame
+  // with a URL; fall back to the URL-less one only when it is all there is.
+  it('prefers an app frame with a URL over a URL-less one above it', () => {
+    const tag = frameTagOf(
+      capture({
+        frames: [frame('', 'get', 10), frame('file:///app/lib/x.test.ts', 'blockLoopForTest', 30)],
+      }),
+      BLOCK_THRESHOLD_MS,
+    );
+    expect(tag).toMatch(/lib\/x\.test\.ts:30 blockLoopForTest$/);
+  });
+
+  it('still names a URL-less frame when no app frame has a URL', () => {
+    const tag = frameTagOf(
+      capture({
+        frames: [
+          frame('node:internal/fs', 'readFileSync'),
+          frame('', 'evaluated', 3),
+          frame('', 'outer', 9),
+        ],
+      }),
+      BLOCK_THRESHOLD_MS,
+    );
+    expect(tag).toBe('<anonymous>:3 evaluated');
+  });
+
   it('reads `no_app_frame` when only library or internal frames ran', () => {
     const tag = frameTagOf(
       capture({

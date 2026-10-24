@@ -16,6 +16,7 @@ import {
 import { routingTargetId } from '@/lib/approvalGates/routing';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { requireArgsCard, requireGateCard } from './gateCard';
+import { applyGateTransition } from './gateTransition';
 
 // THE `decision_choice` HANDLER (Story MOTIR-4914 · Subtask MOTIR-5891; ADR
 // `docs/decisions/approval-gates.md` §1's MOTIR-5887 amendment, the handler row).
@@ -82,7 +83,7 @@ export const decisionChoiceGateHandler: GateHandler<ParsedChoice> = {
    * itself went away under the lock.
    */
   async approve(args: GateEffectArgs): Promise<GateEffect> {
-    const { gate, ctx, tx, resolvedStatusKey, choice } = args;
+    const { gate, resolvedStatusKey, choice } = args;
     const subject = await this.resolveSubject(args);
     if (!subject) throw new ApprovalGateStaleSubjectError(gate.id, ['subject']);
     const chosenOption = choice ? chosenOptionOf(subject, choice.optionId) : null;
@@ -94,20 +95,12 @@ export const decisionChoiceGateHandler: GateHandler<ParsedChoice> = {
         chosenOption,
       };
     }
-    // ⚠️ IMPORTED HERE, NOT AT THE TOP: `workItemsService` → `approvalGatesService` →
-    // the registry → this module is a cycle, and a static import leaves the registry's
-    // handler map holding `undefined` whenever this module is the first of the cycle
-    // to load (a test that imports it directly is enough). The call site is the only
-    // place the service is needed, so it is resolved there — the precedent is
-    // `plansService`'s lazy imports.
-    const { workItemsService } = await import('@/lib/services/workItemsService');
     // Never meets MARKED_CARD_CANNOT_REOPEN (MOTIR-6681): the target is the done
     // category, and the obsolescence mark refuses only a move OUT of it.
-    await workItemsService.applyStatusTransition(
+    await applyGateTransition(
+      args,
       requireGateCard(gate, 'decisionChoiceHandler'),
       resolvedStatusKey,
-      ctx,
-      tx,
       {
         decidingGateId: gate.id,
       },

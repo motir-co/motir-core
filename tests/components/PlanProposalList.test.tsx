@@ -596,7 +596,7 @@ describe('the list reserves the floating confirm bar (MOTIR-7726)', () => {
   // that ignores it ends its scroll range UNDER the bar — a list that fits the box
   // but not the space above the bar has no scrollbar at all, and its last rows
   // cannot be reached. happy-dom lays nothing out, so the geometry is pinned by
-  // `acceptance-plan-surface-views.spec.ts`; this pins the wiring, both boxes, and
+  // `regression-plan-surface-views.spec.ts`; this pins the wiring, both boxes, and
   // the `0px` fallback that keeps the plan page (which sets no inset) unchanged.
   const INSET = 'var(--canvas-foot-inset,0px)';
 

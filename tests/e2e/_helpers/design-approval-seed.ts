@@ -319,7 +319,19 @@ export async function publishDesignResult(client: Client, key: string): Promise<
 export async function servePublishedMock(page: Page): Promise<void> {
   await servePrivateObjectStore(page);
   await page.route('**/api/attachments/*/content', async (route) => {
-    const response = await route.fetch({ maxRedirects: 0 });
+    // A frame can still be loading a mock when the test ends; its fetch then
+    // fails against a closed page, and a throwing route handler fails a test
+    // that already passed. Seen once the regression lane dropped the holds
+    // that used to outlast every load (MOTIR-9411).
+    let response;
+    try {
+      response = await route.fetch({ maxRedirects: 0 });
+    } catch (err) {
+      // The page may not report itself closed yet while its context is being
+      // torn down, so the error's own message is the reliable test.
+      if (page.isClosed() || /has been closed|Test ended/.test(String(err))) return;
+      throw err;
+    }
     const location = response.headers()['location'] ?? '';
     if (location.includes('.html')) {
       await route.fulfill({

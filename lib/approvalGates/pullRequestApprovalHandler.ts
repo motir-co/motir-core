@@ -11,12 +11,12 @@ import {
   workItemDeliveryRepository,
   type WorkItemDeliveryWithChecks,
 } from '@/lib/repositories/workItemDeliveryRepository';
-import { workItemsService } from '@/lib/services/workItemsService';
 import { decisionHoldsMerge } from '@/lib/approvalGates/decisionApprovalHandler';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { acceptanceResultHoldsMerge, designResultHoldsMerge } from '@/lib/services/mergeGates';
 import { ApprovalGatePrimaryPendingError } from '@/lib/approvalGates/errors';
 import { requireArgsCard, requireGateCard } from './gateCard';
+import { applyGateTransition } from './gateTransition';
 
 // THE `pull_request_approval` HANDLER — the registry's THIRD member (Story MOTIR-4909 ·
 // MOTIR-5481; ADR docs/decisions/approval-gates.md §8's amendment, decisions 2 and 6).
@@ -144,7 +144,8 @@ export const pullRequestApprovalGateHandler: GateHandler<PullRequestApprovalSubj
    * Without it the guard would refuse the very move this approval exists to make. It
    * exempts THIS gate only.
    */
-  async approve({ gate, ctx, tx, resolvedStatusKey }: GateEffectArgs): Promise<GateEffect> {
+  async approve(args: GateEffectArgs): Promise<GateEffect> {
+    const { gate, tx, resolvedStatusKey } = args;
     // ⚠️ THE MERGE FOLLOWS THE DESIGN, WHATEVER DOOR IT IS PRESSED THROUGH (Bug MOTIR-5785;
     // `design-result.md` AMENDMENT 6 Q1). MOTIR-5712 hid this gate from the To-approve
     // queue on a design card, and MOTIR-5762 held the `auto` arm and the GitHub review
@@ -191,14 +192,11 @@ export const pullRequestApprovalGateHandler: GateHandler<PullRequestApprovalSubj
     // `approved` is outside the done category. A card marked under the rule is `done`
     // and holds no merge gate; only a LEGACY card marked while open can reach here,
     // and the refusal is the right answer to the person pressing — clear the mark.
-    await workItemsService.applyStatusTransition(
+    await applyGateTransition(
+      args,
       requireGateCard(gate, 'pullRequestApprovalHandler'),
       resolvedStatusKey,
-      ctx,
-      tx,
-      {
-        decidingGateId: gate.id,
-      },
+      { decidingGateId: gate.id },
     );
     return { statusWritten: resolvedStatusKey };
   },

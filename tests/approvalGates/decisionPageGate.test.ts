@@ -25,6 +25,7 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { expectEachHopAnnounced } from '../helpers/transitionedEvents';
 
 // `decision_approval` asks about a PAGE (Story MOTIR-5761 · MOTIR-7433;
 // `approval-gates.md` §8 NINTH AMENDMENT). A published page wins the subject over a
@@ -238,7 +239,13 @@ describe('the decision — Approve freezes, nothing else does', () => {
     const { publication, page } = await publishedPage(item.id);
     const gate = await awaitingOn(item.id);
 
-    const result = await decide(gate.id, 'approve');
+    // Its `done` is announced after the commit (Bug MOTIR-9415).
+    const { result, hops } = await expectEachHopAnnounced(
+      item.id,
+      { workspaceId: fx.workspaceId, actorId: fx.ctx.userId },
+      () => decide(gate.id, 'approve'),
+    );
+    expect(hops.map((hop) => hop.toStatusKey)).toEqual(['done']);
 
     const frozen = await versionRow(publication.versionId);
     expect(frozen.frozenAt).not.toBeNull();
@@ -256,7 +263,13 @@ describe('the decision — Approve freezes, nothing else does', () => {
     const gate = await awaitingOn(item.id);
     const before = (await itemRow(item.id)).status;
 
-    const result = await decide(gate.id, 'approve');
+    // `merge_writes_done` moves nothing, so it announces nothing.
+    const { result, hops } = await expectEachHopAnnounced(
+      item.id,
+      { workspaceId: fx.workspaceId, actorId: fx.ctx.userId },
+      () => decide(gate.id, 'approve'),
+    );
+    expect(hops).toEqual([]);
 
     expect((await versionRow(publication.versionId)).frozenAt).not.toBeNull();
     expect(result.effect.statusWritten).toBeNull();

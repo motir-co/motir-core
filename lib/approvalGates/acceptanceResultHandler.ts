@@ -12,8 +12,8 @@ import { hasOpenOwnDelivery } from './verdictOffer';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { isTerminalStatus } from '@/lib/workItems/blockerReadiness';
 import { workflowsService } from '@/lib/services/workflowsService';
-import { workItemsService } from '@/lib/services/workItemsService';
 import { requireArgsCard, requireGateCard } from './gateCard';
+import { applyGateTransition } from './gateTransition';
 
 // THE `acceptance_result` HANDLER — a story's acceptance receipt, decided through
 // the one gate contract (Story MOTIR-4949 · Subtask MOTIR-4950; ADR
@@ -193,11 +193,10 @@ export const acceptanceResultGateHandler: GateHandler<AcceptanceEvidence> = {
     }
     // Never meets MARKED_CARD_CANNOT_REOPEN (MOTIR-6681): the target is the done
     // category, and the obsolescence mark refuses only a move OUT of it.
-    await workItemsService.applyStatusTransition(
+    await applyGateTransition(
+      args,
       requireGateCard(args.gate, 'acceptanceResultHandler'),
       args.resolvedStatusKey,
-      args.ctx,
-      args.tx,
       { decidingGateId: args.gate.id },
     );
     return { statusWritten: args.resolvedStatusKey };

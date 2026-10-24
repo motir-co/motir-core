@@ -2060,7 +2060,7 @@ The overlapping pairs reproduce Revision 7's numbers exactly. No text in the ass
   accounts read lists no account** (2n); with accounts listed, the list leads (behaviour 2 above).
   Amended here rather than in Revision 7, which stays a record. In code,
   `ConnectPanel.tsx`'s `preflight` case, `tests/components/onboarding-connect-step.test.tsx` and
-  `tests/e2e/acceptance-onboarding-github-connect.spec.ts` assume the pre-flight on arrival; they
+  `tests/e2e/regression-onboarding-github-connect.spec.ts` assume the pre-flight on arrival; they
   remain true for the no-account case and are MOTIR-8762's to extend, not to rewrite.
 
 ## Non-blocking index states (2026-10-16 · MOTIR-8767 · Story MOTIR-8246)

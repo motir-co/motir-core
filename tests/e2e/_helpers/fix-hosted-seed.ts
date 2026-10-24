@@ -6,7 +6,7 @@ import type { ContinueHostedSeed } from './continue-hosted-seed';
 import type { SeededHostedCard } from './hosted-run-seed';
 
 // THE FIX-ON-THE-HOSTED-AGENT E2E SEED (Story MOTIR-1626 · Subtask MOTIR-6930), for
-// `acceptance-fix-hosted.spec.ts`.
+// `regression-fix-hosted.spec.ts`.
 //
 // It is `continue-hosted-seed.ts`'s workspace — an owner, a second member (Ben, whose
 // terminal `motir fix` is the *held* case), a v1 token each, and the `created`-state

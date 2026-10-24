@@ -225,6 +225,17 @@ export interface GateEffect {
 }
 
 /**
+ * ONE status hop a decision applied, as `applyStatusTransition` reported it — what the
+ * door's post-commit `work-item/transitioned` carries (Bug MOTIR-9415).
+ */
+export interface AppliedGateTransition {
+  workItemId: string;
+  fromStatusKey: string;
+  toStatusKey: string;
+  revisionId: string;
+}
+
+/**
  * What ROUTING needs, and it is deliberately LESS than {@link GateEffectArgs}.
  *
  * ⚠️ `routeTo` is answered at CREATION — ADR §6a: *"§2's answer computed at
@@ -302,6 +313,15 @@ export interface GateEffectArgs extends GateRoutingArgs {
    * that seam, and for a gate the pre-read already found decided.
    */
   prepared?: unknown;
+  /**
+   * WHERE THE KIND'S STATUS HOPS ARE RECORDED (Bug MOTIR-9415) — a list the DOOR owns and
+   * emits `work-item/transitioned` from once its transaction commits. A handler never
+   * pushes to it by hand: it moves a status through `applyGateTransition`
+   * (`lib/approvalGates/gateTransition.ts`), which applies the hop and records it. Both
+   * doors (`decide`, `approveBySystem`) always pass one; absent only where a test calls a
+   * handler directly and reads no event.
+   */
+  appliedTransitions?: AppliedGateTransition[];
   /**
    * What a composing SERVICE handed the door for the kind's effect alone, opaque to the
    * door (MOTIR-6038 — a plan's approve takes the onboarding placeholder name its rename

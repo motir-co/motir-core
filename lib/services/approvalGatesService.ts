@@ -22,7 +22,8 @@ import type {
   PendingDecisionDTO,
 } from '@/lib/dto/approvalGate';
 import { APPROVAL_GATE_REFUSAL_VERDICTS } from '@/lib/dto/approvalGate';
-import type { GateEffect } from '@/lib/approvalGates/registry';
+import type { AppliedGateTransition, GateEffect } from '@/lib/approvalGates/registry';
+import { emitAppliedGateTransitions } from '@/lib/approvalGates/gateTransition';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { PermissionKey } from '@/lib/permissions/catalog';
 import type { ApprovalGatePendingError } from '@/lib/workItems/errors';
@@ -2145,6 +2146,10 @@ export const approvalGatesService = {
         : undefined;
 
     // ── THE TRANSACTION ───────────────────────────────────────────────────────
+    // Every status hop the kind's effect applies is recorded here (`applyGateTransition`)
+    // and announced after the commit, below (Bug MOTIR-9415). The connection retry runs
+    // only before the body starts, so a dead attempt records nothing.
+    const appliedTransitions: AppliedGateTransition[] = [];
     let decidedResult: DecideGateResult;
     try {
       decidedResult = await withWorkspaceContext(
@@ -2163,6 +2168,10 @@ export const approvalGatesService = {
     // that rolled back. Stripped from the result so it never crosses the wire.
     const { afterCommit, ...effect } = decidedResult.effect;
     if (afterCommit) await afterCommit();
+    // THE HOPS THE DECISION WROTE (Bug MOTIR-9415) — `work-item/transitioned` for each, as
+    // every other mover sends it after its own commit. Without it the parent rollup, the
+    // bell and automation rules never saw a gate-decided move.
+    await emitAppliedGateTransitions(appliedTransitions, ctx);
     // TO RESUME (MOTIR-7707): a decision on a gate a parent run stopped at moves the
     // cards waiting on that run. After the commit, in the close's lock order —
     // `resumeStateService.afterGateDecided` says why.
@@ -2406,6 +2415,7 @@ export const approvalGatesService = {
         resolvedStatusKey,
         prepared,
         effectOptions: options.effectOptions,
+        appliedTransitions,
         // Validated in step 3c below, BEFORE any handler seam that acts reads it; the
         // version seam ignores it.
         refusalVerdict: input.refusalVerdict ?? null,
@@ -2780,11 +2790,16 @@ export const approvalGatesService = {
    * `resolveStatusIntent` — never `workflowsService.resolveStatusKey`, which opens a
    * second connection while this one holds the gate lock (the shape
    * `applyStatusTransition` warns about).
+   *
+   * ⚠️ THE CALLER EMITS THE HOPS (Bug MOTIR-9415). The effect's status hops are recorded
+   * on `appliedTransitions`, and only the caller knows when ITS transaction commits, so
+   * it sends `emitAppliedGateTransitions` for them then — never this method.
    */
   async approveBySystem(
     gateId: string,
     ctx: ServiceContext,
     tx: Prisma.TransactionClient,
+    appliedTransitions: AppliedGateTransition[],
   ): Promise<DecideGateResult> {
     // 1 · LOCK AND RE-READ.
     const locked = await approvalGateRepository.lockById(gateId, tx);
@@ -2830,6 +2845,7 @@ export const approvalGatesService = {
       prepared: undefined,
       effectOptions: undefined,
       refusalVerdict: null,
+      appliedTransitions,
     };
     const decidedVersion = await handler.subjectVersion(args);
 

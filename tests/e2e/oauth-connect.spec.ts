@@ -18,7 +18,7 @@ import {
 
 // SIGN IN WITH MOTIR FROM CLAUDE — the cases the receipt does not record (Story
 // MOTIR-6973 · Subtask MOTIR-6988). The recorded happy path, connect → read →
-// revoke, is `acceptance-oauth-connect.spec.ts`; the protocol's edges (refresh,
+// revoke, is `regression-oauth-connect.spec.ts`; the protocol's edges (refresh,
 // `plain` PKCE, membership removal, PAT parity) are the integration gate in
 // `tests/integration/oauth/`.
 //

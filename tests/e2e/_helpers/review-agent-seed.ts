@@ -5,7 +5,7 @@ import { seedGithubInstallation } from './github-seed';
 import { E2E_PROVISIONING_ORG } from './github-const';
 
 // THE REVIEW-AGENT E2E SEED (Story MOTIR-1626 · Subtask MOTIR-6827), for the story's
-// acceptance receipt `acceptance-review-agent.spec.ts`.
+// acceptance receipt `regression-review-agent.spec.ts`.
 //
 // It is `continue-hosted-seed.ts`'s workspace — an owner, Ben, the `created`-state
 // repositories the hosted pre-flight can READ (a review run reads the project's primary

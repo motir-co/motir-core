@@ -279,7 +279,7 @@ export default defineConfig({
         // follows it.
         MOTIR_LEGAL_DOCUMENTS: E2E_LEGAL_DOCUMENTS_JSON,
         // The rail's Docs row is conditional too (MOTIR-4167), and
-        // `acceptance-legal-manifest.spec.ts` reads it as the CONTROL for the
+        // `regression-legal-manifest.spec.ts` reads it as the CONTROL for the
         // Legal row's absence — so it is configured, under the same synthetic
         // public origin as the legal urls above.
         MOTIR_DOCS_URL: 'https://public.motir.e2e/docs',

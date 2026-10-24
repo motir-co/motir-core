@@ -23,6 +23,7 @@ import { pageVersionRepository } from '@/lib/repositories/pageVersionRepository'
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { pageStoreFor } from '@/lib/pages';
 import { routingTargetId } from '@/lib/approvalGates/routing';
+import { applyGateTransition } from './gateTransition';
 import {
   workItemDeliveryRepository,
   type WorkItemDeliveryWithChecks,
@@ -235,7 +236,7 @@ export const decisionApprovalGateHandler: GateHandler<DecisionIdentity> = {
     // THE PAGE ARM. Lock the card, then the page — the publish's order after the
     // gate this door already holds — so a racing save serialises behind the
     // freeze and starts a new version rather than extending the frozen one.
-    const { gate, ctx, tx, resolvedStatusKey } = args;
+    const { gate, tx, resolvedStatusKey } = args;
     const workItemId = gate.subjectId;
     await workItemRepository.lockById(workItemId, tx);
     await pageStoreFor(tx).lockPage(identity.pageId);
@@ -249,13 +250,8 @@ export const decisionApprovalGateHandler: GateHandler<DecisionIdentity> = {
       return { statusWritten: null, statusDeferredReason: 'no_status_in_target_category' };
     }
     // `decidingGateId` exempts THIS gate from the approval-gate guard: it is still
-    // `awaiting` here, the door writing the decision after the effect. LAZY: the
-    // status funnel reaches back into the gate registry this handler is part of,
-    // and a static import closes that cycle at module load.
-    const { workItemsService } = await import('@/lib/services/workItemsService');
-    await workItemsService.applyStatusTransition(workItemId, resolvedStatusKey, ctx, tx, {
-      decidingGateId: gate.id,
-    });
+    // `awaiting` here, the door writing the decision after the effect.
+    await applyGateTransition(args, workItemId, resolvedStatusKey, { decidingGateId: gate.id });
     return { statusWritten: resolvedStatusKey };
   },
 

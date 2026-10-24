@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { expectEachHopAnnounced } from '../helpers/transitionedEvents';
 
 // THE `decision_confirmation` KIND (Story MOTIR-5871 · Subtask MOTIR-5954; ADR
 // `approval-gates.md` §1's MOTIR-5952 amendment, points 1, 3, 4, 6, 7, 8). Real
@@ -11,8 +12,6 @@ import { truncateAuthTables } from '../helpers/db';
 // EXECUTOR withdraws or raises it; an edit that moves the stamp re-asks it; the
 // held `done` move waits on it; Confirm writes `done` and STAMPS the record — the
 // newest markdown attachment, or none — in the deciding write.
-
-vi.mock('@/lib/jobs/sendEvent', () => ({ sendEvent: async () => {} }));
 
 const { workItemsService } = await import('@/lib/services/workItemsService');
 const { approvalGatesService } = await import('@/lib/services/approvalGatesService');
@@ -387,7 +386,13 @@ describe('Confirm — through the decide door', () => {
 
   it('writes done and stamps the gate approved with the audit set — and `none` with no record', async () => {
     const item = await createDecision(COMPLETE);
-    const result = await confirm(item.id);
+    // The `done` it writes is announced after the commit (Bug MOTIR-9415).
+    const { result, hops } = await expectEachHopAnnounced(
+      item.id,
+      { workspaceId: fx.workspaceId, actorId: fx.ownerId },
+      () => confirm(item.id),
+    );
+    expect(hops).toEqual([{ fromStatusKey: 'in_review', toStatusKey: 'done' }]);
     expect(result.effect).toEqual({ statusWritten: 'done', confirmedRecord: { kind: 'none' } });
     expect(await statusOf(item.id)).toBe('done');
     const [gate] = await confirmGates(item.id);

@@ -25,7 +25,7 @@ import enMessages from '@/messages/en.json';
  * write is a Server Action, so `page.route` reaches neither: each case seeds the
  * fixture file and reads back what a save wrote.
  *
- * The happy path a human watches is `acceptance-platform-planner-model.spec.ts`;
+ * The happy path a human watches is `regression-platform-planner-model.spec.ts`;
  * this file is the regression half, run on every PR.
  */
 

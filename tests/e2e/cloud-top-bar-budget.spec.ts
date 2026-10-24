@@ -343,7 +343,7 @@ async function seedLongContextPath(page: Page): Promise<void> {
   });
   // This lane is CLOUD-ON, and the free plan caps an organisation at ONE
   // workspace — the create below is REFUSED without this. Set on the org row, the
-  // same remedy `acceptance-repository-tenancy.spec.ts` documents: a paid AI
+  // same remedy `regression-repository-tenancy.spec.ts` documents: a paid AI
   // plan bundles a seat, which resolves the tier to `scaled` (no workspace cap).
   await adminDb.organization.update({
     where: { id: workspace.organizationId },

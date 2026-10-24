@@ -6,6 +6,7 @@ import { adminDb } from './helpers/adminDb';
 import { shaFor } from './helpers/commitShaFixtures';
 import { ensureWorkWaitsOn } from '@/tests/helpers/designWaits';
 import { truncateAuthTables } from './helpers/db';
+import { transitionedEventsFor } from './helpers/transitionedEvents';
 
 // THE DESIGN-APPROVAL SWITCH (Story MOTIR-693 · MOTIR-697;
 // `docs/decisions/hosted-design-rerun-and-design-approval-switch.md` §2), against a
@@ -189,6 +190,25 @@ describe('design approval OFF — the gate is raised AND approved by the system,
     expect(evidence.pinnedAt).not.toBeNull();
 
     expect(await cardStatus()).toBe('done');
+
+    // The system approval's `done` is announced once the publish commits, with the
+    // revision it wrote (Bug MOTIR-9415). Only that hop is asserted: the publish's own
+    // walk to review is a different writer.
+    const [doneHop] = await adminDb.workItemRevision.findMany({
+      where: { workItemId: card.id, diff: { path: ['status', 'to'], equals: 'done' } },
+    });
+    const announced = (await transitionedEventsFor(card.id)).filter(
+      (event) => event.toStatusKey === 'done',
+    );
+    expect(announced).toEqual([
+      expect.objectContaining({
+        workspaceId: fx.workspaceId,
+        workItemId: card.id,
+        actorId: fx.ctx.userId,
+        fromStatusKey: 'in_review',
+        revisionId: doneHop!.id,
+      }),
+    ]);
   });
 
   it('with an open pull request: approved, and no status written — the merge writes done', async () => {

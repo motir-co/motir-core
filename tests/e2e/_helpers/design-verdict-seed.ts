@@ -7,7 +7,7 @@ import { CLI_TOKEN_GRANT } from '@/lib/mcp/toolPermissions';
 import { createTestPerson } from './testPerson';
 
 // THE DESIGN-VERDICT seed (Story MOTIR-6070 · Subtask MOTIR-6429), for the receipt
-// `acceptance-design-verdict.spec.ts` records.
+// `regression-design-verdict.spec.ts` records.
 //
 // One story holding THREE design cards and the TWO cards that wait on the designs:
 //

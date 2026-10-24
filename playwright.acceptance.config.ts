@@ -494,7 +494,7 @@ export default defineConfig({
         // took when MOTIR-3932 moved the public reading surface to
         // motir-marketing.
         //
-        // `acceptance-legal-manifest.spec.ts` reads that row as its CONTROL: its
+        // `regression-legal-manifest.spec.ts` reads that row as its CONTROL: its
         // chapter asserts the rail offers Docs and NOT Legal, and the Docs half
         // is what makes Legal's absence mean *this build did not configure it*
         // rather than *the rail is empty*. Once the row became conditional, a

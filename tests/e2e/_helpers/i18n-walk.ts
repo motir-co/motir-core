@@ -1,5 +1,5 @@
 // Shared helpers for the eleven-languages story E2E (Story MOTIR-7730 ·
-// MOTIR-7761): `acceptance-eleven-languages.spec.ts` (the receipt) and
+// MOTIR-7761): `regression-eleven-languages.spec.ts` (the receipt) and
 // `i18n-locale-walk.spec.ts` (the nine-language walk).
 //
 // ⚠️ EVERY EXPECTED STRING IS READ FROM `messages/<locale>.json` AT RUN TIME.

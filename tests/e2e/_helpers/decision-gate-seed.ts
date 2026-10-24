@@ -8,7 +8,7 @@ import { seedGithubInstallation } from './github-seed';
 import { E2E_PROVISIONING_ORG } from './github-const';
 
 // THE DECISION GATE E2E SEED (Story MOTIR-4907 · Subtask MOTIR-5681), for the acceptance
-// receipt `acceptance-decision-gate.spec.ts` records.
+// receipt `regression-decision-gate.spec.ts` records.
 //
 // WHAT GOES THROUGH A SERVICE, AND WHAT IS LEFT TO THE SPEC — the approve-and-merge seed's
 // split (`approve-and-merge-seed.ts`), for the same reasons:
