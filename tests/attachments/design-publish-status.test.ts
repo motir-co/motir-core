@@ -5,6 +5,7 @@ import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { linkPr } from '../helpers/prLink';
+import { expectEachHopAnnounced, transitionedEventsFor } from '../helpers/transitionedEvents';
 
 // PUBLISHING A DESIGN RESULT HANDS THE CARD TO A PERSON — so the publish moves
 // it to In Review, and ONLY when nothing else owns its status (Bug MOTIR-6009).
@@ -42,6 +43,7 @@ const { designEvidenceService, designPrefix } =
   await import('@/lib/services/designEvidenceService');
 const { workItemsService } = await import('@/lib/services/workItemsService');
 const { makeWorkWaitOn } = await import('../helpers/designWaits');
+const { designEvidenceRepository } = await import('@/lib/repositories/designEvidenceRepository');
 
 const INSTALLATION = '6009001';
 
@@ -100,6 +102,16 @@ function publish(fx: WorkItemFixture, workItemId: string, name: string) {
     },
     fx.ctx,
   );
+}
+
+/** Publish, asserting every status hop it wrote was announced once (Bug MOTIR-9416). */
+async function publishAnnounced(fx: WorkItemFixture, workItemId: string, name: string) {
+  const { hops } = await expectEachHopAnnounced(
+    workItemId,
+    { workspaceId: fx.ctx.workspaceId, actorId: fx.ctx.userId },
+    () => publish(fx, workItemId, name),
+  );
+  return hops;
 }
 
 async function statusOf(workItemId: string): Promise<string> {
@@ -166,7 +178,12 @@ describe('a design card with NO open pull request', () => {
     const fx = await makeWorkItemFixture();
     const card = await makeDesignCard(fx, 'in_progress');
 
-    await publish(fx, card.id, 'v1.mock.html');
+    // Each hop of the walk is announced once the publish commits, with its revision
+    // (Bug MOTIR-9416): the parent rollup, the bell and automation rules all read the
+    // event, not the row.
+    expect(await publishAnnounced(fx, card.id, 'v1.mock.html')).toEqual([
+      { fromStatusKey: 'in_progress', toStatusKey: 'in_review' },
+    ]);
 
     expect(await statusOf(card.id)).toBe('in_review');
     // The status and the question commit together: the card is in review BECAUSE
@@ -179,7 +196,9 @@ describe('a design card with NO open pull request', () => {
     const fx = await makeWorkItemFixture();
     const card = await makeDesignCard(fx, 'implemented');
 
-    await publish(fx, card.id, 'v1.mock.html');
+    expect(await publishAnnounced(fx, card.id, 'v1.mock.html')).toEqual([
+      { fromStatusKey: 'implemented', toStatusKey: 'in_review' },
+    ]);
 
     expect(await statusOf(card.id)).toBe('in_review');
   });
@@ -188,7 +207,8 @@ describe('a design card with NO open pull request', () => {
     const fx = await makeWorkItemFixture();
     const card = await makeDesignCard(fx, 'in_review');
 
-    await publish(fx, card.id, 'v1.mock.html');
+    // A walk that moves nothing announces nothing.
+    expect(await publishAnnounced(fx, card.id, 'v1.mock.html')).toEqual([]);
 
     expect(await statusOf(card.id)).toBe('in_review');
   });
@@ -200,9 +220,33 @@ describe('a design card with NO open pull request', () => {
     const fx = await makeWorkItemFixture();
     const card = await makeDesignCard(fx, 'approved');
 
-    await publish(fx, card.id, 'v1.mock.html');
+    // A walk that moves nothing announces nothing.
+    expect(await publishAnnounced(fx, card.id, 'v1.mock.html')).toEqual([]);
 
     expect(await statusOf(card.id)).toBe('approved');
+  });
+  // ⚠️ THE EMIT WAITS FOR THE COMMIT. A publish that fails after the walk rolls the
+  // hop back, and an event already sent for it would tell every consumer about a
+  // move that never happened.
+  it('announces nothing when the publish rolls back after the walk', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await makeDesignCard(fx, 'in_progress');
+    const before = await transitionedEventsFor(card.id);
+    // The re-read that closes the publish's transaction, after the walk has written.
+    const reread = vi
+      .spyOn(designEvidenceRepository, 'findById')
+      .mockRejectedValueOnce(new Error('the publish fails after the walk'));
+
+    try {
+      await expect(publish(fx, card.id, 'v1.mock.html')).rejects.toThrow(
+        'the publish fails after the walk',
+      );
+    } finally {
+      reread.mockRestore();
+    }
+
+    expect(await statusOf(card.id)).toBe('in_progress');
+    expect(await transitionedEventsFor(card.id)).toEqual(before);
   });
 });
 
@@ -212,7 +256,7 @@ describe('a design card WITH an open linked pull request', () => {
     const card = await makeDesignCard(fx, 'implemented');
     await giveItAnOpenPullRequest(fx, card.id, 61);
 
-    await publish(fx, card.id, 'v1.mock.html');
+    expect(await publishAnnounced(fx, card.id, 'v1.mock.html')).toEqual([]);
 
     // Implemented is TRUE here: a branch is pushed and CI decides when it is
     // reviewable. The whole defect was writing it on the card that has no such
@@ -226,7 +270,7 @@ describe('a design card WITH an open linked pull request', () => {
     const card = await makeDesignCard(fx, 'in_progress');
     await giveItAnOpenPullRequest(fx, card.id, 62);
 
-    await publish(fx, card.id, 'v1.mock.html');
+    expect(await publishAnnounced(fx, card.id, 'v1.mock.html')).toEqual([]);
 
     expect(await statusOf(card.id)).toBe('in_progress');
   });

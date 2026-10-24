@@ -464,11 +464,19 @@ async function assertStatusOpen(
  *
  * Silent by design when there is nothing to do: no hops, an open delivery, or a
  * card at or above review each return without writing.
+ *
+ * ⚠️ EVERY HOP IT APPLIES IS RECORDED ON `appliedTransitions` (Bug MOTIR-9416).
+ * `applyStatusTransition` leaves `work-item/transitioned` to its caller, and the
+ * caller here is a transaction that may still roll back — so the hop is handed to
+ * `persistEvidence`, which announces it once the publish has committed, beside the
+ * system approval's hops. Without it the parent rollup, the bell and automation
+ * rules never saw a design card enter review.
  */
 async function moveToReviewWhenUndelivered(
   item: WorkItem,
   ctx: ServiceContext,
   tx: Prisma.TransactionClient,
+  appliedTransitions: AppliedGateTransition[],
 ): Promise<void> {
   if ((await workItemDeliveryRepository.countOpenByWorkItem(item.id, tx)) > 0) return;
 
@@ -493,7 +501,9 @@ async function moveToReviewWhenUndelivered(
   // card is already refused (`DESIGN_CARD_CLOSED`), so only a LEGACY card marked while
   // open reaches this walk, and the publisher is told to clear the mark.
   for (const key of await hopsToReview(current, tx)) {
-    await workItemsService.applyStatusTransition(current.id, key, ctx, tx);
+    const { transition } = await workItemsService.applyStatusTransition(current.id, key, ctx, tx);
+    /* v8 ignore next -- a hop `hopsToReview` chose always leaves the current status, so it always applies a transition */
+    if (transition) appliedTransitions.push({ workItemId: current.id, ...transition });
   }
 }
 
@@ -621,8 +631,9 @@ async function persistEvidence(
   },
   ctx: ServiceContext,
 ) {
-  // The system approval's status hops (below), announced once this publish commits
-  // (Bug MOTIR-9415) — `approveBySystem` runs in this transaction and cannot.
+  // The status hops this publish writes — its own walk to review (Bug MOTIR-9416) and
+  // the system approval's (Bug MOTIR-9415) — announced once it commits: both run in
+  // this transaction and cannot.
   const appliedTransitions: AppliedGateTransition[] = [];
   return withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, async (tx) => {
     // ⚠️ THE AUTHORITATIVE "DOES WORK WAIT ON THIS?" READ — INSIDE the write's own
@@ -860,7 +871,7 @@ async function persistEvidence(
     // In Review *because* somebody has been asked, so a rollback that loses the
     // gate must lose the status with it — and the early return above, where the
     // predicate says this card owes no design gate, must not move it at all.
-    await moveToReviewWhenUndelivered(args.item, ctx, tx);
+    await moveToReviewWhenUndelivered(args.item, ctx, tx, appliedTransitions);
 
     // ⚠️ DESIGN APPROVAL SWITCHED OFF — the gate above is APPROVED BY THE SYSTEM, here,
     // in this same transaction (Story MOTIR-693 · MOTIR-697;
