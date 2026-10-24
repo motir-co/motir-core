@@ -10,7 +10,7 @@ import type { SharpenDoorResult, SharpenSessionDto, SharpenSettleResult } from '
 // `code` (`SHARPEN_TURN_IN_FLIGHT`, `SHARPEN_SESSION_ENDED`, …), so the
 // out-of-credits test every planning surface uses applies here too.
 
-export type SharpenTarget = { planId: string } | { itemKey: string };
+export type SharpenTarget = { planId: string } | { conversationId: string };
 
 async function readErrorCode(res: Response): Promise<string | null> {
   try {
@@ -39,7 +39,7 @@ async function call<T>(
   return (await res.json()) as T;
 }
 
-/** OPEN a Sharpen session on a plan or a work item — resumes the caller's open
+/** OPEN a Sharpen session on a plan or a conversation — resumes the caller's open
  *  one (`outcome: 'resumed'`, nothing sent), else starts one and its first job. */
 export function openSharpen(target: SharpenTarget, signal?: AbortSignal) {
   return call<SharpenDoorResult>('/api/ai/sharpen', { method: 'POST', body: target }, signal);
@@ -91,6 +91,15 @@ export function getOpenSharpen(target: SharpenTarget, signal?: AbortSignal) {
   const query =
     'planId' in target
       ? `planId=${encodeURIComponent(target.planId)}`
-      : `itemKey=${encodeURIComponent(target.itemKey)}`;
+      : `conversationId=${encodeURIComponent(target.conversationId)}`;
   return call<SharpenSessionDto | null>(`/api/ai/sharpen?${query}`, { method: 'GET' }, signal);
+}
+
+/** The caller's LATEST session on a conversation, open or ended, or null. */
+export function getLatestConversationSharpen(conversationId: string, signal?: AbortSignal) {
+  return call<SharpenSessionDto | null>(
+    `/api/ai/sharpen?conversationId=${encodeURIComponent(conversationId)}&latest=1`,
+    { method: 'GET' },
+    signal,
+  );
 }

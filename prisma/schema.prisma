@@ -3357,8 +3357,9 @@ model WorkItem {
   // most one. SetNull on the child: a deleted bug leaves the issue row with a
   // null pointer, which is how the reconciler tells "deleted" from "never filed".
   monitorIssues   MonitorIssue[]
-  /// Sharpen sessions about this item (Task MOTIR-1101 · MOTIR-8182). Cascade.
-  sharpenSessions SharpenSession[]
+  /// RETIRED with `SharpenSession.workItemId` (MOTIR-9314) — `@ignore`d until its
+  /// column is dropped.
+  sharpenSessions SharpenSession[] @ignore
 
   @@unique([projectId, key])
   @@unique([projectId, identifier])
@@ -9326,28 +9327,30 @@ model PlanChangeSession {
   createdAt           DateTime                  @default(now()) @map("created_at")
   updatedAt           DateTime                  @updatedAt @map("updated_at")
 
-  workspace     Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  project       Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  createdBy     User?                    @relation("PlanChangeSessionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  seedGate      ApprovalGate?            @relation("PlanChangeSessionSeedGate", fields: [seedGateId], references: [id], onDelete: SetNull)
-  seedGuideTurn PlanChangeTurn?          @relation("PlanChangeSessionSeedGuideTurn", fields: [seedGuideTurnId], references: [id], onDelete: SetNull)
-  endedBy       User?                    @relation("PlanChangeSessionEndedBy", fields: [endedById], references: [id], onDelete: SetNull)
-  copiedFrom    PlanChangeSession?       @relation("PlanChangeSessionCopiedFrom", fields: [copiedFromSessionId], references: [id], onDelete: SetNull)
-  copies        PlanChangeSession[]      @relation("PlanChangeSessionCopiedFrom")
-  turns         PlanChangeTurn[]
+  workspace       Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project         Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy       User?                    @relation("PlanChangeSessionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  seedGate        ApprovalGate?            @relation("PlanChangeSessionSeedGate", fields: [seedGateId], references: [id], onDelete: SetNull)
+  seedGuideTurn   PlanChangeTurn?          @relation("PlanChangeSessionSeedGuideTurn", fields: [seedGuideTurnId], references: [id], onDelete: SetNull)
+  endedBy         User?                    @relation("PlanChangeSessionEndedBy", fields: [endedById], references: [id], onDelete: SetNull)
+  copiedFrom      PlanChangeSession?       @relation("PlanChangeSessionCopiedFrom", fields: [copiedFromSessionId], references: [id], onDelete: SetNull)
+  copies          PlanChangeSession[]      @relation("PlanChangeSessionCopiedFrom")
+  turns           PlanChangeTurn[]
+  /// Grill me sessions about this conversation (Story MOTIR-9221 · MOTIR-9314). Cascade.
+  sharpenSessions SharpenSession[]
   /// The BOUNDARY MAILBOX for this thread's runs (MOTIR-4067) — one ordered
   /// sequence per job, carrying BOTH the turns typed mid-run and the stop.
   /// Cascade: a deleted thread takes its mailbox with it.
-  mailbox       PlanChangeMailboxEntry[]
+  mailbox         PlanChangeMailboxEntry[]
   /// The planner's mid-run PAUSES on this thread's runs (MOTIR-8007). Cascade.
-  runPauses     PlanChangeRunPause[]
+  runPauses       PlanChangeRunPause[]
   /// The work items this conversation currently HOLDS (Story MOTIR-2786 ·
   /// MOTIR-2787). Cascade — a deleted thread releases everything it held.
-  targetLocks   PlanTargetLock[]
+  targetLocks     PlanTargetLock[]
   /// The plans this conversation produced (AMENDMENT 17 §5) — many plans to one
   /// session: a refine or a revision writes a successor plan on the SAME
   /// session, never a new one.
-  plans         Plan[]
+  plans           Plan[]
 
   /// The composite-FK TARGET (MOTIR-1735). `id` is already unique on its own, so
   /// this adds no integrity constraint of its own — it exists solely to make
@@ -9589,7 +9592,8 @@ model PlanChangeTurn {
 /// Is a Sharpen session about a PLAN or ONE committed WORK ITEM (Task MOTIR-1101 · MOTIR-8182).
 enum SharpenScopeKind {
   plan
-  work_item
+  /// A plan-change CONVERSATION with no plan yet (Story MOTIR-9221 · MOTIR-9314).
+  conversation
 
   @@map("sharpen_scope_kind")
 }
@@ -9646,38 +9650,48 @@ enum SharpenAction {
 /// `SharpenTurnResult` pieces and are OPAQUE here: the door's service and DTO
 /// (MOTIR-8181) type them. Workspace-scoped by RLS.
 model SharpenSession {
-  id              String               @id @default(cuid())
-  workspaceId     String               @map("workspace_id")
-  projectId       String               @map("project_id")
+  id                  String               @id @default(cuid())
+  workspaceId         String               @map("workspace_id")
+  projectId           String               @map("project_id")
   /// The person who opened it — the session is theirs alone, so it goes with them.
-  createdById     String               @map("created_by_id")
-  scopeKind       SharpenScopeKind     @map("scope_kind")
-  planId          String?              @map("plan_id")
-  workItemId      String?              @map("work_item_id")
-  status          SharpenSessionStatus @default(open)
-  endReason       SharpenEndReason?    @map("end_reason")
+  createdById         String               @map("created_by_id")
+  scopeKind           SharpenScopeKind     @map("scope_kind")
+  planId              String?              @map("plan_id")
+  /// The plan-change CONVERSATION a `conversation`-scope session grills (Story
+  /// MOTIR-9221 · MOTIR-9314) — its settled answers are stored here, with it.
+  planChangeSessionId String?              @map("plan_change_session_id")
+  /// RETIRED (MOTIR-9314): the work-item target is gone, so nothing writes or
+  /// reads this. SCHEMA-ONLY phase of the column's removal
+  /// (docs/decisions/delivery-reader-migration.md §6a/§6b): `@ignore`d so the
+  /// client stops selecting it while the column stays; the CONTRACT phase drops
+  /// the column, this field, its relation and its index together, after release.
+  workItemId          String?              @map("work_item_id") @ignore
+  status              SharpenSessionStatus @default(open)
+  endReason           SharpenEndReason?    @map("end_reason")
   /// The question waiting on the person, or null.
-  pendingQuestion Json?                @map("pending_question")
+  pendingQuestion     Json?                @map("pending_question")
   /// The answers the person settled so far — the cumulative set.
-  settled         Json                 @default("[]")
+  settled             Json                 @default("[]")
   /// The planner-marked assumptions for skipped / "you decide" questions.
-  assumptions     Json                 @default("[]")
+  assumptions         Json                 @default("[]")
   /// The write-back outcome motir-ai reported when the session ended, or null.
-  writeBack       Json?                @map("write_back")
-  lastActivityAt  DateTime             @default(now()) @map("last_activity_at")
-  createdAt       DateTime             @default(now()) @map("created_at")
-  updatedAt       DateTime             @updatedAt @map("updated_at")
+  writeBack           Json?                @map("write_back")
+  lastActivityAt      DateTime             @default(now()) @map("last_activity_at")
+  createdAt           DateTime             @default(now()) @map("created_at")
+  updatedAt           DateTime             @updatedAt @map("updated_at")
 
-  workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  project   Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  createdBy User          @relation("SharpenSessionCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
-  plan      Plan?         @relation(fields: [planId], references: [id], onDelete: Cascade)
-  workItem  WorkItem?     @relation(fields: [workItemId], references: [id], onDelete: Cascade)
-  turns     SharpenTurn[]
+  workspace         Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project           Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy         User               @relation("SharpenSessionCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+  plan              Plan?              @relation(fields: [planId], references: [id], onDelete: Cascade)
+  planChangeSession PlanChangeSession? @relation(fields: [planChangeSessionId], references: [id], onDelete: Cascade)
+  workItem          WorkItem?          @relation(fields: [workItemId], references: [id], onDelete: Cascade) @ignore
+  turns             SharpenTurn[]
 
   @@index([workspaceId])
   @@index([projectId])
   @@index([planId])
+  @@index([planChangeSessionId])
   @@index([workItemId])
   @@map("sharpen_session")
 }

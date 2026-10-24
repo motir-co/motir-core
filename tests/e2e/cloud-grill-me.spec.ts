@@ -28,12 +28,10 @@ import {
   act,
   answerLine,
   ask,
-  assumptionLine,
   cardBody,
   composer,
   conversationPhase,
   declareSharpen,
-  expectCardCarries,
   grillExplanation,
   grillHelp,
   grillSwitch,
@@ -144,7 +142,7 @@ test('off by default, the "?" explains it, and a request with it off asks nothin
   await expect(planRequirement(planId)).resolves.toBeNull();
 });
 
-test('grilled before planning: one question at a time, pick, skip, you decide, stop — kept, handed off, written to the plan and the card', async ({
+test('grilled before planning: one question at a time, pick, skip, you decide, stop — kept, handed off, written to the plan, the card untouched', async ({
   page,
 }) => {
   declareSharpen(SCRIPT);
@@ -156,7 +154,8 @@ test('grilled before planning: one question at a time, pick, skip, you decide, s
   // ── Turning it on starts nothing by itself ──
   await grillSwitch(page).click();
   await expect(grillSwitch(page)).toHaveAttribute('aria-checked', 'true');
-  await expect(rail(page).getByTestId('grill-me-hint')).toHaveText(COPY.control.hint);
+  // No plan exists yet, so the pre-planning hint shows (MOTIR-9316).
+  await expect(rail(page).getByTestId('grill-me-hint')).toHaveText(COPY.control.hintBeforePlanning);
   await expect(question(page)).toHaveCount(0);
   expect(posts, 'turning it on sends nothing').toHaveLength(0);
   expect(readSharpen().submitted ?? []).toHaveLength(0);
@@ -237,18 +236,9 @@ test('grilled before planning: one question at a time, pick, skip, you decide, s
     { question: Q3.text, recommendation: recommended(Q3).label },
   ]);
 
-  // ── … and to the card the run is anchored on, after a reload ──
-  expect(before ?? '').not.toContain('Acceptance criteria');
-  await expectCardCarries(
-    page,
-    seed.storyKey,
-    [answerLine(Q1, picked.label)],
-    [assumptionLine(Q2), assumptionLine(Q3)],
-    FIRST_PAINT_MS,
-  );
-  await expect(page.getByRole('main').getByLabel('Work item description')).not.toContainText(
-    Q4.text,
-  );
+  // ── … and NOT to the card the run is anchored on (MOTIR-9314): Motir AI does
+  // not edit a card as the person; a change reaches it through the plan. ──
+  expect(await cardBody(seed.storyKey)).toBe(before);
 });
 
 test('nothing to ask: the session says so, asks no question, and the card is unchanged', async ({

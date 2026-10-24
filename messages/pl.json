@@ -8413,7 +8413,11 @@
         "outOfCredits": "Twoja organizacja nie ma już kredytów AI, więc planowanie nie może się rozpocząć.",
         "targetUnavailable": "Nie możesz już otworzyć {key}, więc planowanie nie może się rozpocząć.",
         "generic": "Planowanie nie może się rozpocząć z tej propozycji."
-      }
+      },
+      "held": "Motir AI zaproponuje planowanie, gdy skończą się te pytania.",
+      "settledHeading": "Co ustaliły Twoje odpowiedzi",
+      "clearEnough": "Wystarczająco jasne, by zaplanować bez zmian.",
+      "nothingSettled": "Nic nie ustalono, więc prośba zostanie zaplanowana bez zmian."
     },
     "logBugOffer": {
       "label": "Propozycja zgłoszenia błędu",
@@ -8466,9 +8470,11 @@
           "title": "Przepytaj mnie",
           "body1": "Zanim zacznie planować, Motir AI pyta, czego chcesz, po jednym pytaniu: jak to ma działać, jakie są inne sposoby zrobienia tego samego i co się dzieje, gdy coś pójdzie nie tak.",
           "body2": "Każde pytanie ma kilka odpowiedzi do wyboru, jedną zalecaną. Pomiń dowolne, pozwól zdecydować planiście albo przerwij w dowolnej chwili.",
-          "body3": "To, co ustalisz, trafia do wymagania planu i od tego zaczyna się planowanie."
+          "body3": "To, co ustalisz, trafia do wymagania planu i od tego zaczyna się planowanie.",
+          "beforePlanning": "Dopóki nie ma planu, Motir AI zadaje pytania, zanim zaproponuje planowanie, a propozycja pokazuje, co ustalono."
         },
-        "hint": "Twoja następna wiadomość rozpocznie przepytywanie."
+        "hint": "Twoja następna wiadomość rozpocznie przepytywanie.",
+        "hintBeforePlanning": "Zanim Motir AI zaproponuje planowanie, najpierw zada pytania."
       }
     },
     "follow": {
@@ -14883,15 +14889,18 @@
       },
       "youAnswered": "Twoja odpowiedź",
       "plannersAssumption": "Założenie planisty",
-      "writing": "Zapisywanie odpowiedzi w wymaganiu planu i w <item></item>…",
       "writingPlanOnly": "Zapisywanie odpowiedzi w wymaganiu planu…",
-      "written": "Zapisano w wymaganiu planu i w <item></item>.",
       "writtenPlanOnly": "Zapisano w wymaganiu planu.",
       "failed": "Odpowiedzi nie zostały zapisane. Nadal są tutaj.",
       "copy": "Kopiuj odpowiedzi"
     },
     "error": "To pytanie nie dotarło. Dotychczasowe odpowiedzi są zachowane — spróbuj ponownie.",
-    "retry": "Spróbuj ponownie"
+    "retry": "Spróbuj ponownie",
+    "conversation": {
+      "nothingToAsk": "Nie mam pytań — to jest wystarczająco jasne, by zaplanować bez zmian.",
+      "stoppedNoAnswer": "Przerwano przepytywanie przed jakąkolwiek odpowiedzią.",
+      "switchedOff": "Wyłączono Przepytaj mnie, więc pytania zostały przerwane."
+    }
   },
   "itemTranslation": {
     "groupLabel": "Tłumaczenie",

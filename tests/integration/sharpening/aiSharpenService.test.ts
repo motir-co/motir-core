@@ -186,15 +186,6 @@ describe('open', () => {
     expect(await sessionCount()).toBe(1);
   });
 
-  it('opens on a work item by key, case-insensitively', async () => {
-    const item = await createTestWorkItem(fx, { kind: 'task', title: 'Export' });
-    const opened = await aiSharpenService.open({ itemKey: item.identifier.toLowerCase() }, pctx);
-    expect(opened.session.scope).toEqual({ kind: 'work_item', itemKey: item.identifier });
-    expect(jobs.submitted[0]!.context.sharpen).toMatchObject({
-      scope: { kind: 'work_item', ref: item.identifier },
-    });
-  });
-
   it.each(['approved', 'declined'] as const)(
     'refuses a %s plan, writing nothing and submitting nothing',
     async (status) => {
@@ -265,39 +256,12 @@ describe('open', () => {
     expect((await aiSharpenService.open({ planId }, pctx)).outcome).toBe('sharpening');
   });
 
-  it.each([
-    ['done', { status: 'done' }],
-    ['cancelled', { status: 'cancelled' }],
-    ['archived', { archivedAt: new Date() }],
-  ])('refuses a %s work item', async (_label, data) => {
-    const item = await createTestWorkItem(fx, { kind: 'task', title: 'Export' });
-    await adminDb.workItem.update({ where: { id: item.id }, data });
-    await expect(aiSharpenService.open({ itemKey: item.identifier }, pctx)).rejects.toBeInstanceOf(
-      errors.SharpenTargetClosedError,
-    );
-    expect(await sessionCount()).toBe(0);
-    expect(jobs.submitted).toHaveLength(0);
-  });
-
-  it('answers 404-shaped for another project’s plan or item', async () => {
+  it('answers 404-shaped for another project’s plan', async () => {
     const other = await makeWorkItemFixture({ name: 'Other', identifier: 'OTH' });
     const foreignPlan = await plannedPlan(other);
-    const foreignItem = await createTestWorkItem(other, { kind: 'task', title: 'X' });
     await expect(aiSharpenService.open({ planId: foreignPlan }, pctx)).rejects.toBeInstanceOf(
       errors.SharpenTargetNotAvailableError,
     );
-    await expect(
-      aiSharpenService.open({ itemKey: foreignItem.identifier }, pctx),
-    ).rejects.toBeInstanceOf(errors.SharpenTargetNotAvailableError);
-  });
-
-  it('refuses a person who can browse but not edit', async () => {
-    const viewer = await colleague('viewer');
-    const item = await createTestWorkItem(fx, { kind: 'task', title: 'Export' });
-    await expect(
-      aiSharpenService.open({ itemKey: item.identifier }, viewer),
-    ).rejects.toBeInstanceOf(PermissionDeniedError);
-    expect(await sessionCount()).toBe(0);
   });
 });
 
@@ -563,7 +527,7 @@ describe('the run hole', () => {
     expect('requirement' in run).toBe(false);
   });
 
-  it('is ABSENT for a plan with no conversation, a conversation with no request, and a card', async () => {
+  it('is ABSENT for a plan with no conversation and a conversation with no request', async () => {
     const plain = await plannedPlan();
     await aiSharpenService.open({ planId: plain }, pctx);
     expect('run' in sharpenOf(0)).toBe(false);
@@ -571,10 +535,6 @@ describe('the run hole', () => {
     const silent = await runPlan([], []);
     await aiSharpenService.open({ planId: silent }, pctx);
     expect('run' in sharpenOf(1)).toBe(false);
-
-    const item = await createTestWorkItem(fx, { kind: 'task', title: 'Export' });
-    await aiSharpenService.open({ itemKey: item.identifier }, pctx);
-    expect('run' in sharpenOf(2)).toBe(false);
   });
 
   it('rides every turn from stored state; extra body keys cannot reach it', async () => {
@@ -590,5 +550,228 @@ describe('the run hole', () => {
       pctx,
     );
     expect(sharpenOf(1).run).toEqual(sharpenOf(0).run);
+  });
+});
+
+// Story MOTIR-9221 · Subtask MOTIR-9314 — "Grill me" on the CONVERSATION, before any
+// plan exists. The session targets the plan-change conversation; nothing it does
+// creates a plan, takes a lock or writes a card.
+describe('a conversation target', () => {
+  async function conversation(
+    turns: Array<['user' | 'assistant', string]>,
+    over: { targetKeys?: string[]; createdById?: string; endedAt?: Date; origin?: 'mcp' } = {},
+  ) {
+    const session = await adminDb.planChangeSession.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        createdById: over.createdById ?? fx.ownerId,
+        scopeKey: (over.targetKeys ?? []).join(','),
+        targetKeys: over.targetKeys ?? [],
+        lastActivityAt: new Date('2026-01-01T00:00:00.000Z'),
+        ...(over.origin ? { origin: over.origin } : {}),
+        ...(over.endedAt ? { endedAt: over.endedAt, endReason: 'idle' as const } : {}),
+      },
+    });
+    let seq = 0;
+    for (const [role, body] of turns) {
+      await adminDb.planChangeTurn.create({
+        data: { workspaceId: fx.workspaceId, sessionId: session.id, seq: seq++, role, body },
+      });
+    }
+    return session.id;
+  }
+
+  const sharpenOf = (i = 0) => jobs.submitted[i]!.context.sharpen as Record<string, unknown>;
+
+  async function counts() {
+    return {
+      plans: await adminDb.plan.count(),
+      locks: await adminDb.planTargetLock.count(),
+      revisions: await adminDb.workItemRevision.count({ where: { changeKind: 'updated' } }),
+    };
+  }
+
+  it('opens one session and one start turn, grounded in the conversation, and makes no plan or lock', async () => {
+    const card = await createTestWorkItem(fx, { kind: 'story', title: 'Shared export presets' });
+    const conversationId = await conversation(
+      [
+        ['user', 'Add shared export presets'],
+        ['assistant', 'Presets would sit beside the export button.'],
+        ['user', 'For the finance team.'],
+      ],
+      { targetKeys: [card.identifier] },
+    );
+    const before = await counts();
+
+    const opened = await aiSharpenService.open({ conversationId }, pctx);
+    expect(opened.outcome).toBe('sharpening');
+    expect(opened.session.scope).toEqual({ kind: 'conversation', conversationId });
+    expect(opened.session.turns).toHaveLength(1);
+    expect(jobs.submitted).toHaveLength(1);
+    expect(sharpenOf()).toMatchObject({
+      scope: { kind: 'conversation', ref: conversationId },
+      conversation: {
+        requests: ['Add shared export presets', 'For the finance team.'],
+        readAnswer: 'Presets would sit beside the export button.',
+        card: { key: card.identifier, title: card.title },
+      },
+    });
+    expect('run' in sharpenOf()).toBe(false);
+    expect(await counts()).toEqual(before);
+  });
+
+  it('sends readAnswer: null and card: null before Motir AI has answered, project-wide', async () => {
+    const conversationId = await conversation([['user', 'Plan the quarter']]);
+    await aiSharpenService.open({ conversationId }, pctx);
+    expect(sharpenOf().conversation).toEqual({
+      requests: ['Plan the quarter'],
+      readAnswer: null,
+      card: null,
+    });
+  });
+
+  it('resumes the open session without sending, and two opens at once leave one session', async () => {
+    const conversationId = await conversation([['user', 'Plan the quarter']]);
+    const [a, b] = await Promise.all([
+      aiSharpenService.open({ conversationId }, pctx),
+      aiSharpenService.open({ conversationId }, pctx),
+    ]);
+    expect(a.session.id).toBe(b.session.id);
+    expect(await sessionCount()).toBe(1);
+    const again = await aiSharpenService.open({ conversationId }, pctx);
+    expect(again.outcome).toBe('resumed');
+    expect(again.jobId).toBeNull();
+    expect(jobs.submitted).toHaveLength(1);
+  });
+
+  it('refuses a conversation with no request, writing nothing and sending nothing', async () => {
+    const conversationId = await conversation([]);
+    await expect(aiSharpenService.open({ conversationId }, pctx)).rejects.toBeInstanceOf(
+      errors.SharpenActionInvalidError,
+    );
+    expect(await sessionCount()).toBe(0);
+    expect(jobs.submitted).toHaveLength(0);
+  });
+
+  it('answers 404-shaped for another person’s, another project’s or a non-conversation session', async () => {
+    const member = await colleague('member');
+    const theirs = await conversation([['user', 'Mine']], { createdById: member.userId });
+    const mcp = await conversation([['user', 'Over MCP']], { origin: 'mcp' });
+    for (const conversationId of [theirs, mcp, 'nope']) {
+      await expect(aiSharpenService.open({ conversationId }, pctx)).rejects.toBeInstanceOf(
+        errors.SharpenTargetNotAvailableError,
+      );
+    }
+    expect(await sessionCount()).toBe(0);
+  });
+
+  it('gates on ai:plan: a viewer is refused, a member (no plan to view) is admitted', async () => {
+    const viewer = await colleague('viewer');
+    const viewerConv = await conversation([['user', 'Read only']], { createdById: viewer.userId });
+    await expect(
+      aiSharpenService.open({ conversationId: viewerConv }, viewer),
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
+
+    const member = await colleague('member');
+    const memberConv = await conversation([['user', 'Plan it']], { createdById: member.userId });
+    expect((await aiSharpenService.open({ conversationId: memberConv }, member)).outcome).toBe(
+      'sharpening',
+    );
+  });
+
+  it('refuses to open on an ended conversation, but a session on one that ended still stops', async () => {
+    const ended = await conversation([['user', 'Too late']], { endedAt: new Date() });
+    await expect(aiSharpenService.open({ conversationId: ended }, pctx)).rejects.toBeInstanceOf(
+      errors.SharpenTargetClosedError,
+    );
+
+    const conversationId = await conversation([['user', 'Plan the quarter']]);
+    const opened = await aiSharpenService.open({ conversationId }, pctx);
+    succeed(opened.jobId!, questionTurn());
+    await aiSharpenService.settle(opened.session.id, opened.jobId!, pctx);
+    await adminDb.planChangeSession.update({
+      where: { id: conversationId },
+      data: { endedAt: new Date(), endReason: 'idle' },
+    });
+    await expect(
+      aiSharpenService.act(opened.session.id, 'answer', { readingId: 'a' }, pctx),
+    ).rejects.toBeInstanceOf(errors.SharpenTargetClosedError);
+    await expect(aiSharpenService.act(opened.session.id, 'stop', {}, pctx)).resolves.toBeTruthy();
+  });
+
+  it('each turn keeps the conversation alive; an ended one is left as it ended', async () => {
+    const conversationId = await conversation([['user', 'Plan the quarter']]);
+    const activity = async () =>
+      (await adminDb.planChangeSession.findUniqueOrThrow({ where: { id: conversationId } }))
+        .lastActivityAt;
+    const stale = await activity();
+    const opened = await aiSharpenService.open({ conversationId }, pctx);
+    expect((await activity()).getTime()).toBeGreaterThan(stale.getTime());
+
+    const endedAt = new Date('2026-02-01T00:00:00.000Z');
+    await adminDb.planChangeSession.update({
+      where: { id: conversationId },
+      data: { endedAt, endReason: 'idle', lastActivityAt: endedAt },
+    });
+    succeed(opened.jobId!, questionTurn());
+    await aiSharpenService.settle(opened.session.id, opened.jobId!, pctx);
+    expect((await activity()).toISOString()).toBe(endedAt.toISOString());
+  });
+
+  it('ends with writeBack null even when the job reports one, and the card is untouched', async () => {
+    const card = await createTestWorkItem(fx, { kind: 'task', title: 'Export' });
+    const conversationId = await conversation([['user', 'Export invoices']], {
+      targetKeys: [card.identifier],
+    });
+    const before = await counts();
+    const opened = await aiSharpenService.open({ conversationId }, pctx);
+    succeed(opened.jobId!, {
+      kind: 'finished',
+      question: null,
+      settled: SETTLED,
+      assumptions: [],
+      writeBack: { ok: true },
+    });
+    await aiSharpenService.settle(opened.session.id, opened.jobId!, pctx);
+    const read = await aiSharpenService.get(opened.session.id, pctx);
+    expect(read.status).toBe('ended');
+    expect(read.writeBack).toBeNull();
+    expect(await counts()).toEqual(before);
+    expect(
+      (await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id } })).descriptionMd,
+    ).toBe(card.descriptionMd);
+  });
+
+  it('getSettledForConversation: null before a grilling, then the latest session’s answers', async () => {
+    const conversationId = await conversation([['user', 'Export invoices']]);
+    expect(await aiSharpenService.getSettledForConversation(conversationId, pctx)).toBeNull();
+
+    const opened = await aiSharpenService.open({ conversationId }, pctx);
+    succeed(opened.jobId!, questionTurn(QUESTION, SETTLED));
+    await aiSharpenService.settle(opened.session.id, opened.jobId!, pctx);
+    expect(await aiSharpenService.getSettledForConversation(conversationId, pctx)).toEqual({
+      sessionId: opened.session.id,
+      status: 'open',
+      endReason: null,
+      settled: SETTLED,
+      assumptions: [],
+      requests: ['Export invoices'],
+    });
+
+    const stopped = await aiSharpenService.act(opened.session.id, 'stop', {}, pctx);
+    succeed(stopped.jobId!, {
+      kind: 'stopped',
+      question: null,
+      settled: SETTLED,
+      assumptions: [],
+      writeBack: null,
+    });
+    await aiSharpenService.settle(opened.session.id, stopped.jobId!, pctx);
+    expect(await aiSharpenService.getSettledForConversation(conversationId, pctx)).toMatchObject({
+      status: 'ended',
+      endReason: 'stopped',
+      settled: SETTLED,
+    });
   });
 });

@@ -8413,7 +8413,11 @@
         "outOfCredits": "Ihre Organisation hat keine AI-Credits mehr, daher kann die Planung nicht starten.",
         "targetUnavailable": "Sie können {key} nicht mehr öffnen, daher kann die Planung nicht starten.",
         "generic": "Die Planung kann aus diesem Angebot nicht starten."
-      }
+      },
+      "held": "Motir AI bietet die Planung an, sobald diese Fragen beantwortet sind.",
+      "settledHeading": "Was Ihre Antworten festgelegt haben",
+      "clearEnough": "Klar genug, um es wie beschrieben zu planen.",
+      "nothingSettled": "Es wurde nichts festgelegt, daher wird die Anfrage wie beschrieben geplant."
     },
     "logBugOffer": {
       "label": "Angebot, einen Bug zu erfassen",
@@ -8466,9 +8470,11 @@
           "title": "Löchere mich",
           "body1": "Bevor geplant wird, fragt Motir AI Sie nach dem, was Sie möchten, eine Frage nach der anderen: wie es funktionieren soll, welche anderen Wege es zum selben Ziel gibt und was passiert, wenn etwas schiefgeht.",
           "body2": "Jede Frage bietet einige Antworten zur Auswahl, eine davon empfohlen. Überspringen Sie beliebige Fragen, lassen Sie den Planer entscheiden oder hören Sie jederzeit auf.",
-          "body3": "Was Sie festlegen, wird in die Anforderung des Plans geschrieben, und die Planung beginnt damit."
+          "body3": "Was Sie festlegen, wird in die Anforderung des Plans geschrieben, und die Planung beginnt damit.",
+          "beforePlanning": "Solange es noch keinen Plan gibt, stellt Motir AI seine Fragen, bevor es eine Planung anbietet, und das Angebot zeigt, was Sie festgelegt haben."
         },
-        "hint": "Ihre nächste Nachricht startet die Befragung."
+        "hint": "Ihre nächste Nachricht startet die Befragung.",
+        "hintBeforePlanning": "Bevor Motir AI eine Planung anbietet, stellt es zuerst seine Fragen."
       }
     },
     "follow": {
@@ -14883,15 +14889,18 @@
       },
       "youAnswered": "Ihre Antwort",
       "plannersAssumption": "Annahme des Planers",
-      "writing": "Ihre Antworten werden in die Anforderung des Plans und in <item></item> geschrieben…",
       "writingPlanOnly": "Ihre Antworten werden in die Anforderung des Plans geschrieben…",
-      "written": "In die Anforderung des Plans und in <item></item> geschrieben.",
       "writtenPlanOnly": "In die Anforderung des Plans geschrieben.",
       "failed": "Ihre Antworten wurden nicht geschrieben. Sie sind weiterhin hier.",
       "copy": "Antworten kopieren"
     },
     "error": "Diese Frage ist nicht angekommen. Ihre bisherigen Antworten bleiben erhalten – versuchen Sie es erneut.",
-    "retry": "Erneut versuchen"
+    "retry": "Erneut versuchen",
+    "conversation": {
+      "nothingToAsk": "Ich habe keine Fragen — das ist klar genug, um es wie beschrieben zu planen.",
+      "stoppedNoAnswer": "Sie haben die Befragung vor der ersten Antwort beendet.",
+      "switchedOff": "Sie haben „Löchere mich“ ausgeschaltet, daher wurden die Fragen beendet."
+    }
   },
   "itemTranslation": {
     "groupLabel": "Übersetzung",

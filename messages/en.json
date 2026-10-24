@@ -8413,7 +8413,11 @@
         "outOfCredits": "Your organization is out of AI credits, so planning can’t start.",
         "targetUnavailable": "You can no longer open {key}, so planning can’t start.",
         "generic": "Planning can’t start from this offer."
-      }
+      },
+      "held": "Motir AI will offer to plan when these questions are done.",
+      "settledHeading": "What your answers settled",
+      "clearEnough": "Clear enough to plan as stated.",
+      "nothingSettled": "Nothing was settled, so the request is planned as stated."
     },
     "logBugOffer": {
       "label": "Offer to log a bug",
@@ -8466,9 +8470,11 @@
           "title": "Grill me",
           "body1": "Before it plans, Motir AI asks you about what you want, one question at a time: how it should work, the other ways of doing the same thing, and what happens when things go wrong.",
           "body2": "Each question has a few answers to pick from, one recommended. Skip any, let the planner decide, or stop whenever you like.",
-          "body3": "What you settle is written into the plan's requirement, and planning starts from it."
+          "body3": "What you settle is written into the plan's requirement, and planning starts from it.",
+          "beforePlanning": "Before any plan exists, Motir AI asks its questions before it offers to plan, and the offer shows what you settled."
         },
-        "hint": "Your next message starts the grilling."
+        "hint": "Your next message starts the grilling.",
+        "hintBeforePlanning": "When Motir AI would offer to plan, it asks its questions first."
       }
     },
     "follow": {
@@ -14883,15 +14889,18 @@
       },
       "youAnswered": "You answered",
       "plannersAssumption": "Planner's assumption",
-      "writing": "Writing your answers to the plan's requirement and to <item></item>…",
       "writingPlanOnly": "Writing your answers to the plan's requirement…",
-      "written": "Written to the plan's requirement and to <item></item>.",
       "writtenPlanOnly": "Written to the plan's requirement.",
       "failed": "Your answers weren't written. They are still here.",
       "copy": "Copy answers"
     },
     "error": "That question didn't arrive. Your answers so far are kept — try again.",
-    "retry": "Try again"
+    "retry": "Try again",
+    "conversation": {
+      "nothingToAsk": "I have nothing to ask — this is clear enough to plan as stated.",
+      "stoppedNoAnswer": "You stopped the grilling before any answer.",
+      "switchedOff": "You turned Grill me off, so the questions stopped."
+    }
   },
   "itemTranslation": {
     "groupLabel": "Translation",

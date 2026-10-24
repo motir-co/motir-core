@@ -39,6 +39,8 @@ import {
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { planSessionsService } from '@/lib/services/planSessionsService';
 import { aiPlanEditsService } from '@/lib/services/aiPlanEditsService';
+import { aiSharpenService } from '@/lib/services/aiSharpenService';
+import { toCarriedAnswers } from '@/lib/mappers/sharpenMappers';
 import { toPlanChangeSessionDto } from '@/lib/mappers/planChangeMappers';
 import { planChangeMailboxRepository } from '@/lib/repositories/planChangeMailboxRepository';
 import { planChangeRunPauseRepository } from '@/lib/repositories/planChangeRunPauseRepository';
@@ -49,7 +51,7 @@ import { readPlanningTurn } from '@/lib/planning/plannerTurn';
 import { readCodeUnreadable } from '@/lib/planning/codeUnreadable';
 import { readCodeUnsearchable, type CodeUnsearchableRepo } from '@/lib/planning/codeUnsearchable';
 import { getJob } from '@/lib/ai/motirAiClient';
-import type { SubmittedRequirement } from '@/lib/ai/types';
+import type { CarriedAnswers, SubmittedRequirement } from '@/lib/ai/types';
 import { turnSubmitKey } from '@/lib/ai/turnSubmitKey';
 import { readGuideTurnRecord, type GuideTurnRecord } from '@/lib/ai/guideWorkItem';
 import type {
@@ -1416,6 +1418,19 @@ async function releasePlanAgainClaim(
       await planChangeSessionRepository.update(session.id, { lastSubmittedAt: claim.previous }, tx);
     },
   );
+}
+
+/**
+ * The conversation's carried answers (MOTIR-9315): what its own person's grilling
+ * settled, or `undefined`. Only a conversation is grilled before planning, and only
+ * by the person whose conversation it is, so any other session carries nothing.
+ */
+async function carriedAnswersFor(
+  session: PlanChangeSession,
+  pctx: ProjectContext,
+): Promise<CarriedAnswers | undefined> {
+  if (session.origin !== 'conversation' || session.createdById !== pctx.userId) return undefined;
+  return toCarriedAnswers(await aiSharpenService.getSettledForConversation(session.id, pctx));
 }
 
 export const planChangeSessionsService = {
@@ -3221,7 +3236,17 @@ export const planChangeSessionsService = {
     // one key, and a repeat that comes back with a job already planned into gets
     // that job's plan back (`createPlan`), never a second one.
     const idempotencyKey = planningSubmitKey(turns, session.lastJobId);
-    const submitOpts = { sessionId: session.id, ...(idempotencyKey ? { idempotencyKey } : {}) };
+    // CARRIED ANSWERS (Story MOTIR-9221 · MOTIR-9315): what the person settled when
+    // this conversation was grilled before planning rides the run, so the run does
+    // not grill that request again. Read now, at submit, so a Stop, a finish or Grill
+    // me switched off all carry what was settled so far. A fresh run only: a plan
+    // again re-plans what an earlier run already carried.
+    const carriedAnswers = claim ? undefined : await carriedAnswersFor(session, pctx);
+    const submitOpts = {
+      sessionId: session.id,
+      ...(idempotencyKey ? { idempotencyKey } : {}),
+      ...(carriedAnswers ? { carriedAnswers } : {}),
+    };
     let submitted: { jobId: string; planId: string };
     try {
       submitted =
