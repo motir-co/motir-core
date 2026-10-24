@@ -4,7 +4,6 @@
 // structural-guard lane rather than beside the story gate's database cases in
 // `agentRunnerPoolStoryGate.test.ts`.
 import { describe, expect, it } from 'vitest';
-import hostedAgentRunCoverage from '../../vitest.coverage.hosted-agent-run.config';
 import { filesForIncludePattern, includePatterns, thresholdsFor } from '../helpers/coverageGate';
 
 describe('the coverage floor over the story’s motir-core files', () => {
@@ -35,8 +34,14 @@ describe('the coverage floor over the story’s motir-core files', () => {
     120_000,
   );
 
-  it('hostedRunService keeps its floor in the hosted-agent-run lane, not here', () => {
-    const coverage = hostedAgentRunCoverage.test?.coverage as {
+  it('hostedRunService keeps its floor in the hosted-agent-run lane, not here', async () => {
+    // Imported by a computed path: the lane config sits outside this test
+    // project's file list, so a static import would not type-check (TS6307).
+    const lanePath = '../../vitest.coverage.hosted-agent-run.config';
+    const lane = (await import(lanePath)) as {
+      default: { test?: { coverage?: unknown } };
+    };
+    const coverage = lane.default.test?.coverage as {
       include?: string[];
       thresholds?: Record<string, unknown>;
     };

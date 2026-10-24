@@ -293,11 +293,12 @@ describe('the hosted-agent env allow-list', () => {
       MOTIR_GATEWAY_URL: 'https://gateway.test',
       MOTIR_RUN_KEY: 'key',
     };
-    for (const extra of [
+    const extras: Readonly<Record<string, string>>[] = [
       { MOTIR_RUN_MODE: 'continue' },
       { MOTIR_RUN_MODE: 'fix' },
       { MOTIR_RUN_MODE: 'review', MOTIR_REVIEW_GATE_ID: 'gate', MOTIR_REVIEW_VERSION: '2' },
-    ]) {
+    ];
+    for (const extra of extras) {
       expect(() =>
         buildContainerUserData({ image: IMAGE, env: { ...base, ...extra } }),
       ).not.toThrow();

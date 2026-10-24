@@ -568,9 +568,11 @@ describe('an abandoned hosted-agent supervision on an agent-runner account (MOTI
     fleetShardOrchestratorService.resetCache();
     fakeOrchestrator.reset();
     const run = await makeRun('failed');
+    const workspaceId = run.workspaceId;
+    if (workspaceId === null) throw new Error('the seeded run belongs to no workspace');
     const project = await adminDb.project.create({
       data: {
-        workspaceId: run.workspaceId,
+        workspaceId,
         name: 'Sweep',
         identifier: `SW${seq}`,
         slug: `sweep-${seq}`,
@@ -593,19 +595,19 @@ describe('an abandoned hosted-agent supervision on an agent-runner account (MOTI
     });
     const dispatchRun = await adminDb.dispatchRun.create({
       data: {
-        workspaceId: run.workspaceId,
+        workspaceId,
         projectId: project.id,
         command: 'run',
         fleetShardId: shard.id,
       },
     });
-    const workspace = await adminDb.workspace.findUniqueOrThrow({ where: { id: run.workspaceId } });
+    const workspace = await adminDb.workspace.findUniqueOrThrow({ where: { id: workspaceId } });
     const orgId = workspace.organizationId;
     if (orgId === null) throw new Error('the seeded workspace belongs to no organisation');
     const account = fakeOrchestratorForShard(shard.id);
     const handle = await account.provision({
       orgId,
-      workspaceId: run.workspaceId,
+      workspaceId,
       projectId: project.id,
       repoFullName: 'motir-projects/site',
       workload: 'hosted_agent',
@@ -633,7 +635,7 @@ describe('an abandoned hosted-agent supervision on an agent-runner account (MOTI
       size: FLEET_CONTAINER_SIZE,
       attribution: {
         orgId,
-        workspaceId: run.workspaceId,
+        workspaceId,
         projectId: project.id,
         repoFullName: 'motir-projects/site',
       },
@@ -645,7 +647,7 @@ describe('an abandoned hosted-agent supervision on an agent-runner account (MOTI
           subject: dispatchId,
           kind: 'hosted-agent',
           nextPollAt: new Date(Date.now() - 40 * 60_000),
-          workspaceId: run.workspaceId,
+          workspaceId,
         },
         tx,
       );
@@ -655,7 +657,7 @@ describe('an abandoned hosted-agent supervision on an agent-runner account (MOTI
           stepId: hostedAgentBootStepId(dispatchId),
           kind: 'run',
           result: JSON.parse(JSON.stringify({ phase: 'supervising', session })),
-          workspaceId: run.workspaceId,
+          workspaceId,
         },
         tx,
       );
