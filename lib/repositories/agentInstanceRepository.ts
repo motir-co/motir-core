@@ -34,6 +34,16 @@ export interface AgentInstanceHandleColumns {
   volumeId: string;
 }
 
+/**
+ * Where an instance lives (MOTIR-9468): its fleet account and the zone of its
+ * disk. Recorded once, at placement; an instance with none is on the
+ * process-wide Fly app.
+ */
+export interface AgentInstancePlacement {
+  fleetShardId: string;
+  availabilityZone: string | null;
+}
+
 /** What a guarded transition may write beside the new state. */
 /** The image-update columns a patch carries, only where the patch names them. */
 function imagePatch(patch: AgentInstanceTransitionPatch): Record<string, unknown> {
@@ -228,6 +238,36 @@ export const agentInstanceRepository = {
       data: handle,
     });
     return result.count;
+  },
+
+  /**
+   * Record the account and zone the instance was placed in — ONCE. The update is
+   * guarded on `fleetShardId IS NULL`, so a second placement, or a racer that
+   * lost, changes nothing and answers `applied: false`: the disk lives in one
+   * account and one zone for the instance's life. `tx` required.
+   */
+  async recordPlacement(
+    id: string,
+    placement: AgentInstancePlacement,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ applied: boolean }> {
+    const result = await tx.agentInstance.updateMany({
+      where: { id, fleetShardId: null },
+      data: placement,
+    });
+    return { applied: result.count === 1 };
+  },
+
+  /**
+   * Every record in one fleet account, live AND deleted — the reconciler and the
+   * headroom reading count an account's instances. An instance with no account
+   * (the process-wide Fly app) is in no account's list. `tx` required.
+   */
+  async listByFleetShard(
+    fleetShardId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<AgentInstance[]> {
+    return tx.agentInstance.findMany({ where: { fleetShardId }, orderBy: { createdAt: 'asc' } });
   },
 
   /** Bump the idle signal (§2) — later stories' relay and runs call it. `tx` required. */
