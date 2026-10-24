@@ -127,6 +127,7 @@ describe('the page REST surface goes through pagesService only', () => {
 });
 
 describe('the checker fails on a violation', () => {
+  const PAGES_PACKAGE = ['@motir', 'pages'].join('/');
   const route = 'app/api/v1/pages/[pageId]/route.ts';
   const calls = 'export const GET = () => pagesService.getPageMarkdown(ctx, input);\n';
 
@@ -135,8 +136,10 @@ describe('the checker fails on a violation', () => {
     ["import { Prisma } from '@/generated/prisma/client';", '@/generated/prisma/client'],
     ["import { pageRepository } from '@/lib/repositories/pageRepository';", 'pageRepository'],
     ["import { getPageTool } from '@/lib/mcp/tools/getPage';", '@/lib/mcp/tools/getPage'],
-    ["import { markdownToUpdate } from '@motir/pages';", '@motir/pages'],
-    ["import { parseMarkdown, serializeMarkdown } from '@motir/pages/document';", '@motir/pages'],
+    // The package name is assembled so `importDirection.test.ts`, which scans
+    // test sources for real imports of it, does not read these samples as one.
+    [`import { markdownToUpdate } from '${PAGES_PACKAGE}';`, PAGES_PACKAGE],
+    [`import { parseMarkdown } from '${PAGES_PACKAGE}/document';`, PAGES_PACKAGE],
     ["import * as Y from 'yjs';", 'yjs'],
     ["export { excerpt } from '@/lib/markdown/excerpt';", '@/lib/markdown'],
     ["const { db } = await import('@/lib/db');", '@/lib/db'],
