@@ -618,6 +618,17 @@ export interface PersistentTerminalEndpoint {
   readonly url: string;
   /** Headers the dial must carry to reach this one machine (Fly: `fly-force-instance-id`). */
   readonly headers: Readonly<Record<string, string>>;
+  /**
+   * Mutual TLS for the dial (MOTIR-9470: an AWS instance's host agent on 8443).
+   * The relay presents `certPem`/`keyPem`, trusts ONLY `caPem`, and does not check
+   * the host name — the address is a public IP that changes on every start.
+   * Absent on Fly and the fake, whose dial is ordinary TLS or a local socket.
+   */
+  readonly tls?: {
+    readonly caPem: string;
+    readonly certPem: string;
+    readonly keyPem: string;
+  };
 }
 
 /** The persistent handle (§1's table) — persisted on the instance record. */
@@ -788,8 +799,14 @@ export interface PersistentContainerOrchestrator {
     terminal: PersistentTerminalConfig,
   ): Promise<'updated' | 'current'>;
 
-  /** Where the relay dials this machine's terminal server (Q2). Pure — no provider call. */
-  terminalEndpoint(handle: PersistentContainerHandle): PersistentTerminalEndpoint;
+  /**
+   * Where the relay dials this machine's terminal server (Q2). Pure on Fly and the
+   * fake; on AWS (MOTIR-9470) it reads the instance's current public address, so
+   * the answer may be a promise — callers await it.
+   */
+  terminalEndpoint(
+    handle: PersistentContainerHandle,
+  ): PersistentTerminalEndpoint | Promise<PersistentTerminalEndpoint>;
 
   /**
    * MOVE the machine to a different image (`agent-image-update.md` Q2) — the SAME

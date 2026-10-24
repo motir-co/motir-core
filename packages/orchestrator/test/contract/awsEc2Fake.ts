@@ -43,6 +43,10 @@ import {
 // (`IncorrectInstanceState` otherwise, as EC2 refuses), CreateTags adds or
 // overwrites tags on instances and volumes, and DescribeVolumes pages like
 // DescribeInstances.
+//
+// REACH (MOTIR-9470): a running instance has a PUBLIC ADDRESS, a new one on
+// every start and none while stopped; AuthorizeSecurityGroupIngress records one
+// rule per (group, port, range) and answers a repeat `InvalidPermission.Duplicate`.
 
 export interface FakeCall {
   readonly method: string;
@@ -95,6 +99,12 @@ export class AwsEc2Fake implements Ec2Api {
   holdNextTerminate = false;
   /** The next stop leaves its instance `stopping` until {@link setState}. */
   holdNextStop = false;
+  /** Each security group's inbound rules. */
+  readonly ingressRules = new Map<
+    string,
+    Array<{ port: number; cidrIp: string; description: string }>
+  >();
+  private addressSeq = 0;
   /** Each instance's user-data, raw text, by id. */
   readonly userData = new Map<string, string>();
   /** Every instance ever launched, terminated ones included, by id. */
@@ -133,6 +143,7 @@ export class AwsEc2Fake implements Ec2Api {
       this.byToken,
       this.volumes,
       this.userData,
+      this.ingressRules,
     ]) {
       map.clear();
     }
@@ -146,6 +157,13 @@ export class AwsEc2Fake implements Ec2Api {
     this.outOfStockZones.clear();
     this.refusals.length = 0;
     this.seq = 0;
+    this.addressSeq = 0;
+  }
+
+  /** A fresh public address, as EC2 assigns one at each start. */
+  private nextAddress(): string {
+    this.addressSeq += 1;
+    return `203.0.113.${this.addressSeq}`;
   }
 
   /**
@@ -207,8 +225,14 @@ export class AwsEc2Fake implements Ec2Api {
 
   /** Move an instance to `state`, as a person in the console or AWS would. */
   setState(instanceId: string, state: string, reason: string | null = null): void {
-    const instance = this.instance(instanceId);
-    this.instances.set(instanceId, { ...instance, state, stateTransitionReason: reason });
+    const { publicIpAddress, ...instance } = this.instance(instanceId);
+    // Only a running instance keeps its public address.
+    this.instances.set(instanceId, {
+      ...instance,
+      ...(state === 'running' && publicIpAddress ? { publicIpAddress } : {}),
+      state,
+      stateTransitionReason: reason,
+    });
   }
 
   /** The instance was launched at `launchTime`. */
@@ -495,9 +519,11 @@ export class AwsEc2Fake implements Ec2Api {
       });
       return { deviceName: mapping.deviceName, volumeId };
     });
+    const pending = this.leaveNextPending;
     this.instances.set(instanceId, {
       instanceId,
-      state: this.leaveNextPending ? 'pending' : 'running',
+      state: pending ? 'pending' : 'running',
+      ...(pending ? {} : { publicIpAddress: this.nextAddress() }),
       launchTime: this.now(),
       stateTransitionReason: null,
       availabilityZone: subnet.availabilityZone,
@@ -600,6 +626,7 @@ export class AwsEc2Fake implements Ec2Api {
       this.instances.set(id, {
         ...instance,
         state: 'running',
+        publicIpAddress: this.nextAddress(),
         launchTime: this.now(),
         stateTransitionReason: null,
       });
@@ -651,6 +678,24 @@ export class AwsEc2Fake implements Ec2Api {
     if (!instance) throw new Ec2ApiError('InvalidInstanceID.NotFound', 400, false);
     if (instance.state !== 'stopped') throw new Ec2ApiError('IncorrectInstanceState', 400, false);
     this.userData.set(instanceId, userData);
+  }
+
+  async authorizeSecurityGroupIngress(input: {
+    groupId: string;
+    port: number;
+    cidrIp: string;
+    description: string;
+  }) {
+    this.record('authorizeSecurityGroupIngress', input);
+    const group = this.securityGroups.get(input.groupId);
+    if (!group) throw new Ec2ApiError('InvalidGroup.NotFound', 400, false);
+    const rules = this.ingressRules.get(input.groupId) ?? [];
+    if (rules.some((r) => r.port === input.port && r.cidrIp === input.cidrIp)) {
+      throw new Ec2ApiError('InvalidPermission.Duplicate', 400, false);
+    }
+    rules.push({ port: input.port, cidrIp: input.cidrIp, description: input.description });
+    this.ingressRules.set(input.groupId, rules);
+    this.securityGroups.set(input.groupId, { ...group, ingressRuleCount: rules.length });
   }
 
   async createTags(resourceIds: readonly string[], tags: readonly Ec2Tag[]) {

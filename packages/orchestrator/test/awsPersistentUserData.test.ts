@@ -159,6 +159,7 @@ describe('instanceConfigOf', () => {
       env: AWS_PERSISTENT_SPEC.env,
       idleCommand: ['sleep', 'infinity'],
       terminal: TERMINAL,
+      hostAgent: null,
     });
     expect(instanceConfigOf({ ...AWS_PERSISTENT_SPEC, idleCommand: undefined }).idleCommand).toBe(
       null,

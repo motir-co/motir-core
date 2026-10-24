@@ -363,7 +363,7 @@ describe('the terminal (agent-terminal.md Q2, Q8 · MOTIR-6939)', () => {
     try {
       const handle = await fake.provisionPersistent({ ...SPEC, terminal: TERMINAL });
       fake.setTerminalAddress(`ws://127.0.0.1:${port}/`);
-      const endpoint = fake.terminalEndpoint(handle);
+      const endpoint = await fake.terminalEndpoint(handle);
       expect(endpoint).toEqual({
         url: `ws://127.0.0.1:${port}/v1/terminal`,
         headers: { 'x-motir-machine-id': handle.machineId },
@@ -391,12 +391,12 @@ describe('the terminal (agent-terminal.md Q2, Q8 · MOTIR-6939)', () => {
 
   it('defaults the address to MOTIR_FAKE_TERMINAL_URL, then to 127.0.0.1:7681', async () => {
     const handle = await fake.provisionPersistent(SPEC);
-    expect(fake.terminalEndpoint(handle).url).toBe('ws://127.0.0.1:7681/v1/terminal');
+    expect((await fake.terminalEndpoint(handle)).url).toBe('ws://127.0.0.1:7681/v1/terminal');
     vi.stubEnv('MOTIR_FAKE_TERMINAL_URL', 'ws://localhost:9999');
-    expect(fake.terminalEndpoint(handle).url).toBe('ws://localhost:9999/v1/terminal');
+    expect((await fake.terminalEndpoint(handle)).url).toBe('ws://localhost:9999/v1/terminal');
     fake.reset();
     vi.stubEnv('MOTIR_FAKE_TERMINAL_URL', '');
-    expect(fake.terminalEndpoint(handle).url).toBe('ws://127.0.0.1:7681/v1/terminal');
+    expect((await fake.terminalEndpoint(handle)).url).toBe('ws://127.0.0.1:7681/v1/terminal');
   });
 });
 

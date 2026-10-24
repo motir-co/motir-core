@@ -551,8 +551,8 @@ export function awsRunnerPolicyDocument(input: {
  * What an AGENT-HOSTER key may do (Story MOTIR-9361 · MOTIR-9479): the runner's
  * calls, plus what a persistent instance needs beyond a one-job VM — stop and
  * start (hibernate, wake), read and rewrite its user-data (the config document,
- * legal only while stopped), re-stamp its tags after launch, and list and delete
- * its home disk. Every action that takes a resource-level condition is held to
+ * legal only while stopped), re-stamp its tags after launch, list and delete its
+ * home disk, and open the host agent's port on its own group (MOTIR-9470). Every action that takes a resource-level condition is held to
  * the account's own `motir-shard` tag; `DescribeVolumes` (like every Describe)
  * supports none, so it is `*`.
  * https://docs.aws.amazon.com/service-authorization/latest/reference/list_amazonec2.html
@@ -591,6 +591,14 @@ export function awsAgentHosterPolicyDocument(input: {
         Effect: 'Allow',
         Action: 'ec2:CreateTags',
         Resource: arn('instance/*'),
+        Condition: own,
+      },
+      {
+        // MOTIR-9470: the host agent's one inbound rule (TCP 8443, mutual TLS).
+        Sid: 'OpenHostAgentPortOnOwnGroup',
+        Effect: 'Allow',
+        Action: 'ec2:AuthorizeSecurityGroupIngress',
+        Resource: arn('security-group/*'),
         Condition: own,
       },
       {

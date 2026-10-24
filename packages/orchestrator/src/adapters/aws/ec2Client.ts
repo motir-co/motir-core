@@ -1,6 +1,7 @@
 import {
   AssociateRouteTableCommand,
   AttachInternetGatewayCommand,
+  AuthorizeSecurityGroupIngressCommand,
   CreateInternetGatewayCommand,
   CreateRouteCommand,
   CreateRouteTableCommand,
@@ -142,6 +143,9 @@ export interface Ec2Instance {
   readonly stateTransitionReason: string | null;
   readonly availabilityZone: string | null;
   readonly tags: readonly Ec2Tag[];
+  /** The public IPv4 address (`PublicIpAddress`), present only while the instance
+   *  runs; a new one is assigned on every start (MOTIR-9470). Absent when none. */
+  readonly publicIpAddress?: string;
   /** The EBS volumes attached to it, by device name (MOTIR-9469: an agent
    *  instance's home disk). Absent when the answer listed none. */
   readonly volumes?: ReadonlyArray<{ readonly deviceName: string; readonly volumeId: string }>;
@@ -290,6 +294,15 @@ export interface Ec2Api {
   /** https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_CreateTags.html —
    *  adds or overwrites each tag on each resource. */
   createTags(resourceIds: readonly string[], tags: readonly Ec2Tag[]): Promise<void>;
+  /** https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_AuthorizeSecurityGroupIngress.html —
+   *  one TCP port from one IPv4 range; a rule that already exists is
+   *  `InvalidPermission.Duplicate`, thrown (MOTIR-9470). */
+  authorizeSecurityGroupIngress(input: {
+    groupId: string;
+    port: number;
+    cidrIp: string;
+    description: string;
+  }): Promise<void>;
 }
 
 /** The slice of `EC2Client` the factory uses — what a test stubs. */
@@ -383,7 +396,8 @@ type InstanceMethod =
   | 'deleteVolume'
   | 'describeInstanceUserData'
   | 'modifyInstanceUserData'
-  | 'createTags';
+  | 'createTags'
+  | 'authorizeSecurityGroupIngress';
 type NetworkCalls = Omit<Ec2Api, InstanceMethod>;
 type InstanceCalls = Pick<Ec2Api, InstanceMethod>;
 
@@ -395,6 +409,7 @@ function toInstance(i: Instance): Ec2Instance {
     stateTransitionReason: i.StateTransitionReason || null,
     availabilityZone: i.Placement?.AvailabilityZone ?? null,
     tags: tagsOf(i.Tags),
+    ...(i.PublicIpAddress ? { publicIpAddress: i.PublicIpAddress } : {}),
     ...(i.BlockDeviceMappings?.length
       ? {
           volumes: i.BlockDeviceMappings.flatMap((m) =>
@@ -520,6 +535,21 @@ function instanceCalls(send: Send): InstanceCalls {
         new ModifyInstanceAttributeCommand({
           InstanceId: instanceId,
           UserData: { Value: Buffer.from(userData, 'utf8') },
+        }),
+      );
+    },
+    async authorizeSecurityGroupIngress({ groupId, port, cidrIp, description }) {
+      await send(
+        new AuthorizeSecurityGroupIngressCommand({
+          GroupId: groupId,
+          IpPermissions: [
+            {
+              IpProtocol: 'tcp',
+              FromPort: port,
+              ToPort: port,
+              IpRanges: [{ CidrIp: cidrIp, Description: description }],
+            },
+          ],
         }),
       );
     },

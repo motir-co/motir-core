@@ -14,6 +14,7 @@ import {
   type PersistentContainerSpec,
   type PersistentTerminalConfig,
 } from '../src/index';
+import { testHostAgentConfig } from './contract/awsHostAgentFake';
 import { AwsEc2Fake } from './contract/awsEc2Fake';
 import {
   AWS_HOSTER_AMI_ID,
@@ -49,6 +50,7 @@ let clock: number;
 function adapter() {
   return createAwsPersistentOrchestrator({
     ec2,
+    hostAgent: testHostAgentConfig(),
     region: 'us-east-1',
     shardTag: SHARD,
     amiId: AWS_HOSTER_AMI_ID,
@@ -99,6 +101,7 @@ describe('provisionPersistent — launches with the config document', () => {
       env: { ...SPEC.env, API_TOKEN: MARKER },
       idleCommand: ['sleep', 'infinity'],
       terminal: TERMINAL,
+      hostAgent: expect.anything(),
     });
     expect(tagsOf(handle)).toMatchObject({
       [AWS_TERMINAL_VERSION_TAG_KEY]: '2',
@@ -244,6 +247,7 @@ describe('moveImage — the same instance and disk, only the image replaced', ()
     });
     const waiting = createAwsPersistentOrchestrator({
       ec2,
+      hostAgent: testHostAgentConfig(),
       region: 'us-east-1',
       shardTag: SHARD,
       amiId: AWS_HOSTER_AMI_ID,

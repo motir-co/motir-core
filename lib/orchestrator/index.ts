@@ -1,9 +1,11 @@
 import {
+  awsTerminalEndpoint,
   createAwsOrchestrator,
   createAwsPersistentOrchestrator,
   createEc2Api,
   createFakeOrchestrator,
   createFlyOrchestrator,
+  createHostAgentClient,
   createUsageSink,
   fakeFleetInventory,
   flyFleetInventory,
@@ -121,14 +123,15 @@ export function getPersistentOrchestrator(): PersistentContainerOrchestrator {
  * address needs none, since the Fly adapter's answer is pure (the org app's
  * public hostname plus `fly-force-instance-id`).
  */
-export function persistentTerminalEndpoint(
+export async function persistentTerminalEndpoint(
   handle: PersistentContainerHandle,
-): PersistentTerminalEndpoint {
+): Promise<PersistentTerminalEndpoint> {
   const adapter =
     selectedOrchestratorProvider() === 'fake'
       ? fakePersistentOrchestrator
       : flyPersistentOrchestrator;
-  return adapter.terminalEndpoint(handle);
+  // Awaited since MOTIR-9470: an AWS instance's address is read at dial time.
+  return await adapter.terminalEndpoint(handle);
 }
 
 /** Can this deployment boot agent instances at all? Never throws. */
@@ -253,32 +256,112 @@ function awsOrchestratorForShard(shard: FleetShardDTO): ContainerOrchestrator {
 /** The env var naming the hoster AMI every AWS agent-instance account boots (MOTIR-9469). */
 export const AWS_HOSTER_AMI_ENV_VAR = 'MOTIR_AWS_HOSTER_AMI_ID';
 
-/** An AWS account's IAM key and an AMI, read from the account's `credentialRef`
- *  and `amiVar` — every missing variable named at once. */
-function awsAccountConfig(shard: FleetShardDTO, amiVar: string) {
+/**
+ * The Motir hoster CA and client certificate (MOTIR-9470): the CA signs each AWS
+ * agent instance's host-agent server certificate, and the client pair is what
+ * the exec client and the relay present to it. PEM, with a literal `\n` read as
+ * a line break so a one-line secret store can hold them.
+ */
+export const HOSTER_CA_CERT_ENV_VAR = 'MOTIR_HOSTER_CA_CERT';
+export const HOSTER_CA_KEY_ENV_VAR = 'MOTIR_HOSTER_CA_KEY';
+export const HOSTER_CLIENT_CERT_ENV_VAR = 'MOTIR_HOSTER_CLIENT_CERT';
+export const HOSTER_CLIENT_KEY_ENV_VAR = 'MOTIR_HOSTER_CLIENT_KEY';
+
+/** Each of `names` from the environment, or the not-configured error naming
+ *  EVERY one that is unset. */
+function requireEnv(names: readonly string[]): Record<string, string> {
+  const values: Record<string, string> = {};
+  const missing: string[] = [];
+  for (const name of names) {
+    const value = process.env[name]?.trim();
+    if (value) values[name] = value.replace(/\\n/g, '\n');
+    else missing.push(name);
+  }
+  if (missing.length > 0) throw new OrchestratorNotConfiguredError(`set ${missing.join(', ')}`);
+  return values;
+}
+
+/** An AWS account's EC2 client over its own IAM key, plus `extraVars` — every
+ *  missing variable named at once. */
+function awsAccount(shard: FleetShardDTO, extraVars: readonly string[]) {
   const keyIdVar = `${shard.credentialRef}_ACCESS_KEY_ID`;
   const secretVar = `${shard.credentialRef}_SECRET_ACCESS_KEY`;
-  const accessKeyId = process.env[keyIdVar]?.trim();
-  const secretAccessKey = process.env[secretVar]?.trim();
-  const amiId = process.env[amiVar]?.trim();
-  const missing = [
-    ...(accessKeyId ? [] : [keyIdVar]),
-    ...(secretAccessKey ? [] : [secretVar]),
-    ...(amiId ? [] : [amiVar]),
-  ];
-  if (missing.length > 0 || !accessKeyId || !secretAccessKey || !amiId) {
-    throw new OrchestratorNotConfiguredError(`set ${missing.join(', ')}`);
-  }
+  const env = requireEnv([keyIdVar, secretVar, ...extraVars]);
   if (!shard.aws) {
     throw new OrchestratorNotConfiguredError(`fleet account ${shard.name} names no AWS location`);
   }
   const { region } = shard.aws;
   return {
-    ec2: createEc2Api({ accessKeyId, secretAccessKey, region }),
+    env,
+    ec2: createEc2Api({ accessKeyId: env[keyIdVar]!, secretAccessKey: env[secretVar]!, region }),
+    region,
+  };
+}
+
+/** An AWS account's IAM key and an AMI, read from the account's `credentialRef`
+ *  and `amiVar` — every missing variable named at once. */
+function awsAccountConfig(shard: FleetShardDTO, amiVar: string) {
+  const { env, ec2, region } = awsAccount(shard, [amiVar]);
+  return { ec2, region, shardTag: shard.name, amiId: env[amiVar]! };
+}
+
+/** The hoster account's whole persistent config: its key, the hoster AMI, and
+ *  the hoster CA and client pair — every missing variable named at once. */
+function awsHosterConfig(shard: FleetShardDTO) {
+  const { env, ec2, region } = awsAccount(shard, [
+    AWS_HOSTER_AMI_ENV_VAR,
+    HOSTER_CA_CERT_ENV_VAR,
+    HOSTER_CA_KEY_ENV_VAR,
+    HOSTER_CLIENT_CERT_ENV_VAR,
+    HOSTER_CLIENT_KEY_ENV_VAR,
+  ]);
+  const clientTls = {
+    caPem: env[HOSTER_CA_CERT_ENV_VAR]!,
+    certPem: env[HOSTER_CLIENT_CERT_ENV_VAR]!,
+    keyPem: env[HOSTER_CLIENT_KEY_ENV_VAR]!,
+  };
+  return {
+    ec2,
     region,
     shardTag: shard.name,
-    amiId,
+    amiId: env[AWS_HOSTER_AMI_ENV_VAR]!,
+    hostAgent: {
+      client: createHostAgentClient(clientTls),
+      ca: { certPem: clientTls.caPem, keyPem: env[HOSTER_CA_KEY_ENV_VAR]! },
+      clientTls,
+    },
   };
+}
+
+/**
+ * Where the RELAY dials an agent instance's terminal on ONE account
+ * (MOTIR-9470). For an `aws` account it reads, lazily and only here, the
+ * account's key (a describe of the instance's address is all it does), the
+ * hoster CA certificate and Motir's client pair — never the AMI id and never the
+ * CA KEY, which the relay must not hold. A `fly` account answers as
+ * {@link persistentTerminalEndpoint} does.
+ */
+export async function hosterTerminalEndpointFor(
+  shard: FleetShardDTO,
+  handle: PersistentContainerHandle,
+): Promise<PersistentTerminalEndpoint> {
+  if (selectedOrchestratorProvider() === 'fake' || shard.provider !== 'aws') {
+    return persistentTerminalEndpoint(handle);
+  }
+  const { env, ec2 } = awsAccount(shard, [
+    HOSTER_CA_CERT_ENV_VAR,
+    HOSTER_CLIENT_CERT_ENV_VAR,
+    HOSTER_CLIENT_KEY_ENV_VAR,
+  ]);
+  return awsTerminalEndpoint(
+    ec2,
+    {
+      caPem: env[HOSTER_CA_CERT_ENV_VAR]!,
+      certPem: env[HOSTER_CLIENT_CERT_ENV_VAR]!,
+      keyPem: env[HOSTER_CLIENT_KEY_ENV_VAR]!,
+    },
+    handle,
+  );
 }
 
 /**
@@ -296,7 +379,7 @@ export function persistentOrchestratorForShard(
     case 'fly':
       return getPersistentOrchestrator();
     case 'aws':
-      return createAwsPersistentOrchestrator(awsAccountConfig(shard, AWS_HOSTER_AMI_ENV_VAR));
+      return createAwsPersistentOrchestrator(awsHosterConfig(shard));
     default: {
       const unrouted: never = shard.provider;
       const adapter = registeredAdapter(unrouted);

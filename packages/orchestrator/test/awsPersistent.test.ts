@@ -19,9 +19,9 @@ import {
   createAwsPersistentOrchestrator,
   toAwsPersistentState,
   type Ec2Instance,
-  type PersistentContainerHandle,
   type PersistentContainerSpec,
 } from '../src/index';
+import { testHostAgentConfig } from './contract/awsHostAgentFake';
 import { AwsEc2Fake, userInitiated } from './contract/awsEc2Fake';
 import {
   AWS_HOSTER_AMI_ID,
@@ -45,6 +45,7 @@ let tokens: number;
 function adapter(overrides: Partial<Parameters<typeof createAwsPersistentOrchestrator>[0]> = {}) {
   return createAwsPersistentOrchestrator({
     ec2,
+    hostAgent: testHostAgentConfig(),
     region: 'us-east-1',
     shardTag: SHARD,
     amiId: AWS_HOSTER_AMI_ID,
@@ -417,7 +418,12 @@ describe('destroy — the machine, THEN the disk', () => {
     });
     await orchestrator.destroyPersistent(handle);
     const order = ec2.mutations().map((c) => c.method);
-    expect(order).toEqual(['runInstances', 'terminateInstances', 'deleteVolume']);
+    expect(order).toEqual([
+      'authorizeSecurityGroupIngress',
+      'runInstances',
+      'terminateInstances',
+      'deleteVolume',
+    ]);
     expect(ec2.liveVolumeIds()).toEqual([]);
   });
 
@@ -488,25 +494,9 @@ describe('destroyMachine / destroyVolume — the orphan clean-up', () => {
   });
 });
 
-describe('the operations the reach card owns', () => {
-  it('each throws one named not_implemented error', async () => {
+describe('the account as the app', () => {
+  it('names every handle’s app and region from its own config', () => {
     const orchestrator = adapter();
-    const handle: PersistentContainerHandle = {
-      provider: 'aws',
-      app: SHARD,
-      machineId: 'i-1',
-      volumeId: 'vol-1',
-      region: 'us-east-1',
-      createdAt: new Date(START),
-    };
-    const refusal = {
-      provider: 'aws',
-      status: 501,
-      message: expect.stringContaining('not_implemented'),
-    };
-    await expect(orchestrator.exec(handle, ['true'])).rejects.toMatchObject(refusal);
-    await expect(orchestrator.checkLiveness(handle, ['true'])).rejects.toMatchObject(refusal);
-    expect(() => orchestrator.terminalEndpoint(handle)).toThrow(/not_implemented/);
     expect(orchestrator.appNameFor('any-org')).toBe(SHARD);
     expect(orchestrator.defaultRegion()).toBe('us-east-1');
   });
@@ -514,6 +504,7 @@ describe('the operations the reach card owns', () => {
   it('defaults its clock, sleep and token when the config names none', async () => {
     const orchestrator = createAwsPersistentOrchestrator({
       ec2,
+      hostAgent: testHostAgentConfig(),
       region: 'us-east-1',
       shardTag: SHARD,
       amiId: AWS_HOSTER_AMI_ID,

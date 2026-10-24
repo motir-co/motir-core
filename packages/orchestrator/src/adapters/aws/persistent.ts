@@ -5,6 +5,7 @@ import {
   OrchestratorNotConfiguredError,
   type OrchestratorCapacityReason,
 } from '../../errors';
+import { livenessViaExec } from '../../persistentLiveness';
 import type {
   ContainerSize,
   PersistentAppInventory,
@@ -37,6 +38,8 @@ import {
   type Ec2Volume,
 } from './ec2Client';
 import { AWS_DEFAULT_INSTANCE_TYPE, AwsInstanceSizeError, transitionTimeOf } from './index';
+import { HOST_AGENT_PORT, type HostAgentClient, type HostAgentTls } from './hostAgentClient';
+import { mintHostServerCertificate, type HostCertificatePem } from './hostCertificates';
 import { AWS_SHARD_TAG_KEY } from './network';
 import {
   encodeInstanceUserData,
@@ -50,8 +53,9 @@ import {
 // instance as ONE EC2 instance and ONE EBS home disk, in one zone of one
 // account, for the instance's life. MOTIR-9469 is its lifecycle and its disk;
 // MOTIR-9479 its upkeep (the config document, ensure config, image move, the tag
-// listing). The reach channel (exec, liveness, the terminal) is MOTIR-9470, and
-// until it lands those methods throw one named `not_implemented` error.
+// listing); MOTIR-9470 its reach channel — exec, liveness and the terminal, all
+// through the instance's host agent on 8443 over mutual TLS
+// (`docs/decisions/aws-hoster-host-agent.md`).
 //
 // What EC2 gives differently from Fly, and how the port's guarantees still hold:
 //
@@ -109,6 +113,13 @@ export const AWS_STOP_WAIT_ATTEMPTS = 30;
 /** The page size of the tag listing (DescribeInstances takes 5–1000, DescribeVolumes 5–500). */
 export const AWS_LIST_PAGE_SIZE = 200;
 
+/** The default bound on one exec, as on Fly. */
+export const AWS_EXEC_DEFAULT_TIMEOUT_SECONDS = 120;
+
+/** The description on the host agent's one inbound rule. */
+export const AWS_HOST_AGENT_INGRESS_DESCRIPTION =
+  'motir host agent - mutual TLS, Motir hoster CA client certificates only';
+
 /** How many reads `destroyPersistent` waits for a terminating instance. */
 export const AWS_TERMINATE_WAIT_ATTEMPTS = 30;
 
@@ -138,6 +149,17 @@ export class AwsPersistentSpecError extends Error {
   }
 }
 
+/** How Motir reaches an instance's host agent (MOTIR-9470). */
+export interface AwsHostAgentConfig {
+  /** The exec client — `createHostAgentClient(clientTls)`; the test seam. */
+  readonly client: HostAgentClient;
+  /** The Motir hoster CA, certificate and KEY: it signs each instance's server
+   *  certificate at provision. */
+  readonly ca: HostCertificatePem;
+  /** What the relay dials with: the CA certificate and Motir's client pair. */
+  readonly clientTls: HostAgentTls;
+}
+
 export interface AwsPersistentOrchestratorConfig {
   readonly ec2: Ec2Api;
   /** The region the `ec2` client speaks to — every handle's region. */
@@ -146,6 +168,8 @@ export interface AwsPersistentOrchestratorConfig {
   readonly shardTag: string;
   /** The hoster AMI (`MOTIR_AWS_HOSTER_AMI_ID`). */
   readonly amiId: string;
+  /** The host agent's client, CA and client TLS. */
+  readonly hostAgent: AwsHostAgentConfig;
   /** The instance type for a size; null refuses the size. Default: the fleet's
    *  one size (2 vCPU / 8 GiB) as {@link AWS_DEFAULT_INSTANCE_TYPE}. */
   readonly instanceTypeFor?: (size: ContainerSize) => string | null;
@@ -194,10 +218,6 @@ function classifyCapacity(err: unknown, zone: string | null): OrchestratorApiErr
   return classifyAwsLaunchError(err, zone);
 }
 
-function notImplemented(): never {
-  throw new OrchestratorApiError('aws', 501, 'not_implemented');
-}
-
 function tagOf(resource: { tags: readonly Ec2Tag[] }, key: string): string | undefined {
   return resource.tags.find((t) => t.key === key)?.value;
 }
@@ -218,6 +238,45 @@ function stampOf(instance: Ec2Instance): Record<string, string> {
   return {
     ...(version !== undefined ? { [MACHINE_CONFIG_METADATA_KEY]: version } : {}),
     ...(keyId !== undefined ? { [TERMINAL_KEY_ID_METADATA_KEY]: keyId } : {}),
+  };
+}
+
+/** The instance, or null when EC2 no longer knows it. Other failures throw. */
+async function readAwsInstance(ec2: Ec2Api, id: string): Promise<Ec2Instance | null> {
+  try {
+    const { instances } = await ec2.describeInstances({ instanceIds: [id] });
+    return instances[0] ?? null;
+  } catch (err) {
+    if (GONE_INSTANCE_CODES.has(codeOf(err) ?? '')) return null;
+    throw awsApiError(err);
+  }
+}
+
+/** The public address of a RUNNING instance, else null. The address is
+ *  `Instance.PublicIpAddress`, assigned anew on every start
+ *  (https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_Instance.html). */
+async function publicAddressOf(ec2: Ec2Api, id: string): Promise<string | null> {
+  const instance = await readAwsInstance(ec2, id);
+  return instance?.state === 'running' ? (instance.publicIpAddress ?? null) : null;
+}
+
+/**
+ * Where the relay dials an AWS instance's terminal: its host agent on 8443, over
+ * mutual TLS with `tls`, read NOW because the address changes on every start. An
+ * instance with no address (not running) is `no_public_address`. Shared by the
+ * adapter and the relay's own describe-only resolver.
+ */
+export async function awsTerminalEndpoint(
+  ec2: Ec2Api,
+  tls: HostAgentTls,
+  handle: PersistentContainerHandle,
+): Promise<PersistentTerminalEndpoint> {
+  const address = await publicAddressOf(ec2, handle.machineId);
+  if (!address) throw new OrchestratorApiError('aws', 409, 'no_public_address');
+  return {
+    url: `wss://${address}:${HOST_AGENT_PORT}/v1/terminal`,
+    headers: {},
+    tls: { caPem: tls.caPem, certPem: tls.certPem, keyPem: tls.keyPem },
   };
 }
 
@@ -245,6 +304,24 @@ export function createAwsPersistentOrchestrator(
     ];
   }
 
+  /** The host agent's ONE inbound rule: TCP 8443 from anywhere. Open to the
+   *  internet only because the agent refuses every connection without a client
+   *  certificate signed by the Motir CA. An existing rule is success
+   *  (`InvalidPermission.Duplicate`, the EC2 error-codes reference). */
+  async function ensureHostAgentIngress(groupId: string): Promise<void> {
+    try {
+      await ec2.authorizeSecurityGroupIngress({
+        groupId,
+        port: HOST_AGENT_PORT,
+        cidrIp: '0.0.0.0/0',
+        description: AWS_HOST_AGENT_INGRESS_DESCRIPTION,
+      });
+    } catch (err) {
+      if (codeOf(err) === 'InvalidPermission.Duplicate') return;
+      throw awsApiError(err);
+    }
+  }
+
   /** The account's subnet in `zone` and its security group, found by tag. */
   async function networkIn(zone: string): Promise<{ subnetId: string; securityGroupId: string }> {
     const byTag = { name: `tag:${AWS_SHARD_TAG_KEY}`, values: [shardTag] };
@@ -267,16 +344,7 @@ export function createAwsPersistentOrchestrator(
     return { subnetId: subnets[0]!.subnetId, securityGroupId: groups[0]!.groupId };
   }
 
-  /** The instance, or null when EC2 no longer knows it. Other failures throw. */
-  async function readInstance(id: string): Promise<Ec2Instance | null> {
-    try {
-      const { instances } = await ec2.describeInstances({ instanceIds: [id] });
-      return instances[0] ?? null;
-    } catch (err) {
-      if (GONE_INSTANCE_CODES.has(codeOf(err) ?? '')) return null;
-      throw awsApiError(err);
-    }
-  }
+  const readInstance = (id: string) => readAwsInstance(ec2, id);
 
   function homeVolumeOf(instance: Ec2Instance | null): string | null {
     return instance?.volumes?.find((v) => v.deviceName === AWS_HOME_DEVICE_NAME)?.volumeId ?? null;
@@ -336,6 +404,7 @@ export function createAwsPersistentOrchestrator(
     userData: string,
   ): Promise<Ec2Instance> {
     const { subnetId, securityGroupId } = await networkIn(zone);
+    await ensureHostAgentIngress(securityGroupId);
     const token = clientToken();
     for (let attempt = 1; ; attempt += 1) {
       try {
@@ -485,7 +554,20 @@ export function createAwsPersistentOrchestrator(
       }
       const instanceType = instanceTypeFor(spec.size);
       if (!instanceType) throw new AwsInstanceSizeError(spec.size.cpus, spec.size.memoryMb);
-      const userData = encodeInstanceUserData(renderInstanceUserData(instanceConfigOf(spec)));
+      // Validate the document BEFORE minting, so a bad spec costs no key pair.
+      renderInstanceUserData(instanceConfigOf(spec));
+      // A fresh server key pair per instance, signed by the CA; it lives only in
+      // the document (the user-data), never in a tag, a log or an error.
+      const server = await mintHostServerCertificate({
+        ca: config.hostAgent.ca,
+        instanceId: spec.instanceId,
+        now: now(),
+      });
+      const userData = encodeInstanceUserData(
+        renderInstanceUserData(
+          instanceConfigOf(spec, { ...server, caPem: config.hostAgent.ca.certPem }),
+        ),
+      );
 
       const launched = await launch(spec, zone, instanceType, userData);
       // RunInstances answers the mapping it made; when it did not, describe it.
@@ -665,15 +747,39 @@ export function createAwsPersistentOrchestrator(
       }
     },
 
-    // ── MOTIR-9470 (reach) ─────────────────────────────────────────────────────
-    exec(): Promise<PersistentExecResult> {
-      return Promise.resolve().then(notImplemented);
+    /** One command in the instance's container, through its host agent over
+     *  mutual TLS. A non-zero exit is a result; an instance with no address, and
+     *  a refused, reset or timed-out connection, are `unreachable` (503). The
+     *  stdin (a run's credential) travels only in that TLS request. */
+    async exec(
+      handle: PersistentContainerHandle,
+      command: readonly string[],
+      options: { timeoutSeconds?: number; stdin?: string } = {},
+    ): Promise<PersistentExecResult> {
+      const address = await publicAddressOf(ec2, handle.machineId);
+      if (!address) throw new OrchestratorApiError('aws', 503, 'unreachable');
+      return config.hostAgent.client.exec(address, {
+        command,
+        ...(options.stdin !== undefined ? { stdin: options.stdin } : {}),
+        timeoutSeconds: options.timeoutSeconds ?? AWS_EXEC_DEFAULT_TIMEOUT_SECONDS,
+      });
     },
-    terminalEndpoint(): PersistentTerminalEndpoint {
-      return notImplemented();
+
+    terminalEndpoint(handle: PersistentContainerHandle): Promise<PersistentTerminalEndpoint> {
+      return awsTerminalEndpoint(ec2, config.hostAgent.clientTls, handle);
     },
-    checkLiveness(): Promise<PersistentLivenessResult> {
-      return Promise.resolve().then(notImplemented);
+
+    checkLiveness(
+      handle: PersistentContainerHandle,
+      command: readonly string[],
+      options: { timeoutSeconds?: number } = {},
+    ): Promise<PersistentLivenessResult> {
+      return livenessViaExec(
+        (h, cmd, opts) => this.exec(h, cmd, opts),
+        handle,
+        command,
+        options.timeoutSeconds,
+      );
     },
   };
 }

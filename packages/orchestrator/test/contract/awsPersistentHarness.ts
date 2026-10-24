@@ -4,16 +4,17 @@ import {
   type PersistentContainerSpec,
 } from '../../src/index';
 import { AwsEc2Fake } from './awsEc2Fake';
+import { FakeHostAgentClient, testHostAgentConfig } from './awsHostAgentFake';
 import type { PersistentContractHarness } from './persistentContract';
 
 // The AWS adapter's persistent half behind the shared persistent contract
 // (MOTIR-9469), over the in-memory EC2 of `awsEc2Fake.ts` with the account's
 // network seeded by tag.
 //
-// `exec` is PENDING: the reach card (MOTIR-9470) implements it and defines its
-// controls, so cases 8 and 9 skip for this adapter until then. The listing
-// (MOTIR-9479) runs: a machine made by hand is a planted instance with the
-// account's tag and no instance id.
+// Every case runs. The listing (MOTIR-9479): a machine made by hand is a planted
+// instance with the account's tag and no instance id. Exec and liveness
+// (MOTIR-9470) go through the instance's public address to an in-memory host
+// agent (`awsHostAgentFake.ts`), whose behaviour the exec controls set.
 
 export const AWS_HOSTER_SHARD_TAG = 'agent-hoster-use1-1';
 export const AWS_HOSTER_AMI_ID = 'ami-0fedcba9876543210';
@@ -40,8 +41,10 @@ export const AWS_PERSISTENT_SPEC: PersistentContainerSpec = {
 export function awsPersistentHarness(): PersistentContractHarness {
   const ec2 = new AwsEc2Fake();
   let clock = START;
+  const agent = new FakeHostAgentClient();
   const orchestrator = createAwsPersistentOrchestrator({
     ec2,
+    hostAgent: testHostAgentConfig(agent),
     region: 'us-east-1',
     shardTag: AWS_HOSTER_SHARD_TAG,
     amiId: AWS_HOSTER_AMI_ID,
@@ -52,9 +55,10 @@ export function awsPersistentHarness(): PersistentContractHarness {
     tags.some((t) => t.key === 'motir-shard' && t.value === app);
   return {
     orchestrator,
-    pending: ['exec'],
     reset() {
       ec2.clear();
+      agent.calls.length = 0;
+      agent.behaviour = {};
       clock = START;
       ec2.now = () => new Date(clock);
       ec2.seedShardNetwork(AWS_HOSTER_SHARD_TAG, AWS_HOSTER_ZONES);
@@ -65,6 +69,15 @@ export function awsPersistentHarness(): PersistentContractHarness {
     },
     // A 4xx: refused outright, not retried — and RunInstances makes the machine
     // and its disk in one call, so a refusal leaves neither.
+    setExecBehaviour(behaviour) {
+      agent.behaviour = behaviour;
+    },
+    execs: () =>
+      agent.records(
+        (address) =>
+          [...ec2.instances.values()].find((i) => i.publicIpAddress === address)?.instanceId ??
+          address,
+      ),
     failNextMachineCreate: () => ec2.failNext('runInstances', 'InvalidParameterValue', 400),
     destroyOutOfBand(handle, options = {}) {
       if (options.machine !== false) ec2.terminateOutside(handle.machineId);

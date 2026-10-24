@@ -49,6 +49,9 @@ export const PERSISTENT_CONTAINER_NAME = 'motir-instance';
 /** The filesystem label the home disk is formatted with, and mounted by. */
 export const HOME_FILESYSTEM_LABEL = 'motir-home';
 
+/** Where the boot script writes the host agent's TLS files (MOTIR-9470), mode 600. */
+export const HOST_AGENT_TLS_DIR = '/etc/motir/host-agent';
+
 /** The script line that carries the config document. */
 export const INSTANCE_CONFIG_MARKER = '# motir-instance-config: ';
 
@@ -73,6 +76,21 @@ export interface AwsInstanceConfig {
   /** The main process when {@link terminal} is null; null keeps the image's `CMD`. */
   readonly idleCommand: readonly string[] | null;
   readonly terminal: PersistentTerminalConfig | null;
+  /**
+   * The host agent's TLS material (MOTIR-9470): the instance's own server
+   * certificate and key, minted at provision, and the Motir hoster CA it verifies
+   * client certificates against. Null on a document written before the reach
+   * channel. The key is a SECRET: it lives here and in the mode-600 file the boot
+   * script writes, nowhere else.
+   */
+  readonly hostAgent: AwsHostAgentTlsFiles | null;
+}
+
+/** The host agent's server certificate, key and trusted CA, PEM. */
+export interface AwsHostAgentTlsFiles {
+  readonly certPem: string;
+  readonly keyPem: string;
+  readonly caPem: string;
 }
 
 /** A config the user-data cannot carry, or user-data that carries none.
@@ -97,13 +115,17 @@ export class PersistentUserDataError extends Error {
 }
 
 /** The config document a new instance is launched with. */
-export function instanceConfigOf(spec: PersistentContainerSpec): AwsInstanceConfig {
+export function instanceConfigOf(
+  spec: PersistentContainerSpec,
+  hostAgent: AwsHostAgentTlsFiles | null = null,
+): AwsInstanceConfig {
   return {
     image: spec.image,
     mountPath: spec.mountPath,
     env: { ...spec.env },
     idleCommand: spec.idleCommand ? [...spec.idleCommand] : null,
     terminal: spec.terminal,
+    hostAgent,
   };
 }
 
@@ -133,6 +155,17 @@ const WRITE_ENV_PY = [
   'env = {**c["env"], **((c.get("terminal") or {}).get("env") or {})}',
   'sys.stdout.write("".join(f"{k}={v}\\n" for k, v in env.items()))',
 ].join('; ');
+
+/** Writes the host agent's TLS files from the document, each created mode 600. */
+const WRITE_TLS_PY = [
+  'import json, os',
+  `c = json.load(open(${JSON.stringify(PERSISTENT_CONFIG_FILE)}))`,
+  'h = c.get("hostAgent") or {}',
+  'for name, key in (("server.crt", "certPem"), ("server.key", "keyPem"), ("ca.crt", "caPem")):',
+  '    if key in h:',
+  `        fd = os.open(${JSON.stringify(HOST_AGENT_TLS_DIR + '/')} + name, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)`,
+  '        os.fdopen(fd, "w").write(h[key])',
+].join('\n');
 
 const RUN_PY = [
   'import json, os, subprocess',
@@ -173,6 +206,12 @@ function bootScript(document: string): string {
     'mkdir -p "$mount_path"',
     `mountpoint -q "$mount_path" || mount -L ${HOME_FILESYSTEM_LABEL} "$mount_path"`,
     '',
+    "# The host agent's TLS files — mode 600, read by the agent on 8443.",
+    `install -d -m 700 ${HOST_AGENT_TLS_DIR}`,
+    "python3 - <<'MOTIR_TLS'",
+    WRITE_TLS_PY,
+    'MOTIR_TLS',
+    '',
     '# The env file — mode 600, written before any byte of it.',
     `install -m 600 /dev/null ${PERSISTENT_ENV_FILE}`,
     `python3 -c '${WRITE_ENV_PY}' > ${PERSISTENT_ENV_FILE}`,
@@ -198,6 +237,7 @@ export function renderInstanceUserData(config: AwsInstanceConfig): string {
       env: config.env,
       idleCommand: config.idleCommand,
       terminal: config.terminal,
+      hostAgent: config.hostAgent,
     }),
     'utf8',
   ).toString('base64');
@@ -255,6 +295,12 @@ function isTerminal(value: unknown): value is PersistentTerminalConfig {
   );
 }
 
+function isHostAgentTls(value: unknown): value is AwsHostAgentTlsFiles {
+  if (typeof value !== 'object' || value === null) return false;
+  const h = value as Record<string, unknown>;
+  return ['certPem', 'keyPem', 'caPem'].every((k) => typeof h[k] === 'string');
+}
+
 /** The config document `text` (raw user-data) carries. Unreadable user-data is
  *  refused; the error never holds the text. */
 export function parseInstanceUserData(text: string): AwsInstanceConfig {
@@ -270,16 +316,18 @@ export function parseInstanceUserData(text: string): AwsInstanceConfig {
   }
   const d = (typeof doc === 'object' && doc !== null ? doc : {}) as Record<string, unknown>;
   const { image, mountPath, env, idleCommand, terminal } = d;
+  const hostAgent = d['hostAgent'] ?? null;
   if (
     typeof image !== 'string' ||
     typeof mountPath !== 'string' ||
     !isStringRecord(env) ||
     !(idleCommand === null || isStringList(idleCommand)) ||
-    !(terminal === null || isTerminal(terminal))
+    !(terminal === null || isTerminal(terminal)) ||
+    !(hostAgent === null || isHostAgentTls(hostAgent))
   ) {
     throw new PersistentUserDataError('unreadable', null);
   }
-  return { image, mountPath, env, idleCommand, terminal };
+  return { image, mountPath, env, idleCommand, terminal, hostAgent };
 }
 
 /** The base64 `UserData` for RunInstances, refused above AWS's 16 KB raw limit. */

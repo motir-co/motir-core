@@ -580,6 +580,7 @@ describe('awsAgentHosterPolicyDocument', () => {
         'ec2:ModifyInstanceAttribute',
         'ec2:CreateTags',
         'ec2:DeleteVolume',
+        'ec2:AuthorizeSecurityGroupIngress',
       ]),
     );
     for (const statement of added.filter((s) => s['Sid'] !== 'DescribeVolumes')) {
