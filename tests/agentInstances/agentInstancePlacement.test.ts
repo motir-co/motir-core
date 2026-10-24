@@ -181,7 +181,7 @@ function deps(accounts: Record<string, ReturnType<typeof fakeAccount>>) {
       if (!account) throw new Error(`no fake for ${shard.name}`);
       return account.orchestrator;
     },
-    flyOrchestrator: () => fly.orchestrator,
+    processWideOrchestrator: () => fly.orchestrator,
     now: () => NOW,
   };
   return { value, fly };

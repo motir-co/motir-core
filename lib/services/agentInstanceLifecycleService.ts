@@ -988,7 +988,7 @@ async function provisionNewInstance(
           idleCommand: terminal ? null : AGENT_IDLE_COMMAND,
         },
       },
-      { persistentOrchestratorForShard, flyOrchestrator: () => orchestrator },
+      { persistentOrchestratorForShard, processWideOrchestrator: () => orchestrator },
     );
   } catch (err) {
     if (err instanceof OrchestratorCapacityError) return 'waiting';

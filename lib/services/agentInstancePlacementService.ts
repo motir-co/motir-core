@@ -58,7 +58,7 @@ export interface AgentInstancePlacementDeps {
     shard: FleetShardDTO,
   ) => PersistentContainerOrchestrator;
   /** The process-wide Fly orchestrator — the switch-off path. */
-  readonly flyOrchestrator: () => PersistentContainerOrchestrator;
+  readonly processWideOrchestrator: () => PersistentContainerOrchestrator;
   readonly now?: () => Date;
 }
 
@@ -185,7 +185,7 @@ export const agentInstancePlacementService = {
     const now = deps.now ?? (() => new Date());
     // THE ONE READ OF THE SWITCH.
     if (!(await fleetKindOnPool('agent_instance'))) {
-      const fly = deps.flyOrchestrator();
+      const fly = deps.processWideOrchestrator();
       const handle = await fly.provisionPersistent({ ...input.spec, region: fly.defaultRegion() });
       return { outcome: 'fly', handle };
     }
