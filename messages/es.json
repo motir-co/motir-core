@@ -10041,7 +10041,11 @@
               "limits": "Actualizó los límites de una cuenta de la flota",
               "ceiling": "Cambió el límite de admisión de una cuenta de la flota",
               "disable": "Desactivó una cuenta de la flota",
-              "enable": "Reactivó una cuenta de la flota"
+              "enable": "Reactivó una cuenta de la flota",
+              "quota_request": "Solicitó un aumento de cuota de una cuenta de la flota"
+            },
+            "pool": {
+              "grow": "Amplió un grupo de la flota"
             }
           },
           "idea": {

@@ -10041,7 +10041,11 @@
               "limits": "De limieten van een vlootaccount vernieuwd",
               "ceiling": "Het plafond van een vlootaccount gewijzigd",
               "disable": "Een vlootaccount uitgeschakeld",
-              "enable": "Een vlootaccount weer ingeschakeld"
+              "enable": "Een vlootaccount weer ingeschakeld",
+              "quota_request": "Een quotumverhoging voor een vlootaccount aangevraagd"
+            },
+            "pool": {
+              "grow": "Een vlootpool uitgebreid"
             }
           },
           "idea": {

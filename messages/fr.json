@@ -10041,7 +10041,11 @@
               "limits": "A actualisé les limites d’un compte de la flotte",
               "ceiling": "A modifié le plafond d’un compte de la flotte",
               "disable": "A désactivé un compte de la flotte",
-              "enable": "A réactivé un compte de la flotte"
+              "enable": "A réactivé un compte de la flotte",
+              "quota_request": "A demandé une hausse de quota d’un compte de la flotte"
+            },
+            "pool": {
+              "grow": "A agrandi un pool de la flotte"
             }
           },
           "idea": {

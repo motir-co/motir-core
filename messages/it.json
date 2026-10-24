@@ -10041,7 +10041,11 @@
               "limits": "Aggiornati i limiti di un account della flotta",
               "ceiling": "Modificato il tetto di un account della flotta",
               "disable": "Disattivato un account della flotta",
-              "enable": "Riattivato un account della flotta"
+              "enable": "Riattivato un account della flotta",
+              "quota_request": "Richiesto un aumento della quota di un account della flotta"
+            },
+            "pool": {
+              "grow": "Ampliato un pool della flotta"
             }
           },
           "idea": {

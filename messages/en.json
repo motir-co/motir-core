@@ -10041,7 +10041,11 @@
               "limits": "Refreshed a fleet account's limits",
               "ceiling": "Changed a fleet account's ceiling",
               "disable": "Disabled a fleet account",
-              "enable": "Re-enabled a fleet account"
+              "enable": "Re-enabled a fleet account",
+              "quota_request": "Requested a fleet account quota raise"
+            },
+            "pool": {
+              "grow": "Grew a fleet pool"
             }
           },
           "idea": {
