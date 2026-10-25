@@ -690,6 +690,11 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
       'Find a project’s live pages by a word in the title or body — ranked hits with a snippet, paged by cursor.',
     descriptionFingerprint: '6300effbffe9',
   },
+  move_page: {
+    summary:
+      'Re-file a page and its sub-pages under another page, into a folder or at the root; a cycle or an archived page is refused by name.',
+    descriptionFingerprint: 'af2acd1e96dd',
+  },
   publish_decision_page: {
     summary:
       'Publish a page as a decision card’s decision: seals its newest version and, on an agent card, asks a person to approve it.',

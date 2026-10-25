@@ -174,6 +174,8 @@ describe('SEAM 2 — the LEGACY-ROW promise, key by key, against real Postgres',
       rename_page: true,
       // MOTIR-9553 — `page:view` again: a stale row must not start searching pages.
       search_pages: true,
+      // MOTIR-9556 — `page:edit`: a stale row must not start moving pages.
+      move_page: true,
     };
     for (const name of MCP_TOOL_NAMES) {
       const reachable = verified.grant.includes(TOOL_PERMISSIONS[name]);

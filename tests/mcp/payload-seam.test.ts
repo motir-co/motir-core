@@ -188,6 +188,8 @@ const DERIVED_TOOL_NAMES: Record<DerivedToolName, true> = {
   delete_folder: true,
   // MOTIR-9553 — the page search, each hit probing `PageSearchHit`.
   search_pages: true,
+  // MOTIR-9556 — the page move, `PagePlacement` whole.
+  move_page: true,
   // MOTIR-6807 — the repair claim, `WorkItemRepairClaim` whole (its touch and
   // close siblings are EXEMPT: a run's liveness is not the `DispatchRun` resource).
   claim_work_item_repair: true,

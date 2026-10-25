@@ -1964,6 +1964,54 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  move_page: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description: 'The project key the page belongs to (e.g. "ACME").',
+      },
+      pageId: {
+        type: 'string',
+        minLength: 1,
+        description: 'The page id — the `<id>` in the page’s address `/pages/<id>`.',
+      },
+      parent: {
+        type: 'object',
+        properties: {
+          kind: {
+            type: 'string',
+            minLength: 1,
+            description: '`root`, `folder` (an id from `list_folders`) or `page` (a page id).',
+          },
+          id: {
+            type: 'string',
+            minLength: 1,
+            description: 'The folder or page id. Required unless `kind` is `root`.',
+          },
+        },
+        required: ['kind'],
+        additionalProperties: false,
+        description:
+          'Where the page goes: `{ "kind": "root" }`, `{ "kind": "folder", "id" }` (an id from `list_folders`) or `{ "kind": "page", "id" }` to nest it under another page.',
+      },
+      beforeId: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'A page at the destination the moved page lands right AFTER. Omit both neighbours to place it last (or keep its place when the parent does not change).',
+      },
+      afterId: {
+        type: 'string',
+        minLength: 1,
+        description: 'A page at the destination the moved page lands right BEFORE.',
+      },
+    },
+    required: ['projectKey', 'pageId', 'parent'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   move_to_backlog: {
     type: 'object',
     properties: {
@@ -4141,6 +4189,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   list_sprints: 'List sprints',
   list_work_item_todos: 'List a work item’s to-do list',
   mark_integrated: 'Mark integrated',
+  move_page: 'Move page',
   move_to_backlog: 'Move work items to backlog',
   move_to_parent: 'Move work item to a new parent',
   move_to_sprint: 'Move work items to sprint',
@@ -4464,6 +4513,13 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
     destructiveHint: true,
     idempotentHint: true,
     openWorldHint: true,
+  },
+  move_page: {
+    title: 'Move page',
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: true,
+    openWorldHint: false,
   },
   move_to_backlog: {
     title: 'Move work items to backlog',

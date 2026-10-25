@@ -329,7 +329,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **102 tools**.
+`initialize` handshake and registers **103 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -3141,7 +3141,7 @@ editor's collaborative document; an agent reads and writes it as **markdown**,
 converted on the server through the same package the editor uses (§8.2). A page
 is addressed by its project key and its opaque **id** — the `<id>` in the page's
 address `/pages/<id>`. The token `motir login` mints carries `page:view` and
-`page:edit`, so a dispatched agent reaches all three tools; it never carries
+`page:edit`, so a dispatched agent reaches every page tool below; it never carries
 `page:delete` ([`docs/decisions/pages.md`](decisions/pages.md) §5). A token
 minted before that grant changed gains them at its next `motir login`. Every
 refusal is the page service's own, returned as a typed tool error carrying its
@@ -3160,6 +3160,9 @@ code:
 | `CROSS_PROJECT_PAGE_PARENT`  | The parent page or folder belongs to another project.                                                                                                       |
 | `PAGE_CYCLE`                 | A page placed under itself or one of its own sub-pages.                                                                                                     |
 | `PAGE_DEPTH_EXCEEDED`        | The sub-page would sit deeper than 10 levels.                                                                                                               |
+| `PAGE_ARCHIVED`              | `move_page` named an archived page. Restore it before moving it.                                                                                            |
+| `PAGE_PARENT_ARCHIVED`       | `move_page`'s destination page is archived.                                                                                                                 |
+| `PAGE_NEIGHBOUR_INVALID`     | `move_page`'s `beforeId` / `afterId` is not a sibling at the destination.                                                                                   |
 | `PAGE_SEARCH_QUERY_EMPTY`    | `search_pages`' `q` is empty or only whitespace. A search never lists every page.                                                                           |
 | `PAGE_SEARCH_QUERY_TOO_LONG` | `search_pages`' `q` is over 200 characters.                                                                                                                 |
 | `PAGE_CURSOR_INVALID`        | `search_pages`' `cursor` is not one a previous call returned.                                                                                               |
@@ -3267,6 +3270,30 @@ never returned. Hits are ranked best first, 20 at a time.
 
 **Output** — `{ items: [{ id, title, place, snippet, rank }], nextCursor }`, each
 hit v1's `PageSearchHit`. A hit is not the page: read it with `get_page`.
+
+#### `move_page`
+
+**Re-file** a page, with its whole subtree, under another page, into a folder or
+at the project root (Story MOTIR-9487 · MOTIR-9556). Gated on `page:edit`. It
+calls the same `pagesService.movePage` door as
+`PATCH /api/v1/pages/{pageId}/placement`, so the structure lock and every tree
+rule are the REST route's: a page under itself or its own sub-page is
+`PAGE_CYCLE`, a destination page or folder in another project reads as missing
+(`PAGE_NOT_FOUND` / `FOLDER_NOT_FOUND`, the same answer as an unknown id), an
+archived page is `PAGE_ARCHIVED`, an archived destination page is
+`PAGE_PARENT_ARCHIVED`, and a tree deeper than 10 levels is
+`PAGE_DEPTH_EXCEEDED`. A move to where the page already is writes nothing and
+answers `moved: false`.
+
+| Input        | Type   | Required | Notes                                                                                |
+| ------------ | ------ | -------- | ------------------------------------------------------------------------------------ |
+| `projectKey` | string | yes      | Project key, e.g. `"ACME"`.                                                          |
+| `pageId`     | string | yes      | The page id — the `<id>` in `/pages/<id>`.                                           |
+| `parent`     | object | yes      | `{ "kind": "root" }`, `{ "kind": "folder", "id" }` or `{ "kind": "page", "id" }`.    |
+| `beforeId`   | string | no       | A sibling at the destination the page lands right after. Omit both to place it last. |
+| `afterId`    | string | no       | A sibling at the destination the page lands right before.                            |
+
+**Output** — v1's `PagePlacement`: `{ id, parent, position, ancestorPageIds, moved }`.
 
 #### `publish_decision_page`
 

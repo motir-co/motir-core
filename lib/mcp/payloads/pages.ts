@@ -1,5 +1,10 @@
 import { z } from 'zod/v4';
-import { pageSearchHitSchema, type V1PageSearchResult } from '@/lib/api/v1/pages/schema';
+import {
+  pagePlacementResultSchema,
+  pageSearchHitSchema,
+  type V1PagePlacement,
+  type V1PageSearchResult,
+} from '@/lib/api/v1/pages/schema';
 import { definePayload } from './define';
 
 // The `search_pages` payload (Story MOTIR-9489 · MOTIR-9553). `/api/v1`
@@ -19,4 +24,17 @@ export const searchPagesPayload = definePayload({
     nextCursor: z.string().nullable(),
   }) as unknown as z.ZodType<V1PageSearchResult & Record<string, unknown>>,
   probes: [{ resource: 'PageSearchHit', select: (p) => p.items }],
+});
+
+// The `move_page` payload (Story MOTIR-9487 · MOTIR-9556). `PATCH /api/v1/pages/
+// {pageId}/placement` publishes where a move left the page as `PagePlacement`
+// (MOTIR-9495), and the tool returns the same placement through v1's own
+// presenter — so the payload IS that resource and PROBES it whole.
+
+/** Where a `move_page` left the page — v1's `PagePlacement`. */
+export const movePagePayload = definePayload({
+  schema: pagePlacementResultSchema as unknown as z.ZodType<
+    V1PagePlacement & Record<string, unknown>
+  >,
+  probes: [{ resource: 'PagePlacement', select: (p) => [p] }],
 });

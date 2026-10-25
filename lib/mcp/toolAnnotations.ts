@@ -364,6 +364,16 @@ export const TOOL_ANNOTATIONS: Record<McpToolName, McpToolAnnotations> = {
   },
   // R: searchPages.ts → pagesService.searchPages — a ranked read, no lock, no write
   search_pages: { readOnlyHint: true, openWorldHint: false },
+  // A move overwrites where the page and its whole subtree sit — every moving verb is a
+  // destructive write here, as `move_to_parent` is; the same destination twice answers
+  // `moved: false` and writes nothing, so it is idempotent.
+  // W: movePage.ts → pagesService.movePage — re-parents/reorders the page and rewrites its subtree's ancestors
+  move_page: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
   // A replay of the same version writes nothing, so it is idempotent; not destructive
   // (nothing is removed).
   // W: publishDecisionPage.ts → decisionPageService.publish — seals a version, records the publication, supersedes + raises the decision gate
