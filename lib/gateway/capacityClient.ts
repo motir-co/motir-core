@@ -1,5 +1,11 @@
 import 'server-only';
 
+import {
+  CAPACITY_LIMIT_UNITS,
+  type CapacityLimitUnit,
+  type CapacityProvider,
+  isCapacityProvider,
+} from '@/lib/capacity/alertKeys';
 import { GatewayRunKeyConfigError } from './errors';
 import {
   GatewayCapacityConfigError,
@@ -44,18 +50,14 @@ export const MOTIR_GATEWAY_CAPACITY_TOKEN_ENV_VAR = 'MOTIR_GATEWAY_CAPACITY_TOKE
  *  polled from a screen, so it does not get the run-key client's 15 s. */
 export const GATEWAY_CAPACITY_TIMEOUT_MS = 3_000;
 
-export const CAPACITY_PROVIDERS = ['claude', 'qwen', 'deepseek'] as const;
-export type CapacityProvider = (typeof CAPACITY_PROVIDERS)[number];
-
-export const CAPACITY_LIMIT_UNITS = [
-  'max_concurrency',
-  'rpm',
-  'input_tpm',
-  'output_tpm',
-  'tpm',
-  'tpd',
-] as const;
-export type CapacityLimitUnit = (typeof CAPACITY_LIMIT_UNITS)[number];
+// The provider and unit sets live in `lib/capacity/alertKeys.ts`, so the client
+// and the alert state share one list.
+export {
+  CAPACITY_LIMIT_UNITS,
+  CAPACITY_PROVIDERS,
+  type CapacityLimitUnit,
+  type CapacityProvider,
+} from '@/lib/capacity/alertKeys';
 
 /** A limit. Only a `set` limit carries a number; the other two have none to read as 0. */
 export type CapacityLimit =
@@ -225,10 +227,6 @@ function parseHint(value: unknown): ProviderHint | null {
     retryAfterSeconds: nullableCount(wire['retry_after_seconds']),
     observedAt: text(wire['observed_at']),
   };
-}
-
-function isCapacityProvider(value: unknown): value is CapacityProvider {
-  return (CAPACITY_PROVIDERS as readonly unknown[]).includes(value);
 }
 
 function parseRowBase(wire: Wire, provider: CapacityProvider): CapacityRowBase {

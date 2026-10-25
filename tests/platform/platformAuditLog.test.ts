@@ -265,6 +265,9 @@ describe('the reason rule', () => {
     'idea.tag_add': 'inherited',
     'idea.tag_translate': 'inherited',
     'idea.research_run': 'inherited',
+    // The capacity alert share (Story MOTIR-9539 · MOTIR-9609): a write whose
+    // reason the service supplies when the screen gives none.
+    'capacity.alert_share.set': 'inherited',
   } as const;
 
   it('every action carries the policy the ADR allocates it', () => {
