@@ -87,7 +87,12 @@ async function kindStatus(
     accounts: shared
       .filter((shard) => shard.state !== 'disabled')
       .map((shard) => accountView(shard, usage.get(shard.id))),
-    spares: spares.map((s) => ({ name: s.name, state: s.state, vcpuQuota: s.vcpuQuota })),
+    spares: spares.map((s) => ({
+      name: s.name,
+      state: s.state,
+      vcpuQuota: s.vcpuQuota,
+      grantedReadAt: grantedReadAt(s),
+    })),
     requests: requests.map(
       (r): FleetPoolRequestDTO => ({
         account: r.shard.name,
