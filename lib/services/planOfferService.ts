@@ -207,7 +207,12 @@ export const planOfferService = {
     if (!offer || offer.kind !== 'plan' || offer.immediate) return null;
     if (!(await planningAvailable(pctx))) return null;
     if (offer.targetKey === null) {
-      return { kind: 'plan', requestMd: offer.requestMd, targetKey: null };
+      return {
+        kind: 'plan',
+        requestMd: offer.requestMd,
+        targetKey: null,
+        ...(offer.requirement ? { requirement: offer.requirement } : {}),
+      };
     }
     const target = await resolveTarget(offer.targetKey, pctx);
     if (target) {

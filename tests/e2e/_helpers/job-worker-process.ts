@@ -169,6 +169,18 @@ export function hostedRunSeamEnv(): Record<string, string> {
     ...(process.env['MOTIR_FAKE_CONTAINER_STATE_PATH']
       ? { MOTIR_FAKE_CONTAINER_STATE_PATH: process.env['MOTIR_FAKE_CONTAINER_STATE_PATH'] }
       : {}),
+    // The fake AWS (MOTIR-9429): this process polls, settles and reaps a run an
+    // `aws` account booted, so it reads the same EC2 state file, switch fixture and
+    // image the webServer does.
+    ...(process.env['MOTIR_FAKE_AWS_STATE_PATH']
+      ? { MOTIR_FAKE_AWS_STATE_PATH: process.env['MOTIR_FAKE_AWS_STATE_PATH'] }
+      : {}),
+    ...(process.env['MOTIR_FAKE_FLEET_SWITCH_PATH']
+      ? { MOTIR_FAKE_FLEET_SWITCH_PATH: process.env['MOTIR_FAKE_FLEET_SWITCH_PATH'] }
+      : {}),
+    ...(process.env['MOTIR_HOSTED_AGENT_IMAGE']
+      ? { MOTIR_HOSTED_AGENT_IMAGE: process.env['MOTIR_HOSTED_AGENT_IMAGE'] }
+      : {}),
     // The agent instances' persistent fake fleet (MOTIR-6877): the idle and sweep
     // jobs run here, so this process must read the same machines the webServer made.
     ...(process.env['MOTIR_FAKE_PERSISTENT_STATE_PATH']

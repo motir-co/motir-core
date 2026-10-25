@@ -6,6 +6,8 @@ import { pageVersionRepository } from '@/lib/repositories/pageVersionRepository'
 import { userRepository } from '@/lib/repositories/userRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import type { AppliedGateTransition } from '@/lib/approvalGates/registry';
+import { emitAppliedGateTransitions } from '@/lib/approvalGates/gateTransition';
 import { reconcileGatesFor } from '@/lib/services/gateSetFor';
 import { asksTheDecisionQuestion } from '@/lib/approvalGates/decisionDocument';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -70,11 +72,19 @@ async function canViewPages(
  * a card with an open pull request stays where it is (its merge writes the
  * status), and a card already at or above review is left alone. `hopsToReview`
  * lands on `implemented` in a workflow with no review status.
+ *
+ * ⚠️ EVERY HOP IT APPLIES IS RECORDED ON `appliedTransitions` (Bug MOTIR-9485).
+ * `applyStatusTransition` leaves `work-item/transitioned` to its caller, and the
+ * caller here is a transaction that may still roll back — so the hop is handed to
+ * `publish`, which announces it once the publish has committed. Without it the
+ * parent rollup, the bell and automation rules never saw a decision card enter
+ * review.
  */
 async function moveToReviewWhenUndelivered(
   item: WorkItem,
   ctx: ServiceContext,
   tx: Prisma.TransactionClient,
+  appliedTransitions: AppliedGateTransition[],
 ): Promise<void> {
   if ((await workItemDeliveryRepository.countOpenByWorkItem(item.id, tx)) > 0) return;
   const statuses = await workflowsService.listStatusesByProject(
@@ -94,7 +104,9 @@ async function moveToReviewWhenUndelivered(
   const { hopsToReview } = await import('@/lib/services/choiceGateService');
   const { workItemsService } = await import('@/lib/services/workItemsService');
   for (const key of await hopsToReview(item, tx)) {
-    await workItemsService.applyStatusTransition(item.id, key, ctx, tx);
+    const { transition } = await workItemsService.applyStatusTransition(item.id, key, ctx, tx);
+    /* v8 ignore next -- a hop `hopsToReview` chose always leaves the current status, so it always applies a transition */
+    if (transition) appliedTransitions.push({ workItemId: item.id, ...transition });
   }
 }
 
@@ -109,7 +121,10 @@ export const decisionPageService = {
     input: PublishDecisionPageInput,
     ctx: ServiceContext,
   ): Promise<DecisionPagePublicationDto> {
-    return withWorkspaceContext(
+    // The walk to review's status hops, announced once this publish commits (Bug
+    // MOTIR-9485) — the walk runs in this transaction and cannot.
+    const appliedTransitions: AppliedGateTransition[] = [];
+    const published = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
       async (tx) => {
         const found = await workItemRepository.findById(input.workItemId, tx);
@@ -207,7 +222,7 @@ export const decisionPageService = {
           /* v8 ignore next -- the predicate always asks an agent card's question here */
           gateId = raised?.id ?? null;
           // The status follows the question, after it, in the same transaction.
-          await moveToReviewWhenUndelivered(item, ctx, tx);
+          await moveToReviewWhenUndelivered(item, ctx, tx, appliedTransitions);
         }
 
         const [publisher] = await userRepository.findByIds([ctx.userId], tx);
@@ -223,5 +238,7 @@ export const decisionPageService = {
         });
       },
     );
+    await emitAppliedGateTransitions(appliedTransitions, ctx);
+    return published;
   },
 };

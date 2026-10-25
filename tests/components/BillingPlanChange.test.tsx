@@ -351,6 +351,136 @@ describe('the downgrade dialog', () => {
   });
 });
 
+// MOTIR-9403: Host is the fifth regular card and changes plan through the same
+// dialogs — upgraded to from Max ×2 or a held rung, downgraded from to Max ×2.
+function onPlan(
+  key: string,
+  name: string,
+  credits: number,
+  pendingDowngrade: PendingPlanChangeDTO | null = null,
+): BillingStatusDTO {
+  const planTier = { key, name, monthlyCreditAllotment: credits };
+  return {
+    ...onPro(),
+    motirAi: {
+      tier: planTier,
+      balance: 1000,
+      pendingDowngrade,
+      subscription: {
+        status: 'active',
+        currentPeriodEnd: '2026-11-01T00:00:00.000Z',
+        priceId: `${key}_pool_monthly`,
+        planTier,
+      },
+    },
+  };
+}
+
+const TO_HOST: UpgradePreviewDTO = {
+  ...UPGRADE,
+  fromPlan: 'max_x2',
+  toPlan: 'host',
+  amountDueCents: 58065,
+  billingDaysLeft: 15,
+  daysLeft: 15,
+  extraCredits: 116129,
+  fromPool: 60000,
+  fullPool: 300000,
+  toPriceCents: 150000,
+};
+
+describe('Host in the plan-change flow', () => {
+  it('an org on Max ×2 upgrades to Host through the dialog, posting toPlanKey host', async () => {
+    const fetchMock = stubFetch([onPlan('max_x2', 'Max ×2', 60000)], {
+      'upgrade/preview': ok(TO_HOST),
+      upgrade: ok({
+        status: 'upgraded',
+        fromPlan: 'max_x2',
+        toPlan: 'host',
+        extraCredits: 116129,
+        extraIndexAllowance: null,
+        clearedPending: null,
+      }),
+    });
+    await openPlans();
+    fireEvent.click(await screen.findByRole('button', { name: 'Upgrade to Host' }));
+    const dialog = await screen.findByRole('dialog');
+    await within(dialog).findByText('$580.65');
+    expect(within(dialog).getByTestId('plan-change-switch').getAttribute('aria-label')).toBe(
+      'Max ×2 → Host',
+    );
+    expect(posts(fetchMock, 'upgrade/preview')).toEqual([{ toPlanKey: 'host' }]);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Upgrade now' }));
+    await screen.findByTestId('plan-change-success');
+    expect(posts(fetchMock, 'upgrade')).toEqual([{ toPlanKey: 'host', prorationDate: 1792238400 }]);
+  });
+
+  it('an org holding Pool 250,000 unfolds the regular plans and is offered Upgrade to Host', async () => {
+    const fetchMock = stubFetch([onPlan('pool_250k', 'Pool 250,000', 250000)], {
+      'upgrade/preview': ok({ ...TO_HOST, fromPlan: 'pool_250k', fromPool: 250000 }),
+    });
+    await openPlans();
+    await screen.findByText('Motir AI — plans & subscription');
+    fireEvent.click(screen.getByRole('button', { name: 'See all regular plans' }));
+    const upgrade = within(card('Host')).getByRole('button', { name: 'Upgrade to Host' });
+    fireEvent.click(upgrade);
+    await screen.findByRole('dialog');
+    expect(posts(fetchMock, 'upgrade/preview')).toEqual([{ toPlanKey: 'host' }]);
+  });
+
+  it('an org on Host sees the five-card row with Host current and downgrades to Max ×2', async () => {
+    const fetchMock = stubFetch([onPlan('host', 'Host', 300000)], {
+      'downgrade/preview': ok({
+        ...DOWNGRADE,
+        fromPlan: 'host',
+        toPlan: 'max_x2',
+        fromPool: 300000,
+        fullPool: 60000,
+        toPriceCents: 30000,
+      }),
+      downgrade: ok({
+        status: 'scheduled',
+        fromPlan: 'host',
+        toPlan: 'max_x2',
+        effectiveDate: '2026-11-01T00:00:00.000Z',
+        replacedPending: null,
+      }),
+    });
+    await openPlans();
+    await screen.findByText('Motir AI — plans & subscription');
+    expect(screen.queryByRole('button', { name: 'See all regular plans' })).toBeNull();
+    expect(within(card('Host')).getByRole('button', { name: 'Current plan' })).toBeTruthy();
+    for (const name of ['Standard', 'Pro', 'Max', 'Max ×2']) {
+      expect(within(card(name)).getByRole('button', { name: `Downgrade to ${name}` })).toBeTruthy();
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'Downgrade to Max ×2' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'Schedule downgrade' }));
+    expect((await screen.findByTestId('plan-change-success')).textContent).toBe(
+      'You stay on Host until Nov 1, 2026, then move to Max ×2.',
+    );
+    expect(posts(fetchMock, 'downgrade')).toEqual([{ toPlanKey: 'max_x2' }]);
+  });
+
+  it('a pending downgrade from Host shows on the Host card and on the Max ×2 card', async () => {
+    stubFetch([
+      onPlan('host', 'Host', 300000, {
+        planKey: 'max_x2',
+        effectiveDate: '2026-11-01T00:00:00.000Z',
+      }),
+    ]);
+    await openPlans();
+    await screen.findByText('Motir AI — plans & subscription');
+    expect(within(card('Host')).getByTestId('plan-pending-downgrade').textContent).toBe(
+      'Changes to Max ×2 on Nov 1, 2026',
+    );
+    const scheduled = within(card('Max ×2')).getByRole('button', {
+      name: 'Scheduled for Nov 1, 2026',
+    }) as HTMLButtonElement;
+    expect(scheduled.disabled).toBe(true);
+  });
+});
+
 describe('in zh', () => {
   it('renders the plan-change controls and the upgrade dialog with no raw keys or ICU', async () => {
     stubFetch([onPro()], { 'upgrade/preview': ok(UPGRADE) });

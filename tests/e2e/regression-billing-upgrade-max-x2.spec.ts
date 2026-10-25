@@ -61,6 +61,7 @@ const STANDARD = entry('standard');
 const PRO = entry('pro');
 const MAX = entry('max');
 const MAX_X2 = entry('max_x2');
+const HOST = entry('host');
 
 const tierOf = (plan: AiPlanCatalogEntry): BillingFixtureTier => ({
   key: plan.key,
@@ -364,7 +365,10 @@ test.describe('A plan change mid-period: upgrade now, downgrade at the period en
       await expect(
         card(page, MAX_X2.name).getByRole('button', { name: copy.plans.ctaCurrent }),
       ).toBeVisible();
-      await expect(cardRow(page).getByRole('button', { name: /^Upgrade to / })).toHaveCount(0);
+      // The one plan above Max ×2 is Host (MOTIR-9403): its upgrade is the only one.
+      await expect(cardRow(page).getByRole('button', { name: /^Upgrade to / })).toHaveText([
+        format(up.cta, { plan: HOST.name }),
+      ]);
       before = after;
       patchOrgBillingState(seed.organizationId, planChange({}));
 

@@ -257,11 +257,17 @@ describe('a container that did not exit 0 writes no claim the ledger’s readers
 
       // READER 2 — the onboarding wizard's per-repo rows, keyed by a DIFFERENT
       // repository method. The Next button must stay disabled.
+      //
+      // ⚠️ `indexing`, NOT `queued` (MOTIR-9454). The claim names the run's own
+      // ledger row, and `JobTestEngine` leaves a throwing run's row `running` —
+      // the state of an attempt the worker will retry. It read `queued` only
+      // while the claim carried an id no reader could resolve. What matters here
+      // is that it is never `indexed`.
       const ctx = { userId: ownerUserId, workspaceId };
       const run = await migrateOnboardingService.startMigration(projectIds[0]!, ctx);
       const status = await migrateOnboardingService.getIndexStatus(run.id, ctx);
       expect(status.repos).toEqual([
-        { provider: 'github', repoRef: INDEX_REPO_REF, status: 'queued' },
+        { provider: 'github', repoRef: INDEX_REPO_REF, status: 'indexing' },
       ]);
       expect(status.allIndexed).toBe(false);
 

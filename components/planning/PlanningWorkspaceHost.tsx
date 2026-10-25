@@ -26,6 +26,8 @@ import {
 } from '@/components/planning/PlanChangeConfirmBar';
 import type { PlanApproveProgressView } from '@/components/planning/PlanApproveProgress';
 import { PlanProposalViews } from '@/components/planning/PlanProposalViews';
+import { RequirementDocument, RequirementNotice } from '@/components/planning/RequirementDocument';
+import { requirementPaneOf } from '@/lib/planning/requirementPane';
 import { PlanChangeRail } from '@/components/planning/PlanChangeRail';
 import { FollowPlannerControl } from '@/components/planning/FollowPlannerControl';
 import type { ProjectRoadmapCanvasProps } from '@/components/planning/ProjectRoadmapCanvas';
@@ -825,7 +827,38 @@ function PlanWorkspaceHost({
       ? (drivenRequest ?? followTo)
       : null
     : followTo;
+  // THE REQUIREMENT LAYER (MOTIR-9437): while the live offer is a plan offer with no
+  // target, its composed requirement covers the pane. Derived from the thread alone —
+  // the one rule the rail reads — so a reopen shows it again and Decline, Confirm or a
+  // newer answer drops it, with the pane underneath never unmounted (it keeps the
+  // reader's level, view and zoom in instance state).
+  const requirementPane = useMemo(
+    () => requirementPaneOf(state.session?.turns ?? []),
+    [state.session?.turns],
+  );
   const paneRef = useRef<HTMLDivElement>(null);
+  const layerUp = requirementPane !== null;
+  // While the layer is up, what it covers is `inert` and hidden from assistive tech, so
+  // keyboard focus and the canvas's own shortcuts stay out of it. Set on the pane's
+  // direct children rather than a wrapper, so the pane's structure is unchanged; it
+  // runs every render because the confirm bar can mount under it.
+  useEffect(() => {
+    const pane = paneRef.current;
+    if (!pane || !layerUp) return;
+    const covered = Array.from(pane.children).filter(
+      (el): el is HTMLElement => el instanceof HTMLElement && el.dataset['layer'] !== 'requirement',
+    );
+    covered.forEach((el) => {
+      el.setAttribute('inert', '');
+      el.setAttribute('aria-hidden', 'true');
+    });
+    return () => {
+      covered.forEach((el) => {
+        el.removeAttribute('inert');
+        el.removeAttribute('aria-hidden');
+      });
+    };
+  });
   const followReaderNavigated = useCallback(() => {
     setDrive((d) => (d.on ? { ...d, on: false } : d));
   }, []);
@@ -1216,6 +1249,26 @@ function PlanWorkspaceHost({
                   approveProgress={approveProgressAt('bar')}
                   stale={planIsStale}
                 />
+              </div>
+            ) : null}
+
+            {requirementPane ? (
+              <div
+                key={requirementPane.turnId}
+                role="region"
+                aria-label={t('requirementPane.label')}
+                data-layer="requirement"
+                data-testid="requirement-pane"
+                className="absolute inset-0 z-30 overflow-y-auto bg-(--el-page-bg) px-8 py-6"
+              >
+                {requirementPane.requirement ? (
+                  <RequirementDocument
+                    requestMd={requirementPane.requestMd}
+                    requirement={requirementPane.requirement}
+                  />
+                ) : (
+                  <RequirementNotice />
+                )}
               </div>
             ) : null}
           </div>

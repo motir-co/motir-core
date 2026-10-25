@@ -10,6 +10,10 @@ import { planChangeTurnRepository } from '@/lib/repositories/planChangeTurnRepos
 import { contextualPlanningService } from '@/lib/services/contextualPlanningService';
 import { appendWithin, planChangeSessionsService } from '@/lib/services/planChangeSessionsService';
 import { planOfferService } from '@/lib/services/planOfferService';
+import { requirementPageService } from '@/lib/services/requirementPageService';
+import { requirementPageLocale } from '@/lib/ai/requirementMarkdown';
+import { resolveTenantLanguages } from '@/lib/ai/tenantLanguages';
+import type { SubmittedRequirement } from '@/lib/ai/types';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workflowsService } from '@/lib/services/workflowsService';
@@ -19,6 +23,7 @@ import { planOfferStartPath } from '@/lib/planChange/offerRestart';
 import {
   PlanChangeSessionNotFoundError,
   PlanChangeTurnNotFoundError,
+  PlanOfferRequirementNotSavedError,
   PlanOfferStartRefusedError,
   PlanSessionEndedError,
   PlanSessionNotFoundError,
@@ -333,16 +338,136 @@ async function claimOffer(
   });
 }
 
+/** What a no-target offer's start hands the run beyond its request (MOTIR-9436). */
+interface ComposedStart {
+  requirement: SubmittedRequirement;
+  requirementPage: { pageId: string; title: string };
+}
+
 /** THE one call site of the shipped submit this seam adds (MOTIR-9291): every start
- *  that is not a targeted landing runs it, on the conversation the plan belongs to. */
-async function submitOn(pctx: ProjectContext, sessionId: string): Promise<PlanOfferStartResult> {
-  const submitted = await planChangeSessionsService.submit(pctx, { sessionId });
+ *  that is not a targeted landing runs it, on the conversation the plan belongs to.
+ *  With a composed requirement the run gets it and its page, and NO carried answers:
+ *  Grill me's answers are already inside the requirement (MOTIR-9436). */
+async function submitOn(
+  pctx: ProjectContext,
+  sessionId: string,
+  composed?: ComposedStart,
+): Promise<PlanOfferStartResult> {
+  const submitted = composed
+    ? await planChangeSessionsService.submit(pctx, { sessionId }, composed.requirement, {
+        requirementPage: composed.requirementPage,
+        omitCarriedAnswers: true,
+      })
+    : await planChangeSessionsService.submit(pctx, { sessionId });
   return {
     sessionId: submitted.session.id,
     jobId: submitted.jobId,
     planId: submitted.planId,
     session: submitted.session,
   };
+}
+
+/** The page an earlier attempt recorded on the offer, if it reads as one. */
+function recordedPageOf(offer: Record<string, unknown>): { pageId: string; title: string } | null {
+  const page = offer['requirementPage'];
+  if (!page || typeof page !== 'object' || Array.isArray(page)) return null;
+  const { pageId, title } = page as Record<string, unknown>;
+  return typeof pageId === 'string' && pageId && typeof title === 'string' && title
+    ? { pageId, title }
+    : null;
+}
+
+/** Rewrite the stored offer under the conversation's lock: `change` gets what is stored
+ *  and answers what to keep. A no-op when the offer no longer reads. */
+async function rewriteOffer(
+  pctx: ProjectContext,
+  conversationId: string,
+  offerTurnId: string,
+  change: (offer: Record<string, unknown>) => Record<string, unknown>,
+) {
+  await withWorkspaceContext(txScope(pctx), async (tx) => {
+    await lockOwnConversation(pctx, conversationId, tx);
+    const row = await planChangeTurnRepository.findByIdInSession(
+      offerTurnId,
+      conversationId,
+      pctx.workspaceId,
+      tx,
+    );
+    const offer = row ? offerJson(row) : null;
+    if (!row || !offer) return;
+    await planChangeTurnRepository.setAnswerOffer(
+      row.id,
+      pctx.workspaceId,
+      change(offer) as Prisma.InputJsonValue,
+      tx,
+    );
+  });
+}
+
+/**
+ * The requirement page of a confirmed no-target offer, written EXACTLY ONCE (MOTIR-9436).
+ * Called only by the claim's winner, so a double press or a Confirm racing a typed yes
+ * reaches it once. The page is written OUTSIDE the claim's transaction (`createPageFromMarkdown`
+ * opens its own, and holding the conversation lock across a folder and page write would
+ * queue unrelated conversations behind it) and its id is recorded on the offer BEFORE the
+ * submit, so a start that then throws leaves a retry that re-uses it. The one gap is a
+ * crash between the write and the record, which can leave an unlinked page nothing reads.
+ *
+ * A write that throws gives the claim back, marks the offer `requirementSaveFailed` and
+ * throws {@link PlanOfferRequirementNotSavedError}: nothing started, Confirm still works.
+ */
+async function ensureRequirementPage(
+  pctx: ProjectContext,
+  input: {
+    conversationId: string;
+    offerTurnId: string;
+    requestMd: string;
+    requirement: SubmittedRequirement;
+  },
+): Promise<{ pageId: string; title: string }> {
+  // Read UNDER the lock, not from the thread read before the claim: an earlier attempt
+  // may have recorded its page after that read and released its claim since.
+  const recorded = await withWorkspaceContext(txScope(pctx), async (tx) => {
+    await lockOwnConversation(pctx, input.conversationId, tx);
+    const row = await planChangeTurnRepository.findByIdInSession(
+      input.offerTurnId,
+      input.conversationId,
+      pctx.workspaceId,
+      tx,
+    );
+    const offer = row ? offerJson(row) : null;
+    return offer ? recordedPageOf(offer) : null;
+  });
+  if (recorded) return recorded;
+  let page: { pageId: string; title: string };
+  try {
+    const { contentLanguage } = await resolveTenantLanguages({
+      workspaceId: pctx.workspaceId,
+      userId: pctx.userId,
+    });
+    const written = await requirementPageService.write({
+      workspaceId: pctx.workspaceId,
+      projectId: pctx.projectId,
+      requirement: input.requirement,
+      requestMd: input.requestMd,
+      conversationLabel: input.conversationId,
+      at: new Date(),
+      locale: requirementPageLocale(contentLanguage),
+    });
+    page = { pageId: written.pageId, title: written.title };
+  } catch (err) {
+    await releaseOffer(pctx, input.conversationId, input.offerTurnId);
+    await rewriteOffer(pctx, input.conversationId, input.offerTurnId, (offer) => ({
+      ...offer,
+      requirementSaveFailed: true,
+    }));
+    throw new PlanOfferRequirementNotSavedError(err);
+  }
+  await rewriteOffer(pctx, input.conversationId, input.offerTurnId, (offer) => {
+    const { requirementSaveFailed: _cleared, ...kept } = offer;
+    return { ...kept, requirementPage: page };
+  });
+  return page;
 }
 
 async function releaseOffer(pctx: ProjectContext, conversationId: string, offerTurnId: string) {
@@ -370,7 +495,7 @@ async function stampOffer(
     );
     const offer = row ? offerJson(row) : null;
     if (!row || !offer) return;
-    const { startRefusal: _dropped, ...kept } = offer;
+    const { startRefusal: _dropped, requirementSaveFailed: _cleared, ...kept } = offer;
     await planChangeTurnRepository.setAnswerOffer(
       row.id,
       pctx.workspaceId,
@@ -526,6 +651,22 @@ async function confirm(
     return confirm(pctx, input, attempts - 1);
   }
 
+  // A NO-TARGET offer that carries its composed requirement saves it as a page now, after
+  // the claim and before any start, on all three paths (MOTIR-9436). One without a
+  // requirement (an older offer, or one the read could not compose) starts as it always did.
+  const composed: ComposedStart | undefined =
+    !target && offer.requirement
+      ? {
+          requirement: offer.requirement,
+          requirementPage: await ensureRequirementPage(pctx, {
+            conversationId: input.conversationId,
+            offerTurnId: input.offerTurnId,
+            requestMd: offer.requestMd,
+            requirement: offer.requirement,
+          }),
+        }
+      : undefined;
+
   // The scope the plan runs in: the target's, or the conversation's own.
   const scope = target ? buildScope([target.identifier]) : buildScope(thread.targetKeys);
   let started: PlanOfferStartResult;
@@ -541,14 +682,14 @@ async function confirm(
       if (!restarted.ownsStart || !restarted.session) {
         throw new PlanOfferStartRefusedError('offer_not_open');
       }
-      started = await submitOn(pctx, restarted.session.id);
+      started = await submitOn(pctx, restarted.session.id, composed);
     } else if (claim.path === 'resume') {
       const successor = await planChangeSessionsService.findResumable(pctx, scope.scopeKey);
       const last = successor?.turns.at(-1);
       if (!successor || last?.role !== 'user' || last.body !== offer.requestMd.trim()) {
         throw new PlanSessionEndedError(input.conversationId);
       }
-      started = await submitOn(pctx, successor.id);
+      started = await submitOn(pctx, successor.id, composed);
     } else if (target) {
       started = await landTargeted(pctx, {
         conversationId: input.conversationId,
@@ -556,7 +697,7 @@ async function confirm(
         prompt: offer.requestMd,
       });
     } else {
-      started = await submitOn(pctx, input.conversationId);
+      started = await submitOn(pctx, input.conversationId, composed);
     }
   } catch (err) {
     await releaseOffer(pctx, input.conversationId, input.offerTurnId);

@@ -38,6 +38,9 @@ export interface MockSeam {
   readonly flag: string;
   readonly message: string;
   readonly install: (agent: MockAgent) => Promise<void>;
+  /** Whether the seam is on in this process. Absent ⇒ `flag` is set to `'1'`;
+   *  a seam keyed on a PATH (the fake AWS) says so here. */
+  readonly active?: () => boolean;
 }
 
 export const E2E_MOCK_SEAMS: readonly MockSeam[] = [
@@ -247,7 +250,26 @@ export const E2E_MOCK_SEAMS: readonly MockSeam[] = [
       installPlatformLessonsBoundaryMock(agent);
     },
   },
+  {
+    // Story MOTIR-9359 · MOTIR-9429 — the fake AWS: every `aws` fleet account's
+    // EC2 becomes one state file all three lane processes share, behind the REAL
+    // AWS adapter and inventory, and the agent-runner switch reads the spec's
+    // fixture. Keyed on the state file's PATH, not a `'1'` flag, so it is on
+    // exactly where the lane hands a process that path. Ignores the agent.
+    flag: 'MOTIR_FAKE_AWS_STATE_PATH',
+    message: 'fake AWS (file-backed EC2 behind the real adapter) installed.',
+    active: () => Boolean(process.env['MOTIR_FAKE_AWS_STATE_PATH']?.trim()),
+    install: async () => {
+      const { installFakeAwsSeam } = await import('@/lib/test-fake-aws');
+      await installFakeAwsSeam();
+    },
+  },
 ];
+
+/** Is `seam` on in THIS process? */
+function seamActive(seam: MockSeam): boolean {
+  return seam.active ? seam.active() : process.env[seam.flag] === '1';
+}
 
 /**
  * Install every seam whose flag is set in THIS process, on ONE shared agent.
@@ -259,7 +281,7 @@ export const E2E_MOCK_SEAMS: readonly MockSeam[] = [
  * agent, and nothing is imported.
  */
 export async function installE2EMockSeams(log: (line: string) => void): Promise<string[]> {
-  const active = E2E_MOCK_SEAMS.filter((seam) => process.env[seam.flag] === '1');
+  const active = E2E_MOCK_SEAMS.filter(seamActive);
   if (active.length === 0) return [];
 
   const { installSharedMockAgent } = await import('@/lib/test-mock-agent');

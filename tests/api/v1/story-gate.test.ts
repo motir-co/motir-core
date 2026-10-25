@@ -5,6 +5,7 @@ import { withV1Route } from '@/lib/api/v1/route';
 import { decodePageCursor } from '@/lib/api/v1/pagination';
 import { resetRateLimitStore } from '@/lib/api/v1/rateLimit';
 import { isGrantable } from '@/lib/tokens/grant';
+import { LEGACY_SCOPE_PERMISSIONS } from '@/lib/mcp/scopes';
 import { workspacesService } from '@/lib/services/workspacesService';
 import {
   auditV1RouteSource,
@@ -16,6 +17,7 @@ import {
 import { createV1Caller, createV1ProjectCaller } from '../../fixtures/apiV1Fixtures';
 import { createTestWorkItem } from '../../fixtures';
 import { foldersService } from '@/lib/services/foldersService';
+import { pagesService } from '@/lib/services/pagesService';
 import { plansService } from '@/lib/services/plansService';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { truncateAuthTables } from '../../helpers/db';
@@ -305,9 +307,10 @@ describe('gate — architecture guards over the /api/v1 route tree', () => {
         expect(isGrantable(permission), `${file} declares "${permission}"`).toBe(true);
       }
       if (/export const GET\s*=/.test(source)) {
-        expect(permissions, `${file} — a GET is gated on \`project:browse\``).toContain(
-          'project:browse',
-        );
+        // The page resource (MOTIR-9493) reads under `page:view`, the finer key
+        // `pagesService` asserts beside browse — a page is not every browser's.
+        const readKey = /\/pages\//.test(file) ? 'page:view' : 'project:browse';
+        expect(permissions, `${file} — a GET is gated on \`${readKey}\``).toContain(readKey);
       }
     }
   });
@@ -414,7 +417,12 @@ describe('gate — cross-tenant isolation across the whole v1 tree', () => {
   // cannot fill FAILS LOUDLY — a silently skipped route is a hole in a guard
   // that reads as coverage.
   it('no v1 route returns ANY identifier belonging to another tenant', async () => {
-    const mine = await createV1ProjectCaller({ workspaceName: 'Mine' });
+    // The legacy `read` grant, plus `page:view` (MOTIR-9493) — no legacy scope
+    // expands to a page key, and the page read must answer 200 to be swept.
+    const mine = await createV1ProjectCaller({
+      workspaceName: 'Mine',
+      permissions: [...LEGACY_SCOPE_PERMISSIONS.read, 'page:view'],
+    });
     const theirs = await createV1ProjectCaller({ workspaceName: 'Theirs', identifier: 'OTHR' });
 
     const myItem = await createTestWorkItem(mine.fixture, { kind: 'task', title: 'Mine' });
@@ -479,6 +487,17 @@ describe('gate — cross-tenant isolation across the whole v1 tree', () => {
       theirs.ctx,
     );
 
+    // MOTIR-9493's page read needs a `[pageId]` the caller owns, and a foreign
+    // page whose id must never appear.
+    const myPage = await pagesService.createPage(mine.ctx, {
+      projectId: mine.fixture.projectId,
+      title: 'Mine',
+    });
+    const theirPage = await pagesService.createPage(theirs.ctx, {
+      projectId: theirs.fixture.projectId,
+      title: 'Theirs',
+    });
+
     const foreign = [
       theirs.workspace.id,
       theirs.user.id,
@@ -490,6 +509,7 @@ describe('gate — cross-tenant isolation across the whole v1 tree', () => {
       theirPlan.id,
       theirRun.id,
       theirFolder.id,
+      theirPage.id,
     ];
 
     /** Fill one `[slug]` segment with a value the CALLER legitimately owns. */
@@ -500,6 +520,7 @@ describe('gate — cross-tenant isolation across the whole v1 tree', () => {
       if (slug === 'planId') return myPlan.id;
       if (slug === 'id') return myRun.id;
       if (slug === 'folderId') return myFolder.id;
+      if (slug === 'pageId') return myPage.id;
       throw new Error(
         `the cross-tenant sweep has no value for the dynamic segment [${slug}] — ` +
           'add one rather than letting the route be skipped',

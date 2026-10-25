@@ -6588,7 +6588,7 @@
         "standard": {
           "useCase": "Plan je projecten met de Motir AI-planner.",
           "features": [
-            "Het hele project in detail plannen",
+            "Het project in detail plannen",
             "Credits worden maandelijks vernieuwd · altijd bij te kopen"
           ]
         },
@@ -6603,12 +6603,26 @@
         "max": {
           "useCase": "Pro, plus ruimte om gepland werk aan de agent over te dragen.",
           "prev": "Pro",
-          "features": ["Ruimte om gepland werk automatisch aan de agent toe te wijzen"]
+          "features": [
+            "Plan meer werk, zodat je project sneller vordert",
+            "Ruimte om een deel van het geplande werk automatisch aan de agent toe te wijzen"
+          ]
         },
         "max_x2": {
           "useCase": "Max, met twee keer het volume.",
           "prev": "Max",
-          "features": ["Twee keer de maandelijkse creditpool van Max"]
+          "features": [
+            "Twee keer de maandelijkse creditpool van Max",
+            "Meer gepland werk automatisch aan de agent toewijzen"
+          ]
+        },
+        "host": {
+          "useCase": "Motir op vlootschaal, op AWS-accounts van jezelf.",
+          "prev": "Max ×2",
+          "features": [
+            "Motir brengt je project zelfstandig verder",
+            "Eigen pools voor CI-runners, agentruns, de indexer en gehoste agents"
+          ]
         }
       },
       "trial": {
@@ -8417,7 +8431,9 @@
       "held": "Motir AI biedt aan te plannen zodra deze vragen klaar zijn.",
       "settledHeading": "Wat je antwoorden hebben vastgelegd",
       "clearEnough": "Duidelijk genoeg om zo te plannen.",
-      "nothingSettled": "Er is niets vastgelegd, dus het verzoek wordt gepland zoals het er staat."
+      "nothingSettled": "Er is niets vastgelegd, dus het verzoek wordt gepland zoals het er staat.",
+      "requirementSaved": "Opgeslagen als <link>{title}</link> in Vereistendocumenten.",
+      "requirementNotSaved": "<lead>De vereiste kon niet worden opgeslagen.</lead> Er is niets gestart. Bevestigen is nog beschikbaar – probeer het opnieuw."
     },
     "logBugOffer": {
       "label": "Aanbod om een bug vast te leggen",
@@ -8496,6 +8512,20 @@
       "emptyBody": "Vragen die je stelt en plannen die je in dit project start, staan hier.",
       "error": "Je gesprekken konden niet worden geladen.",
       "rowAria": "{title} · {status} · actief {when}"
+    },
+    "requirementPane": {
+      "label": "Te plannen vereiste",
+      "headings": {
+        "outcome": "Resultaat",
+        "behaviour": "Gedrag",
+        "scopeEdge": "Scopegrens",
+        "constraints": "Randvoorwaarden",
+        "acceptance": "Acceptatie",
+        "assumptions": "Aannames"
+      },
+      "none": "Niets hier",
+      "correctionHint": "Typ de correctie in het gesprek om hier iets te wijzigen.",
+      "notice": "Voor dit voorstel is geen vereiste opgesteld. De planning stelt die op zodra je bevestigt."
     }
   },
   "codeHealth": {

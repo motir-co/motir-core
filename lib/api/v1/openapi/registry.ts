@@ -1,6 +1,7 @@
 import type { z } from 'zod/v4';
 import { FOLDER_COMPONENTS, FOLDER_OPERATIONS } from '@/lib/api/v1/folders/operations';
 import { operationKey, type V1Operation } from '@/lib/api/v1/openapi/operation';
+import { PAGE_COMPONENTS, PAGE_OPERATIONS } from '@/lib/api/v1/pages/operations';
 import { PLANNING_COMPONENTS, PLANNING_OPERATIONS } from '@/lib/api/v1/planning/operations';
 import {
   WORK_ITEM_COMPONENTS,
@@ -57,6 +58,8 @@ const RESOURCE_MODULES: readonly V1ResourceModule[] = [
   { operations: FOLDER_OPERATIONS, components: FOLDER_COMPONENTS },
   // Story MOTIR-9023's section sets read (MOTIR-9029).
   { operations: SECTION_SET_OPERATIONS, components: SECTION_SET_COMPONENTS },
+  // Story MOTIR-9486's page resource (MOTIR-9493).
+  { operations: PAGE_OPERATIONS, components: PAGE_COMPONENTS },
 ];
 
 /**
