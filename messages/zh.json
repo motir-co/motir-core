@@ -10057,6 +10057,10 @@
               "enable": "已开启集群 CI",
               "disable": "已关闭集群 CI"
             },
+            "agent_hosting": {
+              "enable": "已将新智能体切换到 AWS",
+              "disable": "已将新智能体切回 Fly"
+            },
             "shard": {
               "add": "已添加集群账户",
               "limits": "已刷新集群账户的上限",
@@ -12039,6 +12043,56 @@
         "title": "无法加载集群设置",
         "body": "无法读取该设置或其就绪状态，因此不显示任何状态，也不提供开关。这是读取错误 —— 没有任何更改，也不会猜测任何值。",
         "retry": "重试"
+      },
+      "agentHosting": {
+        "title": "智能体托管",
+        "subtitle": "新智能体实例的创建位置",
+        "superadminOnly": "仅限超级管理员",
+        "explanation": "关闭：新智能体实例在 Fly 上创建。开启：每个新智能体实例都放在智能体托管 AWS 池的某个账户上。无论哪种情况，已存在的智能体都留在原处 —— 此开关从不迁移正在运行的智能体。更改对下一个创建的智能体生效，无需重启。",
+        "state": {
+          "fly": "Fly",
+          "aws": "AWS"
+        },
+        "action": {
+          "turnOnAws": "开启 AWS",
+          "turnOffAws": "关闭 AWS"
+        },
+        "onNote": "新智能体在 AWS 上创建；已在 Fly 上的智能体留在 Fly。",
+        "meta": {
+          "lastChanged": "上次更改",
+          "changedBy": "由 {email} 于 {when} 更改 —— “{reason}”",
+          "neverChanged": "从未更改 —— 新智能体在 Fly 上创建",
+          "auditLink": "审计日志"
+        },
+        "monitoringLine": "智能体机器显示在 监控 › 集群 中",
+        "confirm": {
+          "toAwsTitle": "在 AWS 上创建新智能体？",
+          "toAwsBody": "Fly → AWS。从现在起，每个新智能体实例都在智能体托管 AWS 池的某个账户上创建。已在 Fly 上的智能体不会迁移：它们继续在 Fly 上运行。",
+          "toFlyTitle": "重新在 Fly 上创建新智能体？",
+          "toFlyBody": "AWS → Fly。新智能体实例回到 Fly，从下一个创建的实例开始。已在 AWS 上的智能体不会迁移：它们继续在 AWS 上运行。",
+          "reasonLabel": "原因 — 必填，将写入审计日志",
+          "reasonPlaceholderToAws": "为什么要把新智能体移到 AWS？",
+          "reasonPlaceholderToFly": "为什么要让新智能体回到 Fly？",
+          "reasonHint": "以后查看此更改的任何运维人员都会看到。仅写“测试”什么也说明不了。",
+          "reasonHintEmpty": "填写原因之前按钮保持禁用 —— 与服务器执行的规则相同。",
+          "cancel": "取消",
+          "confirmToAws": "开启 AWS",
+          "confirmToFly": "关闭 AWS"
+        },
+        "refused": {
+          "reasonMissing": "未更改：必须填写原因，它会随此更改写入审计日志。新智能体仍在 {hoster} 上创建。",
+          "alreadyAws": "已经是 AWS —— 没有任何更改。",
+          "alreadyFly": "已经是 Fly —— 没有任何更改。",
+          "alreadyBody": "另一位超级管理员已先行更改，因此没有写入任何内容，也没有添加审计记录。",
+          "writeFailed": "未切换到 {hoster}：无法保存此更改。",
+          "nothingChanged": "没有任何更改：新智能体仍在 {previous} 上创建。",
+          "retryHint": "你填写的原因已保留。请重试或取消。"
+        },
+        "unavailable": {
+          "title": "无法加载智能体托管",
+          "body": "无法读取新智能体的创建位置，因此不显示任何状态，也不提供开关。这是读取错误 —— 没有任何更改，也不会猜测任何值。",
+          "retry": "重试"
+        }
       }
     }
   },

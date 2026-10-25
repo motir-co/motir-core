@@ -307,6 +307,15 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
     'public',
     'platform_fleet_org_ci_read (20261015300000) · platformFleetOrgCiRead.test "the fleet org CI state read" (under SET LOCAL ROLE motir_app, nothing bound)',
   ],
+  // ── a FLEET KIND's Fly↔AWS switch (MOTIR-9503) ─────────────────────────
+  // Placement reads the agent hoster's switch on every new instance, from a
+  // tenant's create path with no platform flag bound, and the console reads it
+  // outside any platform transaction. The table's SELECT arm is `USING (true)`;
+  // its writes stay behind `app.platform_staff`.
+  'platformFleetKindSwitchRepository.ts#find': [
+    'public',
+    'platform_fleet_kind_switch_read (20261025090000) · platformFleetKindSwitchRead.test "the fleet kind switch read" (under SET LOCAL ROLE motir_app, nothing bound)',
+  ],
   'platformRunModelRepository.ts#findListedModelsForOffer': [
     'public',
     'platform_run_model_read + platform_run_model_list_read (20261004120000) · platformRunModelOfferRead.test "the offer read" (under SET LOCAL ROLE motir_app, nothing bound)',

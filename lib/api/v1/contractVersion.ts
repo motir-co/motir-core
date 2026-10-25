@@ -1112,5 +1112,18 @@
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.75.0` after MOTIR-9052's
  *   `1.74.0`. If a sibling has taken it since, RENUMBER this entry — it names the
  *   OPERATIONS.
+ *
+ * - `1.76.0` — MOTIR-9552 (Story MOTIR-9489) adds `searchPages`
+ *   (`GET /api/v1/projects/{projectKey}/pages/search?q=&cursor=`, `page:view`, `200` with a
+ *   plain page of `PageSearchHit`) — full-text search over a project's live pages by a word in
+ *   the title or body, ranked and keyset-paged, over the same `pagesService.searchPages` door
+ *   as the MCP `search_pages` tool. New codes `PAGE_SEARCH_QUERY_EMPTY` and
+ *   `PAGE_SEARCH_QUERY_TOO_LONG` (422).
+ *
+ *   Additive: one new operation, one new component and new codes for new conditions
+ *   (§8's allowed list).
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.76.0` after MOTIR-9493's
+ *   `1.75.0`. If a sibling has taken it since, RENUMBER this entry.
  */
-export const V1_CONTRACT_VERSION = '1.75.0';
+export const V1_CONTRACT_VERSION = '1.76.0';

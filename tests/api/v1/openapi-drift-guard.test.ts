@@ -1181,6 +1181,12 @@ describe('every operation’s REAL response validates against its declared schem
       send(`/api/v1/pages/${pageId}/placement`, 'PATCH', { parent: { kind: 'root' } }),
       { pageId },
     );
+    await drive(
+      'searchPages',
+      () => import('@/app/api/v1/projects/[projectKey]/pages/search/route'),
+      get(`/api/v1/projects/${pk}/pages/search?q=worker`),
+      { projectKey: pk },
+    );
 
     // ── The activity read (Story 11.7) ──────────────────────────────────────
     // Driven on the item that has BOTH a comment and a change trail by now, so

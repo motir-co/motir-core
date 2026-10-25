@@ -9,6 +9,7 @@ import {
   MissingAuditReasonError,
   NotPlatformStaffError,
 } from '@/lib/platform/errors';
+import { agentHostingSettingService } from '@/lib/services/agentHostingSettingService';
 import { fleetOrgCiSettingService } from '@/lib/services/fleetOrgCiSettingService';
 
 /**
@@ -102,6 +103,40 @@ export async function setFleetOrgCiAction(
     if (err instanceof NotPlatformStaffError) return { ok: false, code: 'NOT_PERMITTED' };
     if (err instanceof FleetOrgCiTargetUnknownError) return { ok: false, code: 'TARGET_UNKNOWN' };
     console.error('[admin] fleet org CI action failed', { projectId, org, enabled });
+    return { ok: false, code: 'FAILED' };
+  }
+}
+
+/**
+ * The AGENT HOSTING flip — design `platform-admin/design-notes.md` § Fleet
+ * settings · Agent hosting (MOTIR-9534), card MOTIR-9503. The same transport
+ * shape as `setFleetOrgCiAction`: the principal, ONE service call, the typed
+ * errors as a discriminated result. The switch has no readiness and no remote
+ * write, so its refusals are the reason, the gate and anything else.
+ */
+export type AgentHostingActionResult =
+  | { ok: true; outcome: 'changed' }
+  | { ok: true; outcome: 'unchanged'; onPool: boolean }
+  | { ok: false; code: 'REASON_REQUIRED' | 'NOT_PERMITTED' | 'FAILED' };
+
+export async function setAgentHostingAction(
+  onPool: boolean,
+  reason: string,
+): Promise<AgentHostingActionResult> {
+  try {
+    const principal = await requirePlatformStaff('superadmin');
+    const flip = await agentHostingSettingService.setOnPool(principal, onPool, reason);
+    // The section is a server-rendered prop: the re-read shows the new state
+    // and its last-changed line (`CLAUDE.md`'s page-state contract).
+    revalidatePath(PAGE);
+    if (flip.outcome === 'unchanged') {
+      return { ok: true, outcome: 'unchanged', onPool: flip.state.onPool };
+    }
+    return { ok: true, outcome: 'changed' };
+  } catch (err) {
+    if (err instanceof MissingAuditReasonError) return { ok: false, code: 'REASON_REQUIRED' };
+    if (err instanceof NotPlatformStaffError) return { ok: false, code: 'NOT_PERMITTED' };
+    console.error('[admin] agent hosting action failed', { onPool });
     return { ok: false, code: 'FAILED' };
   }
 }

@@ -362,6 +362,8 @@ export const TOOL_ANNOTATIONS: Record<McpToolName, McpToolAnnotations> = {
     idempotentHint: true,
     openWorldHint: false,
   },
+  // R: searchPages.ts → pagesService.searchPages — a ranked read, no lock, no write
+  search_pages: { readOnlyHint: true, openWorldHint: false },
   // A replay of the same version writes nothing, so it is idempotent; not destructive
   // (nothing is removed).
   // W: publishDecisionPage.ts → decisionPageService.publish — seals a version, records the publication, supersedes + raises the decision gate

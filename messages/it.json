@@ -10066,6 +10066,10 @@
               "enable": "Attivata la CI della flotta",
               "disable": "Disattivata la CI della flotta"
             },
+            "agent_hosting": {
+              "enable": "Ha spostato i nuovi agenti su AWS",
+              "disable": "Ha riportato i nuovi agenti su Fly"
+            },
             "shard": {
               "add": "Aggiunto un account della flotta",
               "limits": "Aggiornati i limiti di un account della flotta",
@@ -12048,6 +12052,56 @@
         "title": "Impossibile caricare l’impostazione della flotta",
         "body": "Non è stato possibile leggere l’impostazione o la sua disponibilità, quindi non viene mostrato alcuno stato né offerto alcun interruttore. È un errore di lettura: non è cambiato nulla e nessun valore viene indovinato.",
         "retry": "Riprova"
+      },
+      "agentHosting": {
+        "title": "Hosting degli agenti",
+        "subtitle": "Dove vengono create le nuove istanze di agenti",
+        "superadminOnly": "Solo superadmin",
+        "explanation": "Disattivato: le nuove istanze di agenti vengono create su Fly. Attivato: ogni nuova istanza di agente viene collocata su un account del pool AWS per l’hosting degli agenti. In entrambi i casi, gli agenti già esistenti restano dove sono: questo interruttore non sposta mai un agente in esecuzione. Una modifica si applica al prossimo agente creato, senza riavvio.",
+        "state": {
+          "fly": "Fly",
+          "aws": "AWS"
+        },
+        "action": {
+          "turnOnAws": "Attiva AWS",
+          "turnOffAws": "Disattiva AWS"
+        },
+        "onNote": "I nuovi agenti vengono creati su AWS; gli agenti già su Fly restano su Fly.",
+        "meta": {
+          "lastChanged": "Ultima modifica",
+          "changedBy": "da {email}, {when} — «{reason}»",
+          "neverChanged": "Mai modificata: i nuovi agenti vengono creati su Fly",
+          "auditLink": "Registro di audit"
+        },
+        "monitoringLine": "Le macchine degli agenti compaiono in Monitoraggio › Flotta",
+        "confirm": {
+          "toAwsTitle": "Creare i nuovi agenti su AWS?",
+          "toAwsBody": "Fly → AWS. D’ora in poi ogni nuova istanza di agente viene creata su un account del pool AWS per l’hosting degli agenti. Gli agenti già su Fly non vengono spostati: continuano a funzionare su Fly.",
+          "toFlyTitle": "Creare di nuovo i nuovi agenti su Fly?",
+          "toFlyBody": "AWS → Fly. Le nuove istanze di agenti tornano su Fly, a partire dalla prossima creata. Gli agenti già su AWS non vengono spostati: continuano a funzionare su AWS.",
+          "reasonLabel": "Motivo: obbligatorio, scritto nel registro di audit",
+          "reasonPlaceholderToAws": "Perché i nuovi agenti passano ad AWS?",
+          "reasonPlaceholderToFly": "Perché i nuovi agenti tornano su Fly?",
+          "reasonHint": "Visibile a qualsiasi operatore che leggerà questa modifica in seguito. «Test» da solo non spiega nulla.",
+          "reasonHintEmpty": "Il pulsante resta disattivato finché non scrivi un motivo: la stessa regola applicata dal server.",
+          "cancel": "Annulla",
+          "confirmToAws": "Attiva AWS",
+          "confirmToFly": "Disattiva AWS"
+        },
+        "refused": {
+          "reasonMissing": "Non modificato: il motivo è obbligatorio e viene scritto nel registro di audit con questa modifica. I nuovi agenti vengono ancora creati su {hoster}.",
+          "alreadyAws": "Già su AWS: non è cambiato nulla.",
+          "alreadyFly": "Già su Fly: non è cambiato nulla.",
+          "alreadyBody": "Un altro superadmin l’ha modificata prima, quindi non è stato scritto nulla e non è stata aggiunta alcuna riga di audit.",
+          "writeFailed": "Non passato a {hoster}: non è stato possibile salvare la modifica.",
+          "nothingChanged": "Non è cambiato nulla: i nuovi agenti vengono ancora creati su {previous}.",
+          "retryHint": "Il tuo motivo è conservato. Riprova o annulla."
+        },
+        "unavailable": {
+          "title": "Impossibile caricare l’hosting degli agenti",
+          "body": "Non è stato possibile leggere dove vengono creati i nuovi agenti, quindi non viene mostrato alcuno stato né offerto alcun interruttore. È un errore di lettura: non è cambiato nulla e nessun valore viene indovinato.",
+          "retry": "Riprova"
+        }
       }
     }
   },

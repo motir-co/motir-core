@@ -685,6 +685,11 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
       'Change a page’s title only — no body write, no revision, and no new version of a published decision page.',
     descriptionFingerprint: 'd1f07933be8e',
   },
+  search_pages: {
+    summary:
+      'Find a project’s live pages by a word in the title or body — ranked hits with a snippet, paged by cursor.',
+    descriptionFingerprint: '6300effbffe9',
+  },
   publish_decision_page: {
     summary:
       'Publish a page as a decision card’s decision: seals its newest version and, on an agent card, asks a person to approve it.',

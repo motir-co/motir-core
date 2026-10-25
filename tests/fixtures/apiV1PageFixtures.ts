@@ -2,6 +2,7 @@ import type { WorkspaceRole } from '@/generated/prisma/client';
 import { POST as CREATE_PAGE } from '@/app/api/v1/projects/[projectKey]/pages/route';
 import { GET as GET_PAGE, PATCH as PATCH_PAGE } from '@/app/api/v1/pages/[pageId]/route';
 import { PATCH as MOVE_PAGE } from '@/app/api/v1/pages/[pageId]/placement/route';
+import { GET as SEARCH_PAGES } from '@/app/api/v1/projects/[projectKey]/pages/search/route';
 import { workspacesService } from '@/lib/services/workspacesService';
 import type { TokenGrant } from '@/lib/tokens/grant';
 import { withTokenFor, type V1Caller, type V1ProjectCaller } from './apiV1Fixtures';
@@ -66,6 +67,23 @@ export function movePageV1(caller: Headers, pageId: string, body: unknown): Prom
       body: typeof body === 'string' ? body : JSON.stringify(body),
     }),
     { params: Promise.resolve({ pageId }) },
+  );
+}
+
+/** `GET /api/v1/projects/{projectKey}/pages/search` — each query parameter set only when given. */
+export function searchPagesV1(
+  caller: Headers,
+  projectKey: string,
+  query: { q?: string; cursor?: string },
+): Promise<Response> {
+  const params = new URLSearchParams();
+  if (query.q !== undefined) params.set('q', query.q);
+  if (query.cursor !== undefined) params.set('cursor', query.cursor);
+  return SEARCH_PAGES(
+    new Request(`${V1_BASE}/projects/${projectKey}/pages/search?${params.toString()}`, {
+      headers: caller.headers,
+    }),
+    { params: Promise.resolve({ projectKey }) },
   );
 }
 

@@ -127,4 +127,44 @@ describe('the emitted document describes the page operations', () => {
     );
     expect(document.components.schemas['Page']).toBeDefined();
   });
+
+  it('publishes searchPages with its parameters, the hit page, page:view and the empty-query rule', () => {
+    const search = document.paths['/api/v1/projects/{projectKey}/pages/search']?.['get'];
+    expect(search?.['operationId']).toBe('searchPages');
+    expect(search?.['x-motir-permission']).toBe('page:view');
+    const parameters = (search?.['parameters'] as Array<{ name: string; in: string }>).map(
+      (p) => `${p.in}:${p.name}`,
+    );
+    expect(parameters).toEqual(
+      expect.arrayContaining(['path:projectKey', 'query:q', 'query:cursor']),
+    );
+    expect(Object.keys(search?.['responses'] as object)).toEqual(
+      expect.arrayContaining(['200', '403', '404', '422']),
+    );
+    expect(search?.['description']).toContain('PAGE_SEARCH_QUERY_EMPTY');
+    expect(search?.['description']).toContain('never returns every page');
+    expect(document.components.schemas['PageSearchHit']).toBeDefined();
+  });
+
+  it('FAILS when searchPages is undeclared while its route exists', () => {
+    const without = PAGE_OPERATIONS.filter((op) => op.operationId !== 'searchPages');
+    expect(findSpecDrift(shippedRouteMethods(pageRouteSources()), without)).toEqual([
+      expect.objectContaining({
+        rule: 'route-without-operation',
+        subject: 'GET /api/v1/projects/{projectKey}/pages/search',
+      }),
+    ]);
+  });
+
+  it('FAILS when the search route is gone while searchPages is declared', () => {
+    const sources = pageRouteSources();
+    for (const file of [...sources.keys()])
+      if (file.includes(`${sep}search${sep}`)) sources.delete(file);
+    expect(findSpecDrift(shippedRouteMethods(sources), PAGE_OPERATIONS)).toEqual([
+      expect.objectContaining({
+        rule: 'operation-without-route',
+        subject: 'GET /api/v1/projects/{projectKey}/pages/search',
+      }),
+    ]);
+  });
 });

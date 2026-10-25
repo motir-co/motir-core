@@ -122,6 +122,7 @@ import { DesignEvidenceError } from '@/lib/designEvidence/errors';
 import { DecisionPageError } from '@/lib/decisionPages/errors';
 import { TestInstructionsError } from '@/lib/testInstructions/errors';
 import { PageError, PageRevisionConflictError, PageTreeError } from '@/lib/pages';
+import { PageSearchQueryEmptyError, PageSearchQueryTooLongError } from '@/lib/pages/searchErrors';
 import {
   EmptyTodoTextError,
   TodoCommandTooLongError,
@@ -480,7 +481,15 @@ export function toToolError(err: unknown): CallToolResult {
         `returns, and send revision ${err.actual}.`,
     );
   }
-  if (err instanceof PageError || err instanceof PageTreeError) {
+  // Page search's query refusals (MOTIR-9553) are not `PageError`s — they live in
+  // `lib/pages/searchErrors.ts` — so they are named here, by the same code the REST
+  // search route returns. Its cursor refusal is a `PageError` and is covered above.
+  if (
+    err instanceof PageError ||
+    err instanceof PageTreeError ||
+    err instanceof PageSearchQueryEmptyError ||
+    err instanceof PageSearchQueryTooLongError
+  ) {
     return toolError(err.code, err.message);
   }
   // The organization's storage cap. Not an AttachmentError (it is a billing
