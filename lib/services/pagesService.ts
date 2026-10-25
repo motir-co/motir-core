@@ -1,5 +1,6 @@
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { projectAccessService } from '@/lib/services/projectAccessService';
+import { pageEmbeddingsService } from '@/lib/services/pageEmbeddingsService';
 import { folderRepository } from '@/lib/repositories/folderRepository';
 import { pageRepository } from '@/lib/repositories/pageRepository';
 import { pageVersionRepository } from '@/lib/repositories/pageVersionRepository';
@@ -363,7 +364,7 @@ export const pagesService = {
    */
   async createPage(ctx: ServiceContext, input: CreatePageInput): Promise<PageSummaryDto> {
     const parent = parsePlacement(input.parent ?? { kind: 'root' });
-    return withWorkspaceContext(scopeTo(ctx, input.projectId), async (tx) => {
+    const summary = await withWorkspaceContext(scopeTo(ctx, input.projectId), async (tx) => {
       await projectAccessService.assertCanEditPages(input.projectId, ctx, tx);
       const row = await createPageProcedure(pageStoreFor(tx), systemClock, {
         workspaceId: ctx.workspaceId,
@@ -374,6 +375,8 @@ export const pagesService = {
       });
       return toSummary(row);
     });
+    await pageEmbeddingsService.requestEmbeddings(ctx.workspaceId, [summary.id]);
+    return summary;
   },
 
   /**
@@ -614,7 +617,7 @@ export const pagesService = {
     ctx: ServiceContext,
     input: PageArchiveActionInput,
   ): Promise<ArchivePageResultDto> {
-    return withWorkspaceContext(scopeTo(ctx, input.projectId), async (tx) => {
+    const archived = await withWorkspaceContext(scopeTo(ctx, input.projectId), async (tx) => {
       await projectAccessService.assertCanEditPages(input.projectId, ctx, tx);
       await lockArchiveStructure(input.projectId, tx);
       const store = pageStoreFor(tx);
@@ -630,6 +633,9 @@ export const pagesService = {
         subPageCount: result.archivedIds.length - 1,
       };
     });
+    // Every page of the set leaves the semantic index — its job drops the row.
+    await pageEmbeddingsService.requestEmbeddings(ctx.workspaceId, archived.archivedIds);
+    return archived;
   },
 
   /**
@@ -643,7 +649,7 @@ export const pagesService = {
     ctx: ServiceContext,
     input: PageArchiveActionInput,
   ): Promise<RestorePageResultDto> {
-    return withWorkspaceContext(scopeTo(ctx, input.projectId), async (tx) => {
+    const restored = await withWorkspaceContext(scopeTo(ctx, input.projectId), async (tx) => {
       await projectAccessService.assertCanEditPages(input.projectId, ctx, tx);
       await lockArchiveStructure(input.projectId, tx);
       const store = pageStoreFor(tx);
@@ -669,6 +675,9 @@ export const pagesService = {
         },
       };
     });
+    // Every page of the set rejoins the semantic index — its job re-embeds it.
+    await pageEmbeddingsService.requestEmbeddings(ctx.workspaceId, restored.restoredIds);
+    return restored;
   },
 
   /**
@@ -846,7 +855,7 @@ export const pagesService = {
     ctx: ServiceContext,
     input: SavePageMarkdownInput,
   ): Promise<PageMarkdownDto> {
-    return withWorkspaceContext(scopeTo(ctx, input.projectId), async (tx) => {
+    const saved = await withWorkspaceContext(scopeTo(ctx, input.projectId), async (tx) => {
       await projectAccessService.assertCanEditPages(input.projectId, ctx, tx);
       const store = pageStoreFor(tx);
       await findInProject(store, input.projectId, input.pageId);
@@ -858,6 +867,8 @@ export const pagesService = {
       });
       return (await readPageMarkdown(input.projectId, input.pageId, tx))!;
     });
+    await pageEmbeddingsService.requestEmbeddings(ctx.workspaceId, [input.pageId]);
+    return saved;
   },
 
   /**
@@ -872,7 +883,7 @@ export const pagesService = {
     input: CreatePageFromMarkdownInput,
   ): Promise<PageMarkdownDto> {
     const parent = parsePlacement(input.parent ?? { kind: 'root' });
-    return withWorkspaceContext(scopeTo(ctx, input.projectId), async (tx) => {
+    const created = await withWorkspaceContext(scopeTo(ctx, input.projectId), async (tx) => {
       await projectAccessService.assertCanEditPages(input.projectId, ctx, tx);
       const store = pageStoreFor(tx);
       const row = await createPageProcedure(store, systemClock, {
@@ -892,11 +903,13 @@ export const pagesService = {
       }
       return (await readPageMarkdown(input.projectId, row.id, tx))!;
     });
+    await pageEmbeddingsService.requestEmbeddings(ctx.workspaceId, [created.id]);
+    return created;
   },
 
   /** Rename a page. `page:edit`. */
   async renamePage(ctx: ServiceContext, input: RenamePageInput): Promise<PageSummaryDto> {
-    return withWorkspaceContext(scopeTo(ctx, input.projectId), async (tx) => {
+    const summary = await withWorkspaceContext(scopeTo(ctx, input.projectId), async (tx) => {
       await projectAccessService.assertCanEditPages(input.projectId, ctx, tx);
       const store = pageStoreFor(tx);
       await findInProject(store, input.projectId, input.pageId);
@@ -907,6 +920,8 @@ export const pagesService = {
       });
       return toSummary(row);
     });
+    await pageEmbeddingsService.requestEmbeddings(ctx.workspaceId, [input.pageId]);
+    return summary;
   },
 
   /** Merge one Yjs update into a page's state. `page:edit`. Returns the new revision. */
@@ -914,7 +929,7 @@ export const pagesService = {
     ctx: ServiceContext,
     input: SavePageUpdateInput,
   ): Promise<SavePageResultDto> {
-    return withWorkspaceContext(scopeTo(ctx, input.projectId), async (tx) => {
+    const saved = await withWorkspaceContext(scopeTo(ctx, input.projectId), async (tx) => {
       await projectAccessService.assertCanEditPages(input.projectId, ctx, tx);
       const store = pageStoreFor(tx);
       await findInProject(store, input.projectId, input.pageId);
@@ -925,6 +940,10 @@ export const pagesService = {
       });
       return { revision };
     });
+    // The collaborative door fires as a member types; the job's debounce turns
+    // the burst into one embedding of the latest text.
+    await pageEmbeddingsService.requestEmbeddings(ctx.workspaceId, [input.pageId]);
+    return saved;
   },
 
   /**
@@ -1018,7 +1037,7 @@ export const pagesService = {
     ctx: ServiceContext,
     input: RestorePageVersionInput,
   ): Promise<RestorePageVersionResultDto> {
-    return withWorkspaceContext(scopeTo(ctx, input.projectId), async (tx) => {
+    const restored = await withWorkspaceContext(scopeTo(ctx, input.projectId), async (tx) => {
       await projectAccessService.assertCanEditPages(input.projectId, ctx, tx);
       const store = pageStoreFor(tx);
       await findInProject(store, input.projectId, input.pageId);
@@ -1035,6 +1054,8 @@ export const pagesService = {
         bodyState: toBase64(page!.bodyState),
       };
     });
+    await pageEmbeddingsService.requestEmbeddings(ctx.workspaceId, [input.pageId]);
+    return restored;
   },
   /**
    * The `@` picker's Pages section (Story MOTIR-7694 · MOTIR-7697): the live

@@ -270,6 +270,22 @@ export interface WorkItemEmbeddingRequestedData {
 }
 
 /**
+ * The `page/embedding.requested` event payload (Story MOTIR-9490 · MOTIR-9571) —
+ * emitted AFTER a page write commits, by every door that changes a page's title,
+ * body or liveness: create (empty or from markdown), a markdown save, a
+ * collaborative update, a rename, a version restore, and an archive or restore
+ * (one per page in the set).
+ *
+ * ⚠️ AN ID, NOT A PAYLOAD — the same design as {@link WorkItemEmbeddingRequestedData}:
+ * the job re-reads the page's current text (and whether it is archived) at run
+ * time, so rapid edits converge whatever order their jobs run in.
+ */
+export interface PageEmbeddingRequestedData {
+  workspaceId: string;
+  pageId: string;
+}
+
+/**
  * The `filter-subscription/deliver` event payload (Story 6.2 · Subtask 6.2.5)
  * — one per DUE subscription, enqueued by the hourly `system.filter-
  * subscription-tick` cron so each delivery retries/dead-letters independently
@@ -705,6 +721,7 @@ export interface JobEventDataMap {
   'work-item/child-set.changed': WorkItemChildSetChangedData;
   'work-item/derivation.requested': WorkItemDerivationRequestedData;
   'work-item/embedding.requested': WorkItemEmbeddingRequestedData;
+  'page/embedding.requested': PageEmbeddingRequestedData;
   'pull-request/auto-merge.requested': PullRequestAutoMergeRequestedData;
   /** An `agent_review` gate was RAISED (Story MOTIR-1626 · MOTIR-6819; `approval-gates.md`
    *  §12.2, `hosted-agent-run.md` §8.1) — start ONE review run for it. Emitted after the

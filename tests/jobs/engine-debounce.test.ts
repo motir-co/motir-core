@@ -9,6 +9,9 @@ import { dispatchEventToEngine } from '@/lib/jobs/engine/dispatcher';
 import { debouncedRunAt, resolveDebounceKey } from '@/lib/jobs/engine/debounce';
 import { parseEventExpression, resolveEventExpression } from '@/lib/jobs/engine/eventExpression';
 import { codeGraphRefresh } from '@/lib/jobs/definitions/codeGraphRefresh';
+import { pageEmbeddingRequested } from '@/lib/jobs/definitions/pageEmbedding';
+import { usersService } from '@/lib/services/usersService';
+import { workspacesService } from '@/lib/services/workspacesService';
 import type { CodeGraphRefreshData } from '@/lib/jobs/types';
 
 // THE ENGINE'S DEBOUNCE (Story MOTIR-3417 · Subtask MOTIR-3483).
@@ -526,5 +529,47 @@ describe("codeGraphRefresh's declared debounce is untouched", () => {
         codeGraphRefresh.debounce!.key,
       ),
     ).toHaveLength(5);
+  });
+});
+
+describe('pageEmbeddingRequested — a typing burst on one page is ONE run (MOTIR-9571)', () => {
+  // The collaborative editor saves as a member types, and every save emits. This
+  // drives the REAL definition's trigger through the real dispatcher.
+  const PAGE_TRIGGER = 'page/embedding.requested';
+
+  /** A real workspace — the event row carries it as a foreign key. */
+  async function workspace(): Promise<string> {
+    const owner = await usersService.createUser({
+      email: 'debounce-pages@example.com',
+      password: 'hunter2hunter2',
+      name: 'Debounce',
+    });
+    const ws = await workspacesService.createWorkspace({ name: 'Pages', ownerUserId: owner.id });
+    return ws.workspace.id;
+  }
+
+  it('coalesces a same-page burst into one row keyed on the page, due 30 s after the last', async () => {
+    const workspaceId = await workspace();
+    const before = Date.now();
+    for (let i = 0; i < 5; i++) {
+      await dispatchEventToEngine(PAGE_TRIGGER, { workspaceId, pageId: 'page_1' });
+    }
+    const after = Date.now();
+
+    const rows = await rowsFor(pageEmbeddingRequested.id);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.debounceKey).toBe('page_1');
+    expect(rows[0]!.runAt.getTime()).toBeGreaterThanOrEqual(before + 30_000);
+    expect(rows[0]!.runAt.getTime()).toBeLessThanOrEqual(after + 30_000 + 5_000);
+  });
+
+  it('keeps two pages as two runs', async () => {
+    const workspaceId = await workspace();
+    await dispatchEventToEngine(PAGE_TRIGGER, { workspaceId, pageId: 'page_1' });
+    await dispatchEventToEngine(PAGE_TRIGGER, { workspaceId, pageId: 'page_2' });
+    await dispatchEventToEngine(PAGE_TRIGGER, { workspaceId, pageId: 'page_1' });
+
+    const rows = await rowsFor(pageEmbeddingRequested.id);
+    expect(rows.map((r) => r.debounceKey).sort()).toEqual(['page_1', 'page_2']);
   });
 });

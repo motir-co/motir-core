@@ -241,6 +241,32 @@ export const pageRepository = {
   },
 
   /**
+   * Read what a page's MEANING VECTOR is derived from, and whether it is live
+   * (Story MOTIR-9490 · MOTIR-9571) — `pageEmbeddingsService.embedPage`'s re-read.
+   * `null` when absent or invisible. Archived pages included: the service decides
+   * that an archived page's row goes.
+   */
+  async findEmbeddingSourceById(
+    id: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Pick<
+    Page,
+    'id' | 'workspaceId' | 'projectId' | 'title' | 'bodyText' | 'archivedAt'
+  > | null> {
+    return tx.page.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        workspaceId: true,
+        projectId: true,
+        title: true,
+        bodyText: true,
+        archivedAt: true,
+      },
+    });
+  },
+
+  /**
    * Read one page with its derived MARKDOWN and no lock — the agent's read door
    * (`pagesService.getPageMarkdown`, MOTIR-7409). The Yjs state is not selected:
    * serving markdown never needs the canonical bytes. `null` when absent or invisible.
