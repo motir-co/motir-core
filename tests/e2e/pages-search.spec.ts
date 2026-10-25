@@ -130,8 +130,11 @@ async function hits(request: APIRequestContext, token: string, projectKey: strin
   const text = await res.text();
   expect(res.status(), text.slice(0, 400)).toBe(200);
   expect(text).not.toMatch(/"(markdown|body|bodyText|total|count)"/);
-  const body = JSON.parse(text) as { items: Hit[]; nextCursor: string | null };
-  expect(Object.keys(body).sort()).toEqual(['items', 'nextCursor']);
+  const body = JSON.parse(text) as { items: Hit[]; nextCursor: string | null; mode: string };
+  expect(Object.keys(body).sort()).toEqual(['items', 'message', 'mode', 'nextCursor']);
+  // This lane's server has no motir-ai, so the search says it ranked by words only
+  // (MOTIR-9574); search by meaning is the acceptance lane's spec.
+  expect(body.mode).toBe('full-text-only');
   return body.items;
 }
 
