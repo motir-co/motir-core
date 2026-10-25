@@ -3,7 +3,7 @@
 - **Status:** Accepted (2026-06-21, locked with Yue; **catalog provisioned in
   Stripe sandbox 2026-06-22** per the §3 + §6 reconciliations below). This is the
   rung-1 pricing decision Story 8.1 implements — no billing code ships until it
-  is locked. **Amended 2026-06-23 + 2026-06-24 + 2026-09-04 + 2026-09-25 + 2026-09-26 + 2026-10-21 — see below.**
+  is locked. **Amended 2026-06-23 + 2026-06-24 + 2026-09-04 + 2026-09-25 + 2026-09-26 + 2026-10-21 + 2026-10-23 — see below.**
 - **Credit model:** the rates, the token→credit conversion and the ledger this ADR
   builds on are specified in `motir-ai/docs/credit-model.md`, owned by the closed
   side (where the ledger lives). Every citation of it below is repo-qualified for
@@ -516,6 +516,23 @@ only vs the PM tools above, not vs Cursor).
 > (2,000), `pro` (8,000), `max` (30,000), `enterprise` (custom) rows" and the §2 narrative around
 > it (the reconciliation list and the v1 "AI pool sizing") are the record of what was provisioned
 > then, superseded by this amendment.
+
+> **Amendment (2026-10-23, MOTIR-9364 / MOTIR-9398) — Host, a regular plan of 300,000 credits.**
+> The catalog gains **Host** (`host`): 300,000 credits a month at **$1,500 a month or $12,000 a
+> year**, under `host_pool_monthly` / `host_pool_annual`, bought at quantity 1 with one included
+> tracker seat like every paid plan.
+>
+> - **Its price is the ladder's per-credit basis**, pool ÷ 1,000 × $5 a month and × $40 a year (so
+>   annual is 8× monthly, as on the ladder), not the larger rungs' 10%-off monthly rule.
+> - **It is sold from the plan row and through the change-of-plan path, and never recommended by
+>   the calculator.** It sits in a `host` band of its own: the ladder ceiling
+>   (`maxMonthlyPlanCredits()`, still Max ×2's 60,000) and the rung table never count it, and only
+>   the checkout allow-list and the change-of-plan keys name it. Adding it as a `ladder` rung would
+>   have lifted the ceiling to 300,000 and taken all six rungs off sale.
+> - **What it brings beyond credits** (three AWS accounts of the org's own, and Max's limits on the
+>   shared pools until they are live) is owned by the Host accounts story, MOTIR-9365, not by this
+>   record. The six `pool_<n>k` rungs stay on sale between Max ×2 and Host until the larger-pool
+>   story, MOTIR-9366, re-anchors them above it.
 
 ### 3. The Stripe Price catalog (binding on 8.1.2 / MOTIR-1141)
 

@@ -284,6 +284,8 @@ export function PlanOffer({
   }
 
   const long = offer.requestMd.length > CLAMP_AT;
+  // The requirement's page and failed save exist only on a no-target plan offer.
+  const requirementNoTarget = offer.kind === 'plan' && target === null;
   const decided = state === 'confirmed' || state === 'declined';
   const live = state === 'undecided' && answerable;
   // Logging a bug ends no plan, so a bug offer never draws the mid-planning variant.
@@ -372,6 +374,24 @@ export function PlanOffer({
           ) : null}
           {/* A bug offer's result is the outcome line in the answer above. */}
           {bug ? null : <p className="text-xs text-(--el-text-secondary)">{t('startedHere')}</p>}
+          {requirementNoTarget && offer.requirementPage ? (
+            <p
+              className="text-xs text-(--el-text-secondary)"
+              data-testid="plan-offer-requirement-page"
+            >
+              {t.rich('requirementSaved', {
+                title: offer.requirementPage.title,
+                link: (chunks) => (
+                  <a
+                    href={`/pages/${offer.requirementPage!.pageId}`}
+                    className="rounded-(--radius-control) font-medium text-(--el-link) underline hover:text-(--el-link-pressed) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                  >
+                    {chunks}
+                  </a>
+                ),
+              })}
+            </p>
+          ) : null}
         </div>
       ) : state === 'declined' ? (
         <div className="flex flex-col gap-1.5" data-testid="plan-offer-declined">
@@ -442,6 +462,18 @@ export function PlanOffer({
               {declining ? t('declining') : t('decline')}
             </Button>
           </div>
+          {requirementNoTarget && offer.requirementSaveFailed ? (
+            // NOT the cannot-start line: nothing here is refused and Confirm stays.
+            <p
+              role="alert"
+              className="rounded-(--radius-control) border border-(--el-danger) bg-(--el-danger-surface) px-(--spacing-control-x-12) py-(--spacing-control-y-8) text-xs text-(--el-text)"
+              data-testid="plan-offer-requirement-not-saved"
+            >
+              {t.rich('requirementNotSaved', {
+                lead: (chunks) => <b className="text-(--el-danger-on-surface)">{chunks}</b>,
+              })}
+            </p>
+          ) : null}
           <p className="text-xs leading-relaxed text-(--el-text-secondary)">
             {bug
               ? `${tb('confirmHelp')} ${tb('declineHelp')}`

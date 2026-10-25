@@ -56,7 +56,8 @@ const entry = (key: AiPlanCatalogEntry['key']): AiPlanCatalogEntry => {
 const FREE = entry('free');
 const MAX = entry('max');
 const MAX_X2 = entry('max_x2');
-const PAID = (['standard', 'pro', 'max', 'max_x2'] as const).map(entry);
+// Host is the last card of the row, after Max ×2 (MOTIR-9403).
+const PAID = (['standard', 'pro', 'max', 'max_x2', 'host'] as const).map(entry);
 
 /** The org on the one-time trial, as motir-ai reports it: the `free` tier and its balance. */
 const trialState = (balance: number): BillingFixtureEntry => ({
@@ -146,7 +147,7 @@ async function expectRow(page: Page, messages: typeof en, locale = 'en'): Promis
 }
 
 test.describe('The AI plan cards, planning-led', () => {
-  test('an owner on the free trial reads four plan cards, a ladder, the included seat and no Enterprise', async ({
+  test('an owner on the free trial reads the five plan cards, a ladder, the included seat and no Enterprise', async ({
     page,
     chapter,
     beat,
@@ -208,7 +209,7 @@ test.describe('The AI plan cards, planning-led', () => {
     });
     await beat();
 
-    await chapter('中文: the same four cards, ladder and included seat', async () => {
+    await chapter('中文: the same five cards, ladder and included seat', async () => {
       // The signed-in account's saved language outranks the browser's cookie
       // (`lib/i18n/resolveLocale.ts`), so the owner's account says 中文 too.
       await db.user.update({ where: { id: seed.ownerId }, data: { locale: 'zh' } });

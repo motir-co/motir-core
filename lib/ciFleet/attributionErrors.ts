@@ -27,10 +27,14 @@ export class UnattributedMachineDestroyedError extends Error {
     readonly ageMs: number,
     readonly reason: AttributionKillReason,
     readonly action: 'destroyed' | 'stopped' = 'destroyed',
+    /** The provider the machine was listed in — an AWS account's VM is an
+     *  instance, not a Fly machine (MOTIR-9426). */
+    readonly provider: string = 'fly',
   ) {
     const verb = action === 'stopped' ? 'Stopped' : 'Destroyed';
+    const noun = provider === 'aws' ? 'AWS instance' : 'Fly machine';
     super(
-      `${verb} Fly machine ${machineId} (${machineName || 'unnamed'}) in ${app}, ` +
+      `${verb} ${noun} ${machineId} (${machineName || 'unnamed'}) in ${app}, ` +
         `${describeAge(ageMs)} old: ${reason}.`,
     );
     this.name = 'UnattributedMachineDestroyedError';

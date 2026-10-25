@@ -145,6 +145,9 @@ describe('CI Postgres container (MOTIR-1742)', () => {
       // MOTIR-9075's run-overlay-parity coverage lane (Story MOTIR-8982): the story gate
       // reads real run rows and legs through the real service.
       'ci.yml:story-8982-coverage',
+      // MOTIR-9406's Host plan coverage lane (Story MOTIR-9364): the story gate
+      // drives checkout and plan changes against a real database.
+      'ci.yml:story-9364-coverage',
       'ci.yml:test',
     ]);
   });

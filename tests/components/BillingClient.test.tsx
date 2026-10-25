@@ -493,7 +493,7 @@ describe('BillingClient', () => {
     expect(screen.queryByText(/Cloud-only/)).toBeNull();
   });
 
-  it('four-tier storefront: no Starter, paid cards show the bundled Motir seat + use-case (8.1.17)', async () => {
+  it('storefront: no Starter, paid cards show the bundled Motir seat + use-case (8.1.17)', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => new Response(JSON.stringify(activeStandard()), { status: 200 })),
@@ -506,8 +506,9 @@ describe('BillingClient', () => {
     // Starter is gone — its CTA never renders.
     expect(screen.queryByRole('button', { name: 'Choose Starter' })).toBeNull();
     // Every paid card carries the bundled Motir seat (never "tracker"); there is
-    // no Free card to state an absence on (MOTIR-7598).
-    expect(screen.getAllByText('+ 1 Motir seat · work items uncapped')).toHaveLength(4);
+    // no Free card to state an absence on (MOTIR-7598). Five cards: Host is the
+    // fifth (MOTIR-9403).
+    expect(screen.getAllByText('+ 1 Motir seat · work items uncapped')).toHaveLength(5);
     expect(screen.queryByText('No Motir seat · 250-item cap')).toBeNull();
     expect(screen.queryByText(/tracker seat/i)).toBeNull();
     // Per-tier use-case copy + the cumulative "Everything in {prev}" lead render.
@@ -515,7 +516,7 @@ describe('BillingClient', () => {
     expect(screen.getByText('Everything in Standard, plus')).toBeTruthy();
   });
 
-  it('the plan row keeps the four standing rungs while the larger pools sit in the catalog (MOTIR-8990)', async () => {
+  it('the plan row keeps the regular plans (four rungs and Host) while the larger pools sit in the catalog (MOTIR-8990, MOTIR-9403)', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => new Response(JSON.stringify(activeStandard()), { status: 200 })),
@@ -525,7 +526,7 @@ describe('BillingClient', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Change plan' }));
     await waitFor(() => expect(screen.getByText('Motir AI — plans & subscription')).toBeTruthy());
     expect(BILLING_CATALOG.aiPlans.some((p) => p.band === 'larger_pool')).toBe(true);
-    expect(screen.getAllByText('+ 1 Motir seat · work items uncapped')).toHaveLength(4);
+    expect(screen.getAllByText('+ 1 Motir seat · work items uncapped')).toHaveLength(5);
     expect(screen.queryByText(/Pool \d/)).toBeNull();
   });
 

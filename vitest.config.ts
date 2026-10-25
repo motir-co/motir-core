@@ -1645,6 +1645,13 @@ export default defineConfig({
         'lib/repositories/ciFleetAdmissionLockRepository.ts',
         'lib/repositories/fleetInFlightSlotRepository.ts',
         'lib/jobs/definitions/ciRunnerFleet.ts',
+        // Story MOTIR-9359 · MOTIR-9427 — the agent-runner pool: its switch, the
+        // per-account admission and the hosted-agent container's boot, poll and
+        // settle on the account. Their chain is `agentRunnerPoolStoryGate.test.ts`;
+        // pinned at the fleet's 90 floor below.
+        'lib/ciFleet/fleetKindSwitches.ts',
+        'lib/services/fleetShardAdmissionService.ts',
+        'lib/services/hostedAgentContainerService.ts',
         // Story MOTIR-8699 · MOTIR-8716 — Motir CI on the fleet for a CONNECTED org:
         // the org-target auth, the readiness verdict's GitHub reads, the org
         // Actions-variable client, the runner-target resolver, the readiness and
@@ -3413,6 +3420,19 @@ export default defineConfig({
         'components/planning/PlanOffer.tsx',
         'app/api/ai/plan-change/session/offer/confirm/route.ts',
         'app/api/ai/plan-change/session/offer/decline/route.ts',
+        // Story MOTIR-9430 · MOTIR-9440 — the composed requirement's NEW core modules (the
+        // page writer, the pure markdown renderer, the left pane's derivation). MEASURED
+        // on the story branch against `tests/integration/planning/composedRequirementSeam`,
+        // `planOfferRequirementPage`, `tests/services/requirementPageService.integration`,
+        // `tests/ai/requirementMarkdown`, `tests/planning/requirementPane` and
+        // `tests/components/requirement-pane`, statements / branches / functions / lines:
+        // requirementPageService.ts 93.93 / 85.71 / 100 / 96.42 on one run and 81.81 /
+        // 71.42 / 100 / 85.71 on another (the folder-race arm is hit only when two writes
+        // actually collide), pinned at the lower run; requirementMarkdown.ts 100 / 87.5 /
+        // 100 / 100; requirementPane.ts 100 / 96.15 / 100 / 100. Pinned at the floor below.
+        'lib/services/requirementPageService.ts',
+        'lib/ai/requirementMarkdown.ts',
+        'lib/planning/requirementPane.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -3581,6 +3601,25 @@ export default defineConfig({
           functions: 90,
           branches: 90,
           statements: 90,
+        },
+        // Story MOTIR-9430 · MOTIR-9440 — measured above, pinned at the floor.
+        'lib/services/requirementPageService.ts': {
+          lines: 85,
+          functions: 100,
+          branches: 71,
+          statements: 81,
+        },
+        'lib/ai/requirementMarkdown.ts': {
+          lines: 100,
+          functions: 100,
+          branches: 87,
+          statements: 100,
+        },
+        'lib/planning/requirementPane.ts': {
+          lines: 100,
+          functions: 100,
+          branches: 96,
+          statements: 100,
         },
         // ── Story MOTIR-8538 · THE LOAD TEST (Subtask MOTIR-8681) — see `include`. ──
         'loadtest/staging/sideEffectSwitches.ts': {
@@ -6019,6 +6058,10 @@ export default defineConfig({
           lines: 90,
         },
         'lib/jobs/definitions/ciRunnerFleet.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-9359 · MOTIR-9427 (see the include list).
+        'lib/ciFleet/fleetKindSwitches.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/fleetShardAdmissionService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/hostedAgentContainerService.ts': { branches: 90, functions: 90, lines: 90 },
         // Story MOTIR-1775 · MOTIR-1901 — the CI-minutes entitlement.
         'lib/ciMetering/allowance.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/services/ciAllowanceService.ts': { branches: 90, functions: 90, lines: 90 },

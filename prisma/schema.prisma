@@ -11473,6 +11473,12 @@ model FleetInFlightSlot {
   /// behaviour.
   ownerRef String? @map("owner_ref")
 
+  /// WHICH ACCOUNT of the fleet pool this container boots on (MOTIR-9421),
+  /// written by the same locked `take` that admits it, so the per-account count
+  /// (`countLiveForWorkloadOnShardInTx`) is exact. NULL means the process-wide
+  /// Fly fleet: the kind's Fly↔AWS switch was off at admission.
+  fleetShardId String? @map("fleet_shard_id")
+
   claimedAt DateTime @default(now()) @map("claimed_at")
 
   /// ⚠️ A SAFETY NET, NOT THE RELEASE MECHANISM. Release is an explicit delete
@@ -11487,6 +11493,9 @@ model FleetInFlightSlot {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  /// An account a live slot names is never deleted under it.
+  fleetShard FleetShard? @relation(fields: [fleetShardId], references: [id], onDelete: Restrict)
+
   /// Idempotent take: one slot per (workload, ref), forever.
   @@unique([workload, ref])
   /// The ceiling's read — count live rows for one workload. Ordered
@@ -11494,6 +11503,8 @@ model FleetInFlightSlot {
   @@index([workload, expiresAt])
   /// The per-organisation pool count (MOTIR-6907), read under the fleet lock.
   @@index([organizationId, expiresAt])
+  /// The per-account in-flight count admission reads (MOTIR-9421).
+  @@index([fleetShardId, workload])
   @@map("fleet_in_flight_slot")
 }
 
@@ -11629,7 +11640,11 @@ model FleetShard {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   /// The CI intents whose containers were booted in this account (MOTIR-8964).
-  ciRunnerIntents CiRunnerProvisioningIntent[]
+  ciRunnerIntents    CiRunnerProvisioningIntent[]
+  /// The fleet slots whose containers boot in this account (MOTIR-9421).
+  fleetInFlightSlots FleetInFlightSlot[]
+  /// The hosted runs whose containers booted in this account (MOTIR-9423).
+  dispatchRuns       DispatchRun[]
 
   /// The quota raises filed for this account (MOTIR-9457).
   quotaRequests     FleetQuotaRequest[]
@@ -12594,6 +12609,11 @@ model DispatchRun {
   /// constraint (`dispatch_run_agent_instance_origin_check`) pins that only an
   /// `instance` run names an agent.
   agentInstanceId String? @map("agent_instance_id")
+  /// The agent-runner account a HOSTED run's container booted on (MOTIR-9423),
+  /// written once the boot is supervising. Null for a run on the process-wide
+  /// fleet, a local run, and every run before accounts. SetNull: an account row
+  /// going away never takes run history with it.
+  fleetShardId    String? @map("fleet_shard_id")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -12603,6 +12623,7 @@ model DispatchRun {
   scope         WorkItem?      @relation("DispatchRunScope", fields: [scopeWorkItemId], references: [id], onDelete: SetNull)
   createdBy     User?          @relation(fields: [createdById], references: [id], onDelete: SetNull)
   agentInstance AgentInstance? @relation(fields: [agentInstanceId], references: [id], onDelete: SetNull)
+  fleetShard    FleetShard?    @relation(fields: [fleetShardId], references: [id], onDelete: SetNull)
 
   cards            DispatchRunCard[]
   events           DispatchRunEvent[]
@@ -12643,6 +12664,8 @@ model DispatchRun {
   /// heartbeat is older than the lapse window. Status-first for the same reason
   /// as the index above.
   @@index([status, lastHeartbeatAt])
+  /// Which runs an agent-runner account carries (MOTIR-9423), for the reaper.
+  @@index([fleetShardId])
   @@map("dispatch_run")
 }
 

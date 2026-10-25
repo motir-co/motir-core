@@ -2,6 +2,9 @@ import { generateKeyPairSync } from 'node:crypto';
 import { fleetAttributionService } from '@/lib/services/fleetAttributionService';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FLEET_CONTAINER_SIZE, fakeOrchestrator } from '@motir/orchestrator';
+import { AGENT_RUNNER_PROVIDER_ENV_VAR } from '@/lib/ciFleet/fleetKindSwitches';
+import { fakeOrchestratorForShard, resetShardFakes } from '@/lib/orchestrator';
+import { fleetShardOrchestratorService } from '@/lib/services/fleetShardOrchestratorService';
 import type { Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { isJobRunDefer } from '@/lib/jobs/engine/defer';
@@ -280,7 +283,10 @@ beforeEach(async () => {
   await truncateAuthTables();
   await truncateJobRuns();
   await adminDb.fleetInFlightSlot.deleteMany({});
+  await adminDb.fleetShard.deleteMany({});
   fakeOrchestrator.reset();
+  resetShardFakes();
+  fleetShardOrchestratorService.resetCache();
   _resetRunGitBotAuthors();
   fx = await makeWorkItemFixture();
   requireCompliantWorkspaceContext.mockResolvedValue({ ok: true, ctx: fx.ctx });
@@ -300,6 +306,7 @@ afterEach(async () => {
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
   await adminDb.fleetInFlightSlot.deleteMany({});
+  await adminDb.fleetShard.deleteMany({});
 });
 
 afterAll(async () => {
@@ -407,6 +414,41 @@ describe('a container that exits with its run still OPEN is a crash, never a suc
 });
 
 describe('cancel — revoked and closed now, torn down by its supervisor at the next poll', () => {
+  it('a run on an agent-runner account is torn down on THAT account (MOTIR-9424)', async () => {
+    const shard = await adminDb.fleetShard.create({
+      data: {
+        name: 'agents-cancel',
+        fleetKind: 'hosted_agent',
+        provider: 'fly',
+        state: 'active',
+        githubOrg: 'motir-projects',
+        githubInstallationId: '556677',
+        flyOrg: 'motir',
+        flyApp: 'motir-agents-cancel',
+        flyRegion: 'iad',
+        credentialRef: 'FLEET_SHARD_TEST_TOKEN',
+        machineLimit: 5,
+      },
+    });
+    vi.stubEnv(AGENT_RUNNER_PROVIDER_ENV_VAR, 'aws');
+    const { data } = await startRun();
+    expect(data.session.handle.shardId).toBe(shard.id);
+    const account = fakeOrchestratorForShard(shard.id);
+    const accountTeardown = vi.spyOn(account, 'teardown');
+    const legacyTeardown = vi.spyOn(fakeOrchestrator, 'teardown');
+
+    const res = await cancelRoute(new Request('http://t/cancel', { method: 'POST' }), {
+      params: Promise.resolve({ id: data.dispatchRunId }),
+    });
+    expect(res.status).toBe(200);
+    expect(await superviseToEnd(data)).toEqual({ outcome: 'settled', reason: 'gate_revoked' });
+
+    expect(accountTeardown.mock.calls.map((c) => c[1])).toEqual(['gate_revoked']);
+    expect(legacyTeardown).not.toHaveBeenCalled();
+    expect(account.liveContainerIds()).toEqual([]);
+    expect(fakeOrchestrator.provisioned).toEqual([]);
+  });
+
   it('AC1/AC4/AC6 — the dispatcher cancels: 200, run cancelled, machine settled `gate_revoked`', async () => {
     const { data, cardId } = await startRun();
     const card = await cardOf(cardId);

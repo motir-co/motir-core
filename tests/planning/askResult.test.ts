@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { ASK_ANSWER_MAX_CHARS, ASK_MAX_CITATIONS, readAskOutcome } from '@/lib/planning/askResult';
+import {
+  ASK_ANSWER_MAX_CHARS,
+  ASK_MAX_CITATIONS,
+  ASK_REQUIREMENT_MAX_ASSUMPTIONS,
+  readAskOutcome,
+  type AskPlanOffer,
+} from '@/lib/planning/askResult';
 
 // The consuming half of MOTIR-1817's boundary contract (MOTIR-1819) — reading an
 // `ask_project` result. A boundary parser, so what it is worth testing is every
@@ -202,5 +208,66 @@ describe('readAskOutcome — run mode', () => {
     ).toMatchObject({
       intent: 'ask',
     });
+  });
+});
+
+describe('readAskOutcome — the plan offer’s composed requirement (MOTIR-9432)', () => {
+  const COMPOSED = {
+    outcome: '  A person plans a small feature from the overlay.  ',
+    behaviour: 'Offer shows the requirement before Confirm.',
+    scopeEdge: '',
+    constraints: '',
+    acceptance: 'The pane shows six headings.',
+    assumptions: [{ id: 'r1', text: ' The pane replaces the canvas. ' }, 'A bare string stays.'],
+  };
+  const offerOf = (requirement: unknown) =>
+    readAskOutcome({
+      ask: {
+        intent: 'ask',
+        answer: 'Shall I plan it?',
+        offer: { kind: 'plan', requestText: 'Plan the pane.', targetKey: null, requirement },
+      },
+    })!.offer as AskPlanOffer;
+
+  it('reads the six parts, trimmed, keeping an empty scopeEdge and constraints empty', () => {
+    expect(offerOf(COMPOSED).requirement).toEqual({
+      outcome: 'A person plans a small feature from the overlay.',
+      behaviour: 'Offer shows the requirement before Confirm.',
+      scopeEdge: '',
+      constraints: '',
+      acceptance: 'The pane shows six headings.',
+      assumptions: [{ id: 'r1', text: 'The pane replaces the canvas.' }, 'A bare string stays.'],
+    });
+  });
+
+  it('BOUNDS every string part, every assumption text and the assumption count', () => {
+    const long = 'y'.repeat(ASK_ANSWER_MAX_CHARS * 2);
+    const read = offerOf({
+      ...COMPOSED,
+      outcome: long,
+      assumptions: [
+        ...Array.from({ length: ASK_REQUIREMENT_MAX_ASSUMPTIONS + 5 }, (_, i) => ({
+          id: `r${i}`,
+          text: i === 0 ? long : 'short',
+        })),
+      ],
+    }).requirement!;
+    expect(read.outcome!.length).toBeLessThanOrEqual(ASK_ANSWER_MAX_CHARS);
+    expect(read.outcome!.endsWith('…')).toBe(true);
+    const assumptions = read.assumptions as { id?: string; text: string }[];
+    expect(assumptions).toHaveLength(ASK_REQUIREMENT_MAX_ASSUMPTIONS);
+    expect(assumptions[0]!.text.length).toBeLessThanOrEqual(ASK_ANSWER_MAX_CHARS);
+  });
+
+  it.each([
+    ['absent', undefined],
+    ['null', null],
+    ['a string', 'outcome'],
+    ['an array', [COMPOSED]],
+    ['an object with none of the six parts', { note: 'x' }],
+  ])('reads the offer WITHOUT a requirement key when it is %s', (_label, value) => {
+    const offer = offerOf(value);
+    expect(offer).toMatchObject({ kind: 'plan', requestMd: 'Plan the pane.', targetKey: null });
+    expect('requirement' in offer).toBe(false);
   });
 });

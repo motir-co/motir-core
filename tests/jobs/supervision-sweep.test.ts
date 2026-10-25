@@ -22,6 +22,16 @@ import { jobServices } from '@/lib/jobs/services';
 import { supervisionSweep } from '@/lib/jobs/definitions/supervisionSweep';
 import { SUB_HOURLY_CADENCE } from '@/lib/jobs/schedules';
 import { IDLE_MAX_MS, LEASE_MS, retryBackoffMs } from '@/lib/jobs/engine/worker';
+import { FLEET_CONTAINER_SIZE } from '@motir/orchestrator';
+import { fakeOrchestrator } from '@motir/orchestrator';
+import { fakeOrchestratorForShard, resetShardFakes } from '@/lib/orchestrator';
+import { fleetShardOrchestratorService } from '@/lib/services/fleetShardOrchestratorService';
+import { hostedRunChargeService } from '@/lib/services/hostedRunChargeService';
+import { hostedRunService } from '@/lib/services/hostedRunService';
+import {
+  hostedAgentBootStepId,
+  type HostedAgentSession,
+} from '@/lib/services/hostedAgentContainerService';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 
@@ -548,5 +558,129 @@ describe('the shape of the thing', () => {
     expect(def!.cron).toBe(SUB_HOURLY_CADENCE);
     // §11.8: the disposition is declared BESIDE the cron, never in a second list.
     expect(def!.catchUp).toBe('latest');
+  });
+});
+
+describe('an abandoned hosted-agent supervision on an agent-runner account (MOTIR-9424)', () => {
+  it('is torn down on that account, charged once, and ended lost_supervision', async () => {
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fake');
+    resetShardFakes();
+    fleetShardOrchestratorService.resetCache();
+    fakeOrchestrator.reset();
+    const run = await makeRun('failed');
+    const workspaceId = run.workspaceId;
+    if (workspaceId === null) throw new Error('the seeded run belongs to no workspace');
+    const project = await adminDb.project.create({
+      data: {
+        workspaceId,
+        name: 'Sweep',
+        identifier: `SW${seq}`,
+        slug: `sweep-${seq}`,
+      },
+    });
+    const shard = await adminDb.fleetShard.create({
+      data: {
+        name: `agents-sweep-${seq}`,
+        fleetKind: 'hosted_agent',
+        provider: 'fly',
+        state: 'active',
+        githubOrg: 'motir-projects',
+        githubInstallationId: '556677',
+        flyOrg: 'motir',
+        flyApp: `motir-agents-sweep-${seq}`,
+        flyRegion: 'iad',
+        credentialRef: 'FLEET_SHARD_TEST_TOKEN',
+        machineLimit: 5,
+      },
+    });
+    const dispatchRun = await adminDb.dispatchRun.create({
+      data: {
+        workspaceId,
+        projectId: project.id,
+        command: 'run',
+        fleetShardId: shard.id,
+      },
+    });
+    const workspace = await adminDb.workspace.findUniqueOrThrow({ where: { id: workspaceId } });
+    const orgId = workspace.organizationId;
+    if (orgId === null) throw new Error('the seeded workspace belongs to no organisation');
+    const account = fakeOrchestratorForShard(shard.id);
+    const handle = await account.provision({
+      orgId,
+      workspaceId,
+      projectId: project.id,
+      repoFullName: 'motir-projects/site',
+      workload: 'hosted_agent',
+      workflowJobId: null,
+      image: 'motir/hosted-agent@sha256:fake',
+      size: FLEET_CONTAINER_SIZE,
+      env: {},
+      timeoutSeconds: 3_600,
+      region: 'iad',
+    });
+    const dispatchId = `hosted-run:${dispatchRun.id}`;
+    const session: HostedAgentSession = {
+      handle: {
+        provider: handle.provider,
+        id: handle.id,
+        region: handle.region,
+        createdAt: handle.createdAt.toISOString(),
+        shardId: shard.id,
+      },
+      bootedAt: new Date(Date.now() - 40 * 60_000).toISOString(),
+      dispatchId,
+      runId: dispatchRun.id,
+      dispatchRunId: dispatchRun.id,
+      timeoutSeconds: 3_600,
+      size: FLEET_CONTAINER_SIZE,
+      attribution: {
+        orgId,
+        workspaceId,
+        projectId: project.id,
+        repoFullName: 'motir-projects/site',
+      },
+    };
+    await withSystemContext(async (tx) => {
+      await jobSupervisionRepository.open(
+        {
+          runId: run.id,
+          subject: dispatchId,
+          kind: 'hosted-agent',
+          nextPollAt: new Date(Date.now() - 40 * 60_000),
+          workspaceId,
+        },
+        tx,
+      );
+      await jobStepRepository.create(
+        {
+          runId: run.id,
+          stepId: hostedAgentBootStepId(dispatchId),
+          kind: 'run',
+          result: JSON.parse(JSON.stringify({ phase: 'supervising', session })),
+          workspaceId,
+        },
+        tx,
+      );
+    });
+    const accountTeardown = vi.spyOn(account, 'teardown');
+    const legacyTeardown = vi.spyOn(fakeOrchestrator, 'teardown');
+    const charge = vi
+      .spyOn(hostedRunChargeService, 'chargeMachineTime')
+      .mockResolvedValue({ outcome: 'skipped' } as never);
+    const end = vi.spyOn(hostedRunService, 'endHostedRun').mockResolvedValue({} as never);
+
+    expect(await supervisionSweepService.sweepAbandoned()).toMatchObject({ settled: 1 });
+
+    expect(accountTeardown).toHaveBeenCalledTimes(1);
+    expect(accountTeardown.mock.calls[0]![1]).toBe('job_timed_out');
+    expect(legacyTeardown).not.toHaveBeenCalled();
+    expect(account.liveContainerIds()).toEqual([]);
+    expect(charge).toHaveBeenCalledTimes(1);
+    expect(charge).toHaveBeenCalledWith(dispatchRun.id);
+    expect(end).toHaveBeenCalledWith(dispatchRun.id, 'lost_supervision', expect.anything());
+
+    await adminDb.dispatchRun.deleteMany({ where: { id: dispatchRun.id } });
+    await adminDb.fleetShard.deleteMany({ where: { id: shard.id } });
+    vi.unstubAllEnvs();
   });
 });

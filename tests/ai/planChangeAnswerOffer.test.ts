@@ -109,3 +109,83 @@ describe('toPlanChangeTurnDto — the answer offer', () => {
     },
   );
 });
+
+describe('toPlanChangeTurnDto — the composed requirement (MOTIR-9432)', () => {
+  const REQUIREMENT = {
+    outcome: 'Plan from the pane.',
+    behaviour: 'Show it before Confirm.',
+    scopeEdge: '',
+    constraints: '',
+    acceptance: 'Six headings.',
+    assumptions: [{ id: 'r1', text: 'One pane.' }],
+  };
+  const NO_TARGET = { ...UNDECIDED, targetKey: null };
+
+  it('serves a stored requirement on a no-target plan offer exactly as stored', () => {
+    expect(offerOf({ ...NO_TARGET, requirement: REQUIREMENT })).toEqual({
+      ...NO_TARGET,
+      requirement: REQUIREMENT,
+    });
+  });
+
+  it('omits the key when the stored value does not narrow, and the offer still reads', () => {
+    for (const requirement of ['x', 7, [], {}, { note: 'x' }, null]) {
+      const offer = offerOf({ ...NO_TARGET, requirement });
+      expect(offer).toEqual(NO_TARGET);
+      expect(offer && 'requirement' in offer).toBe(false);
+    }
+  });
+
+  it('never serves one on an offer with a target', () => {
+    expect(offerOf({ ...UNDECIDED, requirement: REQUIREMENT })).toEqual(UNDECIDED);
+  });
+
+  it('never serves one on a log_bug offer', () => {
+    const bug = { target: { kind: 'new', key: null }, title: 'T', descriptionMd: 'D' };
+    const offer = offerOf({ ...NO_TARGET, kind: 'log_bug', bug, requirement: REQUIREMENT });
+    expect(offer?.requirement).toBeUndefined();
+  });
+
+  it('reads an offer stored before the field exactly as before', () => {
+    expect(offerOf(NO_TARGET)).toEqual(NO_TARGET);
+  });
+});
+
+describe('toPlanChangeTurnDto — the saved page and failed save (MOTIR-9436)', () => {
+  const NO_TARGET = { ...UNDECIDED, targetKey: null };
+  const PAGE = { pageId: 'pg_1', title: 'Export reports' };
+
+  it('serves the recorded page and the failed-save flag on a no-target plan offer', () => {
+    expect(offerOf({ ...NO_TARGET, requirementPage: PAGE })).toEqual({
+      ...NO_TARGET,
+      requirementPage: PAGE,
+    });
+    expect(offerOf({ ...NO_TARGET, requirementSaveFailed: true })).toEqual({
+      ...NO_TARGET,
+      requirementSaveFailed: true,
+    });
+  });
+
+  it('drops a malformed page or flag alone, and the offer still reads', () => {
+    for (const requirementPage of [
+      'x',
+      7,
+      [],
+      {},
+      { pageId: '', title: 't' },
+      { pageId: 'p', title: '' },
+      { pageId: 3, title: 't' },
+    ]) {
+      expect(offerOf({ ...NO_TARGET, requirementPage })).toEqual(NO_TARGET);
+    }
+    for (const requirementSaveFailed of [false, 'true', 1, null]) {
+      expect(offerOf({ ...NO_TARGET, requirementSaveFailed })).toEqual(NO_TARGET);
+    }
+  });
+
+  it('never serves either on an offer with a target', () => {
+    expect(offerOf({ ...UNDECIDED, requirementPage: PAGE, requirementSaveFailed: true })).toEqual(
+      UNDECIDED,
+    );
+  });
+});

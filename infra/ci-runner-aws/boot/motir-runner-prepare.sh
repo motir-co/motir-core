@@ -20,15 +20,20 @@
 # nothing needs the metadata service again.
 #
 # ── user-data is DATA, never a script ────────────────────────────────────────
-# Four `KEY=value` lines and nothing else. cloud-init ignores text that is not a
-# script or cloud-config, and this hook refuses any other key, so a mistake in
-# user-data cannot run code at launch. The four keys are the entrypoint's
-# contract (`infra/ci-runner/entrypoint.sh` header):
+# `KEY=value` lines and nothing else, parsed by `motir-parse-user-data`
+# (`parse-user-data.sh`, MOTIR-9419), which chooses the boot mode and refuses
+# any key that mode does not accept. cloud-init ignores text that is not a
+# script or cloud-config, so a mistake in user-data cannot run code at launch.
 #
-#   ACTIONS_RUNNER_INPUT_JITCONFIG  (required) the base64 JIT config
-#   MOTIR_RUNNER_LABEL              the fleet label, echoed into the log
-#   MOTIR_INTENT_ID                 attribution, echoed into the log
-#   MOTIR_WORKFLOW_JOB_ID           attribution, echoed into the log
+#   CI mode (no mode line): the four keys of the entrypoint's contract
+#   (`infra/ci-runner/entrypoint.sh` header), written to the unit's env file.
+#   Container mode (`MOTIR_BOOT_MODE=container`): a hosted agent run — the
+#   image by digest and its `MOTIR_ENV_` lines, written under ${STATE_DIR} for
+#   `motir-container-entrypoint`, which runs it once.
+#
+# The disk mount, `MOTIR_RUNNER_DOCKER_STORAGE=overlay2` and the metadata block
+# are the same in both modes, and all of them happen here, before the unit's
+# ExecStart (`motir-vm-entrypoint`) starts anything.
 #
 # ── What this hook never does ────────────────────────────────────────────────
 # It downloads and installs nothing: every tool is baked into the AMI by
@@ -42,9 +47,10 @@ set -euo pipefail
 IMDS=http://169.254.169.254
 ENV_DIR=/run/motir-ci-runner
 ENV_FILE="${ENV_DIR}/env"
+STATE_DIR=/run/motir
+PARSER=/usr/local/sbin/motir-parse-user-data
 DOCKER_ROOT=/var/lib/docker
 DISK_WAIT_SECONDS=60
-KNOWN_KEYS=(ACTIONS_RUNNER_INPUT_JITCONFIG MOTIR_RUNNER_LABEL MOTIR_INTENT_ID MOTIR_WORKFLOW_JOB_ID)
 
 log() { printf '[motir-runner-prepare] %s\n' "$*"; }
 die() { printf '[motir-runner-prepare] FATAL: %s\n' "$*" >&2; exit 1; }
@@ -63,42 +69,39 @@ read_user_data() {
     || die "could not read user-data over IMDSv2"
 }
 
-is_known_key() {
-  local k
-  for k in "${KNOWN_KEYS[@]}"; do [ "$1" = "${k}" ] && return 0; done
-  return 1
+# Hands user-data to the parser as a 0600 root-only file, never on a command
+# line, and removes it once parsed. The parser writes the mode and, for CI, the
+# four-key env file under ${STATE_DIR}; a refusal there ends this hook.
+parse_user_data() {
+  local data="$1" raw
+  install -d -m 0700 -o root -g root "${STATE_DIR}"
+  raw="$(mktemp "${STATE_DIR}/user-data.XXXXXX")"
+  chmod 0600 "${raw}"
+  printf '%s\n' "${data}" >"${raw}"
+  "${PARSER}" "${raw}" "${STATE_DIR}" || { rm -f "${raw}"; die "user-data was refused (see the parser's message above)"; }
+  rm -f "${raw}"
+  log "boot mode: $(cat "${STATE_DIR}/mode")"
 }
 
-# Writes the env file from user-data, refusing anything that is not one of the
-# four known keys with a plain value. The file is created 0600 and owned by
-# root before a byte of the credential is written into it.
+# The unit's EnvironmentFile, in BOTH modes: CI mode's four keys when there are
+# any, then the storage setting dockerd starts with. The file is created 0600
+# and owned by root before a byte of the credential is written into it.
 write_env_file() {
-  local data="$1" tmp line key value seen=" "
+  local tmp
   install -d -m 0700 -o root -g root "${ENV_DIR}"
   tmp="$(mktemp "${ENV_DIR}/env.XXXXXX")"
   chmod 0600 "${tmp}"
-  while IFS= read -r line || [ -n "${line}" ]; do
-    line="${line%$'\r'}"
-    [ -n "${line}" ] || continue
-    case "${line}" in *=*) ;; *) die "user-data has a line that is not KEY=value (the line is not printed)" ;; esac
-    key="${line%%=*}"
-    value="${line#*=}"
-    is_known_key "${key}" || die "user-data carries a key that is not accepted (only: ${KNOWN_KEYS[*]})"
-    case "${seen}" in *" ${key} "*) die "user-data sets ${key} twice" ;; esac
-    # A plain value only: systemd reads this file, and a quote, a space or a
-    # backslash would be interpreted there. A base64 JIT config fits this set.
-    [[ "${value}" =~ ^[A-Za-z0-9+/=._:-]+$ ]] || die "user-data value for ${key} has characters outside [A-Za-z0-9+/=._:-] (the value is not printed)"
-    printf '%s=%s\n' "${key}" "${value}" >>"${tmp}"
-    seen="${seen}${key} "
-  done <<<"${data}"
-  case "${seen}" in *" ACTIONS_RUNNER_INPUT_JITCONFIG "*) ;; *) die "user-data has no ACTIONS_RUNNER_INPUT_JITCONFIG" ;; esac
+  if [ -f "${STATE_DIR}/env" ]; then
+    cat "${STATE_DIR}/env" >>"${tmp}"
+    rm -f "${STATE_DIR}/env"
+  fi
   # overlay2 on the mounted volume, forced: with the data disk in place the vfs
   # fallback in `start-dockerd.sh` could only ever hide a bad disk (MOTIR-8839).
   printf 'MOTIR_RUNNER_DOCKER_STORAGE=overlay2\n' >>"${tmp}"
   mv -f "${tmp}" "${ENV_FILE}"
   chown root:root "${ENV_FILE}"
   chmod 0600 "${ENV_FILE}"
-  log "wrote the runner environment (${seen# }MOTIR_RUNNER_DOCKER_STORAGE)"
+  log "wrote the unit environment"
 }
 
 # cloud-init keeps its own copies of user-data on disk. They are root-only, but
@@ -191,8 +194,9 @@ block_metadata_service() {
 main() {
   local user_data
   user_data="$(read_user_data)"
-  write_env_file "${user_data}"
+  parse_user_data "${user_data}"
   unset user_data
+  write_env_file
   scrub_cloud_init_copies
   mount_docker_disk
   block_metadata_service

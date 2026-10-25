@@ -20,6 +20,7 @@ import {
 } from '@/lib/ciFleet/shardTargets';
 import { isUnlimitedAgentOrg } from '@/lib/agentInstances/config';
 import { ciRunnerProvisioningIntentRepository as intents } from '@/lib/repositories/ciRunnerProvisioningIntentRepository';
+import { fleetInFlightSlotRepository as slots } from '@/lib/repositories/fleetInFlightSlotRepository';
 import { fleetShardRepository } from '@/lib/repositories/fleetShardRepository';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
 
@@ -63,13 +64,30 @@ export type ProvisionRefusal = FleetShardMoveReason | 'job_fault';
 export const SHARD_CAPACITY_DETAIL =
   "Motir's CI capacity is full right now. This job starts when a runner finishes.";
 
-/** Counts one kind's containers in flight on one account. */
-type ShardInFlightCounter = (shardId: string, tx: Prisma.TransactionClient) => Promise<number>;
+/** The words a hosted run's `shard_capacity` deferral carries (MOTIR-9421). */
+export const HOSTED_AGENT_SHARD_CAPACITY_DETAIL =
+  "Motir's agent-run capacity is full right now. This run starts when another run finishes.";
 
-/** Each kind's per-account counter. CI is wired here; the agent runner, indexer
- *  and agent hoster stories add theirs when they put their kind on its pool. */
+/** Each kind's `shard_capacity` words; a kind with none uses CI's. */
+const SHARD_CAPACITY_DETAIL_BY_KIND: Partial<Record<FleetWorkloadKind, string>> = {
+  hosted_agent: HOSTED_AGENT_SHARD_CAPACITY_DETAIL,
+};
+
+/** Counts one kind's containers in flight on one account. */
+type ShardInFlightCounter = (
+  shardId: string,
+  now: Date,
+  tx: Prisma.TransactionClient,
+) => Promise<number>;
+
+/** Each kind's per-account counter. CI and the agent runner (MOTIR-9421) are
+ *  wired here; the indexer and agent hoster stories add theirs when they put
+ *  their kind on its pool. A hosted run counts its live fleet slots on the
+ *  account, never another workload's. */
 const IN_FLIGHT_ON_SHARD: Partial<Record<FleetWorkloadKind, ShardInFlightCounter>> = {
-  ci_runner: (shardId, tx) => intents.countInFlightForShardInTx(shardId, tx),
+  ci_runner: (shardId, _now, tx) => intents.countInFlightForShardInTx(shardId, tx),
+  hosted_agent: (shardId, now, tx) =>
+    slots.countLiveForWorkloadOnShardInTx('hosted_agent', shardId, now, tx),
 };
 
 /**
@@ -151,7 +169,7 @@ export const fleetShardAdmissionService = {
     for (const shard of await this.selectionSetInTx(job, tx)) {
       if (options.exclude?.has(shard.id)) continue;
       if (shard.admissionPausedUntil && shard.admissionPausedUntil > now) continue;
-      const headroom = this.effectiveCeiling(shard) - (await countInFlight(shard.id, tx));
+      const headroom = this.effectiveCeiling(shard) - (await countInFlight(shard.id, now, tx));
       if (headroom <= 0) continue;
       if (
         best === null ||
@@ -163,22 +181,35 @@ export const fleetShardAdmissionService = {
     }
     return best
       ? { shardId: best.shardId }
-      : { deferred: 'shard_capacity', detail: SHARD_CAPACITY_DETAIL };
+      : {
+          deferred: 'shard_capacity',
+          detail: SHARD_CAPACITY_DETAIL_BY_KIND[job.fleetKind] ?? SHARD_CAPACITY_DETAIL,
+        };
   },
 
   /**
-   * After `refusedShardId` refused a CI intent's provision: pause it for
-   * `SHARD_PAUSE_SECONDS`, choose again excluding every account this boot has
-   * tried, and move the claim there with the reason. Null when no account is
-   * left. Inside the admission's locked transaction, like the first choice.
+   * After `refusedShardId` refused a claim's provision: pause it for
+   * `SHARD_PAUSE_SECONDS`, choose again among the job's kind excluding every
+   * account this boot has tried, and move the claim there through `reassign`
+   * with the reason. Null when no account is left. Inside the admission's locked
+   * transaction, like the first choice.
+   *
+   * `reassign` is the one thing a CI move (the intent row) and a hosted-agent
+   * move (the `fleet_in_flight_slot` row, MOTIR-9423) differ in; the pause, the
+   * exclusion set and the choice stay this one implementation.
    */
   async moveAfterRefusalInTx(
-    intent: { id: string; organizationId: string },
+    job: ShardPlacementJob,
     refusedShardId: string,
     reason: FleetShardMoveReason & FleetShardPauseReason,
     tried: ReadonlySet<string>,
     now: Date,
     tx: Prisma.TransactionClient,
+    reassign: (
+      nextShardId: string,
+      reason: FleetShardMoveReason,
+      tx: Prisma.TransactionClient,
+    ) => Promise<unknown>,
   ): Promise<string | null> {
     await fleetShardRepository.pauseInTx(
       refusedShardId,
@@ -186,14 +217,9 @@ export const fleetShardAdmissionService = {
       reason,
       tx,
     );
-    const next = await this.chooseInTx(
-      { fleetKind: 'ci_runner', organizationId: intent.organizationId },
-      now,
-      tx,
-      { exclude: tried },
-    );
+    const next = await this.chooseInTx(job, now, tx, { exclude: tried });
     if (!('shardId' in next) || next.shardId === null) return null;
-    await intents.reassignShardInTx(intent.id, next.shardId, reason, tx);
+    await reassign(next.shardId, reason, tx);
     return next.shardId;
   },
 };

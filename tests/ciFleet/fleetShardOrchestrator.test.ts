@@ -179,7 +179,8 @@ describe('orchestratorForShard — the account row becomes its own adapter', () 
 
       expect(account.aws).toEqual({ accountId: '123456789012', region: 'us-east-1' });
       expect(orchestratorForShard(account).provider).toBe('aws');
-      expect(inventoryForShard(account)).toBeNull();
+      expect(inventoryForShard(account)?.provider).toBe('aws');
+      expect(await inventoryForShard(account)!.listApps()).toEqual(['ci-runner-use1-1']);
     });
 
     it('names EVERY missing variable at once', async () => {

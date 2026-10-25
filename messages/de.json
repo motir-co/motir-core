@@ -6588,7 +6588,7 @@
         "standard": {
           "useCase": "Planen Sie Ihre Projekte mit dem Motir AI-Planer.",
           "features": [
-            "Das gesamte Projekt detailliert planen",
+            "Das Projekt detailliert planen",
             "Credits werden monatlich erneuert · jederzeit aufladbar"
           ]
         },
@@ -6603,12 +6603,26 @@
         "max": {
           "useCase": "Pro, plus Spielraum, geplante Arbeit an den Agenten zu übergeben.",
           "prev": "Pro",
-          "features": ["Spielraum, geplante Arbeit automatisch an den Agenten zu übergeben"]
+          "features": [
+            "Mehr Arbeit planen, damit Ihr Projekt schneller vorankommt",
+            "Spielraum, einen Teil der geplanten Arbeit automatisch an den Agenten zu übergeben"
+          ]
         },
         "max_x2": {
           "useCase": "Max, mit doppeltem Volumen.",
           "prev": "Max",
-          "features": ["Doppelter monatlicher Credit-Pool von Max"]
+          "features": [
+            "Doppelter monatlicher Credit-Pool von Max",
+            "Mehr geplante Arbeit automatisch an den Agenten übergeben"
+          ]
+        },
+        "host": {
+          "useCase": "Motir im Flottenmaßstab, auf eigenen AWS-Konten.",
+          "prev": "Max ×2",
+          "features": [
+            "Motir führt Ihr Projekt eigenständig voran",
+            "Eigene Pools für CI-Runner, Agentenläufe, den Indexer und gehostete Agenten"
+          ]
         }
       },
       "trial": {
@@ -8417,7 +8431,9 @@
       "held": "Motir AI bietet die Planung an, sobald diese Fragen beantwortet sind.",
       "settledHeading": "Was Ihre Antworten festgelegt haben",
       "clearEnough": "Klar genug, um es wie beschrieben zu planen.",
-      "nothingSettled": "Es wurde nichts festgelegt, daher wird die Anfrage wie beschrieben geplant."
+      "nothingSettled": "Es wurde nichts festgelegt, daher wird die Anfrage wie beschrieben geplant.",
+      "requirementSaved": "Gespeichert als <link>{title}</link> in den Anforderungsdokumenten.",
+      "requirementNotSaved": "<lead>Die Anforderung konnte nicht gespeichert werden.</lead> Es wurde nichts gestartet. Bestätigen ist weiterhin verfügbar – versuchen Sie es noch einmal."
     },
     "logBugOffer": {
       "label": "Angebot, einen Bug zu erfassen",
@@ -8496,6 +8512,20 @@
       "emptyBody": "Fragen, die du stellst, und Pläne, die du in diesem Projekt beginnst, werden hier aufgeführt.",
       "error": "Deine Gespräche konnten nicht geladen werden.",
       "rowAria": "{title} · {status} · aktiv {when}"
+    },
+    "requirementPane": {
+      "label": "Zu planende Anforderung",
+      "headings": {
+        "outcome": "Ergebnis",
+        "behaviour": "Verhalten",
+        "scopeEdge": "Abgrenzung",
+        "constraints": "Randbedingungen",
+        "acceptance": "Abnahme",
+        "assumptions": "Annahmen"
+      },
+      "none": "Nichts vorhanden",
+      "correctionHint": "Um hier etwas zu ändern, schreibe die Korrektur in die Unterhaltung.",
+      "notice": "Für dieses Angebot wurde keine Anforderung verfasst. Die Planung verfasst sie, sobald du bestätigst."
     }
   },
   "codeHealth": {

@@ -233,6 +233,18 @@ describe('POST …/billing/upgrade/preview', () => {
     });
   });
 
+  it('asks motir-ai for an upgrade to Host rather than refusing it as unknown_plan (MOTIR-9403)', async () => {
+    const { organizationId, owner } = await makeOrg();
+    signInAs(owner);
+    ai.previewPlanUpgrade.mockResolvedValue({ ...UPGRADE_PREVIEW, toPlan: 'host' });
+    const res = await call(previewUpgradePOST, organizationId, { toPlanKey: 'host' });
+    expect(res.status).toBe(200);
+    expect(ai.previewPlanUpgrade).toHaveBeenCalledWith({
+      coreOrganizationId: organizationId,
+      toPlanKey: 'host',
+    });
+  });
+
   it.each([
     ['not_an_upgrade', 400],
     ['same_plan', 400],

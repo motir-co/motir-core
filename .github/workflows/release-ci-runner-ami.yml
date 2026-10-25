@@ -76,7 +76,10 @@ jobs:
           docker run --rm -v "$PWD:/mnt" -w /mnt koalaman/shellcheck:v0.10.0 \
             infra/ci-runner-aws/provision.sh \
             infra/ci-runner-aws/build-ami.sh \
-            infra/ci-runner-aws/boot/motir-runner-prepare.sh
+            infra/ci-runner-aws/boot/motir-runner-prepare.sh \
+            infra/ci-runner-aws/boot/parse-user-data.sh \
+            infra/ci-runner-aws/boot/motir-vm-entrypoint.sh \
+            infra/ci-runner-aws/boot/motir-container-entrypoint.sh
 
   build:
     name: Build and publish the AMI
