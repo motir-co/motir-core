@@ -216,6 +216,16 @@ export interface ContainerStatus {
    * type (§4 rule 1).
    */
   readonly exitCode: number | null;
+  /**
+   * True when the container stopped because its image could NOT BE PULLED
+   * (MOTIR-9446). A provider that pulls at create time refuses `provision` with
+   * `OrchestratorImageUnpullableError` instead and never sets this. One that
+   * boots a VM first and pulls on it (AWS) can only learn of the failure after
+   * `provision` has returned, so it reports it here, on a terminal status.
+   * Absent means no such failure is known, which is not a claim that the pull
+   * worked.
+   */
+  readonly imagePullFailed?: boolean;
 }
 
 /**

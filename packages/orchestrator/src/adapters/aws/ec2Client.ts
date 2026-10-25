@@ -21,6 +21,7 @@ import {
   DescribeVpcsCommand,
   EC2Client,
   ModifyInstanceAttributeCommand,
+  GetConsoleOutputCommand,
   ModifySubnetAttributeCommand,
   RunInstancesCommand,
   StartInstancesCommand,
@@ -207,6 +208,9 @@ export interface Ec2RunInstanceInput {
   readonly blockDeviceMappings: readonly Ec2BlockDeviceMapping[];
   /** Written on the instance AND its volumes in the same call. */
   readonly tags: readonly Ec2Tag[];
+  /** Also write `tags` on the launch's network interface (an index VM's, so cost
+   *  tooling sees every billed resource — MOTIR-9450). A runner's launch omits it. */
+  readonly tagNetworkInterface?: boolean;
 }
 
 export interface Ec2DescribeInstancesInput {
@@ -318,6 +322,11 @@ export interface Ec2Api {
     cidrIp: string;
     description: string;
   }): Promise<void>;
+  /** https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_GetConsoleOutput.html —
+   *  the instance's serial console, decoded, with `Latest` (a Nitro instance's
+   *  most recent output). Null when EC2 holds none yet. An unknown id throws as
+   *  `describeInstances` does. */
+  getConsoleOutput(instanceId: string): Promise<string | null>;
 }
 
 /** The slice of `EC2Client` the factory uses — what a test stubs. */
@@ -417,7 +426,8 @@ type InstanceMethod =
   | 'describeInstanceUserData'
   | 'modifyInstanceUserData'
   | 'createTags'
-  | 'authorizeSecurityGroupIngress';
+  | 'authorizeSecurityGroupIngress'
+  | 'getConsoleOutput';
 type NetworkCalls = Omit<Ec2Api, InstanceMethod>;
 type InstanceCalls = Pick<Ec2Api, InstanceMethod>;
 
@@ -493,6 +503,7 @@ function instanceCalls(send: Send): InstanceCalls {
           TagSpecifications: [
             ...sdkTagSpecs('instance', input.tags),
             ...sdkTagSpecs('volume', input.tags),
+            ...(input.tagNetworkInterface ? sdkTagSpecs('network-interface', input.tags) : []),
           ],
         }),
       );
@@ -580,6 +591,12 @@ function instanceCalls(send: Send): InstanceCalls {
           Tags: tags.map((t) => ({ Key: t.key, Value: t.value })),
         }),
       );
+    },
+    async getConsoleOutput(instanceId) {
+      const out = await send<{ Output?: string }>(
+        new GetConsoleOutputCommand({ InstanceId: instanceId, Latest: true }),
+      );
+      return out.Output ? Buffer.from(out.Output, 'base64').toString('utf8') : null;
     },
   };
 }

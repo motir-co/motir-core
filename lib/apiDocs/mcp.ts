@@ -685,6 +685,26 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
       'Change a page’s title only — no body write, no revision, and no new version of a published decision page.',
     descriptionFingerprint: 'd1f07933be8e',
   },
+  search_pages: {
+    summary:
+      'Find a project’s live pages by a word in the title or body — ranked hits with a snippet, paged by cursor.',
+    descriptionFingerprint: '6300effbffe9',
+  },
+  move_page: {
+    summary:
+      'Re-file a page and its sub-pages under another page, into a folder or at the root; a cycle or an archived page is refused by name.',
+    descriptionFingerprint: 'af2acd1e96dd',
+  },
+  archive_page: {
+    summary:
+      'Archive a page with its sub-pages, or restore an archive root and see where it landed — nothing is deleted.',
+    descriptionFingerprint: 'e48d9ee5c544',
+  },
+  link_page: {
+    summary:
+      'Link a page to a work item of its project, or unlink it; linking twice changes nothing, and another project is refused by name.',
+    descriptionFingerprint: '215ff7d3a41d',
+  },
   publish_decision_page: {
     summary:
       'Publish a page as a decision card’s decision: seals its newest version and, on an agent card, asks a person to approve it.',

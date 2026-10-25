@@ -54,7 +54,7 @@ export const API_MAJOR = 1;
  * compatible by construction and only a server BELOW it can be missing
  * something this client was generated to expect.
  */
-export const GENERATED_AGAINST = "1.75.0";
+export const GENERATED_AGAINST = "1.76.0";
 
 /** Every declared operation, keyed by `operationId`. */
 export const V1_OPERATIONS = {
@@ -533,6 +533,13 @@ export const V1_OPERATIONS = {
     permission: "work_item:archive",
     successStatus: 200,
     responseComponent: "WorkItemDetail",
+  },
+  "searchPages": {
+    method: "GET",
+    path: "/api/v1/projects/{projectKey}/pages/search",
+    permission: "page:view",
+    successStatus: 200,
+    responseComponent: undefined,
   },
   "startSprint": {
     method: "POST",

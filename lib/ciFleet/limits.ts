@@ -174,6 +174,32 @@ export function orgIndexInFlightCap(globalCap: number): number {
   return Math.ceil(globalCap / 2);
 }
 
+/** The env var holding the indexer's Fly↔AWS switch (MOTIR-9445): `aws` puts
+ *  `code_graph_index` on its pool of AWS accounts, `fly` (or unset) keeps it on
+ *  the process-wide Fly fleet. */
+export const INDEX_FLEET_PROVIDER_ENV = 'MOTIR_INDEX_FLEET_PROVIDER';
+
+/**
+ * IS INDEXING ON ITS POOL? — the indexer's Fly↔AWS switch
+ * (`fleet-per-org-pool.md` AMENDMENT 1, A1.3: one switch per fleet kind, read on
+ * every boot). `wireFleetKindSwitch('code_graph_index', …)` wires this reader, so
+ * `fleetKindOnPool` reads it per job, uncached: flipping it moves the next index
+ * and no other fleet kind.
+ *
+ * Only `aws` turns it on. Unset and `fly` read Fly; any other value reads Fly
+ * WITH A WARNING — a typo must leave indexing where it is today, never move it.
+ */
+export function indexFleetOnPool(): boolean {
+  const raw = process.env[INDEX_FLEET_PROVIDER_ENV]?.trim().toLowerCase();
+  if (!raw || raw === 'fly') return false;
+  if (raw === 'aws') return true;
+  console.warn('[ciFleet/limits] ignoring a malformed index fleet provider; using Fly', {
+    env: INDEX_FLEET_PROVIDER_ENV,
+    raw,
+  });
+  return false;
+}
+
 /** The env var sizing a CI runner's Docker volume, and its default (MOTIR-8839). */
 export const CI_DOCKER_VOLUME_GB_ENV = 'MOTIR_CI_DOCKER_VOLUME_GB';
 export const DEFAULT_CI_DOCKER_VOLUME_GB = 20;

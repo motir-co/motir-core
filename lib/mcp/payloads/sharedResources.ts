@@ -143,12 +143,6 @@ export const MCP_UNREACHABLE_RESOURCES: Partial<Record<SharedResourceName, strin
     'listed in `EXEMPT_TOOLS` with that reason, so no tool payload carries this exact shape to ' +
     'probe. Both surfaces read the same `pagesService.getPageMarkdown` DTO, which is where the ' +
     'body and revision are kept in agreement.',
-  PagePlacement:
-    'Story MOTIR-9486 (MOTIR-9495) publishes the result of `PATCH /api/v1/pages/{pageId}/placement` ' +
-    'as `PagePlacement`. No MCP tool moves a page yet: `move_page` belongs to the sibling story ' +
-    '"An agent moves, archives and links pages over the MCP", which reuses the same ' +
-    '`pagesService.movePage` door. When that tool lands it probes this resource and this entry ' +
-    'closes; it is not a permanent divergence.',
   ScopeClaim:
     'MOTIR-3049’s SCOPE claim ships on `/api/v1` ONLY, and the absence is argued rather than ' +
     'incidental: its caller is `motir run <story-id>` / `motir run sprint` in `packages/cli`, ' +

@@ -1,6 +1,11 @@
 import { checkIndexAllowance } from '@/lib/ai/motirAiClient';
 import { deriveCodeGraphIndexState } from '@/lib/codeGraph/indexState';
-import { isIndexHardStop, type IndexAllowanceVerdict } from '@/lib/ciFleet/indexAllowance';
+import {
+  isIndexHardStop,
+  isPoolFullPause,
+  type IndexAllowanceVerdict,
+} from '@/lib/ciFleet/indexAllowance';
+import { fleetShardAdmissionService } from '@/lib/services/fleetShardAdmissionService';
 import { enqueueCodeGraphIndex, enqueueCodeGraphRefresh } from '@/lib/github/indexEnqueue';
 import type { CodeGraphIndexData } from '@/lib/jobs/types';
 import {
@@ -38,6 +43,16 @@ import { withSystemContext } from '@/lib/workspaces/context';
 // the allowance itself and lifts the pause when it boots (MOTIR-4593); until then
 // a later sweep may enqueue again, which the refresh job's per-repo debounce
 // coalesces.
+//
+// ⚠️ A FULL INDEXER POOL IS RE-ASKED OF THE POOL, NOT OF THE ALLOWANCE
+// (MOTIR-9451). A repository paused because every indexer account was full is
+// not refused by its organisation, so asking the allowance for it would answer
+// a question that never applied. Those rows are acted on only when the pool has
+// room — a read-only headroom check through the SAME chooser admission uses, so
+// the two cannot disagree about whether a unit of room exists — and otherwise
+// stay paused as `pool_still_full`, so the sweep never re-enqueues into a pool
+// that is still full. Admission stays the authority: a dispatch it defers again
+// pauses again, and the next tick retries.
 
 /** Paused repositories considered per tick — oldest pause first. */
 export const INDEX_CATCH_UP_BATCH = 200;
@@ -58,7 +73,10 @@ export type IndexCatchUpOutcome =
    *  own refresh. */
   | 'head_unknown'
   /** The action for this repository threw — its pause stays, and the next sweep retries. */
-  | 'action_failed';
+  | 'action_failed'
+  /** Paused for a full indexer pool, and the pool is still full — the pause stays
+   *  and no allowance was asked (MOTIR-9451). */
+  | 'pool_still_full';
 
 export interface IndexCatchUpSummary {
   scanned: number;
@@ -70,6 +88,23 @@ export interface IndexCatchUpDeps {
   check: (organizationId: string) => Promise<IndexAllowanceVerdict | null>;
   enqueueRefresh: (data: CodeGraphIndexData) => Promise<void>;
   enqueueIndex: (data: CodeGraphIndexData) => Promise<void>;
+  /** Does the indexer pool have room for this organisation's index right now?
+   *  Read-only: chooses an account and takes nothing (MOTIR-9451). */
+  poolHasRoom: (organizationId: string) => Promise<boolean>;
+}
+
+/** The pool's answer, through admission's own chooser, in a transaction of its
+ *  own. The switch off (`shardId: null`) means the index runs on the process-wide
+ *  fleet, which a full pool does not hold up, so it counts as room. */
+export async function indexPoolHasRoom(organizationId: string): Promise<boolean> {
+  const placement = await withSystemContext((tx) =>
+    fleetShardAdmissionService.chooseInTx(
+      { fleetKind: 'code_graph_index', organizationId },
+      new Date(),
+      tx,
+    ),
+  );
+  return !('deferred' in placement);
 }
 
 // Looked up at CALL time, not captured at import: a suite that mocks the client
@@ -78,6 +113,7 @@ const defaultDeps: IndexCatchUpDeps = {
   check: (organizationId) => checkIndexAllowance(organizationId),
   enqueueRefresh: (data) => enqueueCodeGraphRefresh(data),
   enqueueIndex: (data) => enqueueCodeGraphIndex(data),
+  poolHasRoom: (organizationId) => indexPoolHasRoom(organizationId),
 };
 
 /**
@@ -138,18 +174,41 @@ export const codeGraphIndexCatchUpService = {
     }
 
     for (const [organizationId, repos] of byOrganization) {
-      summary.organizationsAsked += 1;
-      // Total client: `null` is "could not ask", and it is never read as a lift.
-      const verdict = await deps.check(organizationId);
-      const blanket: IndexCatchUpOutcome | null = !verdict
-        ? 'ask_failed'
-        : isIndexHardStop(verdict.outcome)
-          ? 'still_stopped'
-          : null;
+      // ONE allowance ask, and only when a row of this organisation is paused by
+      // the allowance; ONE pool read, only when a row is paused by a full pool.
+      const allowancePaused = repos.some((repo) => !isPoolFullPause(repo.indexPausedReason));
+      const poolPaused = repos.some((repo) => isPoolFullPause(repo.indexPausedReason));
+
+      let blanket: IndexCatchUpOutcome | null = null;
+      if (allowancePaused) {
+        summary.organizationsAsked += 1;
+        // Total client: `null` is "could not ask", and it is never read as a lift.
+        const verdict = await deps.check(organizationId);
+        blanket = !verdict
+          ? 'ask_failed'
+          : isIndexHardStop(verdict.outcome)
+            ? 'still_stopped'
+            : null;
+      }
+      let poolBlanket: IndexCatchUpOutcome | null = null;
+      if (poolPaused) {
+        try {
+          poolBlanket = (await deps.poolHasRoom(organizationId)) ? null : 'pool_still_full';
+        } catch (err) {
+          // An unreadable pool is not room: the pause stays, the next tick retries.
+          console.error('[index-catch-up] could not read the indexer pool', {
+            organizationId,
+            err,
+          });
+          poolBlanket = 'pool_still_full';
+        }
+      }
 
       for (const repo of repos) {
         const repoRef = `${repo.owner}/${repo.name}`;
-        const outcome = blanket ?? catchUpActionFor(repo);
+        const outcome =
+          (isPoolFullPause(repo.indexPausedReason) ? poolBlanket : blanket) ??
+          catchUpActionFor(repo);
         const data: CodeGraphIndexData = {
           installationId: repo.hostInstallationId,
           workspaceId: repo.workspaceId,

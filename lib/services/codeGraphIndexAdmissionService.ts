@@ -7,9 +7,12 @@ import {
 import type { FleetWorkloadKind } from '@/lib/ciFleet/workloads';
 import {
   fleetKillSwitchEngaged,
+  indexFleetOnPool,
   indexInFlightCap,
   orgIndexInFlightCap,
 } from '@/lib/ciFleet/limits';
+import { wireFleetKindSwitch } from '@/lib/ciFleet/shardTargets';
+import { fleetShardAdmissionService } from '@/lib/services/fleetShardAdmissionService';
 import {
   fleetCeilingService,
   describeFleetCensus,
@@ -91,6 +94,16 @@ import {
 /** The workload every decision in this file is about. */
 const CODE_GRAPH_INDEX_WORKLOAD = 'code_graph_index' satisfies FleetWorkloadKind;
 
+// ── THE INDEXER'S FLY↔AWS SWITCH (MOTIR-9445) ───────────────────────────────
+// `fleetKindOnPool('code_graph_index')` reads `MOTIR_INDEX_FLEET_PROVIDER` per
+// job through this reader. Wired where the indexer's admission lives, because
+// that is the one caller that places an index; it moves no other kind.
+wireFleetKindSwitch(CODE_GRAPH_INDEX_WORKLOAD, indexFleetOnPool);
+
+/** What a `pool_full` deferral says. */
+const INDEX_POOL_FULL_DETAIL =
+  "every account of the indexer's pool is full — the index waits for a container to finish";
+
 /**
  * How much longer than the container's own hard kill the slot keeps counting.
  *
@@ -124,6 +137,9 @@ export type IndexAdmissionDeferralReason =
   | 'org_index_cap'
   /** Indexing as a whole is at its configured global cap. */
   | 'index_cap'
+  /** The indexer is on its pool of accounts and every one of them is full,
+   *  paused or empty (MOTIR-9445). The index waits; it is never sent to Fly. */
+  | 'pool_full'
   /** The operator's kill switch is engaged (`MOTIR_FLEET_MAX_IN_FLIGHT=0`). */
   | 'fleet_ceiling'
   /** The gate itself could not decide. FAIL-CLOSED: an unestablished count is
@@ -148,6 +164,14 @@ export interface IndexAdmission {
   readonly admittedAt: string;
   /** What the fleet looked like at admission, for the operator's log. */
   readonly detail: string;
+  /**
+   * The fleet account (`fleet_shard.id`) the container boots on — the same
+   * account recorded on the slot row (MOTIR-9445), so boot, poll, settle and
+   * reap address ONE account's orchestrator. Absent or null: the process-wide
+   * fleet (the indexer's switch is Fly). A memo written before this field
+   * existed carries none, which reads as Fly, and so does its slot row.
+   */
+  readonly shardId?: string | null;
 }
 
 export type IndexAdmissionVerdict =
@@ -224,7 +248,7 @@ function detailOf(err: unknown): string {
  * holder's remaining TTL, once, on the deploy that ships this column.
  */
 function heldVerdict(
-  held: { claimedAt: Date; ownerRef: string | null },
+  held: { claimedAt: Date; ownerRef: string | null; fleetShardId: string | null },
   slotRef: string,
   dispatchId: string,
 ): IndexAdmissionVerdict {
@@ -236,6 +260,9 @@ function heldVerdict(
         slotRef,
         admittedAt: takenAt,
         detail: `this dispatch already holds the index slot for this (repo × project), taken at ${takenAt}`,
+        // The account the held slot was admitted onto — a replay must reach the
+        // same orchestrator the container booted on (MOTIR-9445).
+        shardId: held.fleetShardId,
       },
     };
   }
@@ -390,7 +417,29 @@ export const codeGraphIndexAdmissionService = {
           };
         }
 
-        // ── 3 · TAKE THE SLOT, in the same transaction as the counts above ────
+        // ── 3 · WHERE IT RUNS — the indexer's account, AFTER every bound ──────
+        // (MOTIR-9445). Switch Fly ⇒ no account, the process-wide fleet, exactly
+        // as before. Switch on ⇒ the indexer-pool account with the most headroom,
+        // counted from the live index slots recorded on each account — read
+        // here, under the one admission lock, and written by the take below in
+        // the same transaction, so two admissions cannot both claim an account's
+        // last unit. Only `code_graph_index` accounts are in the set. No account
+        // with room ⇒ `pool_full`: no slot, and never Fly. A pool record that
+        // cannot be read throws into the fail-closed catch below.
+        const placement = await fleetShardAdmissionService.chooseInTx(
+          { fleetKind: CODE_GRAPH_INDEX_WORKLOAD, organizationId: request.organizationId },
+          now,
+          tx,
+        );
+        if ('deferred' in placement) {
+          return {
+            outcome: 'deferred' as const,
+            reason: 'pool_full' as const,
+            detail: INDEX_POOL_FULL_DETAIL,
+          };
+        }
+
+        // ── 4 · TAKE THE SLOT, in the same transaction as the counts above ────
         const took = await slots.take(
           {
             workload: CODE_GRAPH_INDEX_WORKLOAD,
@@ -398,6 +447,7 @@ export const codeGraphIndexAdmissionService = {
             ownerRef: request.dispatchId,
             organizationId: request.organizationId,
             workspaceId: request.workspaceId,
+            fleetShardId: placement.shardId,
             expiresAt: new Date(now.getTime() + ttlSeconds * 1_000),
           },
           tx,
@@ -429,7 +479,9 @@ export const codeGraphIndexAdmissionService = {
             admittedAt: now.toISOString(),
             detail:
               `admitted: organization index ${orgIndexInFlight + 1}/${orgCap}, ` +
-              `indexing ${indexInFlight + 1}/${globalCap} (${describeFleetCensus(census)})`,
+              `indexing ${indexInFlight + 1}/${globalCap} (${describeFleetCensus(census)})` +
+              (placement.shardId ? `, on account ${placement.shardId}` : ''),
+            shardId: placement.shardId,
           },
         };
       });

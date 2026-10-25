@@ -10,6 +10,7 @@ import type {
   PageTrailDto,
   PageTreeRowDto,
   PageMentionCandidateDto,
+  PageSearchHitDto,
   PageRefSummaryDto,
   PageVersionDto,
   PageVersionListItemDto,
@@ -452,6 +453,14 @@ export function toPageMentionCandidateDto(
   parentPageTitle: string | null,
 ): PageMentionCandidateDto {
   return { id: row.id, title: row.title, place: { folderPath, parentPageTitle } };
+}
+
+/** A full-text search hit (MOTIR-9551): the candidate with its place, plus snippet and rank. */
+export function toPageSearchHitDto(
+  candidate: PageMentionCandidateDto,
+  row: { snippet: string; rank: number },
+): PageSearchHitDto {
+  return { ...candidate, snippet: row.snippet, rank: row.rank };
 }
 
 /**

@@ -1,5 +1,6 @@
 import { z } from 'zod/v4';
 import type { ZodType } from 'zod/v4';
+import { PAGE_SEARCH_QUERY_MAX_LENGTH } from '@/lib/pages/searchErrors';
 import {
   defineOperation,
   type V1Operation,
@@ -10,6 +11,7 @@ import {
   movePageBodySchema,
   pagePlacementResultSchema,
   pageSchema,
+  pageSearchHitSchema,
   updatePageBodySchema,
 } from '@/lib/api/v1/pages/schema';
 
@@ -117,9 +119,44 @@ export const PAGE_OPERATIONS: readonly V1Operation[] = [
     },
     errorStatuses: [403, 404, 409, 422],
   }),
+  defineOperation({
+    method: 'GET',
+    path: '/api/v1/projects/{projectKey}/pages/search',
+    operationId: 'searchPages',
+    summary: 'Search a project’s pages',
+    description:
+      'Find the project’s LIVE pages by a word in the title or the body — Postgres full-text search, words matched as typed in any language (no stemming). Hits are ranked best match first and keyset-paged by an opaque `cursor`: pass back the `nextCursor` you were given, `null` when there is no further hit; no total is returned. A hit is the page’s id, title, place, a short `snippet` of the body around the match, and its `rank` — never the body itself: read a page with `GET /api/v1/pages/{pageId}`. Archived pages and other projects’ pages never appear. ⚠️ An empty or whitespace-only `q` is REFUSED by name, 422 `PAGE_SEARCH_QUERY_EMPTY` — it never returns every page. A `q` over ' +
+      PAGE_SEARCH_QUERY_MAX_LENGTH +
+      ' characters is 422 `PAGE_SEARCH_QUERY_TOO_LONG`, and a cursor this API did not issue 422 `PAGE_CURSOR_INVALID`. A caller who can browse the project but may not view its pages is 403 `PROJECT_ACCESS_DENIED`, whatever the query or cursor; a project the caller cannot browse is 404 `PAGE_NOT_FOUND`. Neither refusal names a page or a count. The MCP `search_pages` tool is the same search with the same codes.',
+    permission: 'page:view',
+    parameters: [
+      pageProjectKeyParameter,
+      {
+        name: 'q',
+        in: 'query',
+        required: true,
+        description: `The words to find, at most ${PAGE_SEARCH_QUERY_MAX_LENGTH} characters. Read as plain words: punctuation and search operators are text, so no input is a syntax error, and a query of only punctuation finds nothing.`,
+        schema: z.string(),
+      },
+      {
+        name: 'cursor',
+        in: 'query',
+        required: false,
+        description: 'The `nextCursor` of the previous page; omit for the first page.',
+        schema: z.string(),
+      },
+    ],
+    response: {
+      status: 200,
+      body: { kind: 'page', item: pageSearchHitSchema },
+      description: 'A page of hits, best match first.',
+    },
+    errorStatuses: [403, 404, 422],
+  }),
 ];
 
 export const PAGE_COMPONENTS: Readonly<Record<string, ZodType>> = {
   Page: pageSchema,
   PagePlacement: pagePlacementResultSchema,
+  PageSearchHit: pageSearchHitSchema,
 };

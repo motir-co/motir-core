@@ -44,6 +44,7 @@ import {
 } from './workLoop';
 import { folderDeletionPayload, folderWritePayload, listFoldersPayload } from './folders';
 import { sectionSetsPayload } from './sectionSets';
+import { movePagePayload, searchPagesPayload } from './pages';
 
 // The TOOL → PAYLOAD map (Story 11.6 · Subtask 11.6.6 — MOTIR-2232).
 //
@@ -117,6 +118,10 @@ export const TOOL_PAYLOADS: Partial<Record<McpToolName, PayloadDefinition<never>
   // MOTIR-9029 — the section registry read: v1's `SectionSets` whole, and it PROBES it.
   get_section_sets: sectionSetsPayload as unknown as PayloadDefinition<never>,
   create_folder: folderWritePayload as unknown as PayloadDefinition<never>,
+  // MOTIR-9553 — the page search: v1's search page, and each hit PROBES `PageSearchHit`.
+  search_pages: searchPagesPayload as unknown as PayloadDefinition<never>,
+  // MOTIR-9556 — the page move: v1's `PagePlacement` whole, and it PROBES it.
+  move_page: movePagePayload as unknown as PayloadDefinition<never>,
   update_folder: folderWritePayload as unknown as PayloadDefinition<never>,
   delete_folder: folderDeletionPayload as unknown as PayloadDefinition<never>,
   attach_file: attachFilePayload as unknown as PayloadDefinition<never>,

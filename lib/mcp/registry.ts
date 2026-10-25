@@ -128,6 +128,10 @@ import { GET_PAGE_TOOL_NAME, registerGetPage } from './tools/getPage';
 import { CREATE_PAGE_TOOL_NAME, registerCreatePage } from './tools/createPage';
 import { UPDATE_PAGE_TOOL_NAME, registerUpdatePage } from './tools/updatePage';
 import { RENAME_PAGE_TOOL_NAME, registerRenamePage } from './tools/renamePage';
+import { SEARCH_PAGES_TOOL_NAME, registerSearchPages } from './tools/searchPages';
+import { MOVE_PAGE_TOOL_NAME, registerMovePage } from './tools/movePage';
+import { ARCHIVE_PAGE_TOOL_NAME, registerArchivePage } from './tools/archivePage';
+import { LINK_PAGE_TOOL_NAME, registerLinkPage } from './tools/linkPage';
 import {
   PUBLISH_DECISION_PAGE_TOOL_NAME,
   registerPublishDecisionPage,
@@ -273,6 +277,10 @@ export const MCP_TOOL_NAMES = [
   CREATE_PAGE_TOOL_NAME,
   UPDATE_PAGE_TOOL_NAME,
   RENAME_PAGE_TOOL_NAME,
+  SEARCH_PAGES_TOOL_NAME,
+  MOVE_PAGE_TOOL_NAME,
+  ARCHIVE_PAGE_TOOL_NAME,
+  LINK_PAGE_TOOL_NAME,
   PUBLISH_DECISION_PAGE_TOOL_NAME,
   LIST_SPRINTS_TOOL_NAME,
   VALIDATE_SPRINT_TOOL_NAME,
@@ -538,6 +546,12 @@ export function registerMcpTools(
   registerCreatePage(target, resolveContext);
   registerUpdatePage(target, resolveContext);
   registerRenamePage(target, resolveContext);
+  // Full-text page search (MOTIR-9553) — the same door as `GET /api/v1/…/pages/search`.
+  registerSearchPages(target, resolveContext);
+  // Re-file a page (MOTIR-9556) — the same door as `PATCH /api/v1/pages/{pageId}/placement`.
+  registerMovePage(target, resolveContext);
+  registerArchivePage(target, resolveContext);
+  registerLinkPage(target, resolveContext);
   // A page as a decision card's decision (MOTIR-7434; approval-gates.md §8 NINTH AMENDMENT).
   registerPublishDecisionPage(target, resolveContext);
   // Sprint tools (7.8.10) — the Scrum cadence over the shipped Epic-4 services.

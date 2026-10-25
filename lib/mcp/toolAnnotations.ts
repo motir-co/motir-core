@@ -104,6 +104,16 @@ export const TOOL_ANNOTATIONS: Record<McpToolName, McpToolAnnotations> = {
     idempotentHint: false,
     openWorldHint: false,
   },
+  // `action: "unlink"` is an unlinking verb, so a destructive write by this table's rule
+  // (as `link_work_items` / `unlink_work_items` share one door). Not idempotent: a link
+  // repeated answers `changed: false`, but an unlink repeated is refused PAGE_LINK_NOT_FOUND.
+  // W: linkPage.ts → pageLinksService.linkPageForWorkItem / unlinkPageForWorkItem — writes or deletes the manual row and the work item's revision
+  link_page: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
   // W: claimWorkItem.ts → workItemsService.claimWorkItem — overwrites assigneeId, moves status; a repeat answers `mine` and writes nothing
   claim_work_item: {
     readOnlyHint: false,
@@ -360,6 +370,28 @@ export const TOOL_ANNOTATIONS: Record<McpToolName, McpToolAnnotations> = {
     readOnlyHint: false,
     destructiveHint: true,
     idempotentHint: true,
+    openWorldHint: false,
+  },
+  // R: searchPages.ts → pagesService.searchPages — a ranked read, no lock, no write
+  search_pages: { readOnlyHint: true, openWorldHint: false },
+  // A move overwrites where the page and its whole subtree sit — every moving verb is a
+  // destructive write here, as `move_to_parent` is; the same destination twice answers
+  // `moved: false` and writes nothing, so it is idempotent.
+  // W: movePage.ts → pagesService.movePage — re-parents/reorders the page and rewrites its subtree's ancestors
+  move_page: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
+  // Archiving is an archiving verb, so a destructive write by this table's rule, even though
+  // `action: "restore"` undoes it and nothing is deleted. NOT idempotent: a second archive is
+  // refused PAGE_ARCHIVED (a second restore PAGE_NOT_ARCHIVED) rather than answering the same.
+  // W: archivePage.ts → pagesService.archivePage / restorePage — archives or restores the page and its subtree
+  archive_page: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
     openWorldHint: false,
   },
   // A replay of the same version writes nothing, so it is idempotent; not destructive

@@ -541,6 +541,9 @@ describe('gate — cross-tenant isolation across the whole v1 tree', () => {
       // the kind has no default on purpose: guessing one would answer about a
       // decision the caller did not ask about.
       '/api/v1/work-items/[key]/approval-gate': 'kind=decision_approval',
+      // MOTIR-9552 — page search has no default query on purpose: an empty one is
+      // refused rather than answering every page.
+      '/api/v1/projects/[projectKey]/pages/search': 'q=Mine',
     };
 
     /**
