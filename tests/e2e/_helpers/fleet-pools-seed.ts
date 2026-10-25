@@ -56,9 +56,13 @@ export async function releaseGrowthPass(): Promise<void> {
 /**
  * Clear every CI runner AWS account, request and growth event. The lane has no
  * real CI pool, and `resetDatabase()` reaches none of these: no row here hangs
- * off a workspace. Growth events first, since their shard links only null out.
+ * off a workspace. Growth events first, since their shard links only null out;
+ * the walk's CI intents before the shards, since theirs do not.
  */
 export async function clearPoolRows(): Promise<void> {
+  await adminDb.ciRunnerProvisioningIntent.deleteMany({
+    where: { fleetShard: { fleetKind: 'ci_runner', provider: 'aws' } },
+  });
   await adminDb.fleetGrowthEvent.deleteMany({ where: { fleetKind: 'ci_runner' } });
   await adminDb.fleetQuotaRequest.deleteMany({ where: { fleetKind: 'ci_runner' } });
   await adminDb.fleetShard.deleteMany({ where: { fleetKind: 'ci_runner', provider: 'aws' } });

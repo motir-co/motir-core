@@ -201,7 +201,7 @@ test('a platform admin reads every pool: the CI pool past 70%, an unread quota, 
     await expect(hotRow.getByRole('cell').nth(5)).toHaveText('80%');
 
     const coolRow = rowOf('b');
-    await expect(coolRow).toHaveAttribute('data-over', 'false');
+    await expect(coolRow).not.toHaveAttribute('data-over');
     await expect(coolRow.getByRole('cell').nth(5)).toHaveText('40%');
     await expect(coolRow.getByRole('cell').nth(6)).toHaveText(
       `${vcpu(Math.ceil(COOL.granted * 0.7) - COOL.jobs * C)} to go`,
