@@ -79,6 +79,13 @@ export const V1_OPERATIONS = {
     successStatus: 200,
     responseComponent: "Plan",
   },
+  "archivePage": {
+    method: "POST",
+    path: "/api/v1/pages/{pageId}/archive",
+    permission: "page:edit",
+    successStatus: 200,
+    responseComponent: "PageArchive",
+  },
   "archiveWorkItem": {
     method: "POST",
     path: "/api/v1/work-items/{key}/archive",
@@ -366,6 +373,13 @@ export const V1_OPERATIONS = {
     successStatus: 200,
     responseComponent: undefined,
   },
+  "linkPageWorkItem": {
+    method: "POST",
+    path: "/api/v1/pages/{pageId}/work-items",
+    permission: "page:edit",
+    successStatus: 200,
+    responseComponent: "PageLinkPair",
+  },
   "linkWorkItemPullRequest": {
     method: "POST",
     path: "/api/v1/work-items/{key}/pull-requests",
@@ -527,6 +541,13 @@ export const V1_OPERATIONS = {
     successStatus: 200,
     responseComponent: undefined,
   },
+  "restorePage": {
+    method: "POST",
+    path: "/api/v1/pages/{pageId}/restore",
+    permission: "page:edit",
+    successStatus: 200,
+    responseComponent: "PageRestore",
+  },
   "restoreWorkItem": {
     method: "POST",
     path: "/api/v1/work-items/{key}/restore",
@@ -575,6 +596,13 @@ export const V1_OPERATIONS = {
     permission: "work_item:edit",
     successStatus: 200,
     responseComponent: "WorkItemDetail",
+  },
+  "unlinkPageWorkItem": {
+    method: "DELETE",
+    path: "/api/v1/pages/{pageId}/work-items/{workItemId}",
+    permission: "page:edit",
+    successStatus: 200,
+    responseComponent: "PageLinkPair",
   },
   "updateFolder": {
     method: "PATCH",
