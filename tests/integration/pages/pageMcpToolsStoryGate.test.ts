@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
@@ -33,7 +31,9 @@ import { truncateAuthTables } from '../../helpers/db';
 //
 //   1  AGREEMENT — every name is registered once and present in every home a tool
 //      has (permission map, annotations, published catalogue, generated input
-//      schema, `docs/mcp.md`); a missing home fails NAMING the home.
+//      schema); a missing home fails NAMING the home. `docs/mcp.md` is held by
+//      `tests/mcp/mcp-doc-guards.test.ts` (its tool count) in the docs-guard lane, not here: this
+//      file needs Postgres, and a spec reading a `docs/**` file must run in that lane.
 //   2  THE GRANT — a token holding only `CLI_TOKEN_GRANT` reaches all three.
 //   3  BEHAVIOUR AND EVERY REFUSAL BY CODE — asserted on the code, not the prose.
 //   4  NO LEAK — a sentinel page title and work item title appear in no refusal
@@ -131,14 +131,12 @@ describe('Story MOTIR-9487 gate — the three page tools agree in every home', (
   });
 
   it.each(TOOLS)('%s is in every home a tool has', (name) => {
-    const docs = readFileSync(resolve(process.cwd(), 'docs/mcp.md'), 'utf8');
     const homes: Record<string, boolean> = {
       MCP_TOOL_NAMES: (MCP_TOOL_NAMES as readonly string[]).includes(name),
       'TOOL_PERMISSIONS (page:edit)': TOOL_PERMISSIONS[name] === 'page:edit',
       TOOL_ANNOTATIONS: TOOL_ANNOTATIONS[name] !== undefined,
       'published catalogue (mcpToolRows)': mcpToolRows().some((r) => r.name === name),
       MCP_TOOL_INPUT_SCHEMAS: MCP_TOOL_INPUT_SCHEMAS[name] !== undefined,
-      'docs/mcp.md section': docs.includes(`#### \`${name}\``),
     };
     const missing = Object.entries(homes)
       .filter(([, present]) => !present)
