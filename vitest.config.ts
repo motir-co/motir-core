@@ -1687,6 +1687,32 @@ export default defineConfig({
         'lib/services/fleetOrgCiSettingService.ts',
         'lib/repositories/platformFleetOrgCiRepository.ts',
         'lib/mappers/fleetOrgCiSettingMappers.ts',
+        // Story MOTIR-9362 · MOTIR-9464 — the pool-growth story's new modules (the
+        // growth policy, the spare's add-shard plan, the quota and growth records,
+        // the live read, the raise service, the growth and its scheduled pass, the
+        // pool status and `fleet-admin`'s pool commands). MEASURED on this branch
+        // against the story's own specs: every file >= 90 on all four metrics (the
+        // lowest, `fleetQuotaRaiseService`, 96.58 / 92.2 / 94.11 / 97.14). The arms
+        // left uncovered are named, with why, in `tests/ciFleet/fleetGrowthIntegration.test.ts`.
+        // Pinned at the fleet's 90 floor below.
+        'lib/ciFleet/poolGrowthPolicy.ts',
+        'lib/fleetShards/awsMemberAccountPlan.ts',
+        'lib/fleetShards/fleetAutomationPrincipal.ts',
+        'lib/fleetShards/scrubSecrets.ts',
+        'lib/jobs/definitions/fleetPoolGrowth.ts',
+        'lib/mappers/fleetPoolMappers.ts',
+        'lib/repositories/fleetGrowthEventRepository.ts',
+        'lib/repositories/fleetGrowthLockRepository.ts',
+        'lib/repositories/fleetGrowthPassLeaseRepository.ts',
+        'lib/repositories/fleetQuotaRequestRepository.ts',
+        'lib/services/fleetGrowthEventService.ts',
+        'lib/services/fleetPoolGrowthPassService.ts',
+        'lib/services/fleetPoolGrowthService.ts',
+        'lib/services/fleetPoolStatusService.ts',
+        'lib/services/fleetQuotaRaiseService.ts',
+        'lib/services/fleetQuotaRequestService.ts',
+        'lib/services/fleetShardQuotaService.ts',
+        'scripts/fleet/fleetAdminPoolCommands.ts',
         // Story MOTIR-1775 · MOTIR-1782 — the establish STEP at plan approval.
         // Gated for a different reason than the primitive above: the whole card
         // is a claim about what must NOT be on screen (no repository name, count,
@@ -3427,6 +3453,115 @@ export default defineConfig({
       // fails SILENTLY when it matches nothing — see the route-group note on
       // `include`. Write a route-group path as `app/**/…`.
       thresholds: {
+        // Story MOTIR-9362 · MOTIR-9464 — the pool-growth modules, measured above.
+        'lib/ciFleet/poolGrowthPolicy.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/fleetShards/awsMemberAccountPlan.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/fleetShards/fleetAutomationPrincipal.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/fleetShards/scrubSecrets.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/jobs/definitions/fleetPoolGrowth.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/mappers/fleetPoolMappers.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/repositories/fleetGrowthEventRepository.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/repositories/fleetGrowthLockRepository.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/repositories/fleetGrowthPassLeaseRepository.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/repositories/fleetQuotaRequestRepository.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/fleetGrowthEventService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/fleetPoolGrowthPassService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/fleetPoolGrowthService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/fleetPoolStatusService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/fleetQuotaRaiseService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/fleetQuotaRequestService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/fleetShardQuotaService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'scripts/fleet/fleetAdminPoolCommands.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
         // Story MOTIR-9219 · MOTIR-9295 — measured above, pinned at the floor (the start
         // service's branches at 88, for the reason the `include` block gives).
         'lib/planChange/planOffer.ts': {

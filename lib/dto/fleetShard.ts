@@ -7,7 +7,9 @@ import type { GithubAppRole } from '@/lib/github/appAuth';
 // provider secret lives in — and never a secret value: the row holds none.
 
 export type FleetShardProviderDTO = 'fly' | 'aws';
-export type FleetShardRoleDTO = 'primary';
+/** `primary` — an account of the kind's shared pool; `spare` — the kind's Motir
+ *  spare, which runs only Motir's exempt orgs' jobs (MOTIR-9456). */
+export type FleetShardRoleDTO = 'primary' | 'spare';
 export type FleetShardStateDTO = 'provisioning' | 'active' | 'disabled';
 
 /** The limits an account records, by name. */

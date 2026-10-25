@@ -1,5 +1,11 @@
 import {
+  AWS_MANAGEMENT_ENV,
+  AWS_RUNNER_IAM_ROLE,
+  awsCredentialsFromEnv,
+  awsManagementCredentials,
+  awsRuntimeKeyEnvNames,
   createAwsFleetInventory,
+  createAwsManagementApi,
   createAwsOrchestrator,
   createEc2Api,
   Ec2ApiError,
@@ -21,6 +27,7 @@ import {
   INDEXER_IMAGE_ENV_VAR,
   OrchestratorNotConfiguredError,
   probeImagePull,
+  type AwsManagementApi,
   type ContainerOrchestrator,
   type Ec2Api,
   type FakeOrchestratorControls,
@@ -239,20 +246,6 @@ function flyOrchestratorForShard(shard: FleetShardDTO): ContainerOrchestrator {
 export const AWS_RUNNER_AMI_ENV_VAR = 'MOTIR_AWS_RUNNER_AMI_ID';
 
 /**
- * An AWS account's orchestrator (MOTIR-9276): its own IAM key, read from
- * `<credentialRef>_ACCESS_KEY_ID` / `<credentialRef>_SECRET_ACCESS_KEY` (the
- * suffixes add-shard documents, MOTIR-9278), the fleet's AMI, and the account's
- * region. The shard tag is the account's name — what its network is tagged with.
- */
-/**
- * An AWS account's EC2 client and region, from its row and its key variables
- * (`<credentialRef>_ACCESS_KEY_ID` / `_SECRET_ACCESS_KEY`) — the ONE place the
- * orchestrator and the inventory of an account build it, so a kill and its
- * settle land in the account the VM was listed in. `extra` names variables only
- * the caller needs (the AMI, for a launch); every missing one is named at once,
- * as `indexFleetConfig` does.
- */
-/**
  * THE ACCEPTANCE LANE'S EC2 (MOTIR-9429): a factory `lib/test-fake-aws.ts`
  * installs when `MOTIR_FAKE_AWS_STATE_PATH` is set, so the lane's three processes
  * drive the REAL AWS adapter and inventory over one file-backed fake EC2. Given
@@ -291,6 +284,18 @@ function onFakeAws(shard: FleetShardDTO): boolean {
   return shard.provider === 'aws' && awsEc2Override() !== null;
 }
 
+/**
+ * An AWS account's EC2 client and region — the ONE place the orchestrator and
+ * the inventory of an account build it, so a kill and its settle land in the
+ * account the VM was listed in. Its credential is its own IAM key, read from
+ * `<credentialRef>_ACCESS_KEY_ID` / `_SECRET_ACCESS_KEY` (the suffixes add-shard
+ * documents, MOTIR-9278), or, when no key is set, a session of the account's
+ * `motir-fleet-runner` ROLE assumed from the management credential (MOTIR-9460:
+ * an account the unattended add-shard created has no key at all); the SDK asks
+ * the provider again before the session lapses. `extra` names variables only
+ * the caller needs (the AMI, for a launch); every missing one is named at once,
+ * as `indexFleetConfig` does.
+ */
 function awsShardClient(
   shard: FleetShardDTO,
   extra: readonly string[] = [],
@@ -305,32 +310,69 @@ function awsShardClient(
     for (const name of extra) values[name] = process.env[name]?.trim() || FAKE_AWS_AMI_ID;
     return { ec2: override(shard, { Ec2ApiError }), region: shard.aws.region, values };
   }
-  const keyIdVar = `${shard.credentialRef}_ACCESS_KEY_ID`;
-  const secretVar = `${shard.credentialRef}_SECRET_ACCESS_KEY`;
+  const keyNames = awsRuntimeKeyEnvNames(shard.credentialRef);
+  const key = awsCredentialsFromEnv(shard.credentialRef, process.env);
+  const management = key ? null : runnerRoleManagement();
   const values: Record<string, string> = {};
-  const missing: string[] = [];
-  for (const name of [keyIdVar, secretVar, ...extra]) {
+  const missing = key || management ? [] : [keyNames.accessKeyId, keyNames.secretAccessKey];
+  for (const name of extra) {
     const value = process.env[name]?.trim();
     if (value) values[name] = value;
     else missing.push(name);
   }
   if (missing.length > 0) {
-    throw new OrchestratorNotConfiguredError(`set ${missing.join(', ')}`);
+    throw new OrchestratorNotConfiguredError(
+      `set ${missing.join(', ')}` +
+        (key || management
+          ? ''
+          : ` (or ${Object.values(AWS_MANAGEMENT_ENV).join(', ')} to assume ${AWS_RUNNER_IAM_ROLE})`),
+    );
   }
   if (!shard.aws) {
     throw new OrchestratorNotConfiguredError(`fleet account ${shard.name} names no AWS location`);
   }
-  const { region } = shard.aws;
-  return {
-    ec2: createEc2Api({
-      accessKeyId: values[keyIdVar]!,
-      secretAccessKey: values[secretVar]!,
-      region,
-    }),
-    region,
-    values,
+  const { accountId, region } = shard.aws;
+  const ec2 = key
+    ? createEc2Api({ ...key, region })
+    : createEc2Api({
+        region,
+        credentialProvider: runnerRoleCredentialProvider(management!, accountId),
+      });
+  return { ec2, region, values };
+}
+
+/** The SDK credential provider for an account's runner ROLE (MOTIR-9460): each
+ *  call assumes a fresh session through the management API; a session with no
+ *  expiry is handed over without one. */
+export function runnerRoleCredentialProvider(
+  management: Pick<AwsManagementApi, 'assumeRunnerRole'>,
+  accountId: string,
+) {
+  return async () => {
+    const session = await management.assumeRunnerRole(accountId);
+    return {
+      accessKeyId: session.accessKeyId,
+      secretAccessKey: session.secretAccessKey,
+      sessionToken: session.sessionToken,
+      ...(session.expiration ? { expiration: session.expiration } : {}),
+    };
   };
 }
+
+/** The management API the runner role is assumed through, or null when the
+ *  management credential is not set. */
+function runnerRoleManagement(): AwsManagementApi | null {
+  try {
+    return createAwsManagementApi(awsManagementCredentials(process.env));
+  } catch (err) {
+    if (err instanceof OrchestratorNotConfiguredError) return null;
+    throw err;
+  }
+}
+
+/** An AWS account's orchestrator (MOTIR-9276): its EC2 client, the fleet's AMI
+ *  and its region. The shard tag is the account's name — what its network is
+ *  tagged with. */
 
 function awsOrchestratorForShard(shard: FleetShardDTO): ContainerOrchestrator {
   const { ec2, region, values } = awsShardClient(shard, [AWS_RUNNER_AMI_ENV_VAR]);

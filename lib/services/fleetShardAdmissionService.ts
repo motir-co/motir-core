@@ -1,6 +1,7 @@
 import type {
   FleetShard,
   FleetShardMoveReason,
+  FleetShardRole,
   FleetShardPauseReason,
   Prisma,
 } from '@/generated/prisma/client';
@@ -17,9 +18,11 @@ import {
   SHARD_PAUSE_SECONDS,
   shardAdmissionCeiling,
 } from '@/lib/ciFleet/shardTargets';
+import { isUnlimitedAgentOrg } from '@/lib/agentInstances/config';
 import { ciRunnerProvisioningIntentRepository as intents } from '@/lib/repositories/ciRunnerProvisioningIntentRepository';
 import { fleetInFlightSlotRepository as slots } from '@/lib/repositories/fleetInFlightSlotRepository';
 import { fleetShardRepository } from '@/lib/repositories/fleetShardRepository';
+import { organizationRepository } from '@/lib/repositories/organizationRepository';
 
 // WHICH ACCOUNT A JOB'S MACHINE BOOTS ON (Story MOTIR-8953 · MOTIR-8968) — the
 // admission order of `docs/decisions/fleet-per-org-pool.md` AMENDMENT 1:
@@ -125,12 +128,22 @@ export const fleetShardAdmissionService = {
     );
   },
 
-  /** The accounts a job may use: the active shared accounts of its fleet kind. */
+  /**
+   * The accounts a job may use: the active shared accounts of its fleet kind —
+   * and, for a job of one of Motir's own exempt orgs (meta or internal, the
+   * {@link isUnlimitedAgentOrg} predicate), that kind's active spare too
+   * (MOTIR-9456). Exemption is read here, per job, from the job's own org row in
+   * the admission's transaction — never from a caller-supplied flag — so no other
+   * org's job can ever be placed on a spare.
+   */
   async selectionSetInTx(
     job: ShardPlacementJob,
     tx: Prisma.TransactionClient,
   ): Promise<FleetShard[]> {
-    return fleetShardRepository.listActiveForKindInTx(job.fleetKind, tx);
+    const org = await organizationRepository.findByIdInTx(job.organizationId, tx);
+    const roles: FleetShardRole[] =
+      org && isUnlimitedAgentOrg(org) ? ['primary', 'spare'] : ['primary'];
+    return fleetShardRepository.listActiveForKindInTx(job.fleetKind, roles, tx);
   },
 
   /**

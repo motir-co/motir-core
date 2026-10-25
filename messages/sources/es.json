@@ -11559,6 +11559,8 @@
   "platformAdmin.users.log.action.fleet.shard.ceiling": "Changed a fleet account's ceiling",
   "platformAdmin.users.log.action.fleet.shard.disable": "Disabled a fleet account",
   "platformAdmin.users.log.action.fleet.shard.enable": "Re-enabled a fleet account",
+  "platformAdmin.users.log.action.fleet.shard.quota_request": "Requested a fleet account quota raise",
+  "platformAdmin.users.log.action.fleet.pool.grow": "Grew a fleet pool",
   "myAgents.refusal.userCapNoFigure": "You already have as many agents as your organization’s plan allows per person. Each one is charged for its storage every day, even asleep. Delete one to create another.",
   "myAgents.refusal.orgRunningLimitNoFigure": "Your organization is already running as many agents at once as its plan allows. Hibernate one to start another.",
   "platformAdmin.monitoring.fleet.orgs.stat.ciRunners": "CI runners · each org held to its plan’s burst cap",
