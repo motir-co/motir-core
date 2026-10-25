@@ -40,7 +40,7 @@ import en from '@/messages/en.json';
 //     five-minute cron and no route fires one pass), over the account
 //     inventories the spec injects: an account's machines, read from the shared
 //     store, plus the one machine the spec plants. Its alert goes to Sentry, so
-//     the pass runs under a client whose `beforeSend` records and drops it.
+//     the pass runs with Sentry's capture recorded (see `reconcileOnce`).
 
 export const HOSTER_PREFIX = 'agent-hoster-e2e-';
 const FLEET_SETTINGS = '/admin/fleet-settings';
@@ -226,21 +226,27 @@ export type ReconcileResult = Awaited<ReturnType<typeof fleetAttributionService.
 /**
  * Run the reconciler ONCE over the given account inventories, on a clock past
  * the grace window, and return its result with the alerts it raised.
+ *
+ * ⚠️ THE ALERTS ARE READ AT THE SCOPE, NOT THROUGH A CLIENT. `@sentry/nextjs`
+ * initialises once per process: once any spec in the same worker has closed
+ * its client (`acceptance-hosted-run-aws-pool.spec.ts` does), a second
+ * `Sentry.init` is a no-op and nothing reaches a `beforeSend`. Every
+ * `Sentry.captureException` lands on a `Scope`, whichever copy of the module
+ * namespace called it, so the pass runs with the scopes' capture recorded and
+ * it is put back after.
  */
 export async function reconcileOnce(
   accountInventories: readonly AccountInventory[],
 ): Promise<{ result: ReconcileResult; alerts: Error[] }> {
   const alerts: Error[] = [];
-  Sentry.init({
-    dsn: 'https://e2e@o0.ingest.sentry.io/0',
-    defaultIntegrations: false,
-    integrations: [],
-    tracesSampleRate: 0,
-    beforeSend(_event, hint) {
-      if (hint.originalException instanceof Error) alerts.push(hint.originalException);
-      return null;
-    },
-  });
+  const scope = Object.getPrototypeOf(Sentry.getCurrentScope()) as {
+    captureException: (exception: unknown) => string;
+  };
+  const original = scope.captureException;
+  scope.captureException = (exception: unknown) => {
+    if (exception instanceof Error) alerts.push(exception);
+    return 'e2e-recorded';
+  };
   const later = Date.now() + FLEET_ATTRIBUTION_GRACE_MS + 60_000;
   try {
     const result = await fleetAttributionService.reconcile({
@@ -248,9 +254,8 @@ export async function reconcileOnce(
       inventory: null,
       accountInventories,
     });
-    await Sentry.flush(5_000);
     return { result, alerts };
   } finally {
-    await Sentry.close(5_000);
+    scope.captureException = original;
   }
 }
