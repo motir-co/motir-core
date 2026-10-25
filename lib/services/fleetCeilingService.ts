@@ -170,18 +170,17 @@ export interface FleetSlotRequest {
 }
 
 /**
- * One system-context transaction holding `FLEET_ADMISSION_SCOPE` — the lock every
- * read-derived admission decision is made under (`reserve`, and the hosted move
- * after a refusal, MOTIR-9423). Throws when the lock cannot be taken.
+ * Take `FLEET_ADMISSION_SCOPE` inside the caller's system-context transaction —
+ * the lock every read-derived admission decision is made under (`reserve`, and
+ * the hosted move after a refusal, MOTIR-9423). Throws when it cannot be taken.
+ * Each caller opens its own `withSystemContext` so the RLS arm scan reads the
+ * whole block.
  */
-function withAdmissionLock<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
-  return withSystemContext(async (tx) => {
-    await locks.ensureScope(FLEET_ADMISSION_SCOPE, tx);
-    if (!(await locks.lockScope(FLEET_ADMISSION_SCOPE, tx))) {
-      throw new Error('the fleet admission lock could not be taken');
-    }
-    return fn(tx);
-  });
+async function takeAdmissionLock(tx: Prisma.TransactionClient): Promise<void> {
+  await locks.ensureScope(FLEET_ADMISSION_SCOPE, tx);
+  if (!(await locks.lockScope(FLEET_ADMISSION_SCOPE, tx))) {
+    throw new Error('the fleet admission lock could not be taken');
+  }
 }
 
 function detailOf(err: unknown): string {
@@ -480,7 +479,9 @@ export const fleetCeilingService = {
     const ttlSeconds = request.ttlSeconds ?? fleetSlotTtlSeconds();
     const organizationId = request.organizationId;
     try {
-      return await withAdmissionLock(async (tx) => {
+      return await withSystemContext(async (tx) => {
+        await takeAdmissionLock(tx);
+
         // An already-held slot is NOT a new container, so it must not be judged
         // against the pool — a redelivery of a job that is already running would
         // otherwise be refused capacity it is already occupying, and the caller
@@ -587,7 +588,8 @@ export const fleetCeilingService = {
     tried: ReadonlySet<string>,
     now: Date,
   ): Promise<string | null> {
-    return withAdmissionLock(async (tx) => {
+    return withSystemContext(async (tx) => {
+      await takeAdmissionLock(tx);
       let moved = true;
       const next = await fleetShardAdmissionService.moveAfterRefusalInTx(
         { fleetKind: 'hosted_agent', organizationId: slot.organizationId },
