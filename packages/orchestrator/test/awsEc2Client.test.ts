@@ -35,6 +35,17 @@ const TAGS = [{ key: 'motir-shard', value: 'ci-1' }];
 const SDK_TAGS = [{ Key: 'motir-shard', Value: 'ci-1' }];
 
 describe('createEc2Api', () => {
+  it('hands a credential provider to the SDK as is, for an assumed-role session (MOTIR-9460)', () => {
+    const provided = stub();
+    const credentialProvider = async () => ({
+      accessKeyId: 'ASIA',
+      secretAccessKey: 's',
+      sessionToken: 't',
+    });
+    createEc2Api({ credentialProvider, region: 'us-east-1' }, provided.factory);
+    expect(provided.built[0]).toEqual({ region: 'us-east-1', credentials: credentialProvider });
+  });
+
   it('passes a session token through when one is given, and omits it otherwise', () => {
     const withToken = stub();
     createEc2Api({ ...CONFIG, sessionToken: 'session' }, withToken.factory);

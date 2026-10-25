@@ -449,6 +449,12 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ accounts: number; alerted: number; failures: number; kinds: number; moves: { [key: string]: { capacity_refused?: number | undefined; provider_unavailable?: number | undefined } }; orgs: number; readings: Array<{ capacity: number; fraction: number; limit: string; subject: { fleetKind: string } | { githubOrg: string } | { shardId: string }; used: number }> }',
   },
+  // Story MOTIR-9362 · MOTIR-9462 — the pool-growth pass.
+  'fleet-pool-growth': {
+    file: 'lib/jobs/definitions/fleetPoolGrowth.ts',
+    shape:
+      '{ failures: number; kinds: { agent_instance?: "backing_off" | "below_threshold" | "failed" | "grown" | "in_flight" | "not_aws" | "on_fly" | "refused" | undefined; ci_runner?: "backing_off" | "below_threshold" | "failed" | "grown" | "in_flight" | "not_aws" | "on_fly" | "refused" | undefined; code_graph_index?: "backing_off" | "below_threshold" | "failed" | "grown" | "in_flight" | "not_aws" | "on_fly" | "refused" | undefined; hosted_agent?: "backing_off" | "below_threshold" | "failed" | "grown" | "in_flight" | "not_aws" | "on_fly" | "refused" | undefined }; ran: boolean; requestAlerts: number }',
+  },
   'fleet-debit-monitor': {
     file: 'lib/jobs/definitions/fleetDebitMonitor.ts',
     shape: '{ alerted: number; failures: number; mismatched: number; orgs: number }',

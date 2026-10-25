@@ -117,7 +117,7 @@ async function shardRow(name = NAME) {
 /** The pool read admission uses, for one kind. */
 function poolOf(kind: string): Promise<string[]> {
   return withSystemContext(async (tx) =>
-    (await fleetShardRepository.listActiveForKindInTx(kind, tx)).map((s) => s.name),
+    (await fleetShardRepository.listActiveForKindInTx(kind, ['primary'], tx)).map((s) => s.name),
   );
 }
 

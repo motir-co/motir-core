@@ -3356,10 +3356,7 @@ model WorkItem {
   // issues may point at one work item (MOTIR-4932's manual link), one issue at
   // most one. SetNull on the child: a deleted bug leaves the issue row with a
   // null pointer, which is how the reconciler tells "deleted" from "never filed".
-  monitorIssues   MonitorIssue[]
-  /// RETIRED with `SharpenSession.workItemId` (MOTIR-9314) — `@ignore`d until its
-  /// column is dropped.
-  sharpenSessions SharpenSession[] @ignore
+  monitorIssues MonitorIssue[]
 
   @@unique([projectId, key])
   @@unique([projectId, identifier])
@@ -9589,7 +9586,7 @@ model PlanChangeTurn {
   @@map("plan_change_turn")
 }
 
-/// Is a Sharpen session about a PLAN or ONE committed WORK ITEM (Task MOTIR-1101 · MOTIR-8182).
+/// Is a Sharpen session about a PLAN or a plan-change CONVERSATION (Task MOTIR-1101 · MOTIR-8182 · MOTIR-9314).
 enum SharpenScopeKind {
   plan
   /// A plan-change CONVERSATION with no plan yet (Story MOTIR-9221 · MOTIR-9314).
@@ -9637,14 +9634,14 @@ enum SharpenAction {
 }
 
 /// A SHARPEN session (Task MOTIR-1101 · Subtask MOTIR-8182) — one person's
-/// grilling conversation about WHAT a plan or one committed work item is, one
+/// grilling conversation about WHAT a plan or a plan-change conversation is, one
 /// question at a time. A dedicated table rather than a `plan_change_session`
 /// origin: that model is scoped by work-item keys, has no plan scope, and its
 /// `origin` / turn `intent` enums are read by the planning, guide and
 /// conversation doors.
 ///
-/// Exactly ONE of `planId` / `workItemId` is set, and it matches `scopeKind`
-/// (a CHECK in the migration). ONE OPEN session per person per target is held
+/// Exactly ONE of `planId` / `planChangeSessionId` is set, and it matches
+/// `scopeKind` (a CHECK in the migration). ONE OPEN session per person per target is held
 /// by two partial unique indexes (`… WHERE status = 'open'`), so two concurrent
 /// "Sharpen" clicks can never open two. The JSON columns hold motir-ai's
 /// `SharpenTurnResult` pieces and are OPAQUE here: the door's service and DTO
@@ -9660,12 +9657,6 @@ model SharpenSession {
   /// The plan-change CONVERSATION a `conversation`-scope session grills (Story
   /// MOTIR-9221 · MOTIR-9314) — its settled answers are stored here, with it.
   planChangeSessionId String?              @map("plan_change_session_id")
-  /// RETIRED (MOTIR-9314): the work-item target is gone, so nothing writes or
-  /// reads this. SCHEMA-ONLY phase of the column's removal
-  /// (docs/decisions/delivery-reader-migration.md §6a/§6b): `@ignore`d so the
-  /// client stops selecting it while the column stays; the CONTRACT phase drops
-  /// the column, this field, its relation and its index together, after release.
-  workItemId          String?              @map("work_item_id") @ignore
   status              SharpenSessionStatus @default(open)
   endReason           SharpenEndReason?    @map("end_reason")
   /// The question waiting on the person, or null.
@@ -9685,14 +9676,12 @@ model SharpenSession {
   createdBy         User               @relation("SharpenSessionCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
   plan              Plan?              @relation(fields: [planId], references: [id], onDelete: Cascade)
   planChangeSession PlanChangeSession? @relation(fields: [planChangeSessionId], references: [id], onDelete: Cascade)
-  workItem          WorkItem?          @relation(fields: [workItemId], references: [id], onDelete: Cascade) @ignore
   turns             SharpenTurn[]
 
   @@index([workspaceId])
   @@index([projectId])
   @@index([planId])
   @@index([planChangeSessionId])
-  @@index([workItemId])
   @@map("sharpen_session")
 }
 
@@ -11519,9 +11508,16 @@ enum FleetShardProvider {
 }
 
 /// What an account is to its fleet kind. `primary` = an account of that kind's
-/// SHARED pool. The pool-growth story adds `spare`.
+/// SHARED pool; `spare` = its Motir spare (below).
 enum FleetShardRole {
   primary
+  /// The kind's Motir spare (MOTIR-9456): an `active` account that runs work, but
+  /// only Motir's own exempt orgs' — shared admission never places a job on it.
+  /// The growth job promotes it to `primary` (MOTIR-9461). At most one READY
+  /// (`active`) spare per kind: the partial unique index
+  /// `fleet_shard_one_ready_spare_per_kind` in the migration, which the DSL
+  /// cannot express.
+  spare
 
   @@map("fleet_shard_role")
 }
@@ -11639,11 +11635,140 @@ model FleetShard {
   /// The hosted runs whose containers booted in this account (MOTIR-9423).
   dispatchRuns       DispatchRun[]
 
+  /// The quota raises filed for this account (MOTIR-9457).
+  quotaRequests     FleetQuotaRequest[]
+  /// The growths this account triggered, the spare it promoted, the account it
+  /// created (MOTIR-9457).
+  growthsTriggered  FleetGrowthEvent[]  @relation("FleetGrowthTrigger")
+  growthsAsSpare    FleetGrowthEvent[]  @relation("FleetGrowthSpare")
+  growthsAsNewShard FleetGrowthEvent[]  @relation("FleetGrowthNewShard")
+
   /// One Fly location is one account.
   @@unique([provider, flyOrg, flyApp])
   /// Admission and the headroom reading list one kind's accounts by role and state.
   @@index([fleetKind, role, state])
   @@map("fleet_shard")
+}
+
+/// Where a filed quota raise stands — the seven values AWS Service Quotas'
+/// `RequestStatus` returns (MOTIR-9457). The last five are terminal: a read that
+/// answers one closes the request (`FLEET_QUOTA_REQUEST_TERMINAL_STATUSES`).
+enum FleetQuotaRequestStatus {
+  pending
+  case_opened
+  approved
+  denied
+  not_approved
+  case_closed
+  invalid_request
+
+  @@map("fleet_quota_request_status")
+}
+
+/// A quota raise filed for one fleet account (Story MOTIR-9362 · MOTIR-9457) —
+/// the shape of the manual record of MOTIR-9275: desired, then granted. At
+/// most ONE open request per account and quota code (the partial unique index
+/// `fleet_quota_request_one_open` in the migration): AWS itself refuses a second
+/// pending request for the same quota. Holds no credential.
+model FleetQuotaRequest {
+  id           String                  @id @default(cuid())
+  shardId      String                  @map("shard_id")
+  /// The account's kind, copied at creation so a kind's requests list without a
+  /// join (held to the four by a CHECK).
+  fleetKind    String                  @map("fleet_kind")
+  /// The Service Quotas code — `L-1216C47A` (Running On-Demand Standard vCPUs).
+  quotaCode    String                  @map("quota_code")
+  desiredValue Int                     @map("desired_value")
+  /// The id AWS answered `RequestServiceQuotaIncrease` with.
+  awsRequestId String                  @map("aws_request_id")
+  status       FleetQuotaRequestStatus @default(pending)
+  /// What AWS granted, once it says (null until then).
+  grantedValue Int?                    @map("granted_value")
+
+  createdAt  DateTime  @default(now()) @map("created_at")
+  /// When Service Quotas was last read for this request.
+  lastReadAt DateTime? @map("last_read_at")
+  /// Set by the read that answered a terminal status; null while open.
+  closedAt   DateTime? @map("closed_at")
+  /// When the growth pass last alerted about this request (MOTIR-9462): once when
+  /// it has been open 24 hours, and once when it closes refused. Stored so a
+  /// pass every minute alerts once, not every pass.
+  alertedAt  DateTime? @map("alerted_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  shard        FleetShard         @relation(fields: [shardId], references: [id], onDelete: Cascade)
+  /// The growths waiting on this request.
+  growthEvents FleetGrowthEvent[]
+
+  @@index([fleetKind, status])
+  @@index([fleetKind, createdAt])
+  @@index([shardId, createdAt])
+  @@map("fleet_quota_request")
+}
+
+/// What one pool-growth decision did (MOTIR-9457).
+enum FleetGrowthOutcome {
+  /// The kind's ready spare joined the shared pool (and a replacement spare was
+  /// created).
+  spare_promoted
+  /// No spare was ready: a new account was created.
+  account_created
+  /// A spare exists but its quota raise is not granted yet.
+  waiting_for_quota
+  /// AWS refused (e.g. `CreateAccount`): nothing changed; `reason` says why.
+  refused
+
+  @@map("fleet_growth_outcome")
+}
+
+/// One pool growth of one fleet kind (Story MOTIR-9362 · MOTIR-9457): which
+/// account crossed 70%, its use and live granted quota when the pass decided,
+/// and what the pass did. A growth is UNFINISHED while it is not `refused` and
+/// its `quotaRequest` is still open — the one-in-flight rule reads that, so no
+/// flag column can drift from it. Holds no credential: `reason` is AWS's refusal
+/// text only.
+model FleetGrowthEvent {
+  id                String             @id @default(cuid())
+  /// Held to the four kinds by a CHECK.
+  fleetKind         String             @map("fleet_kind")
+  triggeringShardId String?            @map("triggering_shard_id")
+  /// The triggering account's vCPU in use, and its live granted quota.
+  vcpuInUse         Int                @map("vcpu_in_use")
+  grantedQuota      Int                @map("granted_quota")
+  outcome           FleetGrowthOutcome
+  reason            String?
+  /// The spare it promoted, the account it created, and the quota raise it waits
+  /// on (each when there is one).
+  spareShardId      String?            @map("spare_shard_id")
+  newShardId        String?            @map("new_shard_id")
+  quotaRequestId    String?            @map("quota_request_id")
+  createdAt         DateTime           @default(now()) @map("created_at")
+
+  triggeringShard FleetShard?        @relation("FleetGrowthTrigger", fields: [triggeringShardId], references: [id], onDelete: SetNull)
+  spareShard      FleetShard?        @relation("FleetGrowthSpare", fields: [spareShardId], references: [id], onDelete: SetNull)
+  newShard        FleetShard?        @relation("FleetGrowthNewShard", fields: [newShardId], references: [id], onDelete: SetNull)
+  quotaRequest    FleetQuotaRequest? @relation(fields: [quotaRequestId], references: [id], onDelete: SetNull)
+
+  @@index([fleetKind, createdAt])
+  @@index([triggeringShardId])
+  @@index([spareShardId])
+  @@index([newShardId])
+  @@index([quotaRequestId])
+  @@map("fleet_growth_event")
+}
+
+/// The growth pass's single-flight lease (Story MOTIR-9362 · MOTIR-9462): one
+/// row per pass name. A run takes it only when `heldUntil` has passed, in one
+/// statement, so two overlapping runs cannot both execute; a crashed run's lease
+/// simply expires. Platform-only, as `fleet_shard`.
+model FleetGrowthPassLease {
+  id        String   @id
+  heldUntil DateTime @map("held_until")
+  /// The run holding it — released only by that run.
+  holder    String
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("fleet_growth_pass_lease")
 }
 
 /// The repo-role vocabulary (`docs/decisions/project-repository-set.md` §1.1).

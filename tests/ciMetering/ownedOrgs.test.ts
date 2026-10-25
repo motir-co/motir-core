@@ -105,6 +105,19 @@ describe('motirOwnedOrgLogins', () => {
     expect((await motirOwnedOrgLogins()).sort()).toEqual([FALLBACK, 'motir-shard-1']);
   });
 
+  it('includes a spare account’s org — the spare runs Motir’s own jobs there (MOTIR-9456)', async () => {
+    await fleetShardService.createShard(
+      account({
+        name: 'ci-runner-spare',
+        flyApp: 'motir-ci-spare',
+        githubOrg: 'motir-spare-1',
+        role: 'spare',
+      }),
+    );
+
+    expect((await motirOwnedOrgLogins()).sort()).toEqual([FALLBACK, 'motir-spare-1']);
+  });
+
   it("reads in SYSTEM context — a tenant's context, which cannot see the rows, still gets every org", async () => {
     await fleetShardService.createShard(account());
     const user = await usersService.createUser({

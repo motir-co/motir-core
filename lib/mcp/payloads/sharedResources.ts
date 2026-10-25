@@ -136,6 +136,19 @@ export const MCP_UNREACHABLE_RESOURCES: Partial<Record<SharedResourceName, strin
     'cursor over two sources. Its entries are the activity DTOs the web surface renders; v1’s ' +
     '`ActivityEntry` is the narrowed wire form. Aligning them is a widening of a paged read that ' +
     'no client has asked for — a card against 11.7 if one ever does, not a divergence to keep quiet.',
+  Page:
+    'Story MOTIR-9486 publishes the v1 `Page` resource for `/api/v1` integrations. The MCP ' +
+    'page tools (`get_page`, `create_page`, `update_page`) return a SUPERSET of it — they add ' +
+    '`projectId` and the full version block an agent needs to cite a version — and each is ' +
+    'listed in `EXEMPT_TOOLS` with that reason, so no tool payload carries this exact shape to ' +
+    'probe. Both surfaces read the same `pagesService.getPageMarkdown` DTO, which is where the ' +
+    'body and revision are kept in agreement.',
+  PagePlacement:
+    'Story MOTIR-9486 (MOTIR-9495) publishes the result of `PATCH /api/v1/pages/{pageId}/placement` ' +
+    'as `PagePlacement`. No MCP tool moves a page yet: `move_page` belongs to the sibling story ' +
+    '"An agent moves, archives and links pages over the MCP", which reuses the same ' +
+    '`pagesService.movePage` door. When that tool lands it probes this resource and this entry ' +
+    'closes; it is not a permanent divergence.',
   ScopeClaim:
     'MOTIR-3049’s SCOPE claim ships on `/api/v1` ONLY, and the absence is argued rather than ' +
     'incidental: its caller is `motir run <story-id>` / `motir run sprint` in `packages/cli`, ' +

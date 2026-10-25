@@ -39,6 +39,7 @@ import { ciMinutesReconciliationService } from '@/lib/services/ciMinutesReconcil
 import { fleetAttributionService } from '@/lib/services/fleetAttributionService';
 import { fleetDebitMonitorService } from '@/lib/services/fleetDebitMonitorService';
 import { fleetShardHeadroomService } from '@/lib/services/fleetShardHeadroomService';
+import { fleetPoolGrowthPassService } from '@/lib/services/fleetPoolGrowthPassService';
 import { ciLiveChargeService } from '@/lib/services/ciLiveChargeService';
 import { ciActionsGateService } from '@/lib/services/ciActionsGateService';
 import { ciRunnerBootService } from '@/lib/services/ciRunnerBootService';
@@ -125,6 +126,8 @@ export const jobServices = {
   // The fleet debit monitor (Story MOTIR-6905 · MOTIR-7318).
   fleetDebitMonitor: fleetDebitMonitorService,
   fleetShardHeadroom: fleetShardHeadroomService,
+  // The pool growth pass (Story MOTIR-9362 · MOTIR-9462).
+  fleetPoolGrowthPass: fleetPoolGrowthPassService,
   ciActionsGate: ciActionsGateService,
   ciRunnerBoot: ciRunnerBootService,
   // The GitHub-side reconcile of the fleet's queue (MOTIR-8976).

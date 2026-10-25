@@ -65,3 +65,58 @@ export class SustainedDeferralError extends Error {
     this.name = 'SustainedDeferralError';
   }
 }
+
+// ── The growth pass's alerts (Story MOTIR-9362 · MOTIR-9462) ─────────────────
+
+/** A pool growth was refused — AWS would not create the account. The pool keeps
+ *  the capacity it has; the pass backs off before trying again. */
+export class PoolGrowthRefusedError extends Error {
+  constructor(
+    readonly fleetKind: string,
+    readonly triggeringShardName: string,
+    /** AWS's reason, as text. */
+    readonly reason: string,
+    readonly promotedSpareName: string | null,
+  ) {
+    super(
+      `Growing the ${fleetKind} pool was refused (triggered by ${triggeringShardName}): ${reason}.` +
+        `${promotedSpareName ? ` The spare ${promotedSpareName} was promoted first and stays in the pool.` : ''}` +
+        ' The pass backs off before the next attempt.',
+    );
+    this.name = 'PoolGrowthRefusedError';
+  }
+}
+
+/** A quota raise still open after a day — AWS is slow, or wants a case answered. */
+export class QuotaRequestSlowError extends Error {
+  constructor(
+    readonly requestId: string,
+    readonly shardName: string,
+    readonly fleetKind: string,
+    readonly awsRequestId: string,
+    readonly ageHours: number,
+  ) {
+    super(
+      `The vCPU quota raise ${awsRequestId} for fleet account ${shardName} (${fleetKind}) ` +
+        `has been open ${ageHours} hours.`,
+    );
+    this.name = 'QuotaRequestSlowError';
+  }
+}
+
+/** A quota raise AWS turned down. The account keeps its granted quota. */
+export class QuotaRequestDeniedError extends Error {
+  constructor(
+    readonly requestId: string,
+    readonly shardName: string,
+    readonly fleetKind: string,
+    readonly awsRequestId: string,
+    readonly status: string,
+  ) {
+    super(
+      `The vCPU quota raise ${awsRequestId} for fleet account ${shardName} (${fleetKind}) ` +
+        `closed ${status}; the account keeps its granted quota.`,
+    );
+    this.name = 'QuotaRequestDeniedError';
+  }
+}

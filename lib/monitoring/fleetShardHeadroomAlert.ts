@@ -1,6 +1,9 @@
 import * as Sentry from '@sentry/nextjs';
 import type {
   GithubOrgHeadroomExceededError,
+  PoolGrowthRefusedError,
+  QuotaRequestDeniedError,
+  QuotaRequestSlowError,
   ShardHeadroomExceededError,
   SustainedDeferralError,
 } from '@/lib/ciFleet/headroomErrors';
@@ -8,7 +11,12 @@ import type {
 export type FleetHeadroomAlert =
   | ShardHeadroomExceededError
   | GithubOrgHeadroomExceededError
-  | SustainedDeferralError;
+  | SustainedDeferralError
+  // The growth pass's (MOTIR-9462): one issue per kind for a refusal, one per
+  // quota request for a slow or refused raise.
+  | PoolGrowthRefusedError
+  | QuotaRequestSlowError
+  | QuotaRequestDeniedError;
 
 /**
  * Tell the platform admin a fleet account, GitHub org or fleet kind is near its
@@ -33,7 +41,7 @@ export function alertFleetShardHeadroom(error: FleetHeadroomAlert): void {
 }
 
 function describe(error: FleetHeadroomAlert): {
-  subjectTag: 'fleet_shard' | 'github_org' | 'fleet_kind';
+  subjectTag: 'fleet_shard' | 'github_org' | 'fleet_kind' | 'fleet_quota_request';
   subject: string;
   limit: string;
 } {
@@ -45,6 +53,22 @@ function describe(error: FleetHeadroomAlert): {
     case 'GithubOrgHeadroomExceededError': {
       const e = error as GithubOrgHeadroomExceededError;
       return { subjectTag: 'github_org', subject: e.org, limit: e.limit };
+    }
+    case 'PoolGrowthRefusedError': {
+      const e = error as PoolGrowthRefusedError;
+      return { subjectTag: 'fleet_kind', subject: e.fleetKind, limit: 'growth_refused' };
+    }
+    case 'QuotaRequestSlowError': {
+      const e = error as QuotaRequestSlowError;
+      return { subjectTag: 'fleet_quota_request', subject: e.requestId, limit: 'quota_raise_slow' };
+    }
+    case 'QuotaRequestDeniedError': {
+      const e = error as QuotaRequestDeniedError;
+      return {
+        subjectTag: 'fleet_quota_request',
+        subject: e.requestId,
+        limit: 'quota_raise_refused',
+      };
     }
     default: {
       const e = error as SustainedDeferralError;

@@ -21,8 +21,8 @@ import { pageProjectKeyField, resolvePageProject } from './pageRef';
 // refused there as `PAGE_PARENT_NOT_ALLOWED`, the one place that rule lives —
 // not be swallowed as a schema error that never names the rule.
 //
-// EXEMPT from payload derivation (`payloads/exemptions.ts`): no `/api/v1`
-// operation returns a page.
+// EXEMPT from payload derivation (`payloads/exemptions.ts`): the `/api/v1`
+// `Page` resource is a subset of this payload.
 
 export const CREATE_PAGE_TOOL_NAME = 'create_page';
 

@@ -1,8 +1,12 @@
 import {
+  CreateRoleCommand,
+  GetRoleCommand,
+  GetRolePolicyCommand,
   GetUserCommand,
   CreateUserCommand,
   GetUserPolicyCommand,
   IAMClient,
+  PutRolePolicyCommand,
   PutUserPolicyCommand,
 } from '@aws-sdk/client-iam';
 import {
@@ -16,7 +20,10 @@ import {
 } from '@aws-sdk/client-organizations';
 import {
   GetAWSDefaultServiceQuotaCommand,
+  GetRequestedServiceQuotaChangeCommand,
   GetServiceQuotaCommand,
+  ListRequestedServiceQuotaChangeHistoryByQuotaCommand,
+  RequestServiceQuotaIncreaseCommand,
   ServiceQuotasClient,
 } from '@aws-sdk/client-service-quotas';
 import { AssumeRoleCommand, STSClient } from '@aws-sdk/client-sts';
@@ -45,7 +52,9 @@ import { AWS_SHARD_TAG_KEY } from './network';
 //     API_ListCreateAccountStatus.html, API_CreateAccount.html, API_DescribeCreateAccountStatus.html
 //   STS — https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html
 //   Service Quotas — https://docs.aws.amazon.com/servicequotas/2019-06-24/apireference/API_GetServiceQuota.html,
-//     API_GetAWSDefaultServiceQuota.html
+//     API_GetAWSDefaultServiceQuota.html, API_RequestServiceQuotaIncrease.html,
+//     API_GetRequestedServiceQuotaChange.html, API_ListRequestedServiceQuotaChangeHistoryByQuota.html
+//     (MOTIR-9459: the fleet's own quota raises)
 //   IAM — https://docs.aws.amazon.com/IAM/latest/APIReference/API_GetUser.html, API_CreateUser.html,
 //     API_GetUserPolicy.html, API_PutUserPolicy.html
 
@@ -59,6 +68,10 @@ export const AWS_EC2_VCPU_QUOTA_CODE = 'L-1216C47A';
 
 /** The IAM user every account's runners boot with, and its inline policy. */
 export const AWS_RUNNER_IAM_USER = 'motir-fleet-runner';
+/** The runner's IAM ROLE in a member account an unattended add-shard created
+ *  (MOTIR-9460): the management role assumes it, so no person mints a key.
+ *  Roles and users are separate IAM namespaces; the name matches the user's. */
+export const AWS_RUNNER_IAM_ROLE = 'motir-fleet-runner';
 export const AWS_RUNNER_IAM_POLICY = 'motir-fleet-runner-ec2';
 
 /** Organizations, STS and IAM are global; their endpoints answer in us-east-1. */
@@ -67,6 +80,10 @@ const GLOBAL_REGION = 'us-east-1';
  *  add-shard takes well under it after the account exists. */
 const SESSION_SECONDS = 900;
 const SESSION_NAME = 'motir-add-shard';
+/** A runner session (MOTIR-9460): an hour, the role's maximum; the SDK renews it
+ *  through the credential provider before it lapses. */
+const RUNNER_SESSION_SECONDS = 3600;
+const RUNNER_SESSION_NAME = 'motir-fleet-runner';
 /** CreateAccount is asynchronous; AWS documents it as taking minutes. */
 export const AWS_CREATE_ACCOUNT_TIMEOUT_MS = 10 * 60_000;
 const CREATE_ACCOUNT_POLL_MS = 5_000;
@@ -159,7 +176,16 @@ export interface AwsManagementOptions {
   now?: () => number;
 }
 
-/** The management calls add-shard makes. */
+/** One Service Quotas increase request, as AWS answers it (MOTIR-9459).
+ *  `status` is AWS's `RequestStatus` verbatim (`PENDING`, `CASE_OPENED`, …); the
+ *  caller maps it, so a value AWS adds later is seen rather than defaulted. */
+export interface AwsQuotaIncreaseRequest {
+  requestId: string;
+  status: string;
+  desiredValue: number | null;
+}
+
+/** The management calls add-shard and the pool's growth make. */
 export interface AwsManagementApi {
   findOrganizationAccount(name: string): Promise<AwsOrganizationAccountLookup>;
   /** File CreateAccount and wait for it. */
@@ -171,6 +197,34 @@ export interface AwsManagementApi {
   waitForCreateAccount(requestId: string, name: string): Promise<AwsOrganizationAccount>;
   assumeMemberRole(accountId: string): Promise<AwsSessionCredentials>;
   readVcpuQuota(credentials: AwsSessionCredentials, regionId: string): Promise<number>;
+  /** File a raise of `quotaCode` (default `L-1216C47A`) to `desired` — MOTIR-9459. */
+  requestVcpuQuotaIncrease(
+    credentials: AwsSessionCredentials,
+    regionId: string,
+    desired: number,
+    quotaCode?: string,
+  ): Promise<AwsQuotaIncreaseRequest>;
+  /** Read one filed raise. */
+  getQuotaRequest(
+    credentials: AwsSessionCredentials,
+    regionId: string,
+    requestId: string,
+  ): Promise<AwsQuotaIncreaseRequest>;
+  /** The account's still-open raise of `quotaCode`, if AWS has one — what a
+   *  re-filing finds when the first filing was accepted but never stored. */
+  findOpenQuotaRequest(
+    credentials: AwsSessionCredentials,
+    regionId: string,
+    quotaCode?: string,
+  ): Promise<AwsQuotaIncreaseRequest | null>;
+  /** The runner's IAM ROLE and inline policy, trusting the management role
+   *  (MOTIR-9460); answers what it created. */
+  ensureRunnerRole(
+    credentials: AwsSessionCredentials,
+    policyDocument: AwsPolicyDocument,
+  ): Promise<{ created: string[] }>;
+  /** A runner session in the member account, from the management role. */
+  assumeRunnerRole(accountId: string): Promise<AwsSessionCredentials>;
   /** The runner's IAM user and inline policy; answers what it created. */
   ensureRunnerIamUser(
     credentials: AwsSessionCredentials,
@@ -231,6 +285,23 @@ function accountOf(account: Account): AwsOrganizationAccount {
   };
 }
 
+/** The two `RequestStatus` values a request is still open in. */
+const OPEN_QUOTA_REQUEST_STATUSES = ['PENDING', 'CASE_OPENED'] as const;
+
+interface RequestedQuotaShape {
+  Id?: string;
+  Status?: string;
+  DesiredValue?: number;
+}
+
+function quotaRequestOf(quota: RequestedQuotaShape): AwsQuotaIncreaseRequest {
+  return {
+    requestId: required(quota.Id, 'RequestedQuota.Id'),
+    status: required(quota.Status, 'RequestedQuota.Status'),
+    desiredValue: typeof quota.DesiredValue === 'number' ? quota.DesiredValue : null,
+  };
+}
+
 export function createAwsManagementApi(
   management: AwsManagementCredentials,
   options: AwsManagementOptions = {},
@@ -279,6 +350,31 @@ export function createAwsManagementApi(
     );
     managementSession = sessionOf(response);
     return managementSession;
+  }
+
+  /** Assume `roleName` in a member account from the management session,
+   *  retrying `AccessDenied` while a just-created role propagates. */
+  async function assumeInMember(
+    accountId: string,
+    roleName: string,
+    sessionName: string,
+  ): Promise<AwsSessionCredentials> {
+    const sts = client('sts', await managementRole());
+    const command = new AssumeRoleCommand({
+      RoleArn: `arn:aws:iam::${accountId}:role/${roleName}`,
+      RoleSessionName: sessionName,
+      DurationSeconds: roleName === AWS_RUNNER_IAM_ROLE ? RUNNER_SESSION_SECONDS : SESSION_SECONDS,
+    });
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        return sessionOf(await call<Parameters<typeof sessionOf>[0]>('sts', sts, command));
+      } catch (err) {
+        // A just-created account's role propagates within seconds.
+        if (!(err instanceof AwsManagementApiError) || err.awsCode !== 'AccessDenied') throw err;
+        if (attempt >= MEMBER_ROLE_ATTEMPTS) throw err;
+        await sleep(MEMBER_ROLE_RETRY_MS);
+      }
+    }
   }
 
   async function organizations(): Promise<AwsSdkClient> {
@@ -371,22 +467,60 @@ export function createAwsManagementApi(
     waitForCreateAccount,
 
     async assumeMemberRole(accountId) {
-      const sts = client('sts', await managementRole());
-      const command = new AssumeRoleCommand({
-        RoleArn: `arn:aws:iam::${accountId}:role/${AWS_MEMBER_ROLE_NAME}`,
-        RoleSessionName: SESSION_NAME,
-        DurationSeconds: SESSION_SECONDS,
-      });
-      for (let attempt = 1; ; attempt += 1) {
-        try {
-          return sessionOf(await call<Parameters<typeof sessionOf>[0]>('sts', sts, command));
-        } catch (err) {
-          // A just-created account's role propagates within seconds.
-          if (!(err instanceof AwsManagementApiError) || err.awsCode !== 'AccessDenied') throw err;
-          if (attempt >= MEMBER_ROLE_ATTEMPTS) throw err;
-          await sleep(MEMBER_ROLE_RETRY_MS);
-        }
+      return assumeInMember(accountId, AWS_MEMBER_ROLE_NAME, SESSION_NAME);
+    },
+
+    async assumeRunnerRole(accountId) {
+      return assumeInMember(accountId, AWS_RUNNER_IAM_ROLE, RUNNER_SESSION_NAME);
+    },
+
+    async ensureRunnerRole(credentials, policyDocument) {
+      const iam = client('iam', credentials);
+      const created: string[] = [];
+      try {
+        await call('iam', iam, new GetRoleCommand({ RoleName: AWS_RUNNER_IAM_ROLE }));
+      } catch (err) {
+        if (!iamAbsent(err)) throw err;
+        await call(
+          'iam',
+          iam,
+          new CreateRoleCommand({
+            RoleName: AWS_RUNNER_IAM_ROLE,
+            AssumeRolePolicyDocument: JSON.stringify(awsRunnerTrustPolicy(management.roleArn)),
+            MaxSessionDuration: RUNNER_SESSION_SECONDS,
+            Tags: [{ Key: 'motir-role', Value: 'fleet-runner' }],
+          }),
+        );
+        created.push(`iam-role:${AWS_RUNNER_IAM_ROLE}`);
       }
+      const wanted = JSON.stringify(policyDocument);
+      let current: string | null = null;
+      try {
+        const answer = await call<{ PolicyDocument?: string }>(
+          'iam',
+          iam,
+          new GetRolePolicyCommand({
+            RoleName: AWS_RUNNER_IAM_ROLE,
+            PolicyName: AWS_RUNNER_IAM_POLICY,
+          }),
+        );
+        current = answer.PolicyDocument ? decodeURIComponent(answer.PolicyDocument) : null;
+      } catch (err) {
+        if (!iamAbsent(err)) throw err;
+      }
+      if (current === null || !samePolicy(current, wanted)) {
+        await call(
+          'iam',
+          iam,
+          new PutRolePolicyCommand({
+            RoleName: AWS_RUNNER_IAM_ROLE,
+            PolicyName: AWS_RUNNER_IAM_POLICY,
+            PolicyDocument: wanted,
+          }),
+        );
+        created.push(`iam-role-policy:${AWS_RUNNER_IAM_POLICY}`);
+      }
+      return { created };
     },
 
     async readVcpuQuota(credentials, regionId) {
@@ -416,12 +550,52 @@ export function createAwsManagementApi(
       return Math.floor(required(value, 'Quota.Value'));
     },
 
+    async requestVcpuQuotaIncrease(credentials, regionId, desired, quotaCode) {
+      const quotas = client('service-quotas', credentials, regionId);
+      const answer = await call<{ RequestedQuota?: RequestedQuotaShape }>(
+        'service-quotas',
+        quotas,
+        new RequestServiceQuotaIncreaseCommand({
+          ServiceCode: 'ec2',
+          QuotaCode: quotaCode ?? AWS_EC2_VCPU_QUOTA_CODE,
+          DesiredValue: desired,
+        }),
+      );
+      return quotaRequestOf(required(answer.RequestedQuota, 'RequestedQuota'));
+    },
+
+    async getQuotaRequest(credentials, regionId, requestId) {
+      const quotas = client('service-quotas', credentials, regionId);
+      const answer = await call<{ RequestedQuota?: RequestedQuotaShape }>(
+        'service-quotas',
+        quotas,
+        new GetRequestedServiceQuotaChangeCommand({ RequestId: requestId }),
+      );
+      return quotaRequestOf(required(answer.RequestedQuota, 'RequestedQuota'));
+    },
+
+    async findOpenQuotaRequest(credentials, regionId, quotaCode) {
+      const quotas = client('service-quotas', credentials, regionId);
+      for (const status of OPEN_QUOTA_REQUEST_STATUSES) {
+        const answer = await call<{ RequestedQuotas?: RequestedQuotaShape[] }>(
+          'service-quotas',
+          quotas,
+          new ListRequestedServiceQuotaChangeHistoryByQuotaCommand({
+            ServiceCode: 'ec2',
+            QuotaCode: quotaCode ?? AWS_EC2_VCPU_QUOTA_CODE,
+            Status: status,
+          }),
+        );
+        const open = answer.RequestedQuotas?.[0];
+        if (open) return quotaRequestOf(open);
+      }
+      return null;
+    },
+
     async ensureRunnerIamUser(credentials, policyDocument) {
       const iam = client('iam', credentials);
       const created: string[] = [];
-      const absent = (err: unknown) =>
-        err instanceof AwsManagementApiError &&
-        (err.awsCode === 'NoSuchEntity' || err.awsCode === 'NoSuchEntityException');
+      const absent = iamAbsent;
 
       try {
         await call('iam', iam, new GetUserCommand({ UserName: AWS_RUNNER_IAM_USER }));
@@ -468,6 +642,28 @@ export function createAwsManagementApi(
       }
       return { created };
     },
+  };
+}
+
+function iamAbsent(err: unknown): boolean {
+  return (
+    err instanceof AwsManagementApiError &&
+    (err.awsCode === 'NoSuchEntity' || err.awsCode === 'NoSuchEntityException')
+  );
+}
+
+/** Who may assume the runner role: the management role add-shard and the
+ *  orchestrator run as, and nothing else (MOTIR-9460). */
+export function awsRunnerTrustPolicy(trustedRoleArn: string): AwsPolicyDocument {
+  return {
+    Version: '2012-10-17',
+    Statement: [
+      {
+        Effect: 'Allow',
+        Principal: { AWS: trustedRoleArn },
+        Action: 'sts:AssumeRole',
+      },
+    ],
   };
 }
 

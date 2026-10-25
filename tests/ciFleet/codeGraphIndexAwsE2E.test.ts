@@ -315,7 +315,9 @@ const indexSlots = () =>
 /** The pool read admission uses, for one kind. */
 const poolOf = (kind: string) =>
   withSystemContext(async (tx) =>
-    (await fleetShardRepository.listActiveForKindInTx(kind, tx)).map((s) => s.name).sort(),
+    (await fleetShardRepository.listActiveForKindInTx(kind, ['primary'], tx))
+      .map((s) => s.name)
+      .sort(),
   );
 
 let a: Account;

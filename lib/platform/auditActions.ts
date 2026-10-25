@@ -315,6 +315,25 @@ export const PLATFORM_AUDIT_ACTIONS = {
   'fleet.shard.disable': { kind: 'write', reason: 'required' },
   'fleet.shard.enable': { kind: 'write', reason: 'required' },
   /**
+   * One POOL GROWTH (Story MOTIR-9362 · MOTIR-9461): an account crossed 70% of
+   * its live granted vCPU quota, and the growth pass promoted the kind's ready
+   * spare and/or created the next account. One row per growth, beside its
+   * `fleet_growth_event`, written by the pass as Motir's system account
+   * (`fleetAutomationPrincipal`) with a reason the service writes. Target is
+   * `platform` with the triggering account's id and name; `metadata` is
+   * `{ fleetKind, growthEventId, outcome, triggeringShardId, vcpuInUse,
+   * grantedQuota, spareShardId, newShardId, quotaRequestId }`, never a
+   * credential.
+   */
+  'fleet.pool.grow': { kind: 'write', reason: 'required' },
+  /**
+   * `fleet-admin request-quota` (Story MOTIR-9362 · MOTIR-9463): vCPU quota
+   * raises filed on one or more fleet accounts. One row per invocation, as the
+   * `--operator` superadmin, with a reason the service writes; `metadata` is
+   * `{ desiredVcpu, quotaCode, accounts: [{ name, outcome, awsRequestId? }] }`.
+   */
+  'fleet.shard.quota_request': { kind: 'write', reason: 'required' },
+  /**
    * The IDEA STORE's writes (Story MOTIR-7662 · MOTIR-7671), `targetKind:
    * 'idea'`, written by `ideasAdminService` inside `withPlatformWrite`. Reached
    * from the console session OR — on `/api/platform/ideas/**` alone — a staff

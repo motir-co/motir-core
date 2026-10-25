@@ -96,6 +96,7 @@ import type { VisitorReadContext } from '@/lib/visitor/context';
 import { isVisitorContext } from '@/lib/visitor/readScope';
 import type { Page, Prisma } from '@/generated/prisma/client';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 
 // Page service (Story MOTIR-5752 · MOTIR-7277) — who may create, read, rename and
 // save a project's pages, and the transaction each of those runs in. No route
@@ -762,6 +763,36 @@ export const pagesService = {
       const nameById = new Map(editors.map((u) => [u.id, u.name]));
       return records.map((r) => toPageListItemDto(r, nameById.get(r.updatedById)));
     });
+  },
+
+  /**
+   * The project a page lives in, from its id ALONE — the `/api/v1` page doors
+   * (MOTIR-9493), which have no active project to scope by. `page:view` on that
+   * project. A page that does not exist, one in another workspace, and one in a
+   * project the caller cannot browse (or a token bound elsewhere cannot reach)
+   * are the SAME `PageNotFoundError`, so an id is no existence oracle and no
+   * title escapes. A browser without `page:view` is still refused as `edit`.
+   */
+  async getPageProjectId(ctx: ServiceContext, pageId: string): Promise<string> {
+    return withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      async (tx) => {
+        const page = await pageRepository.findById(pageId, tx);
+        if (!page) throw new PageNotFoundError(pageId);
+        try {
+          await projectAccessService.assertCanViewPages(page.projectId, ctx, tx);
+        } catch (err) {
+          if (
+            err instanceof ProjectNotFoundError ||
+            (err instanceof ProjectAccessDeniedError && err.kind === 'browse')
+          ) {
+            throw new PageNotFoundError(pageId);
+          }
+          throw err;
+        }
+        return page.projectId;
+      },
+    );
   },
 
   /**

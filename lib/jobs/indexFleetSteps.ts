@@ -11,6 +11,7 @@ import type {
 import { codeGraphOffboardingService } from '@/lib/services/codeGraphOffboardingService';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
+import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
 import { jobSupervisionRepository } from '@/lib/repositories/jobSupervisionRepository';
 import { jobStepRepository } from '@/lib/repositories/jobStepRepository';
 import type { IndexAllowanceAsk } from '@/lib/services/codeGraphIndexDispatchService';
@@ -191,6 +192,9 @@ function stepSeam(ctx: JobContext): SupervisionSteps {
   };
 }
 
+/** The two jobs that drive {@link runIndexFleetSteps}. */
+export type IndexFleetJobId = 'system.code-graph-index' | 'system.code-graph-refresh';
+
 /**
  * Drive ONE repo's container-based index.
  *
@@ -202,6 +206,9 @@ export async function runIndexFleetSteps(
   ctx: JobContext,
   services: JobServices,
   input: IndexRepoInput,
+  /** The job driving this run — the `functionId` its `job_run` row is written
+   *  under, which the indexing claim resolves its ledger id by (MOTIR-9454). */
+  jobId: IndexFleetJobId,
 ): Promise<IndexRepoResult> {
   // ⚠️ THE STEP ID CARRIES THE RESULT'S SHAPE, AND `-v2` IS THE FIX FOR AN
   // OUTAGE (MOTIR-5020). A memo is returned WITHOUT executing its step
@@ -313,7 +320,10 @@ export async function runIndexFleetSteps(
   //
   // Best-effort and OUTSIDE the step seam: this is telemetry for a surface, and
   // an index that ran must never fail because a field write did not.
-  const headAtStart = await claimIndexingRepo(ctx, target.repoRef, target.organizationId);
+  const headAtStart = await claimIndexingRepo(ctx, target.repoRef, target.organizationId, {
+    functionId: jobId,
+    eventId: dispatchId,
+  });
 
   const dispatched = await indexEveryProject(ctx, services, input, target, dispatchId);
 
@@ -800,6 +810,7 @@ async function claimIndexingRepo(
   ctx: JobContext,
   repoRef: string,
   organizationId: string,
+  ledger: { functionId: IndexFleetJobId; eventId: string },
 ): Promise<string | null> {
   try {
     return await withSystemContext(async (tx) => {
@@ -809,7 +820,26 @@ async function claimIndexingRepo(
         where: { owner, name, organizationId },
         select: { defaultBranchHeadSha: true },
       });
-      await githubRepoRepository.markIndexStarted(repoRef, organizationId, ctx.runId, tx);
+      // ⚠️ THE CLAIM NAMES THE LEDGER ROW, NOT THE QUEUE ROW (Bug MOTIR-9454).
+      // Every reader joins `indexing_run_id` to `job_run` ids — the running set
+      // says `indexing`, the terminal set says `failed`. `ctx.runId` is the
+      // `job_queue` row id on this engine, which is in neither set, so a claim
+      // stamped from it read `queued` while the index ran and after it failed.
+      // The ledger row is found the way the terminal-failure path finds it: by
+      // `(functionId, eventId)`, and `dispatchId` IS the ledger's `eventId`
+      // (`ledgerIdentity`). No row — `recordStart` returns none for a tenant that
+      // vanished — keeps the queue id, so the repository still reads claimed.
+      const ledgerRunId = await jobRunRepository.findUnsettledIdByEventId(
+        ledger.eventId,
+        ledger.functionId,
+        tx,
+      );
+      await githubRepoRepository.markIndexStarted(
+        repoRef,
+        organizationId,
+        ledgerRunId ?? ctx.runId,
+        tx,
+      );
       return repo?.defaultBranchHeadSha ?? null;
     });
   } catch (err) {
