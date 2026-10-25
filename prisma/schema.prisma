@@ -3356,10 +3356,7 @@ model WorkItem {
   // issues may point at one work item (MOTIR-4932's manual link), one issue at
   // most one. SetNull on the child: a deleted bug leaves the issue row with a
   // null pointer, which is how the reconciler tells "deleted" from "never filed".
-  monitorIssues   MonitorIssue[]
-  /// RETIRED with `SharpenSession.workItemId` (MOTIR-9314) — `@ignore`d until its
-  /// column is dropped.
-  sharpenSessions SharpenSession[] @ignore
+  monitorIssues MonitorIssue[]
 
   @@unique([projectId, key])
   @@unique([projectId, identifier])
@@ -9589,7 +9586,7 @@ model PlanChangeTurn {
   @@map("plan_change_turn")
 }
 
-/// Is a Sharpen session about a PLAN or ONE committed WORK ITEM (Task MOTIR-1101 · MOTIR-8182).
+/// Is a Sharpen session about a PLAN or a plan-change CONVERSATION (Task MOTIR-1101 · MOTIR-8182 · MOTIR-9314).
 enum SharpenScopeKind {
   plan
   /// A plan-change CONVERSATION with no plan yet (Story MOTIR-9221 · MOTIR-9314).
@@ -9637,14 +9634,14 @@ enum SharpenAction {
 }
 
 /// A SHARPEN session (Task MOTIR-1101 · Subtask MOTIR-8182) — one person's
-/// grilling conversation about WHAT a plan or one committed work item is, one
+/// grilling conversation about WHAT a plan or a plan-change conversation is, one
 /// question at a time. A dedicated table rather than a `plan_change_session`
 /// origin: that model is scoped by work-item keys, has no plan scope, and its
 /// `origin` / turn `intent` enums are read by the planning, guide and
 /// conversation doors.
 ///
-/// Exactly ONE of `planId` / `workItemId` is set, and it matches `scopeKind`
-/// (a CHECK in the migration). ONE OPEN session per person per target is held
+/// Exactly ONE of `planId` / `planChangeSessionId` is set, and it matches
+/// `scopeKind` (a CHECK in the migration). ONE OPEN session per person per target is held
 /// by two partial unique indexes (`… WHERE status = 'open'`), so two concurrent
 /// "Sharpen" clicks can never open two. The JSON columns hold motir-ai's
 /// `SharpenTurnResult` pieces and are OPAQUE here: the door's service and DTO
@@ -9660,12 +9657,6 @@ model SharpenSession {
   /// The plan-change CONVERSATION a `conversation`-scope session grills (Story
   /// MOTIR-9221 · MOTIR-9314) — its settled answers are stored here, with it.
   planChangeSessionId String?              @map("plan_change_session_id")
-  /// RETIRED (MOTIR-9314): the work-item target is gone, so nothing writes or
-  /// reads this. SCHEMA-ONLY phase of the column's removal
-  /// (docs/decisions/delivery-reader-migration.md §6a/§6b): `@ignore`d so the
-  /// client stops selecting it while the column stays; the CONTRACT phase drops
-  /// the column, this field, its relation and its index together, after release.
-  workItemId          String?              @map("work_item_id") @ignore
   status              SharpenSessionStatus @default(open)
   endReason           SharpenEndReason?    @map("end_reason")
   /// The question waiting on the person, or null.
@@ -9685,14 +9676,12 @@ model SharpenSession {
   createdBy         User               @relation("SharpenSessionCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
   plan              Plan?              @relation(fields: [planId], references: [id], onDelete: Cascade)
   planChangeSession PlanChangeSession? @relation(fields: [planChangeSessionId], references: [id], onDelete: Cascade)
-  workItem          WorkItem?          @relation(fields: [workItemId], references: [id], onDelete: Cascade) @ignore
   turns             SharpenTurn[]
 
   @@index([workspaceId])
   @@index([projectId])
   @@index([planId])
   @@index([planChangeSessionId])
-  @@index([workItemId])
   @@map("sharpen_session")
 }
 
