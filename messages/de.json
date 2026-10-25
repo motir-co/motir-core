@@ -10465,6 +10465,157 @@
         "prev": "Zurück",
         "next": "Weiter",
         "pageOf": "Seite {page} von {pages}"
+      },
+      "pools": {
+        "title": "Pools",
+        "subtitle": "Der Pool von AWS-Konten jeder Flottenart: Kapazität, Nutzung gemessen an 70 %, das Motir-Reservekonto, die bei AWS beantragten Kontingenterhöhungen und ob das Wachstum seine Arbeit getan hat. Gelesen aus dem, was der Wachstumsdurchlauf zuletzt aufgezeichnet hat – das Laden dieser Seite fragt AWS nichts.",
+        "kind": {
+          "ci_runner": "CI-Runner",
+          "hosted_agent": "Agent-Runner",
+          "code_graph_index": "Indexer",
+          "agent_instance": "Agent-Host"
+        },
+        "block": {
+          "title": "Pool · {kind}",
+          "subtitle": {
+            "aws": "Seine gemeinsamen Konten, das Motir-Reservekonto, bei AWS beantragte Kontingenterhöhungen und die Wachstumsereignisse – so, wie der Wachstumsdurchlauf sie zuletzt gelesen hat.",
+            "fly": "Diese Art ist auf Fly umgestellt und hat daher keinen AWS-Pool.",
+            "other": "Seine gemeinsamen Konten, das Motir-Reservekonto, Kontingenterhöhungen und Wachstumsereignisse."
+          }
+        },
+        "provider": {
+          "aws": "Läuft auf AWS",
+          "fly": "Läuft auf Fly"
+        },
+        "overCount": "{count, plural, one {# Konto über 70 %} other {# Konten über 70 %}}",
+        "growthInFlight": "Wachstum läuft",
+        "fly": {
+          "title": "{kind} läuft auf Fly",
+          "body": "Der Schalter steht auf Fly, daher gibt es keine AWS-Kapazität, kein Kontingent und kein Wachstum anzuzeigen. Die laufenden Container werden oben im Bereich „Flotte“ pro Organisation gezählt."
+        },
+        "error": {
+          "title": "Der Pool {kind} konnte nicht gelesen werden",
+          "body": "Das Lesen dieses Pools hat nicht geantwortet, daher ist hier nichts geladen – nichts davon ist null, und kein Anbieter wird behauptet. Die anderen Pools und der Rest dieser Seite sind nicht betroffen. Laden Sie die Seite neu, um es erneut zu versuchen."
+        },
+        "sectionError": {
+          "title": "Die Pools konnten nicht gelesen werden",
+          "body": "Das Lesen der Pools hat nicht geantwortet, daher ist kein Pool geladen – nichts davon ist null, und kein Anbieter wird behauptet. Der Rest dieser Seite ist nicht betroffen. Laden Sie die Seite neu, um es erneut zu versuchen."
+        },
+        "total": {
+          "capacity": "Kapazität · genehmigtes Kontingent von {count, plural, one {# gemeinsamen Konto} other {# gemeinsamen Konten}} · das Reservekonto nicht mitgezählt",
+          "used": "Davon genutzte vCPU",
+          "percent": "Genutzter Anteil der Kapazität · Wachstum beginnt, wenn ein Konto 70 % überschreitet",
+          "percentShort": "Genutzter Anteil der Kapazität",
+          "capacityShort": "Kapazität · genehmigtes vCPU-Kontingent",
+          "usedShort": "Genutzte vCPU",
+          "incomplete": "{count, plural, one {Das Kontingent von # Konto ist nicht gelesen} other {Das Kontingent von # Konten ist nicht gelesen}}, daher ist die Summe nicht bekannt",
+          "noAccount": "Noch kein Konto",
+          "noAccountBody": "Dieser Pool hat noch kein AWS-Konto und daher keine Kapazität zum Lesen. Sein erstes Konto wird mit <cmd>{command}</cmd> hinzugefügt."
+        },
+        "vcpu": "{n} vCPU",
+        "percent": "{n} %",
+        "notAvailable": "Nicht verfügbar",
+        "accounts": {
+          "title": "Gemeinsame Konten",
+          "count": "{count, plural, one {# Konto} other {# Konten}}",
+          "col": {
+            "account": "Konto",
+            "role": "Rolle",
+            "state": "Zustand",
+            "granted": "Genehmigtes Kontingent",
+            "used": "In Nutzung",
+            "percent": "Prozent",
+            "toThreshold": "Bis 70 %"
+          }
+        },
+        "role": {
+          "shared": "Gemeinsam"
+        },
+        "state": {
+          "active": "Aktiv",
+          "provisioning": "Wird eingerichtet",
+          "disabled": "Deaktiviert"
+        },
+        "readAgo": "gelesen {age}",
+        "notRead": "Nicht gelesen",
+        "notReadLabel": "Kontingent nicht von AWS gelesen",
+        "lastRead": "zuletzt gelesen {age}",
+        "neverRead": "nie gelesen",
+        "toGo": "noch {n} vCPU",
+        "over": "Über 70 %",
+        "overBy": "{n} vCPU darüber",
+        "atThreshold": "genau bei 70 %",
+        "spare": {
+          "title": "Motir-Reservekonto",
+          "none": "Für diese Art gibt es noch kein Motir-Reservekonto.",
+          "ready": "Bereit zum Beitritt",
+          "waiting": "Wartet auf Kontingent",
+          "granted": "genehmigt · gelesen {age}",
+          "notRead": "Kontingent nicht gelesen · {when}",
+          "readyBody": "Nicht in der Kapazität mitgezählt. Es tritt dem gemeinsamen Pool bei, wenn ein Konto das nächste Mal 70 % überschreitet, und dahinter wird ein neues Reservekonto angelegt.",
+          "raisingBody": "Eine Erhöhung auf {n} vCPU wurde {age} beantragt und ist noch offen. Das Reservekonto tritt dem gemeinsamen Pool bei, sobald AWS sie genehmigt.",
+          "notReadBody": "Sein Kontingent ist nicht gelesen, daher gilt es nicht als bereit. Das Wachstum befördert es erst, wenn ein genehmigtes Kontingent gelesen wurde.",
+          "belowBody": "Sein genehmigtes Kontingent liegt unter dem, was ein gemeinsames Konto braucht, daher gilt es nicht als bereit. Das Wachstum befördert es erst, wenn AWS die Erhöhung genehmigt."
+        },
+        "requests": {
+          "title": "Bei AWS beantragte Kontingenterhöhungen",
+          "count": "{count, plural, one {# Antrag} other {# Anträge}} · {open} offen",
+          "none": "keine",
+          "empty": "Für diese Art wurde bei AWS noch keine Kontingenterhöhung beantragt.",
+          "col": {
+            "account": "Konto",
+            "asked": "Beantragter Wert",
+            "status": "Status",
+            "granted": "Genehmigt",
+            "when": "Beantragt",
+            "lastRead": "Zuletzt von AWS gelesen"
+          },
+          "status": {
+            "pending": "Offen · ausstehend",
+            "case_opened": "Offen · Fall eröffnet",
+            "approved": "Genehmigt",
+            "denied": "Abgelehnt",
+            "not_approved": "Nicht genehmigt",
+            "case_closed": "Fall geschlossen",
+            "invalid_request": "Ungültiger Antrag"
+          },
+          "notYet": "Noch nicht",
+          "notGranted": "Nicht genehmigt",
+          "quotaStays": "Kontingent bleibt bei {n} vCPU",
+          "quotaUnchanged": "Kontingent unverändert",
+          "notReadYet": "noch nicht gelesen",
+          "foot": "{from}–{to} von {total} · offene zuerst, dann die neuesten",
+          "pagerLabel": "Seiten der Kontingenterhöhungen für {kind}"
+        },
+        "events": {
+          "title": "Wachstumsereignisse · 70 % erreicht",
+          "count": "{count, plural, one {# Ereignis} other {# Ereignisse}}",
+          "empty": "Noch keine Wachstumsereignisse – kein Konto dieser Art hat 70 % erreicht.",
+          "col": {
+            "when": "Wann",
+            "account": "Auslösendes Konto",
+            "use": "Seine Nutzung",
+            "outcome": "Ergebnis"
+          },
+          "use": "<b>{used}</b> von {granted} vCPU",
+          "usePercent": "{p} % seines genehmigten Kontingents",
+          "accountRemoved": "Konto entfernt",
+          "outcome": {
+            "spare_promoted": "Reservekonto befördert",
+            "account_created": "Konto angelegt",
+            "waiting_for_quota": "Wartet auf Kontingent",
+            "refused": "Abgelehnt"
+          },
+          "promoted": "{spare} ist dem gemeinsamen Pool beigetreten",
+          "promotedNew": "{spare} ist dem gemeinsamen Pool beigetreten; neues Reservekonto {created} wird angelegt",
+          "created": "{created} hinzugefügt, ohne Reservekonto zum Befördern",
+          "waiting": "die Erhöhung des Reservekontos ist noch offen, daher ist noch nichts beigetreten",
+          "awsSaid": "AWS sagte: „{reason}“",
+          "refusedNote": "es wurde kein Konto hinzugefügt; der nächste Durchlauf versucht es nach einer Wartezeit erneut",
+          "foot": "{from}–{to} von {total} · die neuesten zuerst",
+          "pagerLabel": "Seiten der Wachstumsereignisse für {kind}"
+        },
+        "readOnly": "Nur lesen. Um bei AWS mehr Kontingent zu beantragen, führen Sie <cmd>{command}</cmd> in einem Terminal aus."
       }
     },
     "orgs": {

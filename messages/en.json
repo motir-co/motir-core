@@ -10462,6 +10462,157 @@
         "prev": "Prev",
         "next": "Next",
         "pageOf": "Page {page} of {pages}"
+      },
+      "pools": {
+        "title": "Pools",
+        "subtitle": "Each fleet kind’s pool of AWS accounts: capacity, use against 70%, the Motir spare, the quota raises asked of AWS and whether growth has been doing its job. Read from what the growth pass last recorded — loading this page asks AWS nothing.",
+        "kind": {
+          "ci_runner": "CI runner",
+          "hosted_agent": "Agent runner",
+          "code_graph_index": "Indexer",
+          "agent_instance": "Agent hoster"
+        },
+        "block": {
+          "title": "Pool · {kind}",
+          "subtitle": {
+            "aws": "Its shared accounts, the Motir spare, quota raises asked of AWS and the growth events — as the growth pass last read them.",
+            "fly": "This kind is switched to Fly, so it has no AWS pool.",
+            "other": "Its shared accounts, the Motir spare, quota raises and growth events."
+          }
+        },
+        "provider": {
+          "aws": "Runs on AWS",
+          "fly": "Runs on Fly"
+        },
+        "overCount": "{count, plural, one {# account over 70%} other {# accounts over 70%}}",
+        "growthInFlight": "Growth in progress",
+        "fly": {
+          "title": "{kind} runs on Fly",
+          "body": "Its switch is set to Fly, so there is no AWS capacity, quota or growth to show for it. Its running containers are counted per organisation in the Fleet section above."
+        },
+        "error": {
+          "title": "Couldn’t read the {kind} pool",
+          "body": "This pool’s read didn’t answer, so nothing here is loaded — none of it is zero, and no provider is claimed. The other pools and the rest of this page are unaffected. Reload to try again."
+        },
+        "sectionError": {
+          "title": "Couldn’t read the pools",
+          "body": "The pools read didn’t answer, so no pool is loaded — none of it is zero, and no provider is claimed. The rest of this page is unaffected. Reload to try again."
+        },
+        "total": {
+          "capacity": "Capacity · granted quota of {count, plural, one {# shared account} other {# shared accounts}} · the spare not counted",
+          "used": "vCPU in use across them",
+          "percent": "Of capacity in use · growth starts when one account passes 70%",
+          "percentShort": "Of capacity in use",
+          "capacityShort": "Capacity · granted vCPU quota",
+          "usedShort": "vCPU in use",
+          "incomplete": "{count, plural, one {# account’s quota is not read} other {# accounts’ quota is not read}}, so the total is not known",
+          "noAccount": "No account yet",
+          "noAccountBody": "This pool has no AWS account yet, so it has no capacity to read. Its first account is added with <cmd>{command}</cmd>."
+        },
+        "vcpu": "{n} vCPU",
+        "percent": "{n}%",
+        "notAvailable": "Not available",
+        "accounts": {
+          "title": "Shared accounts",
+          "count": "{count, plural, one {# account} other {# accounts}}",
+          "col": {
+            "account": "Account",
+            "role": "Role",
+            "state": "State",
+            "granted": "Granted quota",
+            "used": "In use",
+            "percent": "Percent",
+            "toThreshold": "To 70%"
+          }
+        },
+        "role": {
+          "shared": "Shared"
+        },
+        "state": {
+          "active": "Active",
+          "provisioning": "Provisioning",
+          "disabled": "Disabled"
+        },
+        "readAgo": "read {age}",
+        "notRead": "Not read",
+        "notReadLabel": "Quota not read from AWS",
+        "lastRead": "last read {age}",
+        "neverRead": "never read",
+        "toGo": "{n} vCPU to go",
+        "over": "Over 70%",
+        "overBy": "{n} vCPU past it",
+        "atThreshold": "at 70% exactly",
+        "spare": {
+          "title": "Motir spare",
+          "none": "No Motir spare for this kind yet.",
+          "ready": "Ready to join",
+          "waiting": "Waiting for quota",
+          "granted": "granted · read {age}",
+          "notRead": "Quota not read · {when}",
+          "readyBody": "Not counted in capacity. It joins the shared pool the next time an account passes 70%, and a new spare is created behind it.",
+          "raisingBody": "A raise to {n} vCPU was asked {age} and is still open. The spare joins the shared pool once AWS grants it.",
+          "notReadBody": "Its quota is not read, so it is not counted as ready. Growth promotes it only once a granted quota has been read.",
+          "belowBody": "Its granted quota is below what a shared account needs, so it is not counted as ready. Growth promotes it only once AWS grants the raise."
+        },
+        "requests": {
+          "title": "Quota raises asked of AWS",
+          "count": "{count, plural, one {# request} other {# requests}} · {open} open",
+          "none": "none",
+          "empty": "No quota raise has been asked of AWS for this kind.",
+          "col": {
+            "account": "Account",
+            "asked": "Value asked",
+            "status": "Status",
+            "granted": "Granted",
+            "when": "Asked",
+            "lastRead": "Last read from AWS"
+          },
+          "status": {
+            "pending": "Open · pending",
+            "case_opened": "Open · case opened",
+            "approved": "Approved",
+            "denied": "Denied",
+            "not_approved": "Not approved",
+            "case_closed": "Case closed",
+            "invalid_request": "Invalid request"
+          },
+          "notYet": "Not yet",
+          "notGranted": "Not granted",
+          "quotaStays": "quota stays {n} vCPU",
+          "quotaUnchanged": "quota unchanged",
+          "notReadYet": "not read yet",
+          "foot": "Showing {from}–{to} of {total} · open first, then newest",
+          "pagerLabel": "{kind} quota raises pages"
+        },
+        "events": {
+          "title": "Growth events · 70% reached",
+          "count": "{count, plural, one {# event} other {# events}}",
+          "empty": "No growth events yet — no account of this kind has reached 70%.",
+          "col": {
+            "when": "When",
+            "account": "Triggering account",
+            "use": "Its use",
+            "outcome": "Outcome"
+          },
+          "use": "<b>{used}</b> of {granted} vCPU",
+          "usePercent": "{p}% of its granted quota",
+          "accountRemoved": "account removed",
+          "outcome": {
+            "spare_promoted": "Spare promoted",
+            "account_created": "Account created",
+            "waiting_for_quota": "Waiting for quota",
+            "refused": "Refused"
+          },
+          "promoted": "{spare} joined the shared pool",
+          "promotedNew": "{spare} joined the shared pool; new spare {created} being created",
+          "created": "{created} added, with no spare to promote",
+          "waiting": "the spare’s raise is still open, so nothing joined yet",
+          "awsSaid": "AWS said: “{reason}”",
+          "refusedNote": "no account was added; the next pass tries again after a backoff",
+          "foot": "Showing {from}–{to} of {total} · newest first",
+          "pagerLabel": "{kind} growth events pages"
+        },
+        "readOnly": "Read-only. To ask AWS for more quota, run <cmd>{command}</cmd> at a terminal."
       }
     },
     "orgs": {
