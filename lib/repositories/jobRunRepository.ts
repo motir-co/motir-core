@@ -37,6 +37,28 @@ export const jobRunRepository = {
   },
 
   /**
+   * The id of the UNSETTLED row for a given (function, event) — the ledger row
+   * a run in flight is writing under (Bug MOTIR-9454). The index job stamps it on
+   * the repository it claims, because every reader of that claim joins it to
+   * `job_run` ids. The engine's `ctx.runId` is the `job_queue` row id, a
+   * different row, so it is never the value to stamp.
+   *
+   * Same predicate as {@link findUnsettledByEventId}, narrowed to the id.
+   */
+  async findUnsettledIdByEventId(
+    eventId: string,
+    functionId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<string | null> {
+    const row = await tx.jobRun.findFirst({
+      where: { eventId, functionId, status: { in: ['running', 'abandoned'] } },
+      orderBy: { startedAt: 'desc' },
+      select: { id: true },
+    });
+    return row?.id ?? null;
+  },
+
+  /**
    * Insert the initial `running` row. Uses the UNCHECKED create input (scalar
    * `workspaceId` FK) rather than a `workspace: { connect }` relation: the job
    * runtime writes under the system-admin context with NO workspace context, so

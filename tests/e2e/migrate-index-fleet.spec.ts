@@ -177,7 +177,7 @@ const errorBanner = (page: Page) => page.locator('main').getByRole('alert');
 async function reachIndexStep(
   page: Page,
   email: string,
-  beforeAdvance?: () => Promise<void>,
+  beforeAdvance?: (workspaceId: string) => Promise<void>,
 ): Promise<string> {
   await signUp(page, email);
   await createFirstProject(page, 'Invoicer');
@@ -207,7 +207,7 @@ async function reachIndexStep(
   // hold on that route must be armed only now) and moves on with Continue.
   const proceed = page.getByRole('button', { name: 'Continue', exact: true });
   await expect(proceed).toBeVisible();
-  await beforeAdvance?.();
+  await beforeAdvance?.(workspaceId);
   await proceed.click();
   expect((await advanced).status()).toBe(200);
 
@@ -231,11 +231,21 @@ test('@smoke migrate Index step — Next opens on the first read, and every repo
   page,
 }) => {
   let releaseFirstPoll!: () => void;
+  let storefrontRun!: string;
   const workspaceId = await reachIndexStep(
     page,
     `e2e-index-${Date.now()}@example.com`,
-    async () => {
+    async (seededWorkspaceId) => {
       releaseFirstPoll = await holdIndexStatus(page);
+      // ⚠️ A RUN IN FLIGHT BEFORE CONNECT ADVANCES (MOTIR-9454). Connect's kick
+      // (`CONNECT.ensureKicked`) enqueues a REAL index job for the first repo
+      // unless an index is already in flight in the workspace. That job claims
+      // its repo with its own ledger row, so the repo reads `indexing` while it
+      // runs — which this spec's `queued` assertions cannot allow. It read
+      // `queued` only while the claim carried a job_queue id no reader could
+      // resolve. An UNCLAIMED running row covers the kick and claims nothing, so
+      // every per-repo state below is the one this spec writes.
+      storefrontRun = await recordIndexRunning(seededWorkspaceId);
     },
   );
 
@@ -284,8 +294,8 @@ test('@smoke migrate Index step — Next opens on the first read, and every repo
 
   // ── IN FLIGHT: a running row is aggregate, never per-repo ─────────────────
   // An UNCLAIMED running row cannot be tied to a repo (it carries no output and
-  // no repo points at it), so it must move `hasRunning` and NOTHING else.
-  const storefrontRun = await recordIndexRunning(workspaceId);
+  // no repo points at it), so it must move `hasRunning` and NOTHING else. It was
+  // seeded before Connect advanced (see above).
   const running = await waitForIndexStatus(page, (s) => s.hasRunning);
   expect(running.indexedCount).toBe(0);
   expect(running.repos.every((r) => r.status === 'queued')).toBe(true);

@@ -126,27 +126,19 @@ describe('a size-refused run, end to end in motir-core', () => {
 
     // 3 — the read `/code` renders carries it, beside a refresh that is still dead.
     // The failed run leaves its claim on the repository (`indexingRunId` is not
-    // released on the failure path), and in production the engine then writes that
-    // run's ledger row `failed`. `JobTestEngine` runs the handler under its own id
-    // and never finalises a ledger row, so that one terminal write is made here —
-    // it is what `deriveRefreshFailing` reads, and nothing about the refusal.
+    // released on the failure path), and the claim names the run's own ledger row
+    // (MOTIR-9454). In production the engine then writes that row `failed`.
+    // `JobTestEngine` has no attempt budget to exhaust and never finalises a ledger
+    // row, so that one terminal write is made here — it is what
+    // `deriveRefreshFailing` reads, and nothing about the refusal.
     const { indexingRunId } = await adminDb.githubRepo.findFirstOrThrow({
       where: { owner: REPO_OWNER, name: REPO_NAME },
       select: { indexingRunId: true },
     });
     expect(indexingRunId).not.toBeNull();
-    await adminDb.jobRun.create({
-      data: {
-        id: indexingRunId!,
-        workspaceId: fx.workspaceId,
-        functionId: 'system.code-graph-index',
-        eventName: 'code-graph/index.requested',
-        eventId: 'evt-int-refused-ledger',
-        lane: 'inngest',
-        attempt: 1,
-        status: 'failed',
-      },
-    });
+    const ledgerRow = await adminDb.jobRun.findUniqueOrThrow({ where: { id: indexingRunId! } });
+    expect(ledgerRow).toMatchObject({ functionId: 'system.code-graph-index', status: 'running' });
+    await adminDb.jobRun.update({ where: { id: indexingRunId! }, data: { status: 'failed' } });
     expect(await codeRow(fx, fx.projectIds[0]!)).toMatchObject({
       graphTooLarge: { sizeBytes: REFUSED_SIZE, capBytes: GIB },
       refreshFailing: true,
