@@ -123,6 +123,7 @@ import { DecisionPageError } from '@/lib/decisionPages/errors';
 import { TestInstructionsError } from '@/lib/testInstructions/errors';
 import { PageError, PageRevisionConflictError, PageTreeError } from '@/lib/pages';
 import { PageSearchQueryEmptyError, PageSearchQueryTooLongError } from '@/lib/pages/searchErrors';
+import { PageLinkAlreadyExistsError, PageLinkNotFoundError } from '@/lib/pages/linkErrors';
 import {
   EmptyTodoTextError,
   TodoCommandTooLongError,
@@ -480,6 +481,13 @@ export function toToolError(err: unknown): CallToolResult {
         `read it, and nothing was written — call get_page, apply your change to what it ` +
         `returns, and send revision ${err.actual}.`,
     );
+  }
+  // The hand-link refusals (MOTIR-9197) extend plain `Error` — they only mimic the
+  // `PageError` shape — so `link_page` (MOTIR-9558) names them here by the code the
+  // REST link routes return. `link_page` turns ALREADY_LINKED into `changed: false`
+  // itself; the arm is the floor for any other caller.
+  if (err instanceof PageLinkAlreadyExistsError || err instanceof PageLinkNotFoundError) {
+    return toolError(err.code, err.message);
   }
   // Page search's query refusals (MOTIR-9553) are not `PageError`s — they live in
   // `lib/pages/searchErrors.ts` — so they are named here, by the same code the REST

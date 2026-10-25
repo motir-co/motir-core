@@ -615,6 +615,30 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  archive_page: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description: 'The project key the page belongs to (e.g. "ACME").',
+      },
+      pageId: {
+        type: 'string',
+        minLength: 1,
+        description: 'The page id — the `<id>` in the page’s address `/pages/<id>`.',
+      },
+      action: {
+        type: 'string',
+        enum: ['archive', 'restore'],
+        description:
+          '`archive` (the default) archives the page with its live sub-pages; `restore` brings an archived page back, with the sub-pages that left with it.',
+      },
+    },
+    required: ['projectKey', 'pageId'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   archive_work_item: {
     type: 'object',
     properties: {
@@ -1714,6 +1738,35 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  link_page: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description: 'The project key the page belongs to (e.g. "ACME").',
+      },
+      pageId: {
+        type: 'string',
+        minLength: 1,
+        description: 'The page id — the `<id>` in the page’s address `/pages/<id>`.',
+      },
+      workItemKey: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The work item to link the page to — its key, e.g. "ACME-7". It must be in `projectKey`.',
+      },
+      action: {
+        type: 'string',
+        enum: ['link', 'unlink'],
+        description: '`link` (the default) adds the hand link; `unlink` removes it.',
+      },
+    },
+    required: ['projectKey', 'pageId', 'workItemKey'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   link_pull_request: {
     type: 'object',
     properties: {
@@ -1961,6 +2014,54 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       },
     },
     required: ['key', 'sessionBranch'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
+  move_page: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description: 'The project key the page belongs to (e.g. "ACME").',
+      },
+      pageId: {
+        type: 'string',
+        minLength: 1,
+        description: 'The page id — the `<id>` in the page’s address `/pages/<id>`.',
+      },
+      parent: {
+        type: 'object',
+        properties: {
+          kind: {
+            type: 'string',
+            minLength: 1,
+            description: '`root`, `folder` (an id from `list_folders`) or `page` (a page id).',
+          },
+          id: {
+            type: 'string',
+            minLength: 1,
+            description: 'The folder or page id. Required unless `kind` is `root`.',
+          },
+        },
+        required: ['kind'],
+        additionalProperties: false,
+        description:
+          'Where the page goes: `{ "kind": "root" }`, `{ "kind": "folder", "id" }` (an id from `list_folders`) or `{ "kind": "page", "id" }` to nest it under another page.',
+      },
+      beforeId: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'A page at the destination the moved page lands right AFTER. Omit both neighbours to place it last (or keep its place when the parent does not change).',
+      },
+      afterId: {
+        type: 'string',
+        minLength: 1,
+        description: 'A page at the destination the moved page lands right BEFORE.',
+      },
+    },
+    required: ['projectKey', 'pageId', 'parent'],
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
@@ -4090,6 +4191,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   add_plan_items: 'Append proposals to a plan',
   add_work_item_todo: 'Add a to-do step',
   append_plan_turn: 'Add a planning turn',
+  archive_page: 'Archive page',
   archive_work_item: 'Archive work item',
   attach_file: 'Attach file',
   change_kind: 'Change work item kind',
@@ -4132,6 +4234,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   get_work_item: 'Get work item',
   get_work_item_activity: 'Get work item activity',
   hold_plan_revision: 'Hold a plan while you revise it',
+  link_page: 'Link page',
   link_pull_request: 'Link pull request',
   link_work_items: 'Link work items',
   list_designs: 'List designs',
@@ -4141,6 +4244,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   list_sprints: 'List sprints',
   list_work_item_todos: 'List a work item’s to-do list',
   mark_integrated: 'Mark integrated',
+  move_page: 'Move page',
   move_to_backlog: 'Move work items to backlog',
   move_to_parent: 'Move work item to a new parent',
   move_to_sprint: 'Move work items to sprint',
@@ -4221,6 +4325,13 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
   },
   append_plan_turn: {
     title: 'Add a planning turn',
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
+  archive_page: {
+    title: 'Archive page',
     readOnlyHint: false,
     destructiveHint: true,
     idempotentHint: false,
@@ -4434,6 +4545,13 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
     idempotentHint: false,
     openWorldHint: false,
   },
+  link_page: {
+    title: 'Link page',
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
   link_pull_request: {
     title: 'Link pull request',
     readOnlyHint: false,
@@ -4464,6 +4582,13 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
     destructiveHint: true,
     idempotentHint: true,
     openWorldHint: true,
+  },
+  move_page: {
+    title: 'Move page',
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: true,
+    openWorldHint: false,
   },
   move_to_backlog: {
     title: 'Move work items to backlog',

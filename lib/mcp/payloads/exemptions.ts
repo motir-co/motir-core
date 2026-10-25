@@ -308,6 +308,13 @@ export const EXEMPT_TOOLS = {
   rename_page:
     'Returns the renamed page’s summary — `{ id, projectId, title, position, revision, updatedAt }` ' +
     '(MOTIR-8841). No `/api/v1` operation returns a page, so there is no shared shape to derive from.',
+  archive_page:
+    'Returns what an archive took — `{ archivedIds, rootId, subPageCount }` — or what a restore ' +
+    'brought back and where it landed — `{ restoredIds, landing }` (MOTIR-9557). No `/api/v1` ' +
+    'operation archives or restores a page, so there is no shared shape to derive from.',
+  link_page:
+    'Returns the hand-link PAIR — `{ pageId, workItemId, source, action, changed }` (MOTIR-9558). ' +
+    'No `/api/v1` operation returns a link pair, so there is no shared shape to derive from.',
   publish_decision_page:
     'Returns the PUBLICATION — which version of which page is the card’s decision, and the gate ' +
     'it raised (MOTIR-7434). No `/api/v1` operation returns a publication, so there is no shared ' +
