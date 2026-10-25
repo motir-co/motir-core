@@ -53,8 +53,11 @@ export default async function OrganizationBillingPage() {
   // `motir-core/CLAUDE.md`). The `notFound()` is the FIRST statement in this
   // function and the boundary is the last, so nothing can flush before the
   // status is settled.
+  // No width cap here: BillingClient caps each view at 64rem except the Motir AI
+  // plans view, which takes the full page width (design/billing § "Amendment
+  // 2026-10-23 — the Host plan", point 7, MOTIR-9403).
   return (
-    <div className="mx-auto max-w-[64rem]">
+    <div className="w-full">
       {/* The header lives inside BillingClient so it swaps with the active
           screen (home / Motir AI / Motir seats), each with its own breadcrumb. */}
       <span className="sr-only">{t('title')}</span>

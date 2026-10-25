@@ -3141,6 +3141,52 @@ jobs:
       - run: pnpm -r --filter './packages/*' build
       - run: pnpm coverage:waiting-plan-carry
 
+  story-9364-coverage:
+    name: Coverage (Host plan)
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
+    # Story MOTIR-9364 (Host, a regular plan of 300,000 credits) — MOTIR-9406's per-file
+    # floor over the two motir-core files the story grew (`vitest.coverage.host-plan.config.ts`):
+    # the catalog and the plan row, measured by their suites and the story gate against
+    # Postgres. Locally it ran 9 files (262 tests); with no CI run measured yet, the
+    # ceiling is the 20 min its neighbours take.
+    timeout-minutes: 20
+    needs: changes
+    if: ${{ needs.changes.outputs.app == 'true' && github.event_name != 'push' }}
+    permissions:
+      contents: read
+    env:
+      DATABASE_URL: postgresql://prodect:prodect@localhost:5432/prodect
+      BETTER_AUTH_SECRET: ci-test-only-not-a-real-secret-do-not-reuse
+      GOOGLE_CLIENT_ID: ci-test-placeholder
+      GOOGLE_CLIENT_SECRET: ci-test-placeholder
+      HUSKY: '0'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Start Postgres
+        uses: ./.github/actions/postgres
+      - uses: ./.github/actions/pnpm
+      - name: Cache node_modules
+        id: cache-node-modules-story-9364
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Cache Prisma client
+        id: cache-prisma-story-9364
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules/.prisma
+            node_modules/@prisma/client
+          key: ${{ runner.os }}-prisma-client-${{ hashFiles('prisma/schema.prisma') }}
+      - run: pnpm install --frozen-lockfile
+        if: steps.cache-node-modules-story-9364.outputs.cache-hit != 'true'
+      - run: pnpm prisma generate
+        if: steps.cache-prisma-story-9364.outputs.cache-hit != 'true'
+      - run: pnpm prisma migrate deploy
+      - run: pnpm -r --filter './packages/*' build
+      - run: pnpm coverage:host-plan
+
   # Story MOTIR-7797 (a confirmed bug is filed the moment it is confirmed) —
   # MOTIR-7806's per-file floor over the story's changed motir-core files
   # (`vitest.coverage.bug-filing.config.ts`): the guide's filing, the `file_bug`
@@ -3500,6 +3546,7 @@ jobs:
         story-7928-coverage,
         story-7974-coverage,
         story-8060-coverage,
+        story-9364-coverage,
         story-7797-coverage,
         story-7990-coverage,
         story-8684-coverage,

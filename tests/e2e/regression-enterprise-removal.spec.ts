@@ -30,8 +30,8 @@ import enMessages from '@/messages/en.json';
  *  3. A stored audit row whose action is the removed `enterprise_request.transition`,
  *     seeded as a real link of the hash chain, still lists, opens and shows its
  *     metadata, and the chain still verifies.
- *  4. The owner's Motir AI plan cards are the four ladder plans, with no Enterprise
- *     card and no Contact sales.
+ *  4. The owner's Motir AI plan cards are the four ladder plans and Host (MOTIR-9364),
+ *     with no Enterprise card and no Contact sales.
  *
  * Every wait is a rendered state or an awaited response, never a timeout.
  */
@@ -57,6 +57,8 @@ const STALE_REASON = `Moved Enterprise request ${REMOVED_REQUEST_ID} from new to
 
 /** The Motir AI ladder cards the plans screen offers: the catalog's ladder, less Free. */
 const LADDER = BILLING_CATALOG.aiPlans.filter((p) => p.band === 'ladder' && p.key !== 'free');
+// Host (MOTIR-9364) sits after the ladder in the plans row, in a band of its own.
+const HOSTS = BILLING_CATALOG.aiPlans.filter((p) => p.band === 'host');
 const FREE = BILLING_CATALOG.aiPlans.find((p) => p.key === 'free')!;
 
 /** The org on the one-time trial, as motir-ai reports it (as the ladder spec does). */
@@ -195,20 +197,24 @@ test('the console has no Enterprise requests, its URLs 404, an old enterprise-re
   // The page's own reads appended more links; the whole chain still verifies.
   expect(await firstAuditChainBreak()).toBeNull();
 
-  await chapter('Billing & plans → Motir AI: the four ladder plans, no Enterprise', async () => {
-    setOrgBillingState(seed.organizationId, trialState(185));
-    const read = billingRead(page, seed);
-    await page.goto('/settings/organization/billing');
-    expect((await read).status()).toBe(200);
-    await expect(page.getByRole('heading', { name: billing.title })).toBeVisible();
-    await page.getByRole('button', { name: billing.ai.choosePlan }).click();
-    await expect(page.getByRole('heading', { name: billing.plans.title })).toBeVisible();
+  await chapter(
+    'Billing & plans → Motir AI: the four ladder plans and Host, no Enterprise',
+    async () => {
+      setOrgBillingState(seed.organizationId, trialState(185));
+      const read = billingRead(page, seed);
+      await page.goto('/settings/organization/billing');
+      expect((await read).status()).toBe(200);
+      await expect(page.getByRole('heading', { name: billing.title })).toBeVisible();
+      await page.getByRole('button', { name: billing.ai.choosePlan }).click();
+      await expect(page.getByRole('heading', { name: billing.plans.title })).toBeVisible();
 
-    expect(LADDER.map((p) => p.key)).toEqual(['standard', 'pro', 'max', 'max_x2']);
-    await expect(cardNames(page)).toHaveText(LADDER.map((p) => p.name));
-    await expect(main).not.toContainText(/enterprise/i);
-    await expect(page.getByRole('button', { name: /contact sales/i })).toHaveCount(0);
-    await expect(page.getByRole('link', { name: /contact sales/i })).toHaveCount(0);
-    await beat();
-  });
+      expect(LADDER.map((p) => p.key)).toEqual(['standard', 'pro', 'max', 'max_x2']);
+      expect(HOSTS.map((p) => p.key)).toEqual(['host']);
+      await expect(cardNames(page)).toHaveText([...LADDER, ...HOSTS].map((p) => p.name));
+      await expect(main).not.toContainText(/enterprise/i);
+      await expect(page.getByRole('button', { name: /contact sales/i })).toHaveCount(0);
+      await expect(page.getByRole('link', { name: /contact sales/i })).toHaveCount(0);
+      await beat();
+    },
+  );
 });

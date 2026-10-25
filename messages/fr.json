@@ -6588,7 +6588,7 @@
         "standard": {
           "useCase": "Planifiez vos projets avec le planificateur Motir AI.",
           "features": [
-            "Planifiez l'ensemble du projet, en détail",
+            "Planifiez le projet, en détail",
             "Crédits renouvelés chaque mois · recharge à tout moment"
           ]
         },
@@ -6603,12 +6603,26 @@
         "max": {
           "useCase": "Pro, plus de la marge pour confier le travail planifié à l’agent.",
           "prev": "Pro",
-          "features": ["De la marge pour confier automatiquement le travail planifié à l’agent"]
+          "features": [
+            "Planifiez davantage de travail pour faire avancer votre projet plus vite",
+            "De la marge pour confier automatiquement une partie du travail planifié à l’agent"
+          ]
         },
         "max_x2": {
           "useCase": "Max, avec deux fois le volume.",
           "prev": "Max",
-          "features": ["Le double de la réserve mensuelle de crédits de Max"]
+          "features": [
+            "Le double de la réserve mensuelle de crédits de Max",
+            "Confiez automatiquement davantage de travail planifié à l’agent"
+          ]
+        },
+        "host": {
+          "useCase": "Motir à l’échelle d’une flotte, sur vos propres comptes AWS.",
+          "prev": "Max ×2",
+          "features": [
+            "Motir fait avancer votre projet de façon autonome",
+            "Des pools dédiés aux runners CI, aux exécutions d’agents, à l’indexeur et aux agents hébergés"
+          ]
         }
       },
       "trial": {

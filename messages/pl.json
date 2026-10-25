@@ -6588,7 +6588,7 @@
         "standard": {
           "useCase": "Planuj projekty z planistą Motir AI.",
           "features": [
-            "Planuj cały projekt, szczegółowo",
+            "Planuj projekt, szczegółowo",
             "Kredyty odnawiane co miesiąc · doładowanie w każdej chwili"
           ]
         },
@@ -6603,12 +6603,26 @@
         "max": {
           "useCase": "Pro, a do tego zapas na przekazywanie zaplanowanej pracy agentowi.",
           "prev": "Pro",
-          "features": ["Zapas na automatyczne przekazywanie zaplanowanej pracy agentowi"]
+          "features": [
+            "Planuj więcej pracy, by projekt posuwał się szybciej",
+            "Zapas na automatyczne przekazywanie części zaplanowanej pracy agentowi"
+          ]
         },
         "max_x2": {
           "useCase": "Max, w podwójnej ilości.",
           "prev": "Max",
-          "features": ["Dwukrotność miesięcznej puli kredytów Max"]
+          "features": [
+            "Dwukrotność miesięcznej puli kredytów Max",
+            "Automatycznie przekazuj agentowi więcej zaplanowanej pracy"
+          ]
+        },
+        "host": {
+          "useCase": "Motir w skali floty, na własnych kontach AWS.",
+          "prev": "Max ×2",
+          "features": [
+            "Motir samodzielnie prowadzi Twój projekt",
+            "Dedykowane pule dla runnerów CI, uruchomień agentów, indeksera i hostowanych agentów"
+          ]
         }
       },
       "trial": {

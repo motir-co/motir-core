@@ -69,7 +69,8 @@ const entry = (key: AiPlanCatalogEntry['key']): AiPlanCatalogEntry => {
 };
 const MAX_X2 = entry('max_x2');
 const MAX = entry('max');
-const PAID = (['standard', 'pro', 'max', 'max_x2'] as const).map(entry);
+const HOST = entry('host');
+const PAID = (['standard', 'pro', 'max', 'max_x2', 'host'] as const).map(entry);
 const TOPUP = BILLING_CATALOG.creditTopup;
 
 const tierOf = (plan: AiPlanCatalogEntry): BillingFixtureTier => ({
@@ -315,14 +316,16 @@ test.describe('The plan catalog: pools, Max ×2 and the included seat', () => {
       );
       await beat();
 
-      // Holding a plan: Max ×2 is the current plan and no card offers a checkout.
+      // Holding a plan: Max ×2 is the current plan and no card offers a checkout;
+      // the one card above it, Host, offers its upgrade (MOTIR-9403).
       await openPlans(page, copy.ai.changePlan);
       await expect(
         card(page, MAX_X2.name).getByRole('button', { name: copy.plans.ctaCurrent }),
       ).toBeVisible();
-      await expect(
-        cardRow(page).getByRole('button', { name: /^(Choose|Upgrade to) / }),
-      ).toHaveCount(0);
+      await expect(cardRow(page).getByRole('button', { name: /^Choose / })).toHaveCount(0);
+      await expect(cardRow(page).getByRole('button', { name: /^Upgrade to / })).toHaveText([
+        format(copy.plans.upgrade.cta, { plan: HOST.name }),
+      ]);
     });
     await beat();
 

@@ -24,7 +24,10 @@ const ROWS = [
   // that card's own measurements.
   { row: 12, rel: `${S}/organization/git/page.tsx`, width: null },
   { row: 13, rel: `${S}/organization/page.tsx`, width: '45rem' },
-  { row: 14, rel: `${S}/organization/billing/page.tsx`, width: '64rem' },
+  // Row 14 has no page-level column since MOTIR-9403: BillingClient caps each
+  // view at 64rem itself, except the Motir AI plans view, which takes the full
+  // page width (design/billing § "Amendment 2026-10-23 — the Host plan").
+  { row: 14, rel: `${S}/organization/billing/page.tsx`, width: null },
   // Story MOTIR-1215 · MOTIR-3646 — the org Security pane. Not one of the four
   // pages MOTIR-3448 measured; it JOINS their contract, because a new
   // `settings/**` route owes the same arrival and the same boundary rule the
@@ -55,8 +58,7 @@ describe('every settings pane mounts the shared frame (MOTIR-3448; MOTIR-3646 jo
     'row $row · keeps its own centred column at $width',
     ({ rel, width }) => {
       // The frame carries no width — the column is the page's, so a stale entry
-      // in the asset's width table cannot move the content. (Row 14 is exactly
-      // that case: the table says 48rem, the page has always said 64rem.)
+      // in the asset's width table cannot move the content.
       expect(code(rel)).toContain(`max-w-[${width!}]`);
     },
   );
