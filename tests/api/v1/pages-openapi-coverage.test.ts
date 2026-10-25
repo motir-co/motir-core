@@ -146,6 +146,30 @@ describe('the emitted document describes the page operations', () => {
     expect(document.components.schemas['PageSearchHit']).toBeDefined();
   });
 
+  it('publishes the searchPages 200 body with items, nextCursor, the three-mode enum and a nullable message (MOTIR-9574)', () => {
+    const search = document.paths['/api/v1/projects/{projectKey}/pages/search']?.['get'];
+    const ok = (search?.['responses'] as Record<string, Record<string, unknown>>)['200'];
+    const content = ok?.['content'] as Record<string, { schema: Record<string, unknown> }>;
+    let schema = content['application/json']!.schema;
+    const ref = schema['$ref'];
+    if (typeof ref === 'string') {
+      schema = document.components.schemas[ref.split('/').pop()!] as Record<string, unknown>;
+    }
+    const props = schema['properties'] as Record<string, Record<string, unknown>>;
+    expect(Object.keys(props).sort()).toEqual(['items', 'message', 'mode', 'nextCursor']);
+    expect(props['mode']!['enum']).toEqual(['merged', 'full-text-only', 'not-indexed']);
+    const message = JSON.stringify(props['message']);
+    expect(message).toContain('"string"');
+    expect(message).toContain('null');
+    expect(document.components.schemas['PageSearchResult']).toBeDefined();
+    const description = String(search?.['description']);
+    expect(description).toContain('by meaning');
+    expect(description).toContain('reciprocal-rank fusion');
+    for (const mode of ['`merged`', '`full-text-only`', '`not-indexed`']) {
+      expect(description).toContain(mode);
+    }
+  });
+
   it('FAILS when searchPages is undeclared while its route exists', () => {
     const without = PAGE_OPERATIONS.filter((op) => op.operationId !== 'searchPages');
     expect(findSpecDrift(shippedRouteMethods(pageRouteSources()), without)).toEqual([
