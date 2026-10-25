@@ -1557,6 +1557,7 @@ model Organization {
   /// The fleet accounts that belong to this organisation alone — a Host org's
   /// three (MOTIR-9581). Restrict on the account's side.
   ownedFleetShards            FleetShard[]                 @relation("FleetShardOwner")
+  hostAccountAttempts         HostAccountAttempt[]
 
   // ── Content language (Story MOTIR-7731 · MOTIR-8092) ──────────────────────
   /// The language Motir's planner and agents write this organisation's NEW work
@@ -11820,6 +11821,28 @@ model FleetGrowthPassLease {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("fleet_growth_pass_lease")
+}
+
+/// A Host organisation's refused account creations (Story MOTIR-9365 ·
+/// MOTIR-9582), one row per (organisation, slot): how many `CreateAccount`
+/// refusals in a row, and when the last one was. The reconcile backs a slot off
+/// `refusalBackoffMs(refusedCount)` from `lastRefusedAt` — stored, so a restart
+/// changes nothing — and zeroes the count on the pass that creates the account.
+/// Counts and times only: never a credential, an email or AWS's message.
+/// Platform-only, as `fleet_shard`.
+model HostAccountAttempt {
+  id             String       @id @default(cuid())
+  organizationId String       @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  /// `ci_runner` | `agent_runner` | `merged` (`lib/ciFleet/hostAccounts.ts`).
+  slot           String
+  refusedCount   Int          @default(0) @map("refused_count")
+  lastRefusedAt  DateTime?    @map("last_refused_at")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  @@unique([organizationId, slot])
+  @@map("host_account_attempt")
 }
 
 /// The repo-role vocabulary (`docs/decisions/project-repository-set.md` §1.1).

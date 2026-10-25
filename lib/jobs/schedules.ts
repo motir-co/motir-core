@@ -81,6 +81,9 @@ export const SUB_HOURLY_CADENCE_EXCEPTIONS: Readonly<Record<string, string>> = {
     'a 5-minute registration window must be read inside its own window',
   // MOTIR-9462 · the growth pass acts on that reading, so it runs at its cadence.
   'system.fleet-pool-growth': 'pool growth acts on the every-minute headroom reading',
+  // MOTIR-9582 · a Host purchase starts a days-long quota wait at account
+  // creation, so the reconcile runs at the growth pass's cadence.
+  'system.host-account-reconcile': 'a Host purchase starts its quota wait at account creation',
 };
 
 /**

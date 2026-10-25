@@ -455,6 +455,12 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ failures: number; kinds: { agent_instance?: "backing_off" | "below_threshold" | "failed" | "grown" | "in_flight" | "not_aws" | "on_fly" | "refused" | undefined; ci_runner?: "backing_off" | "below_threshold" | "failed" | "grown" | "in_flight" | "not_aws" | "on_fly" | "refused" | undefined; code_graph_index?: "backing_off" | "below_threshold" | "failed" | "grown" | "in_flight" | "not_aws" | "on_fly" | "refused" | undefined; hosted_agent?: "backing_off" | "below_threshold" | "failed" | "grown" | "in_flight" | "not_aws" | "on_fly" | "refused" | undefined }; ran: boolean; requestAlerts: number }',
   },
+  // Story MOTIR-9365 · MOTIR-9582 — the Host account reconcile.
+  'host-account-reconcile': {
+    file: 'lib/jobs/definitions/hostAccountReconcile.ts',
+    shape:
+      '{ failures: number; organizations: Array<{ host: boolean; organizationId: string; slots: { agent_runner?: "already" | "backing_off" | "created" | "failed" | "no_primary" | "raise_failed" | "refused" | undefined; ci_runner?: "already" | "backing_off" | "created" | "failed" | "no_primary" | "raise_failed" | "refused" | undefined; merged?: "already" | "backing_off" | "created" | "failed" | "no_primary" | "raise_failed" | "refused" | undefined } }>; ran: boolean }',
+  },
   'fleet-debit-monitor': {
     file: 'lib/jobs/definitions/fleetDebitMonitor.ts',
     shape: '{ alerted: number; failures: number; mismatched: number; orgs: number }',
