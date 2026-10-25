@@ -37,7 +37,7 @@ const WORK_ITEM_EDITOR = [...PAGE_EDITOR, 'work_item:edit'] as const;
 
 beforeEach(async () => {
   await adminDb.$executeRawUnsafe(
-    'TRUNCATE TABLE "page_work_item_link", "page", "folder", "work_item_revision", "work_item" RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE "page_work_item_link", "work_item_revision", "work_item", "page", "folder" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
   resetRateLimitStore();
