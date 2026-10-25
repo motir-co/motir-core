@@ -58,6 +58,7 @@ const githubAccounts = vi.hoisted(() => ({ installGithubAccountsMock: vi.fn() })
 const githubFleetOrgCi = vi.hoisted(() => ({ installGithubFleetOrgCiMock: vi.fn() }));
 const codeHealth = vi.hoisted(() => ({ installCodeHealthBoundaryMock: vi.fn() }));
 const codeGraphRead = vi.hoisted(() => ({ installCodeGraphReadBoundaryMock: vi.fn() }));
+const embeddings = vi.hoisted(() => ({ installEmbeddingsBoundaryMock: vi.fn() }));
 const aiJobs = vi.hoisted(() => ({ installAiJobsBoundaryMock: vi.fn() }));
 const sharpen = vi.hoisted(() => ({ installSharpenBoundaryMock: vi.fn() }));
 const lessons = vi.hoisted(() => ({ installLessonsBoundaryMock: vi.fn() }));
@@ -78,6 +79,7 @@ vi.mock('@/lib/test-github-accounts-mock', () => githubAccounts);
 vi.mock('@/lib/test-github-fleet-org-ci-mock', () => githubFleetOrgCi);
 vi.mock('@/lib/test-code-health-mock', () => codeHealth);
 vi.mock('@/lib/test-code-graph-read-mock', () => codeGraphRead);
+vi.mock('@/lib/test-embeddings-mock', () => embeddings);
 vi.mock('@/lib/test-ai-jobs-mock', () => aiJobs);
 vi.mock('@/lib/test-sharpen-mock', () => sharpen);
 vi.mock('@/lib/test-lessons-mock', () => lessons);
@@ -108,6 +110,8 @@ const INSTALLERS: Record<string, ReturnType<typeof vi.fn>[]> = {
   E2E_TEST_CODE_HEALTH: [codeHealth.installCodeHealthBoundaryMock],
   // MOTIR-7866 — the motir-ai code-graph READ seam (Story MOTIR-7858).
   E2E_TEST_CODE_GRAPH_READ: [codeGraphRead.installCodeGraphReadBoundaryMock],
+  // MOTIR-9577 — motir-ai's embeddings, for page search by meaning (Story MOTIR-9490).
+  E2E_TEST_EMBEDDINGS: [embeddings.installEmbeddingsBoundaryMock],
   E2E_TEST_AI_JOBS: [aiJobs.installAiJobsBoundaryMock],
   // MOTIR-8180 — a Sharpen session's `sharpen_turn` jobs.
   E2E_TEST_SHARPEN: [sharpen.installSharpenBoundaryMock],
