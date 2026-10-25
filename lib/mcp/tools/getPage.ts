@@ -17,8 +17,8 @@ import { pageIdField, pageProjectKeyField, renderPageText, resolvePageProject } 
 // another project, or an unknown id, is the same `PAGE_NOT_FOUND` — the gate on
 // one project never confirms a page exists in another.
 //
-// EXEMPT from payload derivation (`payloads/exemptions.ts`): no `/api/v1`
-// operation returns a page.
+// EXEMPT from payload derivation (`payloads/exemptions.ts`): the `/api/v1`
+// `Page` resource is a subset of this payload.
 
 export const GET_PAGE_TOOL_NAME = 'get_page';
 

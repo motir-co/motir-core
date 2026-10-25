@@ -292,16 +292,19 @@ export const EXEMPT_TOOLS = {
     'to derive from (MOTIR-2230).',
   get_page:
     'Returns a PAGE as an agent reads it — `{ id, projectId, title, placement, revision, ' +
-    'latestVersion, markdown, updatedAt }`. No `/api/v1` operation returns a page: the editor ' +
-    'reads it through its own routes, and the pages REST resource belongs to a later story ' +
-    '(Agents and search reach pages). So there is no shared shape to derive from. `revision` ' +
-    'is load-bearing: it is what `update_page` must send back (MOTIR-7410).',
+    'latestVersion, markdown, updatedAt }`. The `/api/v1` `Page` resource (MOTIR-9493) is a ' +
+    'SUBSET of it: it leaves out `projectId` (a project is a KEY on the wire) and the ' +
+    '`version` block of a one-version read, so this payload cannot be derived from it; both ' +
+    'are presented from the same `PageMarkdownDto`. `revision` is load-bearing: it is what ' +
+    '`update_page` must send back (MOTIR-7410).',
   create_page:
-    'Returns the new PAGE exactly as `get_page` reads it (MOTIR-7411). No `/api/v1` operation ' +
-    'returns a page, so there is no shared shape to derive from.',
+    'Returns the new PAGE exactly as `get_page` reads it (MOTIR-7411) — a superset of the ' +
+    '`/api/v1` `Page` resource, for the reason `get_page` gives, so there is no shared shape ' +
+    'to derive from.',
   update_page:
-    'Returns the saved PAGE exactly as `get_page` reads it, at its new `revision` (MOTIR-7411). ' +
-    'No `/api/v1` operation returns a page, so there is no shared shape to derive from.',
+    'Returns the saved PAGE exactly as `get_page` reads it, at its new `revision` (MOTIR-7411) ' +
+    '— a superset of the `/api/v1` `Page` resource, for the reason `get_page` gives, so there ' +
+    'is no shared shape to derive from.',
   rename_page:
     'Returns the renamed page’s summary — `{ id, projectId, title, position, revision, updatedAt }` ' +
     '(MOTIR-8841). No `/api/v1` operation returns a page, so there is no shared shape to derive from.',

@@ -307,6 +307,9 @@ describe('every operation’s REAL response validates against its declared schem
           ).flatMap((s) => LEGACY_SCOPE_PERMISSIONS[s]),
         ),
         'ai:decide_plan',
+        // The page resource (MOTIR-9493) — no legacy scope expands to a page key.
+        'page:view',
+        'page:edit',
       ],
     });
     const pk = caller.projectKey;
@@ -1141,6 +1144,42 @@ describe('every operation’s REAL response validates against its declared schem
       () => import('@/app/api/v1/folders/[folderId]/route'),
       send(`/api/v1/folders/${spareId}`, 'DELETE'),
       { folderId: spareId },
+    );
+
+    // ── The page resource (Story MOTIR-9486 · MOTIR-9493) ────────────────────
+    // Create one in the folder above with a markdown body, read it back, then
+    // replace its body at the revision the create returned and move it to the root.
+    const page = await drive(
+      'createPage',
+      () => import('@/app/api/v1/projects/[projectKey]/pages/route'),
+      send(`/api/v1/projects/${pk}/pages`, 'POST', {
+        title: 'Runbook',
+        markdown: '# Runbook\n\nRestart the worker.',
+        parent: { kind: 'folder', id: folderId },
+      }),
+      { projectKey: pk },
+    );
+    const pageId = (page.body as { id: string }).id;
+    await drive(
+      'getPage',
+      () => import('@/app/api/v1/pages/[pageId]/route'),
+      get(`/api/v1/pages/${pageId}`),
+      { pageId },
+    );
+    await drive(
+      'updatePage',
+      () => import('@/app/api/v1/pages/[pageId]/route'),
+      send(`/api/v1/pages/${pageId}`, 'PATCH', {
+        markdown: '# Runbook\n\nRestart the worker, then the queue.',
+        revision: (page.body as { revision: number }).revision,
+      }),
+      { pageId },
+    );
+    await drive(
+      'movePage',
+      () => import('@/app/api/v1/pages/[pageId]/placement/route'),
+      send(`/api/v1/pages/${pageId}/placement`, 'PATCH', { parent: { kind: 'root' } }),
+      { pageId },
     );
 
     // ── The activity read (Story 11.7) ──────────────────────────────────────
