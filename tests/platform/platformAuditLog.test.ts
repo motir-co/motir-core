@@ -240,6 +240,9 @@ describe('the reason rule', () => {
     // org's CI onto the fleet, so `superadmin` with a reason, both directions.
     'fleet.org_ci.enable': 'required',
     'fleet.org_ci.disable': 'required',
+    // The agent hoster's Fly↔AWS switch (MOTIR-9503): a flip says why.
+    'fleet.agent_hosting.enable': 'required',
+    'fleet.agent_hosting.disable': 'required',
     // `fleet-admin add-shard` / `refresh-limits` (Story MOTIR-8953 · MOTIR-8967):
     // a fleet account added or its quota re-read — writes, reason by the service.
     'fleet.shard.add': 'required',
