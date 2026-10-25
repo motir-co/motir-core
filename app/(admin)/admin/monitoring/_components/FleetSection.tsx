@@ -735,17 +735,22 @@ function usedPct(used: number, figure: number): number {
   return Math.min(100, Math.max(1, Math.round((used / figure) * 100)));
 }
 
-function CardHead({
+/** The card header: icon tile, title, subtitle, pills. The Pools section's blocks
+ *  (MOTIR-9563) sit one level down, so they title it with an `h3`. */
+export function CardHead({
   icon,
   title,
   subtitle,
   pills,
+  level = 2,
 }: {
   icon: React.ReactNode;
   title: string;
   subtitle: string;
   pills: React.ReactNode;
+  level?: 2 | 3;
 }) {
+  const Heading = level === 3 ? 'h3' : 'h2';
   return (
     <div className="flex flex-wrap items-center justify-between gap-2">
       <div className="flex min-w-0 items-center gap-2">
@@ -756,7 +761,7 @@ function CardHead({
           {icon}
         </span>
         <div className="flex min-w-0 flex-col gap-1">
-          <h2 className="font-sans text-sm font-semibold text-(--el-text)">{title}</h2>
+          <Heading className="font-sans text-sm font-semibold text-(--el-text)">{title}</Heading>
           <p className="font-sans text-xs text-(--el-text-secondary)">{subtitle}</p>
         </div>
       </div>
@@ -766,17 +771,20 @@ function CardHead({
 }
 
 /** An EmptyState / ErrorState drawn INSIDE a card body — the card is the frame. */
-function InsetState({
+export function InsetState({
   icon,
   title,
   tone = 'neutral',
+  level = 3,
   children,
 }: {
   icon: React.ReactNode;
   title: string;
   tone?: 'neutral' | 'error';
+  level?: 3 | 4;
   children: React.ReactNode;
 }) {
+  const Heading = level === 4 ? 'h4' : 'h3';
   return (
     <div
       role={tone === 'error' ? 'alert' : undefined}
@@ -792,13 +800,13 @@ function InsetState({
       >
         {icon}
       </span>
-      <h3 className="font-serif text-base text-(--el-text)">{title}</h3>
+      <Heading className="font-serif text-base text-(--el-text)">{title}</Heading>
       <p className="max-w-prose font-sans text-xs text-(--el-text-secondary)">{children}</p>
     </div>
   );
 }
 
-function Foot({
+export function Foot({
   note,
   label,
   page,
@@ -887,11 +895,28 @@ function Avatar({ name }: { name: string }) {
   );
 }
 
-function MiniStat({ value, label }: { value: string; label: string }) {
+/** A figure tile. `missing` sets the value in italic secondary — a WORD standing
+ *  where no figure could be read (the Pools section's _Not available_). */
+export function MiniStat({
+  value,
+  label,
+  missing,
+  sub,
+}: {
+  value: string;
+  label: string;
+  missing?: boolean;
+  sub?: string;
+}) {
   return (
     <div className="flex flex-col gap-1 rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-page-bg) p-(--spacing-card-padding-12)">
-      <span className="font-serif text-xl text-(--el-text)">{value}</span>
+      <span
+        className={`font-serif text-xl ${missing ? 'italic text-(--el-text-secondary)' : 'text-(--el-text)'}`}
+      >
+        {value}
+      </span>
       <span className="font-sans text-xs text-(--el-text-secondary)">{label}</span>
+      {sub ? <span className="font-sans text-xs text-(--el-text-secondary)">{sub}</span> : null}
     </div>
   );
 }
@@ -904,11 +929,11 @@ function Count({ n, own }: { n: number; own?: boolean }) {
   );
 }
 
-function Mono({ children }: { children: React.ReactNode }) {
+export function Mono({ children }: { children: React.ReactNode }) {
   return <span className="font-mono text-xs text-(--el-text-identifier)">{children}</span>;
 }
 
-function Sub({ children }: { children: React.ReactNode }) {
+export function Sub({ children }: { children: React.ReactNode }) {
   return (
     <span className="mt-0.5 block whitespace-nowrap text-xs text-(--el-text-secondary)">
       {children}
@@ -916,19 +941,22 @@ function Sub({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Th({
+export function Th({
   children,
   numeric,
   sorted,
   own,
+  scope,
 }: {
   children?: React.ReactNode;
   numeric?: boolean;
   sorted?: boolean;
   own?: boolean;
+  scope?: 'col';
 }) {
   return (
     <th
+      scope={scope}
       aria-sort={sorted ? 'descending' : undefined}
       className={`py-2 pr-3 align-bottom font-sans text-xs font-medium uppercase tracking-wide first:pl-3 ${numeric ? 'text-right' : ''} ${own ? 'border-l border-dashed border-(--el-border-strong) pl-2' : ''} ${sorted ? 'text-(--el-text-strong)' : 'text-(--el-text-secondary)'}`}
     >
@@ -937,7 +965,7 @@ function Th({
   );
 }
 
-function Td({
+export function Td({
   children,
   numeric,
   own,
@@ -947,14 +975,16 @@ function Td({
   children: React.ReactNode;
   numeric?: boolean;
   own?: boolean;
-  /** The danger rail: a 3px leading edge on a mismatched or failed row. */
-  rail?: boolean;
+  /** The 3px leading rail: danger on a mismatched or failed row (`true`), warning
+   *  on a Pools account past 70% (`'warning'`). */
+  rail?: boolean | 'warning';
   className?: string;
 }) {
+  const railTone = rail === 'warning' ? 'warning' : rail ? 'danger' : undefined;
   return (
     <td
-      data-rail={rail ? 'danger' : undefined}
-      className={`py-2 pr-3 align-top ${numeric ? 'text-right' : ''} ${own ? 'border-l border-dashed border-(--el-border-strong) pl-2' : ''} ${rail === undefined ? '' : `border-l-[3px] pl-3 ${rail ? 'border-l-(--el-danger)' : 'border-l-transparent'}`} ${className}`}
+      data-rail={railTone}
+      className={`py-2 pr-3 align-top ${numeric ? 'text-right' : ''} ${own ? 'border-l border-dashed border-(--el-border-strong) pl-2' : ''} ${rail === undefined ? '' : `border-l-[3px] pl-3 ${railTone === 'warning' ? 'border-l-(--el-warning)' : railTone === 'danger' ? 'border-l-(--el-danger)' : 'border-l-transparent'}`} ${className}`}
     >
       {children}
     </td>

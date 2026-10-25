@@ -10465,6 +10465,157 @@
         "prev": "Vorige",
         "next": "Volgende",
         "pageOf": "Pagina {page} van {pages}"
+      },
+      "pools": {
+        "title": "Pools",
+        "subtitle": "De pool van AWS-accounts van elk vloottype: capaciteit, gebruik tegenover 70%, het Motir-reserveaccount, de quotaverhogingen die bij AWS zijn aangevraagd en of de groei zijn werk heeft gedaan. Gelezen uit wat de groeironde het laatst heeft vastgelegd: het laden van deze pagina vraagt AWS niets.",
+        "kind": {
+          "ci_runner": "CI-runner",
+          "hosted_agent": "Agent-runner",
+          "code_graph_index": "Indexer",
+          "agent_instance": "Agent-host"
+        },
+        "block": {
+          "title": "Pool · {kind}",
+          "subtitle": {
+            "aws": "De gedeelde accounts, het Motir-reserveaccount, quotaverhogingen die bij AWS zijn aangevraagd en de groei-events, zoals de groeironde ze het laatst heeft gelezen.",
+            "fly": "Dit type is overgezet naar Fly en heeft dus geen AWS-pool.",
+            "other": "De gedeelde accounts, het Motir-reserveaccount, quotaverhogingen en groei-events."
+          }
+        },
+        "provider": {
+          "aws": "Draait op AWS",
+          "fly": "Draait op Fly"
+        },
+        "overCount": "{count, plural, one {# account boven 70%} other {# accounts boven 70%}}",
+        "growthInFlight": "Groei bezig",
+        "fly": {
+          "title": "{kind} draait op Fly",
+          "body": "De schakelaar staat op Fly, dus er is geen AWS-capaciteit, -quota of -groei om te tonen. De draaiende containers worden per organisatie geteld in het onderdeel Vloot hierboven."
+        },
+        "error": {
+          "title": "Kon de pool {kind} niet lezen",
+          "body": "Het lezen van deze pool gaf geen antwoord, dus hier is niets geladen: niets hiervan is nul en er wordt geen provider geclaimd. De andere pools en de rest van deze pagina zijn niet geraakt. Laad opnieuw om het nog eens te proberen."
+        },
+        "sectionError": {
+          "title": "Kon de pools niet lezen",
+          "body": "Het lezen van de pools gaf geen antwoord, dus er is geen pool geladen: niets hiervan is nul en er wordt geen provider geclaimd. De rest van deze pagina is niet geraakt. Laad opnieuw om het nog eens te proberen."
+        },
+        "total": {
+          "capacity": "Capaciteit · toegekende quota van {count, plural, one {# gedeeld account} other {# gedeelde accounts}} · reserve niet meegeteld",
+          "used": "vCPU in gebruik daarop",
+          "percent": "Van de capaciteit in gebruik · groei begint als een account 70% passeert",
+          "percentShort": "Van de capaciteit in gebruik",
+          "capacityShort": "Capaciteit · toegekende vCPU-quota",
+          "usedShort": "vCPU in gebruik",
+          "incomplete": "{count, plural, one {De quota van # account is niet gelezen} other {De quota van # accounts is niet gelezen}}, dus het totaal is niet bekend",
+          "noAccount": "Nog geen account",
+          "noAccountBody": "Deze pool heeft nog geen AWS-account en dus geen capaciteit om te lezen. Het eerste account voeg je toe met <cmd>{command}</cmd>."
+        },
+        "vcpu": "{n} vCPU",
+        "percent": "{n}%",
+        "notAvailable": "Niet beschikbaar",
+        "accounts": {
+          "title": "Gedeelde accounts",
+          "count": "{count, plural, one {# account} other {# accounts}}",
+          "col": {
+            "account": "Account",
+            "role": "Rol",
+            "state": "Staat",
+            "granted": "Toegekende quota",
+            "used": "In gebruik",
+            "percent": "Percentage",
+            "toThreshold": "Tot 70%"
+          }
+        },
+        "role": {
+          "shared": "Gedeeld"
+        },
+        "state": {
+          "active": "Actief",
+          "provisioning": "Wordt ingericht",
+          "disabled": "Uitgeschakeld"
+        },
+        "readAgo": "gelezen {age}",
+        "notRead": "Niet gelezen",
+        "notReadLabel": "Quota niet gelezen van AWS",
+        "lastRead": "laatst gelezen {age}",
+        "neverRead": "nooit gelezen",
+        "toGo": "nog {n} vCPU",
+        "over": "Boven 70%",
+        "overBy": "{n} vCPU erboven",
+        "atThreshold": "precies op 70%",
+        "spare": {
+          "title": "Motir-reserveaccount",
+          "none": "Nog geen Motir-reserveaccount voor dit type.",
+          "ready": "Klaar om toe te treden",
+          "waiting": "Wacht op quota",
+          "granted": "toegekend · gelezen {age}",
+          "notRead": "Quota niet gelezen · {when}",
+          "readyBody": "Niet meegeteld in de capaciteit. Het treedt toe tot de gedeelde pool zodra een account weer 70% passeert, en daarachter wordt een nieuw reserveaccount aangemaakt.",
+          "raisingBody": "Een verhoging naar {n} vCPU is {age} aangevraagd en staat nog open. Het reserveaccount treedt toe tot de gedeelde pool zodra AWS die toekent.",
+          "notReadBody": "De quota is niet gelezen, dus het telt niet als klaar. De groei promoveert het pas als er een toegekende quota is gelezen.",
+          "belowBody": "De toegekende quota is lager dan wat een gedeeld account nodig heeft, dus het telt niet als klaar. De groei promoveert het pas als AWS de verhoging toekent."
+        },
+        "requests": {
+          "title": "Quotaverhogingen aangevraagd bij AWS",
+          "count": "{count, plural, one {# aanvraag} other {# aanvragen}} · {open} open",
+          "none": "geen",
+          "empty": "Voor dit type is nog geen quotaverhoging bij AWS aangevraagd.",
+          "col": {
+            "account": "Account",
+            "asked": "Gevraagde waarde",
+            "status": "Status",
+            "granted": "Toegekend",
+            "when": "Aangevraagd",
+            "lastRead": "Laatst gelezen van AWS"
+          },
+          "status": {
+            "pending": "Open · in behandeling",
+            "case_opened": "Open · case geopend",
+            "approved": "Goedgekeurd",
+            "denied": "Geweigerd",
+            "not_approved": "Niet goedgekeurd",
+            "case_closed": "Case gesloten",
+            "invalid_request": "Ongeldige aanvraag"
+          },
+          "notYet": "Nog niet",
+          "notGranted": "Niet toegekend",
+          "quotaStays": "quota blijft {n} vCPU",
+          "quotaUnchanged": "quota ongewijzigd",
+          "notReadYet": "nog niet gelezen",
+          "foot": "{from}–{to} van {total} · open eerst, dan de nieuwste",
+          "pagerLabel": "Pagina’s met quotaverhogingen voor {kind}"
+        },
+        "events": {
+          "title": "Groei-events · 70% bereikt",
+          "count": "{count, plural, one {# event} other {# events}}",
+          "empty": "Nog geen groei-events: geen account van dit type heeft 70% bereikt.",
+          "col": {
+            "when": "Wanneer",
+            "account": "Account dat het activeerde",
+            "use": "Het gebruik",
+            "outcome": "Uitkomst"
+          },
+          "use": "<b>{used}</b> van {granted} vCPU",
+          "usePercent": "{p}% van de toegekende quota",
+          "accountRemoved": "account verwijderd",
+          "outcome": {
+            "spare_promoted": "Reserve gepromoveerd",
+            "account_created": "Account aangemaakt",
+            "waiting_for_quota": "Wacht op quota",
+            "refused": "Geweigerd"
+          },
+          "promoted": "{spare} is toegetreden tot de gedeelde pool",
+          "promotedNew": "{spare} is toegetreden tot de gedeelde pool; nieuwe reserve {created} wordt aangemaakt",
+          "created": "{created} toegevoegd, zonder reserve om te promoveren",
+          "waiting": "de verhoging van de reserve staat nog open, dus er is nog niets toegetreden",
+          "awsSaid": "AWS zei: ‘{reason}’",
+          "refusedNote": "er is geen account toegevoegd; de volgende ronde probeert het na een wachttijd opnieuw",
+          "foot": "{from}–{to} van {total} · nieuwste eerst",
+          "pagerLabel": "Pagina’s met groei-events voor {kind}"
+        },
+        "readOnly": "Alleen-lezen. Wil je meer quota bij AWS aanvragen, voer dan <cmd>{command}</cmd> uit in een terminal."
       }
     },
     "orgs": {

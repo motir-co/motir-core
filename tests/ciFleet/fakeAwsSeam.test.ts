@@ -20,7 +20,10 @@ import {
 } from '@/lib/orchestrator';
 import { fleetShardService, type CreateFleetShardInput } from '@/lib/services/fleetShardService';
 import { fleetShardOrchestratorService } from '@/lib/services/fleetShardOrchestratorService';
-import { setAgentRunnerSwitchForTests } from '@/lib/ciFleet/fleetKindSwitches';
+import {
+  setAgentRunnerSwitchForTests,
+  setCiRunnerSwitchForTests,
+} from '@/lib/ciFleet/fleetKindSwitches';
 import { E2E_MOCK_SEAMS, installE2EMockSeams } from '@/lib/test-mock-seams';
 import { installFakeAwsSeam, readFakeAwsState } from '@/lib/test-fake-aws';
 import { adminDb } from '../helpers/adminDb';
@@ -115,6 +118,7 @@ beforeEach(async () => {
 afterEach(async () => {
   setAwsEc2OverrideForTests(null);
   setAgentRunnerSwitchForTests(null);
+  setCiRunnerSwitchForTests(null);
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
   rmSync(dir, { recursive: true, force: true });
@@ -341,6 +345,39 @@ describe('the agent-runner switch reads the fixture with the seam on', () => {
 
     expect(switches.agentRunnerOnPool()).toBe(true);
     expect(await fleetKindOnPool('hosted_agent')).toBe(true);
+  });
+});
+
+describe('the CI runner switch (MOTIR-9565) is the lane fixture’s, and Fly without it', () => {
+  it('reads Fly with the seam off, and with the fixture absent, empty or on fly', async () => {
+    const { fleetKindOnPool } = await import('@/lib/ciFleet/shardTargets');
+    const { ciRunnerOnPoolInLane } = await import('@/lib/ciFleet/fleetKindSwitches');
+    // No seam installed: nothing can say yes.
+    expect(ciRunnerOnPoolInLane()).toBe(false);
+    expect(await fleetKindOnPool('ci_runner')).toBe(false);
+
+    await seamOn();
+    // The fixture file does not exist yet.
+    expect(await fleetKindOnPool('ci_runner')).toBe(false);
+    writeFileSync(switchPath, '{}');
+    expect(await fleetKindOnPool('ci_runner')).toBe(false);
+    writeFileSync(switchPath, JSON.stringify({ ciRunner: 'fly' }));
+    expect(await fleetKindOnPool('ci_runner')).toBe(false);
+    // The agent runner's entry moves the agent runner only.
+    writeAgentRunnerSwitch('aws');
+    expect(await fleetKindOnPool('ci_runner')).toBe(false);
+    writeFileSync(switchPath, 'not json');
+    expect(await fleetKindOnPool('ci_runner')).toBe(false);
+  });
+
+  it('reads AWS when the fixture says so, re-read on every call, and leaves the agent runner alone', async () => {
+    await seamOn();
+    const { fleetKindOnPool } = await import('@/lib/ciFleet/shardTargets');
+    writeFileSync(switchPath, JSON.stringify({ ciRunner: 'aws', hostedAgent: 'fly' }));
+    expect(await fleetKindOnPool('ci_runner')).toBe(true);
+    expect(await fleetKindOnPool('hosted_agent')).toBe(false);
+    writeFileSync(switchPath, JSON.stringify({ ciRunner: 'fly' }));
+    expect(await fleetKindOnPool('ci_runner')).toBe(false);
   });
 });
 

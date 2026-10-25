@@ -10465,6 +10465,157 @@
         "prev": "Poprz.",
         "next": "Nast.",
         "pageOf": "Strona {page} z {pages}"
+      },
+      "pools": {
+        "title": "Pule",
+        "subtitle": "Pula kont AWS każdego rodzaju floty: pojemność, użycie względem 70%, konto zapasowe Motir, zwiększenia limitu zgłoszone do AWS i to, czy wzrost wykonuje swoją pracę. Odczytane z tego, co przebieg wzrostu zapisał ostatnio — wczytanie tej strony o nic nie pyta AWS.",
+        "kind": {
+          "ci_runner": "Runner CI",
+          "hosted_agent": "Runner agentów",
+          "code_graph_index": "Indekser",
+          "agent_instance": "Host agentów"
+        },
+        "block": {
+          "title": "Pula · {kind}",
+          "subtitle": {
+            "aws": "Jej współdzielone konta, konto zapasowe Motir, zwiększenia limitu zgłoszone do AWS i zdarzenia wzrostu — tak, jak ostatnio odczytał je przebieg wzrostu.",
+            "fly": "Ten rodzaj przełączono na Fly, więc nie ma puli AWS.",
+            "other": "Jej współdzielone konta, konto zapasowe Motir, zwiększenia limitu i zdarzenia wzrostu."
+          }
+        },
+        "provider": {
+          "aws": "Działa na AWS",
+          "fly": "Działa na Fly"
+        },
+        "overCount": "{count, plural, one {# konto powyżej 70%} few {# konta powyżej 70%} many {# kont powyżej 70%} other {# konta powyżej 70%}}",
+        "growthInFlight": "Wzrost w toku",
+        "fly": {
+          "title": "{kind} działa na Fly",
+          "body": "Przełącznik jest ustawiony na Fly, więc nie ma pojemności, limitu ani wzrostu AWS do pokazania. Działające kontenery są liczone według organizacji w sekcji Flota powyżej."
+        },
+        "error": {
+          "title": "Nie udało się odczytać puli {kind}",
+          "body": "Odczyt tej puli nie odpowiedział, więc nic tu nie jest wczytane — nic z tego nie jest zerem i nie jest wskazany żaden dostawca. Pozostałe pule i reszta tej strony nie są objęte błędem. Wczytaj ponownie, aby spróbować jeszcze raz."
+        },
+        "sectionError": {
+          "title": "Nie udało się odczytać pul",
+          "body": "Odczyt pul nie odpowiedział, więc żadna pula nie jest wczytana — nic z tego nie jest zerem i nie jest wskazany żaden dostawca. Reszta tej strony nie jest objęta błędem. Wczytaj ponownie, aby spróbować jeszcze raz."
+        },
+        "total": {
+          "capacity": "Pojemność · przyznany limit {count, plural, one {# współdzielonego konta} few {# współdzielonych kont} many {# współdzielonych kont} other {# współdzielonego konta}} · bez konta zapasowego",
+          "used": "vCPU w użyciu na tych kontach",
+          "percent": "Wykorzystania pojemności · wzrost zaczyna się, gdy jedno konto przekroczy 70%",
+          "percentShort": "Wykorzystania pojemności",
+          "capacityShort": "Pojemność · przyznany limit vCPU",
+          "usedShort": "vCPU w użyciu",
+          "incomplete": "{count, plural, one {Limit # konta nie jest odczytany} few {Limit # kont nie jest odczytany} many {Limit # kont nie jest odczytany} other {Limit # konta nie jest odczytany}}, więc suma nie jest znana",
+          "noAccount": "Jeszcze brak konta",
+          "noAccountBody": "Ta pula nie ma jeszcze konta AWS, więc nie ma pojemności do odczytania. Pierwsze konto dodaje się poleceniem <cmd>{command}</cmd>."
+        },
+        "vcpu": "{n} vCPU",
+        "percent": "{n}%",
+        "notAvailable": "Niedostępne",
+        "accounts": {
+          "title": "Współdzielone konta",
+          "count": "{count, plural, one {# konto} few {# konta} many {# kont} other {# konta}}",
+          "col": {
+            "account": "Konto",
+            "role": "Rola",
+            "state": "Stan",
+            "granted": "Przyznany limit",
+            "used": "W użyciu",
+            "percent": "Procent",
+            "toThreshold": "Do 70%"
+          }
+        },
+        "role": {
+          "shared": "Współdzielone"
+        },
+        "state": {
+          "active": "Aktywne",
+          "provisioning": "W przygotowaniu",
+          "disabled": "Wyłączone"
+        },
+        "readAgo": "odczyt {age}",
+        "notRead": "Nieodczytany",
+        "notReadLabel": "Limit nieodczytany z AWS",
+        "lastRead": "ostatni odczyt {age}",
+        "neverRead": "nigdy nie odczytano",
+        "toGo": "jeszcze {n} vCPU",
+        "over": "Powyżej 70%",
+        "overBy": "{n} vCPU ponad próg",
+        "atThreshold": "dokładnie 70%",
+        "spare": {
+          "title": "Konto zapasowe Motir",
+          "none": "Dla tego rodzaju nie ma jeszcze konta zapasowego Motir.",
+          "ready": "Gotowe do dołączenia",
+          "waiting": "Czeka na limit",
+          "granted": "przyznany · odczyt {age}",
+          "notRead": "Limit nieodczytany · {when}",
+          "readyBody": "Nie wlicza się do pojemności. Dołącza do współdzielonej puli, gdy następnym razem jakieś konto przekroczy 70%, a za nim tworzone jest nowe konto zapasowe.",
+          "raisingBody": "Zwiększenie do {n} vCPU zgłoszono {age} i jest nadal otwarte. Konto zapasowe dołącza do współdzielonej puli, gdy tylko AWS je przyzna.",
+          "notReadBody": "Jego limit nie jest odczytany, więc nie liczy się jako gotowe. Wzrost awansuje je dopiero po odczytaniu przyznanego limitu.",
+          "belowBody": "Jego przyznany limit jest niższy niż potrzebny współdzielonemu kontu, więc nie liczy się jako gotowe. Wzrost awansuje je dopiero, gdy AWS przyzna zwiększenie."
+        },
+        "requests": {
+          "title": "Zwiększenia limitu zgłoszone do AWS",
+          "count": "{count, plural, one {# wniosek} few {# wnioski} many {# wniosków} other {# wniosku}} · otwarte: {open}",
+          "none": "brak",
+          "empty": "Dla tego rodzaju nie zgłoszono do AWS żadnego zwiększenia limitu.",
+          "col": {
+            "account": "Konto",
+            "asked": "Wnioskowana wartość",
+            "status": "Status",
+            "granted": "Przyznano",
+            "when": "Zgłoszono",
+            "lastRead": "Ostatni odczyt z AWS"
+          },
+          "status": {
+            "pending": "Otwarte · oczekuje",
+            "case_opened": "Otwarte · sprawa otwarta",
+            "approved": "Zatwierdzone",
+            "denied": "Odrzucone",
+            "not_approved": "Niezatwierdzone",
+            "case_closed": "Sprawa zamknięta",
+            "invalid_request": "Nieprawidłowy wniosek"
+          },
+          "notYet": "Jeszcze nie",
+          "notGranted": "Nie przyznano",
+          "quotaStays": "limit zostaje {n} vCPU",
+          "quotaUnchanged": "limit bez zmian",
+          "notReadYet": "jeszcze nie odczytano",
+          "foot": "{from}–{to} z {total} · najpierw otwarte, potem najnowsze",
+          "pagerLabel": "Strony zwiększeń limitu: {kind}"
+        },
+        "events": {
+          "title": "Zdarzenia wzrostu · osiągnięto 70%",
+          "count": "{count, plural, one {# zdarzenie} few {# zdarzenia} many {# zdarzeń} other {# zdarzenia}}",
+          "empty": "Jeszcze brak zdarzeń wzrostu — żadne konto tego rodzaju nie osiągnęło 70%.",
+          "col": {
+            "when": "Kiedy",
+            "account": "Konto wyzwalające",
+            "use": "Jego użycie",
+            "outcome": "Wynik"
+          },
+          "use": "<b>{used}</b> z {granted} vCPU",
+          "usePercent": "{p}% przyznanego limitu",
+          "accountRemoved": "konto usunięte",
+          "outcome": {
+            "spare_promoted": "Zapas awansowany",
+            "account_created": "Konto utworzone",
+            "waiting_for_quota": "Czeka na limit",
+            "refused": "Odmowa"
+          },
+          "promoted": "{spare} dołączyło do współdzielonej puli",
+          "promotedNew": "{spare} dołączyło do współdzielonej puli; tworzone jest nowe konto zapasowe {created}",
+          "created": "dodano {created}, bez konta zapasowego do awansu",
+          "waiting": "zwiększenie dla konta zapasowego jest nadal otwarte, więc nic jeszcze nie dołączyło",
+          "awsSaid": "AWS odpowiedziało: „{reason}”",
+          "refusedNote": "nie dodano żadnego konta; następny przebieg spróbuje ponownie po odczekaniu",
+          "foot": "{from}–{to} z {total} · najpierw najnowsze",
+          "pagerLabel": "Strony zdarzeń wzrostu: {kind}"
+        },
+        "readOnly": "Tylko do odczytu. Aby poprosić AWS o większy limit, uruchom <cmd>{command}</cmd> w terminalu."
       }
     },
     "orgs": {
