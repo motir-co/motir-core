@@ -1,5 +1,8 @@
 import { fetchCodeGraphRunVerdict, type CodeGraphRunVerdict } from '@/lib/ai/motirAiClient';
-import { AI_PLAN_INDEX_PAUSE_REASON } from '@/lib/ciFleet/indexAllowance';
+import {
+  AI_PLAN_INDEX_PAUSE_REASON,
+  INDEX_POOL_FULL_PAUSE_REASON,
+} from '@/lib/ciFleet/indexAllowance';
 import { indexFleetConfig } from '@/lib/orchestrator';
 import type {
   IndexAdvanceOutcome,
@@ -339,6 +342,16 @@ export async function runIndexFleetSteps(
     await pauseIndexingRepo(target.repoRef, target.organizationId, AI_PLAN_INDEX_PAUSE_REASON);
     return { indexed: false, reason: AI_PLAN_INDEX_PAUSE_REASON };
   }
+  // ⚠️ A FULL INDEXER POOL IS THE SAME KIND OF WAIT (MOTIR-9451). Every account
+  // of the pool stayed full for the whole admission budget: nothing booted, no
+  // slot is held, and nothing is wrong with this repository or this run. The
+  // pause reason goes on the row (releasing the claim), the run succeeds as a
+  // no-op with no `output.repoRef`, and the catch-up sweep re-dispatches the
+  // repository once the pool has room. Never Fly, never a failed run.
+  if ('poolFull' in dispatched) {
+    await pauseIndexingRepo(target.repoRef, target.organizationId, INDEX_POOL_FULL_PAUSE_REASON);
+    return { indexed: false, reason: INDEX_POOL_FULL_PAUSE_REASON };
+  }
   const { coreTimings, indexModes } = dispatched;
 
   const result = await finishIndexRun(ctx, services, input, target, coreTimings, indexModes);
@@ -384,6 +397,8 @@ async function indexEveryProject(
   | { coreTimings: IndexCoreTimings[]; indexModes: IndexModeRecord[] }
   /** The organisation has no paid AI plan (MOTIR-8235) — see the caller. */
   | { planRefused: true }
+  /** Every indexer-pool account stayed full (MOTIR-9451) — see the caller. */
+  | { poolFull: true }
 > {
   const steps = stepSeam(ctx);
 
@@ -460,6 +475,10 @@ async function indexEveryProject(
     // this run (MOTIR-8235): the caller records it as a pause.
     if (outcome.outcome === 'admission_deferred' && outcome.reason === 'ai_plan_required') {
       return { planRefused: true };
+    }
+    // ⚠️ NOR A FULL INDEXER POOL (MOTIR-9451): a wait, recorded by the caller.
+    if (outcome.outcome === 'admission_deferred' && outcome.reason === 'pool_full') {
+      return { poolFull: true };
     }
     if (outcome.outcome !== 'settled' || !outcome.verdict.indexed) {
       // ⚠️ A SIZE REFUSAL IS RECORDED ON THE REPOSITORY BEFORE THE RUN FAILS

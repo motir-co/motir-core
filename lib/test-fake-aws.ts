@@ -333,6 +333,11 @@ export function createFileBackedEc2(
         }
       });
     },
+    // The lane boots no index VM (MOTIR-9449 reads an index VM's console for its
+    // exit code), so no instance here has console output.
+    async getConsoleOutput() {
+      return null;
+    },
   };
 }
 

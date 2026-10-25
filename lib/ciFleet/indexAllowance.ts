@@ -49,6 +49,19 @@ export type IndexPauseReason = `paused_index_${string}`;
  *  re-asks about. */
 export const AI_PLAN_INDEX_PAUSE_REASON: IndexPauseReason = 'paused_index_ai_plan_required';
 
+/** The pause recorded when every account of the indexer pool is full
+ *  (MOTIR-9451). NOT an allowance stop: it is a property of Motir's capacity,
+ *  not of the organisation, so the catch-up sweep lifts it when the pool has
+ *  room rather than by asking the allowance, and the allowance surfaces do not
+ *  list it as a stopped organisation. The repository is waiting, not refused. */
+export const INDEX_POOL_FULL_PAUSE_REASON: IndexPauseReason = 'paused_index_pool_full';
+
+/** Is this recorded pause a full indexer pool rather than an allowance or plan
+ *  stop? The one comparison — no caller compares the strings. */
+export function isPoolFullPause(reason: string | null | undefined): boolean {
+  return reason === INDEX_POOL_FULL_PAUSE_REASON;
+}
+
 const HARD_STOP_PREFIX = 'hard_stop_';
 
 /**

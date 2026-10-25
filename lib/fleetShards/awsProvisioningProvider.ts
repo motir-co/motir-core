@@ -236,7 +236,12 @@ export function createAwsShardProvisioningProvider(
       }
       const { created } = await api().ensureRunnerIamUser(
         credentials,
-        awsRunnerPolicyDocument({ shardTag: ctx.name, regionId: region }),
+        awsRunnerPolicyDocument({
+          shardTag: ctx.name,
+          regionId: region,
+          // The attribution pass reaps untagged VMs on an indexer account (MOTIR-9450).
+          reapUntagged: ctx.fleetKind === 'code_graph_index',
+        }),
       );
       const key = awsCredentialsFromEnv(ctx.credentialRef, deps.env());
       if (!key) return { created, confirmed: false };

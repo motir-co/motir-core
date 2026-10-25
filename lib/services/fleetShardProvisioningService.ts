@@ -189,7 +189,9 @@ async function preflight(
   const problems: string[] = [...extraProblems];
 
   if (!(FLEET_WORKLOAD_KINDS as string[]).includes(input.fleetKind)) {
-    problems.push(`--fleet-kind must be one of ${FLEET_WORKLOAD_KINDS.join(', ')}`);
+    problems.push(
+      `--fleet-kind ${input.fleetKind || '(none)'} is not one of ${FLEET_WORKLOAD_KINDS.join(', ')}`,
+    );
   }
   const provider = findShardProvisioningProvider(input.provider);
   if (!provider) {
