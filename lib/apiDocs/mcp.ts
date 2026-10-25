@@ -700,6 +700,11 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
       'Archive a page with its sub-pages, or restore an archive root and see where it landed — nothing is deleted.',
     descriptionFingerprint: 'e48d9ee5c544',
   },
+  link_page: {
+    summary:
+      'Link a page to a work item of its project, or unlink it; linking twice changes nothing, and another project is refused by name.',
+    descriptionFingerprint: '215ff7d3a41d',
+  },
   publish_decision_page: {
     summary:
       'Publish a page as a decision card’s decision: seals its newest version and, on an agent card, asks a person to approve it.',

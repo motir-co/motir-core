@@ -600,6 +600,7 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         search_pages: { projectKey: 'PROD', q: 'scoped' },
         move_page: { projectKey: 'PROD', pageId: 'page_scoped', parent: { kind: 'root' } },
         archive_page: { projectKey: 'PROD', pageId: 'page_scoped' },
+        link_page: { projectKey: 'PROD', pageId: 'page_scoped', workItemKey: 'PROD-1' },
         publish_decision_page: { key: item1, pageId: 'page_scoped' },
         get_work_item: { key: item1 },
         get_design: { key: item1 },

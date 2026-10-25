@@ -79,6 +79,8 @@ export function mcpToolArgs(t: McpToolTargets): Record<McpToolName, Record<strin
     move_page: { projectKey: t.projectKey, pageId: t.pageId, parent: { kind: 'root' } },
     // MOTIR-9557 — the page archive.
     archive_page: { projectKey: t.projectKey, pageId: t.pageId },
+    // MOTIR-9558 — the page hand link.
+    link_page: { projectKey: t.projectKey, pageId: t.pageId, workItemKey: t.item1 },
     publish_decision_page: { key: t.item1, pageId: t.pageId },
     get_work_item: { key: t.item1 },
     get_design: { key: t.item1 },

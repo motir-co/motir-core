@@ -1738,6 +1738,35 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  link_page: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description: 'The project key the page belongs to (e.g. "ACME").',
+      },
+      pageId: {
+        type: 'string',
+        minLength: 1,
+        description: 'The page id — the `<id>` in the page’s address `/pages/<id>`.',
+      },
+      workItemKey: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The work item to link the page to — its key, e.g. "ACME-7". It must be in `projectKey`.',
+      },
+      action: {
+        type: 'string',
+        enum: ['link', 'unlink'],
+        description: '`link` (the default) adds the hand link; `unlink` removes it.',
+      },
+    },
+    required: ['projectKey', 'pageId', 'workItemKey'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   link_pull_request: {
     type: 'object',
     properties: {
@@ -4205,6 +4234,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   get_work_item: 'Get work item',
   get_work_item_activity: 'Get work item activity',
   hold_plan_revision: 'Hold a plan while you revise it',
+  link_page: 'Link page',
   link_pull_request: 'Link pull request',
   link_work_items: 'Link work items',
   list_designs: 'List designs',
@@ -4512,6 +4542,13 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
     title: 'Hold a plan while you revise it',
     readOnlyHint: false,
     destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
+  link_page: {
+    title: 'Link page',
+    readOnlyHint: false,
+    destructiveHint: true,
     idempotentHint: false,
     openWorldHint: false,
   },

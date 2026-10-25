@@ -104,6 +104,16 @@ export const TOOL_ANNOTATIONS: Record<McpToolName, McpToolAnnotations> = {
     idempotentHint: false,
     openWorldHint: false,
   },
+  // `action: "unlink"` is an unlinking verb, so a destructive write by this table's rule
+  // (as `link_work_items` / `unlink_work_items` share one door). Not idempotent: a link
+  // repeated answers `changed: false`, but an unlink repeated is refused PAGE_LINK_NOT_FOUND.
+  // W: linkPage.ts → pageLinksService.linkPageForWorkItem / unlinkPageForWorkItem — writes or deletes the manual row and the work item's revision
+  link_page: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
   // W: claimWorkItem.ts → workItemsService.claimWorkItem — overwrites assigneeId, moves status; a repeat answers `mine` and writes nothing
   claim_work_item: {
     readOnlyHint: false,

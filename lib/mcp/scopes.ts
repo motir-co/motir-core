@@ -220,6 +220,8 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   move_page: 'work_items:write',
   // MOTIR-9557 — the page archive / restore, a write; its real gate is `page:edit`.
   archive_page: 'work_items:write',
+  // MOTIR-9558 — the page hand link, a write; its real gate is `page:edit`.
+  link_page: 'work_items:write',
   // A WRITE: it seals a page version, records the publication and may raise a gate.
   publish_decision_page: 'work_items:write',
   // The SEMANTIC search (MOTIR-3101). A read at the gate — `assertCanBrowse` and

@@ -298,6 +298,8 @@ describe('LEGACY_SCOPE_PERMISSIONS (the forward map)', () => {
       move_page: true,
       // MOTIR-9557 — the page archive / restore, `page:edit`, the same loss.
       archive_page: true,
+      // MOTIR-9558 — the page hand link, `page:edit`, the same loss.
+      link_page: true,
     };
     const losses: string[] = [];
     for (const name of MCP_TOOL_NAMES) {
