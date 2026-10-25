@@ -335,14 +335,26 @@ test('Pages are found by meaning: the ten-step recipe over REST, the app, MCP an
       expect(stale.status()).toBe(409);
       expect(((await stale.json()) as { code: string }).code).toBe('PAGE_REVISION_CONFLICT');
 
-      // Re-embedded once the plants query ranks it first.
-      await expect.poll(async () => (await find(PLANTS_QUERY)).ids[0], POLL).toBe(pageId);
+      // Re-embedded: the worker sent the new body across the boundary. The plants
+      // query alone cannot prove it — full-text matches "water" the moment the
+      // save lands, 30 s before the debounced job runs.
+      await expect
+        .poll(
+          () =>
+            journal().some(
+              (l) => l.status === 200 && l.input.some((text) => text.includes('ficus')),
+            ),
+          POLL,
+        )
+        .toBe(true);
       const plants = await find(PLANTS_QUERY);
       expect(plants.body.mode).toBe('merged');
+      expect(plants.ids[0]).toBe(pageId);
 
-      // The old meaning: the on-call page that is still about it ranks above.
+      // The old meaning: the on-call page that is still about it ranks above
+      // (polled, because the vector is written just after the call returns).
+      await expect.poll(async () => (await find(MEANING)).ids[0], POLL).toBe(controlId);
       const old = await find(MEANING);
-      expect(old.ids[0]).toBe(controlId);
       expect(old.ids.indexOf(pageId)).toBeGreaterThan(0);
     },
   );
