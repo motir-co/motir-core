@@ -8431,7 +8431,9 @@
       "held": "Motir AI zaproponuje planowanie, gdy skończą się te pytania.",
       "settledHeading": "Co ustaliły Twoje odpowiedzi",
       "clearEnough": "Wystarczająco jasne, by zaplanować bez zmian.",
-      "nothingSettled": "Nic nie ustalono, więc prośba zostanie zaplanowana bez zmian."
+      "nothingSettled": "Nic nie ustalono, więc prośba zostanie zaplanowana bez zmian.",
+      "requirementSaved": "Zapisano jako <link>{title}</link> w Dokumentach wymagań.",
+      "requirementNotSaved": "<lead>Nie udało się zapisać wymagania.</lead> Nic nie zostało uruchomione. Potwierdź nadal jest dostępne – spróbuj ponownie."
     },
     "logBugOffer": {
       "label": "Propozycja zgłoszenia błędu",
@@ -8510,6 +8512,20 @@
       "emptyBody": "Tutaj pojawiają się pytania, które zadajesz, i plany, które zaczynasz w tym projekcie.",
       "error": "Nie udało się wczytać Twoich rozmów.",
       "rowAria": "{title} · {status} · aktywna {when}"
+    },
+    "requirementPane": {
+      "label": "Wymaganie do zaplanowania",
+      "headings": {
+        "outcome": "Rezultat",
+        "behaviour": "Zachowanie",
+        "scopeEdge": "Granica zakresu",
+        "constraints": "Ograniczenia",
+        "acceptance": "Akceptacja",
+        "assumptions": "Założenia"
+      },
+      "none": "Brak treści",
+      "correctionHint": "Aby coś tu zmienić, wpisz poprawkę w rozmowie.",
+      "notice": "Dla tej propozycji nie napisano wymagania. Planowanie napisze je po potwierdzeniu."
     }
   },
   "codeHealth": {

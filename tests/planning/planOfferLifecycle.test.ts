@@ -369,6 +369,51 @@ describe('land — the offer rides the answer’s own append', () => {
     },
   );
 
+  it(
+    'keeps the composed requirement on a no-target offer and drops it on a targeted one',
+    T,
+    async () => {
+      const requirement = {
+        outcome: 'Plan from the pane.',
+        behaviour: 'Show it before Confirm.',
+        scopeEdge: '',
+        constraints: '',
+        acceptance: 'Six headings.',
+        assumptions: [{ id: 'r1', text: 'One pane.' }],
+      };
+      const noTarget = await turn(
+        owner(),
+        'Plan something new',
+        answerWith(planOffer(undefined, { requirement })),
+      );
+      expect(lastAnswer(noTarget.session.turns).offer).toMatchObject({
+        targetKey: null,
+        requirement,
+      });
+
+      const target = await task();
+      const targeted = await turn(
+        owner(),
+        'Plan the export',
+        answerWith(planOffer(target.identifier, { requirement })),
+      );
+      const offer = lastAnswer(targeted.session.turns).offer!;
+      expect(offer.targetKey).toBe(target.identifier);
+      expect('requirement' in offer).toBe(false);
+
+      // A target that does not resolve for the caller lands with no target, and still
+      // stores no requirement: it was composed for a targeted offer.
+      const unresolved = await turn(
+        owner(),
+        'Plan the other one',
+        answerWith(planOffer('NOPE-9', { requirement })),
+      );
+      const lost = lastAnswer(unresolved.session.turns).offer!;
+      expect(lost.targetKey).toBeNull();
+      expect('requirement' in lost).toBe(false);
+    },
+  );
+
   it('stores NO offer for an immediate offer, an unknown kind, or no offer at all', T, async () => {
     const target = await task();
     for (const ask of [

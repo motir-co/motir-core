@@ -8431,7 +8431,9 @@
       "held": "O Motir AI vai propor o planejamento quando estas perguntas terminarem.",
       "settledHeading": "O que suas respostas definiram",
       "clearEnough": "Claro o bastante para planejar como está.",
-      "nothingSettled": "Nada foi definido, então o pedido é planejado como está."
+      "nothingSettled": "Nada foi definido, então o pedido é planejado como está.",
+      "requirementSaved": "Guardado como <link>{title}</link> em Documentos de requisitos.",
+      "requirementNotSaved": "<lead>Não foi possível guardar o requisito.</lead> Nada foi iniciado. Confirmar continua disponível: tente novamente."
     },
     "logBugOffer": {
       "label": "Oferta para registrar um bug",
@@ -8510,6 +8512,20 @@
       "emptyBody": "As perguntas que você faz e os planos que você inicia neste projeto aparecem aqui.",
       "error": "Não foi possível carregar suas conversas.",
       "rowAria": "{title} · {status} · ativa {when}"
+    },
+    "requirementPane": {
+      "label": "Requisito a planejar",
+      "headings": {
+        "outcome": "Resultado",
+        "behaviour": "Comportamento",
+        "scopeEdge": "Limite do escopo",
+        "constraints": "Restrições",
+        "acceptance": "Aceitação",
+        "assumptions": "Premissas"
+      },
+      "none": "Nada aqui",
+      "correctionHint": "Para mudar algo aqui, escreva a correção na conversa.",
+      "notice": "Nenhum requisito foi redigido para esta oferta. O planejamento o redigirá quando você confirmar."
     }
   },
   "codeHealth": {

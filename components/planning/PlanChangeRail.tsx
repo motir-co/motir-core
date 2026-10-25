@@ -1226,8 +1226,12 @@ export function PlanChangeRail({
                     offer={turn.offer}
                     workItemRefs={state.session?.workItemRefs ?? {}}
                     {...planOfferPropsFor(turn, i)}
+                    // A no-target offer that carries its requirement folds the answers into
+                    // the document in the left pane; listing them here says it twice.
                     settled={
-                      convGrillSession && convGrillSession.status === 'ended'
+                      convGrillSession &&
+                      convGrillSession.status === 'ended' &&
+                      !turn.offer.requirement
                         ? {
                             settled: convGrillSession.settled,
                             assumptions: convGrillSession.assumptions,
