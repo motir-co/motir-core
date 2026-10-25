@@ -346,6 +346,21 @@ describe('a hibernated instance woken while its own account is full', () => {
     expect((await rowOf(row.id)).failureReason).toContain('The machine could not start');
   });
 
+  it('a provider error on the waiting retry fails the wake with its reason, never waits', async () => {
+    const { a, row } = await hibernatedOnA();
+    fakePersistentOrchestratorForShard(a.id).holdCapacity('start');
+    await lifecycle.wake(fx.projectIdentifier, row.id, fx.ctx);
+    await makeRoom(a);
+    fleet.failNextStart('the fake refused to start');
+    expect(await driveBoot(row.id)).toBe('failed');
+    const failed = await rowOf(row.id);
+    expect(failed.failureReason).toContain('The machine could not start');
+    expect(failed.failureReason).toContain('Wake to try again, or delete it.');
+    const provision = await provisionStep(row.id);
+    expect(provision.state).toBe('failed');
+    expect(provision.waiting).toBeNull();
+  });
+
   it('the boot read names no provider, account, zone or quota', async () => {
     const { a, row } = await hibernatedOnA();
     fakePersistentOrchestratorForShard(a.id).holdCapacity('start');
