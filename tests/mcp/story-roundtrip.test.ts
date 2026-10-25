@@ -597,6 +597,7 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         create_page: { projectKey: 'PROD', markdown: 'scoped page' },
         update_page: { projectKey: 'PROD', pageId: 'page_scoped', markdown: 'x', revision: 1 },
         rename_page: { projectKey: 'PROD', pageId: 'page_scoped', title: 'x' },
+        search_pages: { projectKey: 'PROD', q: 'scoped' },
         publish_decision_page: { key: item1, pageId: 'page_scoped' },
         get_work_item: { key: item1 },
         get_design: { key: item1 },

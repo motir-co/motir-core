@@ -1,6 +1,11 @@
 import { z } from 'zod/v4';
 import { InvalidRequestError } from '@/lib/api/v1/errors';
-import type { PageMarkdownDto, PageMoveResultDto, PageParentInput } from '@/lib/dto/pages';
+import type {
+  PageMarkdownDto,
+  PageMoveResultDto,
+  PageParentInput,
+  PageSearchResultDto,
+} from '@/lib/dto/pages';
 import { parseParentBody } from '@/lib/pages/parentInput';
 
 // The v1 PAGE resource (Story MOTIR-9486 · MOTIR-9493) — a project's document,
@@ -209,3 +214,60 @@ export const movePageBodySchema = z
   })
   .strict();
 export type MovePageBody = z.infer<typeof movePageBodySchema>;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SEARCH (Story MOTIR-9489 · MOTIR-9552)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Where a hit lives — the same place the Link page picker shows. */
+export const pageSearchPlaceSchema = z.object({
+  /** The folder chain its topmost page is filed in, root first; `[]` at the root. */
+  folderPath: z.array(z.string()),
+  /** Its direct parent page's title; `null` for a top-level page. */
+  parentPageTitle: z.string().nullable(),
+});
+
+/** One full-text hit: the page's identity and place, a snippet and a rank — never its body. */
+export const pageSearchHitSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  place: pageSearchPlaceSchema,
+  /** A short excerpt of the body around the match; `''` for a page with no body. */
+  snippet: z.string(),
+  /** Higher is a better match. Comparable only within one search. */
+  rank: z.number(),
+});
+export type V1PageSearchHit = z.infer<typeof pageSearchHitSchema>;
+
+/** One page of hits — the plain cursor envelope, no total. */
+export interface V1PageSearchResult {
+  items: V1PageSearchHit[];
+  nextCursor: string | null;
+}
+
+/**
+ * `GET /api/v1/projects/{projectKey}/pages/search` — WIRE types only. A missing
+ * `q` is the empty string, so the service's named empty-query refusal is the one
+ * answer; the cursor passes through untouched, so only the service decides
+ * whether it issued it.
+ */
+export function readPageSearchQuery(url: URL): { q: string; cursor: string | null } {
+  return { q: url.searchParams.get('q') ?? '', cursor: url.searchParams.get('cursor') };
+}
+
+/** Map a search result to the wire — field by field, never a spread. */
+export function presentPageSearch(result: PageSearchResultDto): V1PageSearchResult {
+  return {
+    items: result.items.map((hit) => ({
+      id: hit.id,
+      title: hit.title,
+      place: {
+        folderPath: [...hit.place.folderPath],
+        parentPageTitle: hit.place.parentPageTitle,
+      },
+      snippet: hit.snippet,
+      rank: hit.rank,
+    })),
+    nextCursor: result.nextCursor,
+  };
+}

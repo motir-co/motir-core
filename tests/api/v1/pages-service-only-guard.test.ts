@@ -107,7 +107,7 @@ function pageRestSources(): Map<string, string> {
 describe('the page REST surface goes through pagesService only', () => {
   it('finds the route files and helpers at all — the walk is not silently empty', () => {
     const files = [...pageRestSources().keys()];
-    expect(files.filter((f) => f.endsWith('/route.ts'))).toHaveLength(3);
+    expect(files.filter((f) => f.endsWith('/route.ts'))).toHaveLength(4);
     expect(files).toEqual(
       expect.arrayContaining([
         'lib/api/v1/pages/errors.ts',

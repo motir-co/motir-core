@@ -73,6 +73,8 @@ export function mcpToolArgs(t: McpToolTargets): Record<McpToolName, Record<strin
     create_page: { projectKey: t.projectKey, markdown: 'rogue' },
     update_page: { projectKey: t.projectKey, pageId: t.pageId, markdown: 'rogue', revision: 1 },
     rename_page: { projectKey: t.projectKey, pageId: t.pageId, title: 'rogue' },
+    // MOTIR-9553 — the page search, project-keyed the same way.
+    search_pages: { projectKey: t.projectKey, q: 'rogue' },
     publish_decision_page: { key: t.item1, pageId: t.pageId },
     get_work_item: { key: t.item1 },
     get_design: { key: t.item1 },

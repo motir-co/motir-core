@@ -329,7 +329,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **101 tools**.
+`initialize` handshake and registers **102 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -3147,19 +3147,22 @@ minted before that grant changed gains them at its next `motir login`. Every
 refusal is the page service's own, returned as a typed tool error carrying its
 code:
 
-| Code                        | Meaning                                                                                                                                                     |
-| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `PAGE_NOT_FOUND`            | No such page in that project — the same answer for an unknown id and another project's page.                                                                |
-| `PAGE_VERSION_NOT_FOUND`    | `get_page`'s `version` names a number the page has no version for. The message names the number.                                                            |
-| `PAGE_REVISION_CONFLICT`    | `update_page` sent a `revision` the page has moved past. Nothing was written; the message names both revisions. Call `get_page`, redo the edit, send again. |
-| `PAGE_BODY_TOO_LARGE`       | The markdown is over 1 MiB, or the body it makes is over 2 MiB. The message names the size and the limit. Nothing was written.                              |
-| `PAGE_TITLE_TOO_LONG`       | `create_page`'s or `rename_page`'s `title` is over 255 characters.                                                                                          |
-| `PAGE_PARENT_NOT_ALLOWED`   | A `parent.kind` other than `root`, `folder` or `page` — a page cannot be filed under a work item.                                                           |
-| `PAGE_PARENT_ID_REQUIRED`   | A `folder` or `page` parent with no `id`.                                                                                                                   |
-| `FOLDER_NOT_FOUND`          | The parent folder is not in this project.                                                                                                                   |
-| `CROSS_PROJECT_PAGE_PARENT` | The parent page or folder belongs to another project.                                                                                                       |
-| `PAGE_CYCLE`                | A page placed under itself or one of its own sub-pages.                                                                                                     |
-| `PAGE_DEPTH_EXCEEDED`       | The sub-page would sit deeper than 10 levels.                                                                                                               |
+| Code                         | Meaning                                                                                                                                                     |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PAGE_NOT_FOUND`             | No such page in that project — the same answer for an unknown id and another project's page.                                                                |
+| `PAGE_VERSION_NOT_FOUND`     | `get_page`'s `version` names a number the page has no version for. The message names the number.                                                            |
+| `PAGE_REVISION_CONFLICT`     | `update_page` sent a `revision` the page has moved past. Nothing was written; the message names both revisions. Call `get_page`, redo the edit, send again. |
+| `PAGE_BODY_TOO_LARGE`        | The markdown is over 1 MiB, or the body it makes is over 2 MiB. The message names the size and the limit. Nothing was written.                              |
+| `PAGE_TITLE_TOO_LONG`        | `create_page`'s or `rename_page`'s `title` is over 255 characters.                                                                                          |
+| `PAGE_PARENT_NOT_ALLOWED`    | A `parent.kind` other than `root`, `folder` or `page` — a page cannot be filed under a work item.                                                           |
+| `PAGE_PARENT_ID_REQUIRED`    | A `folder` or `page` parent with no `id`.                                                                                                                   |
+| `FOLDER_NOT_FOUND`           | The parent folder is not in this project.                                                                                                                   |
+| `CROSS_PROJECT_PAGE_PARENT`  | The parent page or folder belongs to another project.                                                                                                       |
+| `PAGE_CYCLE`                 | A page placed under itself or one of its own sub-pages.                                                                                                     |
+| `PAGE_DEPTH_EXCEEDED`        | The sub-page would sit deeper than 10 levels.                                                                                                               |
+| `PAGE_SEARCH_QUERY_EMPTY`    | `search_pages`' `q` is empty or only whitespace. A search never lists every page.                                                                           |
+| `PAGE_SEARCH_QUERY_TOO_LONG` | `search_pages`' `q` is over 200 characters.                                                                                                                 |
+| `PAGE_CURSOR_INVALID`        | `search_pages`' `cursor` is not one a previous call returned.                                                                                               |
 
 #### `get_page`
 
@@ -3247,6 +3250,23 @@ published at. An empty `title` makes the page untitled. To change the body, use
 | `title`      | string | yes      | The page's new title (may be empty).       |
 
 **Output** — the page's summary: `{ id, projectId, title, position, revision, updatedAt }`.
+
+#### `search_pages`
+
+**Find** a project's live pages by a word in the title or the body (Story
+MOTIR-9489). Gated on `page:view`. It calls the same `pagesService.searchPages`
+door as `GET /api/v1/projects/{projectKey}/pages/search`, so the access filter,
+the query rules and every refusal code are the REST route's. Archived pages are
+never returned. Hits are ranked best first, 20 at a time.
+
+| Input        | Type   | Required | Notes                                                         |
+| ------------ | ------ | -------- | ------------------------------------------------------------- |
+| `projectKey` | string | yes      | Project key, e.g. `"ACME"`.                                   |
+| `q`          | string | yes      | The words to find (at most 200 characters; empty is refused). |
+| `cursor`     | string | no       | The `nextCursor` a previous call returned.                    |
+
+**Output** — `{ items: [{ id, title, place, snippet, rank }], nextCursor }`, each
+hit v1's `PageSearchHit`. A hit is not the page: read it with `get_page`.
 
 #### `publish_decision_page`
 

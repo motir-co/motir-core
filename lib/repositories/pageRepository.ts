@@ -109,6 +109,57 @@ export interface PageArchivedRootsPage {
 const LIVE = Prisma.sql`p."archived_at" IS NULL`;
 
 /**
+ * The text-search configuration of page search (Story MOTIR-9489 · MOTIR-9550).
+ * `simple` neither stems nor drops stop words, so a word is found as typed in
+ * any of the eleven languages the product writes content in.
+ */
+export const PAGE_SEARCH_CONFIG = 'simple';
+
+/**
+ * How much of `body_text` is searchable. A `tsvector` is capped at 1 MiB and a
+ * body may be 2 MiB, so an uncut body would make the page WRITE fail on the
+ * index; words past this many characters are not found.
+ */
+export const PAGE_SEARCH_BODY_LIMIT = 200000;
+
+/**
+ * The searchable document of a page, alias `p` — the EXACT expression
+ * `page_search_gin_idx` was built on (`20261025090000_page_search_index`). The
+ * only place application code spells it: a query that writes it any other way
+ * does not match the index and scans the table. The constants are inlined as
+ * SQL text, not bound, because a bound parameter is not the index's constant.
+ */
+export const PAGE_SEARCH_DOCUMENT = Prisma.sql`to_tsvector(${Prisma.raw(
+  `'${PAGE_SEARCH_CONFIG}'`,
+)}, p."title" || ' ' || left(p."body_text", ${Prisma.raw(String(PAGE_SEARCH_BODY_LIMIT))}))`;
+
+/**
+ * The rows page search may ever return, alias `p`: the LIVE pages of ONE project
+ * (MOTIR-9551). Spelled once so the by-meaning read can interpolate the same
+ * predicate instead of writing a second one; the caller has already passed
+ * `authorizePageSearch` (`lib/pages/pageSearchAccess.ts`).
+ */
+export function PAGE_SEARCH_LIVE_IN_PROJECT(projectId: string): Prisma.Sql {
+  return Prisma.sql`p."project_id" = ${projectId} AND ${LIVE}`;
+}
+
+/** The full-text keyset seek: the last hit served, in `[rank desc, id desc]` order. */
+export interface PageSearchSeek {
+  rank: number;
+  id: string;
+}
+
+/** One full-text hit as the repository reads it — what the service needs, no body. */
+export interface PageSearchRow {
+  id: string;
+  title: string;
+  ancestorPageIds: string[];
+  folderId: string | null;
+  rank: number;
+  snippet: string;
+}
+
+/**
  * The LIVE rows of ONE level, alias `p`: at the root neither column is set; in a
  * folder the folder is (a sub-page never carries one — `page_parent_xor_folder`);
  * under a page the parent is. An archived page is in no level (§7), so its kept
@@ -306,6 +357,51 @@ export const pageRepository = {
       take,
       select: { id: true, title: true, ancestorPageIds: true, folderId: true, updatedAt: true },
     });
+  },
+
+  /**
+   * The LIVE pages of one project whose title or body matches `q` as words
+   * (Story MOTIR-9489 · MOTIR-9551), best match first, at most `take`. The match
+   * is {@link PAGE_SEARCH_DOCUMENT} verbatim, so `page_search_gin_idx` serves it.
+   * `q` is BOUND, and `plainto_tsquery` reads it as plain words — quotes, `%`
+   * and tsquery operators are text, never syntax — so no input raises. A query
+   * with no words left matches nothing.
+   *
+   * `rank` is `ts_rank` as `float8`, so a cursor carrying it compares exactly;
+   * `id` breaks a tie, making the order total. `after` seeks strictly past the
+   * last hit served. The snippet is computed only for the `take` rows returned,
+   * from the same searchable slice of the body; a title-only hit gets the body's
+   * leading words, an empty body `''`.
+   */
+  async searchLiveFullText(
+    projectId: string,
+    q: string,
+    take: number,
+    tx: Prisma.TransactionClient,
+    after?: PageSearchSeek | null,
+  ): Promise<PageSearchRow[]> {
+    const config = Prisma.raw(`'${PAGE_SEARCH_CONFIG}'`);
+    const query = Prisma.sql`plainto_tsquery(${config}, ${q})`;
+    const seek = after
+      ? Prisma.sql`WHERE m."rank" < ${after.rank}::float8 OR (m."rank" = ${after.rank}::float8 AND m."id" < ${after.id})`
+      : Prisma.empty;
+    return tx.$queryRaw<PageSearchRow[]>`
+      SELECT h."id", h."title", h."ancestorPageIds", h."folderId", h."rank",
+             ts_headline(${config}, left(h."body_text", ${Prisma.raw(String(PAGE_SEARCH_BODY_LIMIT))}),
+               ${query}, 'MaxFragments=1, MinWords=8, MaxWords=24, StartSel="", StopSel=""') AS "snippet"
+      FROM (
+        SELECT m.* FROM (
+          SELECT p."id", p."title", p."ancestor_page_ids" AS "ancestorPageIds",
+                 p."folder_id" AS "folderId", p."body_text",
+                 ts_rank(${PAGE_SEARCH_DOCUMENT}, ${query})::float8 AS "rank"
+          FROM "page" p
+          WHERE ${PAGE_SEARCH_LIVE_IN_PROJECT(projectId)} AND ${PAGE_SEARCH_DOCUMENT} @@ ${query}
+        ) m
+        ${seek}
+        ORDER BY m."rank" DESC, m."id" DESC
+        LIMIT ${take}
+      ) h
+      ORDER BY h."rank" DESC, h."id" DESC`;
   },
 
   /**

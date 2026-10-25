@@ -2674,6 +2674,30 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  search_pages: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description: 'The project key the page belongs to (e.g. "ACME").',
+      },
+      q: {
+        type: 'string',
+        description:
+          'The words to find in a page’s title or body (at most 200 characters). An empty query is refused PAGE_SEARCH_QUERY_EMPTY — a search never lists every page.',
+      },
+      cursor: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The `nextCursor` a previous `search_pages` call returned, to read the next hits.',
+      },
+    },
+    required: ['projectKey', 'q'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   search_work_items: {
     type: 'object',
     properties: {
@@ -4136,6 +4160,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   report_plan_step: 'Report the step a planner session is on',
   report_unbuildable_target: 'Report a card you cannot build',
   search_lessons: 'Search lessons by meaning',
+  search_pages: 'Search pages',
   search_work_items: 'Search work items',
   search_work_items_semantic: 'Search work items by meaning',
   set_work_item_todo_done: 'Tick or untick a to-do step',
@@ -4561,6 +4586,7 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
     idempotentHint: false,
     openWorldHint: false,
   },
+  search_pages: { title: 'Search pages', readOnlyHint: true, openWorldHint: false },
   search_work_items: { title: 'Search work items', readOnlyHint: true, openWorldHint: false },
   search_work_items_semantic: {
     title: 'Search work items by meaning',
