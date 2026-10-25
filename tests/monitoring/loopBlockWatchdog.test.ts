@@ -33,6 +33,14 @@ function blockLoopForTest(ms: number): void {
   }
 }
 
+/** The same block under another name, so a reading can tell two blocks apart. */
+function blockLoopEarlierForTest(ms: number): void {
+  const until = Date.now() + ms;
+  while (Date.now() < until) {
+    // spin
+  }
+}
+
 /**
  * Block the thread in NATIVE code that V8 cannot interrupt: a pause request
  * cannot land until the child exits. (`Atomics.wait` is NOT such a block — V8
@@ -111,6 +119,32 @@ describe('the capture', () => {
     const block = readLoopBlock();
     expect(__forTests.captureCount()).toBe(1);
     expect(block!.blockMs).toBeGreaterThanOrEqual(SPIN_MS + 900 - 100);
+  });
+
+  // MOTIR-9499: the window's one capture belongs to its FIRST block. When a
+  // later block is the longer one, the reading must not name the first block's
+  // frame against the second block's length.
+  it('never tags a longer, uncaptured block with an earlier block’s frame', async () => {
+    blockLoopEarlierForTest(SPIN_MS);
+    await sleep(300);
+    blockLoopForTest(SPIN_MS + 900);
+    const block = readLoopBlock();
+    expect(__forTests.captureCount()).toBe(1);
+    expect(block!.blockMs).toBeGreaterThanOrEqual(SPIN_MS + 900 - 100);
+    expect(block!.frame).toBeNull();
+    expect(block!.ageS).toBeNull();
+    expect(block!.context).toBeNull();
+  });
+
+  it('keeps the capture when the captured block is the longer one', async () => {
+    blockLoopEarlierForTest(SPIN_MS + 900);
+    await sleep(300);
+    blockLoopForTest(SPIN_MS);
+    const block = readLoopBlock();
+    expect(__forTests.captureCount()).toBe(1);
+    expect(block!.blockMs).toBeGreaterThanOrEqual(SPIN_MS + 900 - 100);
+    expect(block!.frame).toContain('blockLoopEarlierForTest');
+    expect(block!.context!.frames.some((f) => / blockLoopForTest$/.test(f))).toBe(false);
   });
 
   it('captures again in the next window', async () => {

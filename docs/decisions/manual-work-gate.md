@@ -72,13 +72,21 @@ routes it through the decide door, exactly as every status-owning kind does (§6
 
 ### 2. Raise
 
-| concern       | pinned value                                                                                                                                                                                                           |
-| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| trigger       | a `DispatchRunCard` leg written with `disposition: skipped` and `skipReason: needs_human`, by either writer (`openWithin`, `appendEvents`), in the same transaction as the leg write                                   |
-| server guards | the card resolves, is not archived, is not in the done category, and `isManualReadyItem` holds on the card as read in that transaction. The server does not take the CLI's reason as proof                             |
-| idempotency   | on the CARD, not the run: `createAwaitingIfAbsent` on `(card, manual_work, card.id)`. A second run, or the same run reporting twice, raises nothing new. A decided gate does not stop a later raise on a reopened card |
-| not raised by | the card's existence; a card entering review; the `motir-meta` runbook's parent run, which writes no dispatch run; a leg skipped for any other reason                                                                  |
-| failure       | a raise that cannot be written fails the leg write, so a run is never told a card is waiting on someone when no gate exists                                                                                            |
+| concern       | pinned value                                                                                                                                                                                                                                                 |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| trigger       | a `DispatchRunCard` leg written with `disposition: skipped` and `skipReason: needs_human`, by either writer (`openWithin`, `appendEvents`), in the same transaction as the leg write                                                                         |
+| server guards | the card resolves, is not archived, is not in the done category, is not in Blocked and has no open `blocked_by` (`isOpenBlocker`), and `isManualReadyItem` holds on the card as read in that transaction. The server does not take the CLI's reason as proof |
+| idempotency   | on the CARD, not the run: `createAwaitingIfAbsent` on `(card, manual_work, card.id)`. A second run, or the same run reporting twice, raises nothing new. A decided gate does not stop a later raise on a reopened card                                       |
+| not raised by | the card's existence; a card entering review; the `motir-meta` runbook's parent run, which writes no dispatch run; a leg skipped for any other reason                                                                                                        |
+| failure       | a raise that cannot be written fails the leg write, so a run is never told a card is waiting on someone when no gate exists                                                                                                                                  |
+
+> **AMENDED 2026-10-24 (Bug MOTIR-9500).** The _server guards_ row gains the readiness guard, so the
+> raise mirrors §6 as amended by MOTIR-8670: a card in Blocked, or with a `blocked_by` on work that
+> `isOpenBlocker` calls open, skips as `not_ready`, writes no gate and assigns nobody. Before this the
+> raise could open a gate in exactly the state §6 withdraws it in — MOTIR-9482 and MOTIR-9483 were
+> asked for in Waiting on you while the code cards they configure were unbuilt. Nothing is lost: the
+> next run that reaches the card once its blockers are done or integrated raises it, as §6 already
+> says.
 
 ### 3. Routing and authority
 
