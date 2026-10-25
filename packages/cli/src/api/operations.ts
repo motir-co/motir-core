@@ -54,7 +54,7 @@ export const API_MAJOR = 1;
  * compatible by construction and only a server BELOW it can be missing
  * something this client was generated to expect.
  */
-export const GENERATED_AGAINST = "1.76.0";
+export const GENERATED_AGAINST = "1.77.0";
 
 /** Every declared operation, keyed by `operationId`. */
 export const V1_OPERATIONS = {
