@@ -231,7 +231,7 @@ test('new agents are created on the agent-hoster AWS pool behind its own switch,
     await openMyAgents(page);
     flyId = await createAgent(page, seed, 'yue-fly');
     await expectBooted(page);
-    await expect(readout(page)).toContainText(boot.title.create);
+    await expect(readout(page)).toContainText(boot.summary.create.split('{')[0]!.trim());
     await closePanel(page, 'yue-fly');
     await expect(rowOf(page, 'yue-fly')).toHaveAttribute('data-state', 'running');
 
