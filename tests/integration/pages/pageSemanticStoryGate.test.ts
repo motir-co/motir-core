@@ -134,11 +134,11 @@ function ownAxis(text: string): number {
 
 function topicVector(text: string): number[] {
   const words = text.toLowerCase().split(/[^a-z]+/);
-  const v = Array.from({ length: DIMENSIONS }, () => 0);
+  const v = Array.from({ length: DIMENSIONS }, (): number => 0);
   for (const [axis, vocabulary] of TOPICS) {
     v[axis] = words.filter((w) => vocabulary.includes(w)).length;
   }
-  if (v.every((x) => x === 0)) v[ownAxis(text)] = 1;
+  if (!v.some((x) => x !== 0)) v[ownAxis(text)] = 1;
   const norm = Math.sqrt(v.reduce((s, x) => s + x * x, 0));
   return v.map((x) => x / norm);
 }
