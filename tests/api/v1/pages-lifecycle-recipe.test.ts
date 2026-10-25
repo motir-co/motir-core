@@ -310,6 +310,8 @@ describe('the REST lifecycle recipe, in order', () => {
       'link unknown': await linkPageV1(member, 'cmzzzzzzzzzzzzzzzzzzzzzzz', { workItemId }),
       'archive unbrowsable': await archivePageV1(outsider, pageId),
       'restore unbrowsable': await restorePageV1(outsider, pageId),
+      'link unbrowsable': await linkPageV1(outsider, pageId, { workItemId }),
+      'unlink unbrowsable': await unlinkPageV1(outsider, pageId, workItemId),
     };
     for (const [step, res] of Object.entries(attempts)) {
       expect({ step, status: res.status, text: await res.text() }).toEqual({
@@ -318,13 +320,6 @@ describe('the REST lifecycle recipe, in order', () => {
         text: expected,
       });
     }
-    // An outsider's link is refused by the work item's own visibility gate
-    // first (MOTIR-9579): still a 404 naming neither the page's title nor id.
-    const link = await linkPageV1(outsider, pageId, { workItemId });
-    const text = await link.text();
-    expect(link.status).toBe(404);
-    expect(text).not.toContain(TITLE);
-    expect(text).not.toContain(pageId);
     expect(await snapshot()).toEqual(before);
   });
 

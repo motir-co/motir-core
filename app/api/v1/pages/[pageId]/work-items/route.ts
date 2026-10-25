@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { withPageErrors } from '@/lib/api/v1/pages/errors';
+import { resolvePageProjectId } from '@/lib/api/v1/pages/resolve';
 import { linkPageBodySchema, presentPageLinkPair } from '@/lib/api/v1/pages/schema';
 import { withV1Route } from '@/lib/api/v1/route';
 import { parseV1Body } from '@/lib/api/v1/workItems/schema';
@@ -16,6 +17,11 @@ import { pageLinksService } from '@/lib/services/pageLinksService';
 // project is the same 404 `PAGE_NOT_FOUND` an unknown one is. An archived page is
 // 409 `PAGE_ARCHIVED` and writes no row.
 //
+// The PAGE is resolved first (MOTIR-9579): a caller who cannot see it — an
+// outsider, or an unknown id — gets the one `PAGE_NOT_FOUND` body every page
+// route answers, before the work item's own gate could answer
+// `WORK_ITEM_NOT_FOUND` about an item in a project they cannot browse.
+//
 // ── A duplicate is idempotent ────────────────────────────────────────────────
 // The service counts the row it wrote and throws `PageLinkAlreadyExistsError` on
 // zero, so a second row never exists. This route answers that one error with the
@@ -25,6 +31,7 @@ export const POST = withV1Route<{ pageId: string }>({ permission: 'page:edit' },
   const body = await parseV1Body(ctx.req, linkPageBodySchema);
   const input = { pageId: ctx.params.pageId, workItemId: body.workItemId };
   const pair = await withPageErrors(async () => {
+    await resolvePageProjectId(input.pageId, ctx.service);
     try {
       return await pageLinksService.linkPageForWorkItem(ctx.service, input);
     } catch (err) {

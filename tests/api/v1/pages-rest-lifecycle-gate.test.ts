@@ -328,7 +328,7 @@ describe('who may call the four routes', () => {
     expect(await linkRows(pageId, workItemId)).toBe(1);
   });
 
-  it('an unknown page id answers every route with the same 404 PAGE_NOT_FOUND body; so does an outsider on archive and restore', async () => {
+  it('an unknown page id and an outsider answer every route with the same 404 PAGE_NOT_FOUND body, with no title, writing nothing', async () => {
     const { caller, pageId, workItemId } = await withWorld();
     const outsider = await memberCaller(caller, 'outsider', 'member', [...WORK_ITEM_EDITOR]);
     await adminDb.project.update({
@@ -347,17 +347,13 @@ describe('who may call the four routes', () => {
       });
     }
 
-    // An outsider's link and unlink are refused by the WORK ITEM's visibility
-    // gate before the page is read, so they answer WORK_ITEM_NOT_FOUND rather
-    // than the page's body (MOTIR-9579). Pinned as it ships: still a 404 that
-    // names neither the page's title nor its id.
+    // The outsider, on every route, the same body — link and unlink resolve the
+    // page before the work item's own gate (MOTIR-9579).
     for (const [name, call] of Object.entries(calls(outsider, pageId, workItemId))) {
       const res = await call();
       const text = await res.text();
-      expect({ name, status: res.status }).toEqual({ name, status: 404 });
+      expect({ name, status: res.status, text }).toEqual({ name, status: 404, text: expected });
       expect(text).not.toContain(SECRET_TITLE);
-      expect(text).not.toContain(pageId);
-      if (name === 'archive' || name === 'restore') expect(text).toBe(expected);
     }
     expect(await stored(pageId)).toEqual(before);
     expect(await linkRows(pageId)).toBe(0);
