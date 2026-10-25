@@ -404,6 +404,7 @@ model User {
   // and the hash-chained audit log keeps WHO for ever.
   platformRunModelsAdded           PlatformRunModel[]                  @relation("PlatformRunModelAddedBy")
   platformFleetOrgCiUpdated        PlatformFleetOrgCi[]                @relation("PlatformFleetOrgCiUpdatedBy")
+  platformFleetKindSwitchUpdated   PlatformFleetKindSwitch[]           @relation("PlatformFleetKindSwitchUpdatedBy")
   ideaResearchRuns                 IdeaResearchRun[]
   // Organizations this platform operator SUSPENDED and that are still suspended
   // (MOTIR-748). SetNull on the org's side: an operator's account outliving its
@@ -548,6 +549,29 @@ model PlatformFleetOrgCi {
   @@unique([projectId, org])
   @@index([updatedByUserId])
   @@map("platform_fleet_org_ci")
+}
+
+/// One fleet kind's Fly↔AWS switch (MOTIR-9503): ON puts the kind's NEW work on
+/// its own AWS pool, OFF (or no row) keeps it on Fly. One row per kind, written on
+/// its first flip; only `agent_instance` is offered today. Read on every placement
+/// through the reader `lib/ciFleet/fleetKindSwitches.ts` wires, never cached.
+/// Read unconditionally, written only under `app.platform_staff` (the
+/// `platform_fleet_org_ci` policy shape).
+model PlatformFleetKindSwitch {
+  id              String   @id @default(cuid())
+  /// The `FleetWorkloadKind` this switch belongs to.
+  fleetKind       String   @unique @map("fleet_kind")
+  onPool          Boolean  @default(false) @map("on_pool")
+  /// The reason the last flip was given — the same text its audit row carries.
+  lastReason      String?  @map("last_reason")
+  updatedByUserId String?  @map("updated_by_user_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  updatedBy User? @relation("PlatformFleetKindSwitchUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([updatedByUserId])
+  @@map("platform_fleet_kind_switch")
 }
 
 model PlatformRunModel {

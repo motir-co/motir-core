@@ -291,6 +291,19 @@ export const PLATFORM_AUDIT_ACTIONS = {
   'fleet.org_ci.enable': { kind: 'write', reason: 'required' },
   'fleet.org_ci.disable': { kind: 'write', reason: 'required' },
   /**
+   * The agent hoster's Fly↔AWS switch was turned ON (new agent instances are
+   * placed on an account of the agent-hoster AWS pool) or OFF (new ones go back
+   * to Fly) from /admin/fleet-settings › Agent hosting (MOTIR-9503). Agents that
+   * already exist are not moved either way.
+   *
+   * `required`, at the `superadmin` degree of ADR §7: it moves where every
+   * tenant's new agents run and what Motir pays for them. Target is `platform`
+   * with the fleet kind (`agent_instance`) as `targetId`; `metadata` carries
+   * `{ fleetKind, from, to }`. Written only for a flip that changed something.
+   */
+  'fleet.agent_hosting.enable': { kind: 'write', reason: 'required' },
+  'fleet.agent_hosting.disable': { kind: 'write', reason: 'required' },
+  /**
    * A fleet ACCOUNT was added to, or resumed in, a fleet kind's pool by
    * `fleet-admin add-shard` (Story MOTIR-8953 · MOTIR-8967) — one row per run,
    * written after its steps, carrying `{ fleetKind, provider, steps,

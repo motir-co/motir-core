@@ -132,7 +132,8 @@ describe('the `organization` platform-staff policy arms (MOTIR-4565)', () => {
     // `platformReadService.test.ts`). `platform_run_model` and its
     // `platform_run_model_list` marker are MOTIR-7525's hosted-run model list —
     // platform configuration, written solely from this tier, and so is
-    // `platform_fleet_org_ci`, MOTIR-8714's fleet org CI switch. `enterprise_request`
+    // `platform_fleet_org_ci`, MOTIR-8714's fleet org CI switch, and so is
+    // `platform_fleet_kind_switch`, MOTIR-9503's per-fleet-kind Fly↔AWS switch. `enterprise_request`
     // is MOTIR-7605's Contact-sales request, which staff list and move from the
     // console (MOTIR-7608); its tenant arm is the org's own.
     // The five `idea*`
@@ -155,6 +156,7 @@ describe('the `organization` platform-staff policy arms (MOTIR-4565)', () => {
       'organization',
       'organization_membership',
       'platform_audit_log',
+      'platform_fleet_kind_switch',
       'platform_fleet_org_ci',
       'platform_run_model',
       'platform_run_model_list',

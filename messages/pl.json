@@ -10066,6 +10066,10 @@
               "enable": "Włączono CI floty",
               "disable": "Wyłączono CI floty"
             },
+            "agent_hosting": {
+              "enable": "Przełączono nowe agenty na AWS",
+              "disable": "Przywrócono nowe agenty na Fly"
+            },
             "shard": {
               "add": "Dodano konto floty",
               "limits": "Odświeżono limity konta floty",
@@ -12048,6 +12052,56 @@
         "title": "Nie udało się załadować ustawienia floty",
         "body": "Nie udało się odczytać ustawienia ani jego gotowości, więc nie jest wyświetlany żaden stan ani przełącznik. To błąd odczytu — nic się nie zmieniło i żadna wartość nie jest zgadywana.",
         "retry": "Ponów"
+      },
+      "agentHosting": {
+        "title": "Hosting agentów",
+        "subtitle": "Gdzie tworzone są nowe instancje agentów",
+        "superadminOnly": "Tylko superadmin",
+        "explanation": "Wyłączone: nowe instancje agentów są tworzone na Fly. Włączone: każda nowa instancja agenta jest umieszczana na koncie puli AWS do hostingu agentów. W obu przypadkach istniejące agenty zostają tam, gdzie są — ten przełącznik nigdy nie przenosi działającego agenta. Zmiana obowiązuje od następnego tworzonego agenta, bez ponownego uruchamiania.",
+        "state": {
+          "fly": "Fly",
+          "aws": "AWS"
+        },
+        "action": {
+          "turnOnAws": "Włącz AWS",
+          "turnOffAws": "Wyłącz AWS"
+        },
+        "onNote": "Nowe agenty są tworzone na AWS; agenty już działające na Fly zostają na Fly.",
+        "meta": {
+          "lastChanged": "Ostatnia zmiana",
+          "changedBy": "przez {email}, {when} — „{reason}”",
+          "neverChanged": "Nigdy nie zmieniano — nowe agenty są tworzone na Fly",
+          "auditLink": "Dziennik audytu"
+        },
+        "monitoringLine": "Maszyny agentów są widoczne w Monitorowanie › Flota",
+        "confirm": {
+          "toAwsTitle": "Tworzyć nowe agenty na AWS?",
+          "toAwsBody": "Fly → AWS. Od teraz każda nowa instancja agenta jest tworzona na koncie puli AWS do hostingu agentów. Agenty już działające na Fly nie są przenoszone: nadal działają na Fly.",
+          "toFlyTitle": "Znowu tworzyć nowe agenty na Fly?",
+          "toFlyBody": "AWS → Fly. Nowe instancje agentów wracają na Fly, począwszy od następnej tworzonej. Agenty już działające na AWS nie są przenoszone: nadal działają na AWS.",
+          "reasonLabel": "Powód — wymagany, zapisywany w dzienniku audytu",
+          "reasonPlaceholderToAws": "Dlaczego nowe agenty przechodzą na AWS?",
+          "reasonPlaceholderToFly": "Dlaczego nowe agenty wracają na Fly?",
+          "reasonHint": "Widoczny dla każdego operatora, który później przeczyta tę zmianę. Samo „Testy” niczego nie wyjaśnia.",
+          "reasonHintEmpty": "Przycisk pozostaje nieaktywny, dopóki nie wpiszesz powodu — ta sama zasada, którą stosuje serwer.",
+          "cancel": "Anuluj",
+          "confirmToAws": "Włącz AWS",
+          "confirmToFly": "Wyłącz AWS"
+        },
+        "refused": {
+          "reasonMissing": "Nie zmieniono: powód jest wymagany i zostaje zapisany w dzienniku audytu razem z tą zmianą. Nowe agenty są nadal tworzone na {hoster}.",
+          "alreadyAws": "Już na AWS — nic się nie zmieniło.",
+          "alreadyFly": "Już na Fly — nic się nie zmieniło.",
+          "alreadyBody": "Inny superadmin zmienił to wcześniej, więc nic nie zostało zapisane i nie dodano wiersza audytu.",
+          "writeFailed": "Nie przełączono na {hoster}: nie udało się zapisać zmiany.",
+          "nothingChanged": "Nic się nie zmieniło: nowe agenty są nadal tworzone na {previous}.",
+          "retryHint": "Twój powód został zachowany. Spróbuj ponownie lub anuluj."
+        },
+        "unavailable": {
+          "title": "Nie udało się załadować hostingu agentów",
+          "body": "Nie udało się odczytać, gdzie tworzone są nowe agenty, więc nie jest wyświetlany żaden stan ani przełącznik. To błąd odczytu — nic się nie zmieniło i żadna wartość nie jest zgadywana.",
+          "retry": "Ponów"
+        }
       }
     }
   },

@@ -10066,6 +10066,10 @@
               "enable": "A activé la CI de la flotte",
               "disable": "A désactivé la CI de la flotte"
             },
+            "agent_hosting": {
+              "enable": "A envoyé les nouveaux agents sur AWS",
+              "disable": "A renvoyé les nouveaux agents sur Fly"
+            },
             "shard": {
               "add": "A ajouté un compte de la flotte",
               "limits": "A actualisé les limites d’un compte de la flotte",
@@ -12048,6 +12052,56 @@
         "title": "Impossible de charger le paramètre de la flotte",
         "body": "Le paramètre ou sa disponibilité n’a pas pu être lu, donc aucun état n’est affiché et aucun interrupteur n’est proposé. Il s’agit d’une erreur de lecture : rien n’a changé, et aucune valeur n’est devinée.",
         "retry": "Réessayer"
+      },
+      "agentHosting": {
+        "title": "Hébergement des agents",
+        "subtitle": "Où les nouvelles instances d’agent sont créées",
+        "superadminOnly": "Superadmin uniquement",
+        "explanation": "Désactivé : les nouvelles instances d’agent sont créées sur Fly. Activé : chaque nouvelle instance d’agent est placée sur un compte du pool AWS d’hébergement des agents. Dans les deux cas, les agents existants restent où ils sont — cet interrupteur ne déplace jamais un agent en cours d’exécution. Un changement s’applique au prochain agent créé, sans redémarrage.",
+        "state": {
+          "fly": "Fly",
+          "aws": "AWS"
+        },
+        "action": {
+          "turnOnAws": "Activer AWS",
+          "turnOffAws": "Désactiver AWS"
+        },
+        "onNote": "Les nouveaux agents sont créés sur AWS ; les agents déjà sur Fly restent sur Fly.",
+        "meta": {
+          "lastChanged": "Dernière modification",
+          "changedBy": "par {email}, {when} — « {reason} »",
+          "neverChanged": "Jamais modifié — les nouveaux agents sont créés sur Fly",
+          "auditLink": "Journal d’audit"
+        },
+        "monitoringLine": "Les machines des agents apparaissent dans Supervision › Flotte",
+        "confirm": {
+          "toAwsTitle": "Créer les nouveaux agents sur AWS ?",
+          "toAwsBody": "Fly → AWS. Désormais, chaque nouvelle instance d’agent est créée sur un compte du pool AWS d’hébergement des agents. Les agents déjà sur Fly ne sont pas déplacés : ils continuent de tourner sur Fly.",
+          "toFlyTitle": "Créer de nouveau les nouveaux agents sur Fly ?",
+          "toFlyBody": "AWS → Fly. Les nouvelles instances d’agent repassent sur Fly, à commencer par la prochaine créée. Les agents déjà sur AWS ne sont pas déplacés : ils continuent de tourner sur AWS.",
+          "reasonLabel": "Motif — obligatoire, consigné dans le journal d’audit",
+          "reasonPlaceholderToAws": "Pourquoi les nouveaux agents passent-ils sur AWS ?",
+          "reasonPlaceholderToFly": "Pourquoi les nouveaux agents reviennent-ils sur Fly ?",
+          "reasonHint": "Affiché à tout opérateur qui lira ce changement plus tard. « Test » seul ne répond à rien.",
+          "reasonHintEmpty": "Le bouton reste désactivé tant qu’aucun motif n’est saisi — la même règle que celle appliquée par le serveur.",
+          "cancel": "Annuler",
+          "confirmToAws": "Activer AWS",
+          "confirmToFly": "Désactiver AWS"
+        },
+        "refused": {
+          "reasonMissing": "Non modifié : un motif est obligatoire, et il est consigné dans le journal d’audit avec ce changement. Les nouveaux agents sont toujours créés sur {hoster}.",
+          "alreadyAws": "Déjà sur AWS — rien n’a changé.",
+          "alreadyFly": "Déjà sur Fly — rien n’a changé.",
+          "alreadyBody": "Un autre superadmin l’a modifié en premier, donc rien n’a été écrit et aucune ligne d’audit n’a été ajoutée.",
+          "writeFailed": "Non basculé sur {hoster} : le changement n’a pas pu être enregistré.",
+          "nothingChanged": "Rien n’a changé : les nouveaux agents sont toujours créés sur {previous}.",
+          "retryHint": "Votre motif est conservé. Réessayez, ou annulez."
+        },
+        "unavailable": {
+          "title": "Impossible de charger l’hébergement des agents",
+          "body": "L’endroit où les nouveaux agents sont créés n’a pas pu être lu, donc aucun état n’est affiché et aucun interrupteur n’est proposé. Il s’agit d’une erreur de lecture : rien n’a changé, et aucune valeur n’est devinée.",
+          "retry": "Réessayer"
+        }
       }
     }
   },

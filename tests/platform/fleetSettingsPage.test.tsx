@@ -6,6 +6,7 @@ import { db } from '@/lib/db';
 import en from '@/messages/en.json';
 import type { FleetOrgCiStateDTO, FleetOrgCiTargetDTO } from '@/lib/dto/fleetOrgCiSetting';
 import { NotPlatformStaffError } from '@/lib/platform/errors';
+import { agentHostingSettingService } from '@/lib/services/agentHostingSettingService';
 import { fleetOrgCiSettingService } from '@/lib/services/fleetOrgCiSettingService';
 import { createTestUser } from '../fixtures/userFixtures';
 import { adminDb } from '../helpers/adminDb';
@@ -111,6 +112,13 @@ afterAll(async () => {
 });
 
 describe('the fleet settings page', () => {
+  // These cases are about the per-org Motir-CI section, and count its switches:
+  // the Agent hosting section beside it (MOTIR-9503) is held at its error card,
+  // which draws no switch. Its own cases are below.
+  beforeEach(() => {
+    vi.spyOn(agentHostingSettingService, 'getState').mockRejectedValue(new Error('held'));
+  });
+
   it.each(['support', 'operator'] as const)(
     'a %s gets the 404, and nothing is read',
     async (role) => {
@@ -171,6 +179,61 @@ describe('the fleet settings page', () => {
     vi.spyOn(fleetOrgCiSettingService, 'getState').mockRejectedValueOnce(
       new NotPlatformStaffError(),
     );
+    await expect(renderToHtml(await Page())).rejects.toBeInstanceOf(NotPlatformStaffError);
+  });
+});
+
+describe('the Agent hosting section', () => {
+  const motirCiEmpty = () =>
+    vi.spyOn(fleetOrgCiSettingService, 'listTargets').mockResolvedValue([]);
+
+  it('renders after the Motir-CI section from the stored row: never changed ⇒ Fly', async () => {
+    await signInAs('superadmin');
+    motirCiEmpty();
+    const html = await renderToHtml(await Page());
+    expect(html).toContain('data-testid="agent-hosting"');
+    expect(html.indexOf('fleet-settings-empty')).toBeLessThan(html.indexOf('agent-hosting'));
+    expect(html).toContain('data-state="fly"');
+    expect(html).toContain('Never changed — new agents are created on Fly');
+    expect(html.match(/role="switch"/g)).toHaveLength(1);
+  });
+
+  it('a stored ON row renders AWS, the on note and who changed it', async () => {
+    await signInAs('superadmin');
+    motirCiEmpty();
+    const flipper = await createTestUser({ email: 'ops+flipper@example.test' });
+    await adminDb.platformFleetKindSwitch.create({
+      data: {
+        fleetKind: 'agent_instance',
+        onPool: true,
+        lastReason: 'pool ready',
+        updatedByUserId: flipper.id,
+      },
+    });
+    const html = await renderToHtml(await Page());
+    expect(html).toContain('data-state="aws"');
+    expect(html).toContain('data-testid="agent-hosting-on-note"');
+    expect(html).toContain('ops+flipper@example.test');
+    expect(html).toContain('/admin/audit-log?action=fleet.agent_hosting.enable');
+  });
+
+  it('a failed read renders its own error card and no switch, leaving the Motir-CI section', async () => {
+    await signInAs('superadmin');
+    motirCiEmpty();
+    vi.spyOn(agentHostingSettingService, 'getState').mockRejectedValue(
+      new Error('the private detail'),
+    );
+    const html = await renderToHtml(await Page());
+    expect(html).toContain('data-testid="agent-hosting-unavailable"');
+    expect(html).toContain('data-testid="fleet-settings-empty"');
+    expect(html).not.toContain('role="switch"');
+    expect(JSON.stringify(vi.mocked(console.error).mock.calls)).not.toContain('the private detail');
+  });
+
+  it('a NotPlatformStaffError from its read is not swallowed into the error card', async () => {
+    await signInAs('superadmin');
+    motirCiEmpty();
+    vi.spyOn(agentHostingSettingService, 'getState').mockRejectedValue(new NotPlatformStaffError());
     await expect(renderToHtml(await Page())).rejects.toBeInstanceOf(NotPlatformStaffError);
   });
 });

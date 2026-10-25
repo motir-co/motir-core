@@ -10066,6 +10066,10 @@
               "enable": "Vloot-CI ingeschakeld",
               "disable": "Vloot-CI uitgeschakeld"
             },
+            "agent_hosting": {
+              "enable": "Nieuwe agents naar AWS gestuurd",
+              "disable": "Nieuwe agents terug naar Fly gestuurd"
+            },
             "shard": {
               "add": "Een vlootaccount toegevoegd",
               "limits": "De limieten van een vlootaccount vernieuwd",
@@ -12048,6 +12052,56 @@
         "title": "Kon de vlootinstelling niet laden",
         "body": "De instelling of de gereedheid ervan kon niet worden gelezen, dus er wordt geen status getoond en geen schakelaar aangeboden. Dit is een leesfout — er is niets veranderd en er wordt geen waarde geraden.",
         "retry": "Opnieuw proberen"
+      },
+      "agentHosting": {
+        "title": "Agenthosting",
+        "subtitle": "Waar nieuwe agentinstanties worden aangemaakt",
+        "superadminOnly": "Alleen superadmin",
+        "explanation": "Uit: nieuwe agentinstanties worden op Fly aangemaakt. Aan: elke nieuwe agentinstantie wordt op een account van de AWS-pool voor agenthosting geplaatst. In beide gevallen blijven bestaande agents waar ze zijn — deze schakelaar verplaatst nooit een draaiende agent. Een wijziging geldt voor de volgende agent die wordt aangemaakt, zonder herstart.",
+        "state": {
+          "fly": "Fly",
+          "aws": "AWS"
+        },
+        "action": {
+          "turnOnAws": "AWS aanzetten",
+          "turnOffAws": "AWS uitzetten"
+        },
+        "onNote": "Nieuwe agents worden op AWS aangemaakt; agents die al op Fly draaien, blijven op Fly.",
+        "meta": {
+          "lastChanged": "Laatst gewijzigd",
+          "changedBy": "door {email}, {when} — ‘{reason}’",
+          "neverChanged": "Nooit gewijzigd — nieuwe agents worden op Fly aangemaakt",
+          "auditLink": "Auditlogboek"
+        },
+        "monitoringLine": "Agentmachines verschijnen in Monitoring › Vloot",
+        "confirm": {
+          "toAwsTitle": "Nieuwe agents op AWS aanmaken?",
+          "toAwsBody": "Fly → AWS. Vanaf nu wordt elke nieuwe agentinstantie aangemaakt op een account van de AWS-pool voor agenthosting. Agents die al op Fly draaien, worden niet verplaatst: ze blijven op Fly draaien.",
+          "toFlyTitle": "Nieuwe agents weer op Fly aanmaken?",
+          "toFlyBody": "AWS → Fly. Nieuwe agentinstanties gaan terug naar Fly, te beginnen met de volgende die wordt aangemaakt. Agents die al op AWS draaien, worden niet verplaatst: ze blijven op AWS draaien.",
+          "reasonLabel": "Reden — verplicht, wordt in het auditlogboek geschreven",
+          "reasonPlaceholderToAws": "Waarom gaan nieuwe agents naar AWS?",
+          "reasonPlaceholderToFly": "Waarom gaan nieuwe agents terug naar Fly?",
+          "reasonHint": "Zichtbaar voor elke operator die deze wijziging later leest. ‘Testen’ alleen zegt niets.",
+          "reasonHintEmpty": "De knop blijft uitgeschakeld tot er een reden is getypt — dezelfde regel die de server toepast.",
+          "cancel": "Annuleren",
+          "confirmToAws": "AWS aanzetten",
+          "confirmToFly": "AWS uitzetten"
+        },
+        "refused": {
+          "reasonMissing": "Niet gewijzigd: een reden is verplicht en wordt met deze wijziging in het auditlogboek geschreven. Nieuwe agents worden nog steeds op {hoster} aangemaakt.",
+          "alreadyAws": "Staat al op AWS — er is niets veranderd.",
+          "alreadyFly": "Staat al op Fly — er is niets veranderd.",
+          "alreadyBody": "Een andere superadmin heeft het eerst gewijzigd, dus er is niets geschreven en geen auditrij toegevoegd.",
+          "writeFailed": "Niet overgeschakeld naar {hoster}: de wijziging kon niet worden opgeslagen.",
+          "nothingChanged": "Er is niets veranderd: nieuwe agents worden nog steeds op {previous} aangemaakt.",
+          "retryHint": "Uw reden blijft bewaard. Probeer het opnieuw of annuleer."
+        },
+        "unavailable": {
+          "title": "Kon agenthosting niet laden",
+          "body": "Waar nieuwe agents worden aangemaakt, kon niet worden gelezen, dus er wordt geen status getoond en geen schakelaar aangeboden. Dit is een leesfout — er is niets veranderd en er wordt geen waarde geraden.",
+          "retry": "Opnieuw proberen"
+        }
       }
     }
   },
