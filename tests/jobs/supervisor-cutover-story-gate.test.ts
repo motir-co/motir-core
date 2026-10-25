@@ -590,13 +590,19 @@ describe('§3 the guards', () => {
       expect(Object.hasOwn(def, 'idempotency'), def.id).toBe(true);
       expect(Object.hasOwn(def, 'debounce'), def.id).toBe(true);
     }
-    // Exactly two SHIPPED jobs declare a debounce: the refresh, and the agent
-    // instance idle timer (MOTIR-6873), whose debounce IS its 30-minute window.
+    // Exactly three SHIPPED jobs declare a debounce: the refresh, the agent
+    // instance idle timer (MOTIR-6873), whose debounce IS its 30-minute window,
+    // and the page embedding job (MOTIR-9571), which folds a typing burst into
+    // one run per page.
     expect(
       registered
         .filter((d) => d.debounce !== undefined)
         .map((d) => d.id)
         .sort(),
-    ).toEqual(['agent-instance/idle-check', 'system.code-graph-refresh']);
+    ).toEqual([
+      'agent-instance/idle-check',
+      'page/embedding.requested',
+      'system.code-graph-refresh',
+    ]);
   });
 });
