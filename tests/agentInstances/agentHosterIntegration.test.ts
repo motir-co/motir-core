@@ -3,6 +3,7 @@ import type { PersistentExecResult } from '@motir/orchestrator';
 import { AGENT_WAITING_POLL_MS } from '@/lib/agentInstances/config';
 import { imageCatalogSeam } from '@/lib/agentInstances/imageCatalog';
 import { wireFleetKindSwitch } from '@/lib/ciFleet/shardTargets';
+import { fleetPoolGrowthPassService } from '@/lib/services/fleetPoolGrowthPassService';
 import { db } from '@/lib/db';
 import {
   agentInstanceBootSteps,
@@ -92,6 +93,15 @@ beforeEach(async () => {
   // A has more headroom than B.
   a = await seedHosterAccount('agent-hoster-a', 10);
   b = await seedHosterAccount('agent-hoster-b', 2);
+  // The pool-growth pass (MOTIR-9362) is a cron the harness drains with every
+  // job; it reads each kind's switch, and the reads counted here are the
+  // instance's own.
+  vi.spyOn(fleetPoolGrowthPassService, 'runGrowthPass').mockResolvedValue({
+    ran: false,
+    kinds: {},
+    requestAlerts: 0,
+    failures: 0,
+  });
   switchReads = 0;
   switchOn = false;
   wireFleetKindSwitch('agent_instance', () => {

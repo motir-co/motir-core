@@ -17,7 +17,7 @@ import { randomInt } from '../helpers/random';
 // THE RECONCILER READS EVERY AGENT-HOSTER ACCOUNT (Story MOTIR-9361 · MOTIR-9476)
 // against real Postgres. Each hoster account is an `AwsEc2Fake`, reached through
 // the real composition root (`inventoryForShard` → `createEc2Api`, answered here
-// by the account's access key id); the Fly side is the fake fleet inventory.
+// by the account's access key id), under the real selector with no Fly listing.
 // Sentry is observed at its call.
 //
 // ⚠️ `@motir/orchestrator` RESOLVES TO THE PACKAGE SOURCE here: the EC2 fake
@@ -165,7 +165,10 @@ const alertNames = (): string[] => captureException.mock.calls.map(([err]) => (e
 
 beforeEach(async () => {
   AwsEc2Fake ??= (await import(/* @vite-ignore */ paths.ec2Fake)).AwsEc2Fake;
-  vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fake');
+  // The real composition root: under the fake selector an `aws` account has no
+  // listing unless the lane's fake EC2 is installed (MOTIR-9429).
+  vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', '');
+  vi.stubEnv('FLY_FLEET_API_TOKEN', '');
   world.accounts.clear();
   captureException.mockReset();
   vi.spyOn(console, 'warn').mockImplementation(() => undefined);

@@ -333,6 +333,72 @@ export function createFileBackedEc2(
         }
       });
     },
+
+    // An agent-hoster account's persistent calls (MOTIR-9469). The lane's hoster
+    // instances live on the persistent fake, so this EC2 only keeps the port
+    // whole: a stop and a start move the state, and it holds no disks.
+    async stopInstances(instanceIds) {
+      withAccount(path, shard, (account) => {
+        for (const id of instanceIds) {
+          const record = account.instances[id];
+          if (!record) return fail('InvalidInstanceID.NotFound');
+          if (record.state === 'terminated') return fail('IncorrectInstanceState');
+          if (record.state !== 'stopped') {
+            record.state = 'stopped';
+            record.stateTransitionReason = fakeAwsTransitionReason(new Date());
+          }
+        }
+      });
+    },
+    async startInstances(instanceIds) {
+      withAccount(path, shard, (account) => {
+        for (const id of instanceIds) {
+          const record = account.instances[id];
+          if (!record) return fail('InvalidInstanceID.NotFound');
+          if (record.state !== 'stopped' && record.state !== 'running') {
+            return fail('IncorrectInstanceState');
+          }
+          record.state = 'running';
+          record.stateTransitionReason = null;
+        }
+      });
+    },
+    async describeVolumes() {
+      return { volumes: [], nextToken: null };
+    },
+    async deleteVolume() {
+      return fail('InvalidVolume.NotFound');
+    },
+    async describeInstanceUserData(instanceId) {
+      const record = readAccount(path, shard).instances[instanceId];
+      if (!record) return fail('InvalidInstanceID.NotFound');
+      const encoded = record.request?.userData;
+      return encoded ? Buffer.from(encoded, 'base64').toString('utf8') : null;
+    },
+    async modifyInstanceUserData(instanceId, userData) {
+      withAccount(path, shard, (account) => {
+        const record = account.instances[instanceId];
+        if (!record) return fail('InvalidInstanceID.NotFound');
+        if (record.state !== 'stopped') return fail('IncorrectInstanceState');
+        if (record.request) {
+          record.request = {
+            ...record.request,
+            userData: Buffer.from(userData, 'utf8').toString('base64'),
+          };
+        }
+      });
+    },
+    async createTags(resourceIds, tags) {
+      withAccount(path, shard, (account) => {
+        for (const id of resourceIds) {
+          const record = account.instances[id];
+          if (!record) continue;
+          const keys = new Set(tags.map((t) => t.key));
+          record.tags = [...record.tags.filter((t) => !keys.has(t.key)), ...tags];
+        }
+      });
+    },
+    authorizeSecurityGroupIngress: noNetwork,
   };
 }
 

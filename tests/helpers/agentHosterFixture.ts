@@ -5,6 +5,7 @@ import type {
   Ec2Instance,
   Ec2RunInstanceInput,
   Ec2Volume,
+  FleetInventory,
   HostAgentClient,
   HostAgentExecRequest,
   PersistentContainerHandle,
@@ -136,6 +137,7 @@ export function hosterCompositionRoot<T extends Record<string, unknown>>(origina
       shard: FleetShardDTO,
       handle: PersistentContainerHandle,
     ) => Promise<PersistentTerminalEndpoint>;
+    inventoryForShard: (shard: FleetShardDTO) => FleetInventory | null;
   };
   return {
     ...original,
@@ -148,6 +150,17 @@ export function hosterCompositionRoot<T extends Record<string, unknown>>(origina
       return account
         ? orchestratorOf(account).terminalEndpoint(handle)
         : root.hosterTerminalEndpointFor(shard, handle);
+    },
+    // The account's real AWS listing over its own EC2: under the fake selector the
+    // root answers no listing for an `aws` account (MOTIR-9429).
+    inventoryForShard(shard: FleetShardDTO) {
+      const account = world.byShardId.get(shard.id);
+      if (!account) return root.inventoryForShard(shard);
+      return world.source!.createAwsFleetInventory({
+        ec2: account.ec2,
+        region: account.shard.awsRegion!,
+        accountName: account.shard.name,
+      });
     },
   };
 }

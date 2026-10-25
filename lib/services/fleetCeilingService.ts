@@ -17,7 +17,10 @@ import {
 import { fleetKillSwitchEngaged, fleetSlotTtlSeconds } from '@/lib/ciFleet/limits';
 // Wires the agent runner's Fly↔AWS switch before any admission reads it (MOTIR-9421).
 import '@/lib/ciFleet/fleetKindSwitches';
-import { fleetShardAdmissionService } from '@/lib/services/fleetShardAdmissionService';
+import {
+  fleetShardAdmissionService,
+  type ShardPlacement,
+} from '@/lib/services/fleetShardAdmissionService';
 import { withOrgServiceWriteContext } from '@/lib/organizations/context';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
 import {
@@ -515,12 +518,17 @@ export const fleetCeilingService = {
         // WHICH ACCOUNT (MOTIR-9421), after the plan cap so a run its plan
         // refuses is told `plan_cap`, never `shard_capacity`; in this locked
         // transaction so the account counted is the account written. A kind
-        // whose switch is Fly answers null. A throw fails closed below.
-        const placement = await fleetShardAdmissionService.chooseInTx(
-          { fleetKind: request.workload, organizationId },
-          now,
-          tx,
-        );
+        // whose switch is Fly answers null. A throw fails closed below. An agent
+        // instance's account is chosen by its own placement (MOTIR-9471), where a
+        // full pool means waiting for room (MOTIR-9474), never a refusal here.
+        const placement: ShardPlacement =
+          request.workload === 'agent_instance'
+            ? { shardId: null }
+            : await fleetShardAdmissionService.chooseInTx(
+                { fleetKind: request.workload, organizationId },
+                now,
+                tx,
+              );
         if ('deferred' in placement) {
           return {
             outcome: 'deferred' as const,
