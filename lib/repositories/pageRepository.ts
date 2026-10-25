@@ -109,6 +109,31 @@ export interface PageArchivedRootsPage {
 const LIVE = Prisma.sql`p."archived_at" IS NULL`;
 
 /**
+ * The text-search configuration of page search (Story MOTIR-9489 · MOTIR-9550).
+ * `simple` neither stems nor drops stop words, so a word is found as typed in
+ * any of the eleven languages the product writes content in.
+ */
+export const PAGE_SEARCH_CONFIG = 'simple';
+
+/**
+ * How much of `body_text` is searchable. A `tsvector` is capped at 1 MiB and a
+ * body may be 2 MiB, so an uncut body would make the page WRITE fail on the
+ * index; words past this many characters are not found.
+ */
+export const PAGE_SEARCH_BODY_LIMIT = 200000;
+
+/**
+ * The searchable document of a page, alias `p` — the EXACT expression
+ * `page_search_gin_idx` was built on (`20261025090000_page_search_index`). The
+ * only place application code spells it: a query that writes it any other way
+ * does not match the index and scans the table. The constants are inlined as
+ * SQL text, not bound, because a bound parameter is not the index's constant.
+ */
+export const PAGE_SEARCH_DOCUMENT = Prisma.sql`to_tsvector(${Prisma.raw(
+  `'${PAGE_SEARCH_CONFIG}'`,
+)}, p."title" || ' ' || left(p."body_text", ${Prisma.raw(String(PAGE_SEARCH_BODY_LIMIT))}))`;
+
+/**
  * The LIVE rows of ONE level, alias `p`: at the root neither column is set; in a
  * folder the folder is (a sub-page never carries one — `page_parent_xor_folder`);
  * under a page the parent is. An archived page is in no level (§7), so its kept

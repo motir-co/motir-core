@@ -1,0 +1,24 @@
+-- Story MOTIR-9489 · MOTIR-9550 — pages are found by a word in their title or
+-- their body. A GIN index over ONE expression: the page title plus the first
+-- 200000 characters of its plain-text body (`body_text`, which every markdown
+-- door — REST, MCP and the app — writes on each save beside `body_markdown`).
+--
+-- An EXPRESSION index, not a generated column or a trigger: Postgres keeps it
+-- current on every INSERT/UPDATE with no indexing step, and Prisma does not
+-- model it, so the `prisma migrate diff` drift check stays clean.
+--
+-- ⚠️ THE EXPRESSION IS SPELLED ONCE IN APPLICATION CODE —
+-- `PAGE_SEARCH_DOCUMENT` in `lib/repositories/pageRepository.ts` — and it must
+-- match this text exactly, or the planner cannot use the index and every search
+-- becomes a sequential scan. `tests/pages/pageSearchIndex.integration.test.ts`
+-- proves the two agree by EXPLAIN.
+--
+-- `simple`, not `english`: content is written in eleven languages, and `simple`
+-- neither stems nor drops stop words, so a word is found as typed in any of
+-- them. `left(…, 200000)`: a `tsvector` is capped at 1 MiB and a body may be
+-- 2 MiB, so an uncut long body would make the page WRITE fail ("string is too
+-- long for tsvector"). Words past the cut are not searchable.
+--
+-- `body_text` is NOT NULL (default ''), so no coalesce. A plain CREATE INDEX,
+-- not CONCURRENTLY: Prisma runs a migration inside a transaction.
+CREATE INDEX "page_search_gin_idx" ON "page" USING GIN (to_tsvector('simple', "title" || ' ' || left("body_text", 200000)));
