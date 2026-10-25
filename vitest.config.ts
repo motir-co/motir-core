@@ -203,6 +203,18 @@ export default defineConfig({
         // `workItemContinue-transport.test.ts`): 100 / 90.62 / 100 / 100. Its
         // service, `workItemContinueService.ts`, is already gated.
         'lib/mcp/tools/workItemContinue.ts',
+        // Story MOTIR-9487 · MOTIR-9559 — the three page tools an agent moves, archives and
+        // links pages with. Pinned at the project floor in `thresholds` below after being
+        // MEASURED on this branch against the story's own specs
+        // (`tests/integration/pages/pageMcpToolsStoryGate.test.ts` +
+        // `tests/mcp/{move,archive,link}PageTool.test.ts`), lines / statements / functions /
+        // branches: movePage 100 / 100 / 100 / 100, archivePage 100 / 100 / 100 / 92.85,
+        // linkPage 100 / 100 / 100 / 100. The link-error arm the story added to the shared
+        // `lib/mcp/toolResult.ts` is covered by the same specs (PAGE_LINK_NOT_FOUND); that
+        // file is not in the report and its changed lines are measured in the PR body.
+        'lib/mcp/tools/movePage.ts',
+        'lib/mcp/tools/archivePage.ts',
+        'lib/mcp/tools/linkPage.ts',
         // Story MOTIR-7460 · MOTIR-7479 — the manual-work gate's two NEW modules (the
         // kind's handler, and its raise / withdrawals). Pinned at the project floor in
         // `thresholds` below after being MEASURED on this branch against the story's own
@@ -3899,6 +3911,25 @@ export default defineConfig({
           statements: 90,
         },
         'lib/mcp/tools/workItemContinue.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // Story MOTIR-9487 · MOTIR-9559 — the three page tools; measured above, pinned at the floor.
+        'lib/mcp/tools/movePage.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/mcp/tools/archivePage.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/mcp/tools/linkPage.ts': {
           lines: 90,
           functions: 90,
           branches: 90,

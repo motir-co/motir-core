@@ -329,7 +329,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **102 tools**.
+`initialize` handshake and registers **105 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -3141,7 +3141,7 @@ editor's collaborative document; an agent reads and writes it as **markdown**,
 converted on the server through the same package the editor uses (§8.2). A page
 is addressed by its project key and its opaque **id** — the `<id>` in the page's
 address `/pages/<id>`. The token `motir login` mints carries `page:view` and
-`page:edit`, so a dispatched agent reaches all three tools; it never carries
+`page:edit`, so a dispatched agent reaches every page tool below; it never carries
 `page:delete` ([`docs/decisions/pages.md`](decisions/pages.md) §5). A token
 minted before that grant changed gains them at its next `motir login`. Every
 refusal is the page service's own, returned as a typed tool error carrying its
@@ -3160,6 +3160,13 @@ code:
 | `CROSS_PROJECT_PAGE_PARENT`  | The parent page or folder belongs to another project.                                                                                                       |
 | `PAGE_CYCLE`                 | A page placed under itself or one of its own sub-pages.                                                                                                     |
 | `PAGE_DEPTH_EXCEEDED`        | The sub-page would sit deeper than 10 levels.                                                                                                               |
+| `PAGE_ARCHIVED`              | `move_page` or `archive_page` named a page that is already archived. Restore it first.                                                                      |
+| `PAGE_NOT_ARCHIVED`          | `archive_page`'s `restore` named a live page.                                                                                                               |
+| `PAGE_ARCHIVE_ROOT_REQUIRED` | `archive_page`'s `restore` named a sub-page that was archived with its parent. Restore the archive root instead.                                            |
+| `PAGE_LINK_NOT_FOUND`        | `link_page`'s `unlink` named a pair with no hand link (a mention or embed is not one).                                                                      |
+| `CROSS_PROJECT_LINK`         | `link_page` named a work item, or a page you can see, in another project than `projectKey`.                                                                 |
+| `PAGE_PARENT_ARCHIVED`       | `move_page`'s destination page is archived.                                                                                                                 |
+| `PAGE_NEIGHBOUR_INVALID`     | `move_page`'s `beforeId` / `afterId` is not a sibling at the destination.                                                                                   |
 | `PAGE_SEARCH_QUERY_EMPTY`    | `search_pages`' `q` is empty or only whitespace. A search never lists every page.                                                                           |
 | `PAGE_SEARCH_QUERY_TOO_LONG` | `search_pages`' `q` is over 200 characters.                                                                                                                 |
 | `PAGE_CURSOR_INVALID`        | `search_pages`' `cursor` is not one a previous call returned.                                                                                               |
@@ -3267,6 +3274,80 @@ never returned. Hits are ranked best first, 20 at a time.
 
 **Output** — `{ items: [{ id, title, place, snippet, rank }], nextCursor }`, each
 hit v1's `PageSearchHit`. A hit is not the page: read it with `get_page`.
+
+#### `move_page`
+
+**Re-file** a page, with its whole subtree, under another page, into a folder or
+at the project root (Story MOTIR-9487 · MOTIR-9556). Gated on `page:edit`. It
+calls the same `pagesService.movePage` door as
+`PATCH /api/v1/pages/{pageId}/placement`, so the structure lock and every tree
+rule are the REST route's: a page under itself or its own sub-page is
+`PAGE_CYCLE`, a destination page or folder in another project reads as missing
+(`PAGE_NOT_FOUND` / `FOLDER_NOT_FOUND`, the same answer as an unknown id), an
+archived page is `PAGE_ARCHIVED`, an archived destination page is
+`PAGE_PARENT_ARCHIVED`, and a tree deeper than 10 levels is
+`PAGE_DEPTH_EXCEEDED`. A move to where the page already is writes nothing and
+answers `moved: false`.
+
+| Input        | Type   | Required | Notes                                                                                |
+| ------------ | ------ | -------- | ------------------------------------------------------------------------------------ |
+| `projectKey` | string | yes      | Project key, e.g. `"ACME"`.                                                          |
+| `pageId`     | string | yes      | The page id — the `<id>` in `/pages/<id>`.                                           |
+| `parent`     | object | yes      | `{ "kind": "root" }`, `{ "kind": "folder", "id" }` or `{ "kind": "page", "id" }`.    |
+| `beforeId`   | string | no       | A sibling at the destination the page lands right after. Omit both to place it last. |
+| `afterId`    | string | no       | A sibling at the destination the page lands right before.                            |
+
+**Output** — v1's `PagePlacement`: `{ id, parent, position, ancestorPageIds, moved }`.
+
+#### `archive_page`
+
+**Archive** a page, or **restore** it (Story MOTIR-9487 · MOTIR-9557). Gated on
+`page:edit`. It calls the same `pagesService.archivePage` /
+`pagesService.restorePage` doors as the page tree's Archive and Restore.
+Archiving takes the page's live sub-pages with it; a sub-page archived earlier
+keeps its own archive and stays out of the set. Nothing is deleted: permanent
+delete is `page:delete`, which no tool carries.
+
+Restore applies to an archive **root** and brings back the sub-pages that left
+with it. It lands on the first place that still holds: where the page was
+(`original`), its nearest live ancestor page (`ancestorPage`), its folder
+(`folder`) or the project root (`root`); the tool text says so when the page did
+not come back where it was.
+
+| Input        | Type   | Required | Notes                                      |
+| ------------ | ------ | -------- | ------------------------------------------ |
+| `projectKey` | string | yes      | Project key, e.g. `"ACME"`.                |
+| `pageId`     | string | yes      | The page id — the `<id>` in `/pages/<id>`. |
+| `action`     | string | no       | `archive` (the default) or `restore`.      |
+
+**Output** — archive: `{ archivedIds, rootId, subPageCount }`, the root first.
+Restore: `{ restoredIds, landing: { kind, parentPageId, folderId, title } }`.
+
+#### `link_page`
+
+**Link** a page to a work item by hand, or **unlink** it (Story MOTIR-9487 ·
+MOTIR-9558). Gated on `page:edit`; the hand-link service also asks
+`work_item:edit` and `page:view` on the work item's project, which the token
+`motir login` mints carries. It calls the same
+`pageLinksService.linkPageForWorkItem` / `unlinkPageForWorkItem` doors as the
+work item's page strip, so the link shows there.
+
+Linking a pair that is already linked succeeds with `changed: false` and writes
+nothing. Unlinking a pair with no hand link is refused `PAGE_LINK_NOT_FOUND`. A
+work item in another project than `projectKey` is refused `CROSS_PROJECT_LINK`
+before anything is written; so is a page in another project you can view. A
+page you cannot see is `PAGE_NOT_FOUND`, the answer an unknown id gets. An
+archived page cannot be linked (`PAGE_ARCHIVED`), but a link to a page archived
+since can still be removed.
+
+| Input         | Type   | Required | Notes                                                  |
+| ------------- | ------ | -------- | ------------------------------------------------------ |
+| `projectKey`  | string | yes      | Project key, e.g. `"ACME"`.                            |
+| `pageId`      | string | yes      | The page id — the `<id>` in `/pages/<id>`.             |
+| `workItemKey` | string | yes      | The work item's key, e.g. `"ACME-7"`, in `projectKey`. |
+| `action`      | string | no       | `link` (the default) or `unlink`.                      |
+
+**Output** — `{ pageId, workItemId, source: "manual", action, changed }`.
 
 #### `publish_decision_page`
 

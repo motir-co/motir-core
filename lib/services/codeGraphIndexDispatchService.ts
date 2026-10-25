@@ -12,6 +12,12 @@ import {
   type IndexPauseReason,
 } from '@/lib/ciFleet/indexAllowance';
 import { CodeGraphRunCredentialTooShortError } from '@/lib/ai/errors';
+import { fleetShardOrchestratorService } from '@/lib/services/fleetShardOrchestratorService';
+import { fleetShardService } from '@/lib/services/fleetShardService';
+import { classifyProvisionRefusal } from '@/lib/services/fleetShardAdmissionService';
+import { fleetShardRepository } from '@/lib/repositories/fleetShardRepository';
+import { SHARD_PAUSE_SECONDS } from '@/lib/ciFleet/shardTargets';
+import { withSystemContext } from '@/lib/workspaces/context';
 import {
   codeGraphIndexAdmissionService,
   type IndexAdmission,
@@ -470,7 +476,15 @@ export const INLINE_STEPS: SupervisionSteps = {
 };
 
 /** Seams the tests drive. Defaults are the constants above. */
+/** How many accounts one boot may move past after capacity refusals before it
+ *  defers `pool_full` (MOTIR-9451). Each refusal also pauses its account, so in
+ *  practice admission runs out of accounts first; this is the runaway guard. */
+export const MAX_INDEX_READMISSIONS = 5;
+
 export interface IndexSupervisionOptions {
+  /** Internal (MOTIR-9451): how many capacity refusals this boot has already
+   *  re-admitted past. */
+  indexReadmissions?: number;
   /**
    * The durable-step seam (MOTIR-3484). A job passes its `ctx.step`; everything
    * else passes nothing and gets {@link INLINE_STEPS}.
@@ -609,6 +623,18 @@ export interface IndexSession {
    * what a sync saves would be polluted by runs that never reported.
    */
   readonly syncGranted?: boolean;
+  /**
+   * THE FLEET ACCOUNT the container was booted on (MOTIR-9448) — the admission's
+   * `shardId`, copied at boot so poll and settle reach the SAME account's
+   * orchestrator. A plain id, never an adapter: `orchestratorFor` rebuilds the
+   * orchestrator from it per step.
+   *
+   * ⚠️ OPTIONAL, FOR THE ROLLOUT, as `syncGranted` is. A run in flight across the
+   * deploy replays an `index-boot:<projectId>` memo written without it, and a
+   * session with no account means the process-wide fleet — exactly where that
+   * run's container was booted.
+   */
+  readonly shardId?: string;
   readonly attribution: {
     readonly orgId: string;
     readonly workspaceId: string;
@@ -636,6 +662,11 @@ export type IndexPollResult =
       /** Set when supervision ended for a reason of its own (a deadline, an
        *  unreadable provider) rather than because the container stopped. */
       failureDetail: string | null;
+      /** The container stopped because its image could not be pulled — learned
+       *  after `provision` returned, on a provider that pulls on its VM (AWS,
+       *  MOTIR-9446). The settle reports `image_unpullable`. Absent on every
+       *  memo written before it existed, which reads as "not known". */
+      imageUnpullable?: boolean;
     };
 
 /** The starting point of the poll loop — no reads yet, nothing observed. */
@@ -1232,12 +1263,34 @@ export const codeGraphIndexDispatchService = {
 
     let fleet: IndexFleetConfig;
     let aiBaseUrl: string;
-    let orchestrator: ContainerOrchestrator;
+    let orchestrator: ContainerOrchestrator | undefined;
     let credential: Awaited<ReturnType<typeof mintCodeGraphRunCredential>>;
     let tarballUrl: string;
+
+    // ── The admitted ACCOUNT's orchestrator (MOTIR-9448), before anything is
+    // spent. An account that cannot be reached (its row gone, its credential
+    // unset) is a failed boot that gives the slot back — never a throw that
+    // strands it until the TTL, and never a quiet fall back to the process-wide
+    // fleet, which the admission did not count it against.
+    // The account's region, too (MOTIR-9502): an AWS account refuses a spec for
+    // any region but its own, and the process-wide fleet's is Fly's.
+    let accountRegion: string | undefined;
+    if (admission.shardId) {
+      try {
+        const shard = await fleetShardService.getShard(admission.shardId);
+        orchestrator = fleetShardOrchestratorService.forShardRow(shard);
+        accountRegion = shard.aws?.region ?? shard.fly?.region;
+      } catch (err) {
+        await codeGraphIndexAdmissionService.release(admission.slotRef, input.dispatchId);
+        const detail = `the fleet account ${admission.shardId} could not be reached: ${detailOf(err)}`;
+        return { phase: 'terminal', outcome: { outcome: 'provision_failed', detail } };
+      }
+    }
+
     try {
       // ── 0 · The deployment gate, BEFORE anything is spent ──────────────────
       fleet = indexFleetConfig();
+      if (accountRegion) fleet = { ...fleet, region: accountRegion };
       // ⚠️ THE *CONTAINER'S* ACCESSOR, NOT motir-core's OWN (MOTIR-4518). These
       // are two different addresses for one service because the two callers sit
       // in two different organizations: motir-core reaches motir-ai at
@@ -1251,7 +1304,7 @@ export const codeGraphIndexDispatchService = {
       // grant, while the ledger recorded success. There is NO fallback between
       // the two: unset is a throw, here, before a machine is billed.
       aiBaseUrl = motirAiContainerBaseUrl();
-      orchestrator = getOrchestrator();
+      orchestrator ??= getOrchestrator();
 
       // ── 1 · Mint THIS run's motir-ai credential ────────────────────────────
       // Scoped to one (project, repo, run) for minutes, and the only motir-ai
@@ -1329,6 +1382,23 @@ export const codeGraphIndexDispatchService = {
       // The port guarantees a failed `provision` left no container behind, so
       // the slot stands for nothing and is released rather than aged out.
       await codeGraphIndexAdmissionService.release(admission.slotRef, input.dispatchId);
+      // ⚠️ AN ACCOUNT THAT REFUSED FOR CAPACITY IS A FULL ACCOUNT, NOT A FAILED
+      // RUN (MOTIR-9451). The headroom count thought it had room and the
+      // provider said otherwise: pause it for SHARD_PAUSE_SECONDS, as CI's
+      // `moveAfterRefusalInTx` does, and go back to admission, which skips the
+      // paused account and picks another — or defers `pool_full`, which the job
+      // records as a pause. Never `provision_failed`, never Fly. A run with no
+      // account (the switch off) keeps today's `provision_failed`.
+      const refusal = admission.shardId ? classifyProvisionRefusal(err) : 'job_fault';
+      if (admission.shardId && refusal !== 'job_fault') {
+        return codeGraphIndexDispatchService.readmitAfterRefusal(
+          input,
+          admission.shardId,
+          refusal,
+          err,
+          options,
+        );
+      }
       if (err instanceof OrchestratorImageUnpullableError) {
         const detail = `the indexer image could not be pulled: ${detailOf(err)}`;
         console.error('[codeGraphIndexDispatchService] the indexer image is not pullable', {
@@ -1357,6 +1427,7 @@ export const codeGraphIndexDispatchService = {
         dispatchId: input.dispatchId,
         repoRef: input.repoRef,
         slotRef: admission.slotRef,
+        ...(admission.shardId ? { shardId: admission.shardId } : {}),
         // MOTIR-4945 — the MODE, recorded at the only moment it is knowable.
         //
         // ⚠️ THE SAME PREDICATE THE SPEC BRANCHED ON, deliberately, and it must
@@ -1460,7 +1531,9 @@ export const codeGraphIndexDispatchService = {
 
     let status;
     try {
-      status = await orchestratorFor(session).describe({
+      status = await (
+        await orchestratorFor(session)
+      ).describe({
         provider: session.handle.provider,
         id: session.handle.id,
         region: session.handle.region,
@@ -1471,7 +1544,7 @@ export const codeGraphIndexDispatchService = {
       // deadlines remain the real bound — this buys the loop the right to MISS a
       // few reads, never the right to run longer.
       const consecutiveReadFailures = previous.consecutiveReadFailures + 1;
-      const detail = detailOf(err);
+      const detail = `${detailOf(err)}${onAccount(session)}`;
       if (consecutiveReadFailures > MAX_CONSECUTIVE_READ_FAILURES) {
         // Give up on READING, but not on tearing down: a `done` verdict is what
         // routes this to teardown, which is why it returns rather than throws.
@@ -1527,6 +1600,18 @@ export const codeGraphIndexDispatchService = {
       // that never happened — a provisioning failure even though the provider
       // reported success.
       const observed = startedAt ?? status.startedAt?.toISOString() ?? null;
+      if (status.imagePullFailed) {
+        // The VM booted but could not pull the image (MOTIR-9446): the same
+        // condition a create-time refusal reports, so it ends the same way.
+        return {
+          done: true,
+          reason: 'provision_failed',
+          startedAt: observed,
+          exitCode: null,
+          failureDetail: 'the indexer image could not be pulled on the VM',
+          imageUnpullable: true,
+        };
+      }
       return {
         done: true,
         reason: observed ? 'job_completed' : 'provision_failed',
@@ -1575,12 +1660,24 @@ export const codeGraphIndexDispatchService = {
 
     let orchestrator: ContainerOrchestrator;
     try {
-      orchestrator = orchestratorFor(session);
+      orchestrator = await orchestratorFor(session);
     } catch (err) {
       console.error('[codeGraphIndexDispatchService] no orchestrator at teardown', {
         containerId: handle.id,
         repoRef: session.repoRef,
+        shardId: session.shardId ?? null,
       });
+      if (session.shardId) {
+        // ⚠️ AN ACCOUNT THAT CAN NO LONGER BE REACHED (MOTIR-9448) — its row
+        // gone or its key unreadable — will not become reachable on a retry, so
+        // its slot is given back rather than held to the TTL. The container may
+        // still run: the outcome says so and leaves it to the orphan reaper.
+        await codeGraphIndexAdmissionService.release(session.slotRef, session.dispatchId);
+        return {
+          outcome: 'teardown_failed',
+          detail: `the fleet account ${session.shardId} could not be reached at teardown for container ${handle.id}; left for the reaper: ${detailOf(err)}`,
+        };
+      }
       return {
         outcome: 'teardown_failed',
         detail: `no orchestrator at teardown for container ${handle.id}; left for the reaper: ${detailOf(err)}`,
@@ -1653,6 +1750,19 @@ export const codeGraphIndexDispatchService = {
     // names a (repo × project) that another run could be holding. Passing the ref
     // alone is how a settle used to free a live container's capacity.
     await codeGraphIndexAdmissionService.release(session.slotRef, session.dispatchId);
+
+    if (verdict.imageUnpullable) {
+      // Reported as the boot-time refusal is: a human fixes the image, and every
+      // queued index would hit it the same way. The cost row is written above.
+      console.error('[codeGraphIndexDispatchService] the indexer image is not pullable', {
+        repoRef: session.repoRef,
+        containerId: handle.id,
+      });
+      return {
+        outcome: 'image_unpullable',
+        detail: verdict.failureDetail ?? 'the indexer image could not be pulled',
+      };
+    }
 
     return {
       outcome: 'settled',
@@ -2147,6 +2257,65 @@ export const codeGraphIndexDispatchService = {
    * wait on it would turn one bad read into a dropped index — the outcome the
    * whole rule exists to forbid.
    */
+  /**
+   * After an admitted account refused the provision for capacity (or could not
+   * be reached), pause it and admit again (MOTIR-9451). The pause is what makes
+   * this finite: each refusal takes one account out of the choice for
+   * SHARD_PAUSE_SECONDS, so the walk ends on an account that boots or on a
+   * `pool_full` deferral, which `advanceIndexContainer`'s caller records as a
+   * pending repository. Runs inside the `index-boot` step, so a replayed pass
+   * reads the result rather than walking again.
+   */
+  async readmitAfterRefusal(
+    input: IndexDispatchInput,
+    refusedShardId: string,
+    reason: 'capacity_refused' | 'provider_unavailable',
+    err: unknown,
+    options: IndexSupervisionOptions,
+  ): Promise<IndexBootResult> {
+    const now = options.now ?? (() => new Date());
+    console.warn('[codeGraphIndexDispatchService] an indexer account refused the boot', {
+      repoRef: input.repoRef,
+      shardId: refusedShardId,
+      reason,
+      detail: detailOf(err),
+    });
+    await withSystemContext((tx) =>
+      fleetShardRepository.pauseInTx(
+        refusedShardId,
+        new Date(now().getTime() + SHARD_PAUSE_SECONDS * 1000),
+        reason,
+        tx,
+      ),
+    );
+    const readmissions = (options.indexReadmissions ?? 0) + 1;
+    if (readmissions > MAX_INDEX_READMISSIONS) {
+      return {
+        phase: 'terminal',
+        outcome: {
+          outcome: 'admission_deferred',
+          reason: 'pool_full',
+          detail: `${readmissions - 1} indexer accounts refused this boot for capacity`,
+        },
+      };
+    }
+    const verdict = await codeGraphIndexDispatchService.waitForAdmission(
+      input,
+      options.sleep ?? sleepFor,
+      options,
+    );
+    if (verdict.outcome === 'deferred') {
+      return {
+        phase: 'terminal',
+        outcome: { outcome: 'admission_deferred', reason: verdict.reason, detail: verdict.detail },
+      };
+    }
+    return codeGraphIndexDispatchService.bootIndexContainer(input, verdict.admission, {
+      ...options,
+      indexReadmissions: readmissions,
+    });
+  },
+
   async waitForAdmission(
     input: IndexDispatchInput,
     sleep: (ms: number) => Promise<void>,
@@ -2273,6 +2442,13 @@ function exitVerdictFor(verdict: Extract<IndexPollResult, { done: true }>): Inde
 /** The orchestrator a session's container lives on. Re-read per step rather than
  *  carried across the boundary: an adapter is not serializable, and the handle is
  *  — which is exactly why the port made it opaque. */
-function orchestratorFor(_session: IndexSession): ContainerOrchestrator {
-  return getOrchestrator();
+async function orchestratorFor(session: IndexSession): Promise<ContainerOrchestrator> {
+  // A session with no account — every Fly run, and every memo from before
+  // MOTIR-9448 — is the process-wide fleet; `forShard(null)` is that.
+  return fleetShardOrchestratorService.forShard(session.shardId ?? null);
+}
+
+/** `" on fleet account <id>"` for a session booted on one, for a failure detail. */
+function onAccount(session: IndexSession): string {
+  return session.shardId ? ` on fleet account ${session.shardId}` : '';
 }

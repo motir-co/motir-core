@@ -245,6 +245,11 @@ function flyOrchestratorForShard(shard: FleetShardDTO): ContainerOrchestrator {
 /** The env var naming the runner AMI every AWS account boots (MOTIR-9272). */
 export const AWS_RUNNER_AMI_ENV_VAR = 'MOTIR_AWS_RUNNER_AMI_ID';
 
+/** The env var naming the Docker-host AMI an AWS index VM boots (MOTIR-9446) —
+ *  the ECS-optimized Amazon Linux 2023 AMI. Optional: unset, the account still
+ *  boots runners and refuses an index spec as not configured. */
+export const AWS_INDEXER_AMI_ENV_VAR = 'MOTIR_AWS_INDEXER_AMI_ID';
+
 /**
  * THE ACCEPTANCE LANE'S EC2 (MOTIR-9429): a factory `lib/test-fake-aws.ts`
  * installs when `MOTIR_FAKE_AWS_STATE_PATH` is set, so the lane's three processes
@@ -381,6 +386,7 @@ function awsOrchestratorForShard(shard: FleetShardDTO): ContainerOrchestrator {
     region,
     shardTag: shard.name,
     amiId: values[AWS_RUNNER_AMI_ENV_VAR]!,
+    indexerAmiId: process.env[AWS_INDEXER_AMI_ENV_VAR]?.trim() || undefined,
   });
 }
 
@@ -413,6 +419,12 @@ export function orchestratorForShard(shard: FleetShardDTO): ContainerOrchestrato
  * The machine listing for ONE account, for the reconciler. Null for `fly`: the
  * Fly ORGANISATION inventory already walks every Fly app, and a second listing
  * would judge each machine twice.
+ *
+ * An AWS account of the INDEXER pool lists every instance it has (MOTIR-9450),
+ * with that account's own key, so an index VM no record owns is reaped there. A
+ * CI-runner AWS account has none: its runners are swept by the adapter's
+ * tag-scoped reaper, and its key may only terminate shard-tagged instances. With
+ * the fake orchestrator selected nothing reads EC2.
  */
 export function inventoryForShard(shard: FleetShardDTO): FleetInventory | null {
   switch (shard.provider) {

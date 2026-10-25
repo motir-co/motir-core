@@ -76,6 +76,15 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   create_page: 'page:edit',
   update_page: 'page:edit',
   rename_page: 'page:edit',
+  // `pagesService.movePage` asserts `assertCanEditPages` (MOTIR-9556), the key the
+  // placement route checks.
+  move_page: 'page:edit',
+  // `archivePage` / `restorePage` assert `assertCanEditPages` (MOTIR-9557), the key
+  // the tree's Archive and Restore check.
+  archive_page: 'page:edit',
+  // `link_page` (MOTIR-9558) is gated on `page:edit`; the hand-link service also asks
+  // `work_item:edit` and `page:view` on the work item's project, both in the CLI grant.
+  link_page: 'page:edit',
   // `publish_decision_page` (MOTIR-7434) — publishing a decision is EDITING the card,
   // the key both evidence publishers assert; the service also asserts `page:view` on
   // the page. `CLI_TOKEN_GRANT` already carries `work_item:edit`: not widened here.
@@ -640,7 +649,9 @@ export const CLI_TOKEN_GRANT: readonly PermissionKey[] = [
   // ships green (MOTIR-3058, MOTIR-3051 above). What they grant: read a page and
   // REPLACE its body, in the token's own workspace, under the same project
   // checks a person meets — and every replaced body stays a restorable version
-  // in the page's history. No delete, no move, no archive.
+  // in the page's history — and, since Story MOTIR-9487, re-file a page with
+  // `move_page` (MOTIR-9556), archive or restore it with `archive_page`
+  // (MOTIR-9557) and link it to a work item with `link_page` (MOTIR-9558). No delete.
   //
   // `page:delete` STAYS OUT (§5; `docs/decisions/token-permissions.md` §7: an
   // unattended credential must not be able to destroy). No tool asserts it yet,
