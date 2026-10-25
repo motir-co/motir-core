@@ -329,7 +329,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **103 tools**.
+`initialize` handshake and registers **104 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -3160,7 +3160,9 @@ code:
 | `CROSS_PROJECT_PAGE_PARENT`  | The parent page or folder belongs to another project.                                                                                                       |
 | `PAGE_CYCLE`                 | A page placed under itself or one of its own sub-pages.                                                                                                     |
 | `PAGE_DEPTH_EXCEEDED`        | The sub-page would sit deeper than 10 levels.                                                                                                               |
-| `PAGE_ARCHIVED`              | `move_page` named an archived page. Restore it before moving it.                                                                                            |
+| `PAGE_ARCHIVED`              | `move_page` or `archive_page` named a page that is already archived. Restore it first.                                                                      |
+| `PAGE_NOT_ARCHIVED`          | `archive_page`'s `restore` named a live page.                                                                                                               |
+| `PAGE_ARCHIVE_ROOT_REQUIRED` | `archive_page`'s `restore` named a sub-page that was archived with its parent. Restore the archive root instead.                                            |
 | `PAGE_PARENT_ARCHIVED`       | `move_page`'s destination page is archived.                                                                                                                 |
 | `PAGE_NEIGHBOUR_INVALID`     | `move_page`'s `beforeId` / `afterId` is not a sibling at the destination.                                                                                   |
 | `PAGE_SEARCH_QUERY_EMPTY`    | `search_pages`' `q` is empty or only whitespace. A search never lists every page.                                                                           |
@@ -3294,6 +3296,30 @@ answers `moved: false`.
 | `afterId`    | string | no       | A sibling at the destination the page lands right before.                            |
 
 **Output** — v1's `PagePlacement`: `{ id, parent, position, ancestorPageIds, moved }`.
+
+#### `archive_page`
+
+**Archive** a page, or **restore** it (Story MOTIR-9487 · MOTIR-9557). Gated on
+`page:edit`. It calls the same `pagesService.archivePage` /
+`pagesService.restorePage` doors as the page tree's Archive and Restore.
+Archiving takes the page's live sub-pages with it; a sub-page archived earlier
+keeps its own archive and stays out of the set. Nothing is deleted: permanent
+delete is `page:delete`, which no tool carries.
+
+Restore applies to an archive **root** and brings back the sub-pages that left
+with it. It lands on the first place that still holds: where the page was
+(`original`), its nearest live ancestor page (`ancestorPage`), its folder
+(`folder`) or the project root (`root`); the tool text says so when the page did
+not come back where it was.
+
+| Input        | Type   | Required | Notes                                      |
+| ------------ | ------ | -------- | ------------------------------------------ |
+| `projectKey` | string | yes      | Project key, e.g. `"ACME"`.                |
+| `pageId`     | string | yes      | The page id — the `<id>` in `/pages/<id>`. |
+| `action`     | string | no       | `archive` (the default) or `restore`.      |
+
+**Output** — archive: `{ archivedIds, rootId, subPageCount }`, the root first.
+Restore: `{ restoredIds, landing: { kind, parentPageId, folderId, title } }`.
 
 #### `publish_decision_page`
 

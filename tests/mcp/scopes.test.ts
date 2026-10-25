@@ -296,6 +296,8 @@ describe('LEGACY_SCOPE_PERMISSIONS (the forward map)', () => {
       search_pages: true,
       // MOTIR-9556 — the page move, `page:edit` like `update_page`, the same loss.
       move_page: true,
+      // MOTIR-9557 — the page archive / restore, `page:edit`, the same loss.
+      archive_page: true,
     };
     const losses: string[] = [];
     for (const name of MCP_TOOL_NAMES) {

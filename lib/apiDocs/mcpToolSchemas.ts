@@ -615,6 +615,30 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  archive_page: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description: 'The project key the page belongs to (e.g. "ACME").',
+      },
+      pageId: {
+        type: 'string',
+        minLength: 1,
+        description: 'The page id — the `<id>` in the page’s address `/pages/<id>`.',
+      },
+      action: {
+        type: 'string',
+        enum: ['archive', 'restore'],
+        description:
+          '`archive` (the default) archives the page with its live sub-pages; `restore` brings an archived page back, with the sub-pages that left with it.',
+      },
+    },
+    required: ['projectKey', 'pageId'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   archive_work_item: {
     type: 'object',
     properties: {
@@ -4138,6 +4162,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   add_plan_items: 'Append proposals to a plan',
   add_work_item_todo: 'Add a to-do step',
   append_plan_turn: 'Add a planning turn',
+  archive_page: 'Archive page',
   archive_work_item: 'Archive work item',
   attach_file: 'Attach file',
   change_kind: 'Change work item kind',
@@ -4270,6 +4295,13 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
   },
   append_plan_turn: {
     title: 'Add a planning turn',
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
+  archive_page: {
+    title: 'Archive page',
     readOnlyHint: false,
     destructiveHint: true,
     idempotentHint: false,

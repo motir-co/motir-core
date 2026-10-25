@@ -374,6 +374,16 @@ export const TOOL_ANNOTATIONS: Record<McpToolName, McpToolAnnotations> = {
     idempotentHint: true,
     openWorldHint: false,
   },
+  // Archiving is an archiving verb, so a destructive write by this table's rule, even though
+  // `action: "restore"` undoes it and nothing is deleted. NOT idempotent: a second archive is
+  // refused PAGE_ARCHIVED (a second restore PAGE_NOT_ARCHIVED) rather than answering the same.
+  // W: archivePage.ts → pagesService.archivePage / restorePage — archives or restores the page and its subtree
+  archive_page: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
   // A replay of the same version writes nothing, so it is idempotent; not destructive
   // (nothing is removed).
   // W: publishDecisionPage.ts → decisionPageService.publish — seals a version, records the publication, supersedes + raises the decision gate

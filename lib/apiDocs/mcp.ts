@@ -695,6 +695,11 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
       'Re-file a page and its sub-pages under another page, into a folder or at the root; a cycle or an archived page is refused by name.',
     descriptionFingerprint: 'af2acd1e96dd',
   },
+  archive_page: {
+    summary:
+      'Archive a page with its sub-pages, or restore an archive root and see where it landed — nothing is deleted.',
+    descriptionFingerprint: 'e48d9ee5c544',
+  },
   publish_decision_page: {
     summary:
       'Publish a page as a decision card’s decision: seals its newest version and, on an agent card, asks a person to approve it.',
