@@ -1,6 +1,9 @@
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { pageEmbeddingsService } from '@/lib/services/pageEmbeddingsService';
+import { workItemEmbeddingsService } from '@/lib/services/workItemEmbeddingsService';
+import { pageEmbeddingRepository } from '@/lib/repositories/pageEmbeddingRepository';
+import { fuseRankings, PAGE_SEARCH_FUSION_POOL } from '@/lib/pages/pageSearchFusion';
 import { folderRepository } from '@/lib/repositories/folderRepository';
 import { pageRepository } from '@/lib/repositories/pageRepository';
 import { pageVersionRepository } from '@/lib/repositories/pageVersionRepository';
@@ -186,8 +189,17 @@ async function findInProject(store: PageStore, projectId: string, pageId: string
 /** The `@` picker's Pages section shows a short, fixed list (MOTIR-7697). */
 export const PAGE_MENTION_SEARCH_LIMIT = 10;
 
-/** One page of full-text page search hits (MOTIR-9551). */
+/** One page of page search hits (MOTIR-9551). */
 export const PAGE_SEARCH_LIMIT = 20;
+
+/** What a page search says about its `mode` (MOTIR-9572); `merged` says nothing. */
+export const PAGE_SEARCH_MODE_MESSAGES: Record<PageSearchResultDto['mode'], string | null> = {
+  merged: null,
+  'full-text-only':
+    'Semantic search did not run (the embedding service is not available), so these are word matches only. This is not evidence that no similar page exists.',
+  'not-indexed':
+    'No page in this project is indexed for semantic search yet, so these are word matches only. This is not evidence that no similar page exists.',
+};
 
 /**
  * Page title-search rows with their PLACE: the parent page's title and the folder
@@ -1120,45 +1132,118 @@ export const pagesService = {
   },
 
   /**
-   * Full-text page search (Story MOTIR-9489 · MOTIR-9551): the LIVE pages of one
-   * project whose title or body holds the words of `q`, best match first,
-   * {@link PAGE_SEARCH_LIMIT} at a time, each as id, title, place, snippet and
-   * rank only.
+   * Page search (Story MOTIR-9489 · MOTIR-9551, by meaning since MOTIR-9490 ·
+   * MOTIR-9572): the LIVE pages of one project whose words match `q` or whose
+   * meaning is near it, fused into one ranking, {@link PAGE_SEARCH_LIMIT} at a
+   * time, each as id, title, place, snippet and fused score only.
    *
-   * ⚠️ THE ORDER IS THE CONTRACT. Access first, through `authorizePageSearch` —
-   * the one filter — so a caller without `page:view` is refused by name whatever
-   * the query or cursor, before any page is read. Then the query: trimmed-empty
-   * is `PageSearchQueryEmptyError` (never every page), over
-   * {@link PAGE_SEARCH_QUERY_MAX_LENGTH} is `PageSearchQueryTooLongError`. Then
-   * the cursor (`PAGE_CURSOR_INVALID` for one this service did not issue). A
-   * one-row look-ahead decides `nextCursor`. No total is returned anywhere.
+   * ⚠️ THE ORDER IS THE CONTRACT, and it is `aiBoundaryService.searchSimilarWorkItemsByText`'s.
+   *   1. A short transaction: access first, through `authorizePageSearch` — the
+   *      one filter — so a caller without `page:view` is refused by name whatever
+   *      the query or cursor; then the query (trimmed-empty is
+   *      `PageSearchQueryEmptyError`, over {@link PAGE_SEARCH_QUERY_MAX_LENGTH} is
+   *      `PageSearchQueryTooLongError`); then the cursor (`PAGE_CURSOR_INVALID`).
+   *      Every refusal lands before the embedding seam, so none spends gateway
+   *      budget.
+   *   2. OUTSIDE any transaction, `embedQuery`. `null` (no backend, or it did not
+   *      answer) degrades to `full-text-only`; a dimension mismatch propagates.
+   *   3. A second transaction reads both rankings, top
+   *      {@link PAGE_SEARCH_FUSION_POOL} each, each inside
+   *      `PAGE_SEARCH_LIVE_IN_PROJECT` — no check of its own is written here —
+   *      then only the served rows for title, place and snippet.
+   *
+   * The two lists are fused by reciprocal-rank fusion and keyset-paged on
+   * `(score, id)`. There is NO similarity threshold: in `merged` mode every
+   * embedded live page ranks, the tail weak by construction. Hits beyond the
+   * pool are unreachable by paging. `mode` and `message` say whether meaning
+   * took part; no total is returned anywhere.
    */
   async searchPages(
     ctx: ServiceContext,
     input: { projectId: string; q: string; cursor?: string | null },
   ): Promise<PageSearchResultDto> {
-    return withWorkspaceContext(scopeTo(ctx, input.projectId), async (tx) => {
-      const scope = await authorizePageSearch(ctx, input.projectId, tx);
-      const q = input.q.trim();
-      if (q.length === 0) throw new PageSearchQueryEmptyError();
-      if (q.length > PAGE_SEARCH_QUERY_MAX_LENGTH) throw new PageSearchQueryTooLongError();
-      const after = input.cursor ? decodePageSearchCursor(input.cursor) : null;
-      const window = await pageRepository.searchLiveFullText(
-        scope.projectId,
+    const { projectId, q, after } = await withWorkspaceContext(
+      scopeTo(ctx, input.projectId),
+      async (tx) => {
+        const scope = await authorizePageSearch(ctx, input.projectId, tx);
+        const trimmed = input.q.trim();
+        if (trimmed.length === 0) throw new PageSearchQueryEmptyError();
+        if (trimmed.length > PAGE_SEARCH_QUERY_MAX_LENGTH) throw new PageSearchQueryTooLongError();
+        const seek = input.cursor ? decodePageSearchCursor(input.cursor) : null;
+        return { projectId: scope.projectId, q: trimmed, after: seek };
+      },
+    );
+
+    const query = await workItemEmbeddingsService.embedQuery(q);
+
+    return withWorkspaceContext(scopeTo(ctx, projectId), async (tx) => {
+      const fullText = await pageRepository.searchLiveFullTextIds(
+        projectId,
         q,
-        PAGE_SEARCH_LIMIT + 1,
+        PAGE_SEARCH_FUSION_POOL,
         tx,
-        after,
       );
+      let semantic: string[] = [];
+      let mode: PageSearchResultDto['mode'] = 'full-text-only';
+      if (query) {
+        // Counted in the model the query was embedded in, so a deployment that
+        // changed models reads `not-indexed` rather than a silent mismatch.
+        const rankable = await pageEmbeddingRepository.countRankable(projectId, query.model, tx);
+        if (rankable === 0) {
+          mode = 'not-indexed';
+        } else {
+          mode = 'merged';
+          const rank = {
+            projectId,
+            model: query.model,
+            queryEmbedding: query.embedding,
+            limit: PAGE_SEARCH_FUSION_POOL,
+          };
+          await pageEmbeddingRepository.setEfSearchForLimit(PAGE_SEARCH_FUSION_POOL, tx);
+          let rows = await pageEmbeddingRepository.rankByEmbedding(rank, tx);
+          // A filtered HNSW scan can under-return; then the exact scan answers,
+          // as `workItemEmbeddingsService.rankSimilar` does.
+          if (rows.length < Math.min(rankable, PAGE_SEARCH_FUSION_POOL)) {
+            await pageEmbeddingRepository.disableOrderedIndexScan(tx);
+            rows = await pageEmbeddingRepository.rankByEmbedding(rank, tx);
+          }
+          semantic = rows.map((r) => r.pageId);
+        }
+      }
+
+      const fused = fuseRankings({ fullText, semantic });
+      const start = after
+        ? fused.findIndex(
+            (h) => h.score < after.rank || (h.score === after.rank && h.id < after.id),
+          )
+        : 0;
+      const window = start < 0 ? [] : fused.slice(start, start + PAGE_SEARCH_LIMIT + 1);
       const served = window.slice(0, PAGE_SEARCH_LIMIT);
-      const candidates = await candidatesWithPlace(served, ctx.workspaceId, tx);
+
+      const rows = await pageRepository.findSearchRowsByIds(
+        projectId,
+        served.map((h) => h.id),
+        q,
+        tx,
+      );
+      const byId = new Map(rows.map((r) => [r.id, r]));
+      const present = served.filter((h) => byId.has(h.id));
+      const candidates = await candidatesWithPlace(
+        present.map((h) => byId.get(h.id)!),
+        ctx.workspaceId,
+        tx,
+      );
       const last = served[served.length - 1];
       return {
-        items: served.map((row, i) => toPageSearchHitDto(candidates[i]!, row)),
+        items: present.map((h, i) =>
+          toPageSearchHitDto(candidates[i]!, { snippet: byId.get(h.id)!.snippet, rank: h.score }),
+        ),
         nextCursor:
           window.length > PAGE_SEARCH_LIMIT && last
-            ? encodePageSearchCursor({ rank: last.rank, id: last.id })
+            ? encodePageSearchCursor({ rank: last.score, id: last.id })
             : null,
+        mode,
+        message: PAGE_SEARCH_MODE_MESSAGES[mode],
       };
     });
   },
