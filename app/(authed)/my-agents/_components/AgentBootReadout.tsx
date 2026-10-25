@@ -9,6 +9,8 @@ import {
   CircleCheck,
   CircleMinus,
   CircleX,
+  Hourglass,
+  Info,
   LoaderCircle,
   Power,
   Trash2,
@@ -30,6 +32,14 @@ import type { AgentInstanceBootDto, AgentInstanceBootStepDto } from '@/lib/dto/a
 //   panel 7     a wake: the clone rows skipped
 //   panel 8     deleted mid-boot: the last word, drawn like a skipped row
 //   panel 9     running: one summary line, with Show steps / Hide steps
+//
+// And the waiting-for-room delta (`my-agents--waiting-for-room.mock.html`,
+// MOTIR-9466 · MOTIR-9475): a `provision` step that waits for room in the pool
+// draws one row IN FRONT of it — _Waiting for room_, the in-progress row's sky
+// ground with an Hourglass that does not turn, the reason and the case in words,
+// and from ten minutes on the since line — and the provision row itself waits.
+// Once room is found that row is a done row, _Room found_, with how long it
+// waited. It reads only the DTO's typed `waiting` / `waited`, never the detail.
 //
 // Inks: `--el-text-secondary` is the quiet ink on the card, `--el-text-strong` the
 // ink on the sky tint, `--el-text` on a failed row. `--el-text-muted` and
@@ -70,6 +80,7 @@ const STATE_KEY = {
 
 /** A step's label: `Cloning owner/name` on a clone row, the step's name otherwise. */
 export function bootStepLabel(step: AgentInstanceBootStepDto, t: Translate): string {
+  if (step.waiting || step.waited) return t('step.waiting');
   const key = STEP_KEY[step.step];
   return key === 'clone'
     ? t('step.clone', { repository: step.repository ?? '' })
@@ -78,9 +89,15 @@ export function bootStepLabel(step: AgentInstanceBootStepDto, t: Translate): str
 
 /** The row line of a booting agent in the list (panel 10): the step in its in-progress form. */
 export function bootRowLine(
-  step: { step: AgentInstanceBootStepDto['step']; repository: string | null },
+  step: {
+    step: AgentInstanceBootStepDto['step'];
+    repository: string | null;
+    waiting?: 'pool' | 'account' | null;
+  },
   t: Translate,
 ): string {
+  // The waiting delta's row line: a new agent, or a woken one waiting where its files are.
+  if (step.waiting) return t(step.waiting === 'account' ? 'row.waitingWake' : 'row.waiting');
   const key = STEP_KEY[step.step];
   return key === 'clone' ? t('row.clone', { repository: step.repository ?? '' }) : t(`row.${key}`);
 }
@@ -139,7 +156,80 @@ const GLYPH = 'mt-0.5 size-4';
  */
 const BOUNDED = 'max-h-[45%] shrink-0 overflow-y-auto';
 
+/** The waiting delta's since line shows from this long a wait on. */
+const SINCE_LINE_AFTER_MS = 10 * 60_000;
+
+/**
+ * THE WAITING STEP ROW (the waiting delta, panels 2–4): in progress while the
+ * pool has no room, a done _Room found_ row once it had.
+ */
+function WaitRow({ step, now, t }: { step: AgentInstanceBootStepDto; now: number; t: Translate }) {
+  const mono = 'font-mono text-xs';
+  if (step.waited) {
+    return (
+      <li
+        data-state="room-found"
+        className={`${ROW} border-transparent text-(--el-text-secondary)`}
+      >
+        <CircleCheck className={`${GLYPH} text-(--el-success)`} aria-hidden="true" />
+        <span className="min-w-0">
+          {t('step.roomFound')}
+          <span className="sr-only">{` — ${t('state.done')}`}</span>
+        </span>
+        <span className={mono}>
+          {formatBootDuration(since(step.waited.since, step.waited.until, now), t)}
+        </span>
+      </li>
+    );
+  }
+  const waiting = step.waiting!;
+  const waited = since(waiting.since, null, now);
+  const pool = waiting.reason === 'pool';
+  return (
+    <li
+      data-state="waiting-for-room"
+      className={`${ROW} border-transparent bg-(--el-tint-sky) text-(--el-text-strong)`}
+    >
+      <Hourglass className={GLYPH} aria-hidden="true" />
+      <span className="min-w-0">
+        <span className="font-semibold">
+          {t('step.waiting')}
+          <span className="sr-only">{` — ${t('state.inProgress')}`}</span>
+        </span>
+        <span className="mt-0.5 block">{t(pool ? 'waiting.pool' : 'waiting.account')}</span>
+        <span className="mt-0.5 block text-xs font-medium">
+          {t(pool ? 'waiting.detailPool' : 'waiting.detailAccount')}
+        </span>
+        {waited >= SINCE_LINE_AFTER_MS ? (
+          <span data-testid="agent-boot-waiting-since" className="mt-0.5 flex gap-1.5 text-xs">
+            <Info className="mt-px size-3.5 flex-none" aria-hidden="true" />
+            {t('waiting.since', { minutes: Math.floor(waited / 60_000) })}
+          </span>
+        ) : null}
+      </span>
+      <span aria-hidden="true" className={mono}>
+        {formatBootClock(waited)}
+      </span>
+    </li>
+  );
+}
+
+/** The provision row behind a wait: still waiting, or done the moment room was found. */
+function behindWait(step: AgentInstanceBootStepDto): AgentInstanceBootStepDto {
+  const plain = { ...step, waiting: null, waited: null };
+  if (step.waiting) return { ...plain, state: 'waiting', startedAt: null };
+  return step.waited ? { ...plain, startedAt: step.waited.until } : plain;
+}
+
 function StepRow({ step, now, t }: { step: AgentInstanceBootStepDto; now: number; t: Translate }) {
+  if (step.waiting || step.waited) {
+    return (
+      <>
+        <WaitRow step={step} now={now} t={t} />
+        <StepRow step={behindWait(step)} now={now} t={t} />
+      </>
+    );
+  }
   const label = bootStepLabel(step, t);
   const deleted = step.state === 'failed' && step.detail === 'deleted';
   const state = deleted ? 'skipped' : step.state;
@@ -248,10 +338,13 @@ function useAnnouncement(boot: AgentInstanceBootDto, t: Translate): string {
   const [said, setSaid] = useState('');
   useEffect(() => {
     const prev = seen.current;
-    const states = new Map(boot.steps.map((s) => [s.ordinal, s.state]));
+    // A wait is a state of its own: _Waiting for room: in progress_, then _: done_.
+    const states = new Map(
+      boot.steps.map((s) => [s.ordinal, `${s.state}${s.waiting ? ':waiting' : ''}`]),
+    );
     seen.current = { attempt: boot.attempt, states };
     if (!prev || prev.attempt !== boot.attempt) return;
-    const changed = boot.steps.filter((s) => prev.states.get(s.ordinal) !== s.state);
+    const changed = boot.steps.filter((s) => prev.states.get(s.ordinal) !== states.get(s.ordinal));
     const last = changed.at(-1);
     if (!last) return;
     setSaid(

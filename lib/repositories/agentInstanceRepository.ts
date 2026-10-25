@@ -34,6 +34,16 @@ export interface AgentInstanceHandleColumns {
   volumeId: string;
 }
 
+/**
+ * Where an instance lives (MOTIR-9468): its fleet account and the zone of its
+ * disk. Recorded once, at placement; an instance with none is on the
+ * process-wide Fly app.
+ */
+export interface AgentInstancePlacement {
+  fleetShardId: string;
+  availabilityZone: string | null;
+}
+
 /** What a guarded transition may write beside the new state. */
 /** The image-update columns a patch carries, only where the patch names them. */
 function imagePatch(patch: AgentInstanceTransitionPatch): Record<string, unknown> {
@@ -228,6 +238,84 @@ export const agentInstanceRepository = {
       data: handle,
     });
     return result.count;
+  },
+
+  /**
+   * Record the account and zone the instance was placed in — ONCE. The update is
+   * guarded on `fleetShardId IS NULL`, so a second placement, or a racer that
+   * lost, changes nothing and answers `applied: false`: the disk lives in one
+   * account and one zone for the instance's life. `tx` required.
+   */
+  async recordPlacement(
+    id: string,
+    placement: AgentInstancePlacement,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ applied: boolean }> {
+    const result = await tx.agentInstance.updateMany({
+      where: { id, fleetShardId: null },
+      data: placement,
+    });
+    return { applied: result.count === 1 };
+  },
+
+  /**
+   * Release a RESERVED placement whose provision was refused (Story MOTIR-9361 ·
+   * MOTIR-9471) — legal only while the row has no machine, so a placement that
+   * already holds a disk can never be released. Answers how many rows changed
+   * (0 or 1). `tx` required.
+   */
+  async releasePlacement(
+    id: string,
+    fleetShardId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.agentInstance.updateMany({
+      where: { id, fleetShardId, machineId: null },
+      data: { fleetShardId: null, availabilityZone: null },
+    });
+    return result.count;
+  },
+
+  /**
+   * Write the handle, and the account's region, beside the placement that
+   * reserved it (MOTIR-9471, MOTIR-9472) — only
+   * while the row is live, still placed on `fleetShardId` and has no machine yet.
+   * `applied: false` means the placement is no longer this call's: what it
+   * provisioned must be destroyed. `tx` required.
+   */
+  async setPlacedHandle(
+    id: string,
+    fleetShardId: string,
+    handle: AgentInstanceHandleColumns & { region: string },
+    tx: Prisma.TransactionClient,
+  ): Promise<{ applied: boolean }> {
+    const result = await tx.agentInstance.updateMany({
+      where: { id, fleetShardId, machineId: null, ...LIVE },
+      data: handle,
+    });
+    return { applied: result.count === 1 };
+  },
+
+  /**
+   * How many live instances one account holds — reserved, running or asleep
+   * (MOTIR-9471): admission's per-account in-flight count for the agent hoster.
+   * A sleeping instance counts, because its wake comes back to the same account
+   * and never chooses. `tx` required.
+   */
+  async countLiveOnFleetShard(fleetShardId: string, tx: Prisma.TransactionClient): Promise<number> {
+    return tx.agentInstance.count({ where: { fleetShardId, ...LIVE } });
+  },
+
+  /**
+   * Every record in one fleet account, live AND deleted — the reconciler and the
+   * headroom reading count an account's instances. An instance with no account
+   * (the process-wide Fly app) is in no account's list. `tx` required.
+   */
+  async listByFleetShard(
+    fleetShardId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<AgentInstance[]> {
+    return tx.agentInstance.findMany({ where: { fleetShardId }, orderBy: { createdAt: 'asc' } });
   },
 
   /** Bump the idle signal (§2) — later stories' relay and runs call it. `tx` required. */
@@ -435,12 +523,47 @@ export const agentInstanceRepository = {
   },
 
   /**
-   * Every instance app any record (live or deleted) has ever named — the
-   * reconcile walks each one. Distinct, sorted for a stable pass.
+   * The record — live OR deleted — that names this machine IN THIS fleet account
+   * (MOTIR-9476): the reconciler's read for a hoster account, keyed on the
+   * account and never on the Fly app column, so the same id recorded on another
+   * account's instance does not attribute it. The newest wins.
+   */
+  async findByMachineInShard(
+    fleetShardId: string,
+    machineId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<AgentInstance | null> {
+    return tx.agentInstance.findFirst({
+      where: { fleetShardId, machineId },
+      orderBy: { createdAt: 'desc' },
+    });
+  },
+
+  /**
+   * The NON-DELETED record that names this disk in this fleet account
+   * (MOTIR-9476) — what keeps a detached home disk from being taken for an
+   * orphan. A deleted record owns no disk.
+   */
+  async findByVolumeInShard(
+    fleetShardId: string,
+    volumeId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<AgentInstance | null> {
+    return tx.agentInstance.findFirst({
+      where: { fleetShardId, volumeId, deletedAt: null },
+      orderBy: { createdAt: 'desc' },
+    });
+  },
+
+  /**
+   * Every PROCESS-WIDE instance app any record (live or deleted) has ever named —
+   * the orphan-volume pass walks each one. Distinct, sorted for a stable pass. An
+   * instance placed on a fleet account is in none of them: its account's own
+   * inventory is the reconciler's (MOTIR-9473, MOTIR-9476).
    */
   async listDistinctApps(tx: Prisma.TransactionClient): Promise<string[]> {
     const rows = await tx.agentInstance.findMany({
-      where: { flyApp: { not: null } },
+      where: { flyApp: { not: null }, fleetShardId: null },
       distinct: ['flyApp'],
       select: { flyApp: true },
       orderBy: { flyApp: 'asc' },

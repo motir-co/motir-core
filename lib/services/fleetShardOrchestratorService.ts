@@ -1,9 +1,13 @@
 import type { CiRunnerProvisioningIntent } from '@/generated/prisma/client';
 import type { FleetShardDTO } from '@/lib/dto/fleetShard';
+import { OrchestratorNotConfiguredError } from '@motir/orchestrator';
 import {
   getOrchestrator,
+  getPersistentOrchestrator,
   orchestratorForShard,
+  persistentOrchestratorForShard,
   type ContainerOrchestrator,
+  type PersistentContainerOrchestrator,
 } from '@/lib/orchestrator';
 import { fleetShardService } from '@/lib/services/fleetShardService';
 
@@ -49,6 +53,30 @@ export const fleetShardOrchestratorService = {
     intent: Pick<CiRunnerProvisioningIntent, 'fleetShardId'>,
   ): Promise<ContainerOrchestrator> {
     return this.forShard(intent.fleetShardId);
+  },
+
+  /**
+   * THE PERSISTENT orchestrator for ONE agent instance, from the account recorded
+   * on its row (Story MOTIR-9361 · MOTIR-9472) — never the agent hoster's switch,
+   * which only placement reads, at create. A null account is the process-wide
+   * Fly app (or the fake), exactly {@link getPersistentOrchestrator}. A recorded
+   * account that cannot be read is a typed not-configured error naming it, and is
+   * never routed to Fly. A disabled account is still reached: its instances still
+   * have to be stopped and deleted where their disks are.
+   */
+  async persistentOrchestratorFor(placement: {
+    fleetShardId: string | null;
+  }): Promise<PersistentContainerOrchestrator> {
+    if (placement.fleetShardId === null) return getPersistentOrchestrator();
+    let shard: FleetShardDTO;
+    try {
+      shard = await fleetShardService.getShard(placement.fleetShardId);
+    } catch {
+      throw new OrchestratorNotConfiguredError(
+        `fleet account ${placement.fleetShardId} is not on record`,
+      );
+    }
+    return persistentOrchestratorForShard(shard);
   },
 
   /** Forget every cached account orchestrator — for tests. */

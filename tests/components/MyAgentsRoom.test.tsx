@@ -238,7 +238,7 @@ describe('create', () => {
           id: 'b1',
           name: 'cloning-one',
           state: 'starting',
-          bootStep: { step: 'clone', repository: 'acme/web' },
+          bootStep: { step: 'clone', repository: 'acme/web', waiting: null },
         }),
         agent({ id: 'b2', name: 'quiet-one', state: 'waking', bootStep: null }),
       ]),
@@ -470,6 +470,82 @@ describe('the plan has ended (MOTIR-6921, the MOTIR-6916 delta panel E)', () => 
     expect(within(menu).getByRole('menuitem', { name: 'Wake' }).getAttribute('aria-disabled')).toBe(
       'false',
     );
+  });
+});
+
+describe('waiting for room (MOTIR-9475, the waiting delta)', () => {
+  it('a waiting row reads Waiting in the queued tone, and its line says it waits for room', () => {
+    mount(
+      page([
+        agent({
+          id: 'w1',
+          name: 'new-one',
+          state: 'starting',
+          bootStep: { step: 'provision', repository: null, waiting: 'pool' },
+        }),
+        agent({
+          id: 'w2',
+          name: 'woken-one',
+          state: 'waking',
+          bootStep: { step: 'provision', repository: null, waiting: 'account' },
+        }),
+        agent({
+          id: 'w3',
+          name: 'plain-one',
+          state: 'starting',
+          bootStep: { step: 'machine_start', repository: null, waiting: null },
+        }),
+      ]),
+    );
+    expect(screen.getAllByText('Waiting for room…').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Waiting for room to wake…').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Starting the machine…').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Waiting').length).toBeGreaterThan(0);
+  });
+
+  it('the menu keeps Wake and Hibernate disabled, Delete offered, and says what Delete does to the wait', async () => {
+    mount(
+      page([
+        agent({
+          state: 'starting',
+          bootStep: { step: 'provision', repository: null, waiting: 'pool' },
+        }),
+      ]),
+    );
+    const menu = await openMenu('yue-claude');
+    expect(within(menu).getByRole('menuitem', { name: 'Wake' }).hasAttribute('disabled')).toBe(
+      true,
+    );
+    expect(within(menu).getByRole('menuitem', { name: 'Hibernate' }).hasAttribute('disabled')).toBe(
+      true,
+    );
+    expect(within(menu).getByRole('menuitem', { name: 'Delete…' }).hasAttribute('disabled')).toBe(
+      false,
+    );
+    expect(
+      within(menu).getByText('Deleting it stops the wait. Nothing was created yet.'),
+    ).toBeTruthy();
+  });
+
+  it('a woken agent’s note says Delete deletes its files', async () => {
+    mount(
+      page([
+        agent({
+          state: 'waking',
+          bootStep: { step: 'provision', repository: null, waiting: 'account' },
+        }),
+      ]),
+    );
+    const menu = await openMenu('yue-claude');
+    expect(
+      within(menu).getByText('Deleting it stops the wait and deletes its files.'),
+    ).toBeTruthy();
+  });
+
+  it('an agent that is not waiting carries no note', async () => {
+    mount(page([agent()]));
+    const menu = await openMenu('yue-claude');
+    expect(within(menu).queryByText(/stops the wait/)).toBeNull();
   });
 });
 

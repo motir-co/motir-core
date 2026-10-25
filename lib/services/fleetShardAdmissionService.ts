@@ -19,6 +19,7 @@ import {
   shardAdmissionCeiling,
 } from '@/lib/ciFleet/shardTargets';
 import { isUnlimitedAgentOrg } from '@/lib/agentInstances/config';
+import { agentInstanceRepository } from '@/lib/repositories/agentInstanceRepository';
 import { ciRunnerProvisioningIntentRepository as intents } from '@/lib/repositories/ciRunnerProvisioningIntentRepository';
 import { fleetInFlightSlotRepository as slots } from '@/lib/repositories/fleetInFlightSlotRepository';
 import { fleetShardRepository } from '@/lib/repositories/fleetShardRepository';
@@ -80,14 +81,17 @@ type ShardInFlightCounter = (
   tx: Prisma.TransactionClient,
 ) => Promise<number>;
 
-/** Each kind's per-account counter. CI, the agent runner (MOTIR-9421) and the
- *  indexer (MOTIR-9445) are wired here; the agent hoster story adds its own
- *  when it puts its kind on its pool. A slot-backed kind counts its live fleet
- *  slots on the account, never another workload's. */
+/** Each kind's per-account counter. CI, the agent runner (MOTIR-9421), the
+ *  agent hoster (MOTIR-9471) and the indexer (MOTIR-9445) are wired here. A
+ *  slot-backed kind counts its live fleet slots on the account, never another
+ *  workload's. */
 const IN_FLIGHT_ON_SHARD: Partial<Record<FleetWorkloadKind, ShardInFlightCounter>> = {
   ci_runner: (shardId, _now, tx) => intents.countInFlightForShardInTx(shardId, tx),
   hosted_agent: (shardId, now, tx) =>
     slots.countLiveForWorkloadOnShardInTx('hosted_agent', shardId, now, tx),
+  // The agent hoster (MOTIR-9471): every live instance placed on the account,
+  // a reservation included — placement writes it inside the counting transaction.
+  agent_instance: (shardId, _now, tx) => agentInstanceRepository.countLiveOnFleetShard(shardId, tx),
   code_graph_index: (shardId, now, tx) =>
     slots.countLiveForWorkloadOnShardInTx('code_graph_index', shardId, now, tx),
 };
@@ -136,7 +140,8 @@ export const fleetShardAdmissionService = {
    * {@link isUnlimitedAgentOrg} predicate), that kind's active spare too
    * (MOTIR-9456). Exemption is read here, per job, from the job's own org row in
    * the admission's transaction — never from a caller-supplied flag — so no other
-   * org's job can ever be placed on a spare.
+   * org's job can ever be placed on a spare. The agent hoster's are its AWS
+   * accounts only (MOTIR-9471): with its switch on, an instance never lands on Fly.
    */
   async selectionSetInTx(
     job: ShardPlacementJob,
@@ -145,22 +150,26 @@ export const fleetShardAdmissionService = {
     const org = await organizationRepository.findByIdInTx(job.organizationId, tx);
     const roles: FleetShardRole[] =
       org && isUnlimitedAgentOrg(org) ? ['primary', 'spare'] : ['primary'];
-    return fleetShardRepository.listActiveForKindInTx(job.fleetKind, roles, tx);
+    const shards = await fleetShardRepository.listActiveForKindInTx(job.fleetKind, roles, tx);
+    return job.fleetKind === 'agent_instance'
+      ? shards.filter((shard) => shard.provider === 'aws')
+      : shards;
   },
 
   /**
    * Choose the job's account. Reads the kind's switch first; then takes the
    * account in the selection set, not paused and not excluded, with the largest
    * `effectiveCeiling − in-flight`. Ties go to the lowest id, so the choice is
-   * deterministic.
+   * deterministic. `switchRead: true` is a caller that already read the switch as
+   * on, once, for the whole decision (the agent placement, MOTIR-9471).
    */
   async chooseInTx(
     job: ShardPlacementJob,
     now: Date,
     tx: Prisma.TransactionClient,
-    options: { exclude?: ReadonlySet<string> } = {},
+    options: { exclude?: ReadonlySet<string>; switchRead?: true } = {},
   ): Promise<ShardPlacement> {
-    if (!(await fleetKindOnPool(job.fleetKind))) return { shardId: null };
+    if (!options.switchRead && !(await fleetKindOnPool(job.fleetKind))) return { shardId: null };
 
     const countInFlight = IN_FLIGHT_ON_SHARD[job.fleetKind];
     if (!countInFlight) {

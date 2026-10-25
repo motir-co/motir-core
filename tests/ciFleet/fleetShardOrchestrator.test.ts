@@ -3,6 +3,7 @@ import {
   FLEET_CONTAINER_SIZE,
   OrchestratorNotConfiguredError,
   fakeOrchestrator,
+  fakePersistentOrchestrator,
   type ContainerOrchestrator,
   type FleetInventory,
 } from '@motir/orchestrator';
@@ -10,10 +11,15 @@ import { db } from '@/lib/db';
 import type { FleetShardDTO } from '@/lib/dto/fleetShard';
 import {
   fakeOrchestratorForShard,
+  fakePersistentOrchestratorForShard,
   getOrchestrator,
+  getPersistentOrchestrator,
+  hosterTerminalEndpointFor,
   inventoryForShard,
   legacyFleetLocationKey,
   orchestratorForShard,
+  persistentOrchestratorForShard,
+  persistentTerminalEndpoint,
   registerShardAdapter,
   resetShardFakes,
   runnerRoleCredentialProvider,
@@ -452,5 +458,144 @@ describe('a container is reached through the account its intent recorded', () =>
     await seedBootedIntent(tenant, fakeOrchestratorForShard(account.id), account.id);
     await expect(adminDb.fleetShard.delete({ where: { id: account.id } })).rejects.toThrow();
     expect(await adminDb.fleetShard.count()).toBe(1);
+  });
+});
+
+describe('persistentOrchestratorForShard — where an account’s agent instances live (MOTIR-9469)', () => {
+  const HOSTER: Partial<CreateFleetShardInput> = {
+    name: 'agent-hoster-use1-1',
+    fleetKind: 'agent_instance',
+    provider: 'aws',
+    flyOrg: null,
+    flyApp: null,
+    flyRegion: null,
+    awsAccountId: '210987654321',
+    awsRegion: 'us-east-1',
+    credentialRef: 'FLEET_SHARD_AGENT_HOSTER_USE1_1',
+    limits: { vcpuQuota: 640 },
+  };
+  // The hoster CA and Motir's client pair (MOTIR-9470). A secret store keeps a
+  // PEM on one line, so `\n` in the value reads as a newline.
+  const HOSTER_TLS_VARS = [
+    'MOTIR_HOSTER_CA_CERT',
+    'MOTIR_HOSTER_CA_KEY',
+    'MOTIR_HOSTER_CLIENT_CERT',
+    'MOTIR_HOSTER_CLIENT_KEY',
+  ];
+  const stubHosterTls = () => {
+    for (const name of HOSTER_TLS_VARS) vi.stubEnv(name, `-----BEGIN ${name}-----\\nbody\\n`);
+  };
+
+  it('builds an AWS persistent orchestrator from an aws row, naming every missing variable', async () => {
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
+    const account = await createAccount(HOSTER);
+    vi.stubEnv('FLEET_SHARD_AGENT_HOSTER_USE1_1_ACCESS_KEY_ID', '');
+    vi.stubEnv('FLEET_SHARD_AGENT_HOSTER_USE1_1_SECRET_ACCESS_KEY', '');
+    vi.stubEnv('MOTIR_AWS_HOSTER_AMI_ID', '');
+    for (const name of HOSTER_TLS_VARS) vi.stubEnv(name, '');
+    const thrown = (() => {
+      try {
+        persistentOrchestratorForShard(account);
+      } catch (err) {
+        return err as Error;
+      }
+    })();
+    expect(thrown).toBeInstanceOf(OrchestratorNotConfiguredError);
+    for (const name of [
+      'FLEET_SHARD_AGENT_HOSTER_USE1_1_ACCESS_KEY_ID',
+      'FLEET_SHARD_AGENT_HOSTER_USE1_1_SECRET_ACCESS_KEY',
+      'MOTIR_AWS_HOSTER_AMI_ID',
+      ...HOSTER_TLS_VARS,
+    ]) {
+      expect(thrown!.message).toContain(name);
+    }
+
+    vi.stubEnv('FLEET_SHARD_AGENT_HOSTER_USE1_1_ACCESS_KEY_ID', 'AKIAEXAMPLE');
+    vi.stubEnv('FLEET_SHARD_AGENT_HOSTER_USE1_1_SECRET_ACCESS_KEY', 'secret-example');
+    vi.stubEnv('MOTIR_AWS_HOSTER_AMI_ID', 'ami-0fedcba9876543210');
+    stubHosterTls();
+    const persistent = persistentOrchestratorForShard(account);
+    expect(persistent.provider).toBe('aws');
+    expect(persistent.appNameFor('any-org')).toBe('agent-hoster-use1-1');
+    expect(persistent.defaultRegion()).toBe('us-east-1');
+  });
+
+  it('the relay’s endpoint on an aws row reads the key and the client pair, never the AMI or the CA key', async () => {
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
+    const account = await createAccount(HOSTER);
+    vi.stubEnv('FLEET_SHARD_AGENT_HOSTER_USE1_1_ACCESS_KEY_ID', '');
+    vi.stubEnv('FLEET_SHARD_AGENT_HOSTER_USE1_1_SECRET_ACCESS_KEY', '');
+    vi.stubEnv('MOTIR_AWS_HOSTER_AMI_ID', '');
+    for (const name of HOSTER_TLS_VARS) vi.stubEnv(name, '');
+    const handle = {
+      provider: 'aws' as const,
+      app: 'agent-hoster-use1-1',
+      machineId: 'i-0123456789abcdef0',
+      volumeId: 'vol-0123456789abcdef0',
+      region: 'us-east-1',
+      createdAt: HANDLE_TIME,
+    };
+    const thrown = await hosterTerminalEndpointFor(account, handle).catch((err: Error) => err);
+    expect(thrown).toBeInstanceOf(OrchestratorNotConfiguredError);
+    const message = (thrown as Error).message;
+    for (const name of [
+      'FLEET_SHARD_AGENT_HOSTER_USE1_1_ACCESS_KEY_ID',
+      'FLEET_SHARD_AGENT_HOSTER_USE1_1_SECRET_ACCESS_KEY',
+      'MOTIR_HOSTER_CA_CERT',
+      'MOTIR_HOSTER_CLIENT_CERT',
+      'MOTIR_HOSTER_CLIENT_KEY',
+    ]) {
+      expect(message).toContain(name);
+    }
+    expect(message).not.toContain('MOTIR_AWS_HOSTER_AMI_ID');
+    expect(message).not.toContain('MOTIR_HOSTER_CA_KEY');
+  });
+
+  it('the relay’s endpoint on a fly row, or under the fake, is the process-wide one', async () => {
+    const account = await createAccount(HOSTER);
+    const handle = {
+      provider: 'fake' as const,
+      app: 'agent-hoster-use1-1',
+      machineId: 'm-1',
+      volumeId: 'v-1',
+      region: 'us-east-1',
+      createdAt: HANDLE_TIME,
+    };
+    expect(await hosterTerminalEndpointFor(account, handle)).toEqual(
+      await persistentTerminalEndpoint(handle),
+    );
+    const fly = await createAccount();
+    expect(await hosterTerminalEndpointFor(fly, handle)).toEqual(
+      await persistentTerminalEndpoint(handle),
+    );
+  });
+
+  it('a fly row is the process-wide Fly instance lane, and the fake answers while it is selected', async () => {
+    const account = await createAccount();
+    // Under the fake, each account gets its own view of the shared fake (MOTIR-9472).
+    expect(persistentOrchestratorForShard(account)).toBe(
+      fakePersistentOrchestratorForShard(account.id),
+    );
+    expect(persistentOrchestratorForShard(account).provider).toBe('fake');
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
+    vi.stubEnv('FLY_INSTANCES_API_TOKEN', 'instances-token');
+    expect(persistentOrchestratorForShard(account)).toBe(getPersistentOrchestrator());
+  });
+
+  it('routes another provider through its registration, and refuses one that hosts no instances', async () => {
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
+    const account = { ...(await createAccount()), provider: 'stub' } as unknown as FleetShardDTO;
+    registerShardAdapter('stub', {
+      orchestrator: () => fakeOrchestrator,
+      inventory: () => null,
+    });
+    expect(() => persistentOrchestratorForShard(account)).toThrow(/hosts no agent instances/);
+    registerShardAdapter('stub', {
+      orchestrator: () => fakeOrchestrator,
+      inventory: () => null,
+      persistent: () => fakePersistentOrchestrator,
+    });
+    expect(persistentOrchestratorForShard(account)).toBe(fakePersistentOrchestrator);
+    unregisterShardAdapter('stub');
   });
 });

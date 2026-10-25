@@ -12509,7 +12509,9 @@
         "machineStart": "Machine gestart",
         "clone": "{repository} klonen",
         "terminalCheck": "Terminal gecontroleerd",
-        "ready": "Klaar"
+        "ready": "Klaar",
+        "waiting": "Wacht op ruimte",
+        "roomFound": "Ruimte gevonden"
       },
       "state": {
         "waiting": "Wachten",
@@ -12544,9 +12546,24 @@
         "machineStart": "De machine wordt gestart…",
         "clone": "{repository} wordt gekloond…",
         "terminalCheck": "De terminal wordt gecontroleerd…",
-        "ready": "Wordt klaargemaakt…"
+        "ready": "Wordt klaargemaakt…",
+        "waiting": "Wacht op ruimte…",
+        "waitingWake": "Wacht op ruimte om te worden gewekt…"
       },
-      "terminalClosed": "De terminal blijft gesloten totdat de agent draait."
+      "terminalClosed": "De terminal blijft gesloten totdat de agent draait.",
+      "waiting": {
+        "pool": "Alle machines voor agents zijn nu in gebruik. De jouwe wordt gemaakt zodra er ruimte is.",
+        "account": "De bestanden van deze agent staan op één plek, dus hij wacht daar op ruimte. Je bestanden en je aanmelding zijn veilig.",
+        "detailPool": "Een nieuwe agent — hij start waar het eerst ruimte vrijkomt.",
+        "detailAccount": "Wordt gewekt — hij kan alleen starten waar zijn bestanden staan.",
+        "since": "{minutes, plural, one {Wacht al # minuut} other {Wacht al # minuten}} — Motir blijft het zelf proberen."
+      }
+    },
+    "waiting": {
+      "status": "Wacht",
+      "menuNotePool": "Verwijderen stopt het wachten. Er is nog niets gemaakt.",
+      "menuNoteAccount": "Verwijderen stopt het wachten en verwijdert zijn bestanden.",
+      "terminalTip": "De terminal opent zodra de agent draait. Hij wacht op ruimte."
     }
   },
   "runs": {
@@ -12916,7 +12933,8 @@
           "deleting": "Hij wordt verwijderd.",
           "signedOut": "Log eerst in: open {name} en voer <cmd></cmd> uit in de terminal. <link>{name} openen</link>",
           "imageTooOld": "Gemaakt van een ouder image dat geen werkitems kan afwerken. Hem overzetten naar het nieuwere image — met behoud van thuismap en login — komt eraan; een nieuwe agent kan ze nu al oppakken.",
-          "cannotRun": "{agent} kan niet zelfstandig een werkitem afwerken — hij heeft geen onbeheerde modus die Motir kan starten."
+          "cannotRun": "{agent} kan niet zelfstandig een werkitem afwerken — hij heeft geen onbeheerde modus die Motir kan starten.",
+          "waitingForRoom": "Deze agent kan werk uitvoeren zodra hij draait. Hij wacht op ruimte."
         }
       },
       "command": {

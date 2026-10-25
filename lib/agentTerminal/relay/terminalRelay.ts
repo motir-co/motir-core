@@ -439,6 +439,17 @@ export function createTerminalRelay(deps: TerminalRelayDeps): TerminalRelay {
         headers: t.dial.headers,
         perMessageDeflate: false,
         handshakeTimeout: dialTimeoutMs,
+        // An AWS instance's host agent (MOTIR-9470): mutual TLS, the Motir CA as
+        // the ONLY trust anchor, the host name unchecked (a changing public IP).
+        ...(t.dial.tls
+          ? {
+              ca: t.dial.tls.caPem,
+              cert: t.dial.tls.certPem,
+              key: t.dial.tls.keyPem,
+              rejectUnauthorized: true,
+              checkServerIdentity: () => undefined,
+            }
+          : {}),
       });
       upstream = socket;
 

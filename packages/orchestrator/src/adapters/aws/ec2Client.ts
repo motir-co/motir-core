@@ -1,28 +1,37 @@
 import {
   AssociateRouteTableCommand,
   AttachInternetGatewayCommand,
+  AuthorizeSecurityGroupIngressCommand,
   CreateInternetGatewayCommand,
   CreateRouteCommand,
   CreateRouteTableCommand,
   CreateSecurityGroupCommand,
   CreateSubnetCommand,
+  CreateTagsCommand,
   CreateVpcCommand,
   DescribeAvailabilityZonesCommand,
+  DescribeInstanceAttributeCommand,
   DescribeInstancesCommand,
   DescribeInternetGatewaysCommand,
   DescribeRouteTablesCommand,
   DescribeSecurityGroupsCommand,
+  DeleteVolumeCommand,
   DescribeSubnetsCommand,
+  DescribeVolumesCommand,
   DescribeVpcsCommand,
   EC2Client,
+  ModifyInstanceAttributeCommand,
   GetConsoleOutputCommand,
   ModifySubnetAttributeCommand,
   RunInstancesCommand,
+  StartInstancesCommand,
+  StopInstancesCommand,
   TerminateInstancesCommand,
   type Filter,
   type Instance,
   type ResourceType,
   type Tag,
+  type Volume,
 } from '@aws-sdk/client-ec2';
 
 // The EC2 boundary (Story MOTIR-9270 · MOTIR-9273) — the one module that speaks
@@ -150,9 +159,28 @@ export interface Ec2Instance {
   readonly stateTransitionReason: string | null;
   readonly availabilityZone: string | null;
   readonly tags: readonly Ec2Tag[];
+  /** The public IPv4 address (`PublicIpAddress`), present only while the instance
+   *  runs; a new one is assigned on every start (MOTIR-9470). Absent when none. */
+  readonly publicIpAddress?: string;
+  /** The EBS volumes attached to it, by device name (MOTIR-9469: an agent
+   *  instance's home disk). Absent when the answer listed none. */
+  readonly volumes?: ReadonlyArray<{ readonly deviceName: string; readonly volumeId: string }>;
 }
 
-/** One EBS mapping on a launch — the runner's Docker data disk. */
+/** One EBS volume (MOTIR-9469) — an agent instance's home disk. */
+export interface Ec2Volume {
+  readonly volumeId: string;
+  /** `creating` · `available` · `in-use` · `deleting` · `deleted` · `error`. */
+  readonly state: string;
+  readonly availabilityZone: string;
+  readonly sizeGb: number;
+  /** The instance it is attached to, when it is. */
+  readonly attachedInstanceId: string | null;
+  readonly createTime: Date | null;
+  readonly tags: readonly Ec2Tag[];
+}
+
+/** One EBS mapping on a launch — the runner's Docker data disk, an agent's home. */
 export interface Ec2BlockDeviceMapping {
   readonly deviceName: string;
   readonly volumeSizeGb: number;
@@ -256,6 +284,44 @@ export interface Ec2Api {
   ): Promise<{ instances: Ec2Instance[]; nextToken: string | null }>;
   /** https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_TerminateInstances.html */
   terminateInstances(instanceIds: readonly string[]): Promise<void>;
+  /** https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_StopInstances.html —
+   *  stopping a stopped instance succeeds; a terminated one is `IncorrectInstanceState`. */
+  stopInstances(instanceIds: readonly string[]): Promise<void>;
+  /** https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_StartInstances.html —
+   *  starting a running instance succeeds; a stopping one is `IncorrectInstanceState`. */
+  startInstances(instanceIds: readonly string[]): Promise<void>;
+  /** https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_DescribeVolumes.html —
+   *  an unknown id is `InvalidVolume.NotFound`, thrown. */
+  describeVolumes(input: {
+    volumeIds?: readonly string[];
+    filters?: readonly Ec2Filter[];
+    /** Page size (EC2 takes 5–500); not allowed together with `volumeIds`. */
+    maxResults?: number;
+    nextToken?: string;
+  }): Promise<{ volumes: Ec2Volume[]; nextToken: string | null }>;
+  /** https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_DeleteVolume.html —
+   *  an attached volume is `VolumeInUse`; an unknown one `InvalidVolume.NotFound`. */
+  deleteVolume(volumeId: string): Promise<void>;
+  /** https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_DescribeInstanceAttribute.html —
+   *  the instance's user-data as RAW text (EC2 answers it base64; this decodes),
+   *  null when it has none. An unknown id is `InvalidInstanceID.NotFound`. */
+  describeInstanceUserData(instanceId: string): Promise<string | null>;
+  /** https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_ModifyInstanceAttribute.html —
+   *  replace the user-data with RAW `userData` (the SDK base64-encodes a blob
+   *  attribute). EC2 allows it only on a stopped instance: `IncorrectInstanceState`. */
+  modifyInstanceUserData(instanceId: string, userData: string): Promise<void>;
+  /** https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_CreateTags.html —
+   *  adds or overwrites each tag on each resource. */
+  createTags(resourceIds: readonly string[], tags: readonly Ec2Tag[]): Promise<void>;
+  /** https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_AuthorizeSecurityGroupIngress.html —
+   *  one TCP port from one IPv4 range; a rule that already exists is
+   *  `InvalidPermission.Duplicate`, thrown (MOTIR-9470). */
+  authorizeSecurityGroupIngress(input: {
+    groupId: string;
+    port: number;
+    cidrIp: string;
+    description: string;
+  }): Promise<void>;
   /** https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_GetConsoleOutput.html —
    *  the instance's serial console, decoded, with `Latest` (a Nitro instance's
    *  most recent output). Null when EC2 holds none yet. An unknown id throws as
@@ -349,13 +415,21 @@ export function createEc2Api(
 
 type Send = <T>(command: unknown) => Promise<T>;
 
-type InstanceCallName =
+type InstanceMethod =
   | 'runInstances'
   | 'describeInstances'
   | 'terminateInstances'
+  | 'stopInstances'
+  | 'startInstances'
+  | 'describeVolumes'
+  | 'deleteVolume'
+  | 'describeInstanceUserData'
+  | 'modifyInstanceUserData'
+  | 'createTags'
+  | 'authorizeSecurityGroupIngress'
   | 'getConsoleOutput';
-type NetworkCalls = Omit<Ec2Api, InstanceCallName>;
-type InstanceCalls = Pick<Ec2Api, InstanceCallName>;
+type NetworkCalls = Omit<Ec2Api, InstanceMethod>;
+type InstanceCalls = Pick<Ec2Api, InstanceMethod>;
 
 function toInstance(i: Instance): Ec2Instance {
   return {
@@ -365,6 +439,30 @@ function toInstance(i: Instance): Ec2Instance {
     stateTransitionReason: i.StateTransitionReason || null,
     availabilityZone: i.Placement?.AvailabilityZone ?? null,
     tags: tagsOf(i.Tags),
+    ...(i.PublicIpAddress ? { publicIpAddress: i.PublicIpAddress } : {}),
+    ...(i.BlockDeviceMappings?.length
+      ? {
+          volumes: i.BlockDeviceMappings.flatMap((m) =>
+            m.DeviceName && m.Ebs?.VolumeId
+              ? [{ deviceName: m.DeviceName, volumeId: m.Ebs.VolumeId }]
+              : [],
+          ),
+        }
+      : {}),
+  };
+}
+
+function toVolume(v: Volume): Ec2Volume {
+  return {
+    volumeId: required(v.VolumeId, 'VolumeId'),
+    state: v.State ?? '',
+    availabilityZone: v.AvailabilityZone ?? '',
+    sizeGb: v.Size ?? 0,
+    attachedInstanceId:
+      v.Attachments?.find((a) => a.State === 'attached' || a.State === 'attaching')?.InstanceId ??
+      null,
+    createTime: v.CreateTime ?? null,
+    tags: tagsOf(v.Tags),
   };
 }
 
@@ -432,6 +530,67 @@ function instanceCalls(send: Send): InstanceCalls {
     },
     async terminateInstances(instanceIds) {
       await send(new TerminateInstancesCommand({ InstanceIds: [...instanceIds] }));
+    },
+    async stopInstances(instanceIds) {
+      await send(new StopInstancesCommand({ InstanceIds: [...instanceIds] }));
+    },
+    async startInstances(instanceIds) {
+      await send(new StartInstancesCommand({ InstanceIds: [...instanceIds] }));
+    },
+    async describeVolumes({ volumeIds, filters = [], maxResults, nextToken }) {
+      const out = await send<{ Volumes?: Volume[]; NextToken?: string }>(
+        new DescribeVolumesCommand({
+          Filters: sdkFilters(filters),
+          ...(volumeIds ? { VolumeIds: [...volumeIds] } : {}),
+          ...(maxResults ? { MaxResults: maxResults } : {}),
+          ...(nextToken ? { NextToken: nextToken } : {}),
+        }),
+      );
+      return { volumes: (out.Volumes ?? []).map(toVolume), nextToken: out.NextToken || null };
+    },
+    async deleteVolume(volumeId) {
+      await send(new DeleteVolumeCommand({ VolumeId: volumeId }));
+    },
+    async describeInstanceUserData(instanceId) {
+      const out = await send<{ UserData?: { Value?: string } }>(
+        new DescribeInstanceAttributeCommand({ InstanceId: instanceId, Attribute: 'userData' }),
+      );
+      const value = out.UserData?.Value;
+      return value ? Buffer.from(value, 'base64').toString('utf8') : null;
+    },
+    async modifyInstanceUserData(instanceId, userData) {
+      // `BlobAttributeValue.Value` is a blob: the SDK base64-encodes it on the
+      // wire, so it is handed the raw bytes ("If you are using an AWS SDK or
+      // command line tool, base64-encoding is performed for you").
+      await send(
+        new ModifyInstanceAttributeCommand({
+          InstanceId: instanceId,
+          UserData: { Value: Buffer.from(userData, 'utf8') },
+        }),
+      );
+    },
+    async authorizeSecurityGroupIngress({ groupId, port, cidrIp, description }) {
+      await send(
+        new AuthorizeSecurityGroupIngressCommand({
+          GroupId: groupId,
+          IpPermissions: [
+            {
+              IpProtocol: 'tcp',
+              FromPort: port,
+              ToPort: port,
+              IpRanges: [{ CidrIp: cidrIp, Description: description }],
+            },
+          ],
+        }),
+      );
+    },
+    async createTags(resourceIds, tags) {
+      await send(
+        new CreateTagsCommand({
+          Resources: [...resourceIds],
+          Tags: tags.map((t) => ({ Key: t.key, Value: t.value })),
+        }),
+      );
     },
     async getConsoleOutput(instanceId) {
       const out = await send<{ Output?: string }>(

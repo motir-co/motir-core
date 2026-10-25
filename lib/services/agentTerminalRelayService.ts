@@ -11,7 +11,12 @@ import {
 } from '@/lib/agentTerminal/protocol';
 import { relayAuthorization } from '@/lib/agentTerminal/relayToken';
 import { hashTerminalTicket } from '@/lib/agentTerminal/ticket';
-import { persistentTerminalEndpoint, selectedOrchestratorProvider } from '@/lib/orchestrator';
+import {
+  hosterTerminalEndpointFor,
+  persistentTerminalEndpoint,
+  selectedOrchestratorProvider,
+} from '@/lib/orchestrator';
+import { fleetShardService } from '@/lib/services/fleetShardService';
 import { agentInstanceRepository } from '@/lib/repositories/agentInstanceRepository';
 import {
   agentTerminalConnectionRepository,
@@ -66,8 +71,14 @@ export interface AgentTerminalConnectionTarget {
   workspaceId: string;
   /** The socket the ticket opens — the path it was redeemed on. */
   channel: AgentTerminalChannel;
-  /** The agent's server at that channel's path, and the headers the dial carries. */
-  dial: { url: string; headers: Record<string, string> };
+  /** The agent's server at that channel's path, and the headers the dial carries.
+   *  `tls` (MOTIR-9470, an AWS instance's host agent): the client pair the dial
+   *  presents and the ONE CA it trusts; the host name is not checked. */
+  dial: {
+    url: string;
+    headers: Record<string, string>;
+    tls?: { caPem: string; certPem: string; keyPem: string };
+  };
 }
 
 export type AgentTerminalAuthorization =
@@ -159,15 +170,33 @@ export const agentTerminalRelayService = {
     const refusal = connectionRefusal(row, found.userId);
     if (refusal !== null) return refuse(refusal);
 
+    // An instance placed on a fleet account (MOTIR-9470) is dialled where that
+    // account says — an AWS one over mutual TLS; one with no account is the
+    // process-wide Fly app, as before. An account that is not on record cannot
+    // be dialled, and is never sent to Fly instead: the not-running close
+    // (MOTIR-9473).
+    let shard: Awaited<ReturnType<typeof fleetShardService.getShard>> | null = null;
+    if (row.fleetShardId) {
+      try {
+        shard = await fleetShardService.getShard(row.fleetShardId);
+      } catch {
+        return refuse(TERMINAL_CLOSE.notRunning);
+      }
+    }
     const handle = {
-      provider: selectedOrchestratorProvider(),
+      provider:
+        shard && selectedOrchestratorProvider() !== 'fake'
+          ? shard.provider
+          : selectedOrchestratorProvider(),
       app: row.flyApp!,
       machineId: row.machineId!,
       volumeId: row.volumeId!,
       region: row.region,
       createdAt: row.createdAt,
     };
-    const endpoint = persistentTerminalEndpoint(handle);
+    const endpoint = shard
+      ? await hosterTerminalEndpointFor(shard, handle)
+      : await persistentTerminalEndpoint(handle);
     const authorization = relayAuthorization({
       masterKey: requireMasterKey(),
       instanceId: row.id,
@@ -184,6 +213,7 @@ export const agentTerminalRelayService = {
         dial: {
           url: addressForChannel(endpoint.url, channel),
           headers: { ...endpoint.headers, authorization },
+          ...(endpoint.tls ? { tls: endpoint.tls } : {}),
         },
       },
     };

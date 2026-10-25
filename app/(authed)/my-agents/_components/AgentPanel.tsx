@@ -376,6 +376,14 @@ function OpenAgent({
     live: BOOT_READ_STATES.has(agent.state),
     epoch: agent.state,
   });
+  // The waiting delta (MOTIR-9475): the boot waits for room in the pool — read
+  // from the DTO's typed `waiting`, never from a step's detail.
+  const waitingFor =
+    boot !== null &&
+    boot.outcome === null &&
+    (agent.state === 'starting' || agent.state === 'waking')
+      ? (boot.steps.find((s) => s.waiting)?.waiting?.reason ?? null)
+      : null;
   // The read-out is the panel's only progress while it covers this state.
   const bootShown =
     boot !== null &&
@@ -440,6 +448,7 @@ function OpenAgent({
 
   const area = tab === 'chat' ? chatArea : terminalArea;
   const chatTipId = `agent-chat-tip-${agent.id}`;
+  const terminalTipId = `agent-terminal-tip-${agent.id}`;
   // The run's session is offered at the head of the TERMINAL tab (MOTIR-7029).
   const watchingRun = tab === 'terminal' && run.watching;
 
@@ -453,6 +462,7 @@ function OpenAgent({
         onHibernate={() => actions.onHibernate(agent)}
         onDelete={() => actions.onDelete(agent)}
         onUpdate={() => actions.onUpdate(agent)}
+        waiting={waitingFor !== null}
       />
       {refusal ? (
         <div className="border-b border-(--el-border-soft) p-(--spacing-card-padding)">
@@ -474,20 +484,44 @@ function OpenAgent({
           aria-label={t('panel.tabs.label')}
           className="inline-flex items-center gap-0.5 rounded-(--radius-btn) border border-(--el-border) bg-(--el-tabnav-track) p-0.5"
         >
-          <button
-            type="button"
-            aria-current={tab === 'terminal' ? 'page' : undefined}
-            onClick={() => selectTab('terminal')}
-            className={tab === 'terminal' ? TAB_ON : TAB_OFF}
-          >
+          {waitingFor ? (
+            // The waiting delta, panel 5: the Terminal tab disabled while the agent
+            // waits for room, its reason on hover AND keyboard focus — the pattern
+            // the disabled Chat tab below already draws.
             <span
-              aria-hidden="true"
-              className={`inline-flex ${tab === 'terminal' ? 'text-(--el-tabnav-active)' : ''}`}
+              role="button"
+              tabIndex={0}
+              aria-disabled="true"
+              aria-describedby={terminalTipId}
+              data-testid="agent-terminal-tab-disabled"
+              className={`group ${TAB_BOX} cursor-not-allowed text-(--el-text-secondary) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none`}
             >
-              <SquareTerminal className="size-3.5" />
+              <Ban aria-hidden="true" className="size-3.5" />
+              {t('panel.tabs.terminal')}
+              <span
+                role="tooltip"
+                id={terminalTipId}
+                className="absolute top-[calc(100%+6px)] left-0 z-20 hidden w-[260px] rounded-(--radius-control) bg-(--el-tooltip-bg) px-(--spacing-tooltip-x) py-(--spacing-tooltip-y) text-xs leading-normal font-normal whitespace-normal text-(--el-tooltip-text) shadow-(--shadow-elevated) group-hover:block group-focus-visible:block"
+              >
+                {t('waiting.terminalTip')}
+              </span>
             </span>
-            {t('panel.tabs.terminal')}
-          </button>
+          ) : (
+            <button
+              type="button"
+              aria-current={tab === 'terminal' ? 'page' : undefined}
+              onClick={() => selectTab('terminal')}
+              className={tab === 'terminal' ? TAB_ON : TAB_OFF}
+            >
+              <span
+                aria-hidden="true"
+                className={`inline-flex ${tab === 'terminal' ? 'text-(--el-tabnav-active)' : ''}`}
+              >
+                <SquareTerminal className="size-3.5" />
+              </span>
+              {t('panel.tabs.terminal')}
+            </button>
+          )}
           {chatVerdict.supported ? (
             <button
               type="button"

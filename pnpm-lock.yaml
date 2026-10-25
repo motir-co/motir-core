@@ -459,6 +459,9 @@ importers:
       '@aws-sdk/client-sts':
         specifier: ^3.1156.0
         version: 3.1156.0
+      '@peculiar/x509':
+        specifier: 1.14.3
+        version: 1.14.3
       decimal.js:
         specifier: ^10.6.0
         version: 10.6.0

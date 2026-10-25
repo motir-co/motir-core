@@ -3,6 +3,7 @@ import {
   type ContainerOrchestrator,
   type FleetInventory,
   type InventoryMachine,
+  type InventoryVolume,
 } from '@motir/orchestrator';
 import {
   getFleetInventory,
@@ -31,6 +32,7 @@ import type { FleetWorkloadKind } from '@/lib/ciFleet/workloads';
 import {
   FleetInventoryUnavailableError,
   UnattributedMachineDestroyedError,
+  UnattributedVolumeDestroyedError,
   type AttributionKillReason,
 } from '@/lib/ciFleet/attributionErrors';
 import { alertFleetAttribution } from '@/lib/monitoring/fleetAttributionAlert';
@@ -116,6 +118,10 @@ const HOSTED_AGENT: FleetWorkloadKind = 'hosted_agent';
 const CODE_GRAPH_INDEX: FleetWorkloadKind = 'code_graph_index';
 const AGENT_INSTANCE: FleetWorkloadKind = 'agent_instance';
 
+/** The kill row's `machineName` for a deleted hoster DISK — the row is the
+ *  machine audit's, and the name says which kind of thing it was (MOTIR-9476). */
+export const HOSTER_VOLUME_KILL_NAME = 'ebs-volume';
+
 /** What the matcher concluded about one machine. */
 type Verdict =
   | { kind: 'attributed'; workload: FleetWorkloadKind }
@@ -166,8 +172,11 @@ export type FleetAttributionResult =
        *  each alerted or logged, retried next pass. */
       failures: number;
       /** CI Docker volumes attached to nothing and past the grace, destroyed
-       *  (MOTIR-8839) — each one a teardown that could not delete its own. */
+       *  (MOTIR-8839) — each one a teardown that could not delete its own — and,
+       *  from MOTIR-9476, the agent-hoster disks no live instance names. */
       orphanedVolumesDestroyed: number;
+      /** Fleet accounts whose own listing was walked (MOTIR-9476). */
+      accounts: number;
     };
 
 /**
@@ -187,6 +196,9 @@ async function sweepOrphanedVolumes(
   const places = new Map<string, () => ContainerOrchestrator>();
   if (isOrchestratorConfigured()) places.set(legacyFleetLocationKey(), getOrchestrator);
   for (const account of accounts) {
+    // A hoster account's disks are judged against the instance records by the
+    // hoster volume pass (MOTIR-9476); it has no CI runner volumes to sweep.
+    if (account.fleetKind === AGENT_INSTANCE) continue;
     const key = shardLocationKey(account);
     if (!places.has(key)) {
       places.set(key, () => fleetShardOrchestratorService.forShardRow(account));
@@ -215,12 +227,19 @@ export interface AccountInventory {
   shardId: string;
   name: string;
   inventory: FleetInventory;
+  /** An agent-hoster account (MOTIR-9476): its machines are judged against the
+   *  instance records BY ACCOUNT, and its disks are swept after them. */
+  fleetKind?: FleetWorkloadKind;
 }
 
-/** Every account that can still have machines billing (all but `provisioning`). */
+/** Every account that can still have machines billing — all but `provisioning`,
+ *  except a hoster account, which can hold disks in any state (MOTIR-9476). The
+ *  agent-hoster switch is not read here: a pass covers every account it lists. */
 async function liveAccounts(): Promise<FleetShardDTO[]> {
   const accounts = await fleetShardService.listShards();
-  return accounts.filter((account) => account.state !== 'provisioning');
+  return accounts.filter(
+    (account) => account.state !== 'provisioning' || account.fleetKind === AGENT_INSTANCE,
+  );
 }
 
 /** The listings of the accounts whose provider the Fly walk does not cover. An
@@ -230,7 +249,14 @@ function accountInventories(accounts: readonly FleetShardDTO[]): AccountInventor
   for (const account of accounts) {
     try {
       const inventory = inventoryForShard(account);
-      if (inventory) out.push({ shardId: account.id, name: account.name, inventory });
+      if (inventory) {
+        out.push({
+          shardId: account.id,
+          name: account.name,
+          inventory,
+          fleetKind: account.fleetKind,
+        });
+      }
     } catch (err) {
       alertFleetAttribution(new FleetInventoryUnavailableError(account.name, detailOf(err)));
     }
@@ -307,6 +333,7 @@ export const fleetAttributionService = {
       unavailableApps: [] as string[],
       failures: 0,
       orphanedVolumesDestroyed: 0,
+      accounts: 0,
     };
 
     // One walk per listing: the organisation's (machines settle through the
@@ -316,6 +343,7 @@ export const fleetAttributionService = {
       source: FleetInventory,
       sourceApps: readonly string[],
       shardId: string | null | undefined,
+      hosterShardId?: string,
     ): Promise<void> => {
       for (const app of sourceApps) {
         let machines: InventoryMachine[];
@@ -343,7 +371,7 @@ export const fleetAttributionService = {
 
           let verdict: Verdict;
           try {
-            verdict = await this.judge(source.provider, machine, now());
+            verdict = await this.judge(source.provider, machine, now(), hosterShardId);
           } catch (err) {
             // Could not read the records: never a reason to destroy.
             result.failures += 1;
@@ -395,14 +423,148 @@ export const fleetAttributionService = {
         continue;
       }
       result.apps += accountApps.length;
-      await walk(account.inventory, accountApps, account.shardId);
+      result.accounts += 1;
+      const hoster = account.fleetKind === AGENT_INSTANCE ? account.shardId : undefined;
+      // The disks are LISTED before the machines are judged and JUDGED after: a
+      // disk attached when the pass began is never taken in that pass, so the
+      // home disk this pass's own machine kill detaches waits for the next one,
+      // under the grace, rather than being raced (MOTIR-9476).
+      const disks = hoster
+        ? await this.listHosterVolumes(account, accountApps, retryDelayMs, result)
+        : [];
+      await walk(account.inventory, accountApps, account.shardId, hoster);
+      if (hoster) await this.sweepHosterVolumes(account, disks, hoster, now, result);
     }
-    result.orphanedVolumesDestroyed = await sweepOrphanedVolumes(now, accounts);
+    result.orphanedVolumesDestroyed += await sweepOrphanedVolumes(now, accounts);
     return result;
   },
 
+  /**
+   * THE HOSTER DISK PASS (MOTIR-9476) — one agent-hoster account's EBS volumes.
+   * A disk is deleted only when it is unattached (`available`), past the grace,
+   * and no NON-deleted instance of this account names it as its home: that is
+   * the disk a machine destroy detached (`DeleteOnTermination: false`) or a
+   * failed teardown left. A disk with no creation instant is alerted and left; a
+   * failed listing or record read deletes nothing. Recorded first, then deleted,
+   * then alerted — the machine kill's order.
+   */
+  async listHosterVolumes(
+    account: AccountInventory,
+    apps: readonly string[],
+    retryDelayMs: number,
+    result: { failures: number },
+  ): Promise<Array<{ app: string; volume: InventoryVolume }>> {
+    const source = account.inventory;
+    if (!source.listVolumes || !source.destroyVolume) return [];
+    const out: Array<{ app: string; volume: InventoryVolume }> = [];
+    for (const app of apps) {
+      try {
+        const volumes = await listWithOneRetry(() => source.listVolumes!(app), retryDelayMs);
+        out.push(...volumes.map((volume) => ({ app, volume })));
+      } catch (err) {
+        result.failures += 1;
+        alertFleetAttribution(
+          new FleetInventoryUnavailableError(`${account.name} volumes`, detailOf(err)),
+        );
+      }
+    }
+    return out;
+  },
+
+  /** Judge the disks {@link listHosterVolumes} listed, after the machines. */
+  async sweepHosterVolumes(
+    account: AccountInventory,
+    disks: ReadonlyArray<{ app: string; volume: InventoryVolume }>,
+    fleetShardId: string,
+    now: () => Date,
+    result: { orphanedVolumesDestroyed: number; undated: number; failures: number },
+  ): Promise<void> {
+    const source = account.inventory;
+    if (!source.destroyVolume) return;
+    for (const { app, volume } of disks) {
+      if (volume.state !== 'available' || volume.attachedMachineId) continue;
+      if (!volume.createdAt) {
+        result.undated += 1;
+        alertFleetAttribution(
+          new FleetInventoryUnavailableError(
+            account.name,
+            `volume ${volume.volumeId} has no creation instant, so it cannot be aged`,
+          ),
+        );
+        continue;
+      }
+      const ageMs = now().getTime() - volume.createdAt.getTime();
+      if (ageMs < FLEET_ATTRIBUTION_GRACE_MS) continue;
+      let owner;
+      try {
+        owner = await withSystemContext((tx) =>
+          agentInstanceRepository.findByVolumeInShard(fleetShardId, volume.volumeId, tx),
+        );
+      } catch (err) {
+        result.failures += 1;
+        console.error('[fleetAttribution] could not judge a volume — left in place', {
+          account: account.name,
+          volumeId: volume.volumeId,
+          detail: detailOf(err),
+        });
+        continue;
+      }
+      if (owner) continue;
+
+      const decidedAt = now();
+      const row = await withSystemContext((tx) =>
+        fleetMachineKillRepository.create(
+          {
+            app,
+            machineId: volume.volumeId,
+            machineName: HOSTER_VOLUME_KILL_NAME,
+            reason: 'no_record',
+            action: 'destroyed',
+            workload: AGENT_INSTANCE,
+            recordRef: null,
+            organizationId: null,
+            machineCreatedAt: volume.createdAt,
+            ageSeconds: Math.floor(ageMs / 1000),
+            decidedAt,
+          },
+          tx,
+        ),
+      );
+      try {
+        await source.destroyVolume(app, volume.volumeId);
+      } catch (err) {
+        const detail = detailOf(err);
+        await withSystemContext((tx) => fleetMachineKillRepository.markFailed(row.id, detail, tx));
+        result.failures += 1;
+        alertFleetAttribution(
+          new FleetInventoryUnavailableError(
+            account.name,
+            `could not destroy volume ${volume.volumeId}: ${detail}`,
+          ),
+        );
+        continue;
+      }
+      await withSystemContext((tx) => fleetMachineKillRepository.markCompleted(row.id, now(), tx));
+      result.orphanedVolumesDestroyed += 1;
+      console.warn('[fleetAttribution] destroyed a hoster volume', {
+        account: account.name,
+        volumeId: volume.volumeId,
+      });
+      alertFleetAttribution(
+        new UnattributedVolumeDestroyedError(app, volume.volumeId, ageMs, 'no_record'),
+      );
+    }
+  },
+
   /** Match ONE machine against the records (§5's table). Reads only. */
-  async judge(provider: string, machine: InventoryMachine, now: Date): Promise<Verdict> {
+  async judge(
+    provider: string,
+    machine: InventoryMachine,
+    now: Date,
+    /** The agent-hoster account the machine was listed in (MOTIR-9476): its
+     *  instance is found by machine id AND account, never by the Fly app. */
+    hosterShardId?: string,
+  ): Promise<Verdict> {
     // ── CI runner: an intent names it as its container ──────────────────────
     const intent = await withSystemContext((tx) =>
       intents.findByContainerId(provider, machine.machineId, tx),
@@ -470,7 +632,9 @@ export const fleetAttributionService = {
 
     // ── Agent instance: a record in THIS app names it as its machine ────────
     const instance = await withSystemContext((tx) =>
-      agentInstanceRepository.findByMachine(machine.app, machine.machineId, tx),
+      hosterShardId
+        ? agentInstanceRepository.findByMachineInShard(hosterShardId, machine.machineId, tx)
+        : agentInstanceRepository.findByMachine(machine.app, machine.machineId, tx),
     );
     if (instance) {
       const common = {

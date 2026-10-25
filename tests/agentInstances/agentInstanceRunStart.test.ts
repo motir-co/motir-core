@@ -793,6 +793,52 @@ describe('the card’s agent picker', () => {
     ]);
   });
 
+  it('an agent whose boot waits for room is offered as waiting; one booting otherwise is not (MOTIR-9475)', async () => {
+    const waitingId = await agent('waits');
+    const bootingId = await agent('boots');
+    const reboot = async (
+      id: string,
+      step: 'provision' | 'machine_start',
+      detail: string | null,
+    ) => {
+      await adminDb.agentInstance.update({ where: { id }, data: { state: 'starting' } });
+      const attempt = await adminDb.agentInstanceBootAttempt.create({
+        data: {
+          workspaceId: fx.workspaceId,
+          organizationId: fx.workspace.organizationId!,
+          agentInstanceId: id,
+          attempt: 2,
+          kind: 'create',
+          startedAt: new Date(),
+        },
+      });
+      await adminDb.agentInstanceBootStep.create({
+        data: {
+          workspaceId: fx.workspaceId,
+          bootAttemptId: attempt.id,
+          seq: 1,
+          step,
+          ordinal: 0,
+          state: 'in_progress',
+          startedAt: new Date(),
+          detail,
+        },
+      });
+    };
+    await reboot(waitingId, 'provision', 'waiting_for_room:pool');
+    await reboot(bootingId, 'machine_start', null);
+    const item = await card();
+    const { agents } = await runs.listAgentsForCard(item.identifier, fx.ctx);
+    expect(agents.find((a) => a.id === waitingId)).toMatchObject({
+      state: 'starting',
+      waitingForRoom: true,
+    });
+    expect(agents.find((a) => a.id === bootingId)).toMatchObject({
+      state: 'starting',
+      waitingForRoom: false,
+    });
+  });
+
   it('any other failure of the permission read is not swallowed', async () => {
     const item = await card();
     vi.spyOn(projectAccessService, 'assertPermission').mockRejectedValueOnce(new Error('db down'));

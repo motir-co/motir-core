@@ -571,6 +571,13 @@ export interface PersistentContainerSpec {
    * process then. Absent or null keeps the image's `CMD`.
    */
   readonly idleCommand?: readonly string[] | null;
+  /**
+   * The availability zone the machine and its disk are created in (MOTIR-9469).
+   * Chosen ABOVE the port, by placement, and fixed for the instance's life: an
+   * EBS volume lives in one zone, so a stopped instance restarts there. The AWS
+   * adapter refuses a spec without it; Fly and the fake ignore it.
+   */
+  readonly availabilityZone?: string;
 }
 
 /**
@@ -621,6 +628,17 @@ export interface PersistentTerminalEndpoint {
   readonly url: string;
   /** Headers the dial must carry to reach this one machine (Fly: `fly-force-instance-id`). */
   readonly headers: Readonly<Record<string, string>>;
+  /**
+   * Mutual TLS for the dial (MOTIR-9470: an AWS instance's host agent on 8443).
+   * The relay presents `certPem`/`keyPem`, trusts ONLY `caPem`, and does not check
+   * the host name — the address is a public IP that changes on every start.
+   * Absent on Fly and the fake, whose dial is ordinary TLS or a local socket.
+   */
+  readonly tls?: {
+    readonly caPem: string;
+    readonly certPem: string;
+    readonly keyPem: string;
+  };
 }
 
 /** The persistent handle (§1's table) — persisted on the instance record. */
@@ -632,6 +650,12 @@ export interface PersistentContainerHandle {
   readonly volumeId: string;
   readonly region: string;
   readonly createdAt: Date;
+  /**
+   * The zone the instance's disk is in, from the record (MOTIR-9472) — set for an
+   * instance placed on an AWS hoster account, absent on Fly and the fake. The
+   * adapters address a machine by its id and never require it.
+   */
+  readonly availabilityZone?: string;
 }
 
 /**
@@ -791,8 +815,14 @@ export interface PersistentContainerOrchestrator {
     terminal: PersistentTerminalConfig,
   ): Promise<'updated' | 'current'>;
 
-  /** Where the relay dials this machine's terminal server (Q2). Pure — no provider call. */
-  terminalEndpoint(handle: PersistentContainerHandle): PersistentTerminalEndpoint;
+  /**
+   * Where the relay dials this machine's terminal server (Q2). Pure on Fly and the
+   * fake; on AWS (MOTIR-9470) it reads the instance's current public address, so
+   * the answer may be a promise — callers await it.
+   */
+  terminalEndpoint(
+    handle: PersistentContainerHandle,
+  ): PersistentTerminalEndpoint | Promise<PersistentTerminalEndpoint>;
 
   /**
    * MOVE the machine to a different image (`agent-image-update.md` Q2) — the SAME
@@ -889,4 +919,21 @@ export interface FleetInventory {
   /** Stop one machine — for a PERSISTENT machine whose record owns it but says it
    *  should be resting (§5: stopped, never destroyed). Idempotent. */
   stopMachine(app: string, machineId: string): Promise<void>;
+  /** Every disk in one app, attached or not (MOTIR-9476) — for a provider whose
+   *  disks outlive their machine. Absent where the machine listing covers them. */
+  listVolumes?(app: string): Promise<InventoryVolume[]>;
+  /** Delete one disk. Idempotent on one already gone; a disk still attached is
+   *  refused, never force-detached. */
+  destroyVolume?(app: string, volumeId: string): Promise<void>;
+}
+
+/** One disk as the inventory lists it (MOTIR-9476). */
+export interface InventoryVolume {
+  readonly volumeId: string;
+  /** The provider's own state word (EC2: `available`, `in-use`, …). */
+  readonly state: string;
+  readonly attachedMachineId: string | null;
+  /** Null when the provider omits it — such a disk is alerted, never deleted. */
+  readonly createdAt: Date | null;
+  readonly tags: Readonly<Record<string, string>>;
 }
