@@ -149,6 +149,23 @@ export const MCP_UNREACHABLE_RESOURCES: Partial<Record<SharedResourceName, strin
     '"An agent moves, archives and links pages over the MCP", which reuses the same ' +
     '`pagesService.movePage` door. When that tool lands it probes this resource and this entry ' +
     'closes; it is not a permanent divergence.',
+  PageArchive:
+    'Story MOTIR-9488 (MOTIR-9566) publishes the result of `POST /api/v1/pages/{pageId}/archive` ' +
+    'as `PageArchive`. No MCP tool archives a page yet: `archive_page` belongs to the sibling story ' +
+    '"An agent moves, archives and links pages over the MCP", which reuses the same ' +
+    '`pagesService.archivePage` door. When that tool lands it probes this resource and this entry ' +
+    'closes; it is not a permanent divergence.',
+  PageRestore:
+    'Story MOTIR-9488 (MOTIR-9566) publishes the result of `POST /api/v1/pages/{pageId}/restore` ' +
+    'as `PageRestore`. No MCP tool restores a page yet; the sibling MCP page story reuses the same ' +
+    '`pagesService.restorePage` door, and when its tool lands it probes this resource and this ' +
+    'entry closes; it is not a permanent divergence.',
+  PageLinkPair:
+    'Story MOTIR-9488 (MOTIR-9567) publishes the result of `POST /api/v1/pages/{pageId}/work-items` ' +
+    'as `PageLinkPair`. No MCP tool hand-links a page yet: `link_page` belongs to the sibling story ' +
+    '"An agent moves, archives and links pages over the MCP", which reuses the same ' +
+    '`pageLinksService.linkPageForWorkItem` door. When that tool lands it probes this resource and ' +
+    'this entry closes; it is not a permanent divergence.',
   ScopeClaim:
     'MOTIR-3049’s SCOPE claim ships on `/api/v1` ONLY, and the absence is argued rather than ' +
     'incidental: its caller is `motir run <story-id>` / `motir run sprint` in `packages/cli`, ' +
