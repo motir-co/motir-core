@@ -22,6 +22,7 @@ closest existing usage surface.
 | **ENTERPRISE REQUESTS — the rail row · the list (state filter, cursor paging, count) · the detail per state · support read-only · stale refusal** (AMENDMENT 2026-10-05) | **`console--enterprise-requests.mock.html`** (delta, Panels 1–10) | A new Platform-group page at `/admin/enterprise-requests` where staff work the requests orgs send from the Enterprise card’s Contact sales. **Gates MOTIR-7609.** |
 | **IDEAS — the rail row · the list (status / kind / category / tag / text filters in the URL, keyset pages) · the detail · edit with evidence rows · retire with a reason · a superadmin’s delete · support read-only** (AMENDMENT 2026-10-07) | **`console--ideas.mock.html`** (delta, Panels 1–12) | A new Operations page at `/admin/ideas` where staff review, correct, retire and delete the ideas motir.co shows. **Gates MOTIR-7680 and MOTIR-7681.** |
 | **FLEET SETTINGS — the rail row · the superadmin setting “Run Motir’s private repositories’ CI on the fleet” · the nine-condition readiness verdict · confirm ON / OFF with a reason · the refusals · read failed · not superadmin** (AMENDMENT 2026-10, MOTIR-8703) | **`console--fleet-settings.mock.html`** (delta, Panels 1–13) | A new Operations page at `/admin/fleet-settings` where a superadmin moves Motir’s private repositories’ CI onto the fleet once it is ready, and off at any time. **Gates the /admin setting UI card (story MOTIR-8699, `blocked_by` MOTIR-8703).** |
+| **FLEET SETTINGS · AGENT HOSTING — the Fly ↔ AWS switch for new agent instances · its state and word chip · the last-changed line · confirm → AWS / → Fly with a reason · reason missing · submitting · already in that state · write failed · read failed · not superadmin** (AMENDMENT 2026-10-25, MOTIR-9534) | **`console--fleet-settings--agent-hosting.mock.html`** (delta, Panels 1–11) | One more section on `/admin/fleet-settings`, after the per-org Motir-CI section: where NEW agent instances are created. **Gates MOTIR-9503 (`blocked_by` MOTIR-9534), which builds it.** |
 
 ## What this area is
 
@@ -3114,3 +3115,193 @@ Retired: `stat.pooled`, `group.pool`, `group.own`, `col.poolUsed`, `col.agentIns
 - **Per-user agent counts** — the per-person figure is shown as the plan's figure only; the table
   has no per-user breakdown.
 - **Loading** — server-rendered read, as before. **A `.png` export** — retired (AMENDMENT 4).
+
+# AMENDMENT 2026-10-25 — Fleet settings · Agent hosting, the Fly ↔ AWS switch (MOTIR-9534 · story MOTIR-9361)
+
+**Design system check (first, per the design-system rule).** Read `package.json` (depends on
+`@motir/design-system` `workspace:*`, version 0.17.1 in `packages/design-system/package.json`) and
+`app/globals.css` (imports `@motir/design-system/theme.css`): both hold, so the project is **on
+Motir Design**. The root layout wears the package defaults (`warm-editorial` · `motir` · `motir`),
+and the mock is rendered at those axes. That version exports `@motir/design-system/mock`, so the
+mock is built with `renderMock` from the package's own parts — `Button`, `Card`, `ErrorState`,
+`Input`, `Pill`, `Switch` — plus the shipped product-local `components/ui/Sidebar` for the rail.
+Nothing the package lacks is needed: no proposed addition, no new product-local component.
+
+**Mock (a DELTA):**
+[`console--fleet-settings--agent-hosting.mock.html`](console--fleet-settings--agent-hosting.mock.html),
+eleven states in eleven panels. **Amends:** the _AMENDMENT 2026-10 — Fleet settings · Motir CI on
+the fleet_ section above and its mock [`console--fleet-settings.mock.html`](console--fleet-settings.mock.html)
+— one more section on the same page. It reuses that mock's Panel 1 (the shell and the rail row),
+Panel 6 / 7 (the confirm-with-reason dialog, itself `console.mock.html` Panel 11's grammar), Panel 9
+(the already-in-state info note), Panel 12 (the read-failed error card) and Panel 13 (not superadmin
+→ `console.mock.html` Panel 7a). It does not edit that mock and does not redraw the Motir-CI
+section: wherever the page shows it, the mock draws a dashed reference box naming it.
+**Gates:** **MOTIR-9503** (`blocked_by` MOTIR-9534), which persists the `agent_instance` switch,
+wires its reader through `wireFleetKindSwitch` (`lib/ciFleet/shardTargets.ts`) and builds this
+control. **MOTIR-9478**, the story E2E, drives the control in step 2 of its recipe.
+
+**Composed, not redrawn.** The setting card is `FleetOrgCiSetting.tsx`'s grammar
+(`app/(admin)/admin/fleet-settings/_components/`) with the words changed: the same `Card` header
+(icon tile, title, subtitle line, _Superadmin only_ chip), the same `Switch` + word chip + action
+word row, the same `Band` for notes and refusals, the same `<dl>` last-changed line with its
+audit-log link, and the same Monitoring footer link. The rail is `AdminShell.tsx` as it stands on
+`main`. The dialog is the shipped `Modal`'s panel drawn static with its own classes (a Radix portal
+does not render to a string), with `Modal.Body` / `Modal.Footer`'s classes inline.
+
+## ⚠️ Where the card and this asset differ (each recorded, not papered over)
+
+1. **No `.png` export.** The card's criteria ask for one beside the mock; `CLAUDE.md` and
+   `docs/decisions/design-result.md` AMENDMENT 4 retired exports (the mock renders on the card), the
+   dispatched prompt says _no screenshot export_, and MOTIR-8703 recorded the same. None is produced.
+2. **Write failed keeps the dialog open — unlike the Motir-CI row.** The card asks for it (_the
+   dialog stays open for retry_), and this asset follows the card: the failure sits in a rose
+   `Band` (`role="alert"`) at the top of the dialog body, the typed reason is kept, and the switch
+   behind it shows the previous state. The shipped Motir-CI row closes its dialog and shows the
+   band on the page instead (`FleetOrgCiSetting.tsx` `report()`); that row is not changed here.
+3. **The audit action names in the mock are placeholders.** The last-changed link reads
+   `/admin/audit-log?action=fleet.agent_hosting.enable|disable`. The card leaves the setting key and
+   the audit actions to MOTIR-9503; the build links to whatever action it registers, filtered the
+   same way the Motir-CI row filters on `fleet.org_ci.enable|disable`.
+4. **The section is one `Card`, titled _Agent hosting_.** The page has no section headings today —
+   the Motir-CI setting is itself a titled `Card` under the page `h1` — so the new section is a
+   sibling `Card` with the `h2` _Agent hosting_, not a separate heading over a card.
+
+## What this section is
+
+The home of one platform setting: **where NEW agent instances are created**. It is per fleet kind
+(`agent_instance`), persisted, default **OFF**, read on every placement and never cached
+(MOTIR-9503). **OFF ⇒ Fly. ON ⇒ an account of the agent-hoster AWS pool.** Neither value moves an
+agent that already exists (story MOTIR-9361), so the copy says so in the explanation, in the ON
+note and in both confirms. The flip takes effect in process, so no string says _after restart_;
+and no environment variable is offered as an alternative. There is **no readiness card**: this
+switch has no precondition. If the build later wants one (for example no registered hoster
+account), that is a new design.
+
+## The access path — unchanged (Panel 1)
+
+**Operations → Fleet settings**, the rail row MOTIR-8703 added (superadmin only). No new rail row
+and no new route: the section is on `/admin/fleet-settings`, AFTER the per-org Motir-CI section(s)
+the page renders from `listTargets`. Its footer carries the reverse link to Monitoring › Fleet
+(MOTIR-7314), where agent machines appear.
+
+## The roles
+
+| Staff role                                 | Rail row | Agent hosting section                                 |
+| ------------------------------------------ | -------- | ----------------------------------------------------- |
+| `superadmin`                               | present  | reads the hoster and flips it                         |
+| `operator`                                 | absent   | the app 404 for the whole route (Panel 11 → Panel 7a) |
+| `support`                                  | absent   | the app 404 (Panel 11 → Panel 7a)                     |
+| not platform staff (an org owner included) | —        | the app 404, as for every `/admin/*` route            |
+
+The route's gate is unchanged (`requirePlatformStaffPage('superadmin')`); the read and the flip the
+build adds must be superadmin-only too, so the section has no read-only face.
+
+## The panels (review EACH — mistake #31)
+
+| #   | State                     | What is drawn                                                                                                                                                                                                                                                        | Source                                                                     |
+| --- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| 1   | **Fly · never changed**   | Inside the shell, Fleet settings row active; the Motir-CI section as a reference box; then the section: title, subtitle, explanation, switch OFF + **Fly** chip + _Turn on AWS_ (enabled), _Never changed — new agents are created on Fly_, footer link.             | card § States 1; MOTIR-9503 (default OFF); MOTIR-8703 Panel 1 (shell, row) |
+| 2   | **Fly after a change**    | Chip **Fly**; _Last changed: by {email}, {when} — “{reason}”_ + _Audit log_, filtered to the disable action.                                                                                                                                                         | card § States 2; MOTIR-8703 Panel 1's last-changed line                    |
+| 3   | **AWS**                   | Switch ON, chip **AWS**, _Turn off AWS_, the info note _New agents are created on AWS; agents already on Fly stay on Fly._, the last-changed line, the footer link.                                                                                                  | card § States 3; story MOTIR-9361 (no migration); MOTIR-8703 Panel 4       |
+| 4   | **Confirm → AWS**         | `Modal role="alertdialog"` over the scrim: _Create new agents on AWS?_, the **Fly → AWS** direction line and its consequence, the required reason `Input`, primary _Turn on AWS_ DISABLED while the reason is empty.                                                 | card § States 4; MOTIR-8703 Panel 6 / `console.mock.html` Panel 11         |
+| 5   | **Confirm → Fly**         | The same dialog: _Create new agents on Fly again?_, **AWS → Fly**, agents already on AWS stay there; primary _Turn off AWS_.                                                                                                                                         | card § States 5; MOTIR-8703 Panel 7                                        |
+| 6   | **Reason missing**        | A blank (spaces-only) reason reached the server and was refused: the error under the field (the `Input` error state), dialog open, nothing changed. An EMPTY reason never gets this far — the primary is disabled (Panel 4).                                         | card § States 6; MOTIR-8703 Panel 8b                                       |
+| 7   | **Submitting**            | Primary in its `loading` state (spinner, `aria-busy`), _Cancel_ and the field disabled. Behind the dialog the switch still reads **Fly** and is disabled; it changes only when the write answers and the page re-reads.                                              | card § States 7; `CLAUDE.md` page-state-after-mutation contract            |
+| 8   | **Already in that state** | The flip answered _unchanged_: another superadmin turned AWS on first. The page shows the CURRENT state (AWS) and a sky info `Band` (not an error): _Already on AWS — nothing changed._ + why; the last-changed line names who did it.                               | card § States 8; MOTIR-8703 Panel 9                                        |
+| 9   | **Write failed**          | The flip was refused: the dialog stays open with a rose `Band` (`role="alert"`) — _Not switched to AWS: the change could not be saved._ / _Nothing changed: new agents are still created on Fly._ / _Your reason is kept. Try again, or cancel._ Switch behind: Fly. | card § States 9 (dialog stays open — difference 2); MOTIR-8703 Panel 10    |
+| 10  | **Read failed**           | The Motir-CI reference box above (unaffected); the section's `Card` header with the console's `ErrorState` and **Retry** as its body — NO switch, NO chip, no last-changed line.                                                                                     | card § States 10; MOTIR-8703 Panel 12 (`FleetSettingsUnavailable`)         |
+| 11  | **Not superadmin**        | A reference box, not a redraw: the route is the app 404 (`console.mock.html` Panel 7a) and the rail row is absent (`console--fleet-settings.mock.html` Panel 13). The section inherits both.                                                                         | card § States 11; area _Roles_                                             |
+
+A successful flip closes the dialog and re-reads the page, which then draws Panel 2 or Panel 3 — no
+separate _done_ panel. No loading skeleton is drawn: the page's existing `<Suspense>` fallback
+covers it, after the route's 404 gate.
+
+## Copy (en — `platformAdmin.fleetSettings.agentHosting.*`; the build adds every other locale)
+
+| key                              | en                                                                                                                                                                                                                                                                                               |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `title`                          | Agent hosting                                                                                                                                                                                                                                                                                    |
+| `subtitle`                       | Where new agent instances are created                                                                                                                                                                                                                                                            |
+| `superadminOnly`                 | Superadmin only                                                                                                                                                                                                                                                                                  |
+| `explanation`                    | Off: new agent instances are created on Fly. On: each new agent instance is placed on an account of the agent-hoster AWS pool. Either way, agents that already exist stay where they are — this switch never moves a running agent. A change applies to the next agent created, with no restart. |
+| `state.fly`                      | Fly                                                                                                                                                                                                                                                                                              |
+| `state.aws`                      | AWS                                                                                                                                                                                                                                                                                              |
+| `action.turnOnAws`               | Turn on AWS                                                                                                                                                                                                                                                                                      |
+| `action.turnOffAws`              | Turn off AWS                                                                                                                                                                                                                                                                                     |
+| `onNote`                         | New agents are created on AWS; agents already on Fly stay on Fly.                                                                                                                                                                                                                                |
+| `meta.lastChanged`               | Last changed                                                                                                                                                                                                                                                                                     |
+| `meta.changedBy`                 | by {email}, {when} — “{reason}”                                                                                                                                                                                                                                                                  |
+| `meta.neverChanged`              | Never changed — new agents are created on Fly                                                                                                                                                                                                                                                    |
+| `meta.auditLink`                 | Audit log                                                                                                                                                                                                                                                                                        |
+| `monitoringLine`                 | Agent machines appear in Monitoring › Fleet                                                                                                                                                                                                                                                      |
+| `confirm.toAwsTitle`             | Create new agents on AWS?                                                                                                                                                                                                                                                                        |
+| `confirm.toAwsBody`              | Fly → AWS. Every new agent instance from now on is created on an account of the agent-hoster AWS pool. Agents already on Fly are not moved: they keep running on Fly.                                                                                                                            |
+| `confirm.toFlyTitle`             | Create new agents on Fly again?                                                                                                                                                                                                                                                                  |
+| `confirm.toFlyBody`              | AWS → Fly. New agent instances go back to Fly, starting with the next one created. Agents already on AWS are not moved: they keep running on AWS.                                                                                                                                                |
+| `confirm.reasonLabel`            | Reason — required, written to the audit log                                                                                                                                                                                                                                                      |
+| `confirm.reasonPlaceholderToAws` | Why are new agents moving to AWS?                                                                                                                                                                                                                                                                |
+| `confirm.reasonPlaceholderToFly` | Why are new agents going back to Fly?                                                                                                                                                                                                                                                            |
+| `confirm.reasonHint`             | Shown to any operator reading this change later. “Testing” on its own answers nothing.                                                                                                                                                                                                           |
+| `confirm.reasonHintEmpty`        | The button stays disabled until a reason is typed — the same rule the server applies.                                                                                                                                                                                                            |
+| `confirm.cancel`                 | Cancel                                                                                                                                                                                                                                                                                           |
+| `confirm.confirmToAws`           | Turn on AWS                                                                                                                                                                                                                                                                                      |
+| `confirm.confirmToFly`           | Turn off AWS                                                                                                                                                                                                                                                                                     |
+| `refused.reasonMissing`          | Not changed: a reason is required, and it is written to the audit log with this change. New agents are still created on {hoster}.                                                                                                                                                                |
+| `refused.alreadyAws`             | Already on AWS — nothing changed.                                                                                                                                                                                                                                                                |
+| `refused.alreadyFly`             | Already on Fly — nothing changed.                                                                                                                                                                                                                                                                |
+| `refused.alreadyBody`            | Another superadmin changed it first, so nothing was written and no audit row was added.                                                                                                                                                                                                          |
+| `refused.writeFailed`            | Not switched to {hoster}: the change could not be saved.                                                                                                                                                                                                                                         |
+| `refused.nothingChanged`         | Nothing changed: new agents are still created on {previous}.                                                                                                                                                                                                                                     |
+| `refused.retryHint`              | Your reason is kept. Try again, or cancel.                                                                                                                                                                                                                                                       |
+| `unavailable.title`              | Couldn't load agent hosting                                                                                                                                                                                                                                                                      |
+| `unavailable.body`               | Where new agents are created could not be read, so no state is shown and no switch is offered. This is a read error — nothing has changed, and no value is guessed.                                                                                                                              |
+| `unavailable.retry`              | Retry                                                                                                                                                                                                                                                                                            |
+
+`{hoster}` / `{previous}` interpolate `state.fly` / `state.aws`, so the hoster names are spelled
+once. `{when}` is `format.relativeTime(updatedAt)`, as the Motir-CI row renders it.
+
+## Data — what each element reads
+
+| Element                   | Reads                                                                                                   |
+| ------------------------- | ------------------------------------------------------------------------------------------------------- |
+| switch, chip, action word | the persisted `agent_instance` switch (MOTIR-9503): on ⇒ AWS, off or never written ⇒ Fly                |
+| last-changed line         | who changed it (email), when, and the reason stored with the last flip; none ⇒ _Never changed_          |
+| audit-log link            | `/admin/audit-log?action=<the action MOTIR-9503 registers for this direction>`                          |
+| already-in-state note     | the flip's _unchanged_ answer (the stored value already equalled the asked one)                         |
+| write-failed band         | the flip's refusal after the reason check; the page state is not re-read into a guess                   |
+| reason-missing error      | the audit vocabulary's `required` reason policy (`MissingAuditReasonError`), as for every console write |
+| read-failed card          | a failed read of the switch — the section renders `ErrorState`, never a default                         |
+
+## Colour and shape roles (`--el-*` only)
+
+| Element                       | Colour                                                                                                               | Shape                                      |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| **Fly** chip                  | `Pill tone="neutral"` — `--el-chip-bg`, `--el-text-secondary`, `--el-chip-border`                                    | `--radius-badge`, `--spacing-chip-x/y`     |
+| **AWS** chip                  | `Pill severity="info"` — `--el-tint-sky`, `--el-text-strong`                                                         | `--radius-badge`, `--spacing-chip-x/y`     |
+| _Superadmin only_ chip        | `Pill memberRole="admin"` — `--el-role-admin`, `--el-text-strong`                                                    | `--radius-badge`                           |
+| icon tile                     | `--el-tint-sky` ground, `--el-text-strong` glyph (`Cloud`)                                                           | `--radius-control`, `--height-control-32`  |
+| switch                        | `--el-switch-on` / `--el-switch-on-border` · `--el-muted` / `--el-switch-off-border`, knobs `--el-switch-knob(-off)` | `rounded-full` (circular carve-out)        |
+| ON note · already-in-state    | `--el-tint-sky` ground, `--el-info` glyph, `--el-text-strong`                                                        | `--radius-card`, `--spacing-control-x/y`   |
+| write-failed band             | `--el-tint-rose` ground, `--el-danger` glyph, `--el-text-strong`                                                     | `--radius-card`, `--spacing-control-x/y`   |
+| explanation · subtitle · `dt` | `--el-text-secondary` (AA on every surface)                                                                          | —                                          |
+| links                         | `--el-link`                                                                                                          | —                                          |
+| dialog                        | `--el-page-bg`, `--el-border`, `--shadow-modal`, scrim `--el-overlay-scrim`                                          | `--radius-modal`, `--spacing-card-padding` |
+
+The two chips differ by WORD first; the hue is the second signal, never the only one. Neither hoster
+takes the success role: AWS is not a better state than Fly, only a different one.
+
+## A11y
+
+- The switch is `aria-labelledby` the card's `h2`; the chip's word carries the state.
+- The dialog is `role="alertdialog"`, named by its title and described by its direction line.
+- The write-failed band is `role="alert"`; the ON note and the already-in-state note are
+  `role="status"`. Every glyph is `aria-hidden`.
+- The submitting primary is `aria-busy`; its label stays the action word.
+
+## What this amendment does NOT draw
+
+- **The Motir-CI section** — unchanged, referenced only.
+- **Any other fleet kind's switch** (CI runner, agent runner, indexer), per-account AWS controls,
+  a readiness card, a migration of agents already on Fly, or any tenant-facing surface.
+- **The zh and other locales** — the build adds them beside the en strings above.
+- **A `.png` export** — retired (AMENDMENT 4; difference 1).
