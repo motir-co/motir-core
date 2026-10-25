@@ -687,11 +687,19 @@ export interface AwsPolicyDocument {
  * support no resource-level permission, so they are `*`; a launch must TAG its
  * instance and volume with the shard (`aws:RequestTag`), and a terminate reaches
  * only the shard's own instances (`aws:ResourceTag`).
+ *
+ * AN INDEXER-POOL ACCOUNT (`reapUntagged`, MOTIR-9450) may also terminate an
+ * instance that does NOT carry the shard tag: the attribution pass lists every
+ * instance in such an account and must be able to end an untagged one, the leak
+ * it exists to find. The account is Motir's own and holds nothing but index VMs,
+ * which is what makes that safe; a CI-runner account keeps the tag-scoped
+ * terminate only.
  * https://docs.aws.amazon.com/service-authorization/latest/reference/list_amazonec2.html
  */
 export function awsRunnerPolicyDocument(input: {
   shardTag: string;
   regionId: string;
+  reapUntagged?: boolean;
 }): AwsPolicyDocument {
   const arn = (resource: string, account = '*') =>
     `arn:aws:ec2:${input.regionId}:${account}:${resource}`;
@@ -727,8 +735,19 @@ export function awsRunnerPolicyDocument(input: {
         Sid: 'TagAtLaunch',
         Effect: 'Allow',
         Action: 'ec2:CreateTags',
-        Resource: [arn('instance/*'), arn('volume/*')],
+        // An index VM tags its network interface too (MOTIR-9450).
+        Resource: [arn('instance/*'), arn('volume/*'), arn('network-interface/*')],
         Condition: { StringEquals: { 'ec2:CreateAction': 'RunInstances' } },
+      },
+      {
+        // An index VM's pull failure is read from its console (MOTIR-9446).
+        Sid: 'ConsoleOfOwn',
+        Effect: 'Allow',
+        Action: 'ec2:GetConsoleOutput',
+        Resource: arn('instance/*'),
+        Condition: {
+          StringEquals: { [`aws:ResourceTag/${AWS_SHARD_TAG_KEY}`]: input.shardTag },
+        },
       },
       {
         Sid: 'TerminateOwn',
@@ -738,6 +757,81 @@ export function awsRunnerPolicyDocument(input: {
         Condition: {
           StringEquals: { [`aws:ResourceTag/${AWS_SHARD_TAG_KEY}`]: input.shardTag },
         },
+      },
+      ...(input.reapUntagged
+        ? [
+            {
+              Sid: 'TerminateAnyInAccount',
+              Effect: 'Allow',
+              Action: 'ec2:TerminateInstances',
+              Resource: arn('instance/*'),
+            },
+          ]
+        : []),
+    ],
+  };
+}
+
+/**
+ * What an AGENT-HOSTER key may do (Story MOTIR-9361 · MOTIR-9479): the runner's
+ * calls, plus what a persistent instance needs beyond a one-job VM — stop and
+ * start (hibernate, wake), read and rewrite its user-data (the config document,
+ * legal only while stopped), re-stamp its tags after launch, list and delete its
+ * home disk, and open the host agent's port on its own group (MOTIR-9470). Every action that takes a resource-level condition is held to
+ * the account's own `motir-shard` tag; `DescribeVolumes` (like every Describe)
+ * supports none, so it is `*`.
+ * https://docs.aws.amazon.com/service-authorization/latest/reference/list_amazonec2.html
+ */
+export function awsAgentHosterPolicyDocument(input: {
+  shardTag: string;
+  regionId: string;
+}): AwsPolicyDocument {
+  const runner = awsRunnerPolicyDocument(input);
+  const arn = (resource: string) => `arn:aws:ec2:${input.regionId}:*:${resource}`;
+  const own = { StringEquals: { [`aws:ResourceTag/${AWS_SHARD_TAG_KEY}`]: input.shardTag } };
+  return {
+    Version: '2012-10-17',
+    Statement: [
+      ...runner.Statement,
+      {
+        Sid: 'DescribeVolumes',
+        Effect: 'Allow',
+        Action: 'ec2:DescribeVolumes',
+        Resource: '*',
+      },
+      {
+        Sid: 'HibernateWakeAndConfigureOwn',
+        Effect: 'Allow',
+        Action: [
+          'ec2:StopInstances',
+          'ec2:StartInstances',
+          'ec2:DescribeInstanceAttribute',
+          'ec2:ModifyInstanceAttribute',
+        ],
+        Resource: arn('instance/*'),
+        Condition: own,
+      },
+      {
+        Sid: 'RestampOwn',
+        Effect: 'Allow',
+        Action: 'ec2:CreateTags',
+        Resource: arn('instance/*'),
+        Condition: own,
+      },
+      {
+        // MOTIR-9470: the host agent's one inbound rule (TCP 8443, mutual TLS).
+        Sid: 'OpenHostAgentPortOnOwnGroup',
+        Effect: 'Allow',
+        Action: 'ec2:AuthorizeSecurityGroupIngress',
+        Resource: arn('security-group/*'),
+        Condition: own,
+      },
+      {
+        Sid: 'DeleteOwnDisk',
+        Effect: 'Allow',
+        Action: 'ec2:DeleteVolume',
+        Resource: arn('volume/*'),
+        Condition: own,
       },
     ],
   };

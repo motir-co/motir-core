@@ -1274,3 +1274,171 @@ fallback before the first read), `progress.deleting`, `state.*`, and every `crea
   unchanged.
 - **Does NOT draw:** the terminal and chat tabs themselves, the `updating` state (MOTIR-6951), or the
   hibernate states.
+
+---
+
+## Waiting for room — an agent that cannot start yet (delta)
+
+Mock: **`design/my-agents/my-agents--waiting-for-room.mock.html`**, a DELTA, seven labelled panels.
+
+**Design system.** Read first: the root `package.json` (no `@motir/design-system` dependency) and
+`app/globals.css` (no `@motir/design-system/theme.css` import). Verdict: this project is **on its
+own system** — the `components/ui/*` primitives and the `--el-*` / shape tokens of `app/globals.css`
+— exactly as every other surface in this area. Nothing is proposed for any other package.
+
+**What it amends.** Neither amended mock is edited; both stay records.
+
+- **`design/my-agents/my-agents--boot.mock.html`** — § _Watching an agent boot — the boot read-out_
+  above: **Panel 1 THE ACCESS PATH** (the row after Create, the Wake that opens a read-out),
+  **Panel 2** (the read-out in progress), **Panel 7 A WAKE** and **Panel 10 THE LIST ROW WHILE
+  BOOTING**. This delta adds one step in front of that read-out's five, and a status label and row
+  line for it. Every other row state, the head, the clock, the failed read-outs, the running summary
+  and the deletion's last word are that section's, unchanged.
+- **`design/my-agents/my-agents--panel.mock.html`** — § _The agent panel_ → the row menu and the
+  header's actions: the same three moves, with their enablement while waiting stated here.
+
+**The behaviour it draws.** When there is no machine free for agents right now, a new agent is not
+refused and does not fail: it **waits**, and is created as soon as room appears. A hibernated agent
+being woken keeps its files in one place, so it waits for room **there**, and nowhere else. Waiting
+is never failing, is never turned into a failure by time alone, and is never answered by offering
+another place or kind of machine to run on.
+
+**Composed, not redrawn.** The mock's style blocks and icon symbols are
+`my-agents--boot.mock.html`'s own, verbatim. One block of its own adds the waiting step
+(`.isWaitRoom`, `.bReason`, `.bCase`, `.bSince`), the open row menu (`.menuBox`, `.menuItem`) and the
+disabled-with-tooltip pattern `my-agents--chat.mock.html` draws for a disabled tab (`.tabTip`). Two
+lucide symbols are added: `Hourglass` and `Ban`. Only `--el-*` and shape tokens; no colour is
+invented.
+
+| Panel | What it settles                                                                                  |
+| ----- | ------------------------------------------------------------------------------------------------ |
+| 1     | the access path: the agent row with its **Waiting** label after Create; Wake leading into a wait |
+| 2     | create, waiting · wake, waiting — the two reasons side by side                                   |
+| 3     | waiting for a long time — the since-time line                                                    |
+| 4     | room appeared — the step turns done and the boot carries on (create and wake)                    |
+| 5     | actions while waiting — the row menu, the disabled Terminal tab, the disabled agent in a picker  |
+| 6     | waiting is not failed — a waiting read-out beside a genuine failure, which is unchanged          |
+| 7     | the narrow width — the reason wraps under the label                                              |
+
+### The elements, by name
+
+- **THE WAITING STEP ROW.** The FIRST row of the boot read-out, above _Machine provisioned_, labelled
+  **Waiting for room**. It takes the in-progress row's ground and ink — `--el-tint-sky`,
+  `--el-text-strong`, 600 — so it reads as under way. Its glyph is lucide `Hourglass` in
+  `--el-text-strong`, and it does **not** rotate: nothing is being worked on yet. Its time column is
+  the step's ticking clock (`m:ss`, mono), as any in-progress row's. The rows after it are
+  _waiting_; on a wake the clone rows are _skipped_, as in any wake.
+- **THE REASON LINE.** Directly under the label, inside the row: one or two plain sentences, 0.8125rem,
+  400, `--el-text-strong` on the sky tint. One text for a new agent and one for a woken agent (copy
+  below). It never names a provider, a machine type, an account, a region or a limit code.
+- **THE DETAIL LINE.** Under the reason: a few words saying which case applies, 0.75rem, 500, same ink.
+- **THE SINCE LINE.** From ten minutes of waiting on, one more line under the detail line: an `Info`
+  glyph and _Waiting for {minutes} minutes — Motir keeps trying by itself._ Same ink, same ground.
+  Nothing turns red, nothing blinks, and no retry button is drawn, because nothing needs pressing.
+- **THE STATUS LABEL.** The agent's pill reads **Waiting** in the neutral tone — the muted ground
+  with the to-do dot (`t-queued`: `--el-muted`, `--el-status-todo`), the tone _Hibernating_ and
+  _Deleting_ already take. It is neither the sky of _Starting_ / _Waking_ nor the mint of _Running_
+  nor the rose of _Failed_. The panel header's pill and the list row's pill both read it.
+- **THE ROW LINE.** Under the agent's name in the list: _Waiting for room…_ (new) or _Waiting for
+  room to wake…_ (woken), `.progressNote`, `--el-text-secondary`, no clock (the list compares
+  agents; the panel watches one).
+
+### The states
+
+| State                        | Drawn | What it shows                                                                                                                                                               |
+| ---------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| create, waiting              | 2 A   | the waiting row with the new-agent reason and detail; pill **Waiting**; meta line is the coding agent and project only — no machine details yet                             |
+| wake, waiting                | 2 B   | the waiting row with the woken-agent reason (its files live in one place, they are safe); pill **Waiting**; clone rows skipped                                              |
+| waiting for a long time      | 3     | the same row plus the since line; the clock keeps ticking; no error colour, no retry                                                                                        |
+| room appeared                | 4     | the row becomes a **done** row labelled **Room found** with how long it waited; reason and detail go; the next step goes in progress; pill returns to _Starting_ / _Waking_ |
+| actions while waiting        | 5     | Wake and Hibernate disabled (not hidden); Delete… enabled, with the line under it; Terminal tab and running work disabled, reason as tooltip                                |
+| failed                       | 6     | a genuine failure keeps the boot read-out's failed look unchanged; a full pool never produces it                                                                            |
+| loading / empty of the panel | —     | **unchanged** from the boot read-out — not redrawn                                                                                                                          |
+| narrow width                 | 7     | the reason and detail wrap under the label; the time stays on the row's first line                                                                                          |
+| dark theme                   | —     | the same semantic tokens; the mock flips with `data-theme` on its root like every mock in this area                                                                         |
+
+**Head and clocks.** The read-out's head reads **Booting** (create) or **Waking** (wake), unchanged.
+Its clock counts the whole attempt, the wait included, and the running summary's _Booted in {time}_
+is over that same span. The boot deadline starts when the machine is being created, not while the
+agent waits for room.
+
+**Screen readers.** The row carries its state in words (`.visually-hidden` _— Waiting for room_), and
+the polite live region announces _Waiting for room: in progress_ once, then _Waiting for room: done_
+when room is found — never the clock's ticks.
+
+### Actions while waiting
+
+- **Row menu** (the shipped `AgentRowMenu`): **Wake** and **Hibernate** disabled, **Delete…**
+  enabled. Under Delete…, one line in `--el-text-secondary`: _Deleting it stops the wait. Nothing was
+  created yet._ (new) / _Deleting it stops the wait and deletes its files._ (woken — its files exist).
+- **Panel header:** **Delete…** enabled, opening the shipped delete dialog. A wait is cancelled by
+  deleting; there is no separate Cancel.
+- **Terminal tab:** disabled (`Ban` glyph, `--el-text-secondary`, `aria-disabled`), its reason as
+  its tooltip on hover and keyboard focus (`--el-tooltip-bg` / `--el-tooltip-text`,
+  `--radius-control`, `--spacing-tooltip-x/y`), and in words for a screen reader.
+- **Running work in this agent** (the work item's agent picker, which lives in the runs area): the
+  waiting agent is shown disabled, with its reason as the tooltip.
+
+### Waiting is never failed, and no alternative is offered
+
+- The waiting row never takes `--el-danger` in any form, never reads _Failed_, and never shows the
+  way-out row (_Wake to try again, or delete it._). A full pool never produces the failed state.
+- No other place or kind of machine is offered, and no button to try elsewhere. The agent waits and
+  starts on its own once there is room.
+
+### Tokens
+
+| Element          | Primitive                  | Colour                                                                                                         | Shape                                                                                               |
+| ---------------- | -------------------------- | -------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| waiting step row | `<li>` grid (the step row) | `--el-tint-sky` ground, `--el-text-strong` label and glyph                                                     | `--spacing-control-y/x`, `--radius-control`                                                         |
+| reason line      | text in the row            | `--el-text-strong`, 400                                                                                        | —                                                                                                   |
+| detail line      | text in the row            | `--el-text-strong`, 500                                                                                        | —                                                                                                   |
+| since line       | text + `Info` glyph        | `--el-text-strong`, 400                                                                                        | —                                                                                                   |
+| room-found row   | the done step row          | `--el-success` glyph, `--el-text-secondary`                                                                    | as above                                                                                            |
+| status label     | `runPill` (`RunTonePill`)  | `--el-muted` ground, `--el-status-todo` dot, `--el-text-strong`                                                | `--radius-badge`, `--spacing-chip-x/y`                                                              |
+| row line         | `.progressNote`            | `--el-text-secondary`                                                                                          | —                                                                                                   |
+| row menu         | `Popover` + menu items     | `--el-card`, `--el-border`; items `--el-text`, disabled `--el-text-secondary`, Delete `--el-danger-on-surface` | `--radius-card`, `--height-control`, `--spacing-control-x`, `--radius-control`, `--shadow-elevated` |
+| disabled tab     | the shipped tab track      | `--el-text-secondary`, `Ban` glyph                                                                             | `--radius-btn`                                                                                      |
+| tooltip          | the shipped tooltip        | `--el-tooltip-bg` / `--el-tooltip-text`                                                                        | `--radius-control`, `--spacing-tooltip-x/y`, `--shadow-elevated`                                    |
+
+**Ink audit.** `--el-text-muted` and `--el-text-faint` are used nowhere in this delta, and no danger
+TEXT token is used. The only danger ink is the row menu's Delete… (`--el-danger-on-surface`) and the
+unchanged failed read-out of panel 6 B.
+
+### Copy — proposed, en
+
+`{minutes}` is a whole number of minutes; `{time}` the read-out's finished-duration form.
+
+| element                                | en                                                                                                      |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| waiting step label                     | Waiting for room                                                                                        |
+| waiting step label, once room is found | Room found                                                                                              |
+| reason — a new agent                   | All machines for agents are in use right now. Yours will be created as soon as there is room.           |
+| reason — a woken agent                 | This agent’s files live in one place, so it waits for room there. Your files and your sign-in are safe. |
+| detail — a new agent                   | A new agent — it starts wherever room frees up first.                                                   |
+| detail — a woken agent                 | Waking — it can only start where its files are.                                                         |
+| since line                             | Waiting for {minutes} minutes — Motir keeps trying by itself.                                           |
+| status label                           | Waiting                                                                                                 |
+| row line — a new agent                 | Waiting for room…                                                                                       |
+| row line — a woken agent               | Waiting for room to wake…                                                                               |
+| row menu note — a new agent            | Deleting it stops the wait. Nothing was created yet.                                                    |
+| row menu note — a woken agent          | Deleting it stops the wait and deletes its files.                                                       |
+| Terminal tab tooltip                   | The terminal opens once the agent is running. It’s waiting for room.                                    |
+| running work tooltip                   | This agent can run work once it’s running. It’s waiting for room.                                       |
+| live region                            | Waiting for room: in progress · Waiting for room: done                                                  |
+
+**Wording notes.** The reader sees "no room right now", never an error: no _failed_, _error_,
+_quota_, _limit_ or _capacity_, and no provider, machine-type or account names. The reason is chosen
+by the kind of refusal behind it (no room anywhere for a new agent; no room where its files are for a
+woken one) and never carries an identifier. Translations into the other locales are the build's.
+
+### GIVES / TAKES
+
+- **GIVES** the build: the waiting step row, the reason line, the detail line, the since line, the
+  status label and the row line, the room-found row, the actions while waiting, and every string
+  above.
+- **TAKES** from § _Watching an agent boot_: the read-out, its rows, head, clock, failed look,
+  running summary and narrow-width order. **TAKES** from § _The agent panel_: the header, the row
+  menu, the tab track and the terminal faces, unchanged.
+- **Does NOT draw:** a new screen or route, the platform fleet view, the admin pool views, or any
+  provider-specific information.

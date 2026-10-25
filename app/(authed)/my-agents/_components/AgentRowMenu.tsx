@@ -26,12 +26,15 @@ export function AgentRowMenu({
   name,
   state,
   wakeNeedsPlan = false,
+  waiting = null,
   onMove,
 }: {
   name: string;
   state: AgentInstanceState;
   /** The org's AI plan has ended: Wake is disabled, with the reason under it. */
   wakeNeedsPlan?: boolean;
+  /** The boot waits for room (MOTIR-9475): a line under Delete… says what deleting does. */
+  waiting?: 'pool' | 'account' | null;
   onMove: (move: AgentMove) => void;
 }) {
   const t = useTranslations('myAgents');
@@ -73,7 +76,7 @@ export function AgentRowMenu({
       >
         <MoreHorizontal className="size-4" aria-hidden="true" />
       </Popover.Trigger>
-      <Popover.Content width={wakeNeedsPlan ? 300 : 208} align="end" className="p-0">
+      <Popover.Content width={wakeNeedsPlan || waiting ? 300 : 208} align="end" className="p-0">
         <div className="p-1" role="menu" aria-label={t('rowActions', { name })}>
           {item('wake', <Power className="size-4 shrink-0" aria-hidden="true" />, t('menu.wake'))}
           {wakeNeedsPlan ? (
@@ -101,6 +104,11 @@ export function AgentRowMenu({
             t('menu.delete'),
             true,
           )}
+          {waiting ? (
+            <p className="m-0 pr-(--spacing-control-x) pb-(--spacing-control-y) pl-[calc(var(--spacing-control-x)+22px)] text-xs text-(--el-text-secondary)">
+              {t(waiting === 'account' ? 'waiting.menuNoteAccount' : 'waiting.menuNotePool')}
+            </p>
+          ) : null}
         </div>
       </Popover.Content>
     </Popover>

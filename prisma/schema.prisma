@@ -11654,6 +11654,8 @@ model FleetShard {
 
   /// The CI intents whose containers were booted in this account (MOTIR-8964).
   ciRunnerIntents    CiRunnerProvisioningIntent[]
+  /// The agent instances placed in this account (MOTIR-9468).
+  agentInstances     AgentInstance[]
   /// The fleet slots whose containers boot in this account (MOTIR-9421).
   fleetInFlightSlots FleetInFlightSlot[]
   /// The hosted runs whose containers booted in this account (MOTIR-9423).
@@ -14150,6 +14152,15 @@ model AgentInstance {
   volumeId  String? @map("volume_id")
   region    String
 
+  /// The fleet account the instance lives in (Story MOTIR-9361 · MOTIR-9468).
+  /// NULL = the process-wide Fly app: every instance created before AWS, and every
+  /// one created while the agent-hoster switch is off, needs no backfill. Written
+  /// once at placement (`recordPlacement`) and never changed after.
+  fleetShardId     String? @map("fleet_shard_id")
+  /// The availability zone its disk is in — fixed with the account, since an EBS
+  /// volume lives in one zone. Only set with `fleetShardId` (CHECK).
+  availabilityZone String? @map("availability_zone")
+
   state           AgentInstanceState              @default(starting)
   /// Set on `failed`, in words a person can read; cleared on a later wake.
   failureReason   String?                         @map("failure_reason")
@@ -14205,6 +14216,8 @@ model AgentInstance {
   organization        Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   project             Project                      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   owner               User                         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  /// MOTIR-9468: an account that still holds an instance cannot be deleted.
+  fleetShard          FleetShard?                  @relation(fields: [fleetShardId], references: [id], onDelete: Restrict)
   intervals           AgentInstanceInterval[]
   /// agent-terminal.md Q3, Q8 (MOTIR-6940): its terminal tickets and connections.
   terminalTickets     AgentTerminalTicket[]
@@ -14222,6 +14235,8 @@ model AgentInstance {
   @@index([workspaceId])
   /// The plan-lapse deletion: instances due, and the lapse's schedule per org.
   @@index([scheduledDeletionAt])
+  /// An account's instances — the reconciler and the headroom reading count them.
+  @@index([fleetShardId])
   @@map("agent_instance")
 }
 

@@ -42,6 +42,24 @@ export class UnattributedMachineDestroyedError extends Error {
 }
 
 /**
+ * One per DISK the reconciler deleted in an agent-hoster account (MOTIR-9476): an
+ * unattached EBS volume past the grace that no live agent instance names — the
+ * home disk a machine destroy left behind, or a failed teardown's. Names the
+ * account, the volume, its age and the reason; never a credential.
+ */
+export class UnattributedVolumeDestroyedError extends Error {
+  constructor(
+    readonly app: string,
+    readonly volumeId: string,
+    readonly ageMs: number,
+    readonly reason: AttributionKillReason,
+  ) {
+    super(`Destroyed EBS volume ${volumeId} in ${app}, ${describeAge(ageMs)} old: ${reason}.`);
+    this.name = 'UnattributedVolumeDestroyedError';
+  }
+}
+
+/**
  * The provider could not say what is running — an app list or one app's machine
  * list failed, a destroy was refused, or a machine came back with no creation
  * instant. Nothing was destroyed on a guess.

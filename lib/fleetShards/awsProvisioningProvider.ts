@@ -6,6 +6,7 @@ import {
   AwsAccountCreationRefusedError,
   AwsManagementApiError,
   awsCredentialsFromEnv,
+  awsAgentHosterPolicyDocument,
   awsManagementCredentials,
   awsRunnerPolicyDocument,
   awsRuntimeKeyEnvNames,
@@ -218,12 +219,16 @@ export function createAwsShardProvisioningProvider(
     async runtimeCredential(ctx) {
       const credentials = await memberCredentials(ctx);
       const region = regionOf(ctx);
+      // An agent-hoster account's instances persist — hibernate, wake, rewrite
+      // their config, delete their disk — so its key carries those calls too.
+      const policy =
+        ctx.fleetKind === 'agent_instance' ? awsAgentHosterPolicyDocument : awsRunnerPolicyDocument;
       if (runnerRoleMode(ctx)) {
         // No key at all: the runner role trusts the management role, and the
         // orchestrator assumes it (MOTIR-9460). Confirmed by assuming it once.
         const { created } = await api().ensureRunnerRole(
           credentials,
-          awsRunnerPolicyDocument({ shardTag: ctx.name, regionId: region }),
+          policy({ shardTag: ctx.name, regionId: region }),
         );
         const accountId = accountIdOf(ctx);
         if (!accountId) return { created, confirmed: false };
@@ -236,7 +241,14 @@ export function createAwsShardProvisioningProvider(
       }
       const { created } = await api().ensureRunnerIamUser(
         credentials,
-        awsRunnerPolicyDocument({ shardTag: ctx.name, regionId: region }),
+        ctx.fleetKind === 'agent_instance'
+          ? policy({ shardTag: ctx.name, regionId: region })
+          : awsRunnerPolicyDocument({
+              shardTag: ctx.name,
+              regionId: region,
+              // The attribution pass reaps untagged VMs on an indexer account (MOTIR-9450).
+              reapUntagged: ctx.fleetKind === 'code_graph_index',
+            }),
       );
       const key = awsCredentialsFromEnv(ctx.credentialRef, deps.env());
       if (!key) return { created, confirmed: false };

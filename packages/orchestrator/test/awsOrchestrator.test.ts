@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  AWS_INDEX_EXIT_MARKER,
+  AWS_INDEX_PULL_FAILED_MARKER,
   AWS_DISPATCH_RUN_TAG_KEY,
   AWS_REAP_PAGE_SIZE,
   AwsInstanceSizeError,
@@ -7,12 +9,17 @@ import {
   FLEET_METADATA_KEY,
   OrchestratorApiError,
   OrchestratorNotConfiguredError,
+  IndexUserDataError,
   RunnerUserDataError,
   buildContainerUserData,
+  buildIndexUserData,
+  consoleExitCode,
+  consoleShowsPullFailure,
   createAwsOrchestrator,
   transitionTimeOf,
   type ContainerHandle,
   type ContainerOrchestrator,
+  type ContainerSpec,
   type Ec2Api,
 } from '../src/index';
 import { AwsEc2Fake, userInitiated } from './contract/awsEc2Fake';
@@ -226,6 +233,14 @@ describe('provision', () => {
     const tags = ec2.requestOf(handle.id).tags;
     expect(tags.map((t) => t.key)).not.toContain('motir_intent_id');
     expect(tags).toContainEqual({ key: FLEET_METADATA_KEY, value: 'hosted-agent' });
+  });
+
+  it('omits the intent tag and names by project for an index VM', async () => {
+    const handle = await adapter({ indexerAmiId: INDEXER_AMI_ID }).provision(INDEX_SPEC);
+    const tags = ec2.requestOf(handle.id).tags;
+    expect(tags.map((t) => t.key)).not.toContain('motir_intent_id');
+    expect(tags).toContainEqual({ key: FLEET_METADATA_KEY, value: 'code-graph-index' });
+    expect(tags).toContainEqual({ key: 'Name', value: 'motir-index-proj-1' });
   });
 
   it('maps a positive dockerVolumeGb to /dev/sdb gp3 DeleteOnTermination, and omits it otherwise', async () => {
@@ -515,7 +530,9 @@ describe('provision — a hosted agent run in container mode (MOTIR-9422)', () =
     expect(ec2.mutations().map((c) => c.method)).toEqual(['runInstances']);
   });
 
-  it.each(['code_graph_index', 'agent_instance'] as const)(
+  // The indexer boots on AWS (MOTIR-9446); its refusals (no indexer AMI, no
+  // attribution) are tested with the index specs below.
+  it.each(['agent_instance'] as const)(
     'refuses a %s spec before any EC2 call',
     async (workload) => {
       const thrown = await adapter()
@@ -726,6 +743,264 @@ describe('reap', () => {
   it('throws the typed error when the listing fails', async () => {
     ec2.failNext('describeInstances', 'UnauthorizedOperation', 403);
     await expect(adapter().reap(cutoff(), resolveAll)).rejects.toMatchObject({ status: 403 });
+  });
+});
+
+// ── An index VM (MOTIR-9446) ───────────────────────────────────────────────
+
+const INDEXER_AMI_ID = 'ami-0dockerhost00000';
+const INDEX_IMAGE = `ghcr.io/motir-co/motir-indexer@sha256:${'a'.repeat(64)}`;
+const INDEX_SPEC: ContainerSpec = {
+  ...AWS_SPEC,
+  workload: 'code_graph_index',
+  workflowJobId: null,
+  image: INDEX_IMAGE,
+  env: {
+    MOTIR_AI_CONTAINER_URL: 'https://ai.internal.test',
+    MOTIR_INDEX_RUN_CREDENTIAL: 'run-cred-secret',
+    MOTIR_INDEX_TARBALL_URL: 'https://codeload.test/x?token=abc&sig=1',
+    MOTIR_INDEX_PROJECT_ID: 'proj-1',
+  },
+};
+
+function scriptOf(id: string): string {
+  return Buffer.from(ec2.requestOf(id).userData, 'base64').toString('utf8');
+}
+
+describe('an index VM boots the indexer image by digest (MOTIR-9446)', () => {
+  it('launches the Docker-host AMI at the fleet size, in the no-inbound network, pulling by digest', async () => {
+    const handle = await adapter({ indexerAmiId: INDEXER_AMI_ID }).provision(INDEX_SPEC);
+
+    const request = ec2.requestOf(handle.id);
+    expect(request).toMatchObject({
+      imageId: INDEXER_AMI_ID,
+      instanceType: 'm6i.large',
+      subnetId: `subnet-${AWS_SHARD_TAG}-us-east-1a`,
+      securityGroupIds: [`sg-${AWS_SHARD_TAG}`],
+      metadataOptions: { httpTokens: 'required', httpPutResponseHopLimit: 1 },
+      // Held stopped after its power-off, so describe reads the exit code first.
+      instanceInitiatedShutdownBehavior: 'stop',
+    });
+    // The shard's network: a public IP on launch and a group with no inbound rule.
+    expect(ec2.subnets.get(request.subnetId)!.mapPublicIpOnLaunch).toBe(true);
+    expect(ec2.securityGroups.get(`sg-${AWS_SHARD_TAG}`)!.ingressRuleCount).toBe(0);
+    expect(request.tags).toContainEqual({ key: 'Name', value: 'motir-index-proj-1' });
+
+    const script = scriptOf(handle.id);
+    expect(script.startsWith('#!/bin/bash\n')).toBe(true);
+    expect(script).toContain(`docker pull "$IMAGE"`);
+    expect(script).toContain(`IMAGE='${INDEX_IMAGE}'`);
+    expect(script).toContain('docker run --rm --env-file /run/motir-index.env "$IMAGE"');
+    for (const [key, value] of Object.entries(INDEX_SPEC.env)) {
+      expect(script).toContain(`\n${key}=${value}\n`);
+    }
+    expect(ec2.indexImageOf(handle.id)).toBe(INDEX_IMAGE);
+  });
+
+  it('still launches a CI runner from the runner AMI with its four user-data lines', async () => {
+    const orchestrator = adapter({ indexerAmiId: INDEXER_AMI_ID });
+    const handle = await orchestrator.provision(AWS_SPEC);
+
+    expect(ec2.requestOf(handle.id).imageId).toBe(AWS_AMI_ID);
+    expect(scriptOf(handle.id)).toMatch(/^ACTIONS_RUNNER_INPUT_JITCONFIG=/);
+    expect(ec2.indexImageOf(handle.id)).toBeNull();
+  });
+
+  it('refuses a tag, and an index spec with no indexer AMI, before any EC2 call', async () => {
+    const orchestrator = adapter({ indexerAmiId: INDEXER_AMI_ID });
+    await expect(
+      orchestrator.provision({ ...INDEX_SPEC, image: 'ghcr.io/motir-co/motir-indexer:latest' }),
+    ).rejects.toMatchObject({ code: 'AWS_INDEX_USER_DATA_REFUSED', reason: 'image_not_digest' });
+    await expect(
+      orchestrator.provision({ ...INDEX_SPEC, image: 'ghcr.io/motir-co/motir-indexer' }),
+    ).rejects.toBeInstanceOf(IndexUserDataError);
+    await expect(adapter().provision(INDEX_SPEC)).rejects.toBeInstanceOf(
+      OrchestratorNotConfiguredError,
+    );
+    expect(ec2.calls).toEqual([]);
+  });
+
+  it('refuses an env value that would break out of its line, naming only the key', async () => {
+    const bad = { ...INDEX_SPEC, env: { ...INDEX_SPEC.env, MOTIR_INDEX_RUN_CREDENTIAL: 'a\nb' } };
+    const refusal = await adapter({ indexerAmiId: INDEXER_AMI_ID })
+      .provision(bad)
+      .then(
+        () => new Error('expected a refusal'),
+        (e: unknown) => e as Error,
+      );
+    expect(refusal).toMatchObject({ reason: 'bad_value', key: 'MOTIR_INDEX_RUN_CREDENTIAL' });
+    expect(refusal.message).not.toContain('a\nb');
+    expect(() => buildIndexUserData({ image: INDEX_IMAGE, env: { 'BAD-KEY': 'x' } })).toThrow(
+      IndexUserDataError,
+    );
+    expect(ec2.calls).toEqual([]);
+  });
+
+  it('an image the VM cannot pull reads as imagePullFailed on the stopped VM', async () => {
+    ec2.markImageUnpullable(INDEX_IMAGE);
+    const orchestrator = adapter({ indexerAmiId: INDEXER_AMI_ID });
+    const handle = await orchestrator.provision(INDEX_SPEC);
+
+    expect(await orchestrator.describe(handle)).toMatchObject({
+      terminal: true,
+      imagePullFailed: true,
+      exitCode: null,
+    });
+    expect(ec2.count('getConsoleOutput')).toBe(1);
+  });
+
+  it('a pulled image that ran and stopped carries no pull failure', async () => {
+    const orchestrator = adapter({ indexerAmiId: INDEXER_AMI_ID });
+    const handle = await orchestrator.provision(INDEX_SPEC);
+
+    const running = await orchestrator.describe(handle);
+    expect(running.terminal).toBe(false);
+    // A live VM's console is not read: one read per stop, not per poll.
+    expect(ec2.count('getConsoleOutput')).toBe(0);
+
+    ec2.endJob(handle.id);
+    const stopped = await orchestrator.describe(handle);
+    expect(stopped.terminal).toBe(true);
+    expect(stopped).not.toHaveProperty('imagePullFailed');
+  });
+
+  it('a console that cannot be read is "not known", never a pull failure', async () => {
+    ec2.markImageUnpullable(INDEX_IMAGE);
+    const orchestrator = adapter({ indexerAmiId: INDEXER_AMI_ID });
+    const handle = await orchestrator.provision(INDEX_SPEC);
+    ec2.failNext('getConsoleOutput', 'UnauthorizedOperation', 403);
+
+    const status = await orchestrator.describe(handle);
+    expect(status.terminal).toBe(true);
+    expect(status).not.toHaveProperty('imagePullFailed');
+    expect(warn).toHaveBeenCalledWith(
+      '[awsOrchestrator] could not read an index VM console',
+      expect.objectContaining({ detail: 'UnauthorizedOperation' }),
+    );
+  });
+
+  it('never reads a runner VM’s console', async () => {
+    const orchestrator = adapter({ indexerAmiId: INDEXER_AMI_ID });
+    const handle = await orchestrator.provision(AWS_SPEC);
+    ec2.endJob(handle.id);
+
+    await orchestrator.describe(handle);
+    expect(ec2.count('getConsoleOutput')).toBe(0);
+  });
+
+  it('only the marker on a line of its own counts', () => {
+    expect(consoleShowsPullFailure(`boot\n${AWS_INDEX_PULL_FAILED_MARKER}\r\n`)).toBe(true);
+    expect(consoleShowsPullFailure(`echo ${AWS_INDEX_PULL_FAILED_MARKER} later`)).toBe(false);
+    expect(consoleShowsPullFailure(null)).toBe(false);
+  });
+});
+
+describe('an index VM reports its exit code through describe (MOTIR-9449)', () => {
+  async function bootIndex() {
+    const orchestrator = adapter({ indexerAmiId: INDEXER_AMI_ID });
+    return { orchestrator, handle: await orchestrator.provision(INDEX_SPEC) };
+  }
+
+  it.each([0, 10, 20, 30, 137])(
+    'a container that exits %i reads stopped with that code, and the VM still exists',
+    async (code) => {
+      const { orchestrator, handle } = await bootIndex();
+      ec2.exitIndexContainer(handle.id, code);
+
+      const status = await orchestrator.describe(handle);
+      expect(status).toMatchObject({
+        exists: true,
+        state: 'stopped',
+        terminal: true,
+        exitCode: code,
+      });
+      expect(status).not.toHaveProperty('imagePullFailed');
+      // The power-off stopped it; nothing has terminated it.
+      expect(ec2.count('terminateInstances')).toBe(0);
+    },
+  );
+
+  it('the script writes the code to the console before it powers off', async () => {
+    const { handle } = await bootIndex();
+    const script = scriptOf(handle.id);
+    const run = script.indexOf('docker run');
+    const marker = script.indexOf(AWS_INDEX_EXIT_MARKER);
+    const lastShutdown = script.lastIndexOf('shutdown -h now');
+    expect(run).toBeGreaterThan(0);
+    expect(script.slice(run)).toContain('code=$?');
+    expect(marker).toBeGreaterThan(run);
+    expect(lastShutdown).toBeGreaterThan(marker);
+  });
+
+  it('a running VM reports no code, and a stopping one is not yet terminal', async () => {
+    const { orchestrator, handle } = await bootIndex();
+    expect(await orchestrator.describe(handle)).toMatchObject({ terminal: false, exitCode: null });
+
+    ec2.setState(handle.id, 'stopping');
+    expect(await orchestrator.describe(handle)).toMatchObject({ terminal: false, exitCode: null });
+    expect(ec2.count('getConsoleOutput')).toBe(0);
+  });
+
+  it('a VM that stopped with no marker on its console reads as no code', async () => {
+    const { orchestrator, handle } = await bootIndex();
+    ec2.powerOff(handle.id);
+    expect(await orchestrator.describe(handle)).toMatchObject({
+      state: 'stopped',
+      terminal: true,
+      exitCode: null,
+    });
+  });
+
+  it('teardown right after the exit: the describe before it has the code, and the VM ends', async () => {
+    const { orchestrator, handle } = await bootIndex();
+    ec2.exitIndexContainer(handle.id, 20);
+
+    // Settle's order: the final describe, then teardown.
+    expect((await orchestrator.describe(handle)).exitCode).toBe(20);
+    await orchestrator.teardown(handle, 'job_completed', AWS_ATTRIBUTION);
+    expect(ec2.instances.get(handle.id)!.state).toBe('terminated');
+
+    // A terminated VM's console is still read until it ages out; once gone, unobserved.
+    expect((await orchestrator.describe(handle)).exitCode).toBe(20);
+    ec2.ageOut(handle.id);
+    expect(await orchestrator.describe(handle)).toMatchObject({ exists: false, exitCode: null });
+  });
+
+  it('a pull failure is never read as an exit code', async () => {
+    ec2.markImageUnpullable(INDEX_IMAGE);
+    const { orchestrator, handle } = await bootIndex();
+    expect(await orchestrator.describe(handle)).toMatchObject({
+      state: 'stopped',
+      imagePullFailed: true,
+      exitCode: null,
+    });
+  });
+
+  it('an unreadable console is no code, never a guess', async () => {
+    const { orchestrator, handle } = await bootIndex();
+    ec2.exitIndexContainer(handle.id, 0);
+    ec2.failNext('getConsoleOutput', 'UnauthorizedOperation', 403);
+    expect((await orchestrator.describe(handle)).exitCode).toBeNull();
+  });
+
+  it('a runner VM still launches with terminate and reports no code', async () => {
+    const orchestrator = adapter({ indexerAmiId: INDEXER_AMI_ID });
+    const handle = await orchestrator.provision(AWS_SPEC);
+    expect(ec2.requestOf(handle.id).instanceInitiatedShutdownBehavior).toBe('terminate');
+    ec2.powerOff(handle.id);
+    expect(await orchestrator.describe(handle)).toMatchObject({ exists: false, exitCode: null });
+    expect(ec2.count('getConsoleOutput')).toBe(0);
+  });
+
+  it('reads the last exit marker on a line of its own, 0–255 only', () => {
+    expect(consoleExitCode(`boot\n${AWS_INDEX_EXIT_MARKER}10\r\n`)).toBe(10);
+    expect(consoleExitCode(`${AWS_INDEX_EXIT_MARKER}1\n${AWS_INDEX_EXIT_MARKER}0\n`)).toBe(0);
+    expect(consoleExitCode(`echo ${AWS_INDEX_EXIT_MARKER}0`)).toBeNull();
+    expect(consoleExitCode(`${AWS_INDEX_EXIT_MARKER}256`)).toBeNull();
+    expect(consoleExitCode(`${AWS_INDEX_EXIT_MARKER}-1`)).toBeNull();
+    expect(consoleExitCode(`${AWS_INDEX_EXIT_MARKER}`)).toBeNull();
+    expect(consoleExitCode(`${AWS_INDEX_PULL_FAILED_MARKER}`)).toBeNull();
+    expect(consoleExitCode(null)).toBeNull();
   });
 });
 

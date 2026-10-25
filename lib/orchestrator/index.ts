@@ -2,21 +2,26 @@ import {
   AWS_MANAGEMENT_ENV,
   AWS_RUNNER_IAM_ROLE,
   awsCredentialsFromEnv,
+  awsTerminalEndpoint,
   awsManagementCredentials,
   awsRuntimeKeyEnvNames,
   createAwsFleetInventory,
   createAwsManagementApi,
   createAwsOrchestrator,
+  createAwsPersistentOrchestrator,
   createEc2Api,
   Ec2ApiError,
   createFakeOrchestrator,
   createFlyOrchestrator,
+  createHostAgentClient,
   createUsageSink,
   fakeFleetInventory,
   flyFleetInventory,
   isFlyInventoryConfigured,
   fakeOrchestrator,
   fakePersistentOrchestrator,
+  OrchestratorCapacityError,
+  type FakeCapacityOperation,
   flyFleetConfig,
   flyIndexerImage,
   flyOrchestrator,
@@ -39,6 +44,13 @@ import {
   type RegistryCredentialResolver,
 } from '@motir/orchestrator';
 import type { FleetShardDTO } from '@/lib/dto/fleetShard';
+import {
+  appendShardFakeCall,
+  holdShardShared,
+  releaseShardShared,
+  shardFakeJournalShared,
+  shardHeldShared,
+} from '@/lib/orchestrator/shardFakeJournal';
 import { ciFleetCostMeterService } from '@/lib/services/ciFleetCostMeterService';
 import { withPlatformMeterReport } from '@/lib/services/platformMeterReportEnqueue';
 
@@ -130,14 +142,15 @@ export function getPersistentOrchestrator(): PersistentContainerOrchestrator {
  * address needs none, since the Fly adapter's answer is pure (the org app's
  * public hostname plus `fly-force-instance-id`).
  */
-export function persistentTerminalEndpoint(
+export async function persistentTerminalEndpoint(
   handle: PersistentContainerHandle,
-): PersistentTerminalEndpoint {
+): Promise<PersistentTerminalEndpoint> {
   const adapter =
     selectedOrchestratorProvider() === 'fake'
       ? fakePersistentOrchestrator
       : flyPersistentOrchestrator;
-  return adapter.terminalEndpoint(handle);
+  // Awaited since MOTIR-9470: an AWS instance's address is read at dial time.
+  return await adapter.terminalEndpoint(handle);
 }
 
 /** Can this deployment boot agent instances at all? Never throws. */
@@ -192,6 +205,9 @@ export function isOrchestratorConfigured(): boolean {
 export interface ShardAdapter {
   orchestrator(shard: FleetShardDTO): ContainerOrchestrator;
   inventory(shard: FleetShardDTO): FleetInventory | null;
+  /** How to reach one account's agent instances (MOTIR-9469). Absent for a
+   *  provider that hosts no agent instances. */
+  persistent?(shard: FleetShardDTO): PersistentContainerOrchestrator;
 }
 
 const shardAdapters = new Map<string, ShardAdapter>();
@@ -228,9 +244,105 @@ export function fakeOrchestratorForShard(
   return fake;
 }
 
+/** A persistent fake for one account: the shared persistent fake, seen through
+ *  a view that records which of its operations THIS account was asked for
+ *  (MOTIR-9472). One store holds every machine, so a handle is found whichever
+ *  view it is passed to; `calls` tells a test where an instance was routed.
+ *  With the fake's state file shared (the E2E lane), the calls and the holds are
+ *  shared too, by `shardFakeJournal.ts` (MOTIR-9478). */
+export type ShardPersistentFake = PersistentContainerOrchestrator & {
+  readonly calls: string[];
+  /** THIS account refuses `op` as full (`OrchestratorCapacityError`) until
+   *  {@link releaseCapacity} — the waiting-for-room control (MOTIR-9474). */
+  holdCapacity(op: FakeCapacityOperation): void;
+  /** Lift this account's refusals (all of them, or one operation's). */
+  releaseCapacity(op?: FakeCapacityOperation): void;
+};
+
+const persistentShardFakes = new Map<string, ShardPersistentFake>();
+
+/** The persistent fake standing in for one account — created on first use. */
+export function fakePersistentOrchestratorForShard(shardId: string): ShardPersistentFake {
+  let fake = persistentShardFakes.get(shardId);
+  if (!fake) {
+    const calls: string[] = [];
+    const held = new Set<FakeCapacityOperation>();
+    const controls = {
+      holdCapacity: (op: FakeCapacityOperation) => {
+        held.add(op);
+        holdShardShared(shardId, op);
+      },
+      releaseCapacity: (op?: FakeCapacityOperation) => {
+        if (op) held.delete(op);
+        else held.clear();
+        releaseShardShared(shardId, op);
+      },
+    };
+    fake = new Proxy(fakePersistentOrchestrator, {
+      get(target, prop, receiver) {
+        if (prop === 'calls') return calls;
+        if (prop === 'holdCapacity' || prop === 'releaseCapacity') return controls[prop];
+        const value: unknown = Reflect.get(target, prop, receiver);
+        if (typeof value !== 'function' || typeof prop !== 'string') return value;
+        return (...args: unknown[]) => {
+          calls.push(prop);
+          const op = prop === 'provisionPersistent' ? 'provision' : prop;
+          const shared = shardFakeJournalShared();
+          if (shared && op !== 'provision') {
+            appendShardFakeCall({ shardId, op: prop, ref: refOf(args) });
+          }
+          if (
+            (op === 'provision' || op === 'start') &&
+            (held.has(op) || (shared && shardHeldShared(shardId, op)))
+          ) {
+            if (shared && op === 'provision') {
+              appendShardFakeCall({ shardId, op: prop, ref: null });
+            }
+            return Promise.reject(
+              new OrchestratorCapacityError('fake', 422, 'quota_exceeded', null, 'held'),
+            );
+          }
+          const answer = (value as (...a: unknown[]) => unknown).apply(target, args);
+          if (shared && op === 'provision') {
+            // A provision names its machine only once it has made one.
+            return Promise.resolve(answer).then(
+              (handle) => {
+                appendShardFakeCall({
+                  shardId,
+                  op: prop,
+                  ref: (handle as PersistentContainerHandle).machineId,
+                });
+                return handle;
+              },
+              (err: unknown) => {
+                appendShardFakeCall({ shardId, op: prop, ref: null });
+                throw err;
+              },
+            );
+          }
+          return answer;
+        };
+      },
+    }) as unknown as ShardPersistentFake;
+    persistentShardFakes.set(shardId, fake);
+  }
+  return fake;
+}
+
+/** The machine (else the disk) a persistent call names: a handle's, or the
+ *  `(app, id)` pair of a destroy. */
+function refOf(args: readonly unknown[]): string | null {
+  const [first, second] = args;
+  if (first && typeof first === 'object' && 'machineId' in first) {
+    return String((first as PersistentContainerHandle).machineId);
+  }
+  return typeof second === 'string' ? second : null;
+}
+
 /** Forget every account's fake — for tests. */
 export function resetShardFakes(): void {
   shardFakes.clear();
+  persistentShardFakes.clear();
 }
 
 function flyOrchestratorForShard(shard: FleetShardDTO): ContainerOrchestrator {
@@ -244,6 +356,11 @@ function flyOrchestratorForShard(shard: FleetShardDTO): ContainerOrchestrator {
 
 /** The env var naming the runner AMI every AWS account boots (MOTIR-9272). */
 export const AWS_RUNNER_AMI_ENV_VAR = 'MOTIR_AWS_RUNNER_AMI_ID';
+
+/** The env var naming the Docker-host AMI an AWS index VM boots (MOTIR-9446) —
+ *  the ECS-optimized Amazon Linux 2023 AMI. Optional: unset, the account still
+ *  boots runners and refuses an index spec as not configured. */
+export const AWS_INDEXER_AMI_ENV_VAR = 'MOTIR_AWS_INDEXER_AMI_ID';
 
 /**
  * THE ACCEPTANCE LANE'S EC2 (MOTIR-9429): a factory `lib/test-fake-aws.ts`
@@ -381,7 +498,117 @@ function awsOrchestratorForShard(shard: FleetShardDTO): ContainerOrchestrator {
     region,
     shardTag: shard.name,
     amiId: values[AWS_RUNNER_AMI_ENV_VAR]!,
+    indexerAmiId: process.env[AWS_INDEXER_AMI_ENV_VAR]?.trim() || undefined,
   });
+}
+
+/** The env var naming the hoster AMI every AWS agent-instance account boots (MOTIR-9469). */
+export const AWS_HOSTER_AMI_ENV_VAR = 'MOTIR_AWS_HOSTER_AMI_ID';
+
+/**
+ * The Motir hoster CA and client certificate (MOTIR-9470): the CA signs each AWS
+ * agent instance's host-agent server certificate, and the client pair is what
+ * the exec client and the relay present to it. PEM, with a literal `\n` read as
+ * a line break so a one-line secret store can hold them.
+ */
+export const HOSTER_CA_CERT_ENV_VAR = 'MOTIR_HOSTER_CA_CERT';
+export const HOSTER_CA_KEY_ENV_VAR = 'MOTIR_HOSTER_CA_KEY';
+export const HOSTER_CLIENT_CERT_ENV_VAR = 'MOTIR_HOSTER_CLIENT_CERT';
+export const HOSTER_CLIENT_KEY_ENV_VAR = 'MOTIR_HOSTER_CLIENT_KEY';
+
+/** A PEM read from a one-line secret: a literal `\n` is a line break. */
+function pem(value: string): string {
+  return value.replace(/\\n/g, '\n');
+}
+
+/** The hoster account's whole persistent config: its key, the hoster AMI, and
+ *  the hoster CA and client pair — every missing variable named at once. */
+function awsHosterConfig(shard: FleetShardDTO) {
+  const { ec2, region, values } = awsShardClient(shard, [
+    AWS_HOSTER_AMI_ENV_VAR,
+    HOSTER_CA_CERT_ENV_VAR,
+    HOSTER_CA_KEY_ENV_VAR,
+    HOSTER_CLIENT_CERT_ENV_VAR,
+    HOSTER_CLIENT_KEY_ENV_VAR,
+  ]);
+  const env = Object.fromEntries(Object.entries(values).map(([k, v]) => [k, pem(v)]));
+  const clientTls = {
+    caPem: env[HOSTER_CA_CERT_ENV_VAR]!,
+    certPem: env[HOSTER_CLIENT_CERT_ENV_VAR]!,
+    keyPem: env[HOSTER_CLIENT_KEY_ENV_VAR]!,
+  };
+  return {
+    ec2,
+    region,
+    shardTag: shard.name,
+    amiId: env[AWS_HOSTER_AMI_ENV_VAR]!,
+    hostAgent: {
+      client: createHostAgentClient(clientTls),
+      ca: { certPem: clientTls.caPem, keyPem: env[HOSTER_CA_KEY_ENV_VAR]! },
+      clientTls,
+    },
+  };
+}
+
+/**
+ * Where the RELAY dials an agent instance's terminal on ONE account
+ * (MOTIR-9470). For an `aws` account it reads, lazily and only here, the
+ * account's key (a describe of the instance's address is all it does), the
+ * hoster CA certificate and Motir's client pair — never the AMI id and never the
+ * CA KEY, which the relay must not hold. A `fly` account answers as
+ * {@link persistentTerminalEndpoint} does.
+ */
+export async function hosterTerminalEndpointFor(
+  shard: FleetShardDTO,
+  handle: PersistentContainerHandle,
+): Promise<PersistentTerminalEndpoint> {
+  if (selectedOrchestratorProvider() === 'fake' || shard.provider !== 'aws') {
+    return persistentTerminalEndpoint(handle);
+  }
+  const { ec2, values } = awsShardClient(shard, [
+    HOSTER_CA_CERT_ENV_VAR,
+    HOSTER_CLIENT_CERT_ENV_VAR,
+    HOSTER_CLIENT_KEY_ENV_VAR,
+  ]);
+  const env = Object.fromEntries(Object.entries(values).map(([k, v]) => [k, pem(v)]));
+  return awsTerminalEndpoint(
+    ec2,
+    {
+      caPem: env[HOSTER_CA_CERT_ENV_VAR]!,
+      certPem: env[HOSTER_CLIENT_CERT_ENV_VAR]!,
+      keyPem: env[HOSTER_CLIENT_KEY_ENV_VAR]!,
+    },
+    handle,
+  );
+}
+
+/**
+ * The PERSISTENT orchestrator for ONE account — where its agent instances live
+ * (Story MOTIR-9361 · MOTIR-9469). An `aws` account gets its own adapter over its
+ * own key and the hoster AMI; a `fly` account is the process-wide Fly instance
+ * lane, exactly what {@link getPersistentOrchestrator} returns. Reached through
+ * `fleetShardOrchestratorService.persistentOrchestratorFor`, which reads the
+ * account recorded on the instance (MOTIR-9472).
+ */
+export function persistentOrchestratorForShard(
+  shard: FleetShardDTO,
+): PersistentContainerOrchestrator {
+  if (selectedOrchestratorProvider() === 'fake')
+    return fakePersistentOrchestratorForShard(shard.id);
+  switch (shard.provider) {
+    case 'fly':
+      return getPersistentOrchestrator();
+    case 'aws':
+      return createAwsPersistentOrchestrator(awsHosterConfig(shard));
+    default: {
+      const unrouted: never = shard.provider;
+      const adapter = registeredAdapter(unrouted);
+      if (!adapter.persistent) {
+        throw new OrchestratorNotConfiguredError(`${unrouted} hosts no agent instances`);
+      }
+      return adapter.persistent(shard);
+    }
+  }
 }
 
 /**
@@ -413,6 +640,12 @@ export function orchestratorForShard(shard: FleetShardDTO): ContainerOrchestrato
  * The machine listing for ONE account, for the reconciler. Null for `fly`: the
  * Fly ORGANISATION inventory already walks every Fly app, and a second listing
  * would judge each machine twice.
+ *
+ * An AWS account of the INDEXER pool lists every instance it has (MOTIR-9450),
+ * with that account's own key, so an index VM no record owns is reaped there. A
+ * CI-runner AWS account has none: its runners are swept by the adapter's
+ * tag-scoped reaper, and its key may only terminate shard-tagged instances. With
+ * the fake orchestrator selected nothing reads EC2.
  */
 export function inventoryForShard(shard: FleetShardDTO): FleetInventory | null {
   switch (shard.provider) {

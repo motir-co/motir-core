@@ -349,3 +349,22 @@ export class AgentRunCommandInvalidError extends Error {
     this.name = 'AgentRunCommandInvalidError';
   }
 }
+
+/**
+ * A new instance's provision failed on its AWS account for a reason that is NOT a
+ * capacity refusal (MOTIR-9471) — an authorisation failure, a bad request, an
+ * outage. It is never retried on the next account or on Fly: the caller fails the
+ * create, and can tell it from a full pool.
+ */
+export class AgentInstancePlacementError extends Error {
+  readonly code = 'agent_instance_placement_failed' as const;
+  constructor(
+    readonly fleetShardId: string,
+    override readonly cause: unknown,
+  ) {
+    super(
+      `The agent could not be created on its account: ${cause instanceof Error ? cause.message : String(cause)}`,
+    );
+    this.name = 'AgentInstancePlacementError';
+  }
+}

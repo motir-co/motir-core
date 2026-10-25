@@ -50,6 +50,24 @@ orchestrator adapter launches runners from it. A rebuild is always a new, versio
 (`motir-ci-runner-<runnerVersion>-<yyyymmddHHMM>-<sha7>`), never an edit of an old one, so
 the setting only moves when a person moves it.
 
+The code-graph indexer does not use this AMI. An AWS index VM boots the stock ECS-optimized
+Amazon Linux 2023 AMI, which ships Docker, and pulls the indexer image (`MOTIR_INDEXER_IMAGE`,
+pinned by digest) at boot. Set its id per region from AWS's public parameter:
+
+```sh
+aws ssm get-parameter --region us-east-1 --name /aws/service/ecs/optimized-ami/amazon-linux-2023/recommended/image_id --query Parameter.Value --output text
+```
+
+```sh
+fly secrets set -a motir-core MOTIR_AWS_INDEXER_AMI_ID=ami-…
+```
+
+An index VM writes the indexer's exit code (or, when the pull fails, a pull-failure line) to its
+serial console, then powers off. Unlike a runner it launches with shutdown behaviour `stop`, so a
+finished index VM shows as **stopped** in the EC2 console until Motir has read the code and
+terminates it at settle. A stopped `motir-index-…` instance that stays stopped is one nobody
+settled; the orphan reaper terminates it.
+
 To check the template locally without credentials:
 
 ```sh

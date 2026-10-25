@@ -40,6 +40,7 @@
 import { parseArgs } from 'node:util';
 import { pathToFileURL } from 'node:url';
 import { FleetShardProvisioningRefusedError } from '@/lib/ciFleet/errors';
+import { FLEET_WORKLOAD_KINDS } from '@/lib/ciFleet/workloads';
 import { findShardProvisioningProvider } from '@/lib/fleetShards/provisioningProviders';
 import { scrubSecrets } from '@/lib/fleetShards/scrubSecrets';
 import {
@@ -66,6 +67,8 @@ const USAGE = [
   '  fleet-admin add-shard --provider <provider> --fleet-kind <kind> --name <name> --region <region>',
   '    --github-org <org> (--create-org --admin-login <login> [--billing-email <email>] | --existing-org)',
   '    --operator <email> [provider options]',
+  `    --fleet-kind: one of ${FLEET_WORKLOAD_KINDS.join(', ')} — each kind is its own pool,`,
+  '      and an account serves only the kind it was added with',
   '    --provider aws: --region defaults to us-east-1; --account-email <email> is the new',
   "      member account's root email, required only when no AWS account has the name",
   '  fleet-admin refresh-limits --name <account> --operator <email>',

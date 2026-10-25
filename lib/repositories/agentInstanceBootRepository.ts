@@ -192,7 +192,9 @@ export const agentInstanceBootRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<
     Array<
-      Pick<AgentInstanceBootStep, 'step' | 'repository' | 'ordinal'> & { agentInstanceId: string }
+      Pick<AgentInstanceBootStep, 'step' | 'repository' | 'ordinal' | 'detail'> & {
+        agentInstanceId: string;
+      }
     >
   > {
     if (agentInstanceIds.length === 0) return [];
@@ -205,6 +207,7 @@ export const agentInstanceBootRepository = {
         step: true,
         repository: true,
         ordinal: true,
+        detail: true,
         bootAttempt: { select: { agentInstanceId: true } },
       },
       orderBy: { ordinal: 'asc' },

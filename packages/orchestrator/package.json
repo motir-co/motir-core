@@ -39,6 +39,7 @@
     "@aws-sdk/client-organizations": "^3.1156.0",
     "@aws-sdk/client-service-quotas": "^3.1156.0",
     "@aws-sdk/client-sts": "^3.1156.0",
+    "@peculiar/x509": "1.14.3",
     "decimal.js": "^10.6.0"
   },
   "devDependencies": {

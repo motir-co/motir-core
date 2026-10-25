@@ -15,6 +15,7 @@ import {
   OrchestratorNotConfiguredError,
   awsCredentialsFromEnv,
   awsManagementCredentials,
+  awsAgentHosterPolicyDocument,
   awsRunnerPolicyDocument,
   awsRunnerTrustPolicy,
   awsRuntimeKeyEnvNames,
@@ -680,11 +681,16 @@ describe('awsRunnerPolicyDocument', () => {
         'ec2:RunInstances',
         'ec2:CreateTags',
         'ec2:TerminateInstances',
+        'ec2:GetConsoleOutput',
       ]),
     );
     expect(JSON.stringify(doc)).not.toMatch(/iam:|CreateAccessKey|ec2:\*/);
     const terminate = doc.Statement.find((s) => s['Sid'] === 'TerminateOwn')!;
     expect(terminate['Condition']).toEqual({
+      StringEquals: { 'aws:ResourceTag/motir-shard': 's1' },
+    });
+    const console_ = doc.Statement.find((s) => s['Sid'] === 'ConsoleOfOwn')!;
+    expect(console_['Condition']).toEqual({
       StringEquals: { 'aws:ResourceTag/motir-shard': 's1' },
     });
     const launch = doc.Statement.find((s) => s['Sid'] === 'LaunchTagged')!;
@@ -693,6 +699,57 @@ describe('awsRunnerPolicyDocument', () => {
       'arn:aws:ec2:us-east-1:*:instance/*',
       'arn:aws:ec2:us-east-1:*:volume/*',
     ]);
+    // A runner account may terminate only shard-tagged instances.
+    expect(doc.Statement.some((s) => s['Sid'] === 'TerminateAnyInAccount')).toBe(false);
+    const tagAtLaunch = doc.Statement.find((s) => s['Sid'] === 'TagAtLaunch')!;
+    expect(tagAtLaunch['Resource']).toContain('arn:aws:ec2:us-east-1:*:network-interface/*');
+  });
+
+  it('an indexer account may also terminate an untagged instance (MOTIR-9450)', () => {
+    const doc = awsRunnerPolicyDocument({
+      shardTag: 'indexer-use1-1',
+      regionId: 'us-east-1',
+      reapUntagged: true,
+    });
+    const any = doc.Statement.find((s) => s['Sid'] === 'TerminateAnyInAccount')!;
+    expect(any).toMatchObject({
+      Effect: 'Allow',
+      Action: 'ec2:TerminateInstances',
+      Resource: 'arn:aws:ec2:us-east-1:*:instance/*',
+    });
+    expect(any).not.toHaveProperty('Condition');
+    // Nothing else widens: the same actions as a runner account.
+    expect(JSON.stringify(doc)).not.toMatch(/iam:|CreateAccessKey|ec2:\*/);
+  });
+});
+
+describe('awsAgentHosterPolicyDocument', () => {
+  it('adds the persistent instance’s calls to the runner’s, each held to the account’s tag', () => {
+    const doc = awsAgentHosterPolicyDocument({ shardTag: 'h1', regionId: 'us-east-1' });
+    const runner = awsRunnerPolicyDocument({ shardTag: 'h1', regionId: 'us-east-1' });
+    expect(doc.Statement.slice(0, runner.Statement.length)).toEqual(runner.Statement);
+    const added = doc.Statement.slice(runner.Statement.length);
+    expect(new Set(added.flatMap((s) => [s['Action']].flat()))).toEqual(
+      new Set([
+        'ec2:DescribeVolumes',
+        'ec2:StopInstances',
+        'ec2:StartInstances',
+        'ec2:DescribeInstanceAttribute',
+        'ec2:ModifyInstanceAttribute',
+        'ec2:CreateTags',
+        'ec2:DeleteVolume',
+        'ec2:AuthorizeSecurityGroupIngress',
+      ]),
+    );
+    for (const statement of added.filter((s) => s['Sid'] !== 'DescribeVolumes')) {
+      expect(statement['Condition']).toEqual({
+        StringEquals: { 'aws:ResourceTag/motir-shard': 'h1' },
+      });
+    }
+    expect(added.find((s) => s['Sid'] === 'DeleteOwnDisk')!['Resource']).toBe(
+      'arn:aws:ec2:us-east-1:*:volume/*',
+    );
+    expect(JSON.stringify(doc)).not.toMatch(/iam:|CreateAccessKey|ec2:\*/);
   });
 });
 

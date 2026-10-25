@@ -34,6 +34,8 @@ function step(
     startedAt: null,
     endedAt: null,
     detail: null,
+    waiting: null,
+    waited: null,
     ...over,
   };
 }
@@ -312,6 +314,207 @@ describe('the read-out’s edges', () => {
   it('draws nothing for a running attempt once the agent has moved on', () => {
     readout(boot({ outcome: 'running' }), 'hibernated');
     expect(document.querySelector('[data-testid="agent-boot"]')).toBeNull();
+  });
+});
+
+describe('waiting for room (MOTIR-9475, the waiting delta)', () => {
+  const waitingBoot = (reason: 'pool' | 'account', kind: 'create' | 'wake' = 'create') =>
+    boot({
+      kind,
+      steps: [
+        step(0, {
+          state: 'in_progress',
+          startedAt: at(0),
+          detail: `waiting_for_room:${reason}`,
+          waiting: { reason, since: at(0) },
+        }),
+        step(1, { step: 'machine_start' }),
+        step(2, {
+          step: 'clone',
+          repository: 'acme/web',
+          state: kind === 'wake' ? 'skipped' : 'waiting',
+        }),
+        step(3, { step: 'terminal_check' }),
+        step(4, { step: 'ready' }),
+      ],
+    });
+
+  it('a new agent: the waiting row in front of the provision row, the new-agent reason, no failed look and no retry', () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+    vi.setSystemTime(T0 + 65_000);
+    readout(waitingBoot('pool'));
+    const states = rows().map((r) => r.getAttribute('data-state'));
+    expect(states.slice(0, 3)).toEqual(['waiting-for-room', 'waiting', 'waiting']);
+    const row = rows()[0]!;
+    expect(row.textContent).toContain('Waiting for room');
+    expect(row.textContent).toContain(
+      'All machines for agents are in use right now. Yours will be created as soon as there is room.',
+    );
+    expect(row.textContent).toContain('A new agent — it starts wherever room frees up first.');
+    expect(row.textContent).toContain('1:05');
+    expect(row.className).toContain('bg-(--el-tint-sky)');
+    expect(row.className).not.toContain('danger');
+    // The provision row waits behind it.
+    expect(rows()[1]!.textContent).toContain('Machine provisioned');
+    expect(document.querySelector('[data-state="failed"]')).toBeNull();
+    expect(screen.queryByRole('button', { name: /wake|retry|try again/i })).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Booting' })).toBeTruthy();
+  });
+
+  it('a woken agent: its files live in one place, so it waits there, and they are safe', () => {
+    readout(waitingBoot('account', 'wake'), 'waking');
+    const row = rows()[0]!;
+    expect(row.textContent).toContain(
+      'This agent’s files live in one place, so it waits for room there. Your files and your sign-in are safe.',
+    );
+    expect(row.textContent).toContain('Waking — it can only start where its files are.');
+    expect(screen.getByRole('heading', { name: 'Waking' })).toBeTruthy();
+  });
+
+  it('the since line reads whole minutes from ten minutes on, and follows the clock', () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+    vi.setSystemTime(T0 + 9 * 60_000 + 59_000);
+    readout(waitingBoot('pool'));
+    expect(screen.queryByTestId('agent-boot-waiting-since')).toBeNull();
+    act(() => {
+      vi.advanceTimersByTime(1_000);
+    });
+    expect(screen.getByTestId('agent-boot-waiting-since').textContent).toBe(
+      'Waiting for 10 minutes — Motir keeps trying by itself.',
+    );
+    act(() => {
+      vi.advanceTimersByTime(2 * 60_000);
+    });
+    expect(screen.getByTestId('agent-boot-waiting-since').textContent).toContain(
+      'Waiting for 12 minutes',
+    );
+  });
+
+  it('once room is found the row is a done Room found row, and the boot carries on as before', () => {
+    readout(
+      boot({
+        steps: [
+          step(0, {
+            state: 'done',
+            startedAt: at(0),
+            endedAt: at(125),
+            detail: 'waiting_for_room:pool',
+            waited: { reason: 'pool', since: at(0), until: at(125) },
+          }),
+          step(1, { step: 'machine_start', state: 'in_progress', startedAt: at(125) }),
+          step(2, { step: 'ready' }),
+        ],
+      }),
+    );
+    expect(rows().map((r) => r.getAttribute('data-state'))).toEqual([
+      'room-found',
+      'done',
+      'in_progress',
+      'waiting',
+    ]);
+    expect(rows()[0]!.textContent).toContain('Room found');
+    expect(rows()[0]!.textContent).toContain('2m 05s');
+    expect(rows()[0]!.textContent).not.toContain('All machines');
+    expect(rows()[1]!.textContent).toContain('Machine provisioned');
+    expect(rows()[1]!.textContent).toContain('0s');
+  });
+
+  it('a waiting step is never drawn failed, and a genuine failure keeps its look', () => {
+    readout(
+      boot({ outcome: 'failed', endedAt: at(30), ...{ steps: waitingBoot('pool').steps } }),
+      'failed',
+    );
+    expect(rows()[0]!.getAttribute('data-state')).toBe('waiting-for-room');
+    expect(rows()[0]!.className).not.toContain('danger');
+    cleanup();
+    readout(
+      boot({
+        outcome: 'failed',
+        endedAt: at(30),
+        steps: [
+          step(0, { state: 'failed', startedAt: at(0), endedAt: at(30), detail: 'exit code 3' }),
+          step(1, { step: 'ready' }),
+        ],
+      }),
+      'failed',
+    );
+    expect(rows()[0]!.getAttribute('data-state')).toBe('failed');
+    expect(rows()[0]!.className).toContain('border-(--el-danger)');
+  });
+
+  it('announces Waiting for room as a change of state, then its end — never the clock', () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+    vi.setSystemTime(T0 + 5_000);
+    const plain = boot({
+      steps: [step(0, { state: 'in_progress', startedAt: at(0) }), step(1, { step: 'ready' })],
+    });
+    const view = readout(plain);
+    const rerender = (b: AgentInstanceBootDto) =>
+      view.rerender(
+        <AgentBootReadout
+          boot={b}
+          agentState="starting"
+          waking={false}
+          onWake={noop}
+          onDelete={noop}
+        />,
+      );
+    const waitingNow = boot({
+      seq: 9,
+      steps: [
+        step(0, {
+          state: 'in_progress',
+          startedAt: at(0),
+          waiting: { reason: 'pool', since: at(0) },
+        }),
+        step(1, { step: 'ready' }),
+      ],
+    });
+    rerender(waitingNow);
+    expect(screen.getByRole('status').textContent).toBe('Waiting for room: In progress');
+    act(() => {
+      vi.advanceTimersByTime(5_000);
+    });
+    expect(screen.getByRole('status').textContent).toBe('Waiting for room: In progress');
+    rerender(
+      boot({
+        seq: 10,
+        steps: [
+          step(0, {
+            state: 'done',
+            startedAt: at(0),
+            endedAt: at(9),
+            waited: { reason: 'pool', since: at(0), until: at(9) },
+          }),
+          step(1, { step: 'ready' }),
+        ],
+      }),
+    );
+    expect(screen.getByRole('status').textContent).toBe('Waiting for room: Done');
+  });
+
+  it('names no provider, account, zone, shard or quota', () => {
+    readout(waitingBoot('pool'));
+    const text = screen.getByTestId('agent-boot').textContent!.toLowerCase();
+    for (const word of ['aws', 'fly', 'account', 'zone', 'shard', 'quota', 'ec2']) {
+      expect(text).not.toContain(word);
+    }
+  });
+
+  it('renders in Chinese from the zh catalog', () => {
+    readout(waitingBoot('pool'), 'starting', {});
+    cleanup();
+    render(
+      <AgentBootReadout
+        boot={waitingBoot('pool')}
+        agentState="starting"
+        waking={false}
+        onWake={noop}
+        onDelete={noop}
+      />,
+      { locale: 'zh', messages: zhMessages },
+    );
+    expect(rows()[0]!.textContent).toContain('等待空位');
   });
 });
 

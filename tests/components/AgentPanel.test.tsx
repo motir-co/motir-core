@@ -968,6 +968,44 @@ describe('the boot read-out in the panel (MOTIR-7400)', () => {
     expect(within(panel()).getByRole('alert')).toBeTruthy();
   });
 
+  it('waiting for room (MOTIR-9475): the header reads Waiting, the Terminal tab is disabled with its reason, and no ticket is asked', async () => {
+    const base = bootDto(null);
+    const waiting = {
+      ...base,
+      steps: [
+        {
+          ...base.steps[0]!,
+          state: 'in_progress',
+          endedAt: null,
+          detail: 'waiting_for_room:pool',
+          waiting: { reason: 'pool', since: at(0) },
+        },
+        { ...base.steps[1]!, state: 'waiting', startedAt: null },
+        base.steps[2]!,
+      ],
+    };
+    routes.list = () => page([agent({ state: 'starting' })]);
+    routes.boot = () => snapshot(waiting);
+    await mount(undefined, { openAgentId: 'a1' });
+    await screen.findByTestId('agent-boot');
+    const tab = await screen.findByTestId('agent-terminal-tab-disabled');
+    expect(tab.getAttribute('aria-disabled')).toBe('true');
+    const tip = document.getElementById(tab.getAttribute('aria-describedby')!)!;
+    expect(tip.textContent).toBe(
+      'The terminal opens once the agent is running. It’s waiting for room.',
+    );
+    expect(within(panel()).getAllByText('Waiting').length).toBeGreaterThan(0);
+    expect(ticketCalls()).toBe(0);
+  });
+
+  it('a boot not waiting for room keeps its Terminal tab', async () => {
+    routes.list = () => page([agent({ state: 'starting' })]);
+    routes.boot = () => snapshot(bootDto(null));
+    await mount(undefined, { openAgentId: 'a1' });
+    await screen.findByTestId('agent-boot');
+    expect(screen.queryByTestId('agent-terminal-tab-disabled')).toBeNull();
+  });
+
   it('a failed boot says the terminal stays closed, and its Delete… opens the delete confirmation', async () => {
     routes.list = () => page([agent({ state: 'failed', failureReason: 'exited' })]);
     routes.boot = () => [

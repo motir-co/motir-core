@@ -279,7 +279,7 @@ describe('ensureAwsShardNetwork', () => {
     ).toThrow(/sixteen/);
   });
 
-  it('writes no NAT gateway, Elastic IP or inbound rule anywhere in the AWS adapter', async () => {
+  it('writes no NAT gateway or Elastic IP anywhere in the AWS adapter, and no inbound rule outside the hoster’s host agent', async () => {
     const ec2 = new AwsEc2Fake();
     await ensureAwsShardNetwork(input(ec2));
     expect(ec2.calls.some((c) => /nat|address|ingress/i.test(c.method))).toBe(false);
@@ -298,7 +298,22 @@ describe('ensureAwsShardNetwork', () => {
         return ''; // git grep exits 1 when nothing matches
       }
     };
-    expect(grep('AuthorizeSecurityGroupIngress')).toBe('');
+    // The ONE inbound rule in the adapter is the agent hoster's host agent port
+    // (MOTIR-9470: TCP 8443, mutual TLS), opened by the persistent adapter on its
+    // own account's group — never by the shard network, never for a runner.
+    // `management.ts` names the action only in the hoster's IAM grant, scoped to
+    // its own tagged group.
+    const ingressFiles = new Set(
+      grep('AuthorizeSecurityGroupIngress|authorizeSecurityGroupIngress')
+        .split('\n')
+        .filter(Boolean)
+        .map((line) => line.split(':')[0]),
+    );
+    expect([...ingressFiles].sort()).toEqual([
+      'src/adapters/aws/ec2Client.ts',
+      'src/adapters/aws/management.ts',
+      'src/adapters/aws/persistent.ts',
+    ]);
     expect(grep('NatGateway|AllocateAddress')).toBe('');
     expect(grep('process\\.env')).toBe('');
   });

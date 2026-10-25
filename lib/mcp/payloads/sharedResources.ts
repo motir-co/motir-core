@@ -143,29 +143,22 @@ export const MCP_UNREACHABLE_RESOURCES: Partial<Record<SharedResourceName, strin
     'listed in `EXEMPT_TOOLS` with that reason, so no tool payload carries this exact shape to ' +
     'probe. Both surfaces read the same `pagesService.getPageMarkdown` DTO, which is where the ' +
     'body and revision are kept in agreement.',
-  PagePlacement:
-    'Story MOTIR-9486 (MOTIR-9495) publishes the result of `PATCH /api/v1/pages/{pageId}/placement` ' +
-    'as `PagePlacement`. No MCP tool moves a page yet: `move_page` belongs to the sibling story ' +
-    '"An agent moves, archives and links pages over the MCP", which reuses the same ' +
-    '`pagesService.movePage` door. When that tool lands it probes this resource and this entry ' +
-    'closes; it is not a permanent divergence.',
   PageArchive:
     'Story MOTIR-9488 (MOTIR-9566) publishes the result of `POST /api/v1/pages/{pageId}/archive` ' +
-    'as `PageArchive`. No MCP tool archives a page yet: `archive_page` belongs to the sibling story ' +
-    '"An agent moves, archives and links pages over the MCP", which reuses the same ' +
-    '`pagesService.archivePage` door. When that tool lands it probes this resource and this entry ' +
-    'closes; it is not a permanent divergence.',
+    'as `PageArchive`. The MCP `archive_page` tool (MOTIR-9557) reaches the same ' +
+    '`pagesService.archivePage` door, but it serves archive AND restore from one tool, so its ' +
+    'payload is a union of this resource and `PageRestore` and it stays in `EXEMPT_TOOLS`. Probing ' +
+    'each branch is follow-up work, not a permanent divergence.',
   PageRestore:
     'Story MOTIR-9488 (MOTIR-9566) publishes the result of `POST /api/v1/pages/{pageId}/restore` ' +
-    'as `PageRestore`. No MCP tool restores a page yet; the sibling MCP page story reuses the same ' +
-    '`pagesService.restorePage` door, and when its tool lands it probes this resource and this ' +
-    'entry closes; it is not a permanent divergence.',
+    'as `PageRestore`. Its MCP counterpart is the restore branch of `archive_page`, which reads ' +
+    'the same `pagesService.restorePage` door and is exempt for the reason under `PageArchive`.',
   PageLinkPair:
     'Story MOTIR-9488 (MOTIR-9567) publishes the result of `POST /api/v1/pages/{pageId}/work-items` ' +
-    'as `PageLinkPair`. No MCP tool hand-links a page yet: `link_page` belongs to the sibling story ' +
-    '"An agent moves, archives and links pages over the MCP", which reuses the same ' +
-    '`pageLinksService.linkPageForWorkItem` door. When that tool lands it probes this resource and ' +
-    'this entry closes; it is not a permanent divergence.',
+    'as `PageLinkPair`. The MCP `link_page` tool (MOTIR-9558) reaches the same ' +
+    '`pageLinksService` doors, but it links AND unlinks and returns a SUPERSET of the pair ' +
+    '(`action`, `changed`), so it stays in `EXEMPT_TOOLS`. Probing the pair inside it is ' +
+    'follow-up work, not a permanent divergence.',
   ScopeClaim:
     'MOTIR-3049’s SCOPE claim ships on `/api/v1` ONLY, and the absence is argued rather than ' +
     'incidental: its caller is `motir run <story-id>` / `motir run sprint` in `packages/cli`, ' +
