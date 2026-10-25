@@ -8,6 +8,7 @@ import { buildMcpServer } from '@/lib/mcp/registry';
 import { PERMISSION_NOT_GRANTED_CODE } from '@/lib/mcp/permissionGate';
 import { TOOL_ANNOTATIONS } from '@/lib/mcp/toolAnnotations';
 import { CLI_TOKEN_GRANT, TOOL_PERMISSIONS } from '@/lib/mcp/toolPermissions';
+import { foldersService } from '@/lib/services/foldersService';
 import { pagesService } from '@/lib/services/pagesService';
 import type { TokenGrant } from '@/lib/tokens/grant';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -133,6 +134,54 @@ describe('archive_page', () => {
     const out = structured<RestorePageResultDto>(res);
     expect(out.landing.kind).not.toBe('original');
     expect(textOf(res)).toContain('because its parent');
+    await client.close();
+  });
+
+  it('a restore lands under the nearest live ancestor, or in the folder, and says which', async () => {
+    const fx = await makeWorkItemFixture();
+    const folder = await foldersService.createFolder(
+      { projectId: fx.projectId, parentFolderId: null, name: 'Specs' },
+      fx.ctx,
+    );
+    const top = await seedPage(fx, 'Top', { kind: 'folder', id: folder.id });
+    const middle = await seedPage(fx, 'Middle', { kind: 'page', id: top.id });
+    const deep = await seedPage(fx, 'Deep', { kind: 'page', id: middle.id });
+    const leafA = await seedPage(fx, 'Leaf A', { kind: 'page', id: deep.id });
+    await seedPage(fx, 'Leaf B', { kind: 'page', id: deep.id });
+    // `deep` leaves with its two sub-pages, then `middle` leaves on its own.
+    await pagesService.archivePage(fx.ctx, { projectId: fx.projectId, pageId: deep.id });
+    await pagesService.archivePage(fx.ctx, { projectId: fx.projectId, pageId: middle.id });
+    const client = await connectClient(fx.ctx, EDIT);
+
+    const toAncestor = await client.callTool({
+      name: 'archive_page',
+      arguments: { projectKey: 'PROD', pageId: deep.id, action: 'restore' },
+    });
+    expect(toAncestor.isError, textOf(toAncestor)).toBeFalsy();
+    expect(structured<RestorePageResultDto>(toAncestor).landing).toMatchObject({
+      kind: 'ancestorPage',
+      parentPageId: top.id,
+    });
+    expect(textOf(toAncestor)).toContain(
+      `with 2 sub-pages under its nearest live ancestor page ${top.id}`,
+    );
+    expect(
+      (await adminDb.page.findUniqueOrThrow({ where: { id: leafA.id } })).archivedAt,
+    ).toBeNull();
+
+    // Now `top` leaves with `deep` under it, and `middle` (archived alone) has no live page
+    // above it — its folder still holds.
+    await pagesService.archivePage(fx.ctx, { projectId: fx.projectId, pageId: top.id });
+    const toFolder = await client.callTool({
+      name: 'archive_page',
+      arguments: { projectKey: 'PROD', pageId: middle.id, action: 'restore' },
+    });
+    expect(toFolder.isError, textOf(toFolder)).toBeFalsy();
+    expect(structured<RestorePageResultDto>(toFolder).landing).toMatchObject({
+      kind: 'folder',
+      folderId: folder.id,
+    });
+    expect(textOf(toFolder)).toContain(`in folder ${folder.id}`);
     await client.close();
   });
 
