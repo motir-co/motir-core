@@ -56,6 +56,11 @@ export const PAGE_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Object
   CROSS_PROJECT_PAGE_PARENT: 422,
   PAGE_NEIGHBOUR_INVALID: 422,
   PAGE_PARENT_ARCHIVED: 422,
+  // The hand link (MOTIR-9567): the codes `lib/pages/linkErrors.ts` carries. A
+  // duplicate link never reaches this map — the link route answers it as an
+  // idempotent 200 — but the row keeps any other caller from rendering a 500.
+  PAGE_LINK_NOT_FOUND: 404,
+  PAGE_LINK_ALREADY_LINKED: 409,
   // Search (MOTIR-9552): the codes `lib/pages/searchErrors.ts` carries.
   PAGE_SEARCH_QUERY_EMPTY: 422,
   PAGE_SEARCH_QUERY_TOO_LONG: 422,

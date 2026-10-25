@@ -1,5 +1,6 @@
 import { z } from 'zod/v4';
 import { InvalidRequestError } from '@/lib/api/v1/errors';
+import type { PageLinkPairDto } from '@/lib/dto/pageLinks';
 import type {
   ArchivePageResultDto,
   PageMarkdownDto,
@@ -334,4 +335,39 @@ export function presentPageRestore(result: RestorePageResultDto): V1PageRestore 
       title: result.landing.title,
     },
   };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LINK and UNLINK a work item (Story MOTIR-9488 · MOTIR-9567)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// The page ↔ work-item HAND link (`page_work_item_link`, source `manual`) — the
+// row the app's Link page action writes, through `pageLinksService`. A mention
+// or embed in the page's body is a DERIVED link and is never written here.
+
+/** `POST /api/v1/pages/{pageId}/work-items`. */
+export const linkPageBodySchema = z
+  .object({
+    workItemId: z
+      .string()
+      .min(1)
+      .describe(
+        'The work item’s id — the `id` a work item read returns. It must be in the page’s project.',
+      ),
+  })
+  .strict();
+export type LinkPageBody = z.infer<typeof linkPageBodySchema>;
+
+/** The pair a link or unlink answers. */
+export const pageLinkPairSchema = z.object({
+  pageId: z.string(),
+  workItemId: z.string(),
+  /** Always `manual`: the hand link, never a mention or embed. */
+  source: z.literal('manual'),
+});
+export type V1PageLinkPair = z.infer<typeof pageLinkPairSchema>;
+
+/** Map a link pair to the wire — field by field. */
+export function presentPageLinkPair(pair: PageLinkPairDto): V1PageLinkPair {
+  return { pageId: pair.pageId, workItemId: pair.workItemId, source: pair.source };
 }

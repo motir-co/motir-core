@@ -8,6 +8,8 @@ import {
 } from '@/lib/api/v1/openapi/operation';
 import {
   createPageBodySchema,
+  linkPageBodySchema,
+  pageLinkPairSchema,
   movePageBodySchema,
   pageArchiveResultSchema,
   pagePlacementResultSchema,
@@ -154,6 +156,48 @@ export const PAGE_OPERATIONS: readonly V1Operation[] = [
     errorStatuses: [403, 404, 409],
   }),
   defineOperation({
+    method: 'POST',
+    path: '/api/v1/pages/{pageId}/work-items',
+    operationId: 'linkPageWorkItem',
+    summary: 'Link a work item to a page',
+    description:
+      'Link a work item to the page BY HAND — the `manual` link the app’s Link page action writes, which then shows on both sides: the page’s linked work items and the work item’s pages. A mention or embed in the page’s body is a derived link and is never written here. ⚠️ IDEMPOTENT: linking a pair that is already linked answers 200 with the same pair and writes no second row. The caller needs `work_item:edit` and `page:view` on the work item’s project. The page is looked up INSIDE the work item’s project, so a page of another project is 404 `PAGE_NOT_FOUND` — the same body an unknown page gets — and nothing is written. An archived page is 409 `PAGE_ARCHIVED` and writes no row. An unknown work item, or one in a project the caller cannot browse, is 404 `WORK_ITEM_NOT_FOUND`. A caller who may not edit the work item or view its project’s pages is 403 `PROJECT_ACCESS_DENIED`, naming no page. A missing or non-string `workItemId` is 422 `INVALID_BODY`.',
+    permission: 'page:edit',
+    parameters: [pageIdParameter],
+    requestBody: { schema: linkPageBodySchema, description: 'The work item to link.' },
+    response: {
+      status: 200,
+      body: { kind: 'object', schema: pageLinkPairSchema },
+      description: 'The linked pair.',
+    },
+    errorStatuses: [403, 404, 409, 422],
+  }),
+  defineOperation({
+    method: 'DELETE',
+    path: '/api/v1/pages/{pageId}/work-items/{workItemId}',
+    operationId: 'unlinkPageWorkItem',
+    summary: 'Unlink a work item from a page',
+    description:
+      'Remove the page’s HAND link to a work item, from both sides. A pair with no hand link is 404 `PAGE_LINK_NOT_FOUND` — a mention or embed in the body is not one and is left alone — so unlinking twice answers that the second time. An archived page’s link stays removable. A page of another project than the work item, an unknown page and a page the caller cannot see are the same 404 `PAGE_NOT_FOUND`; an unknown work item is 404 `WORK_ITEM_NOT_FOUND`; a caller who may not edit the work item or view its project’s pages is 403 `PROJECT_ACCESS_DENIED`, naming no page.',
+    permission: 'page:edit',
+    parameters: [
+      pageIdParameter,
+      {
+        name: 'workItemId',
+        in: 'path',
+        required: true,
+        description: 'The work item’s id — the `id` a work item read returns.',
+        schema: z.string().min(1),
+      },
+    ],
+    response: {
+      status: 200,
+      body: { kind: 'object', schema: pageLinkPairSchema },
+      description: 'The unlinked pair.',
+    },
+    errorStatuses: [403, 404],
+  }),
+  defineOperation({
     method: 'GET',
     path: '/api/v1/projects/{projectKey}/pages/search',
     operationId: 'searchPages',
@@ -194,5 +238,6 @@ export const PAGE_COMPONENTS: Readonly<Record<string, ZodType>> = {
   PagePlacement: pagePlacementResultSchema,
   PageArchive: pageArchiveResultSchema,
   PageRestore: pageRestoreResultSchema,
+  PageLinkPair: pageLinkPairSchema,
   PageSearchHit: pageSearchHitSchema,
 };
