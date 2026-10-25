@@ -749,7 +749,10 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   // MOTIR-7414 — ESTIMATED, not measured: one test — a sign-up, an MCP create,
   // three page loads, one debounced save and four tool calls. Rounded UP;
   // re-measure from its first green bulk leg.
-  'pages-agent-mcp.spec.ts': 25.0,
+  // MOTIR-9560 — ESTIMATED, not measured: a second test joins it, no browser — a
+  // seed and about forty tool calls over three MCP sessions. Rounded UP;
+  // re-measure from its first green bulk leg.
+  'pages-agent-mcp.spec.ts': 40.0,
   // MOTIR-9555 — ESTIMATED, not measured: one test — a sign-in, one tree load and
   // archive, about fifteen REST calls and two MCP sessions. Rounded UP; re-measure
   // from its first green bulk leg.
