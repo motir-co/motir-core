@@ -25,6 +25,9 @@ export interface FleetInFlightSlotTakeInput {
    *  (MOTIR-6907): a slot with no org is a container no org's pool bounds. */
   organizationId: string;
   workspaceId?: string | null;
+  /** WHICH ACCOUNT of the fleet pool the container boots on (MOTIR-9421);
+   *  null or omitted means the process-wide Fly fleet. */
+  fleetShardId?: string | null;
   /** When this slot stops being counted if it is never released. NOT the
    *  release mechanism — see the model comment. */
   expiresAt: Date;
@@ -57,7 +60,7 @@ export const fleetInFlightSlotRepository = {
     const inserted = await tx.$executeRaw`
       INSERT INTO "fleet_in_flight_slot"
         ("id", "workload", "ref", "owner_ref", "organization_id", "workspace_id",
-         "claimed_at", "expires_at", "created_at", "updated_at")
+         "fleet_shard_id", "claimed_at", "expires_at", "created_at", "updated_at")
       VALUES (
         ${randomUUID()},
         ${data.workload},
@@ -65,6 +68,7 @@ export const fleetInFlightSlotRepository = {
         ${data.ownerRef ?? null},
         ${data.organizationId},
         ${data.workspaceId ?? null},
+        ${data.fleetShardId ?? null},
         NOW(), ${data.expiresAt}, NOW(), NOW()
       )
       ON CONFLICT ("workload", "ref") DO NOTHING
@@ -86,6 +90,9 @@ export const fleetInFlightSlotRepository = {
    * renews the safety net for the run that now holds it; the INSERT arm puts the
    * row back when the loser's release got there first, so either order ends
    * with exactly one row, owned by the winner.
+   *
+   * The account (MOTIR-9421) is written when the caller names one and KEPT when
+   * it names none: a restamp must never clear the account a live machine is on.
    */
   async adopt(
     data: FleetInFlightSlotTakeInput & { ownerRef: string; workspaceId: string | null },
@@ -94,7 +101,7 @@ export const fleetInFlightSlotRepository = {
     await tx.$executeRaw`
       INSERT INTO "fleet_in_flight_slot"
         ("id", "workload", "ref", "owner_ref", "organization_id", "workspace_id",
-         "claimed_at", "expires_at", "created_at", "updated_at")
+         "fleet_shard_id", "claimed_at", "expires_at", "created_at", "updated_at")
       VALUES (
         ${randomUUID()},
         ${data.workload},
@@ -102,10 +109,12 @@ export const fleetInFlightSlotRepository = {
         ${data.ownerRef},
         ${data.organizationId},
         ${data.workspaceId},
+        ${data.fleetShardId ?? null},
         NOW(), ${data.expiresAt}, NOW(), NOW()
       )
       ON CONFLICT ("workload", "ref") DO UPDATE SET
         "owner_ref" = EXCLUDED."owner_ref",
+        "fleet_shard_id" = COALESCE(EXCLUDED."fleet_shard_id", "fleet_in_flight_slot"."fleet_shard_id"),
         "expires_at" = EXCLUDED."expires_at",
         "updated_at" = NOW()
     `;
@@ -214,6 +223,44 @@ export const fleetInFlightSlotRepository = {
     return tx.fleetInFlightSlot.count({
       where: { workload, organizationId, expiresAt: { gt: now } },
     });
+  },
+
+  /**
+   * How many LIVE slots of one workload one ACCOUNT of the fleet pool is holding
+   * (MOTIR-9421) — the per-account in-flight count admission chooses an account
+   * by. The same locking contract as {@link countLiveForWorkload}: read under the
+   * `fleet` admission lock, in the transaction that writes the account on the
+   * slot. Rides `[fleet_shard_id, workload]`.
+   */
+  async countLiveForWorkloadOnShardInTx(
+    workload: string,
+    fleetShardId: string,
+    now: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    return tx.fleetInFlightSlot.count({
+      where: { workload, fleetShardId, expiresAt: { gt: now } },
+    });
+  },
+
+  /**
+   * Move ONE run's slot to another account (MOTIR-9421) — the write an in-boot
+   * move after a capacity refusal or an outage makes. Only the row `ownerRef`
+   * holds is moved, so a run can never move another run's container. Returns
+   * whether a row moved.
+   */
+  async reassignShardInTx(
+    workload: string,
+    ref: string,
+    ownerRef: string,
+    fleetShardId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const result = await tx.fleetInFlightSlot.updateMany({
+      where: { workload, ref, ownerRef },
+      data: { fleetShardId },
+    });
+    return result.count === 1;
   },
 
   /**
