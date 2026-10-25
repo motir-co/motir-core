@@ -1554,6 +1554,9 @@ model Organization {
   agentInstanceStorageCharges AgentInstanceStorageCharge[]
   /// An agent's boot attempts (`agent-instances.md` AMENDMENT 6, MOTIR-7397). Cascade.
   agentInstanceBootAttempts   AgentInstanceBootAttempt[]
+  /// The fleet accounts that belong to this organisation alone — a Host org's
+  /// three (MOTIR-9581). Restrict on the account's side.
+  ownedFleetShards            FleetShard[]                 @relation("FleetShardOwner")
 
   // ── Content language (Story MOTIR-7731 · MOTIR-8092) ──────────────────────
   /// The language Motir's planner and agents write this organisation's NEW work
@@ -11542,6 +11545,11 @@ enum FleetShardRole {
   /// `fleet_shard_one_ready_spare_per_kind` in the migration, which the DSL
   /// cannot express.
   spare
+  /// An account that belongs to ONE Host organisation (MOTIR-9581, Story
+  /// MOTIR-9365): `ownerOrganizationId` names it (CHECK: set exactly on this
+  /// role). No shared reader names this role, so shared admission, the spare and
+  /// the 70% growth job never see it.
+  org_owned
 
   @@map("fleet_shard_role")
 }
@@ -11649,6 +11657,18 @@ model FleetShard {
   admissionPausedUntil     DateTime?              @map("admission_paused_until")
   admissionPausedReason    FleetShardPauseReason? @map("admission_paused_reason")
 
+  /// The Host organisation an `org_owned` account belongs to (MOTIR-9581); NULL on
+  /// every other role (CHECK). Restrict: an org with accounts of its own is never
+  /// deleted from under them — closing an AWS account is a person's decision.
+  ownerOrganizationId String?       @map("owner_organization_id")
+  ownerOrganization   Organization? @relation("FleetShardOwner", fields: [ownerOrganizationId], references: [id], onDelete: Restrict)
+  /// When an own account entered each state after `createdAt` (created): its
+  /// quota raise filed, granted, and live (MOTIR-9581 stores them; the state card
+  /// MOTIR-9585 writes them). NULL until entered.
+  quotaRequestedAt    DateTime?     @map("quota_requested_at")
+  grantedAt           DateTime?     @map("granted_at")
+  liveAt              DateTime?     @map("live_at")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -11671,6 +11691,11 @@ model FleetShard {
 
   /// One Fly location is one account.
   @@unique([provider, flyOrg, flyApp])
+  /// One AWS account serves a fleet kind once (MOTIR-9581). The merged indexer +
+  /// agent hoster account is ONE AWS account written as two rows, one per kind.
+  @@unique([awsAccountId, fleetKind])
+  /// An org's own accounts (MOTIR-9581).
+  @@index([ownerOrganizationId])
   /// Admission and the headroom reading list one kind's accounts by role and state.
   @@index([fleetKind, role, state])
   @@map("fleet_shard")

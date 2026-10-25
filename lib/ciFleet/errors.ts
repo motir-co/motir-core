@@ -55,7 +55,10 @@ export type FleetShardInvalidField =
   | 'awsLocation'
   | 'machineLimit'
   | 'limit'
-  | 'limitsSource';
+  | 'limitsSource'
+  /** An `org_owned` account with no owning organisation, or an owner on a shared
+   *  account or a spare (MOTIR-9581). */
+  | 'owner';
 
 /** A fleet account input that breaks an invariant — refused BEFORE the write, so
  *  the caller gets this rather than a raw constraint violation. */

@@ -115,6 +115,47 @@ export const fleetShardRepository = {
     });
   },
 
+  /** One Host organisation's own accounts, of every kind and state, oldest first
+   *  (MOTIR-9581) — admission's and the state reader's per-org read. */
+  async listOrgOwnedInTx(
+    organizationId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<FleetShard[]> {
+    return tx.fleetShard.findMany({
+      where: { role: 'org_owned', ownerOrganizationId: organizationId },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+  },
+
+  /** Every `org_owned` account, optionally of one organisation or one kind,
+   *  oldest first (MOTIR-9581) — the listings and the reconciles. */
+  async listOrgOwned(
+    filter: { organizationId?: string; fleetKind?: string },
+    tx?: Prisma.TransactionClient,
+  ): Promise<FleetShard[]> {
+    const client = tx ?? dbRead;
+    return client.fleetShard.findMany({
+      where: {
+        role: 'org_owned',
+        ...(filter.organizationId !== undefined
+          ? { ownerOrganizationId: filter.organizationId }
+          : {}),
+        ...(filter.fleetKind !== undefined ? { fleetKind: filter.fleetKind } : {}),
+      },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+  },
+
+  /** When an own account entered each state (MOTIR-9581). Only the keys given are
+   *  written; `null` clears one. */
+  async setStateTimestampsInTx(
+    id: string,
+    times: Partial<Record<'quotaRequestedAt' | 'grantedAt' | 'liveAt', Date | null>>,
+    tx: Prisma.TransactionClient,
+  ): Promise<FleetShard> {
+    return tx.fleetShard.update({ where: { id }, data: times });
+  },
+
   /** Lock one account by name for a platform admin's change (MOTIR-8972), so two
    *  changes of one account apply one after the other. Null when none has it. */
   async lockByNameForUpdateInTx(
@@ -154,12 +195,15 @@ export const fleetShardRepository = {
    * Lock and return the ACTIVE accounts that name a GitHub org, of every fleet
    * kind, in id order (MOTIR-8966) — the GitHub orgs a tenant may be hosted in.
    * `FOR UPDATE` because the per-org tenant count read after it is
-   * read-derived; id order so two assignments cannot deadlock.
+   * read-derived; id order so two assignments cannot deadlock. A Host org's own
+   * account is never a candidate (MOTIR-9581): its GitHub org is not one other
+   * tenants are hosted in.
    */
   async lockActiveWithGithubOrgInTx(tx: Prisma.TransactionClient): Promise<FleetShard[]> {
     const locked = await tx.$queryRaw<Array<{ id: string }>>`
       SELECT "id" FROM "fleet_shard"
        WHERE "state" = 'active' AND btrim("github_org") <> ''
+         AND "role" <> 'org_owned'
        ORDER BY "id"
        FOR UPDATE
     `;

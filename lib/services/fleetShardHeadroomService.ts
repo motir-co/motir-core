@@ -149,8 +149,10 @@ async function readAccounts(
   now: Date,
   tx: Prisma.TransactionClient,
 ): Promise<Array<AccountHeadroom & { shard: FleetShard }>> {
+  // The SHARED accounts and the spares only: a Host org's own account is never
+  // part of a pool's headroom, so it never counts toward growth (MOTIR-9581).
   const shards = await tx.fleetShard.findMany({
-    where: { state: { in: ['active', 'disabled'] } },
+    where: { state: { in: ['active', 'disabled'] }, role: { in: ['primary', 'spare'] } },
     orderBy: { id: 'asc' },
   });
   const readings: Array<AccountHeadroom & { shard: FleetShard }> = [];

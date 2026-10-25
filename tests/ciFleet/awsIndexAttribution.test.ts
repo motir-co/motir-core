@@ -376,6 +376,10 @@ describe('inventoryForShard routes an indexer AWS account to its own listing (MO
       fly: null,
       aws: { accountId: '111122223333', region: 'us-east-1' },
       credentialRef: 'FLEET_SHARD_INDEXER_USE1_1',
+      ownerOrganizationId: null,
+      quotaRequestedAt: null,
+      grantedAt: null,
+      liveAt: null,
       limits: {
         vcpuQuota: null,
         machineLimit: null,

@@ -22,7 +22,7 @@ export const FLEET_SHARD_LIMIT_SOURCES: readonly FleetShardLimitSource[] = [
 ];
 
 /** Every role an account can hold (MOTIR-9456). */
-export const FLEET_SHARD_ROLES: readonly FleetShardRoleDTO[] = ['primary', 'spare'];
+export const FLEET_SHARD_ROLES: readonly FleetShardRoleDTO[] = ['primary', 'spare', 'org_owned'];
 
 /**
  * The stored role, carried through as it is. A role is a stored value, not a
@@ -78,6 +78,10 @@ export function toFleetShardDTO(row: FleetShard): FleetShardDTO {
     },
     limitsSource: limitsSourceOf(row.limitsSource),
     limitsVerifiedAt: row.limitsVerifiedAt?.toISOString() ?? null,
+    ownerOrganizationId: row.ownerOrganizationId,
+    quotaRequestedAt: row.quotaRequestedAt?.toISOString() ?? null,
+    grantedAt: row.grantedAt?.toISOString() ?? null,
+    liveAt: row.liveAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
