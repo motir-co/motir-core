@@ -50,6 +50,7 @@ the same primitives — no design→code gap.
 | **The Calculator view** (AMENDMENT)                         | **`billing--calculator.mock.html`** (HTML mockup)                  | The fourth view of Billing & plans and the one link that opens it, 18 panels: S1 the link in the plans view's intro block · S2 initial · S3 ready · S4 asking · S5 categories loading · S6 categories unavailable · S7 a category with no live model · S8 populated (with Max ×2 on both cadences) · S9 above the largest pool · S10 top-up only · S11 the upgrade line and its two neighbours · S12 a retired model · S13 four inline refusals · S14 estimate unavailable · S15 request failed · S16 roles · `zh` · narrow. Amends panel 5's intro only (the link); a fourth view. **Dated note (2026-10-14, MOTIR-8636):** the AI ladder, its pools, the Enterprise card and the top-up rate are read from `lib/billing/catalog.ts` and supersede this file's figures. See § "Amendment 2026-10-14 — the Calculator view and the link that opens it" at the end of this file. |
 | **The larger credit pool plan** (AMENDMENT)                 | **`billing--larger-pool.mock.html`** (HTML mockup)                 | One more card at the end of the plans row, offered only from an estimate, 12 panels (with a 2b neighbour): no estimate · offered (the arrival, annual) · upgrade · current · the ladder covers it (absent, no notice) · above the top band (absent, one notice) · read-only · cadence switched · purchase refused · loading · read fails · narrow + dark. Amends panel 5's plan row only. See § "Amendment 2026-10-21 — the larger credit pool plan" at the end of this file.                                                                                                                                                                                                                                                                                                                                                                                                   |
 | **The Calculator — planned and run ranges** (AMENDMENT)     | **`billing--calculator--planned-and-run.mock.html`** (HTML mockup) | The Calculator's one items range becomes two (items planned in Motir · items run on Motir's runner, with the own-agent help), 3 panels: the inputs · the priced-range line in the answer · both ranges at 0 refused. Amends the Calculator view's inputs only. See § "Amendment 2026-10-21 — the Calculator's planned and run ranges" at the end of this file.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| **The Host plan** (AMENDMENT)                               | **`billing--host.mock.html`** (HTML mockup)                        | A fifth paid card after Max ×2 and every state it brings, 13 panels: the row monthly · annual · Choose Host redirecting · member disabled · org on Max ×2 · the upgrade to Host (ready, loading, error) · its success and Host Current · Host in the unfolded regular plans (and Pool 250,000 → Host) · org on Host · the downgrade from Host and its success · the pending downgrade from Host · `zh` · narrow. Amends panel 5's plan row and the larger-pool amendment's unfolded regular plans. See § "Amendment 2026-10-23 — the Host plan" at the end of this file.                                                                                                                                                                                                                                                                                                        |
 
 ## What this area is
 
@@ -1971,3 +1972,77 @@ larger credit pool plan" and drawn in `billing--larger-pool.mock.html`.
 ### The numbers are illustrative
 
 The ranges and credit figures drawn are illustrative.
+
+## Amendment 2026-10-23 — the Host plan
+
+Mock: **`billing--host.mock.html`**. It amends `billing.mock.html` panel 5 (the Motir AI plans
+row) and § "Amendment 2026-10-21 — the larger credit pool plan" panels 9–10 (the regular plans an
+org holding a pool unfolds). Those mocks are records and are not edited. It is rendered with
+`renderMock` from the design system's own `Button`, `Card`, `Pill` and `Segmented`, composed as
+`BillingClient.tsx` composes `PlanCard` and `PlanChangeDialog.tsx` composes its dialogs; the dialog
+panel is drawn static with the shipped `Modal`'s classes. The mono lines are board chrome.
+
+### What changes
+
+**Revised 2026-10-23 after review: the price cards were too narrow, so the plans view now takes the
+full page width (point 7).**
+
+1. **The Host card (panels 1–2).** Host is a fifth paid card, last in the row after Max ×2, drawn by
+   the shipped `PlanCard` with no new element. Its name, monthly and annual price, credit pool and
+   included seat are the catalog entry's. Its ladder line is the shipped `plans.ladder.multiple`
+   ("5× Max ×2's credits · same price per credit"). Recommended stays on Pro; Host is never
+   Recommended and never carries the Calculator's mark. The Need more credits? callout is unchanged
+   and still names Max ×2's pool.
+2. **The Host entitlement lines (panels 1–2).** Under the shipped "Everything in Max ×2, plus",
+   two feature lines say that Motir runs the project autonomously and that CI runners, agent runs,
+   the indexer and hosted agents each get dedicated pools. (Revised after review: the line about
+   Max's limits until the account quotas are granted is dropped, and the AWS-accounts line is
+   shortened to the dedicated pools.)
+3. **Choosing Host (panels 3–4).** Choose Host starts one quantity-1 Checkout on the page's
+   cadence, with the shipped redirecting state. A member without billing rights sees Upgrade to Host
+   disabled, described by the shipped `plans.upgrade.disabledReason`.
+4. **The upgrade to Host (panels 5–7).** From Max ×2 (or any lower plan) the Host card says Upgrade
+   to Host and opens the shipped upgrade dialog: ready, loading skeleton, preview error, success.
+   The Host row then shows Host Current and Downgrade to … on every lower card.
+5. **Host in the unfolded regular plans (panel 8).** An org holding a larger pool unfolds Standard …
+   Max ×2 and Host; Host offers Upgrade to Host when it is above the held pool, through the same
+   dialog.
+6. **The downgrade from Host and the pending downgrade from Host (panels 9–11).** The shipped
+   downgrade dialog at period end, nothing due, credits unchanged, and the shipped pending-change
+   line on the Host card with the target card's disabled Scheduled for … control.
+7. **The plans view takes the full page width (every desktop panel).** The billing page no longer
+   caps the Motir AI plans view at `max-w-[64rem]`: it fills the width the app shell gives it, so
+   five cards stay wide enough to read. The cards keep the shipped `grow basis-0`, so the row
+   shares that width equally. The other billing views (the home panel, Motir seats, the
+   Calculator) keep their shipped width. This is layout only: no new token.
+8. **`zh` and narrow (panels 12–13).** No layout change: the row scrolls horizontally with snap at
+   375px and Host is full and readable at its end; the dialogs are full-width sheets.
+
+### Copy — new keys in the `billing` namespace (en)
+
+| Key                         | en                                                                                                                     |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `plans.tiers.host.useCase`  | Motir at fleet scale, on AWS accounts of your own.                                                                     |
+| `plans.tiers.host.prev`     | Max ×2                                                                                                                 |
+| `plans.tiers.host.features` | 1. Motir runs your project autonomously · 2. Dedicated pools for CI runners, agent runs, the indexer and hosted agents |
+
+Every other string is shipped: `plans.{ctaChoose, ctaUpgrade, ctaCurrent, everythingIn,
+ladder.multiple, seatIncluded}`, and the `plans.upgrade.*` and `plans.downgrade.*` dialog keys (the pending
+downgrade is `plans.downgrade.{pendingPill, scheduledButton}`). The new keys land in every locale; the `zh` panel shows the Chinese text.
+
+### Where the figures come from
+
+- The Host card's name, prices (monthly and annual), credit pool and included seat: the catalog
+  entry in `lib/billing/catalog.ts`.
+- Every figure and date in a dialog (amount due, credits and index allowance added, the period
+  end): the plan-change preview response. The card prints none of its own.
+
+### Colour + shape roles
+
+No new colour or shape role. Every element is a shipped component in its shipped state, so the base
+tables and the larger-pool amendment's roles govern.
+
+### The numbers are illustrative
+
+The period end (Nov 1, 2026), the days left, the amounts due ($580.65 from Max ×2; $166.94 from
+Pool 250,000) and the credits and allowance added are illustrative.

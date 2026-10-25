@@ -263,6 +263,14 @@ exception list**. It is scheduled after MOTIR-6932, as the debit is.
 list for one app skips that app and the pass continues with the rest. A listing error is never read as
 _"nothing is running"_. A failed destroy is alerted and retried on the next pass.
 
+**Every AWS account is walked too** (MOTIR-9426, 2026-10-24). After the Fly organisation, each `aws`
+fleet account of either kind is listed over its own EC2 client — the account's whole region, every
+instance, **no tag filter**, so a VM started by hand is judged like any other — with the table above
+unchanged. A hosted VM it kills is torn down through the account it was listed in, so its usage row,
+slot release, charge and `lost_supervision` end come from that account. An account whose credential
+cannot be read is alerted and skipped, and the pass walks the rest; a transient 429 or 5xx listing is
+asked once more before it alerts.
+
 ### §6 · What becomes of the old limits
 
 | Thing                                                    | Becomes                                                                                                                                                                                                                                                                                                                         |
@@ -408,6 +416,9 @@ its GitHub org (MOTIR-8966, MOTIR-8974).
 - **Each kind has its own Fly↔AWS switch** (a feature flag, read on every boot) and flips on its own.
   A kind whose switch is on Fly boots exactly as today, on the process-wide Fly fleet. The Fly code
   stays.
+  - The agent runner's switch is `MOTIR_FLEET_AGENT_RUNNER_PROVIDER` (`aws` ⇒ its pool; anything
+    else ⇒ Fly), and its in-flight count per account is the live `hosted_agent` fleet slots carrying
+    that account (`fleet_in_flight_slot.fleet_shard_id`) (MOTIR-9421, 2026-10-24).
 - **Fly is never a backup.** There is no `backup` role and no overflow to Fly: a job of a kind switched
   to AWS never boots on Fly. Existing Fly-hosted agents are not migrated; only Motir's own orgs have
   them, and that they may stop working after the hoster flips is accepted (MOTIR-9356).

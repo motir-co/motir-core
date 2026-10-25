@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   AWS_INDEX_EXIT_MARKER,
   AWS_INDEX_PULL_FAILED_MARKER,
+  AWS_DISPATCH_RUN_TAG_KEY,
   AWS_REAP_PAGE_SIZE,
   AwsInstanceSizeError,
   Ec2ApiError,
@@ -10,6 +11,7 @@ import {
   OrchestratorNotConfiguredError,
   IndexUserDataError,
   RunnerUserDataError,
+  buildContainerUserData,
   buildIndexUserData,
   consoleExitCode,
   consoleShowsPullFailure,
@@ -24,6 +26,8 @@ import { AwsEc2Fake, userInitiated } from './contract/awsEc2Fake';
 import {
   AWS_AMI_ID,
   AWS_ATTRIBUTION,
+  AWS_HOSTED_ENV,
+  AWS_HOSTED_IMAGE,
   AWS_SHARD_TAG,
   AWS_SPEC,
   AWS_SPEC_ENV,
@@ -65,6 +69,14 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
 });
+
+const HOSTED_SPEC = {
+  ...AWS_SPEC,
+  workload: 'hosted_agent' as const,
+  workflowJobId: null,
+  image: AWS_HOSTED_IMAGE,
+  env: AWS_HOSTED_ENV,
+};
 
 describe('provision', () => {
   it('sends ONE RunInstances with the AMI, m6i.large, a tagged subnet and group, and locked metadata', async () => {
@@ -214,7 +226,16 @@ describe('provision', () => {
     expect(ec2.mutations().map((c) => c.method)).toEqual(['runInstances']);
   });
 
-  it('omits the intent tag and names by project for a workload with no job', async () => {
+  // Retargeted from `code_graph_index`, which the adapter now refuses (MOTIR-9422):
+  // a workload with no job still omits the intent tag.
+  it('omits the intent tag for a workload with no job', async () => {
+    const handle = await adapter().provision(HOSTED_SPEC);
+    const tags = ec2.requestOf(handle.id).tags;
+    expect(tags.map((t) => t.key)).not.toContain('motir_intent_id');
+    expect(tags).toContainEqual({ key: FLEET_METADATA_KEY, value: 'hosted-agent' });
+  });
+
+  it('omits the intent tag and names by project for an index VM', async () => {
     const handle = await adapter({ indexerAmiId: INDEXER_AMI_ID }).provision(INDEX_SPEC);
     const tags = ec2.requestOf(handle.id).tags;
     expect(tags.map((t) => t.key)).not.toContain('motir_intent_id');
@@ -472,6 +493,115 @@ describe('teardown', () => {
     expect(usage.startedAt).toEqual(observedStartedAt);
     expect(ec2.liveInstanceIds()).toEqual([]);
     expect(warn).toHaveBeenCalled();
+  });
+});
+
+describe('provision — a hosted agent run in container mode (MOTIR-9422)', () => {
+  it('launches the same AMI with the same locked settings and container-mode user-data', async () => {
+    const handle = await adapter().provision(HOSTED_SPEC);
+
+    expect(ec2.count('runInstances')).toBe(1);
+    const request = ec2.requestOf(handle.id);
+    expect(request).toMatchObject({
+      imageId: AWS_AMI_ID,
+      instanceType: 'm6i.large',
+      metadataOptions: { httpTokens: 'required', httpPutResponseHopLimit: 1 },
+      instanceInitiatedShutdownBehavior: 'terminate',
+      blockDeviceMappings: [],
+    });
+    expect(request).not.toHaveProperty('iamInstanceProfile');
+    expect(request).not.toHaveProperty('keyName');
+    expect(Buffer.from(request.userData, 'base64').toString('utf8')).toBe(
+      buildContainerUserData({ image: AWS_HOSTED_IMAGE, env: AWS_HOSTED_ENV }),
+    );
+  });
+
+  it('tags the run in the RunInstances call, with no intent tag and no later tagging call', async () => {
+    const handle = await adapter().provision(HOSTED_SPEC);
+    expect(ec2.requestOf(handle.id).tags).toEqual([
+      { key: 'motir-shard', value: AWS_SHARD_TAG },
+      { key: FLEET_METADATA_KEY, value: 'hosted-agent' },
+      { key: 'motir_org_id', value: 'org-1' },
+      { key: 'motir_project_id', value: 'proj-1' },
+      { key: AWS_DISPATCH_RUN_TAG_KEY, value: 'run-77' },
+      { key: 'Name', value: 'motir-agent-run-77' },
+    ]);
+    expect(AWS_DISPATCH_RUN_TAG_KEY).toBe('motir_dispatch_run_id');
+    expect(ec2.mutations().map((c) => c.method)).toEqual(['runInstances']);
+  });
+
+  // The indexer boots on AWS (MOTIR-9446); its refusals (no indexer AMI, no
+  // attribution) are tested with the index specs below.
+  it.each(['agent_instance'] as const)(
+    'refuses a %s spec before any EC2 call',
+    async (workload) => {
+      const thrown = await adapter()
+        .provision({ ...AWS_SPEC, workload, workflowJobId: null })
+        .then(
+          () => null,
+          (err: unknown) => err as Error,
+        );
+      expect(thrown).toBeInstanceOf(OrchestratorNotConfiguredError);
+      expect(thrown!.message).toContain(workload);
+      expect(thrown!.message).toContain('aws');
+      expect(ec2.calls).toEqual([]);
+      expect(ec2.liveInstanceIds()).toEqual([]);
+    },
+  );
+
+  it.each([
+    ['a tag-pinned image', { image: 'ghcr.io/motir-co/motir-hosted-agent:main' }],
+    ['an env key off the allow-list', { env: { ...AWS_HOSTED_ENV, EXTRA: 'x' } }],
+    ['no run id', { env: { ...AWS_HOSTED_ENV, MOTIR_DISPATCH_RUN_ID: '' } }],
+  ])('refuses a hosted spec with %s before any EC2 call', async (_what, overrides) => {
+    await expect(adapter().provision({ ...HOSTED_SPEC, ...overrides })).rejects.toBeInstanceOf(
+      RunnerUserDataError,
+    );
+    expect(ec2.calls).toEqual([]);
+  });
+
+  it('never puts the run token, the run key or the user-data in a log line, an error or a return value', async () => {
+    const token = 'RUNTOKENMARKER0123456789';
+    const key = 'RUNKEYMARKER9876543210';
+    const spec = {
+      ...HOSTED_SPEC,
+      env: { ...AWS_HOSTED_ENV, MOTIR_RUN_TOKEN: token, MOTIR_RUN_KEY: key },
+    };
+    ec2.failNext('runInstances', 'InvalidUserData.Malformed', 400);
+
+    const thrown = await adapter()
+      .provision(spec)
+      .then(
+        () => null,
+        (err: unknown) => err as Error,
+      );
+    const handle = await adapter().provision(spec);
+
+    const payload = ec2.calls.find((c) => c.method === 'runInstances')!.input as {
+      userData: string;
+    };
+    const logged = JSON.stringify([warn.mock.calls, error.mock.calls, log.mock.calls]);
+    const surfaced = `${thrown?.message} ${JSON.stringify(thrown)} ${JSON.stringify(handle)}`;
+    for (const secret of [token, key, payload.userData, payload.userData.slice(8, 40)]) {
+      expect(logged).not.toContain(secret);
+      expect(surfaced).not.toContain(secret);
+    }
+  });
+
+  it('reap terminates a hosted instance past the cutoff and spares a fresh one', async () => {
+    const orchestrator = adapter();
+    const old = await orchestrator.provision(HOSTED_SPEC);
+    const fresh = await orchestrator.provision(HOSTED_SPEC);
+    ec2.backdate(old.id, new Date(Date.now() - 2 * HOUR_MS));
+
+    const usages = await orchestrator.reap(new Date(Date.now() - HOUR_MS), async () => ({
+      ...AWS_ATTRIBUTION,
+      workload: 'hosted_agent',
+      workflowJobId: null,
+    }));
+
+    expect(usages.map((u) => u.handleId)).toEqual([old.id]);
+    expect(ec2.liveInstanceIds()).toEqual([fresh.id]);
   });
 });
 

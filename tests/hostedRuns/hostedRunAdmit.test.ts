@@ -19,6 +19,10 @@ import {
   hostedRunService,
 } from '@/lib/services/hostedRunService';
 import { planCapsService } from '@/lib/services/planCapsService';
+import { AGENT_RUNNER_PROVIDER_ENV_VAR } from '@/lib/ciFleet/fleetKindSwitches';
+import { fakeOrchestratorForShard, resetShardFakes } from '@/lib/orchestrator';
+import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
+import { fleetShardOrchestratorService } from '@/lib/services/fleetShardOrchestratorService';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { adminDb } from '../helpers/adminDb';
@@ -245,7 +249,10 @@ beforeEach(async () => {
   await truncateAuthTables();
   await truncateJobRuns();
   await adminDb.fleetInFlightSlot.deleteMany({});
+  await adminDb.fleetShard.deleteMany({});
   fakeOrchestrator.reset();
+  resetShardFakes();
+  fleetShardOrchestratorService.resetCache();
   _resetRunGitBotAuthors();
   fx = await makeWorkItemFixture();
   vi.stubEnv('MOTIR_CLOUD', 'true');
@@ -267,6 +274,7 @@ afterEach(async () => {
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
   await adminDb.fleetInFlightSlot.deleteMany({});
+  await adminDb.fleetShard.deleteMany({});
 });
 
 afterAll(async () => {
@@ -425,5 +433,57 @@ describe('a held run that does not boot', () => {
       where: { dispatchRunId: held, kind: 'log' },
     });
     expect(logs.some((l) => (l.body ?? '').includes('never got room to run'))).toBe(true);
+  });
+});
+
+describe('the run records the account its container booted on (MOTIR-9423)', () => {
+  async function agentAccount() {
+    const slug = Math.random().toString(36).slice(2, 8);
+    return adminDb.fleetShard.create({
+      data: {
+        name: `agents-${slug}`,
+        fleetKind: 'hosted_agent',
+        provider: 'fly',
+        state: 'active',
+        githubOrg: 'motir-projects',
+        githubInstallationId: '556677',
+        flyOrg: 'motir',
+        flyApp: `motir-agents-${slug}`,
+        flyRegion: 'iad',
+        credentialRef: 'FLEET_SHARD_TEST_TOKEN',
+        machineLimit: 5,
+      },
+    });
+  }
+
+  it('switch off: the run boots on the process-wide fleet and its fleet_shard_id stays null', async () => {
+    await agentAccount();
+    vi.stubEnv(AGENT_RUNNER_PROVIDER_ENV_VAR, 'fly');
+    await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+    const run = await start((await newCard('legacy')).identifier);
+
+    expect(fakeOrchestrator.provisioned).toHaveLength(1);
+    expect(await runRow(run.dispatchRunId)).toMatchObject({ fleetShardId: null });
+  });
+
+  it('switch on: the run names account A, written before its supervision is sent', async () => {
+    const a = await agentAccount();
+    vi.stubEnv(AGENT_RUNNER_PROVIDER_ENV_VAR, 'aws');
+    const superviseSentAtRecord: number[] = [];
+    const record = dispatchRunRepository.recordFleetShard.bind(dispatchRunRepository);
+    vi.spyOn(dispatchRunRepository, 'recordFleetShard').mockImplementation(async (id, s, tx) => {
+      superviseSentAtRecord.push(
+        await adminDb.jobEvent.count({ where: { name: 'hosted-run/supervise' } }),
+      );
+      return record(id, s, tx);
+    });
+    await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+    const run = await start((await newCard('on an account')).identifier);
+
+    expect(fakeOrchestrator.provisioned).toEqual([]);
+    expect(fakeOrchestratorForShard(a.id).provisioned).toHaveLength(1);
+    expect(await runRow(run.dispatchRunId)).toMatchObject({ fleetShardId: a.id });
+    expect(superviseSentAtRecord).toEqual([0]);
+    expect(await adminDb.jobEvent.count({ where: { name: 'hosted-run/supervise' } })).toBe(1);
   });
 });

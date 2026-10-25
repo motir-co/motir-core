@@ -188,6 +188,11 @@ export interface DailyHealthCheckResult {
    *  deployment that runs CI but does not index reports `not_applicable` here
    *  while `fleet` says `bootable`, and the ledger can tell those apart. */
   indexFleet: FleetBootableVerdict;
+  /** The HOSTED-AGENT image's preflight verdict (MOTIR-9420) — the third pull
+   *  path, probed ANONYMOUSLY the way an agent-runner VM pulls it, and recorded
+   *  beside the other two. A deployment that runs no hosted agent reports
+   *  `not_applicable`. */
+  hostedAgentImage: FleetBootableVerdict;
   /** Whether the address an index container would be GIVEN for motir-ai can work
    *  for it (MOTIR-4518) — recorded on the healthy tick too, so the ledger can
    *  answer "was the container's motir-ai address sane yesterday?". A deployment
@@ -294,6 +299,27 @@ export class IndexFleetImageUnpullableError extends Error {
         `release lane's registry-to-registry copy (docs/decisions/fleet-image-pull.md §5).`,
     );
     this.name = 'IndexFleetImageUnpullableError';
+  }
+}
+
+/**
+ * Thrown when the HOSTED-AGENT image cannot be pulled anonymously (MOTIR-9420).
+ *
+ * A separate error, like the indexer's, so the message names the right image and
+ * the right fix: an agent-runner VM has no instance profile and no Fly org
+ * credential, so the image must stay PUBLIC on GHCR — a private package, or a
+ * mirror to `registry.fly.io` or ECR, strands every hosted run on AWS.
+ */
+export class HostedAgentImageUnpullableError extends Error {
+  constructor(readonly verdict: Extract<FleetBootableVerdict, { verdict: 'unpullable' }>) {
+    super(
+      `The HOSTED-AGENT image cannot be pulled anonymously: ${verdict.reference} — ${verdict.detail}. ` +
+        `No hosted agent run can boot on an agent-runner VM until this is fixed: the VM pulls ` +
+        `anonymously (no instance profile, no Fly org credential), so MOTIR_HOSTED_AGENT_IMAGE ` +
+        `must name a digest that still exists on a PUBLIC registry — the image stays public on ` +
+        `GHCR (docs/decisions/hosted-agent-run.md §6, docs/decisions/fleet-image-pull.md §1).`,
+    );
+    this.name = 'HostedAgentImageUnpullableError';
   }
 }
 
@@ -520,6 +546,9 @@ export const dailyHealthCheck = defineJob(
     const indexFleet = await ctx.step.run('index-fleet-boot-preflight', () =>
       services.fleetPreflight.checkIndexFleet(),
     );
+    const hostedAgentImage = await ctx.step.run('hosted-agent-image-preflight', () =>
+      services.fleetPreflight.checkHostedAgentImage(),
+    );
     const indexContainerAi = await ctx.step.run('index-container-ai-address', () =>
       services.fleetPreflight.checkIndexContainerAiAddress(),
     );
@@ -561,6 +590,12 @@ export const dailyHealthCheck = defineJob(
     // not a fault. Runner first only because a deployment that cannot boot CI has
     // the larger outage; both verdicts are on the row either way.
     if (indexFleet.verdict === 'unpullable') throw new IndexFleetImageUnpullableError(indexFleet);
+
+    // The HOSTED-AGENT path (MOTIR-9420), on the same terms: only a definite
+    // refusal is loud, and `not_applicable` is a deployment with no hosted agent.
+    if (hostedAgentImage.verdict === 'unpullable') {
+      throw new HostedAgentImageUnpullableError(hostedAgentImage);
+    }
 
     // The REACHABILITY probe, reported last and on the same terms: only the two
     // DEFINITE arms are loud. `indeterminate` is this process failing to reach an
@@ -628,6 +663,7 @@ export const dailyHealthCheck = defineJob(
       schedules,
       fleet,
       indexFleet,
+      hostedAgentImage,
       indexContainerAi,
       indexRebuildStreak,
       monitorConfig,

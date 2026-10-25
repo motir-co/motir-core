@@ -6587,7 +6587,7 @@
       "tiers": {
         "standard": {
           "useCase": "用 Motir AI 规划器规划你的项目。",
-          "features": ["详细规划整个项目", "额度每月刷新 · 随时加购"]
+          "features": ["详细规划项目", "额度每月刷新 · 随时加购"]
         },
         "pro": {
           "useCase": "Standard 的全部，外加更强的规划模型。",
@@ -6597,12 +6597,23 @@
         "max": {
           "useCase": "Pro 的全部，外加把规划好的工作交给智能体的余量。",
           "prev": "Pro",
-          "features": ["留有余量，自动把规划好的工作派给智能体"]
+          "features": [
+            "规划更多工作，让项目推进得更快",
+            "留有余量，自动把部分规划好的工作派给智能体"
+          ]
         },
         "max_x2": {
           "useCase": "Max 的两倍用量。",
           "prev": "Max",
-          "features": ["两倍于 Max 的每月额度池"]
+          "features": ["两倍于 Max 的每月额度池", "自动把更多规划好的工作派给智能体"]
+        },
+        "host": {
+          "useCase": "在你自己的 AWS 账户上，以集群规模运行 Motir。",
+          "prev": "Max ×2",
+          "features": [
+            "Motir 自主推进你的项目",
+            "CI 运行器、智能体运行、索引器和托管智能体各有专属资源池"
+          ]
         }
       },
       "trial": {
@@ -8411,7 +8422,9 @@
       "held": "这几问答完后，Motir AI 会提议规划。",
       "settledHeading": "你的回答确定了这些",
       "clearEnough": "已足够清楚，可以按原样规划。",
-      "nothingSettled": "没有确定任何内容，所以会按请求原样规划。"
+      "nothingSettled": "没有确定任何内容，所以会按请求原样规划。",
+      "requirementSaved": "已保存为需求文档中的<link>{title}</link>。",
+      "requirementNotSaved": "<lead>无法保存需求。</lead>尚未开始规划。确认按钮仍可使用，请重试。"
     },
     "logBugOffer": {
       "label": "提议记录缺陷",
@@ -8490,6 +8503,20 @@
       "emptyBody": "你在此项目中的提问和开始的规划会列在这里。",
       "error": "无法加载你的对话。",
       "rowAria": "{title} · {status} · {when}活跃"
+    },
+    "requirementPane": {
+      "label": "待规划的需求",
+      "headings": {
+        "outcome": "结果",
+        "behaviour": "行为",
+        "scopeEdge": "范围边界",
+        "constraints": "约束",
+        "acceptance": "验收",
+        "assumptions": "假设"
+      },
+      "none": "此处为空",
+      "correctionHint": "如需修改，请在对话中输入更正。",
+      "notice": "此提议没有写出需求。确认后，规划会自行撰写。"
     }
   },
   "codeHealth": {

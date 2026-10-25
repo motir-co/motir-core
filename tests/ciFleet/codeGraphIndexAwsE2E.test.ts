@@ -668,7 +668,6 @@ describe('6 · cost and attribution', () => {
         { key: 'motir:repo', value: 'moooon/ghost' },
       ],
     });
-    const ciListingsBefore = ci.ec2.calls.filter((c) => c.method === 'describeInstances').length;
     const reconcile = (now: () => Date) =>
       fleetAttributionService.reconcile({ inventory: null, listingRetryDelayMs: 0, now });
 
@@ -688,10 +687,9 @@ describe('6 · cost and attribution', () => {
     const kills = await adminDb.fleetMachineKill.findMany();
     expect(kills.map((k) => k.machineId).sort()).toEqual([untagged, lookalike].sort());
     expect(kills.every((k) => k.app === ACCOUNT_A)).toBe(true);
-    // The CI account's key may not reap: its EC2 was never listed.
-    expect(ci.ec2.calls.filter((c) => c.method === 'describeInstances')).toHaveLength(
-      ciListingsBefore,
-    );
+    // The CI account is listed too (every AWS account is, MOTIR-9426), and nothing
+    // on it is reaped: no index VM ever lands there.
+    expect(ci.ec2.calls.some((c) => c.method === 'terminateInstances')).toBe(false);
   }, 90_000);
 
   it('a listing failure on one account destroys nothing there and does not stop the other', async () => {

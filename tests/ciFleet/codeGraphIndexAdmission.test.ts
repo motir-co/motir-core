@@ -1310,7 +1310,7 @@ describe("an admitted index lands on an account of the INDEXER'S pool", () => {
     expect(verdicts.filter((v) => v.outcome === 'deferred')).toHaveLength(5);
     expect(
       await withSystemContext((tx) =>
-        fleetInFlightSlotRepository.countLiveForWorkloadOnShard(
+        fleetInFlightSlotRepository.countLiveForWorkloadOnShardInTx(
           'code_graph_index',
           shard.id,
           NOW,

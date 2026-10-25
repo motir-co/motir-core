@@ -84,7 +84,7 @@ function account(name: string): Account {
       amiId: 'ami-0runner000000000',
       indexerAmiId: 'ami-0dockerhost00000',
     }),
-    inventory: createAwsFleetInventory({ ec2, region: 'us-east-1', shardTag: name }),
+    inventory: createAwsFleetInventory({ ec2, region: 'us-east-1', accountName: name }),
   };
 }
 
@@ -389,12 +389,12 @@ describe('inventoryForShard routes an indexer AWS account to its own listing (MO
     };
   }
 
-  it('an indexer account with its key set lists through aws; a CI-runner account has none', () => {
+  it('an indexer account with its key set lists through aws, as every AWS account does', () => {
     vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', '');
     vi.stubEnv('FLEET_SHARD_INDEXER_USE1_1_ACCESS_KEY_ID', 'AKIATEST');
     vi.stubEnv('FLEET_SHARD_INDEXER_USE1_1_SECRET_ACCESS_KEY', 'secret');
     expect(inventoryForShard(shard('code_graph_index'))?.provider).toBe('aws');
-    expect(inventoryForShard(shard('ci_runner'))).toBeNull();
+    expect(inventoryForShard(shard('ci_runner'))?.provider).toBe('aws');
   });
 
   it('an indexer account with no key throws naming the variables, so the pass alerts and skips it', () => {

@@ -175,6 +175,8 @@ Every credential's expiry is derived from the timeout — ~~90 minutes~~ the 12-
 | `MOTIR_RUN_KEY_MINT_SECRET` | the mint secret                                | the same name the gateway reads, character for character                                          |
 | `MOTIR_HOSTED_AGENT_IMAGE`  | `ghcr.io/motir-co/motir-hosted-agent@sha256:…` | **a digest, never a tag**, so a publish cannot change what a running deployment boots             |
 
+_(Amended 2026-10-24, MOTIR-9420, for Story MOTIR-9359: **one `MOTIR_HOSTED_AGENT_IMAGE` serves both the Fly fleet and the AWS agent-runner fleet** — there is no second, AWS-only variable, because two that agree today drift at the next pin. An agent-runner VM boots with no instance profile and no Fly org credential, so it pulls the image anonymously, and the image must therefore stay on a public registry (public on GHCR, `fleet-image-pull.md` §1). A mirror to `registry.fly.io` or to ECR would leave agent-runner VMs unable to pull it: `hostedAgentImage('aws')` refuses either host, and the daily health check's anonymous `verifyHostedAgentImagePullable()` preflight fails loudly when the pinned digest stops being publicly pullable.)_
+
 All three are server-only: no public-env prefix, and never serialized to the browser. **There is no model variable:** the model is the dispatcher's choice, validated against motir-ai's list (§7). _(Re-read 2026-10-01, MOTIR-7206: still true with a second provider. The provider travels with the offered model, not in configuration.)_
 
 ### 7 · The model: the dispatcher picks it from the models that can actually run

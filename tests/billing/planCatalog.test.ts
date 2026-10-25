@@ -13,6 +13,7 @@ import {
   largerPoolPlans,
   maxMonthlyPlanCredits,
   PLAN_CHANGE_KEYS,
+  planChangeKeysOf,
 } from '@/lib/billing/catalog';
 
 // MOTIR-8390 (story MOTIR-8379): the catalog carries pools 5,000 / 15,000 / 30,000,
@@ -295,14 +296,14 @@ describe('the larger-pool band (MOTIR-8990)', () => {
 
   it('keeps the ceiling at the ladder top: 60,000, not the top rung', () => {
     expect(maxMonthlyPlanCredits()).toBe(60000);
-    // Widened over every entry, the "ceiling" would be the top rung's own pool —
-    // the meaning the band filter exists to keep out.
+    // Widened over every entry, the "ceiling" would be Host's own pool (MOTIR-9364)
+    // — the meaning the band filter exists to keep out.
     const widened = Math.max(
       ...BILLING_CATALOG.aiPlans.flatMap((p) =>
         p.allotment?.cadence === 'monthly' ? [p.allotment.credits] : [],
       ),
     );
-    expect(widened).toBe(250000);
+    expect(widened).toBe(300000);
     const rung = plan('pool_250k');
     const original = rung.allotment;
     rung.allotment = { credits: 300000, cadence: 'monthly' };
@@ -387,7 +388,7 @@ describe('the larger-pool band (MOTIR-8990)', () => {
     expect(BILLING_CATALOG.aiPlans.map((p) => p.key)).toEqual(before);
   });
 
-  it('derives both allow-lists from the ladder and the rung table', () => {
+  it('derives both allow-lists from the ladder, the rung table and Host', () => {
     const keysOf = (entries: typeof BILLING_CATALOG.aiPlans) =>
       entries.flatMap((p) =>
         p.prices ? [p.prices.monthly.priceLookupKey, p.prices.annual.priceLookupKey] : [],
@@ -397,12 +398,13 @@ describe('the larger-pool band (MOTIR-8990)', () => {
       new Set([
         ...keysOf(ladder()),
         ...keysOf(largerPoolPlans()),
+        ...keysOf(BILLING_CATALOG.aiPlans.filter((p) => p.band === 'host')),
         seat.monthly.priceLookupKey,
         seat.annual.priceLookupKey,
         BILLING_CATALOG.creditTopup.priceLookupKey,
       ]),
     );
-    expect(PLAN_CHANGE_KEYS).toEqual(['standard', 'pro', 'max', 'max_x2', ...RUNGS]);
+    expect(PLAN_CHANGE_KEYS).toEqual(['standard', 'pro', 'max', 'max_x2', ...RUNGS, 'host']);
     for (const absent of ['free', 'tracker_monthly', 'tracker_annual', 'credit_topup']) {
       expect(isPlanChangeKey(absent)).toBe(false);
     }
@@ -516,5 +518,77 @@ describe('the operator bill for a larger pool (MOTIR-8990)', () => {
       basis: { credits: rung.allotment!.credits, cadence: 'monthly' },
       amountCents: rung.prices!.monthly.amountUsd * 100,
     });
+  });
+});
+
+describe('the Host band (MOTIR-9398)', () => {
+  const HOST_KEYS = ['host_pool_monthly', 'host_pool_annual'];
+  const RUNGS = ['pool_80k', 'pool_100k', 'pool_120k', 'pool_150k', 'pool_200k', 'pool_250k'];
+
+  it('carries exactly one Host entry, with its figures', () => {
+    const hosts = BILLING_CATALOG.aiPlans.filter((p) => p.key === 'host');
+    expect(hosts).toHaveLength(1);
+    expect(hosts[0]).toEqual({
+      key: 'host',
+      name: 'Host',
+      allotment: { credits: 300000, cadence: 'monthly' },
+      recommended: false,
+      prices: {
+        monthly: { amountUsd: 1500, priceLookupKey: 'host_pool_monthly' },
+        annual: { amountUsd: 12000, priceLookupKey: 'host_pool_annual' },
+      },
+      includedTrackerSeats: 1,
+      band: 'host',
+    });
+    expect(hosts[0]!.includedTrackerSeats).toBe(INCLUDED_TRACKER_SEATS_PER_AI_PLAN);
+  });
+
+  it("is priced at the ladder's per-credit basis on both cadences", () => {
+    const host = plan('host');
+    const top = plan('max_x2');
+    expect(host.prices!.monthly.amountUsd / host.allotment!.credits).toBe(
+      top.prices!.monthly.amountUsd / top.allotment!.credits,
+    );
+    expect(host.prices!.monthly.amountUsd / host.allotment!.credits).toBe(0.005);
+    expect(host.prices!.annual.amountUsd / (12 * host.allotment!.credits)).toBe(
+      top.prices!.annual.amountUsd / (12 * top.allotment!.credits),
+    );
+    expect(host.prices!.annual.amountUsd).toBe(8 * host.prices!.monthly.amountUsd);
+  });
+
+  it('moves neither the ladder ceiling nor the rung table', () => {
+    expect(maxMonthlyPlanCredits()).toBe(60000);
+    expect(largerPoolPlans().map((p) => p.key)).toEqual(RUNGS);
+    expect(ladder().map((p) => p.key)).not.toContain('host');
+  });
+
+  it.each(HOST_KEYS)('sells %s at quantity 1 only, and never as a rung', (key) => {
+    expect(CHECKOUT_PRICE_LOOKUP_KEYS.has(key)).toBe(true);
+    expect(isKnownCheckoutPrice(key)).toBe(true);
+    expect(isAllowedCheckoutQuantity(key, 1)).toBe(true);
+    for (const q of [2, 0, 1.5]) expect(isAllowedCheckoutQuantity(key, q)).toBe(false);
+    expect(isLargerPoolPlanKey(key)).toBe(false);
+    expect(largerPoolCreditsForPrice(key)).toBeNull();
+  });
+
+  it('is a plan-change target, last in ascending pool order', () => {
+    expect(isPlanChangeKey('host')).toBe(true);
+    expect(PLAN_CHANGE_KEYS[PLAN_CHANGE_KEYS.length - 1]).toBe('host');
+    const pools = PLAN_CHANGE_KEYS.map((k) => plan(k).allotment!.credits);
+    expect(pools).toEqual([...pools].sort((a, b) => a - b));
+  });
+
+  it('orders plan-change keys by pool, so a rung moved above Host sorts after it', () => {
+    const copy = BILLING_CATALOG.aiPlans.map((p) =>
+      p.key === 'pool_250k'
+        ? { ...p, allotment: { credits: 400000, cadence: 'monthly' as const } }
+        : p,
+    );
+    const keys = planChangeKeysOf(copy);
+    expect(keys.indexOf('pool_250k')).toBeGreaterThan(keys.indexOf('host'));
+    expect(keys).not.toContain('free');
+    // The builder reads its argument only; the catalog and the constant are untouched.
+    expect(plan('pool_250k').allotment!.credits).toBe(250000);
+    expect(PLAN_CHANGE_KEYS[PLAN_CHANGE_KEYS.length - 1]).toBe('host');
   });
 });

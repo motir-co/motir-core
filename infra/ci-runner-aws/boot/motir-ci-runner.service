@@ -5,9 +5,12 @@
 #
 #   ExecStartPre   motir-runner-prepare — user-data → the env file, the Docker
 #                  volume at /var/lib/docker, the metadata service closed.
-#   ExecStart      motir-ci-runner-entrypoint — `infra/ci-runner/entrypoint.sh`,
-#                  installed unchanged: dockerd, then `run.sh --jitconfig` as
-#                  `runner`. A JIT-config runner takes one job and exits.
+#   ExecStart      motir-vm-entrypoint — the boot mode user-data chose
+#                  (MOTIR-9419). CI mode execs motir-ci-runner-entrypoint,
+#                  `infra/ci-runner/entrypoint.sh` installed unchanged: dockerd,
+#                  then `run.sh --jitconfig` as `runner`, one job, exit.
+#                  Container mode execs motir-container-entrypoint: one
+#                  digest-pinned image, run once (a hosted agent run).
 #   ExecStartPost  removes the env file. The entrypoint has its environment by
 #                  then (Type=exec waits for the exec), and the JIT config
 #                  should not outlive the moment it was needed on disk.
@@ -26,7 +29,7 @@
 # cycle. Nothing here traces or prints the JIT config.
 
 [Unit]
-Description=Motir CI runner (one JIT-config job, then power off)
+Description=Motir runner VM (one CI job or one container, then power off)
 Wants=network-online.target
 After=network-online.target cloud-init.service
 
@@ -40,7 +43,7 @@ EnvironmentFile=-/run/motir-ci-runner/env
 Environment=PATH=/home/runner/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 Environment=LANG=C.UTF-8 LC_ALL=C.UTF-8
 WorkingDirectory=/home/runner/actions-runner
-ExecStart=/usr/local/bin/motir-ci-runner-entrypoint
+ExecStart=/usr/local/bin/motir-vm-entrypoint
 ExecStartPost=/usr/bin/rm -f /run/motir-ci-runner/env
 ExecStopPost=/usr/bin/systemctl --no-block poweroff
 Restart=no

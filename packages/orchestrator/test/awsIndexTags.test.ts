@@ -5,9 +5,6 @@ import {
   AWS_TAG_VALUE_MAX,
   AwsIndexAttributionError,
   FLEET_METADATA_KEY,
-  OrchestratorApiError,
-  OrchestratorNotConfiguredError,
-  createAwsFleetInventory,
   createAwsOrchestrator,
   type ContainerSpec,
 } from '../src/index';
@@ -103,77 +100,5 @@ describe('an index VM carries its four attribution tags (MOTIR-9450)', () => {
     expect(request).not.toHaveProperty('tagNetworkInterface');
     expect(Object.keys(tagMap(request.tags)).some((k) => k.startsWith('motir:'))).toBe(false);
     expect(tagMap(request.tags)[FLEET_METADATA_KEY]).toBe('ci-runner');
-  });
-});
-
-describe('createAwsFleetInventory — one account’s listing (MOTIR-9450)', () => {
-  function inventory(pageSize?: number) {
-    return createAwsFleetInventory({
-      ec2,
-      region: 'us-east-1',
-      shardTag: AWS_SHARD_TAG,
-      ...(pageSize ? { pageSize } : {}),
-    });
-  }
-
-  it('lists one app, the account, and every live instance in it — tagged or not', async () => {
-    const launched = new Date('2026-10-24T09:00:00.000Z');
-    const indexed = ec2.plantInstance({
-      launchTime: launched,
-      tags: [
-        { key: AWS_INDEX_TAG_KEYS.workload, value: 'code_graph_index' },
-        { key: 'Name', value: 'motir-index-proj' },
-      ],
-    });
-    const untagged = ec2.plantInstance({ state: 'stopped', launchTime: launched, tags: [] });
-    ec2.plantInstance({ state: 'terminated', tags: [] });
-
-    expect(await inventory().listApps()).toEqual([AWS_SHARD_TAG]);
-    const machines = await inventory().listMachines(AWS_SHARD_TAG);
-    expect(machines.map((m) => m.machineId).sort()).toEqual([indexed, untagged].sort());
-    expect(machines.find((m) => m.machineId === indexed)).toEqual({
-      app: AWS_SHARD_TAG,
-      machineId: indexed,
-      name: 'motir-index-proj',
-      region: 'us-east-1',
-      state: 'running',
-      createdAt: launched,
-      metadata: { [AWS_INDEX_TAG_KEYS.workload]: 'code_graph_index', Name: 'motir-index-proj' },
-    });
-    expect(machines.find((m) => m.machineId === untagged)).toMatchObject({
-      name: '',
-      state: 'stopped',
-    });
-    expect(await inventory().listMachines('another-account')).toEqual([]);
-  });
-
-  it('follows the paging token', async () => {
-    const ids = Array.from({ length: 7 }, () => ec2.plantInstance({ tags: [] }));
-    const machines = await inventory(5).listMachines(AWS_SHARD_TAG);
-    expect(machines.map((m) => m.machineId).sort()).toEqual([...ids].sort());
-    expect(ec2.count('describeInstances')).toBe(2);
-  });
-
-  it('throws on a listing failure — never an empty list', async () => {
-    ec2.failNext('describeInstances', 'UnauthorizedOperation', 403);
-    await expect(inventory().listMachines(AWS_SHARD_TAG)).rejects.toBeInstanceOf(
-      OrchestratorApiError,
-    );
-  });
-
-  it('terminates by instance id, idempotently, and refuses a stop', async () => {
-    const id = ec2.plantInstance({ tags: [] });
-    await inventory().destroyMachine(AWS_SHARD_TAG, id);
-    expect(ec2.instances.get(id)!.state).toBe('terminated');
-    ec2.ageOut(id);
-    await expect(inventory().destroyMachine(AWS_SHARD_TAG, id)).resolves.toBeUndefined();
-
-    ec2.failNext('terminateInstances', 'UnauthorizedOperation', 403);
-    await expect(
-      inventory().destroyMachine(AWS_SHARD_TAG, ec2.plantInstance({ tags: [] })),
-    ).rejects.toBeInstanceOf(OrchestratorApiError);
-    await expect(inventory().stopMachine(AWS_SHARD_TAG, id)).rejects.toBeInstanceOf(
-      OrchestratorNotConfiguredError,
-    );
   });
 });

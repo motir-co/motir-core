@@ -179,13 +179,25 @@ const stateOf = (acct: Account, id: string) => acct.ec2.instances.get(id)!.state
 const ec2Calls = (acct: Account) => acct.ec2.calls.length;
 
 /** Every container booted on any account exits `code` at its first poll — the
- *  indexer returning while supervision sleeps. Wraps the real poll. */
-function containersExit(code: number): void {
+ *  indexer returning while supervision sleeps. Wraps the real poll. With
+ *  `afterLaunches`, no container exits until that many VMs have launched across
+ *  every account, so concurrent runs are all live at once however the runner is
+ *  loaded (otherwise the first can settle, freeing its slot, before the second
+ *  is admitted). */
+function containersExit(code: number, { afterLaunches = 0 } = {}): void {
   const realPoll = codeGraphIndexDispatchService.pollIndexContainer.bind(
     codeGraphIndexDispatchService,
   );
+  const launched = () =>
+    [...(fakes.ec2ByKeyId.values() as Iterable<Ec2Fake>)].reduce(
+      (n, ec2) => n + ec2.instances.size,
+      0,
+    );
   vi.spyOn(codeGraphIndexDispatchService, 'pollIndexContainer').mockImplementation(
     async (session, previous, options) => {
+      for (let waited = 0; launched() < afterLaunches && waited < 30_000; waited += 20) {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
       for (const ec2 of fakes.ec2ByKeyId.values() as Iterable<Ec2Fake>) {
         for (const instance of ec2.instances.values()) {
           if (instance.state === 'pending' || instance.state === 'running') {
@@ -600,7 +612,7 @@ describe('two accounts, two runs, settled at once', () => {
     const a = await account('code_graph_index', 1);
     const b = await account('code_graph_index', 1);
     const sessions = settledSessions();
-    containersExit(0);
+    containersExit(0, { afterLaunches: 2 });
     const one = await tenant('seam-par-a', 'par-a');
     const two = await tenant('seam-par-b', 'par-b');
 

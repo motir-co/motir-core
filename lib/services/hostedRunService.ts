@@ -405,9 +405,9 @@ async function preflight(
  * Stamp the legs hosted, then admit the run: mint its two credentials, boot the
  * container and hand it to the durable supervisor — for a run already OPENED (by
  * Run hosted's open, or by the continue claim's hosted opening). A run held at
- * its org's plan figure (or an unreadable plan) is NOT ended: it stays open and
- * claimed, and the `hosted-run/admit` job boots it once there is room
- * (MOTIR-9381). A failure after this starts is the caller's to end.
+ * its org's plan figure, an unreadable plan, or a full agent-runner pool is NOT
+ * ended: it stays open and claimed, and the `hosted-run/admit` job boots it once
+ * there is room (MOTIR-9381 · MOTIR-9425). A failure after this starts is the caller's to end.
  */
 async function launch(
   run: { id: string; startedAt: string },
@@ -454,7 +454,7 @@ async function launch(
     idempotencyKey: hostedRunAdmitKey(run.id),
   };
 
-  // ── 7 · Admit and boot — or, held at the plan's figure, WAIT (MOTIR-9381) ──
+  // ── 7 · Admit and boot — or, held for room, WAIT (MOTIR-9381 · MOTIR-9425) ──
   const first = await admitHostedRun(admission, { ...options, fleet });
   if (first.kind === 'failed') throw new HostedRunBootFailedError(run.id, first.detail);
   if (first.kind === 'waiting') {
@@ -473,14 +473,19 @@ export function hostedRunAdmitKey(dispatchRunId: string): string {
 export { HOSTED_RUN_ADMIT_RETRY_MS };
 
 /**
- * The admission deferrals that clear BY THEMSELVES (MOTIR-9381): the org is at
- * its plan's agent-run figure, or its plan could not be read. A run held for one
- * of these waits. Every other deferral — no paid plan, the kill switch, no
- * organisation, an unreadable count — ends the run as it always did.
+ * The admission deferrals that clear BY THEMSELVES: the org is at its plan's
+ * agent-run figure (`plan_cap`), its plan could not be read (`plan_unknown`)
+ * (both MOTIR-9381), or every account of the agent-runner pool is full or
+ * refused the boot (`shard_capacity`, MOTIR-9425 — a run only meets it while
+ * the agent runner's switch is on, so it waits for an account and never boots on
+ * Fly). A run held for one of these waits. Every other deferral — no paid plan,
+ * the kill switch, no organisation, an unreadable count — ends the run as it
+ * always did.
  */
 export const HOSTED_RUN_WAITING_REASONS: ReadonlySet<string> = new Set([
   'plan_cap',
   'plan_unknown',
+  'shard_capacity',
 ]);
 
 /** The backstop's words for a run that waited its whole life for room. */
@@ -616,7 +621,17 @@ async function admitHostedRun(
   }
 
   // ── Hand the booted session to the durable supervisor ──────────────────
+  // The account the container booted on is on the run BEFORE anything can
+  // supervise, reap or bill it (MOTIR-9423); null for the process-wide fleet.
+  // A write that fails tears the container down below, like a failed enqueue.
   try {
+    await withWorkspaceServiceContext(data.workspaceId, (tx) =>
+      dispatchRunRepository.recordFleetShard(
+        data.dispatchRunId,
+        booted.session.handle.shardId ?? null,
+        tx,
+      ),
+    );
     await sendEvent(
       'hosted-run/supervise',
       {
