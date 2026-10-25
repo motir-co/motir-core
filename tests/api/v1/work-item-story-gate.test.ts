@@ -104,6 +104,11 @@ describe('gate — the work-item route surface exists and is clean', () => {
      * instead of putting it in contradiction.
      */
     const expectedPermission = (file: string, method: string): string => {
+      // The page resource (MOTIR-9493): `pagesService` gates its doors on the
+      // PAGE keys, read off the MCP page tools that call the same doors.
+      if (/\/pages\//.test(file)) {
+        return method === 'GET' ? TOOL_PERMISSIONS.get_page : TOOL_PERMISSIONS.create_page;
+      }
       if (method === 'GET') return 'project:browse';
       // Archive and restore assert `work_item:archive` — the REVERSIBLE,
       // non-cascading soft-remove, which MOTIR-3629 split out of

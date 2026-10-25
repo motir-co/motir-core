@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+// Wires the agent hoster's Fly↔AWS switch before any instance is placed (MOTIR-9503).
+import '@/lib/ciFleet/fleetKindSwitches';
 import { assertOrgFeatureEnabled } from '@/lib/featureFlags/evaluate';
 import type {
   AgentInstance,

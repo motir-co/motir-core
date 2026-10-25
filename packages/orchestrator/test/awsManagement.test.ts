@@ -8,6 +8,7 @@ import {
   AWS_EC2_VCPU_QUOTA_CODE,
   AWS_MANAGEMENT_ENV,
   AWS_RUNNER_IAM_POLICY,
+  AWS_RUNNER_IAM_ROLE,
   AWS_RUNNER_IAM_USER,
   AwsAccountCreationRefusedError,
   AwsManagementApiError,
@@ -16,6 +17,7 @@ import {
   awsManagementCredentials,
   awsAgentHosterPolicyDocument,
   awsRunnerPolicyDocument,
+  awsRunnerTrustPolicy,
   awsRuntimeKeyEnvNames,
   createAwsManagementApi,
   createAwsManagementSdkClient,
@@ -454,6 +456,136 @@ describe('readVcpuQuota', () => {
     });
     await expect(unknown.api.readVcpuQuota(MEMBER, 'us-east-1')).rejects.toMatchObject({
       awsCode: 'UnknownError',
+    });
+  });
+});
+
+describe('the quota raise calls (MOTIR-9459)', () => {
+  it('files RequestServiceQuotaIncrease for L-1216C47A with the member credentials', async () => {
+    const { api, calls } = harness({
+      RequestServiceQuotaIncreaseCommand: () => ({
+        RequestedQuota: { Id: 'req-1', Status: 'PENDING', DesiredValue: 200 },
+      }),
+    });
+    expect(await api.requestVcpuQuotaIncrease(MEMBER, 'us-east-1', 200)).toEqual({
+      requestId: 'req-1',
+      status: 'PENDING',
+      desiredValue: 200,
+    });
+    expect(calls[0]).toMatchObject({
+      service: 'service-quotas',
+      region: 'us-east-1',
+      accessKeyId: 'ASIAMEMBER',
+      input: { ServiceCode: 'ec2', QuotaCode: AWS_EC2_VCPU_QUOTA_CODE, DesiredValue: 200 },
+    });
+  });
+
+  it('reads one request by its id, AWS status verbatim', async () => {
+    const { api, calls } = harness({
+      GetRequestedServiceQuotaChangeCommand: () => ({
+        RequestedQuota: { Id: 'req-1', Status: 'CASE_OPENED' },
+      }),
+    });
+    expect(await api.getQuotaRequest(MEMBER, 'us-east-1', 'req-1')).toEqual({
+      requestId: 'req-1',
+      status: 'CASE_OPENED',
+      desiredValue: null,
+    });
+    expect(calls[0]!.input).toEqual({ RequestId: 'req-1' });
+  });
+
+  it('finds an open request by listing PENDING, then CASE_OPENED; none is null', async () => {
+    const open = harness({
+      ListRequestedServiceQuotaChangeHistoryByQuotaCommand: (input) =>
+        input['Status'] === 'CASE_OPENED'
+          ? { RequestedQuotas: [{ Id: 'req-9', Status: 'CASE_OPENED', DesiredValue: 400 }] }
+          : { RequestedQuotas: [] },
+    });
+    expect(await open.api.findOpenQuotaRequest(MEMBER, 'us-east-1')).toEqual({
+      requestId: 'req-9',
+      status: 'CASE_OPENED',
+      desiredValue: 400,
+    });
+    expect(open.calls.map((c) => c.input['Status'])).toEqual(['PENDING', 'CASE_OPENED']);
+
+    const none = harness({ ListRequestedServiceQuotaChangeHistoryByQuotaCommand: () => ({}) });
+    expect(await none.api.findOpenQuotaRequest(MEMBER, 'us-east-1')).toBeNull();
+  });
+
+  it('a refusal is a typed error carrying the code; an answer without an id is refused', async () => {
+    const refused = harness({
+      RequestServiceQuotaIncreaseCommand: () => {
+        throw sdkError('ResourceAlreadyExistsException');
+      },
+    });
+    await expect(
+      refused.api.requestVcpuQuotaIncrease(MEMBER, 'us-east-1', 200),
+    ).rejects.toMatchObject({ awsCode: 'ResourceAlreadyExistsException' });
+    const empty = harness({
+      GetRequestedServiceQuotaChangeCommand: () => ({ RequestedQuota: {} }),
+    });
+    await expect(empty.api.getQuotaRequest(MEMBER, 'us-east-1', 'x')).rejects.toMatchObject({
+      awsCode: 'MissingField:RequestedQuota.Id',
+    });
+  });
+});
+
+describe('the runner role (MOTIR-9460)', () => {
+  const policy = awsRunnerPolicyDocument({ shardTag: 'ci-1', regionId: 'us-east-1' });
+
+  it('creates the role trusting the management role, and its policy, minting no key', async () => {
+    const { api, calls } = harness({
+      GetRoleCommand: () => {
+        throw sdkError('NoSuchEntity', 404);
+      },
+      CreateRoleCommand: () => ({}),
+      GetRolePolicyCommand: () => {
+        throw sdkError('NoSuchEntity', 404);
+      },
+      PutRolePolicyCommand: () => ({}),
+    });
+    expect(await api.ensureRunnerRole(MEMBER, policy)).toEqual({
+      created: [`iam-role:${AWS_RUNNER_IAM_ROLE}`, `iam-role-policy:${AWS_RUNNER_IAM_POLICY}`],
+    });
+    const create = calls.find((c) => c.command === 'CreateRoleCommand')!;
+    expect(create.accessKeyId).toBe('ASIAMEMBER');
+    expect(JSON.parse(String(create.input['AssumeRolePolicyDocument']))).toEqual(
+      awsRunnerTrustPolicy(MANAGEMENT.roleArn),
+    );
+    expect(calls.map((c) => c.command)).not.toContain('CreateAccessKeyCommand');
+  });
+
+  it('changes nothing when the role and an equal policy are there', async () => {
+    const { api, calls } = harness({
+      GetRoleCommand: () => ({ Role: { RoleName: AWS_RUNNER_IAM_ROLE } }),
+      GetRolePolicyCommand: () => ({ PolicyDocument: encodeURIComponent(JSON.stringify(policy)) }),
+    });
+    expect(await api.ensureRunnerRole(MEMBER, policy)).toEqual({ created: [] });
+    expect(calls.map((c) => c.command)).toEqual(['GetRoleCommand', 'GetRolePolicyCommand']);
+  });
+
+  it('a refusal other than absence is an error', async () => {
+    const { api } = harness({
+      GetRoleCommand: () => {
+        throw sdkError('AccessDenied', 403);
+      },
+    });
+    await expect(api.ensureRunnerRole(MEMBER, policy)).rejects.toMatchObject({
+      awsCode: 'AccessDenied',
+    });
+  });
+
+  it('assumes motir-fleet-runner in the member account from the management session', async () => {
+    const { api, calls } = harness({ AssumeRoleCommand: assume });
+    const session = await api.assumeRunnerRole('123456789012');
+    expect(session.accessKeyId).toBe('ASIAMEMBER');
+    const runner = calls.find((c) => String(c.input['RoleArn']).includes(AWS_RUNNER_IAM_ROLE))!;
+    expect(runner).toMatchObject({
+      accessKeyId: 'ASIAMGMT',
+      input: {
+        RoleArn: `arn:aws:iam::123456789012:role/${AWS_RUNNER_IAM_ROLE}`,
+        DurationSeconds: 3600,
+      },
     });
   });
 });

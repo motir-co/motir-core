@@ -201,6 +201,21 @@ build {
   }
 
   provisioner "file" {
+    source      = "${path.root}/../boot/parse-user-data.sh"
+    destination = "/tmp/motir-ci-runner/parse-user-data.sh"
+  }
+
+  provisioner "file" {
+    source      = "${path.root}/../boot/motir-vm-entrypoint.sh"
+    destination = "/tmp/motir-ci-runner/motir-vm-entrypoint.sh"
+  }
+
+  provisioner "file" {
+    source      = "${path.root}/../boot/motir-container-entrypoint.sh"
+    destination = "/tmp/motir-ci-runner/motir-container-entrypoint.sh"
+  }
+
+  provisioner "file" {
     source      = "${path.root}/../boot/motir-ci-runner.service"
     destination = "/tmp/motir-ci-runner/motir-ci-runner.service"
   }

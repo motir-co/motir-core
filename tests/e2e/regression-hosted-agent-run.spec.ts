@@ -233,7 +233,7 @@ test.describe('a card runs on the hosted agent', () => {
     await chapter('It reaches a pull request; the card reads Implemented', async () => {
       const api = await ingestContext(runTokenFor(dispatchRunId), origin(baseURL));
       // Pull-request numbers: this spec owns the 22xxx block (MOTIR-3248's
-      // one-thousand-block-per-spec rule; 21xxx is acceptance-verdict.spec.ts's).
+      // one-thousand-block-per-spec rule; 21xxx is regression-verdict.spec.ts's).
       const headRef = `hosted/${card.identifier.toLowerCase()}-22101`;
       await linkPr(page, {
         workItemId: card.id,

@@ -201,13 +201,19 @@ export const fleetShardService = {
     return row ? toFleetShardDTO(row) : null;
   },
 
-  /** The accounts of one role (default `primary`), optionally one kind and state. */
+  /** The accounts of one role (default `primary`; `any` for every role, the
+   *  spare included — MOTIR-9456), optionally one kind and state. */
   async listShards(
-    filter: { fleetKind?: string; role?: FleetShardRoleDTO; state?: FleetShardStateDTO } = {},
+    filter: {
+      fleetKind?: string;
+      role?: FleetShardRoleDTO | 'any';
+      state?: FleetShardStateDTO;
+    } = {},
   ): Promise<FleetShardDTO[]> {
+    const role = filter.role ?? 'primary';
     const rows = await withSystemContext((tx) =>
       fleetShardRepository.listByRole(
-        filter.role ?? 'primary',
+        role === 'any' ? null : role,
         { fleetKind: filter.fleetKind, state: filter.state },
         tx,
       ),

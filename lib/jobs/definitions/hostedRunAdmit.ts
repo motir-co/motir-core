@@ -8,7 +8,8 @@ import { HOSTED_RUN_ADMIT_RETRY_MS, type HostedRunAdmitData } from '../types';
 // clear by itself (`hostedRunService.admit` says which).
 //
 // Emitted by the start path when its first try was held at the org's plan
-// figure (`plan_cap`) or an unreadable plan (`plan_unknown`). It is NOT a poll
+// figure (`plan_cap`), an unreadable plan (`plan_unknown`), or a full
+// agent-runner pool (`shard_capacity`, MOTIR-9425). It is NOT a poll
 // aimed at a state change: each pass is one `reserve` under the fleet admission
 // lock, so the run boots only when a slot has really been released, and a pass
 // still held writes nothing. The interval bounds how soon it asks again.

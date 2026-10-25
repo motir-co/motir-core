@@ -4,6 +4,7 @@ import { isManualReadyItem } from '@/lib/dto/ready';
 import { isOpenBlocker } from '@/lib/workItems/blockerReadiness';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
+import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
 import { workItemRevisionsService } from './workItemRevisionsService';
@@ -47,6 +48,10 @@ const KIND = 'manual_work' as const;
  */
 const ASKED_BY_THEIR_OWN_KIND: ReadonlySet<string> = new Set(['choice', 'decision']);
 
+/** The status a card waits in when it waits on something else first — the move that
+ *  withdraws the gate as `not_ready` (§6), so a raise refuses a card standing in it. */
+const NOT_READY_STATUS_KEY = 'blocked';
+
 /** Why a raise wrote nothing — enough for a caller to log and a test to assert. */
 export type ManualWorkRaiseSkip =
   | 'not_found'
@@ -54,6 +59,7 @@ export type ManualWorkRaiseSkip =
   | 'not_manual'
   | 'asked_by_own_kind'
   | 'done'
+  | 'not_ready'
   | 'already_awaiting';
 
 export interface ManualWorkRaise {
@@ -116,8 +122,12 @@ export const manualWorkGateService = {
    * nothing. A DECIDED gate does not stop it — a reopened card is owed again.
    *
    * The server does not take the run's word for it: the card must resolve in the
-   * caller's workspace, be unarchived, be manual (`isManualReadyItem`) and not be in a
-   * done-category status, as read in this transaction.
+   * caller's workspace, be unarchived, be manual (`isManualReadyItem`), not be in a
+   * done-category status, and be READY — not in Blocked and with no `blocked_by` on
+   * open work (`isOpenBlocker`) — as read in this transaction. The readiness guard is
+   * §6's `not_ready` withdrawal read at the raise (MOTIR-9500): the raise must not open
+   * a gate in the state the withdrawal closes it in. Nothing is lost by the skip: the
+   * next run that reaches the card once its blockers land raises it.
    *
    * @param run the run that reached the card — its starter (`DispatchRun.createdById`)
    *   is who an UNASSIGNED card is assigned to.
@@ -148,6 +158,20 @@ export const manualWorkGateService = {
       tx,
     );
     if (doneKeys.get(item.projectId)?.has(item.status)) return skip('done', item);
+    if (item.status === NOT_READY_STATUS_KEY) return skip('not_ready', item);
+
+    // The card's blockers may sit in other projects, each with its own done set.
+    const blockers = await workItemLinkRepository.findBlockerStates(item.id, tx);
+    if (blockers.length > 0) {
+      const terminalByProject = await workflowsService.getTerminalStatusKeysByProjects(
+        blockers.map((blocker) => blocker.projectId),
+        item.workspaceId,
+        tx,
+      );
+      if (blockers.some((blocker) => isOpenBlocker(blocker, terminalByProject))) {
+        return skip('not_ready', item);
+      }
+    }
 
     const awaiting = await approvalGateRepository.findAwaitingByWorkItem(item.id, tx);
     if (awaiting.some((gate) => gate.kind === KIND)) return skip('already_awaiting', item);

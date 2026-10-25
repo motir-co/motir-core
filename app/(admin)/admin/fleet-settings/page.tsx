@@ -8,7 +8,10 @@ import type { FleetOrgCiStateDTO, FleetOrgCiTargetDTO } from '@/lib/dto/fleetOrg
 import type { PlatformPrincipal } from '@/lib/platform/auth';
 import { NotPlatformStaffError } from '@/lib/platform/errors';
 import { requirePlatformStaffPage } from '@/lib/platform/pageGate';
+import { agentHostingSettingService } from '@/lib/services/agentHostingSettingService';
 import { fleetOrgCiSettingService } from '@/lib/services/fleetOrgCiSettingService';
+import type { FleetKindSwitchStateDTO } from '@/lib/dto/fleetKindSwitch';
+import { AgentHostingSetting, AgentHostingUnavailable } from './_components/AgentHostingSetting';
 import { FleetOrgCiSetting, type FleetOrgCiConstants } from './_components/FleetOrgCiSetting';
 import { FleetSettingsUnavailable } from './_components/FleetSettingsUnavailable';
 
@@ -54,21 +57,44 @@ export default async function AdminFleetSettingsPage() {
         <h1 className="font-serif text-2xl text-(--el-text)">{t('title')}</h1>
         <p className="max-w-prose font-sans text-sm text-(--el-text-secondary)">{t('subtitle')}</p>
       </div>
-      <Suspense
-        fallback={
-          <Card aria-busy="true">
-            <div className="flex animate-pulse flex-col gap-2" aria-hidden="true">
-              <div className="h-6 w-56 rounded-(--radius-control) bg-(--el-muted)" />
-              <div className="h-4 w-full rounded-(--radius-control) bg-(--el-muted)" />
-              <div className="h-4 w-2/3 rounded-(--radius-control) bg-(--el-muted)" />
-            </div>
-          </Card>
-        }
-      >
+      <Suspense fallback={<SectionSkeleton />}>
         <FleetSettingsSection principal={principal} />
+      </Suspense>
+      {/* Agent hosting (MOTIR-9534 · MOTIR-9503) — AFTER the per-org Motir-CI
+          section, and read on its own, so either one failing leaves the other. */}
+      <Suspense fallback={<SectionSkeleton />}>
+        <AgentHostingSection principal={principal} />
       </Suspense>
     </div>
   );
+}
+
+function SectionSkeleton() {
+  return (
+    <Card aria-busy="true">
+      <div className="flex animate-pulse flex-col gap-2" aria-hidden="true">
+        <div className="h-6 w-56 rounded-(--radius-control) bg-(--el-muted)" />
+        <div className="h-4 w-full rounded-(--radius-control) bg-(--el-muted)" />
+        <div className="h-4 w-2/3 rounded-(--radius-control) bg-(--el-muted)" />
+      </div>
+    </Card>
+  );
+}
+
+/**
+ * The agent hoster's Fly↔AWS switch (Panels 1–10). A failed read renders the
+ * section's error card with Retry and no switch (Panel 10) — never a default.
+ */
+async function AgentHostingSection({ principal }: { principal: PlatformPrincipal }) {
+  let state: FleetKindSwitchStateDTO;
+  try {
+    state = await agentHostingSettingService.getState(principal);
+  } catch (err) {
+    if (err instanceof NotPlatformStaffError) throw err;
+    console.error('[admin] agent hosting setting could not be read');
+    return <AgentHostingUnavailable />;
+  }
+  return <AgentHostingSetting state={state} />;
 }
 
 async function FleetSettingsSection({ principal }: { principal: PlatformPrincipal }) {

@@ -23,8 +23,8 @@ import { pageIdField, pageProjectKeyField, resolvePageProject } from './pageRef'
 //
 // No title edit here: renaming is `rename_page` (MOTIR-8841), which takes no revision.
 //
-// EXEMPT from payload derivation (`payloads/exemptions.ts`): no `/api/v1`
-// operation returns a page.
+// EXEMPT from payload derivation (`payloads/exemptions.ts`): the `/api/v1`
+// `Page` resource is a subset of this payload.
 
 export const UPDATE_PAGE_TOOL_NAME = 'update_page';
 

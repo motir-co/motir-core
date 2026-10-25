@@ -103,7 +103,7 @@ function card(name: string): HTMLElement {
 /** Each plan card's name, in render order (the header span, not a price or pill). */
 function cardHeaders(): HTMLElement[] {
   return screen
-    .getAllByText(/^(Free|Standard|Pro|Max|Max ×2)$/, { selector: 'span' })
+    .getAllByText(/^(Free|Standard|Pro|Max|Max ×2|Host)$/, { selector: 'span' })
     .filter((el) => el.className.includes('font-semibold'));
 }
 
@@ -140,7 +140,8 @@ describe('the Max ×2 plan card', () => {
 
     const names = cardHeaders().map((el) => el.textContent);
     // Free is the trial grant, not a card (MOTIR-7598).
-    expect(names).toEqual(['Standard', 'Pro', 'Max', 'Max ×2']);
+    // Host follows Max ×2 (MOTIR-9403).
+    expect(names).toEqual(['Standard', 'Pro', 'Max', 'Max ×2', 'Host']);
 
     const maxX2 = within(card('Max ×2'));
     expect(maxX2.getByText('60,000 credits / mo')).toBeTruthy();
@@ -199,7 +200,11 @@ describe('an org that already holds a live AI plan', () => {
     await openPlans(status(onPlan('max_x2', 'Max ×2', 'max_x2_pool_monthly')));
     await screen.findByText('Motir AI — plans & subscription');
     expect(within(card('Max ×2')).getByRole('button', { name: 'Current plan' })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: /^(Choose|Upgrade to) / })).toBeNull();
+    // The one plan above Max ×2 is Host (MOTIR-9403): no checkout, one upgrade.
+    expect(screen.queryByRole('button', { name: /^Choose / })).toBeNull();
+    expect(
+      screen.getAllByRole('button', { name: /^Upgrade to / }).map((b) => b.textContent),
+    ).toEqual(['Upgrade to Host']);
     expect(within(card('Max')).getByRole('button', { name: 'Downgrade to Max' })).toBeTruthy();
   });
 });

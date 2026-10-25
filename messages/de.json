@@ -6588,7 +6588,7 @@
         "standard": {
           "useCase": "Planen Sie Ihre Projekte mit dem Motir AI-Planer.",
           "features": [
-            "Das gesamte Projekt detailliert planen",
+            "Das Projekt detailliert planen",
             "Credits werden monatlich erneuert · jederzeit aufladbar"
           ]
         },
@@ -6603,12 +6603,26 @@
         "max": {
           "useCase": "Pro, plus Spielraum, geplante Arbeit an den Agenten zu übergeben.",
           "prev": "Pro",
-          "features": ["Spielraum, geplante Arbeit automatisch an den Agenten zu übergeben"]
+          "features": [
+            "Mehr Arbeit planen, damit Ihr Projekt schneller vorankommt",
+            "Spielraum, einen Teil der geplanten Arbeit automatisch an den Agenten zu übergeben"
+          ]
         },
         "max_x2": {
           "useCase": "Max, mit doppeltem Volumen.",
           "prev": "Max",
-          "features": ["Doppelter monatlicher Credit-Pool von Max"]
+          "features": [
+            "Doppelter monatlicher Credit-Pool von Max",
+            "Mehr geplante Arbeit automatisch an den Agenten übergeben"
+          ]
+        },
+        "host": {
+          "useCase": "Motir im Flottenmaßstab, auf eigenen AWS-Konten.",
+          "prev": "Max ×2",
+          "features": [
+            "Motir führt Ihr Projekt eigenständig voran",
+            "Eigene Pools für CI-Runner, Agentenläufe, den Indexer und gehostete Agenten"
+          ]
         }
       },
       "trial": {
@@ -8417,7 +8431,9 @@
       "held": "Motir AI bietet die Planung an, sobald diese Fragen beantwortet sind.",
       "settledHeading": "Was Ihre Antworten festgelegt haben",
       "clearEnough": "Klar genug, um es wie beschrieben zu planen.",
-      "nothingSettled": "Es wurde nichts festgelegt, daher wird die Anfrage wie beschrieben geplant."
+      "nothingSettled": "Es wurde nichts festgelegt, daher wird die Anfrage wie beschrieben geplant.",
+      "requirementSaved": "Gespeichert als <link>{title}</link> in den Anforderungsdokumenten.",
+      "requirementNotSaved": "<lead>Die Anforderung konnte nicht gespeichert werden.</lead> Es wurde nichts gestartet. Bestätigen ist weiterhin verfügbar – versuchen Sie es noch einmal."
     },
     "logBugOffer": {
       "label": "Angebot, einen Bug zu erfassen",
@@ -8496,6 +8512,20 @@
       "emptyBody": "Fragen, die du stellst, und Pläne, die du in diesem Projekt beginnst, werden hier aufgeführt.",
       "error": "Deine Gespräche konnten nicht geladen werden.",
       "rowAria": "{title} · {status} · aktiv {when}"
+    },
+    "requirementPane": {
+      "label": "Zu planende Anforderung",
+      "headings": {
+        "outcome": "Ergebnis",
+        "behaviour": "Verhalten",
+        "scopeEdge": "Abgrenzung",
+        "constraints": "Randbedingungen",
+        "acceptance": "Abnahme",
+        "assumptions": "Annahmen"
+      },
+      "none": "Nichts vorhanden",
+      "correctionHint": "Um hier etwas zu ändern, schreibe die Korrektur in die Unterhaltung.",
+      "notice": "Für dieses Angebot wurde keine Anforderung verfasst. Die Planung verfasst sie, sobald du bestätigst."
     }
   },
   "codeHealth": {
@@ -10036,12 +10066,20 @@
               "enable": "Flotten-CI eingeschaltet",
               "disable": "Flotten-CI ausgeschaltet"
             },
+            "agent_hosting": {
+              "enable": "Neue Agenten auf AWS umgestellt",
+              "disable": "Neue Agenten zurück auf Fly umgestellt"
+            },
             "shard": {
               "add": "Flottenkonto hinzugefügt",
               "limits": "Limits eines Flottenkontos aktualisiert",
               "ceiling": "Obergrenze eines Flottenkontos geändert",
               "disable": "Flottenkonto deaktiviert",
-              "enable": "Flottenkonto wieder aktiviert"
+              "enable": "Flottenkonto wieder aktiviert",
+              "quota_request": "Kontingenterhöhung für ein Flottenkonto angefordert"
+            },
+            "pool": {
+              "grow": "Flottenpool erweitert"
             }
           },
           "idea": {
@@ -12014,6 +12052,56 @@
         "title": "Die Flotteneinstellung konnte nicht geladen werden",
         "body": "Die Einstellung oder ihre Bereitschaft konnte nicht gelesen werden, daher wird kein Zustand angezeigt und kein Schalter angeboten. Dies ist ein Lesefehler – nichts hat sich geändert, und kein Wert wird geraten.",
         "retry": "Erneut versuchen"
+      },
+      "agentHosting": {
+        "title": "Agenten-Hosting",
+        "subtitle": "Wo neue Agenteninstanzen erstellt werden",
+        "superadminOnly": "Nur Superadmin",
+        "explanation": "Aus: Neue Agenteninstanzen werden auf Fly erstellt. An: Jede neue Agenteninstanz wird auf einem Konto des AWS-Pools für Agenten-Hosting platziert. In beiden Fällen bleiben bestehende Agenten, wo sie sind – dieser Schalter verschiebt nie einen laufenden Agenten. Eine Änderung gilt für den nächsten erstellten Agenten, ohne Neustart.",
+        "state": {
+          "fly": "Fly",
+          "aws": "AWS"
+        },
+        "action": {
+          "turnOnAws": "AWS einschalten",
+          "turnOffAws": "AWS ausschalten"
+        },
+        "onNote": "Neue Agenten werden auf AWS erstellt; Agenten, die bereits auf Fly laufen, bleiben auf Fly.",
+        "meta": {
+          "lastChanged": "Zuletzt geändert",
+          "changedBy": "von {email}, {when} – „{reason}“",
+          "neverChanged": "Nie geändert – neue Agenten werden auf Fly erstellt",
+          "auditLink": "Audit-Log"
+        },
+        "monitoringLine": "Agentenmaschinen erscheinen in Monitoring › Flotte",
+        "confirm": {
+          "toAwsTitle": "Neue Agenten auf AWS erstellen?",
+          "toAwsBody": "Fly → AWS. Jede neue Agenteninstanz wird ab jetzt auf einem Konto des AWS-Pools für Agenten-Hosting erstellt. Agenten, die bereits auf Fly laufen, werden nicht verschoben: Sie laufen weiter auf Fly.",
+          "toFlyTitle": "Neue Agenten wieder auf Fly erstellen?",
+          "toFlyBody": "AWS → Fly. Neue Agenteninstanzen gehen zurück zu Fly, beginnend mit der nächsten, die erstellt wird. Agenten, die bereits auf AWS laufen, werden nicht verschoben: Sie laufen weiter auf AWS.",
+          "reasonLabel": "Grund – erforderlich, wird ins Audit-Log geschrieben",
+          "reasonPlaceholderToAws": "Warum werden neue Agenten auf AWS verlagert?",
+          "reasonPlaceholderToFly": "Warum kehren neue Agenten zu Fly zurück?",
+          "reasonHint": "Wird jedem Operator angezeigt, der diese Änderung später liest. „Test“ allein beantwortet nichts.",
+          "reasonHintEmpty": "Die Schaltfläche bleibt deaktiviert, bis ein Grund eingegeben ist – dieselbe Regel, die der Server anwendet.",
+          "cancel": "Abbrechen",
+          "confirmToAws": "AWS einschalten",
+          "confirmToFly": "AWS ausschalten"
+        },
+        "refused": {
+          "reasonMissing": "Nicht geändert: Ein Grund ist erforderlich und wird mit dieser Änderung ins Audit-Log geschrieben. Neue Agenten werden weiterhin auf {hoster} erstellt.",
+          "alreadyAws": "Bereits auf AWS – nichts wurde geändert.",
+          "alreadyFly": "Bereits auf Fly – nichts wurde geändert.",
+          "alreadyBody": "Ein anderer Superadmin hat es zuerst geändert, daher wurde nichts geschrieben und keine Audit-Zeile hinzugefügt.",
+          "writeFailed": "Nicht auf {hoster} umgestellt: Die Änderung konnte nicht gespeichert werden.",
+          "nothingChanged": "Nichts wurde geändert: Neue Agenten werden weiterhin auf {previous} erstellt.",
+          "retryHint": "Ihr Grund bleibt erhalten. Versuchen Sie es erneut oder brechen Sie ab."
+        },
+        "unavailable": {
+          "title": "Agenten-Hosting konnte nicht geladen werden",
+          "body": "Wo neue Agenten erstellt werden, konnte nicht gelesen werden, daher wird kein Zustand angezeigt und kein Schalter angeboten. Dies ist ein Lesefehler – nichts hat sich geändert, und kein Wert wird geraten.",
+          "retry": "Erneut versuchen"
+        }
       }
     }
   },

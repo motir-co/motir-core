@@ -241,16 +241,16 @@ export function BillingClient({ orgId, orgName, memberCount }: BillingClientProp
 
   if (state === 'loading' && !data) {
     return (
-      <>
+      <div className="mx-auto w-full max-w-[64rem]">
         {live}
         <BillingSkeleton />
-      </>
+      </div>
     );
   }
 
   if (state === 'forbidden') {
     return (
-      <>
+      <div className="mx-auto w-full max-w-[64rem]">
         {live}
         <EmptyState
           icon={<Lock className="h-12 w-12 text-(--el-accent-on-surface)" aria-hidden />}
@@ -265,20 +265,20 @@ export function BillingClient({ orgId, orgName, memberCount }: BillingClientProp
             </Link>
           }
         />
-      </>
+      </div>
     );
   }
 
   if (state === 'error' || !data) {
     return (
-      <>
+      <div className="mx-auto w-full max-w-[64rem]">
         {live}
         <ErrorState
           title={t('states.errorTitle')}
           description={t('states.errorDescription')}
           retry={() => load()}
         />
-      </>
+      </div>
     );
   }
 
@@ -308,7 +308,13 @@ export function BillingClient({ orgId, orgName, memberCount }: BillingClientProp
   } as const;
 
   return (
-    <div className="flex flex-col gap-5" aria-busy={state === 'loading'}>
+    // Every view keeps the 64rem column except the Motir AI plans view, whose five
+    // cards take the full page width (design/billing § "Amendment 2026-10-23 — the
+    // Host plan", point 7, MOTIR-9403).
+    <div
+      className={`mx-auto flex w-full flex-col gap-5 ${view === 'plans' ? '' : 'max-w-[64rem]'}`}
+      aria-busy={state === 'loading'}
+    >
       {live}
 
       {/* THE LABEL THAT REPLACED THE BRANCH (MOTIR-4572). A chip, above the
@@ -1590,18 +1596,26 @@ function PlansView({
   // plan has no card (Enterprise is gone — MOTIR-7592).
   // The standing rungs only: a larger pool is offered and sold from the Calculator's
   // answer, never in this row (MOTIR-8997, design/billing § "Amendment 2026-10-21 —
-  // the larger credit pool plan", approved 2026-10-22).
-  const paidPlans = aiPlans.filter((p) => p.key !== 'free' && p.prices && p.band !== 'larger_pool');
+  // the larger credit pool plan", approved 2026-10-22). The row is the standing
+  // LADDER plus Host, each said positively: Host is the fifth card, after Max ×2, in
+  // catalog order (design/billing § "Amendment 2026-10-23 — the Host plan", MOTIR-9403).
+  const paidPlans = aiPlans.filter(
+    (p) => p.key !== 'free' && p.prices && (p.band === 'ladder' || p.band === 'host'),
+  );
   // An org that HOLDS a larger pool sees that one plan, with the regular plans folded
   // behind a toggle (design panels 9–10).
   const heldPool =
     (holdsPlan && aiPlans.find((p) => p.key === tier?.key && p.band === 'larger_pool')) || null;
   const [showRegular, setShowRegular] = useState(false);
   const regularId = useId();
-  const topRung = paidPlans.reduce<AiPlanCatalogEntry | null>(
-    (top, p) => ((p.allotment?.credits ?? 0) > (top?.allotment?.credits ?? 0) ? p : top),
-    null,
-  );
+  // The callout names the LADDER's top (Max ×2), never Host: its sentence is about
+  // outgrowing the ladder, and Host is not a rung of it (MOTIR-9403).
+  const topRung = paidPlans
+    .filter((p) => p.band === 'ladder')
+    .reduce<AiPlanCatalogEntry | null>(
+      (top, p) => ((p.allotment?.credits ?? 0) > (top?.allotment?.credits ?? 0) ? p : top),
+      null,
+    );
   const renderCard = (
     plan: AiPlanCatalogEntry,
     previous: AiPlanCatalogEntry | null,
@@ -1878,7 +1892,7 @@ function PlanCard({
       <div>
         <div>
           <span className="font-serif text-2xl text-(--el-text)">
-            {t('plans.perMoEquiv', { n: perMo })}
+            {t('plans.perMoEquiv', { n: fmt(perMo, locale) })}
           </span>
         </div>
         <p className="font-sans text-xs text-(--el-text-muted)">
@@ -1898,7 +1912,7 @@ function PlanCard({
     priceBlock = (
       <div>
         <span className="font-serif text-2xl text-(--el-text)">
-          {t('plans.perMoEquiv', { n: monthly })}
+          {t('plans.perMoEquiv', { n: fmt(monthly, locale) })}
         </span>
         <p className="font-sans text-xs text-(--el-text-muted)">
           {t('plans.monthlySub', { yr: fmt(monthly * 12, locale), n: fmt(save, locale) })}
@@ -1977,7 +1991,8 @@ function PlanCard({
   // "Everything in {prev}, plus" lead shows only on tiers that name a `prev`.
   const tierBase = `plans.tiers.${plan.key}`;
   const features = pool ? [] : ((t.raw(`${tierBase}.features`) as string[] | undefined) ?? []);
-  const hasPrev = plan.key === 'pro' || plan.key === 'max' || plan.key === 'max_x2';
+  const hasPrev =
+    plan.key === 'pro' || plan.key === 'max' || plan.key === 'max_x2' || plan.key === 'host';
   // The bundled Motir seat (8.1.22): every paid plan includes its catalog count of
   // tracker seats at no charge (MOTIR-8394 reads it, never a typed 1).
   const seatIncluded = plan.includedTrackerSeats > 0;

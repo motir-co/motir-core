@@ -1,82 +1,155 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  AWS_INVENTORY_PAGE_SIZE,
-  OrchestratorApiError,
-  createAwsFleetInventory,
-  type FleetInventory,
-} from '../src/index';
+import { describe, expect, it, vi } from 'vitest';
+import { OrchestratorApiError, createAwsFleetInventory, toEc2ApiError } from '../src';
 import { AwsEc2Fake } from './contract/awsEc2Fake';
 
-// The AWS HOSTER INVENTORY (Story MOTIR-9361 · MOTIR-9476): every instance in one
-// account — tagged or not, terminated ones left out — and every disk, each paged
-// to the end; idempotent destroy and stop; a disk deleted only while unattached;
-// a failed listing thrown, never an empty answer.
+// THE AWS FLEET INVENTORY (MOTIR-9426) — one account's whole region, against the
+// in-memory EC2 fake: no tag filter, every page, the port's state vocabulary, and
+// a listing error that throws rather than reading as empty — and, for an
+// agent-hoster account's persistent machines (MOTIR-9476), a real stop and every
+// disk listed and deleted.
 
-const SHARD = 'agent-hoster-a';
-let ec2: AwsEc2Fake;
-let inventory: FleetInventory;
+const ACCOUNT = 'agents-us-east-1-a';
 
-beforeEach(() => {
-  ec2 = new AwsEc2Fake();
-  inventory = createAwsFleetInventory({ ec2, region: 'us-east-1', shardTag: SHARD });
-});
+function inventoryOver(ec2: AwsEc2Fake, pageSize?: number) {
+  return createAwsFleetInventory({
+    ec2,
+    region: 'us-east-1',
+    accountName: ACCOUNT,
+    ...(pageSize ? { pageSize } : {}),
+  });
+}
 
 describe('createAwsFleetInventory', () => {
-  it('answers the one app the account is, and nothing for any other', async () => {
-    expect(inventory.provider).toBe('aws');
-    expect(await inventory.listApps()).toEqual([SHARD]);
+  it('lists exactly the account as its one app, and nothing for any other app', async () => {
+    const ec2 = new AwsEc2Fake();
     ec2.plantInstance({ tags: [] });
-    expect(await inventory.listMachines('another-app')).toEqual([]);
-    expect(await inventory.listVolumes!('another-app')).toEqual([]);
+    const inventory = inventoryOver(ec2);
+    expect(inventory.provider).toBe('aws');
+    expect(await inventory.listApps()).toEqual([ACCOUNT]);
+    expect(await inventory.listMachines('another-account')).toEqual([]);
+    expect(ec2.count('describeInstances')).toBe(0);
   });
 
-  it('lists every live instance, a hand-started untagged one included, with its launch time and tags', async () => {
-    const launched = new Date('2026-10-24T09:00:00Z');
+  it('lists every instance across pages, tagged and untagged, with no tag filter', async () => {
+    const ec2 = new AwsEc2Fake();
+    const launched = new Date('2026-10-24T10:00:00.000Z');
     const tagged = ec2.plantInstance({
       launchTime: launched,
       tags: [
-        { key: 'motir-shard', value: SHARD },
-        { key: 'Name', value: 'motir-instance-x' },
+        { key: 'Name', value: 'motir-agent-run1' },
+        { key: 'motir-shard', value: 'agents-a' },
+        { key: 'motir_dispatch_run_id', value: 'run1' },
       ],
     });
-    const byHand = ec2.plantInstance({ tags: [], state: 'stopped', launchTime: null });
-    const gone = ec2.plantInstance({ tags: [], state: 'terminated' });
-    const machines = await inventory.listMachines(SHARD);
-    expect(machines.map((m) => m.machineId).sort()).toEqual([tagged, byHand].sort());
+    const byHand = ec2.plantInstance({ tags: [], launchTime: null });
+    const states = ['pending', 'stopping', 'stopped', 'shutting-down', 'terminated'];
+    const others = states.map((state) => ec2.plantInstance({ state, tags: [] }));
+
+    const machines = await inventoryOver(ec2, 2).listMachines(ACCOUNT);
+
+    expect(ec2.count('describeInstances')).toBe(4);
+    for (const call of ec2.calls.filter((c) => c.method === 'describeInstances')) {
+      expect((call.input as { filters?: unknown }).filters).toBeUndefined();
+    }
+    expect(machines).toHaveLength(7);
     expect(machines.find((m) => m.machineId === tagged)).toEqual({
-      app: SHARD,
+      app: ACCOUNT,
       machineId: tagged,
-      name: 'motir-instance-x',
+      name: 'motir-agent-run1',
       region: 'us-east-1',
       state: 'running',
       createdAt: launched,
-      metadata: { 'motir-shard': SHARD, Name: 'motir-instance-x' },
+      metadata: {
+        Name: 'motir-agent-run1',
+        'motir-shard': 'agents-a',
+        motir_dispatch_run_id: 'run1',
+      },
     });
     expect(machines.find((m) => m.machineId === byHand)).toMatchObject({
       name: '',
-      state: 'stopped',
       createdAt: null,
       metadata: {},
+      state: 'running',
     });
-    expect(machines.some((m) => m.machineId === gone)).toBe(false);
+    expect(others.map((id) => machines.find((m) => m.machineId === id)!.state)).toEqual([
+      'starting',
+      'stopping',
+      'stopped',
+      'gone',
+      'gone',
+    ]);
   });
 
-  it('pages both listings to the end', async () => {
-    for (let i = 0; i < AWS_INVENTORY_PAGE_SIZE + 3; i += 1) ec2.plantInstance({ tags: [] });
-    for (let i = 0; i < AWS_INVENTORY_PAGE_SIZE + 2; i += 1) ec2.plantVolume();
-    expect(await inventory.listMachines(SHARD)).toHaveLength(AWS_INVENTORY_PAGE_SIZE + 3);
-    expect(ec2.count('describeInstances')).toBe(2);
-    expect(await inventory.listVolumes!(SHARD)).toHaveLength(AWS_INVENTORY_PAGE_SIZE + 2);
-    expect(ec2.count('describeVolumes')).toBe(2);
+  it.each([
+    [503, 'RequestLimitExceeded'],
+    [400, 'UnauthorizedOperation'],
+  ])('a failing DescribeInstances (%s) throws, never an empty list', async (status, code) => {
+    const ec2 = new AwsEc2Fake();
+    ec2.plantInstance({ tags: [] });
+    // As `createEc2Api` hands it over: the SDK's error reduced to its code.
+    const sdkError = Object.assign(new Error('the user-data was S3CRET'), {
+      Code: code,
+      $metadata: { httpStatusCode: status },
+    });
+    vi.spyOn(ec2, 'describeInstances').mockRejectedValueOnce(toEc2ApiError(sdkError));
+
+    const listed = inventoryOver(ec2).listMachines(ACCOUNT);
+    await expect(listed).rejects.toBeInstanceOf(OrchestratorApiError);
+    const error = (await listed.catch((e: unknown) => e)) as OrchestratorApiError;
+    expect(error).toMatchObject({ provider: 'aws', status });
+    expect(error.message).toContain(code);
+    expect(error.message).not.toContain('S3CRET');
   });
 
-  it('lists every disk with its state, attachment, creation and tags', async () => {
+  it('destroyMachine terminates, and resolves again and on an unknown id', async () => {
+    const ec2 = new AwsEc2Fake();
+    const id = ec2.plantInstance({ tags: [] });
+    const inventory = inventoryOver(ec2);
+
+    await inventory.destroyMachine(ACCOUNT, id);
+    expect(ec2.liveInstanceIds()).toEqual([]);
+    await expect(inventory.destroyMachine(ACCOUNT, id)).resolves.toBeUndefined();
+    await expect(inventory.destroyMachine(ACCOUNT, 'i-0000dead')).resolves.toBeUndefined();
+  });
+
+  it('destroyMachine throws any other EC2 refusal as the port error', async () => {
+    const ec2 = new AwsEc2Fake();
+    const id = ec2.plantInstance({ tags: [] });
+    ec2.failNext('terminateInstances', 'UnauthorizedOperation', 403);
+    await expect(inventoryOver(ec2).destroyMachine(ACCOUNT, id)).rejects.toMatchObject({
+      provider: 'aws',
+      status: 403,
+    });
+  });
+
+  it('stops a machine; one gone or already terminating is where a stop puts it', async () => {
+    const ec2 = new AwsEc2Fake();
+    const inventory = inventoryOver(ec2);
+    const machine = ec2.plantInstance({ tags: [] });
+    await inventory.stopMachine(ACCOUNT, machine);
+    expect(ec2.instances.get(machine)!.state).toBe('stopped');
+    await expect(inventory.stopMachine(ACCOUNT, 'i-0000dead')).resolves.toBeUndefined();
+    const ending = ec2.plantInstance({ tags: [], state: 'shutting-down' });
+    await expect(inventory.stopMachine(ACCOUNT, ending)).resolves.toBeUndefined();
+    ec2.failNext('stopInstances', 'InternalError', 500);
+    await expect(inventory.stopMachine(ACCOUNT, machine)).rejects.toBeInstanceOf(
+      OrchestratorApiError,
+    );
+  });
+
+  it('lists every disk across pages, with its state, attachment, creation and tags', async () => {
+    const ec2 = new AwsEc2Fake();
     const created = new Date('2026-10-24T08:00:00Z');
     const loose = ec2.plantVolume({ createTime: created, tags: [{ key: 'Name', value: 'home' }] });
     const machine = ec2.plantInstance({ tags: [] });
     const held = ec2.plantVolume({ attachedInstanceId: machine });
     ec2.backdateVolume(held, null);
-    const volumes = await inventory.listVolumes!(SHARD);
+    for (let i = 0; i < 6; i += 1) ec2.plantVolume();
+
+    const volumes = await inventoryOver(ec2, 5).listVolumes!(ACCOUNT);
+
+    expect(volumes).toHaveLength(8);
+    expect(ec2.count('describeVolumes')).toBe(2);
     expect(volumes.find((v) => v.volumeId === loose)).toEqual({
       volumeId: loose,
       state: 'available',
@@ -89,57 +162,40 @@ describe('createAwsFleetInventory', () => {
       attachedMachineId: machine,
       createdAt: null,
     });
+    expect(await inventoryOver(ec2).listVolumes!('another-account')).toEqual([]);
   });
 
-  it('a failed listing throws as an orchestrator error — never an empty list', async () => {
-    ec2.failNext('describeInstances', 'RequestLimitExceeded', 503);
-    await expect(inventory.listMachines(SHARD)).rejects.toBeInstanceOf(OrchestratorApiError);
+  it('a failed disk listing throws as an orchestrator error, never an empty list', async () => {
+    const ec2 = new AwsEc2Fake();
+    ec2.plantVolume();
     ec2.failNext('describeVolumes', 'UnauthorizedOperation', 403);
-    await expect(inventory.listVolumes!(SHARD)).rejects.toBeInstanceOf(OrchestratorApiError);
+    await expect(inventoryOver(ec2).listVolumes!(ACCOUNT)).rejects.toBeInstanceOf(
+      OrchestratorApiError,
+    );
   });
 
-  it('destroys a machine (its disk stays), idempotently', async () => {
+  it('destroys a machine with its disk left, and deletes only an unattached disk', async () => {
+    const ec2 = new AwsEc2Fake();
+    const inventory = inventoryOver(ec2);
     const machine = ec2.plantInstance({ tags: [] });
     const home = ec2.plantVolume({ attachedInstanceId: machine });
-    await inventory.destroyMachine(SHARD, machine);
-    expect(ec2.liveInstanceIds()).toEqual([]);
+    await inventory.destroyMachine(ACCOUNT, machine);
     expect(ec2.liveVolumeIds()).toEqual([home]);
-    ec2.ageOut(machine);
-    await expect(inventory.destroyMachine(SHARD, machine)).resolves.toBeUndefined();
-    ec2.failNext('terminateInstances', 'InternalError', 500);
-    const other = ec2.plantInstance({ tags: [] });
-    await expect(inventory.destroyMachine(SHARD, other)).rejects.toBeInstanceOf(
-      OrchestratorApiError,
-    );
-  });
 
-  it('stops a machine; one gone or already terminating is where a stop puts it', async () => {
-    const machine = ec2.plantInstance({ tags: [] });
-    await inventory.stopMachine(SHARD, machine);
-    expect(ec2.instances.get(machine)!.state).toBe('stopped');
-    await expect(inventory.stopMachine(SHARD, 'i-0000dead')).resolves.toBeUndefined();
-    const ending = ec2.plantInstance({ tags: [], state: 'shutting-down' });
-    await expect(inventory.stopMachine(SHARD, ending)).resolves.toBeUndefined();
-    ec2.failNext('stopInstances', 'InternalError', 500);
-    await expect(inventory.stopMachine(SHARD, machine)).rejects.toBeInstanceOf(
-      OrchestratorApiError,
-    );
-  });
-
-  it('deletes an unattached disk, refuses an attached one, and a gone one is done', async () => {
     const loose = ec2.plantVolume();
-    await inventory.destroyVolume!(SHARD, loose);
-    expect(ec2.liveVolumeIds()).toEqual([]);
-    await expect(inventory.destroyVolume!(SHARD, loose)).resolves.toBeUndefined();
-    const machine = ec2.plantInstance({ tags: [] });
-    const held = ec2.plantVolume({ attachedInstanceId: machine });
-    await expect(inventory.destroyVolume!(SHARD, held)).rejects.toBeInstanceOf(
+    await inventory.destroyVolume!(ACCOUNT, loose);
+    expect(ec2.liveVolumeIds()).toEqual([home]);
+    await expect(inventory.destroyVolume!(ACCOUNT, loose)).resolves.toBeUndefined();
+    const other = ec2.plantInstance({ tags: [] });
+    const held = ec2.plantVolume({ attachedInstanceId: other });
+    await expect(inventory.destroyVolume!(ACCOUNT, held)).rejects.toBeInstanceOf(
       OrchestratorApiError,
     );
-    expect(ec2.liveVolumeIds()).toEqual([held]);
   });
 
   it('a transport failure on any action is an orchestrator error, never success', async () => {
+    const ec2 = new AwsEc2Fake();
+    const inventory = inventoryOver(ec2);
     const machine = ec2.plantInstance({ tags: [] });
     const loose = ec2.plantVolume();
     const dropped = () => Promise.reject(new Error('socket hang up'));
@@ -147,9 +203,9 @@ describe('createAwsFleetInventory', () => {
     vi.spyOn(ec2, 'stopInstances').mockImplementation(dropped);
     vi.spyOn(ec2, 'deleteVolume').mockImplementation(dropped);
     for (const action of [
-      () => inventory.destroyMachine(SHARD, machine),
-      () => inventory.stopMachine(SHARD, machine),
-      () => inventory.destroyVolume!(SHARD, loose),
+      () => inventory.destroyMachine(ACCOUNT, machine),
+      () => inventory.stopMachine(ACCOUNT, machine),
+      () => inventory.destroyVolume!(ACCOUNT, loose),
     ]) {
       await expect(action()).rejects.toBeInstanceOf(OrchestratorApiError);
     }

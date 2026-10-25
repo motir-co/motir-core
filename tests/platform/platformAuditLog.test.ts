@@ -240,6 +240,9 @@ describe('the reason rule', () => {
     // org's CI onto the fleet, so `superadmin` with a reason, both directions.
     'fleet.org_ci.enable': 'required',
     'fleet.org_ci.disable': 'required',
+    // The agent hoster's Fly↔AWS switch (MOTIR-9503): a flip says why.
+    'fleet.agent_hosting.enable': 'required',
+    'fleet.agent_hosting.disable': 'required',
     // `fleet-admin add-shard` / `refresh-limits` (Story MOTIR-8953 · MOTIR-8967):
     // a fleet account added or its quota re-read — writes, reason by the service.
     'fleet.shard.add': 'required',
@@ -248,6 +251,11 @@ describe('the reason rule', () => {
     'fleet.shard.ceiling': 'required',
     'fleet.shard.disable': 'required',
     'fleet.shard.enable': 'required',
+    // One pool growth (Story MOTIR-9362 · MOTIR-9461), audited as Motir's system
+    // account with a reason the growth pass writes.
+    'fleet.pool.grow': 'required',
+    // `fleet-admin request-quota` (MOTIR-9463): raises filed on fleet accounts.
+    'fleet.shard.quota_request': 'required',
     // The idea store (Story MOTIR-7662 · MOTIR-7671): retiring and deleting say
     // why an idea left the public list; the rest carry the caller's context.
     'idea.add': 'inherited',

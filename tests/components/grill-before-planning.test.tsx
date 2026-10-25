@@ -361,6 +361,31 @@ describe('the offer is shown once the grilling ended', () => {
     expect(client.openSharpen).not.toHaveBeenCalled();
   });
 
+  it('a no-target offer that carries its requirement lists no settled answers or clear line (MOTIR-9438)', async () => {
+    const withRequirement = conversation([
+      turn(0),
+      turn(1, 'assistant', {
+        offer: offer({
+          requirement: {
+            outcome: 'Managers export a report.',
+            behaviour: 'A button downloads the rows.',
+            scopeEdge: '',
+            constraints: '',
+            acceptance: 'The file opens.',
+            assumptions: [],
+          },
+        }),
+        createdAt: OFFER_AT,
+      }),
+    ]);
+    client.getLatestConversationSharpen.mockResolvedValue(grilling(ENDED));
+    renderWithIntl(rail({ session: withRequirement }));
+    expect(await screen.findByTestId('plan-offer-confirm')).toBeTruthy();
+    expect(screen.queryByTestId('plan-offer-settled')).toBeNull();
+    expect(screen.queryByTestId('plan-offer-settled-answer')).toBeNull();
+    expect(screen.queryByTestId('plan-offer-clear')).toBeNull();
+  });
+
   it('says the request was clear enough when there was nothing to ask', async () => {
     client.getLatestConversationSharpen.mockResolvedValue(
       grilling({

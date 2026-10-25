@@ -206,7 +206,7 @@ describe('machines in every hoster account', () => {
     expect(kill).toMatchObject({ app: a.name, machineId: stray, reason: 'no_record' });
     expect(kill!.completedAt).not.toBeNull();
     expect(alertNames()).toContain('UnattributedMachineDestroyedError');
-    expect(alerts().find((m) => m.includes(stray))).toContain(`EC2 instance ${stray}`);
+    expect(alerts().find((m) => m.includes(stray))).toContain(`AWS instance ${stray}`);
   });
 
   it('a failed listing of one account alerts and skips only that account', async () => {

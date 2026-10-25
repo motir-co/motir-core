@@ -17,8 +17,12 @@ import { ciRunnerAdmissionService } from '@/lib/services/ciRunnerAdmissionServic
 import {
   classifyProvisionRefusal,
   fleetShardAdmissionService,
+  HOSTED_AGENT_SHARD_CAPACITY_DETAIL,
   SHARD_CAPACITY_DETAIL,
 } from '@/lib/services/fleetShardAdmissionService';
+import { fleetShardRepository } from '@/lib/repositories/fleetShardRepository';
+import { AGENT_RUNNER_PROVIDER_ENV_VAR } from '@/lib/ciFleet/fleetKindSwitches';
+import { withSystemContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomInt, randomToken } from '../helpers/random';
@@ -95,6 +99,7 @@ async function account(
   machineLimit: number,
   overrides: Partial<{
     fleetKind: string;
+    role: 'primary' | 'spare';
     admissionCeilingOverride: number | null;
     admissionPausedUntil: Date | null;
   }> = {},
@@ -105,6 +110,7 @@ async function account(
       name: `acct-${slug}`,
       fleetKind: overrides.fleetKind ?? 'ci_runner',
       provider: 'fly',
+      role: overrides.role ?? 'primary',
       state: 'active',
       githubOrg: MOTIR_ORG,
       githubInstallationId: '556677',
@@ -135,6 +141,7 @@ grantPaidAiPlan();
 beforeEach(async () => {
   await truncateAuthTables();
   await adminDb.ciRunnerProvisioningIntent.deleteMany({});
+  await adminDb.fleetInFlightSlot.deleteMany({});
   await adminDb.fleetShard.deleteMany({});
   vi.setSystemTime(NOW);
   vi.stubEnv('MOTIR_CLOUD', 'true');
@@ -165,6 +172,7 @@ afterEach(async () => {
   vi.useRealTimers();
   vi.restoreAllMocks();
   await adminDb.ciRunnerProvisioningIntent.deleteMany({});
+  await adminDb.fleetInFlightSlot.deleteMany({});
   await adminDb.fleetShard.deleteMany({});
 });
 
@@ -343,6 +351,113 @@ describe('the selection seam', () => {
   });
 });
 
+describe('the Motir spare (MOTIR-9456)', () => {
+  /** Make the tenant's org one of Motir's own exempt orgs. */
+  async function exempt(fx: Fixture, flag: 'isMeta' | 'internalBilling'): Promise<void> {
+    await adminDb.organization.update({
+      where: { id: fx.organizationId },
+      data: { [flag]: true },
+    });
+  }
+
+  it('a non-exempt org’s job is claimed on the primary even when the spare has more room', async () => {
+    wireFleetKindSwitch('ci_runner', () => true);
+    const fx = await seedTenant();
+    const primary = await account(3);
+    await account(30, { role: 'spare' });
+    const intent = await seedIntent(fx);
+
+    expect(await ciRunnerAdmissionService.admit(intent)).toMatchObject({
+      outcome: 'admitted',
+      fleetShardId: primary.id,
+    });
+  });
+
+  it('a non-exempt org’s job defers shard_capacity when the primary is full, never onto the spare', async () => {
+    wireFleetKindSwitch('ci_runner', () => true);
+    const fx = await seedTenant();
+    const primary = await account(1);
+    await account(30, { role: 'spare' });
+    await occupy(fx, primary, 1);
+
+    const placement = await withSystemContext((tx) =>
+      fleetShardAdmissionService.chooseInTx(
+        { fleetKind: 'ci_runner', organizationId: fx.organizationId },
+        NOW,
+        tx,
+      ),
+    );
+
+    expect(placement).toEqual({ deferred: 'shard_capacity', detail: SHARD_CAPACITY_DETAIL });
+  });
+
+  it.each(['isMeta', 'internalBilling'] as const)(
+    'an exempt (%s) org’s job may take the spare, by the same most-headroom choice',
+    async (flag) => {
+      wireFleetKindSwitch('ci_runner', () => true);
+      const fx = await seedTenant();
+      await exempt(fx, flag);
+      const primary = await account(3);
+      const spare = await account(30, { role: 'spare' });
+
+      const set = await withSystemContext((tx) =>
+        fleetShardAdmissionService.selectionSetInTx(
+          { fleetKind: 'ci_runner', organizationId: fx.organizationId },
+          tx,
+        ),
+      );
+      expect(set.map((s) => s.id).sort()).toEqual([primary.id, spare.id].sort());
+
+      const first = await seedIntent(fx);
+      expect(await ciRunnerAdmissionService.admit(first)).toMatchObject({ fleetShardId: spare.id });
+
+      // With the spare fuller than the primary, the primary wins.
+      await adminDb.fleetShard.update({
+        where: { id: spare.id },
+        data: { admissionCeilingOverride: 2 },
+      });
+      const second = await seedIntent(fx);
+      expect(await ciRunnerAdmissionService.admit(second)).toMatchObject({
+        fleetShardId: primary.id,
+      });
+    },
+  );
+
+  it('a spare of one kind is never in another kind’s selection set', async () => {
+    const fx = await seedTenant();
+    await exempt(fx, 'isMeta');
+    const ciPrimary = await account(3);
+    await account(30, { role: 'spare', fleetKind: 'hosted_agent' });
+
+    const set = await withSystemContext((tx) =>
+      fleetShardAdmissionService.selectionSetInTx(
+        { fleetKind: 'ci_runner', organizationId: fx.organizationId },
+        tx,
+      ),
+    );
+
+    expect(set.map((s) => s.id)).toEqual([ciPrimary.id]);
+  });
+
+  it('promoting the spare puts it in a non-exempt org’s set on the next admission, no restart', async () => {
+    wireFleetKindSwitch('ci_runner', () => true);
+    const fx = await seedTenant();
+    const primary = await account(1);
+    const spare = await account(30, { role: 'spare' });
+    await occupy(fx, primary, 1);
+    const before = await seedIntent(fx);
+    expect(await ciRunnerAdmissionService.admit(before)).toMatchObject({ outcome: 'deferred' });
+
+    await withSystemContext((tx) => fleetShardRepository.setRoleInTx(spare.id, 'primary', tx));
+
+    const after = await seedIntent(fx);
+    expect(await ciRunnerAdmissionService.admit(after)).toMatchObject({
+      outcome: 'admitted',
+      fleetShardId: spare.id,
+    });
+  });
+});
+
 describe('a credit refusal after the claim gives the account back', () => {
   it('clears the account with the claim', async () => {
     wireFleetKindSwitch('ci_runner', () => true);
@@ -359,6 +474,106 @@ describe('a credit refusal after the claim gives the account back', () => {
       reason: 'balance_unavailable',
     });
     expect(await rowOf(intent.id)).toMatchObject({ status: 'pending', fleetShardId: null });
+  });
+});
+
+describe('the agent runner on its pool (MOTIR-9421)', () => {
+  async function hostedSlot(fx: Fixture, shard: FleetShard, ref: string): Promise<void> {
+    await adminDb.fleetInFlightSlot.create({
+      data: {
+        workload: 'hosted_agent',
+        ref,
+        organizationId: fx.organizationId,
+        fleetShardId: shard.id,
+        expiresAt: new Date(NOW.getTime() + 3_600_000),
+      },
+    });
+  }
+
+  const choose = (fx: Fixture) =>
+    withSystemContext((tx) =>
+      fleetShardAdmissionService.chooseInTx(
+        { fleetKind: 'hosted_agent', organizationId: fx.organizationId },
+        NOW,
+        tx,
+      ),
+    );
+
+  it('counts live hosted slots per account, and never CI intents', async () => {
+    const fx = await seedTenant();
+    const a = await account(2, { fleetKind: 'hosted_agent' });
+    const b = await account(3, { fleetKind: 'hosted_agent' });
+    await hostedSlot(fx, a, 'h1');
+    // Three running CI intents on B do not touch B's hosted headroom.
+    await occupy(fx, b, 3);
+    vi.stubEnv(AGENT_RUNNER_PROVIDER_ENV_VAR, 'aws');
+    expect(await choose(fx)).toEqual({ shardId: b.id });
+  });
+
+  it('a full hosted pool defers with the hosted-agent words, not CI’s', async () => {
+    const fx = await seedTenant();
+    const a = await account(1, { fleetKind: 'hosted_agent' });
+    await hostedSlot(fx, a, 'h2');
+    vi.stubEnv(AGENT_RUNNER_PROVIDER_ENV_VAR, 'aws');
+    expect(await choose(fx)).toEqual({
+      deferred: 'shard_capacity',
+      detail: HOSTED_AGENT_SHARD_CAPACITY_DETAIL,
+    });
+    expect(HOSTED_AGENT_SHARD_CAPACITY_DETAIL).not.toBe(SHARD_CAPACITY_DETAIL);
+  });
+
+  it('with the switch off the hosted run goes to Fly', async () => {
+    const fx = await seedTenant();
+    await account(5, { fleetKind: 'hosted_agent' });
+    vi.stubEnv(AGENT_RUNNER_PROVIDER_ENV_VAR, 'fly');
+    expect(await choose(fx)).toEqual({ shardId: null });
+  });
+  it('the generalised move pauses, re-chooses within the kind and hands the row to reassign (MOTIR-9423)', async () => {
+    const fx = await seedTenant();
+    const a = await account(5, { fleetKind: 'hosted_agent' });
+    const b = await account(2, { fleetKind: 'hosted_agent' });
+    // A CI account with far more room is never a hosted run's next account.
+    await account(50);
+    vi.stubEnv(AGENT_RUNNER_PROVIDER_ENV_VAR, 'aws');
+    const reassigned: Array<[string, string]> = [];
+
+    const next = await withSystemContext((tx) =>
+      fleetShardAdmissionService.moveAfterRefusalInTx(
+        { fleetKind: 'hosted_agent', organizationId: fx.organizationId },
+        a.id,
+        'provider_unavailable',
+        new Set([a.id]),
+        NOW,
+        tx,
+        async (nextShardId, reason) => {
+          reassigned.push([nextShardId, reason]);
+        },
+      ),
+    );
+
+    expect(next).toBe(b.id);
+    expect(reassigned).toEqual([[b.id, 'provider_unavailable']]);
+    expect(await adminDb.fleetShard.findUniqueOrThrow({ where: { id: a.id } })).toMatchObject({
+      admissionPausedUntil: new Date(NOW.getTime() + SHARD_PAUSE_SECONDS * 1000),
+      admissionPausedReason: 'provider_unavailable',
+    });
+
+    // Nothing left: null, and reassign is never called.
+    const none = await withSystemContext((tx) =>
+      fleetShardAdmissionService.moveAfterRefusalInTx(
+        { fleetKind: 'hosted_agent', organizationId: fx.organizationId },
+        b.id,
+        'capacity_refused',
+        new Set([a.id, b.id]),
+        NOW,
+        tx,
+        async (nextShardId, reason) => {
+          reassigned.push([nextShardId, reason]);
+        },
+      ),
+    );
+    expect(none).toBeNull();
+    expect(reassigned).toHaveLength(1);
   });
 });
 

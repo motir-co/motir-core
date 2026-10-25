@@ -1,5 +1,6 @@
 import {
   AwsAccountCreationRefusedError,
+  AwsManagementApiError,
   type AwsManagementApi,
   type AwsOrganizationAccount,
   type AwsPolicyDocument,
@@ -100,8 +101,31 @@ export class FakeOrganization implements AwsManagementApi {
   readonly inProgress = new Map<string, string>();
   readonly iamUsers = new Set<string>();
   quota = SHARD_VCPU_QUOTA_TARGET - 1_000;
+  /** Per member account: its granted quota, else `quota` (MOTIR-9458). */
+  readonly quotaByAccount = new Map<string, number>();
+  /** Per member account: the error its quota read throws (MOTIR-9458). */
+  readonly readFailures = new Map<string, Error>();
+  /** The quota raises filed, by AWS request id (MOTIR-9459). */
+  readonly quotaRequests = new Map<
+    string,
+    { accountId: string; status: string; desiredValue: number }
+  >();
+  /** What the next raise filing throws, once. */
+  requestFailure: Error | null = null;
+  /** Per AWS request id: the error reading it throws. */
+  readonly requestReadFailures = new Map<string, Error>();
   createFailure: string | null = null;
+  /** Member-account root emails already used — CreateAccount refuses a clash
+   *  (MOTIR-9460). */
+  readonly usedEmails = new Set<string>();
+  /** The member accounts holding the runner role, and its policy (MOTIR-9460). */
+  readonly runnerRoles = new Map<string, string>();
+  /** Per member account: the error assuming its runner role throws. */
+  readonly runnerAssumeFailures = new Map<string, Error>();
   private seq = 0;
+  private requestSeq = 0;
+  /** Which member account each answered session is for. */
+  private readonly sessionAccount = new WeakMap<AwsSessionCredentials, string>();
 
   /** `session` is what every member-role assumption answers. */
   constructor(private readonly session: AwsSessionCredentials) {}
@@ -123,6 +147,10 @@ export class FakeOrganization implements AwsManagementApi {
     this.calls.push('createOrganizationAccount');
     if (this.createFailure)
       throw new AwsAccountCreationRefusedError(input.name, this.createFailure);
+    if (this.usedEmails.has(input.email)) {
+      throw new AwsAccountCreationRefusedError(input.name, 'EMAIL_ALREADY_EXISTS');
+    }
+    this.usedEmails.add(input.email);
     const account = { accountId: this.nextAccountId(), name: input.name, status: 'ACTIVE' };
     this.accounts.set(input.name, account);
     return account;
@@ -138,14 +166,95 @@ export class FakeOrganization implements AwsManagementApi {
 
   async assumeMemberRole(accountId: string) {
     this.calls.push(`assumeMemberRole:${accountId}`);
-    return this.session;
+    const session = { ...this.session };
+    this.sessionAccount.set(session, accountId);
+    return session;
   }
 
   async readVcpuQuota(credentials: AwsSessionCredentials, regionId: string) {
     this.calls.push(
       `readVcpuQuota:${regionId}:${credentials.accessKeyId === this.session.accessKeyId}`,
     );
-    return this.quota;
+    const accountId = this.sessionAccount.get(credentials);
+    const failure = accountId ? this.readFailures.get(accountId) : undefined;
+    if (failure) throw failure;
+    return (accountId ? this.quotaByAccount.get(accountId) : undefined) ?? this.quota;
+  }
+
+  async requestVcpuQuotaIncrease(
+    credentials: AwsSessionCredentials,
+    _regionId: string,
+    desired: number,
+  ) {
+    const accountId = this.sessionAccount.get(credentials) ?? 'unknown';
+    this.calls.push(`requestVcpuQuotaIncrease:${accountId}:${desired}`);
+    if (this.requestFailure) {
+      const failure = this.requestFailure;
+      this.requestFailure = null;
+      throw failure;
+    }
+    const open = [...this.quotaRequests.values()].find(
+      (r) => r.accountId === accountId && (r.status === 'PENDING' || r.status === 'CASE_OPENED'),
+    );
+    if (open)
+      throw new AwsManagementApiError('service-quotas', 'ResourceAlreadyExistsException', 400);
+    this.requestSeq += 1;
+    const requestId = `quota-req-${this.requestSeq}`;
+    this.quotaRequests.set(requestId, { accountId, status: 'PENDING', desiredValue: desired });
+    return { requestId, status: 'PENDING', desiredValue: desired };
+  }
+
+  async getQuotaRequest(_credentials: AwsSessionCredentials, _regionId: string, requestId: string) {
+    this.calls.push(`getQuotaRequest:${requestId}`);
+    const failure = this.requestReadFailures.get(requestId);
+    if (failure) throw failure;
+    const request = this.quotaRequests.get(requestId);
+    if (!request) throw new AwsManagementApiError('service-quotas', 'NoSuchResourceException', 400);
+    return { requestId, status: request.status, desiredValue: request.desiredValue };
+  }
+
+  async findOpenQuotaRequest(credentials: AwsSessionCredentials) {
+    const accountId = this.sessionAccount.get(credentials) ?? 'unknown';
+    this.calls.push(`findOpenQuotaRequest:${accountId}`);
+    for (const [requestId, r] of this.quotaRequests) {
+      if (r.accountId === accountId && (r.status === 'PENDING' || r.status === 'CASE_OPENED')) {
+        return { requestId, status: r.status, desiredValue: r.desiredValue };
+      }
+    }
+    return null;
+  }
+
+  /** Move a filed raise on, as AWS would; `APPROVED` grants its value (or
+   *  `granted`) to the account's quota. */
+  settleQuotaRequest(requestId: string, status: string, granted?: number): void {
+    const request = this.quotaRequests.get(requestId);
+    if (!request) throw new Error(`no fake quota request ${requestId}`);
+    request.status = status;
+    if (status === 'APPROVED') {
+      this.quotaByAccount.set(request.accountId, granted ?? request.desiredValue);
+    }
+  }
+
+  async ensureRunnerRole(credentials: AwsSessionCredentials, policy: AwsPolicyDocument) {
+    const accountId = this.sessionAccount.get(credentials) ?? 'unknown';
+    this.calls.push(`ensureRunnerRole:${accountId}`);
+    const wanted = JSON.stringify(policy);
+    const current = this.runnerRoles.get(accountId);
+    this.runnerRoles.set(accountId, wanted);
+    if (current === undefined) {
+      return { created: ['iam-role:motir-fleet-runner', 'iam-role-policy:motir-fleet-runner-ec2'] };
+    }
+    return { created: current === wanted ? [] : ['iam-role-policy:motir-fleet-runner-ec2'] };
+  }
+
+  async assumeRunnerRole(accountId: string) {
+    this.calls.push(`assumeRunnerRole:${accountId}`);
+    const failure = this.runnerAssumeFailures.get(accountId);
+    if (failure) throw failure;
+    if (!this.runnerRoles.has(accountId)) {
+      throw new AwsManagementApiError('sts', 'AccessDenied', 403);
+    }
+    return { ...this.session };
   }
 
   async ensureRunnerIamUser(_credentials: AwsSessionCredentials, policy: AwsPolicyDocument) {

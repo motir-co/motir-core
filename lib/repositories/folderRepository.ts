@@ -172,6 +172,27 @@ export const folderRepository = {
     return rows[0]?.id ?? null;
   },
 
+  /**
+   * The project's ROOT-level folders whose lowercased name is one of `names`
+   * (already lowercased by the caller), oldest first. The same `lower(name)`
+   * predicate as `findSiblingNameConflict` and the `folder_sibling_name_key` index, so
+   * a lookup and a refused create can never disagree about what a match is.
+   */
+  async findRootByNames(
+    projectId: string,
+    names: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string; name: string }>> {
+    if (names.length === 0) return [];
+    return tx.$queryRaw<Array<{ id: string; name: string }>>`
+      SELECT "id", "name" FROM "folder"
+       WHERE "project_id" = ${projectId}
+         AND "parent_folder_id" IS NULL
+         AND lower("name") IN (${Prisma.join(names)})
+       ORDER BY "created_at" ASC, "id" ASC
+    `;
+  },
+
   /** The last position among a level's folders, or `null` when it has none. */
   async lastSiblingPosition(
     projectId: string,

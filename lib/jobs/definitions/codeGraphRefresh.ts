@@ -178,14 +178,19 @@ export const codeGraphRefresh = defineJob(
   },
   async (ctx, services) => {
     const data = ctx.event.data as CodeGraphRefreshData;
-    return runIndexFleetSteps(ctx, services, {
-      installationId: data.installationId,
-      // The repo's own tenant, stamped at enqueue from `repo.workspaceId`
-      // (MOTIR-1931) — never re-derived from the shared installation.
-      workspaceId: data.workspaceId,
-      repoOwner: data.repoOwner,
-      repoName: data.repoName,
-      defaultBranch: data.defaultBranch,
-    });
+    return runIndexFleetSteps(
+      ctx,
+      services,
+      {
+        installationId: data.installationId,
+        // The repo's own tenant, stamped at enqueue from `repo.workspaceId`
+        // (MOTIR-1931) — never re-derived from the shared installation.
+        workspaceId: data.workspaceId,
+        repoOwner: data.repoOwner,
+        repoName: data.repoName,
+        defaultBranch: data.defaultBranch,
+      },
+      'system.code-graph-refresh',
+    );
   },
 );

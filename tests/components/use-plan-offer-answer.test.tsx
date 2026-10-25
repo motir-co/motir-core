@@ -266,6 +266,58 @@ describe('Confirm', () => {
     expect(stream).not.toHaveBeenCalled();
   });
 
+  it('a requirement that could not be saved is not a refusal: no refusal recorded, thread refetched (MOTIR-9438)', async () => {
+    answerOffer.mockRejectedValue(
+      new PlanEditsClientError(503, 'PLAN_OFFER_REQUIREMENT_NOT_SAVED', {
+        code: 'PLAN_OFFER_REQUIREMENT_NOT_SAVED',
+      }),
+    );
+    readSession.mockResolvedValue(session('s1', offer({ requirementSaveFailed: true })));
+    const { result } = await mounted();
+
+    await act(async () => {
+      await result.current.confirmPlanOffer('t1');
+    });
+    expect(result.current.state.offerRefusal).toBeNull();
+    expect(result.current.state.offerAnsweringTurnId).toBeNull();
+    expect(readSession).toHaveBeenCalledWith('s1');
+    expect(result.current.state.session?.turns[1]?.offer?.requirementSaveFailed).toBe(true);
+    expect(stream).not.toHaveBeenCalled();
+  });
+
+  it('a requirement that could not be saved, with the refetch failing too, still records no refusal', async () => {
+    answerOffer.mockRejectedValue(
+      new PlanEditsClientError(503, 'PLAN_OFFER_REQUIREMENT_NOT_SAVED', {
+        code: 'PLAN_OFFER_REQUIREMENT_NOT_SAVED',
+      }),
+    );
+    readSession.mockRejectedValue(new Error('offline'));
+    const { result } = await mounted();
+
+    await act(async () => {
+      await result.current.confirmPlanOffer('t1');
+    });
+    expect(result.current.state.offerRefusal).toBeNull();
+    expect(result.current.state.offerAnsweringTurnId).toBeNull();
+    expect(result.current.state.session?.turns[1]?.offer?.requirementSaveFailed).toBeFalsy();
+  });
+
+  it('a requirement that could not be saved leaves the thread alone when the read is another conversation', async () => {
+    answerOffer.mockRejectedValue(
+      new PlanEditsClientError(503, 'PLAN_OFFER_REQUIREMENT_NOT_SAVED', {
+        code: 'PLAN_OFFER_REQUIREMENT_NOT_SAVED',
+      }),
+    );
+    readSession.mockResolvedValue(session('other', offer({ requirementSaveFailed: true })));
+    const { result } = await mounted();
+
+    await act(async () => {
+      await result.current.confirmPlanOffer('t1');
+    });
+    expect(result.current.state.session?.id).toBe('s1');
+    expect(result.current.state.offerRefusal).toBeNull();
+  });
+
   it('a turn sent while the door is out is not aborted (MOTIR-9409)', async () => {
     const door = deferred<{ sessionId: string; jobId: string; planId: string }>();
     answerOffer.mockReturnValue(door.promise);

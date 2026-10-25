@@ -390,6 +390,16 @@ export default defineConfig({
         'lib/mcp/tools/getSectionSets.ts',
         'lib/api/v1/sectionSets/operations.ts',
         'lib/api/v1/sectionSets/schema.ts',
+        // Story MOTIR-9486 · MOTIR-9496 — the `/api/v1` PAGE resource: its helpers
+        // and its three route files, pinned at the project floor in `thresholds`
+        // below after being measured against the `tests/api/v1/pages-*` suites.
+        'lib/api/v1/pages/errors.ts',
+        'lib/api/v1/pages/resolve.ts',
+        'lib/api/v1/pages/schema.ts',
+        'lib/api/v1/pages/operations.ts',
+        'app/api/v1/projects/\\[projectKey\\]/pages/route.ts',
+        'app/api/v1/pages/\\[pageId\\]/route.ts',
+        'app/api/v1/pages/\\[pageId\\]/placement/route.ts',
         'lib/plans/applySectionsInput.ts',
         'lib/services/sectionSchemaService.ts',
         // Story MOTIR-6016 · MOTIR-6102 — the three modules the DIFFICULTY story
@@ -1645,6 +1655,13 @@ export default defineConfig({
         'lib/repositories/ciFleetAdmissionLockRepository.ts',
         'lib/repositories/fleetInFlightSlotRepository.ts',
         'lib/jobs/definitions/ciRunnerFleet.ts',
+        // Story MOTIR-9359 · MOTIR-9427 — the agent-runner pool: its switch, the
+        // per-account admission and the hosted-agent container's boot, poll and
+        // settle on the account. Their chain is `agentRunnerPoolStoryGate.test.ts`;
+        // pinned at the fleet's 90 floor below.
+        'lib/ciFleet/fleetKindSwitches.ts',
+        'lib/services/fleetShardAdmissionService.ts',
+        'lib/services/hostedAgentContainerService.ts',
         // Story MOTIR-8699 · MOTIR-8716 — Motir CI on the fleet for a CONNECTED org:
         // the org-target auth, the readiness verdict's GitHub reads, the org
         // Actions-variable client, the runner-target resolver, the readiness and
@@ -1670,6 +1687,32 @@ export default defineConfig({
         'lib/services/fleetOrgCiSettingService.ts',
         'lib/repositories/platformFleetOrgCiRepository.ts',
         'lib/mappers/fleetOrgCiSettingMappers.ts',
+        // Story MOTIR-9362 · MOTIR-9464 — the pool-growth story's new modules (the
+        // growth policy, the spare's add-shard plan, the quota and growth records,
+        // the live read, the raise service, the growth and its scheduled pass, the
+        // pool status and `fleet-admin`'s pool commands). MEASURED on this branch
+        // against the story's own specs: every file >= 90 on all four metrics (the
+        // lowest, `fleetQuotaRaiseService`, 96.58 / 92.2 / 94.11 / 97.14). The arms
+        // left uncovered are named, with why, in `tests/ciFleet/fleetGrowthIntegration.test.ts`.
+        // Pinned at the fleet's 90 floor below.
+        'lib/ciFleet/poolGrowthPolicy.ts',
+        'lib/fleetShards/awsMemberAccountPlan.ts',
+        'lib/fleetShards/fleetAutomationPrincipal.ts',
+        'lib/fleetShards/scrubSecrets.ts',
+        'lib/jobs/definitions/fleetPoolGrowth.ts',
+        'lib/mappers/fleetPoolMappers.ts',
+        'lib/repositories/fleetGrowthEventRepository.ts',
+        'lib/repositories/fleetGrowthLockRepository.ts',
+        'lib/repositories/fleetGrowthPassLeaseRepository.ts',
+        'lib/repositories/fleetQuotaRequestRepository.ts',
+        'lib/services/fleetGrowthEventService.ts',
+        'lib/services/fleetPoolGrowthPassService.ts',
+        'lib/services/fleetPoolGrowthService.ts',
+        'lib/services/fleetPoolStatusService.ts',
+        'lib/services/fleetQuotaRaiseService.ts',
+        'lib/services/fleetQuotaRequestService.ts',
+        'lib/services/fleetShardQuotaService.ts',
+        'scripts/fleet/fleetAdminPoolCommands.ts',
         // Story MOTIR-1775 · MOTIR-1782 — the establish STEP at plan approval.
         // Gated for a different reason than the primitive above: the whole card
         // is a claim about what must NOT be on screen (no repository name, count,
@@ -3387,6 +3430,19 @@ export default defineConfig({
         'components/planning/PlanOffer.tsx',
         'app/api/ai/plan-change/session/offer/confirm/route.ts',
         'app/api/ai/plan-change/session/offer/decline/route.ts',
+        // Story MOTIR-9430 · MOTIR-9440 — the composed requirement's NEW core modules (the
+        // page writer, the pure markdown renderer, the left pane's derivation). MEASURED
+        // on the story branch against `tests/integration/planning/composedRequirementSeam`,
+        // `planOfferRequirementPage`, `tests/services/requirementPageService.integration`,
+        // `tests/ai/requirementMarkdown`, `tests/planning/requirementPane` and
+        // `tests/components/requirement-pane`, statements / branches / functions / lines:
+        // requirementPageService.ts 93.93 / 85.71 / 100 / 96.42 on one run and 81.81 /
+        // 71.42 / 100 / 85.71 on another (the folder-race arm is hit only when two writes
+        // actually collide), pinned at the lower run; requirementMarkdown.ts 100 / 87.5 /
+        // 100 / 100; requirementPane.ts 100 / 96.15 / 100 / 100. Pinned at the floor below.
+        'lib/services/requirementPageService.ts',
+        'lib/ai/requirementMarkdown.ts',
+        'lib/planning/requirementPane.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -3397,6 +3453,115 @@ export default defineConfig({
       // fails SILENTLY when it matches nothing — see the route-group note on
       // `include`. Write a route-group path as `app/**/…`.
       thresholds: {
+        // Story MOTIR-9362 · MOTIR-9464 — the pool-growth modules, measured above.
+        'lib/ciFleet/poolGrowthPolicy.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/fleetShards/awsMemberAccountPlan.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/fleetShards/fleetAutomationPrincipal.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/fleetShards/scrubSecrets.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/jobs/definitions/fleetPoolGrowth.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/mappers/fleetPoolMappers.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/repositories/fleetGrowthEventRepository.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/repositories/fleetGrowthLockRepository.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/repositories/fleetGrowthPassLeaseRepository.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/repositories/fleetQuotaRequestRepository.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/fleetGrowthEventService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/fleetPoolGrowthPassService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/fleetPoolGrowthService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/fleetPoolStatusService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/fleetQuotaRaiseService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/fleetQuotaRequestService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/fleetShardQuotaService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'scripts/fleet/fleetAdminPoolCommands.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
         // Story MOTIR-9219 · MOTIR-9295 — measured above, pinned at the floor (the start
         // service's branches at 88, for the reason the `include` block gives).
         'lib/planChange/planOffer.ts': {
@@ -3446,6 +3611,25 @@ export default defineConfig({
           functions: 90,
           branches: 90,
           statements: 90,
+        },
+        // Story MOTIR-9430 · MOTIR-9440 — measured above, pinned at the floor.
+        'lib/services/requirementPageService.ts': {
+          lines: 85,
+          functions: 100,
+          branches: 71,
+          statements: 81,
+        },
+        'lib/ai/requirementMarkdown.ts': {
+          lines: 100,
+          functions: 100,
+          branches: 87,
+          statements: 100,
+        },
+        'lib/planning/requirementPane.ts': {
+          lines: 100,
+          functions: 100,
+          branches: 96,
+          statements: 100,
         },
         // ── Story MOTIR-8538 · THE LOAD TEST (Subtask MOTIR-8681) — see `include`. ──
         'loadtest/staging/sideEffectSwitches.ts': {
@@ -4145,6 +4329,34 @@ export default defineConfig({
           statements: 90,
         },
         'lib/api/v1/sectionSets/schema.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // Story MOTIR-9486 · MOTIR-9496 — the `/api/v1` PAGE resource.
+        'lib/api/v1/pages/errors.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/api/v1/pages/resolve.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/api/v1/pages/schema.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/api/v1/pages/operations.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/api/v1/projects/\\[projectKey\\]/pages/route.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/api/v1/pages/\\[pageId\\]/route.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/api/v1/pages/\\[pageId\\]/placement/route.ts': {
           lines: 90,
           functions: 90,
           branches: 90,
@@ -5884,6 +6096,10 @@ export default defineConfig({
           lines: 90,
         },
         'lib/jobs/definitions/ciRunnerFleet.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-9359 · MOTIR-9427 (see the include list).
+        'lib/ciFleet/fleetKindSwitches.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/fleetShardAdmissionService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/hostedAgentContainerService.ts': { branches: 90, functions: 90, lines: 90 },
         // Story MOTIR-1775 · MOTIR-1901 — the CI-minutes entitlement.
         'lib/ciMetering/allowance.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/services/ciAllowanceService.ts': { branches: 90, functions: 90, lines: 90 },

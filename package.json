@@ -74,6 +74,7 @@
     "coverage:live-push": "vitest run --config vitest.coverage.live-push.config.ts --coverage",
     "coverage:bug-filing": "vitest run --config vitest.coverage.bug-filing.config.ts --coverage",
     "coverage:font-picks": "vitest run --config vitest.coverage.font-picks.config.ts --coverage",
+    "coverage:host-plan": "vitest run --config vitest.coverage.host-plan.config.ts --coverage",
     "coverage:runs-overlay-parity": "vitest run --config vitest.coverage.runs-overlay-parity.config.ts --coverage",
     "coverage:plan-overlay-only": "vitest run --config vitest.coverage.plan-overlay-only.config.ts --coverage",
     "coverage:waiting-plan-carry": "vitest run --config vitest.coverage.waiting-plan-carry.config.ts --coverage",

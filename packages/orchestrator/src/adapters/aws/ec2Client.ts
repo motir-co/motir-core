@@ -55,6 +55,21 @@ export interface AwsCredentialsConfig {
   readonly region: string;
 }
 
+/** Where a client's credentials come from when they are not a fixed key: an
+ *  assumed-role session the SDK asks for again before it expires (MOTIR-9460). */
+export type AwsCredentialProvider = () => Promise<{
+  accessKeyId: string;
+  secretAccessKey: string;
+  sessionToken?: string;
+  expiration?: Date;
+}>;
+
+/** A client on {@link AwsCredentialProvider} instead of a fixed key. */
+export interface AwsProvidedCredentialsConfig {
+  readonly credentialProvider: AwsCredentialProvider;
+  readonly region: string;
+}
+
 /** One resource tag, as every create writes it and every describe returns it. */
 export interface Ec2Tag {
   readonly key: string;
@@ -313,7 +328,9 @@ export interface Ec2SdkClient {
 /** How the factory builds its SDK client — the default is `new EC2Client(config)`. */
 export type Ec2SdkClientFactory = (config: {
   region: string;
-  credentials: { accessKeyId: string; secretAccessKey: string; sessionToken?: string };
+  credentials:
+    | { accessKeyId: string; secretAccessKey: string; sessionToken?: string }
+    | AwsCredentialProvider;
 }) => Ec2SdkClient;
 
 const defaultClientFactory: Ec2SdkClientFactory = (config) => new EC2Client(config);
@@ -363,16 +380,19 @@ export function toEc2ApiError(err: unknown): Ec2ApiError {
 
 /** An {@link Ec2Api} over `@aws-sdk/client-ec2`. `clientFactory` is the test seam. */
 export function createEc2Api(
-  config: AwsCredentialsConfig,
+  config: AwsCredentialsConfig | AwsProvidedCredentialsConfig,
   clientFactory: Ec2SdkClientFactory = defaultClientFactory,
 ): Ec2Api {
   const client = clientFactory({
     region: config.region,
-    credentials: {
-      accessKeyId: config.accessKeyId,
-      secretAccessKey: config.secretAccessKey,
-      ...(config.sessionToken ? { sessionToken: config.sessionToken } : {}),
-    },
+    credentials:
+      'credentialProvider' in config
+        ? config.credentialProvider
+        : {
+            accessKeyId: config.accessKeyId,
+            secretAccessKey: config.secretAccessKey,
+            ...(config.sessionToken ? { sessionToken: config.sessionToken } : {}),
+          },
   });
   async function send<T>(command: unknown): Promise<T> {
     try {

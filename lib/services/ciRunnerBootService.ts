@@ -1377,12 +1377,14 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
         throw new Error('the fleet admission lock could not be taken');
       }
       return fleetShardAdmissionService.moveAfterRefusalInTx(
-        intent,
+        { fleetKind: 'ci_runner', organizationId: intent.organizationId },
         refusedId,
         reason,
         tried,
         now(),
         tx,
+        (nextShardId, moveReason, moveTx) =>
+          intents.reassignShardInTx(intent.id, nextShardId, moveReason, moveTx),
       );
     });
     if (nextId === null) {

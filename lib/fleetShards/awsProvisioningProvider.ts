@@ -1,7 +1,10 @@
 import {
   AWS_MANAGEMENT_ENV,
+  AWS_MEMBER_ROLE_NAME,
+  AWS_RUNNER_IAM_ROLE,
   AWS_RUNNER_IAM_USER,
   AwsAccountCreationRefusedError,
+  AwsManagementApiError,
   awsCredentialsFromEnv,
   awsAgentHosterPolicyDocument,
   awsManagementCredentials,
@@ -15,7 +18,11 @@ import {
   type AwsSessionCredentials,
   type Ec2Api,
 } from '@motir/orchestrator';
-import { FleetShardProvisioningRefusedError } from '@/lib/ciFleet/errors';
+import {
+  FleetShardAccountRefusedError,
+  FleetShardProvisioningRefusedError,
+  MemberRoleAssumeFailedError,
+} from '@/lib/ciFleet/errors';
 import type {
   ProviderStepContext,
   ShardProvisioningProvider,
@@ -33,6 +40,18 @@ import type {
 // `OrganizationAccountAccessRole`) lives in memory for the run. The runner's own
 // key is created by a person in the console; this provider words that step and
 // later CONFIRMS, read-only, that the key a person set works.
+
+/**
+ * The INTERNAL option the unattended add-shard sets (MOTIR-9460) — never a CLI
+ * flag (it is not in `options`): `role` makes the runtime credential the
+ * account's `motir-fleet-runner` ROLE, assumed from the management credential,
+ * in place of the person-keyed IAM user.
+ */
+export const AWS_RUNTIME_CREDENTIAL_OPTION = 'runtime-credential';
+
+function runnerRoleMode(ctx: ProviderStepContext): boolean {
+  return ctx.options[AWS_RUNTIME_CREDENTIAL_OPTION] === 'role';
+}
 
 /** Where a fleet account boots when `--region` is not given. */
 export const AWS_DEFAULT_REGION = 'us-east-1';
@@ -158,9 +177,7 @@ export function createAwsShardProvisioningProvider(
         }
       } catch (err) {
         if (err instanceof AwsAccountCreationRefusedError) {
-          throw new FleetShardProvisioningRefusedError([
-            `AWS refused to create the account ${ctx.name}: ${err.reason}`,
-          ]);
+          throw new FleetShardAccountRefusedError(ctx.name, err.reason);
         }
         throw err;
       }
@@ -171,7 +188,13 @@ export function createAwsShardProvisioningProvider(
             `account of that name is ${accountId}; pick another name`,
         ]);
       }
-      const credentials = await api().assumeMemberRole(accountId);
+      let credentials: AwsSessionCredentials;
+      try {
+        credentials = await api().assumeMemberRole(accountId);
+      } catch (err) {
+        if (!runnerRoleMode(ctx) || !(err instanceof AwsManagementApiError)) throw err;
+        throw new MemberRoleAssumeFailedError(accountId, AWS_MEMBER_ROLE_NAME, err.awsCode);
+      }
       const account: AwsAccountState = { accountId, credentials };
       return { created, detail, account };
     },
@@ -200,6 +223,22 @@ export function createAwsShardProvisioningProvider(
       // their config, delete their disk — so its key carries those calls too.
       const policy =
         ctx.fleetKind === 'agent_instance' ? awsAgentHosterPolicyDocument : awsRunnerPolicyDocument;
+      if (runnerRoleMode(ctx)) {
+        // No key at all: the runner role trusts the management role, and the
+        // orchestrator assumes it (MOTIR-9460). Confirmed by assuming it once.
+        const { created } = await api().ensureRunnerRole(
+          credentials,
+          policy({ shardTag: ctx.name, regionId: region }),
+        );
+        const accountId = accountIdOf(ctx);
+        if (!accountId) return { created, confirmed: false };
+        try {
+          await api().assumeRunnerRole(accountId);
+          return { created, confirmed: true };
+        } catch {
+          return { created, confirmed: false };
+        }
+      }
       const { created } = await api().ensureRunnerIamUser(
         credentials,
         policy({ shardTag: ctx.name, regionId: region }),
@@ -218,6 +257,12 @@ export function createAwsShardProvisioningProvider(
     manualCredentialStep(ctx) {
       const names = awsRuntimeKeyEnvNames(ctx.credentialRef);
       const accountId = accountIdOf(ctx) ?? '(the account)';
+      if (runnerRoleMode(ctx)) {
+        return (
+          `the role ${AWS_RUNNER_IAM_ROLE} in AWS account ${accountId} could not be assumed yet ` +
+          '(IAM propagates within minutes); the next growth pass resumes this account'
+        );
+      }
       return (
         `create an access key for the IAM user ${AWS_RUNNER_IAM_USER} in AWS account ${accountId} ` +
         `(IAM console → Users → ${AWS_RUNNER_IAM_USER} → Security credentials → Create access key), ` +

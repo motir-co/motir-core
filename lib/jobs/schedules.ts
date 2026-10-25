@@ -70,7 +70,8 @@ export const SUB_HOURLY_CADENCE = '*/5 * * * *';
 
 /**
  * Sub-hourly jobs allowed a cadence other than `SUB_HOURLY_CADENCE`, each with a
- * one-line reason. One today: the fleet headroom pass. A job
+ * one-line reason. Two today: the fleet headroom pass and the growth pass acting
+ * on it. A job
  * joins only when its own decision derives a different cadence — never to make a
  * test pass.
  */
@@ -78,6 +79,8 @@ export const SUB_HOURLY_CADENCE_EXCEPTIONS: Readonly<Record<string, string>> = {
   // MOTIR-8969 · `fleet-per-org-pool.md` AMENDMENT 1 §A1.10.
   'system.fleet-shard-headroom':
     'a 5-minute registration window must be read inside its own window',
+  // MOTIR-9462 · the growth pass acts on that reading, so it runs at its cadence.
+  'system.fleet-pool-growth': 'pool growth acts on the every-minute headroom reading',
 };
 
 /**

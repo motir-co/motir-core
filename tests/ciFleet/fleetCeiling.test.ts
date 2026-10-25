@@ -25,8 +25,15 @@ import { organizationRepository } from '@/lib/repositories/organizationRepositor
 import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
-import { randomInt } from '../helpers/random';
 import { grantPaidAiPlan, stubPaidAiPlan } from '../helpers/paidAiPlan';
+import { randomInt, randomToken } from '../helpers/random';
+import { fleetKindOnPool } from '@/lib/ciFleet/shardTargets';
+import { AGENT_RUNNER_PROVIDER_ENV_VAR } from '@/lib/ciFleet/fleetKindSwitches';
+import {
+  fleetShardAdmissionService,
+  HOSTED_AGENT_SHARD_CAPACITY_DETAIL,
+} from '@/lib/services/fleetShardAdmissionService';
+import type { FleetShard } from '@/generated/prisma/client';
 
 // THE PER-ORGANISATION FLEET POOL against real Postgres (Story MOTIR-6906 ·
 // MOTIR-6907, re-cutting MOTIR-1916 · MOTIR-1997;
@@ -866,5 +873,285 @@ describe('adopt — the transition winner takes a held slot (MOTIR-7492)', () =>
       '[fleetCeilingService] could not adopt a fleet slot',
       expect.objectContaining({ ref: 'inst-3', detail: 'db down' }),
     );
+  });
+});
+
+// ── WHICH AGENT-RUNNER ACCOUNT a hosted run boots on (MOTIR-9421) ───────────
+//
+// `reserve` chooses the account inside its locked transaction and writes it on
+// the slot, so the per-account count is the slots carrying that account. The
+// switch is `MOTIR_FLEET_AGENT_RUNNER_PROVIDER`, read on every admission.
+
+async function hostedAccount(
+  machineLimit: number,
+  fleetKind: 'hosted_agent' | 'ci_runner' = 'hosted_agent',
+): Promise<FleetShard> {
+  const slug = randomToken(6).toLowerCase();
+  return adminDb.fleetShard.create({
+    data: {
+      name: `acct-${slug}`,
+      fleetKind,
+      provider: 'fly',
+      state: 'active',
+      githubOrg: MOTIR_ORG,
+      githubInstallationId: '556677',
+      flyOrg: 'motir',
+      flyApp: `motir-agents-${slug}`,
+      flyRegion: 'iad',
+      credentialRef: 'FLEET_SHARD_TEST_TOKEN',
+      machineLimit,
+    },
+  });
+}
+
+/** `count` live hosted slots on `shard`, for orgs other than the one reserving. */
+async function liveHostedOn(shard: FleetShard, count: number, expiresAt?: Date): Promise<void> {
+  const other = await seedTenant();
+  for (let i = 0; i < count; i += 1) {
+    await withSystemContext((tx) =>
+      fleetInFlightSlotRepository.take(
+        {
+          workload: 'hosted_agent',
+          ref: `live-${shard.id}-${(refSeq += 1)}`,
+          organizationId: other.organizationId,
+          fleetShardId: shard.id,
+          expiresAt: expiresAt ?? new Date(NOW.getTime() + TTL_SECONDS * 1_000),
+        },
+        tx,
+      ),
+    );
+  }
+}
+
+async function slotShard(workload: string, ref: string): Promise<string | null | undefined> {
+  const row = await adminDb.fleetInFlightSlot.findUnique({
+    where: { workload_ref: { workload, ref } },
+  });
+  return row?.fleetShardId;
+}
+
+describe('a hosted run is placed on an agent-runner account (MOTIR-9421)', () => {
+  it('switch unset or fly: reserved on Fly with no account, whatever accounts exist', async () => {
+    await hostedAccount(10);
+    const fx = await seedTenant();
+    for (const value of ['', 'fly']) {
+      vi.stubEnv(AGENT_RUNNER_PROVIDER_ENV_VAR, value);
+      const { ref, verdict } = await reserve('hosted_agent', fx);
+      expect(verdict).toMatchObject({ outcome: 'reserved', fleetShardId: null });
+      expect(await slotShard('hosted_agent', ref)).toBeNull();
+    }
+  });
+
+  it('switch aws: the hosted account with the most headroom, never a CI account', async () => {
+    const a = await hostedAccount(2);
+    const b = await hostedAccount(5);
+    const ci = await hostedAccount(50, 'ci_runner');
+    await liveHostedOn(a, 1);
+    await liveHostedOn(b, 1);
+    // A CI intent on B is not a hosted slot: it does not count against B.
+    const fx = await seedTenant();
+    const intent = await seedIntent(fx, { status: 'running' });
+    await adminDb.ciRunnerProvisioningIntent.update({
+      where: { id: intent.id },
+      data: { fleetShardId: b.id },
+    });
+    vi.stubEnv(AGENT_RUNNER_PROVIDER_ENV_VAR, 'aws');
+
+    const { ref, verdict } = await reserve('hosted_agent', fx);
+
+    expect(verdict).toMatchObject({ outcome: 'reserved', fleetShardId: b.id });
+    expect(await slotShard('hosted_agent', ref)).toBe(b.id);
+    expect(await slotShard('hosted_agent', ref)).not.toBe(ci.id);
+  });
+
+  it('switch aws, every account full: shard_capacity, no slot; a release frees A', async () => {
+    const a = await hostedAccount(1);
+    const b = await hostedAccount(1);
+    await liveHostedOn(a, 1);
+    await liveHostedOn(b, 1);
+    const fx = await seedTenant();
+    vi.stubEnv(AGENT_RUNNER_PROVIDER_ENV_VAR, 'aws');
+
+    const { ref, verdict } = await reserve('hosted_agent', fx);
+    expect(verdict).toEqual({
+      outcome: 'deferred',
+      reason: 'shard_capacity',
+      detail: HOSTED_AGENT_SHARD_CAPACITY_DETAIL,
+    });
+    expect(await slotShard('hosted_agent', ref)).toBeUndefined();
+
+    const onA = await adminDb.fleetInFlightSlot.findFirstOrThrow({ where: { fleetShardId: a.id } });
+    await fleetCeilingService.release('hosted_agent', onA.ref);
+    expect((await reserve('hosted_agent', fx)).verdict).toMatchObject({
+      outcome: 'reserved',
+      fleetShardId: a.id,
+    });
+  });
+
+  it('switch aws, no hosted account at all: shard_capacity, never Fly', async () => {
+    await hostedAccount(50, 'ci_runner');
+    const fx = await seedTenant();
+    vi.stubEnv(AGENT_RUNNER_PROVIDER_ENV_VAR, 'aws');
+    const { verdict } = await reserve('hosted_agent', fx);
+    expect(verdict).toMatchObject({ outcome: 'deferred', reason: 'shard_capacity' });
+  });
+
+  it('an org at its plan figure with a full pool is told plan_cap; the kill switch still wins', async () => {
+    const a = await hostedAccount(1);
+    await liveHostedOn(a, 1);
+    const fx = await seedTenant();
+    vi.stubEnv(AGENT_RUNNER_PROVIDER_ENV_VAR, 'aws');
+    // The org's own five hosted runs (Max: agentRunsInParallel 5), on Fly before the flip.
+    for (let i = 0; i < 5; i += 1) {
+      vi.stubEnv(AGENT_RUNNER_PROVIDER_ENV_VAR, 'fly');
+      expect((await reserve('hosted_agent', fx)).verdict.outcome).toBe('reserved');
+    }
+    vi.stubEnv(AGENT_RUNNER_PROVIDER_ENV_VAR, 'aws');
+    expect((await reserve('hosted_agent', fx)).verdict).toMatchObject({
+      outcome: 'deferred',
+      reason: 'plan_cap',
+    });
+
+    vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '0');
+    const readShards = vi.spyOn(fleetShardAdmissionService, 'chooseInTx');
+    expect((await reserve('hosted_agent', fx)).verdict).toMatchObject({
+      outcome: 'deferred',
+      reason: 'fleet_ceiling',
+    });
+    expect(readShards).not.toHaveBeenCalled();
+  });
+
+  it('two orgs racing for the one free slot: one reserved, one shard_capacity', async () => {
+    const a = await hostedAccount(2);
+    await liveHostedOn(a, 1);
+    const x = await seedTenant();
+    const y = await seedTenant();
+    vi.stubEnv(AGENT_RUNNER_PROVIDER_ENV_VAR, 'aws');
+
+    const results = await Promise.all([reserve('hosted_agent', x), reserve('hosted_agent', y)]);
+    const outcomes = results.map((r) => r.verdict.outcome).sort();
+    expect(outcomes).toEqual(['deferred', 'reserved']);
+    expect(results.find((r) => r.verdict.outcome === 'deferred')?.verdict).toMatchObject({
+      reason: 'shard_capacity',
+    });
+    expect(await adminDb.fleetInFlightSlot.count({ where: { fleetShardId: a.id } })).toBe(2);
+  });
+
+  it('a flip between two reserves changes the second placement, and no other kind', async () => {
+    const a = await hostedAccount(5);
+    const fx = await seedTenant();
+    const before = await Promise.all(
+      (['ci_runner', 'code_graph_index', 'agent_instance'] as const).map((k) => fleetKindOnPool(k)),
+    );
+    vi.stubEnv(AGENT_RUNNER_PROVIDER_ENV_VAR, 'fly');
+    expect((await reserve('hosted_agent', fx)).verdict).toMatchObject({ fleetShardId: null });
+    vi.stubEnv(AGENT_RUNNER_PROVIDER_ENV_VAR, 'aws');
+    expect((await reserve('hosted_agent', fx)).verdict).toMatchObject({ fleetShardId: a.id });
+    const after = await Promise.all(
+      (['ci_runner', 'code_graph_index', 'agent_instance'] as const).map((k) => fleetKindOnPool(k)),
+    );
+    expect(after).toEqual(before);
+    expect(after).toEqual([false, false, false]);
+  });
+
+  it('an agent_instance slot carries no account, with the switch on', async () => {
+    await hostedAccount(5);
+    const fx = await seedTenant();
+    vi.stubEnv(AGENT_RUNNER_PROVIDER_ENV_VAR, 'aws');
+    const { ref, verdict } = await reserve('agent_instance', fx);
+    expect(verdict).toMatchObject({ outcome: 'reserved', fleetShardId: null });
+    expect(await slotShard('agent_instance', ref)).toBeNull();
+  });
+});
+
+describe('fleetInFlightSlotRepository and the account column (MOTIR-9421)', () => {
+  const expiresAt = new Date(NOW.getTime() + TTL_SECONDS * 1_000);
+
+  it('take writes the account; adopt without one keeps it', async () => {
+    const a = await hostedAccount(5);
+    const fx = await seedTenant();
+    await withSystemContext((tx) =>
+      fleetInFlightSlotRepository.take(
+        {
+          workload: 'hosted_agent',
+          ref: 'r1',
+          ownerRef: 'run-1',
+          organizationId: fx.organizationId,
+          fleetShardId: a.id,
+          expiresAt,
+        },
+        tx,
+      ),
+    );
+    expect(await slotShard('hosted_agent', 'r1')).toBe(a.id);
+    await withSystemContext((tx) =>
+      fleetInFlightSlotRepository.adopt(
+        {
+          workload: 'hosted_agent',
+          ref: 'r1',
+          ownerRef: 'run-2',
+          organizationId: fx.organizationId,
+          workspaceId: null,
+          expiresAt,
+        },
+        tx,
+      ),
+    );
+    const row = await adminDb.fleetInFlightSlot.findUniqueOrThrow({
+      where: { workload_ref: { workload: 'hosted_agent', ref: 'r1' } },
+    });
+    expect(row).toMatchObject({ ownerRef: 'run-2', fleetShardId: a.id });
+  });
+
+  it('the per-account count excludes expired rows and other workloads', async () => {
+    const a = await hostedAccount(5);
+    await liveHostedOn(a, 2);
+    await liveHostedOn(a, 1, new Date(NOW.getTime() - 1_000));
+    const fx = await seedTenant();
+    await withSystemContext((tx) =>
+      fleetInFlightSlotRepository.take(
+        {
+          workload: 'code_graph_index',
+          ref: 'idx',
+          organizationId: fx.organizationId,
+          fleetShardId: a.id,
+          expiresAt,
+        },
+        tx,
+      ),
+    );
+    const count = await withSystemContext((tx) =>
+      fleetInFlightSlotRepository.countLiveForWorkloadOnShardInTx('hosted_agent', a.id, NOW, tx),
+    );
+    expect(count).toBe(2);
+  });
+
+  it('reassignShardInTx moves only the row its owner holds', async () => {
+    const a = await hostedAccount(5);
+    const b = await hostedAccount(5);
+    const fx = await seedTenant();
+    await withSystemContext((tx) =>
+      fleetInFlightSlotRepository.take(
+        {
+          workload: 'hosted_agent',
+          ref: 'r2',
+          ownerRef: 'run-a',
+          organizationId: fx.organizationId,
+          fleetShardId: a.id,
+          expiresAt,
+        },
+        tx,
+      ),
+    );
+    const moved = await withSystemContext((tx) =>
+      fleetInFlightSlotRepository.reassignShardInTx('hosted_agent', 'r2', 'run-b', b.id, tx),
+    );
+    expect(moved).toBe(false);
+    expect(await slotShard('hosted_agent', 'r2')).toBe(a.id);
+    const movedOwn = await withSystemContext((tx) =>
+      fleetInFlightSlotRepository.reassignShardInTx('hosted_agent', 'r2', 'run-a', b.id, tx),
+    );
+    expect(movedOwn).toBe(true);
+    expect(await slotShard('hosted_agent', 'r2')).toBe(b.id);
   });
 });

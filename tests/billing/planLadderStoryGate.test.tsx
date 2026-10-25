@@ -122,7 +122,8 @@ const cardNamed = (name: string) =>
   cards().find((c) => c.querySelector('span.font-semibold')?.textContent === name)!;
 const n = (v: number) => v.toLocaleString('en-US');
 const entry = (key: string) => BILLING_CATALOG.aiPlans.find((p) => p.key === key)!;
-const PAID = ['standard', 'pro', 'max', 'max_x2'].map(entry);
+// The row's five paid cards, Host last (MOTIR-9403, the Host design amendment).
+const PAID = ['standard', 'pro', 'max', 'max_x2', 'host'].map(entry);
 
 beforeEach(() => {
   Object.defineProperty(window, 'location', {
@@ -138,14 +139,15 @@ afterEach(() => {
 });
 
 describe('the catalog figures, pinned', () => {
-  it('Standard 5,000, Pro 15,000, Max 30,000, Max ×2 60,000 a month, each with one tracker seat', () => {
+  it('Standard 5,000, Pro 15,000, Max 30,000, Max ×2 60,000, Host 300,000 a month, each with one tracker seat', () => {
     expect(PAID.map((p) => [p.key, p.allotment?.credits, p.allotment?.cadence])).toEqual([
       ['standard', 5000, 'monthly'],
       ['pro', 15000, 'monthly'],
       ['max', 30000, 'monthly'],
       ['max_x2', 60000, 'monthly'],
+      ['host', 300000, 'monthly'],
     ]);
-    expect(PAID.map((p) => p.includedTrackerSeats)).toEqual([1, 1, 1, 1]);
+    expect(PAID.map((p) => p.includedTrackerSeats)).toEqual([1, 1, 1, 1, 1]);
     expect(entry('max_x2').prices).toMatchObject({
       monthly: { amountUsd: 300 },
       annual: { amountUsd: 2400 },
@@ -185,7 +187,7 @@ describe('the ladder line', () => {
 
 describe('the assembled row', () => {
   for (const cadence of ['Annual', 'Monthly'] as const) {
-    it(`${cadence}: four paid cards with pools, ladder and seat lines; no Free, no Enterprise`, async () => {
+    it(`${cadence}: five paid cards with pools, ladder and seat lines; no Free, no Enterprise`, async () => {
       await openPlans(status());
       fireEvent.click(screen.getByRole('button', { name: cadence, exact: true } as never));
 
@@ -198,6 +200,7 @@ describe('the assembled row', () => {
         '3× Standard’s credits · same price per credit',
         '2× Pro’s credits · same price per credit',
         '2× Max’s credits · same price per credit',
+        '5× Max ×2’s credits · same price per credit',
       ]);
       for (const plan of PAID) {
         const c = within(cardNamed(plan.name));
@@ -214,6 +217,11 @@ describe('the assembled row', () => {
         expect(maxX2.getByText('$300 / mo')).toBeTruthy();
       }
 
+      // The callout still names the ladder's top, Max ×2, never Host (MOTIR-9403).
+      expect(
+        screen.getByText(/If your organization uses more than Max ×2's 60,000 credits a month/),
+      ).toBeTruthy();
+
       const page = document.body.textContent ?? '';
       expect(page).not.toMatch(/Enterprise|Contact sales|Custom credit pool/);
       expect(screen.queryByText('No Motir seat · 250-item cap')).toBeNull();
@@ -223,7 +231,7 @@ describe('the assembled row', () => {
 
   it('renders the same row in zh, with the zh ladder and seat lines', async () => {
     await openPlans(status(), 'zh');
-    expect(cards()).toHaveLength(4);
+    expect(cards()).toHaveLength(5);
     expect(within(cardNamed('Pro')).getByTestId('plan-ladder').textContent).toBe(
       'Standard 的 3 倍额度 · 额度单价相同',
     );
@@ -308,7 +316,7 @@ describe('the strings, in every shipped locale', () => {
         expect(plans[gone], gone).toBeUndefined();
       }
       const tiers = plans.tiers as Record<string, unknown>;
-      expect(Object.keys(tiers).sort()).toEqual(['max', 'max_x2', 'pro', 'standard']);
+      expect(Object.keys(tiers).sort()).toEqual(['host', 'max', 'max_x2', 'pro', 'standard']);
     }
   });
 });

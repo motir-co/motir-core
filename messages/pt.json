@@ -6588,7 +6588,7 @@
         "standard": {
           "useCase": "Planeje seus projetos com o planejador do Motir AI.",
           "features": [
-            "Planeje o projeto inteiro, em detalhes",
+            "Planeje o projeto, em detalhes",
             "Os créditos renovam todo mês · recarregue quando quiser"
           ]
         },
@@ -6603,12 +6603,26 @@
         "max": {
           "useCase": "Pro, mais folga para passar o trabalho planejado ao agente.",
           "prev": "Pro",
-          "features": ["Folga para enviar automaticamente o trabalho planejado ao agente"]
+          "features": [
+            "Planeje mais trabalho para o seu projeto avançar mais rápido",
+            "Folga para enviar automaticamente parte do trabalho planejado ao agente"
+          ]
         },
         "max_x2": {
           "useCase": "Max, com o dobro do volume.",
           "prev": "Max",
-          "features": ["O dobro do pacote mensal de créditos do Max"]
+          "features": [
+            "O dobro do pacote mensal de créditos do Max",
+            "Envie automaticamente mais trabalho planejado ao agente"
+          ]
+        },
+        "host": {
+          "useCase": "Motir em escala de frota, em contas AWS próprias.",
+          "prev": "Max ×2",
+          "features": [
+            "O Motir conduz seu projeto de forma autônoma",
+            "Pools dedicados para runners de CI, execuções de agentes, o indexador e os agentes hospedados"
+          ]
         }
       },
       "trial": {
@@ -8417,7 +8431,9 @@
       "held": "O Motir AI vai propor o planejamento quando estas perguntas terminarem.",
       "settledHeading": "O que suas respostas definiram",
       "clearEnough": "Claro o bastante para planejar como está.",
-      "nothingSettled": "Nada foi definido, então o pedido é planejado como está."
+      "nothingSettled": "Nada foi definido, então o pedido é planejado como está.",
+      "requirementSaved": "Guardado como <link>{title}</link> em Documentos de requisitos.",
+      "requirementNotSaved": "<lead>Não foi possível guardar o requisito.</lead> Nada foi iniciado. Confirmar continua disponível: tente novamente."
     },
     "logBugOffer": {
       "label": "Oferta para registrar um bug",
@@ -8496,6 +8512,20 @@
       "emptyBody": "As perguntas que você faz e os planos que você inicia neste projeto aparecem aqui.",
       "error": "Não foi possível carregar suas conversas.",
       "rowAria": "{title} · {status} · ativa {when}"
+    },
+    "requirementPane": {
+      "label": "Requisito a planejar",
+      "headings": {
+        "outcome": "Resultado",
+        "behaviour": "Comportamento",
+        "scopeEdge": "Limite do escopo",
+        "constraints": "Restrições",
+        "acceptance": "Aceitação",
+        "assumptions": "Premissas"
+      },
+      "none": "Nada aqui",
+      "correctionHint": "Para mudar algo aqui, escreva a correção na conversa.",
+      "notice": "Nenhum requisito foi redigido para esta oferta. O planejamento o redigirá quando você confirmar."
     }
   },
   "codeHealth": {
@@ -10036,12 +10066,20 @@
               "enable": "Ativou a CI da frota",
               "disable": "Desativou a CI da frota"
             },
+            "agent_hosting": {
+              "enable": "Enviou novos agentes para a AWS",
+              "disable": "Devolveu novos agentes ao Fly"
+            },
             "shard": {
               "add": "Adicionou uma conta da frota",
               "limits": "Atualizou os limites de uma conta da frota",
               "ceiling": "Alterou o teto de uma conta da frota",
               "disable": "Desativou uma conta da frota",
-              "enable": "Reativou uma conta da frota"
+              "enable": "Reativou uma conta da frota",
+              "quota_request": "Solicitou aumento de cota de uma conta da frota"
+            },
+            "pool": {
+              "grow": "Ampliou um pool da frota"
             }
           },
           "idea": {
@@ -12014,6 +12052,56 @@
         "title": "Não foi possível carregar a configuração da frota",
         "body": "A configuração ou sua prontidão não pôde ser lida, então nenhum estado é mostrado e nenhum interruptor é oferecido. É um erro de leitura — nada mudou e nenhum valor é presumido.",
         "retry": "Tentar novamente"
+      },
+      "agentHosting": {
+        "title": "Hospedagem de agentes",
+        "subtitle": "Onde novas instâncias de agente são criadas",
+        "superadminOnly": "Somente superadmin",
+        "explanation": "Desligado: novas instâncias de agente são criadas no Fly. Ligado: cada nova instância de agente é colocada em uma conta do pool AWS de hospedagem de agentes. Em ambos os casos, os agentes que já existem ficam onde estão — este interruptor nunca move um agente em execução. Uma alteração vale para o próximo agente criado, sem reiniciar.",
+        "state": {
+          "fly": "Fly",
+          "aws": "AWS"
+        },
+        "action": {
+          "turnOnAws": "Ligar AWS",
+          "turnOffAws": "Desligar AWS"
+        },
+        "onNote": "Novos agentes são criados na AWS; agentes que já estão no Fly ficam no Fly.",
+        "meta": {
+          "lastChanged": "Última alteração",
+          "changedBy": "por {email}, {when} — “{reason}”",
+          "neverChanged": "Nunca alterada — novos agentes são criados no Fly",
+          "auditLink": "Log de auditoria"
+        },
+        "monitoringLine": "As máquinas dos agentes aparecem em Monitoramento › Frota",
+        "confirm": {
+          "toAwsTitle": "Criar novos agentes na AWS?",
+          "toAwsBody": "Fly → AWS. A partir de agora, cada nova instância de agente é criada em uma conta do pool AWS de hospedagem de agentes. Agentes que já estão no Fly não são movidos: continuam rodando no Fly.",
+          "toFlyTitle": "Criar novos agentes no Fly de novo?",
+          "toFlyBody": "AWS → Fly. Novas instâncias de agente voltam para o Fly, a começar pela próxima criada. Agentes que já estão na AWS não são movidos: continuam rodando na AWS.",
+          "reasonLabel": "Motivo — obrigatório, gravado no log de auditoria",
+          "reasonPlaceholderToAws": "Por que os novos agentes vão para a AWS?",
+          "reasonPlaceholderToFly": "Por que os novos agentes voltam para o Fly?",
+          "reasonHint": "Mostrado a qualquer operador que ler esta alteração depois. “Teste” sozinho não responde nada.",
+          "reasonHintEmpty": "O botão fica desativado até que um motivo seja digitado — a mesma regra que o servidor aplica.",
+          "cancel": "Cancelar",
+          "confirmToAws": "Ligar AWS",
+          "confirmToFly": "Desligar AWS"
+        },
+        "refused": {
+          "reasonMissing": "Não alterado: um motivo é obrigatório e é gravado no log de auditoria com esta alteração. Novos agentes continuam sendo criados em {hoster}.",
+          "alreadyAws": "Já está na AWS — nada mudou.",
+          "alreadyFly": "Já está no Fly — nada mudou.",
+          "alreadyBody": "Outro superadmin a alterou primeiro, então nada foi gravado e nenhuma linha de auditoria foi adicionada.",
+          "writeFailed": "Não mudou para {hoster}: não foi possível salvar a alteração.",
+          "nothingChanged": "Nada mudou: novos agentes continuam sendo criados em {previous}.",
+          "retryHint": "Seu motivo foi mantido. Tente novamente ou cancele."
+        },
+        "unavailable": {
+          "title": "Não foi possível carregar a hospedagem de agentes",
+          "body": "Não foi possível ler onde novos agentes são criados, então nenhum estado é mostrado e nenhum interruptor é oferecido. É um erro de leitura — nada mudou e nenhum valor é presumido.",
+          "retry": "Tentar novamente"
+        }
       }
     }
   },

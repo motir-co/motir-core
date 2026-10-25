@@ -1,5 +1,5 @@
 import type { APIRequestContext, Cookie, Locator, Page, Response } from '@playwright/test';
-import { test, expect, FIRST_PAINT_MS } from './_helpers/acceptance-video';
+import { test, expect, FIRST_PAINT_MS } from './_helpers/promoted-regression';
 import { resetDatabase, adminDb } from './_helpers/db-reset';
 import { developmentSection, openDevelopmentOverlay } from './_helpers/development-decide';
 import { checkSuitePayload, postSignedWebhook, pullRequestPayload } from './_helpers/github-seed';

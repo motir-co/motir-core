@@ -672,6 +672,10 @@ export interface JobEventDataMap {
    *  GitHub org and fleet kind against 70% of its limits, one alert per (subject,
    *  limit). Cross-tenant by design: the limits are Motir's, not a tenant's. */
   'system.fleet-shard-headroom': SystemScheduledData;
+  /** The pool growth pass (Story MOTIR-9362 · MOTIR-9462) — each fleet kind on its
+   *  AWS pool grows by itself at 70% of an account's live granted quota.
+   *  Cross-tenant by design: the pools are Motir's, not a tenant's. */
+  'system.fleet-pool-growth': SystemScheduledData;
   'system.billing-seat-sync': BillingSeatSyncData;
   /** A settled fleet container's usage-and-cost report to motir-ai (MOTIR-5286). */
   'system.platform-meter-report': PlatformMeterReportData;

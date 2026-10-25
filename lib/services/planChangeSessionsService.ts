@@ -576,6 +576,14 @@ export async function appendWithin(
                 kind: turn.answerOffer.kind,
                 requestMd: turn.answerOffer.requestMd,
                 targetKey: turn.answerOffer.targetKey,
+                // The composed requirement of a no-target `plan` offer (MOTIR-9432).
+                ...(turn.answerOffer.requirement
+                  ? {
+                      requirement: JSON.parse(
+                        JSON.stringify(turn.answerOffer.requirement),
+                      ) as Prisma.InputJsonObject,
+                    }
+                  : {}),
                 // The bug a `log_bug` offer would write (MOTIR-9322), stored whole so
                 // a confirm writes exactly what was checked here.
                 ...(turn.answerOffer.bug
@@ -1425,11 +1433,15 @@ async function releasePlanAgainClaim(
  * settled, or `undefined`. Only a conversation is grilled before planning, and only
  * by the person whose conversation it is, so any other session carries nothing.
  */
-async function carriedAnswersFor(
-  session: PlanChangeSession,
+export async function carriedAnswersFor(
+  // `createdById` is absent on the session DTO the ask paths hold, which reads only the
+  // caller's own conversation (`findResumable` / `getById`); the grilling read below is
+  // the caller's too, so a missing owner is not a second person's answers (MOTIR-9442).
+  session: { id: string; origin: string; createdById?: string | null },
   pctx: ProjectContext,
 ): Promise<CarriedAnswers | undefined> {
-  if (session.origin !== 'conversation' || session.createdById !== pctx.userId) return undefined;
+  if (session.origin !== 'conversation') return undefined;
+  if (session.createdById !== undefined && session.createdById !== pctx.userId) return undefined;
   return toCarriedAnswers(await aiSharpenService.getSettledForConversation(session.id, pctx));
 }
 
@@ -3127,7 +3139,14 @@ export const planChangeSessionsService = {
     pctx: ProjectContext,
     address: PlanChangeSessionAddress,
     requirement?: SubmittedRequirement,
-    opts: { planAgainOf?: string | null } = {},
+    opts: {
+      planAgainOf?: string | null;
+      /** The saved requirement page (MOTIR-9436): rides the job beside `requirement`. */
+      requirementPage?: { pageId: string; title: string };
+      /** Send NO carried answers (MOTIR-9436): a confirmed offer's composed requirement
+       *  already holds what Grill me settled, and a second copy would be folded in twice. */
+      omitCarriedAnswers?: boolean;
+    } = {},
   ): Promise<PlanChangeSubmitResultDto> {
     const session = await requireSession(pctx, address);
     // A guide conversation never plans (AMENDMENT 2, A2.2): refused before its
@@ -3241,11 +3260,13 @@ export const planChangeSessionsService = {
     // not grill that request again. Read now, at submit, so a Stop, a finish or Grill
     // me switched off all carry what was settled so far. A fresh run only: a plan
     // again re-plans what an earlier run already carried.
-    const carriedAnswers = claim ? undefined : await carriedAnswersFor(session, pctx);
+    const carriedAnswers =
+      claim || opts.omitCarriedAnswers ? undefined : await carriedAnswersFor(session, pctx);
     const submitOpts = {
       sessionId: session.id,
       ...(idempotencyKey ? { idempotencyKey } : {}),
       ...(carriedAnswers ? { carriedAnswers } : {}),
+      ...(opts.requirementPage ? { requirementPage: opts.requirementPage } : {}),
     };
     let submitted: { jobId: string; planId: string };
     try {

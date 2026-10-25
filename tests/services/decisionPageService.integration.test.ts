@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import {
   DecisionCardFinishedError,
@@ -15,9 +15,11 @@ import { projectsService } from '@/lib/services/projectsService';
 import { usersService } from '@/lib/services/usersService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { userRepository } from '@/lib/repositories/userRepository';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { expectEachHopAnnounced, transitionedEventsFor } from '../helpers/transitionedEvents';
 
 // `decisionPageService.publish` over real Postgres (Story MOTIR-5761 · MOTIR-7432;
 // `approval-gates.md` §8 NINTH AMENDMENT clauses 1–3). The seal, the publication
@@ -92,12 +94,23 @@ const publications = (workItemId: string) =>
 const statusOf = async (id: string) =>
   (await adminDb.workItem.findUniqueOrThrow({ where: { id } })).status;
 
+/** Publish, asserting every status hop it wrote was announced once (Bug MOTIR-9485). */
+async function publishAnnounced(workItemId: string, pageId: string) {
+  return expectEachHopAnnounced(
+    workItemId,
+    { workspaceId: fx.ctx.workspaceId, actorId: fx.ctx.userId },
+    () => decisionPageService.publish({ workItemId, pageId }, fx.ctx),
+  );
+}
+
 describe('decisionPageService.publish — an agent decision card', () => {
   it('seals the latest version, records one publication, raises an awaiting gate and walks the card to review', async () => {
     const item = await card();
     const p = await page();
 
-    const dto = await decisionPageService.publish({ workItemId: item.id, pageId: p.id }, fx.ctx);
+    // Each hop of the walk is announced once the publish commits (Bug MOTIR-9485).
+    const { result: dto, hops } = await publishAnnounced(item.id, p.id);
+    expect(hops.length).toBeGreaterThan(0);
 
     const version = await adminDb.pageVersion.findFirstOrThrow({
       where: { pageId: p.id },
@@ -123,6 +136,57 @@ describe('decisionPageService.publish — an agent decision card', () => {
     });
     expect(dto.gateId).toBe(gate!.id);
     expect(['in_review', 'implemented']).toContain(await statusOf(item.id));
+  });
+
+  // Bug MOTIR-9485: the walk wrote its hop and announced nothing, so the parent
+  // rollup, the bell and automation rules never saw the card enter review.
+  it('announces the In Progress card’s one hop to review with work-item/transitioned', async () => {
+    const item = await card();
+    await workItemsService.updateStatus(item.id, 'in_progress', fx.ctx);
+    const p = await page();
+
+    const { hops } = await publishAnnounced(item.id, p.id);
+
+    expect(hops).toEqual([{ fromStatusKey: 'in_progress', toStatusKey: 'in_review' }]);
+    expect(await statusOf(item.id)).toBe('in_review');
+  });
+
+  it('a replay walks nothing and announces nothing', async () => {
+    const item = await card();
+    await workItemsService.updateStatus(item.id, 'in_progress', fx.ctx);
+    const p = await page();
+    await decisionPageService.publish({ workItemId: item.id, pageId: p.id }, fx.ctx);
+
+    const { result, hops } = await publishAnnounced(item.id, p.id);
+
+    expect(result.replayed).toBe(true);
+    expect(hops).toEqual([]);
+  });
+
+  // ⚠️ THE EMIT WAITS FOR THE COMMIT. A publish that fails after the walk rolls the
+  // hop back, and an event already sent for it would tell every consumer about a
+  // move that never happened.
+  it('announces nothing when the publish rolls back after the walk', async () => {
+    const item = await card();
+    await workItemsService.updateStatus(item.id, 'in_progress', fx.ctx);
+    const p = await page();
+    const before = await transitionedEventsFor(item.id);
+    // The publisher read that closes the publish's transaction, after the walk has written.
+    const publisher = vi
+      .spyOn(userRepository, 'findByIds')
+      .mockRejectedValueOnce(new Error('the publish fails after the walk'));
+
+    try {
+      await expect(
+        decisionPageService.publish({ workItemId: item.id, pageId: p.id }, fx.ctx),
+      ).rejects.toThrow('the publish fails after the walk');
+    } finally {
+      publisher.mockRestore();
+    }
+
+    expect(await statusOf(item.id)).toBe('in_progress');
+    expect(await publications(item.id)).toHaveLength(0);
+    expect(await transitionedEventsFor(item.id)).toEqual(before);
   });
 
   it('the SAME version twice is a replay: no second publication, no second gate', async () => {
