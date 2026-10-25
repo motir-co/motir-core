@@ -21,3 +21,37 @@ export class CapacityAlertKeyInvalidError extends Error {
     this.name = 'CapacityAlertKeyInvalidError';
   }
 }
+
+/**
+ * A provider model's limit is at or over the alert share (MOTIR-9611). Sent to
+ * Sentry by `alertCapacityLimitOverShare`, once per raise; the message names the
+ * provider, model and limit in plain words and nothing about any tenant.
+ */
+export class CapacityLimitOverShareError extends Error {
+  constructor(
+    readonly provider: string,
+    readonly model: string,
+    readonly unit: string,
+    /** The share used, or `null` for a limit of 0 with usage above it. */
+    readonly sharePercent: number | null,
+    readonly alertSharePercent: number,
+  ) {
+    const used =
+      sharePercent === null
+        ? 'is above a limit of 0'
+        : `is at ${Math.round(sharePercent)}% of its limit`;
+    super(
+      `${provider} / ${model}: ${UNIT_WORDS[unit] ?? unit} ${used} (alert share ${alertSharePercent}%)`,
+    );
+    this.name = 'CapacityLimitOverShareError';
+  }
+}
+
+const UNIT_WORDS: Record<string, string> = {
+  max_concurrency: 'concurrency',
+  rpm: 'requests per minute',
+  input_tpm: 'input tokens per minute',
+  output_tpm: 'output tokens per minute',
+  tpm: 'tokens per minute',
+  tpd: 'tokens per day',
+};
