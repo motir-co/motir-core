@@ -7,6 +7,7 @@ import {
   __forTests,
   frameTagOf,
   isLoopBlockWatchdogRunning,
+  framesOnBothPauses,
   pauseInterruptedJs,
   readLoopBlock,
   rollLoopBlockWindow,
@@ -39,6 +40,30 @@ function blockLoopForTest(ms: number): void {
  */
 function blockLoopInNativeCodeForTest(ms: number): void {
   spawnSync('sleep', [String(ms / 1000)]);
+}
+
+/** Spin until the capture reaches `stage`, or give up after `capMs`. */
+function spinUntilStage(stage: number, capMs = 5000): void {
+  const giveUpAt = Date.now() + capMs;
+  while (__forTests.captureStage() < stage && Date.now() < giveUpAt) {
+    // spin
+  }
+}
+
+/** The block itself: past the threshold, and on until the worker's probe was answered. */
+function blockUntilProbedForTest(): void {
+  blockLoopForTest(BLOCK_THRESHOLD_MS);
+  spinUntilStage(1);
+}
+
+/** Code the block handed on to, still running when the first pause lands. */
+function followOnForTest(): void {
+  spinUntilStage(2);
+}
+
+/** Further follow-on code, running when the confirming pause lands. */
+function laterFollowOnForTest(): void {
+  spinUntilStage(3);
 }
 
 function sleep(ms: number): Promise<void> {
@@ -98,6 +123,34 @@ describe('the capture', () => {
   });
 });
 
+// MOTIR-9498: the heartbeat stays stale after a block ends, while the
+// macrotasks queued behind it run, so a pause requested just before the end
+// lands promptly on code that ran AFTER the block. Three immediates queued in one
+// check phase run back to back with no timer between them, so the heartbeat stays
+// stale throughout: the block ends once the probe is answered, and each pause
+// lands in a different follow-on. Neither follow-on held the loop.
+describe('a pause that lands after the block', () => {
+  it('names no follow-on code when the pause lands after the block ended', async () => {
+    await new Promise<void>((resolve) => {
+      setImmediate(blockUntilProbedForTest);
+      setImmediate(followOnForTest);
+      setImmediate(() => {
+        laterFollowOnForTest();
+        resolve();
+      });
+    });
+    await sleep(300);
+    const block = readLoopBlock();
+    expect(__forTests.captureStage(), 'the confirming pause never landed').toBe(3);
+    expect(block).not.toBeNull();
+    expect(block!.frame).toBe(NOT_IN_JS);
+    expect(block!.context!.inJs).toBe(false);
+    // The control: the first pause did land in follow-on code, which is what
+    // the tag would have named on the first pause alone.
+    expect(block!.context!.frames.join('\n')).toMatch(/followOnForTest|blockUntilProbedForTest/);
+  });
+});
+
 describe('what is not a block', () => {
   it('reads null (every tag `unmeasured`) when nothing blocked the loop', async () => {
     blockLoopForTest(300); // under the threshold
@@ -128,16 +181,24 @@ describe('what is not a block', () => {
 
 describe('classifying a capture (pure)', () => {
   const frame = (url: string, fn: string, line = 1) => ({ url, fn, line, col: 1 });
-  const capture = (over: Partial<RawCapture>): RawCapture => ({
-    t: 'capture',
-    hbStart: 0,
-    probeMs: 5,
-    pauseMs: 5,
-    staleAtPausedMs: BLOCK_THRESHOLD_MS + 500,
-    holdMs: 1,
-    frames: [frame('file:///app/lib/x.ts', 'doWork', 12)],
-    ...over,
-  });
+  type CaptureOver = Partial<Omit<RawCapture, 'confirm'>> & {
+    confirm?: Partial<NonNullable<RawCapture['confirm']>> | null;
+  };
+  // Both pauses land on the same stack unless a test says otherwise.
+  const capture = ({ confirm, ...over }: CaptureOver): RawCapture => {
+    const frames = over.frames ?? [frame('file:///app/lib/x.ts', 'doWork', 12)];
+    return {
+      t: 'capture',
+      hbStart: 0,
+      probeMs: 5,
+      pauseMs: 5,
+      staleAtPausedMs: BLOCK_THRESHOLD_MS + 500,
+      holdMs: 1,
+      ...over,
+      frames,
+      confirm: confirm === null ? null : { pauseMs: 5, hb: 0, holdMs: 1, frames, ...confirm },
+    };
+  };
 
   it('names the top in-app frame as file:line fn', () => {
     expect(frameTagOf(capture({}), BLOCK_THRESHOLD_MS)).toMatch(/lib\/x\.ts:12 doWork$/);
@@ -184,6 +245,32 @@ describe('classifying a capture (pure)', () => {
     expect(tag).toBe('<anonymous>:3 evaluated');
   });
 
+  // MOTIR-9498: Node's dispatchers carry no URL and stay under every callback
+  // they run, so two follow-ons share them and they prove nothing.
+  it('reads `not_in_js` when the pauses share only a dispatcher', () => {
+    const dispatched = capture({
+      frames: [frame('', 'followOn', 3), frame('', 'processImmediate', 485)],
+      confirm: {
+        frames: [frame('', 'laterFollowOn', 8), frame('', 'processImmediate', 485)],
+      },
+    });
+    expect(frameTagOf(dispatched, BLOCK_THRESHOLD_MS)).toBe(NOT_IN_JS);
+  });
+
+  it('names no URL-less frame below the outermost shared userland frame', () => {
+    const tag = frameTagOf(
+      capture({
+        frames: [
+          frame('file:///app/node_modules/pg/lib/connection.js', 'parse', 40),
+          frame('', 'emit', 519),
+          frame('', 'onStreamRead', 191),
+        ],
+      }),
+      BLOCK_THRESHOLD_MS,
+    );
+    expect(tag).toBe(NO_APP_FRAME);
+  });
+
   it('reads `no_app_frame` when only library or internal frames ran', () => {
     const tag = frameTagOf(
       capture({
@@ -212,6 +299,48 @@ describe('classifying a capture (pure)', () => {
     expect(frameTagOf(capture({ probeMs: 900 }), BLOCK_THRESHOLD_MS)).toBe(NOT_IN_JS);
     expect(frameTagOf(capture({ pauseMs: 900 }), BLOCK_THRESHOLD_MS)).toBe(NOT_IN_JS);
     expect(frameTagOf(capture({ staleAtPausedMs: 20 }), BLOCK_THRESHOLD_MS)).toBe(NOT_IN_JS);
+  });
+
+  it('reads `not_in_js` when the confirming pause was slow, missing, or after a heartbeat', () => {
+    expect(frameTagOf(capture({ confirm: { pauseMs: 900 } }), BLOCK_THRESHOLD_MS)).toBe(NOT_IN_JS);
+    expect(frameTagOf(capture({ confirm: null }), BLOCK_THRESHOLD_MS)).toBe(NOT_IN_JS);
+    expect(frameTagOf(capture({ confirm: { hb: 1 } }), BLOCK_THRESHOLD_MS)).toBe(NOT_IN_JS);
+  });
+
+  // MOTIR-9498: the confirming pause is what proves the code was still running.
+  it('reads `not_in_js` when the two pauses share no frame outside Node internals', () => {
+    const late = capture({
+      frames: [frame('', '_request', 99), frame('node:internal/timers', 'processTimers', 5)],
+      confirm: {
+        frames: [
+          frame('file:///app/lib/y.ts', 'onData', 4),
+          frame('node:internal/timers', 'processTimers', 5),
+        ],
+      },
+    });
+    expect(framesOnBothPauses(late).map((f) => f.fn)).toEqual(['processTimers']);
+    expect(pauseInterruptedJs(late, BLOCK_THRESHOLD_MS)).toBe(false);
+    expect(frameTagOf(late, BLOCK_THRESHOLD_MS)).toBe(NOT_IN_JS);
+  });
+
+  it("names the frame both pauses were inside, at the first pause's line", () => {
+    const tag = frameTagOf(
+      capture({
+        frames: [
+          frame('file:///app/lib/helper.ts', 'step', 3),
+          frame('file:///app/lib/x.ts', 'doWork', 12),
+          frame('file:///app/app/route.ts', 'GET', 7),
+        ],
+        confirm: {
+          frames: [
+            frame('file:///app/lib/x.ts', 'doWork', 15),
+            frame('file:///app/app/route.ts', 'GET', 7),
+          ],
+        },
+      }),
+      BLOCK_THRESHOLD_MS,
+    );
+    expect(tag).toMatch(/lib\/x\.ts:12 doWork$/);
   });
 
   it('truncates a long frame to 200 characters', () => {
