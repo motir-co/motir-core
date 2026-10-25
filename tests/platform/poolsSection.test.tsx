@@ -524,6 +524,9 @@ describe('the Pools catalogue', () => {
   const enPools = flatten(en.platformAdmin.monitoring.pools as Tree);
   const zhPools = flatten((zh as Tree & typeof en).platformAdmin.monitoring.pools as Tree);
 
+  /** The catalogue's rich-text tags (`<cmd>` for a command, `<b>` for a figure). */
+  const RICH_TAGS = ['<cmd>', '</cmd>', '<b>', '</b>'];
+
   it('carries every string the design fixes, verbatim in en', () => {
     const notes = readFileSync('design/platform-admin/design-notes.md', 'utf8');
     const start = notes.indexOf('# AMENDMENT 2026-10-25 — Monitoring · Pools');
@@ -537,8 +540,8 @@ describe('the Pools catalogue', () => {
       const m = /^\|\s*`([A-Za-z0-9_.]+)`\s*\|\s*(.*?)\s*\|\s*$/.exec(line);
       if (!m || NOT_RENDERED.has(m[1]!)) continue;
       rows += 1;
-      // The catalogue carries markup the table does not: strip its tags.
-      const ours = enPools.get(m[1]!)?.replace(/<\/?[a-z]+>/g, '');
+      // The catalogue carries the two rich-text tags the table does not: drop them.
+      const ours = RICH_TAGS.reduce((text, tag) => text?.split(tag).join(''), enPools.get(m[1]!));
       if (ours !== m[2]!.replace(/`/g, '')) wrong.push(`${m[1]}: ${ours} ≠ ${m[2]}`);
     }
     expect(rows, 'the design Copy table parsed').toBeGreaterThan(60);
