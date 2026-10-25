@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakePersistentOrchestrator as fleet } from '@motir/orchestrator';
 import type { FleetShard } from '@/generated/prisma/client';
@@ -13,6 +16,11 @@ import { isJobRunDefer, type JobRunDefer } from '@/lib/jobs/engine/defer';
 import { engineJob } from '@/lib/jobs/engine/registry';
 import { jobServices } from '@/lib/jobs/services';
 import { fakePersistentOrchestratorForShard, resetShardFakes } from '@/lib/orchestrator';
+import {
+  readShardFakeCalls,
+  resetShardFakeJournal,
+  shardHeldShared,
+} from '@/lib/orchestrator/shardFakeJournal';
 import { agentInstanceBootService as boot } from '@/lib/services/agentInstanceBootService';
 import {
   agentInstanceBootSteps,
@@ -369,5 +377,70 @@ describe('a hibernated instance woken while its own account is full', () => {
     for (const leak of [a.id, a.name, a.awsAccountId!, 'us-east-1', 'aws', 'quota']) {
       expect(wire).not.toContain(leak);
     }
+  });
+});
+
+// MOTIR-9478: with the persistent fake's state file set (the E2E lane), each
+// account's calls and holds live beside it, so the spec, the web server and the
+// job worker read the same record.
+describe('the shared journal', () => {
+  let dir: string;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'shard-journal-'));
+    vi.stubEnv('MOTIR_FAKE_PERSISTENT_STATE_PATH', join(dir, 'state.json'));
+    resetShardFakeJournal();
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("records each account's calls, the refused provision unnamed and the made one by its machine", async () => {
+    const a = await seedShard('agent-hoster-a');
+    const viewA = fakePersistentOrchestratorForShard(a.id);
+    viewA.holdCapacity('provision');
+    expect(shardHeldShared(a.id, 'provision')).toBe(true);
+    wireFleetKindSwitch('agent_instance', () => true);
+    const dto = await create();
+    expect(dto.state).toBe('starting');
+    const refused = readShardFakeCalls().filter((c) => c.shardId === a.id);
+    expect(refused).toEqual([{ shardId: a.id, op: 'provisionPersistent', ref: null }]);
+
+    await makeRoom(a);
+    expect(shardHeldShared(a.id, 'provision')).toBe(false);
+    expect(await driveUntilSettled(dto.id)).toBe('running');
+    const row = await rowOf(dto.id);
+    const calls = readShardFakeCalls().filter((c) => c.shardId === a.id);
+    expect(calls).toContainEqual({ shardId: a.id, op: 'provisionPersistent', ref: row.machineId });
+    // Every other call names the machine it was asked about.
+    expect(
+      calls.filter((c) => c.op !== 'provisionPersistent').every((c) => c.ref === row.machineId),
+    ).toBe(true);
+  });
+
+  it('a held start is refused for every process, and a failed provision is recorded unnamed', async () => {
+    const a = await seedShard('agent-hoster-a');
+    wireFleetKindSwitch('agent_instance', () => true);
+    fleet.failNextProvision('the fake refused to provision');
+    const failed = await create('yue-failed');
+    expect(failed.state).toBe('failed');
+    expect(readShardFakeCalls()).toContainEqual({
+      shardId: a.id,
+      op: 'provisionPersistent',
+      ref: null,
+    });
+
+    const dto = await create();
+    expect(dto.state).toBe('running');
+    await lifecycle.hibernate(fx.projectIdentifier, dto.id, fx.ctx);
+    // Another process holds the room: this view reads the hold from the file.
+    resetShardFakes();
+    fakePersistentOrchestratorForShard(a.id).holdCapacity('start');
+    resetShardFakes();
+    const woke = await lifecycle.wake(fx.projectIdentifier, dto.id, fx.ctx);
+    expect(woke.state).toBe('waking');
+    expect((await provisionStep(dto.id)).waiting?.reason).toBe('account');
+    fakePersistentOrchestratorForShard(a.id).releaseCapacity('start');
+    expect(shardHeldShared(a.id, 'start')).toBe(false);
   });
 });
