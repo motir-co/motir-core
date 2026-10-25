@@ -387,6 +387,18 @@ describe('platformFleetPoolsService.listPools', () => {
     }
   });
 
+  it('answers the indexer’s switch, though nothing in this read places an index', async () => {
+    vi.stubEnv('MOTIR_INDEX_FLEET_PROVIDER', 'aws');
+    try {
+      const { blocks } = await platformFleetPoolsService.listPools(currentPrincipal, NOW);
+      expect(blocks.find((b) => b.fleetKind === 'code_graph_index')!.provider).toBe('aws');
+    } finally {
+      vi.unstubAllEnvs();
+    }
+    const { blocks } = await platformFleetPoolsService.listPools(currentPrincipal, NOW);
+    expect(blocks.find((b) => b.fleetKind === 'code_graph_index')!.provider).toBe('fly');
+  });
+
   it('a pool with no account yet is incomplete, with nothing to sum', () => {
     expect(poolTotal([])).toEqual({ grantedVcpu: 0, usedVcpu: 0, percent: null, complete: false });
   });

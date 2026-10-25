@@ -1,3 +1,4 @@
+import { indexFleetOnPool } from '@/lib/ciFleet/limits';
 import { wireFleetKindSwitch } from '@/lib/ciFleet/shardTargets';
 import { platformFleetKindSwitchRepository } from '@/lib/repositories/platformFleetKindSwitchRepository';
 
@@ -81,3 +82,8 @@ export async function agentHosterOnPool(): Promise<boolean> {
 wireFleetKindSwitch('hosted_agent', agentRunnerOnPool);
 wireFleetKindSwitch('agent_instance', agentHosterOnPool);
 wireFleetKindSwitch('ci_runner', ciRunnerOnPoolInLane);
+// The indexer's reader is wired where its admission lives
+// (`codeGraphIndexAdmissionService`), and wired again here with the SAME reader,
+// so a process that reads every kind's switch without placing an index (the
+// Pools read on /admin/monitoring) answers the indexer's switch too (MOTIR-9562).
+wireFleetKindSwitch('code_graph_index', indexFleetOnPool);
