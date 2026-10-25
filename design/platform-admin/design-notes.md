@@ -22,6 +22,7 @@ closest existing usage surface.
 | **ENTERPRISE REQUESTS — the rail row · the list (state filter, cursor paging, count) · the detail per state · support read-only · stale refusal** (AMENDMENT 2026-10-05) | **`console--enterprise-requests.mock.html`** (delta, Panels 1–10) | A new Platform-group page at `/admin/enterprise-requests` where staff work the requests orgs send from the Enterprise card’s Contact sales. **Gates MOTIR-7609.** |
 | **IDEAS — the rail row · the list (status / kind / category / tag / text filters in the URL, keyset pages) · the detail · edit with evidence rows · retire with a reason · a superadmin’s delete · support read-only** (AMENDMENT 2026-10-07) | **`console--ideas.mock.html`** (delta, Panels 1–12) | A new Operations page at `/admin/ideas` where staff review, correct, retire and delete the ideas motir.co shows. **Gates MOTIR-7680 and MOTIR-7681.** |
 | **FLEET SETTINGS — the rail row · the superadmin setting “Run Motir’s private repositories’ CI on the fleet” · the nine-condition readiness verdict · confirm ON / OFF with a reason · the refusals · read failed · not superadmin** (AMENDMENT 2026-10, MOTIR-8703) | **`console--fleet-settings.mock.html`** (delta, Panels 1–13) | A new Operations page at `/admin/fleet-settings` where a superadmin moves Motir’s private repositories’ CI onto the fleet once it is ready, and off at any time. **Gates the /admin setting UI card (story MOTIR-8699, `blocked_by` MOTIR-8703).** |
+| **PROVIDER CAPACITY — the rail row · usage against limits per provider and model (planning and agent lanes) · the states · the edit dialog and its refusals · the alert share · the raised-alert banner · degraded, unreachable and refused reads · support read-only · zh** (AMENDMENT 2026-10-25, MOTIR-9607) | **`console--capacity.mock.html`** (delta, Panels 1–17) | A new Operations page at `/admin/capacity` where platform staff see how close each provider model is to its limits, and operators edit limits and the alert share. **Gates the capacity screen card (story MOTIR-9539, MOTIR-9614 `blocked_by` MOTIR-9607).** |
 
 ## What this area is
 
@@ -3114,3 +3115,183 @@ Retired: `stat.pooled`, `group.pool`, `group.own`, `col.poolUsed`, `col.agentIns
 - **Per-user agent counts** — the per-person figure is shown as the plan's figure only; the table
   has no per-user breakdown.
 - **Loading** — server-rendered read, as before. **A `.png` export** — retired (AMENDMENT 4).
+
+---
+
+# AMENDMENT 2026-10-25 — Provider capacity (MOTIR-9607 · story MOTIR-9539)
+
+**Mock:** `console--capacity.mock.html` (delta, Panels 1–17). It amends `console.mock.html`
+(Panel 2's shell and Panel 7a's 404, referenced and not redrawn). Its token block, primitive
+CSS and sprite are spliced verbatim from `console--fleet-settings.mock.html`, the newest
+Operations delta. **Gates MOTIR-9614**, the capacity screen card.
+
+## Why it changes
+
+The gateway now measures, per provider and model, how much of each published limit is in use,
+split into the planning lane and the agent-run lane. Nobody can read it. Platform staff learn a
+provider is saturated only when planning turns start to fail, and changing a limit when a tier
+changes means editing gateway storage by hand. This page is the first consumer of the gateway's
+capacity contract (motir-gateway, `motir-capacity-api.md`), and draws nothing that contract does
+not return. The alert share and the raised-alert state are core's own (MOTIR-9609).
+
+## The door and who sees what
+
+- **Rail row:** a new Operations row, **Provider capacity**, lucide `Gauge`, directly after
+  Monitoring (after Fleet settings for a superadmin, who also sees that row). Page address
+  `/admin/capacity`.
+- **Read:** every platform staff role (`support` and up on `PLATFORM_ROLE_LADDER`), behind
+  `requirePlatformStaff`, the same as Monitoring. Anyone else gets the console's 404
+  (`NotPlatformStaffError`, Panel 7a of `console.mock.html`), with no usage number.
+- **Edit** (limits, planning share, tier note, alert share): `operator` and up. A `support` user
+  sees the same page with no Edit buttons (Panel 16). The server door checks the role again; a
+  hidden button is not the gate.
+- No tenant, user or organisation identifier appears anywhere; the read carries none.
+
+## The panels
+
+| #   | state                                                                                            | contract field that decides it                                                                                                              |
+| --- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Loaded, live; the rail door; raised-alerts banner; alert-share card; provider groups             | `counter_store.state = live`, `scope = shared`                                                                                              |
+| 2   | No alert raised: the banner is absent, with no "all clear" in its place                          | core raised-alert state empty                                                                                                               |
+| 3   | Counter scope instance: a sky notice under the Freshness line; numbers still judged              | `counter_store.scope = instance`                                                                                                            |
+| 4   | Counter store unavailable: limits, tier notes and shares shown; every usage cell **Unavailable** | `counter_store.state = unavailable`, all lanes `null`                                                                                       |
+| 5   | One entry slow: only that entry reads Unavailable, with a warning line                           | that entry's `lanes.planning` and `lanes.agent` both `null`                                                                                 |
+| 6   | Usage not reported: Claude's input and output tokens/min show the limit, never 0                 | lanes carry only a summed `tokens_per_minute`                                                                                               |
+| 7   | Limit set to 0: **Limit 0**, share a dash, state from usage > 0                                  | `limits.<u> = { value: 0, status: set }`                                                                                                    |
+| 8   | Unreachable or `capacity_config_unavailable`: the console ErrorState and Retry                   | no answer, or 500                                                                                                                           |
+| 9   | Credential refused: same ErrorState with the credential sentence                                 | 401 `capacity_auth_missing` · `_invalid`, 403 `capacity_auth_forbidden`                                                                     |
+| 10  | Loading: skeleton entries, `aria-busy`                                                           | first read pending                                                                                                                          |
+| 11  | No entries: EmptyState, no add button (models are added in the gateway)                          | `entries = []`                                                                                                                              |
+| 12  | Edit dialog: idle · Unknown checked · saving · saved                                             | the gateway limits write (PUT)                                                                                                              |
+| 13  | Edit refused inline, under the named field                                                       | 400 `capacity_invalid_value` with `field`                                                                                                   |
+| 14  | Edit refused at dialog level                                                                     | `capacity_invalid_body` · `capacity_unknown_model` · `capacity_unknown_provider` · `capacity_store_error` · `capacity_auth_*` · unreachable |
+| 15  | Alert-share card: idle · editing · saving · saved · out of range · save failed                   | core setting (MOTIR-9609)                                                                                                                   |
+| 16  | Support role: read-only                                                                          | `PLATFORM_ROLE_LADDER`                                                                                                                      |
+| 17  | Chinese: the zh column of the copy deck                                                          | —                                                                                                                                           |
+
+## How a row is judged
+
+- **Rows shown:** one Limit row per unit whose `limits.<u>.status` is `set` or `unknown`, in the
+  order concurrency, requests/min, input tokens/min, output tokens/min, tokens/min, tokens/day.
+  Units with `not_applicable` go under the fold **Units this provider does not enforce (n)**,
+  each reading **Not applicable**, never 0. The fold is a native `<details>`, closed by default.
+- **Usage** is `lanes.planning + lanes.agent` for the matching lane field (`in_flight`,
+  `requests_per_minute`, `tokens_per_minute`, `tokens_per_day`). The two lanes are shown apart
+  under the total: **Planning 14 · Agent 40**. The state is judged on the sum.
+- **Share** is `round(usage × 100 / limit)`. **States** at an alert share `A` (default 80):
+  Normal below `A − 10`; **Near limit** from `A − 10` up to `A`; **Over alert share** at `A` or
+  above. A limit of 0 with usage above 0 is Over, and its share is a dash.
+- **Unknown limit** (`status: unknown`, `value: null`): usage shown, limit reads **limit not
+  known**, share a dash, pill Unknown limit. `unknown_note` shows above the table when set.
+- **429 answers:** one row under the limits with this minute's and today's (UTC) counts per
+  lane, from `rate_limited_429`. It has no limit, so no share and no state.
+- **Usage not reported:** Claude enforces `input_tpm` and `output_tpm`, but the gateway reports
+  only a summed `tokens_per_minute` per lane, so those two rows can never show usage. They read
+  **Usage not reported** with no share and no state colour. This is a gap against the gateway
+  contract, not something this screen fills.
+- **Freshness:** "Read at {time} UTC · refreshes every 15 s" from `read_at`, with Refresh. The
+  gateway asks for at most one read a second; 15 s is well inside it.
+
+## Copy (`platformAdmin.capacity.*`)
+
+| key                                                                                | en                                                                                                                                                    | zh                                                                                                           |
+| ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `nav`                                                                              | Provider capacity                                                                                                                                     | 服务商容量                                                                                                   |
+| `title`                                                                            | Provider capacity                                                                                                                                     | 服务商容量                                                                                                   |
+| `subtitle`                                                                         | How close each provider model is to its published limits, for planning and agent runs together. Edit a model’s limits when its provider tier changes. | 每个服务商模型距离其公布限额还有多少余量，规划与智能体运行合并计算。服务商档位变化时，在这里修改模型的限额。 |
+| `fresh.readAt`                                                                     | Read at {time} UTC                                                                                                                                    | 读取于 UTC {time}                                                                                            |
+| `fresh.every`                                                                      | refreshes every 15 s                                                                                                                                  | 每 15 秒刷新                                                                                                 |
+| `fresh.refresh`                                                                    | Refresh                                                                                                                                               | 刷新                                                                                                         |
+| `scope.instance`                                                                   | Numbers are from one gateway instance and may be partial.                                                                                             | 数据来自单个网关实例，可能不完整。                                                                           |
+| `unavailable.notice`                                                               | Live numbers are unavailable: the gateway could not read its counters. Limits, tier notes and planning shares are shown as stored.                    | 实时数据不可用：网关无法读取其计数器。限额、档位说明和规划占比按已保存的值显示。                             |
+| `slow.notice`                                                                      | Live numbers for this model were not read in time. Every other model is live.                                                                         | 该模型的实时数据未能及时读取。其他模型均为实时数据。                                                         |
+| `alerts.title`                                                                     | {count, plural, one {1 limit is over the alert share} other {# limits are over the alert share}}                                                      | {count} 项限额已超过告警比例                                                                                 |
+| `alerts.line`                                                                      | {provider} · {model} · {limit} — {share} %                                                                                                            | {provider} · {model} · {limit} — {share} %                                                                   |
+| `alerts.since`                                                                     | raised since {time} UTC                                                                                                                               | 自 UTC {time} 起告警                                                                                         |
+| `alertShare.title`                                                                 | Alert share                                                                                                                                           | 告警比例                                                                                                     |
+| `alertShare.hsub`                                                                  | One share for every limit of every model                                                                                                              | 所有模型的所有限额共用一个比例                                                                               |
+| `alertShare.label`                                                                 | Alert when any one limit reaches                                                                                                                      | 任一限额达到以下比例时告警                                                                                   |
+| `alertShare.note`                                                                  | Checked once a minute, and each time this page loads.                                                                                                 | 每分钟检查一次，每次打开本页时也会检查。                                                                     |
+| `alertShare.saved`                                                                 | Saved. The next evaluation uses {share} %.                                                                                                            | 已保存。下次检查将使用 {share} %。                                                                           |
+| `alertShare.range`                                                                 | Enter a whole number from 1 to 100.                                                                                                                   | 请输入 1 到 100 之间的整数。                                                                                 |
+| `alertShare.failed`                                                                | The alert share could not be saved. Nothing was changed; try again.                                                                                   | 告警比例未能保存，没有任何更改，请重试。                                                                     |
+| `entry.tierNote`                                                                   | Tier note: {note}                                                                                                                                     | 档位说明：{note}                                                                                             |
+| `entry.noTierNote`                                                                 | No tier note                                                                                                                                          | 无档位说明                                                                                                   |
+| `entry.planningShare`                                                              | Planning share {share} %                                                                                                                              | 规划占比 {share} %                                                                                           |
+| `entry.unknownNote`                                                                | Unknown: {note}                                                                                                                                       | 未知：{note}                                                                                                 |
+| `entry.edit`                                                                       | Edit limits                                                                                                                                           | 编辑限额                                                                                                     |
+| `col.limit` · `col.usage` · `col.share` · `col.state`                              | Limit · Usage / limit · Share used · State                                                                                                            | 限额 · 用量 / 限额 · 已用比例 · 状态                                                                         |
+| `lanes`                                                                            | Planning {planning} · Agent {agent}                                                                                                                   | 规划 {planning} · 智能体 {agent}                                                                             |
+| `unit.max_concurrency` · `rpm` · `input_tpm` · `output_tpm` · `tpm` · `tpd`        | Concurrency · Requests / min · Input tokens / min · Output tokens / min · Tokens / min · Tokens / day                                                 | 并发数 · 每分钟请求数 · 每分钟输入词元 · 每分钟输出词元 · 每分钟词元 · 每日词元                              |
+| `state.normal` · `near` · `over` · `unavailable` · `unknown` · `na` · `unreported` | Normal · Near limit · Over alert share · Unavailable · Unknown limit · Not applicable · Usage not reported                                            | 正常 · 接近限额 · 超过告警比例 · 不可用 · 限额未知 · 不适用 · 未上报用量                                     |
+| `limitZero`                                                                        | Limit 0                                                                                                                                               | 限额 0                                                                                                       |
+| `limitUnknown`                                                                     | limit not known                                                                                                                                       | 限额未知                                                                                                     |
+| `r429.label` · `minute` · `day` · `note`                                           | 429 answers · This minute · Today (UTC) · No limit — counted only                                                                                     | 429 响应 · 本分钟 · 今日（UTC） · 无限额 — 仅计数                                                            |
+| `fold`                                                                             | Units this provider does not enforce ({count})                                                                                                        | 该服务商不限制的单位（{count}）                                                                              |
+| `provider.claude` · `deepseek` · `qwen`                                            | Claude · DeepSeek · Qwen                                                                                                                              | Claude · DeepSeek · Qwen                                                                                     |
+| `error.unreachable.title`                                                          | Capacity could not be read                                                                                                                            | 无法读取容量                                                                                                 |
+| `error.unreachable.body`                                                           | The gateway did not answer, or it could not read its limits table. Nothing is shown until a read succeeds.                                            | 网关没有响应，或无法读取其限额表。读取成功前不显示任何内容。                                                 |
+| `error.auth.title`                                                                 | The gateway credential is not accepted                                                                                                                | 网关凭据未被接受                                                                                             |
+| `error.auth.missing`                                                               | Motir’s server has no gateway credential configured. No usage can be read until it is set.                                                            | Motir 服务器未配置网关凭据。设置之前无法读取用量。                                                           |
+| `error.auth.invalid`                                                               | The gateway does not recognise Motir’s server credential. No usage can be read until it is replaced.                                                  | 网关无法识别 Motir 服务器的凭据。替换之前无法读取用量。                                                      |
+| `error.auth.forbidden`                                                             | The gateway credential belongs to a user who is not a gateway admin. No usage can be read until it is replaced.                                       | 该网关凭据所属用户不是网关管理员。替换之前无法读取用量。                                                     |
+| `error.retry`                                                                      | Retry                                                                                                                                                 | 重试                                                                                                         |
+| `empty.title`                                                                      | No provider models configured                                                                                                                         | 尚未配置服务商模型                                                                                           |
+| `empty.body`                                                                       | The gateway’s limits table has no rows, so there is nothing to show. Models are added in the gateway, not here.                                       | 网关的限额表没有任何记录，因此没有可显示的内容。模型需在网关中添加，而不是在这里。                           |
+| `edit.title`                                                                       | Edit limits · {model}                                                                                                                                 | 编辑限额 · {model}                                                                                           |
+| `edit.intro`                                                                       | Only the values you change are sent. A limit marked Unknown is stored as not known, never as 0.                                                       | 只发送你修改过的值。标记为“未知”的限额会保存为未知，而不是 0。                                               |
+| `edit.unknown`                                                                     | Unknown                                                                                                                                               | 未知                                                                                                         |
+| `edit.planningShare` · `edit.tierNote` · `edit.count`                              | Planning share % · Tier note · {count} / 1000                                                                                                         | 规划占比 % · 档位说明 · {count} / 1000                                                                       |
+| `edit.save` · `saving` · `cancel` · `saved`                                        | Save · Saving… · Cancel · Limits saved for {model}.                                                                                                   | 保存 · 正在保存… · 取消 · 已保存 {model} 的限额。                                                            |
+| `editError.wholeNumber`                                                            | {limit} must be a whole number of 0 or more.                                                                                                          | {limit}必须是大于或等于 0 的整数。                                                                           |
+| `editError.tooLarge`                                                               | {limit} is larger than the gateway can store.                                                                                                         | {limit}超出了网关可保存的范围。                                                                              |
+| `editError.planningShare`                                                          | Planning share must be a whole number from 0 to 100.                                                                                                  | 规划占比必须是 0 到 100 之间的整数。                                                                         |
+| `editError.tierNote`                                                               | The tier note can be at most 1000 characters.                                                                                                         | 档位说明最多 1000 个字符。                                                                                   |
+| `editError.invalidBody`                                                            | The gateway could not read this edit. Nothing was changed.                                                                                            | 网关无法读取此次修改，没有任何更改。                                                                         |
+| `editError.unknownModel`                                                           | This model is no longer in the gateway’s limits table. Nothing was changed; close and refresh.                                                        | 该模型已不在网关的限额表中，没有任何更改。请关闭后刷新。                                                     |
+| `editError.unknownProvider`                                                        | The gateway does not know this provider. Nothing was changed.                                                                                         | 网关无法识别该服务商，没有任何更改。                                                                         |
+| `editError.storeError`                                                             | The gateway could not save the change. Nothing was changed; try again.                                                                                | 网关未能保存修改，没有任何更改，请重试。                                                                     |
+| `editError.auth`                                                                   | The gateway credential is not accepted, so nothing was saved.                                                                                         | 网关凭据未被接受，因此没有保存任何内容。                                                                     |
+| `editError.unreachable`                                                            | The gateway did not answer. Nothing was saved; try again.                                                                                             | 网关没有响应，没有保存任何内容，请重试。                                                                     |
+
+`capacity_empty_edit` has no string: Save is disabled until a value changed, so the screen never
+sends an empty edit. `capacity_invalid_value` on a limit key picks `wholeNumber` or `tooLarge`
+from the typed value; the server's `field` decides which field shows it.
+
+## Colour and shape roles (`--el-*` only)
+
+| element                                                                              | role                                                                                                                                     |
+| ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| model id                                                                             | `--font-mono`, `--el-text`                                                                                                               |
+| tier note · planning share chip                                                      | `--el-text` · `pill-tier`                                                                                                                |
+| lane split · freshness · fold summary · "no tier note" · Not applicable · unreported | `--el-text-secondary` (AA on the white card and on `--el-surface-soft`)                                                                  |
+| usage bar track · fill                                                               | `--el-surface` · `--el-accent`; Near `--el-warning`; Over `--el-danger`; `--radius-badge`; `aria-hidden`                                 |
+| Normal · Near · Over · Unavailable / Unknown / unreported pills                      | `pill-active` (mint) · `pill-warn` (yellow) · `pill-down` (rose) · `pill-neutral`; text `--el-text-strong`, `--radius-badge`             |
+| 429 row                                                                              | `--el-surface-soft` fill, label `--el-text`, lanes `--el-text-secondary`                                                                 |
+| raised-alerts banner                                                                 | `toast toast-err` (rose tint, `--el-text-strong`); "raised since" `--el-text-secondary`                                                  |
+| unavailable · slow notices                                                           | `toast toast-warn`                                                                                                                       |
+| counter-scope notice                                                                 | `audit-banner` (sky tint)                                                                                                                |
+| field error · invalid field                                                          | `--el-danger-on-surface` text; `--el-danger` border and 1px ring                                                                         |
+| saved line                                                                           | glyph `--el-success`, text `--el-text`                                                                                                   |
+| cards · dialog · inputs · buttons                                                    | `--radius-card` · `--radius-modal` · `--radius-input` · `--radius-btn`; `--spacing-card-padding`, `--spacing-input-x`, `--height-btn-sm` |
+
+## A11y
+
+- Every state is a word in its pill; the bar and its colour are never the only signal.
+- The raised-alerts banner is `role="alert"`; the notices and saved lines are `role="status"`.
+- A refused field carries `aria-invalid="true"` and its message sits directly under it (the
+  screen card adds `aria-describedby`). Focus returns to the first refused field.
+- The Edit dialog is the shipped `Modal`: focus trap, Escape closes, focus returns to the entry's
+  Edit limits button.
+- The fold is a native `<details>`, so it is keyboard- and screen-reader-operable as shipped.
+- Loading sets `aria-busy` on the list.
+
+## What this amendment does NOT draw
+
+- **The alert's delivery** beyond this page's banner — the notification itself goes through
+  core's existing admin-alert mechanism (MOTIR-9611), which has its own surfaces.
+- **A no-capacity verdict** or any launch label — that is the no-capacity label story's.
+- **History or charts** — the page reads the gateway's current numbers only.
+- **Adding or removing a model** — done in the gateway.
+- **Dark mode panels** — the Toggle dark button flips the whole board; no separate dark board.
+- **A `.png` export** — retired (AMENDMENT 4).
