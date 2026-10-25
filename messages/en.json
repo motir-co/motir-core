@@ -10063,6 +10063,10 @@
               "enable": "Turned fleet CI on",
               "disable": "Turned fleet CI off"
             },
+            "agent_hosting": {
+              "enable": "Sent new agents to AWS",
+              "disable": "Sent new agents back to Fly"
+            },
             "shard": {
               "add": "Added a fleet account",
               "limits": "Refreshed a fleet account's limits",
@@ -12045,6 +12049,56 @@
         "title": "Couldn't load the fleet setting",
         "body": "The setting or its readiness could not be read, so no state is shown and no switch is offered. This is a read error — nothing has changed, and no value is guessed.",
         "retry": "Retry"
+      },
+      "agentHosting": {
+        "title": "Agent hosting",
+        "subtitle": "Where new agent instances are created",
+        "superadminOnly": "Superadmin only",
+        "explanation": "Off: new agent instances are created on Fly. On: each new agent instance is placed on an account of the agent-hoster AWS pool. Either way, agents that already exist stay where they are — this switch never moves a running agent. A change applies to the next agent created, with no restart.",
+        "state": {
+          "fly": "Fly",
+          "aws": "AWS"
+        },
+        "action": {
+          "turnOnAws": "Turn on AWS",
+          "turnOffAws": "Turn off AWS"
+        },
+        "onNote": "New agents are created on AWS; agents already on Fly stay on Fly.",
+        "meta": {
+          "lastChanged": "Last changed",
+          "changedBy": "by {email}, {when} — “{reason}”",
+          "neverChanged": "Never changed — new agents are created on Fly",
+          "auditLink": "Audit log"
+        },
+        "monitoringLine": "Agent machines appear in Monitoring › Fleet",
+        "confirm": {
+          "toAwsTitle": "Create new agents on AWS?",
+          "toAwsBody": "Fly → AWS. Every new agent instance from now on is created on an account of the agent-hoster AWS pool. Agents already on Fly are not moved: they keep running on Fly.",
+          "toFlyTitle": "Create new agents on Fly again?",
+          "toFlyBody": "AWS → Fly. New agent instances go back to Fly, starting with the next one created. Agents already on AWS are not moved: they keep running on AWS.",
+          "reasonLabel": "Reason — required, written to the audit log",
+          "reasonPlaceholderToAws": "Why are new agents moving to AWS?",
+          "reasonPlaceholderToFly": "Why are new agents going back to Fly?",
+          "reasonHint": "Shown to any operator reading this change later. “Testing” on its own answers nothing.",
+          "reasonHintEmpty": "The button stays disabled until a reason is typed — the same rule the server applies.",
+          "cancel": "Cancel",
+          "confirmToAws": "Turn on AWS",
+          "confirmToFly": "Turn off AWS"
+        },
+        "refused": {
+          "reasonMissing": "Not changed: a reason is required, and it is written to the audit log with this change. New agents are still created on {hoster}.",
+          "alreadyAws": "Already on AWS — nothing changed.",
+          "alreadyFly": "Already on Fly — nothing changed.",
+          "alreadyBody": "Another superadmin changed it first, so nothing was written and no audit row was added.",
+          "writeFailed": "Not switched to {hoster}: the change could not be saved.",
+          "nothingChanged": "Nothing changed: new agents are still created on {previous}.",
+          "retryHint": "Your reason is kept. Try again, or cancel."
+        },
+        "unavailable": {
+          "title": "Couldn't load agent hosting",
+          "body": "Where new agents are created could not be read, so no state is shown and no switch is offered. This is a read error — nothing has changed, and no value is guessed.",
+          "retry": "Retry"
+        }
       }
     }
   },

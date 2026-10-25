@@ -10066,6 +10066,10 @@
               "enable": "Activó la CI de la flota",
               "disable": "Desactivó la CI de la flota"
             },
+            "agent_hosting": {
+              "enable": "Envió los nuevos agentes a AWS",
+              "disable": "Devolvió los nuevos agentes a Fly"
+            },
             "shard": {
               "add": "Añadió una cuenta de la flota",
               "limits": "Actualizó los límites de una cuenta de la flota",
@@ -12048,6 +12052,56 @@
         "title": "No se pudo cargar el ajuste de la flota",
         "body": "No se pudo leer el ajuste o su disponibilidad, así que no se muestra ningún estado ni se ofrece ningún interruptor. Es un error de lectura: no ha cambiado nada y no se adivina ningún valor.",
         "retry": "Reintentar"
+      },
+      "agentHosting": {
+        "title": "Alojamiento de agentes",
+        "subtitle": "Dónde se crean las nuevas instancias de agentes",
+        "superadminOnly": "Solo superadmin",
+        "explanation": "Desactivado: las nuevas instancias de agentes se crean en Fly. Activado: cada nueva instancia de agente se coloca en una cuenta del pool de AWS de alojamiento de agentes. En ambos casos, los agentes que ya existen se quedan donde están: este interruptor nunca mueve un agente en ejecución. Un cambio se aplica al siguiente agente que se cree, sin reiniciar.",
+        "state": {
+          "fly": "Fly",
+          "aws": "AWS"
+        },
+        "action": {
+          "turnOnAws": "Activar AWS",
+          "turnOffAws": "Desactivar AWS"
+        },
+        "onNote": "Los nuevos agentes se crean en AWS; los agentes que ya están en Fly se quedan en Fly.",
+        "meta": {
+          "lastChanged": "Último cambio",
+          "changedBy": "por {email}, {when} — “{reason}”",
+          "neverChanged": "Nunca cambiado: los nuevos agentes se crean en Fly",
+          "auditLink": "Registro de auditoría"
+        },
+        "monitoringLine": "Las máquinas de los agentes aparecen en Monitorización › Flota",
+        "confirm": {
+          "toAwsTitle": "¿Crear los nuevos agentes en AWS?",
+          "toAwsBody": "Fly → AWS. A partir de ahora, cada nueva instancia de agente se crea en una cuenta del pool de AWS de alojamiento de agentes. Los agentes que ya están en Fly no se mueven: siguen ejecutándose en Fly.",
+          "toFlyTitle": "¿Volver a crear los nuevos agentes en Fly?",
+          "toFlyBody": "AWS → Fly. Las nuevas instancias de agentes vuelven a Fly, empezando por la siguiente que se cree. Los agentes que ya están en AWS no se mueven: siguen ejecutándose en AWS.",
+          "reasonLabel": "Motivo: obligatorio, se escribe en el registro de auditoría",
+          "reasonPlaceholderToAws": "¿Por qué se trasladan los nuevos agentes a AWS?",
+          "reasonPlaceholderToFly": "¿Por qué vuelven los nuevos agentes a Fly?",
+          "reasonHint": "Lo verá cualquier operador que lea este cambio más adelante. “Pruebas” por sí solo no responde nada.",
+          "reasonHintEmpty": "El botón sigue desactivado hasta que escribas un motivo: la misma regla que aplica el servidor.",
+          "cancel": "Cancelar",
+          "confirmToAws": "Activar AWS",
+          "confirmToFly": "Desactivar AWS"
+        },
+        "refused": {
+          "reasonMissing": "No se ha cambiado: el motivo es obligatorio y se escribe en el registro de auditoría con este cambio. Los nuevos agentes se siguen creando en {hoster}.",
+          "alreadyAws": "Ya está en AWS: no ha cambiado nada.",
+          "alreadyFly": "Ya está en Fly: no ha cambiado nada.",
+          "alreadyBody": "Otro superadmin lo cambió antes, así que no se escribió nada ni se añadió ninguna fila de auditoría.",
+          "writeFailed": "No se ha cambiado a {hoster}: no se pudo guardar el cambio.",
+          "nothingChanged": "No ha cambiado nada: los nuevos agentes se siguen creando en {previous}.",
+          "retryHint": "Tu motivo se conserva. Vuelve a intentarlo o cancela."
+        },
+        "unavailable": {
+          "title": "No se pudo cargar el alojamiento de agentes",
+          "body": "No se pudo leer dónde se crean los nuevos agentes, así que no se muestra ningún estado ni se ofrece ningún interruptor. Es un error de lectura: no ha cambiado nada y no se adivina ningún valor.",
+          "retry": "Reintentar"
+        }
       }
     }
   },

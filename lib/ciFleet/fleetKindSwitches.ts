@@ -1,11 +1,14 @@
 import { wireFleetKindSwitch } from '@/lib/ciFleet/shardTargets';
+import { platformFleetKindSwitchRepository } from '@/lib/repositories/platformFleetKindSwitchRepository';
 
-// THE FLEET KINDS' Fly↔AWS SWITCHES that this app wires (MOTIR-9421).
+// THE FLEET KINDS' Fly↔AWS SWITCHES that this app wires (MOTIR-9421 · MOTIR-9503).
 //
 // `shardTargets.ts` holds the registry and reads Fly for an unwired kind; each
-// kind's own story wires its reader. The agent runner's is here, and importing
-// this module is what wires it — `fleetCeilingService` imports it, so the switch
-// is in place before any hosted run is admitted.
+// kind's own story wires its reader. The agent runner's and the agent hoster's
+// are here, and importing this module is what wires them — `fleetCeilingService`
+// imports it, so the agent runner's switch is in place before any hosted run is
+// admitted, and `agentInstanceLifecycleService` imports it, so the agent hoster's
+// is in place before any agent instance is created.
 
 /** The agent runner's switch: `aws` puts hosted runs on their own pool. */
 export const AGENT_RUNNER_PROVIDER_ENV_VAR = 'MOTIR_FLEET_AGENT_RUNNER_PROVIDER';
@@ -42,4 +45,16 @@ export function setAgentRunnerSwitchForTests(reader: LaneSwitchReader | null): v
   else delete (globalThis as LaneSwitchHolder)[LANE_SWITCH_KEY];
 }
 
+/**
+ * IS THE AGENT HOSTER ON ITS POOL? The persisted `agent_instance` switch a
+ * superadmin flips at /admin/fleet-settings › Agent hosting
+ * (`agentHostingSettingService`): ON ⇒ yes; OFF or never written ⇒ Fly, today's
+ * path. Read from the database on every placement and never cached, so a flip
+ * applies to the next agent created with no restart and touches no other kind.
+ */
+export async function agentHosterOnPool(): Promise<boolean> {
+  return (await platformFleetKindSwitchRepository.find('agent_instance'))?.onPool === true;
+}
+
 wireFleetKindSwitch('hosted_agent', agentRunnerOnPool);
+wireFleetKindSwitch('agent_instance', agentHosterOnPool);
