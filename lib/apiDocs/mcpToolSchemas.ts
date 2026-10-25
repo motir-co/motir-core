@@ -2786,7 +2786,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       q: {
         type: 'string',
         description:
-          'The words to find in a page’s title or body (at most 200 characters). An empty query is refused PAGE_SEARCH_QUERY_EMPTY — a search never lists every page.',
+          'What to find: words in a page’s title or body, or a phrase describing what the page is about — a meaning-only phrase that shares no word with the page is fine (at most 200 characters). An empty query is refused PAGE_SEARCH_QUERY_EMPTY — a search never lists every page.',
       },
       cursor: {
         type: 'string',
