@@ -15,6 +15,7 @@ import {
 import { FLEET_WORKLOAD_KINDS } from '@/lib/ciFleet/workloads';
 import {
   AWS_DEFAULT_REGION,
+  AWS_REAP_UNTAGGED_OPTION,
   AWS_RUNTIME_CREDENTIAL_OPTION,
 } from '@/lib/fleetShards/awsProvisioningProvider';
 import {
@@ -375,6 +376,8 @@ export const fleetShardProvisioningService = {
       providerOptions: {
         'account-email': template ? memberAccountEmail(template, name) : '',
         [AWS_RUNTIME_CREDENTIAL_OPTION]: 'role',
+        // The attribution pass reaps every machine on an own account (MOTIR-9584).
+        [AWS_REAP_UNTAGGED_OPTION]: 'true',
       },
     };
     const result = await walk(await preflight(addInput, operator, problems), addInput, {

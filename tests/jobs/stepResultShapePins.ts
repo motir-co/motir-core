@@ -469,11 +469,13 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
   // only returned as the job's output — nothing branches on it — and a pass
   // re-decides from the inventory rather than replaying, so a memo written
   // before the field existed is read by no one who needs it. MOTIR-9476 added
-  // `accounts` (the fleet accounts the pass walked) on the same terms.
+  // `accounts` (the fleet accounts the pass walked) on the same terms, and
+  // MOTIR-9584 the `foreign_org` kill reason: a member ADDED to a union, so every
+  // memo written before it is still a valid value of the new shape.
   'reconcile-fleet-attribution': {
     file: 'lib/jobs/definitions/fleetAttribution.ts',
     shape:
-      '{ accounts: number; apps: number; failures: number; killed: Array<{ action: "destroyed" | "stopped"; app: string; machineId: string; reason: "no_record" | "org_stopped" | "record_ended"; workload: "agent_instance" | "ci_runner" | "code_graph_index" | "hosted_agent" | null }>; listed: number; matched: number; orphanedVolumesDestroyed: number; outcome: "reconciled"; spared: number; unavailableApps: Array<string>; undated: number } | { detail: string; outcome: "inventory_unavailable" } | { outcome: "disabled" }',
+      '{ accounts: number; apps: number; failures: number; killed: Array<{ action: "destroyed" | "stopped"; app: string; machineId: string; reason: "foreign_org" | "no_record" | "org_stopped" | "record_ended"; workload: "agent_instance" | "ci_runner" | "code_graph_index" | "hosted_agent" | null }>; listed: number; matched: number; orphanedVolumesDestroyed: number; outcome: "reconciled"; spared: number; unavailableApps: Array<string>; undated: number } | { detail: string; outcome: "inventory_unavailable" } | { outcome: "disabled" }',
   },
   'recompute-code-graph-drift': {
     file: 'lib/jobs/definitions/codeGraphDriftSweep.ts',

@@ -5,8 +5,9 @@
 // about. The messages are the record's own words, because the message is the
 // whole of what the platform admin reads.
 
-/** Why a machine was killed — the alert's own vocabulary. */
-export type AttributionKillReason = 'no_record' | 'record_ended' | 'org_stopped';
+/** Why a machine was killed — the alert's own vocabulary. `foreign_org`: a record
+ *  of another organisation on a Host organisation's own account (MOTIR-9584). */
+export type AttributionKillReason = 'no_record' | 'record_ended' | 'org_stopped' | 'foreign_org';
 
 /** Minutes, then hours, for a machine's age in an alert. */
 export function describeAge(ageMs: number): string {
@@ -30,11 +31,19 @@ export class UnattributedMachineDestroyedError extends Error {
     /** The provider the machine was listed in — an AWS account's VM is an
      *  instance, not a Fly machine (MOTIR-9426). */
     readonly provider: string = 'fly',
+    /** The Host organisation whose own account the machine was on (MOTIR-9584). */
+    readonly ownerOrganizationId: string | null = null,
+    /** For `foreign_org`: the other organisation the machine's record names. */
+    readonly recordOrganizationId: string | null = null,
   ) {
     const verb = action === 'stopped' ? 'Stopped' : 'Destroyed';
     const noun = provider === 'aws' ? 'AWS instance' : 'Fly machine';
+    const owned = ownerOrganizationId
+      ? ` on organization ${ownerOrganizationId}'s own account` +
+        (recordOrganizationId ? `, whose record names organization ${recordOrganizationId}` : '')
+      : '';
     super(
-      `${verb} ${noun} ${machineId} (${machineName || 'unnamed'}) in ${app}, ` +
+      `${verb} ${noun} ${machineId} (${machineName || 'unnamed'}) in ${app}${owned}, ` +
         `${describeAge(ageMs)} old: ${reason}.`,
     );
     this.name = 'UnattributedMachineDestroyedError';

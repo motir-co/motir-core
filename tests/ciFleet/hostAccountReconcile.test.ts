@@ -262,6 +262,21 @@ describe('one pass over a Host organisation with no accounts', () => {
   });
 });
 
+describe('the runner role of an own account (MOTIR-9584)', () => {
+  it('may terminate an untagged instance, so the attribution pass can reap every machine there', async () => {
+    const org = await seedOrg();
+    plans.set(org.id, host());
+
+    await hostAccountReconcileService.runReconcile(deps());
+
+    // One role per AWS account: the merged account's two rows share one.
+    expect(organization.runnerRoles.size).toBe(3);
+    for (const policy of organization.runnerRoles.values()) {
+      expect(policy).toContain('TerminateAnyInAccount');
+    }
+  });
+});
+
 describe('a replayed pass', () => {
   it('again, and after a replayed paid invoice, creates nothing more', async () => {
     const org = await seedOrg();

@@ -33,9 +33,22 @@ export function alertFleetAttribution(
         : error.name === 'UnattributedVolumeDestroyedError'
           ? (error as UnattributedVolumeDestroyedError).volumeId
           : '';
+    // An own account's machine names its owner, and a foreign record's org
+    // (MOTIR-9584) — ids only, never a credential or a member-account email.
+    const machine =
+      error.name === 'UnattributedMachineDestroyedError'
+        ? (error as UnattributedMachineDestroyedError)
+        : null;
     Sentry.captureException(error, {
       level: perMachine ? 'warning' : 'error',
-      tags: { fleet_app: error.app, fleet_alert: error.name },
+      tags: {
+        fleet_app: error.app,
+        fleet_alert: error.name,
+        ...(machine?.ownerOrganizationId ? { fleet_owner_org: machine.ownerOrganizationId } : {}),
+        ...(machine?.recordOrganizationId
+          ? { fleet_record_org: machine.recordOrganizationId }
+          : {}),
+      },
       fingerprint: perMachine
         ? ['fleet-attribution', error.name, error.app, machineId]
         : ['fleet-attribution', error.name, error.app],
