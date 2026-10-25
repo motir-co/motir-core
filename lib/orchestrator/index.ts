@@ -44,6 +44,13 @@ import {
   type RegistryCredentialResolver,
 } from '@motir/orchestrator';
 import type { FleetShardDTO } from '@/lib/dto/fleetShard';
+import {
+  appendShardFakeCall,
+  holdShardShared,
+  releaseShardShared,
+  shardFakeJournalShared,
+  shardHeldShared,
+} from '@/lib/orchestrator/shardFakeJournal';
 import { ciFleetCostMeterService } from '@/lib/services/ciFleetCostMeterService';
 import { withPlatformMeterReport } from '@/lib/services/platformMeterReportEnqueue';
 
@@ -240,7 +247,9 @@ export function fakeOrchestratorForShard(
 /** A persistent fake for one account: the shared persistent fake, seen through
  *  a view that records which of its operations THIS account was asked for
  *  (MOTIR-9472). One store holds every machine, so a handle is found whichever
- *  view it is passed to; `calls` tells a test where an instance was routed. */
+ *  view it is passed to; `calls` tells a test where an instance was routed.
+ *  With the fake's state file shared (the E2E lane), the calls and the holds are
+ *  shared too, by `shardFakeJournal.ts` (MOTIR-9478). */
 export type ShardPersistentFake = PersistentContainerOrchestrator & {
   readonly calls: string[];
   /** THIS account refuses `op` as full (`OrchestratorCapacityError`) until
@@ -259,8 +268,15 @@ export function fakePersistentOrchestratorForShard(shardId: string): ShardPersis
     const calls: string[] = [];
     const held = new Set<FakeCapacityOperation>();
     const controls = {
-      holdCapacity: (op: FakeCapacityOperation) => void held.add(op),
-      releaseCapacity: (op?: FakeCapacityOperation) => void (op ? held.delete(op) : held.clear()),
+      holdCapacity: (op: FakeCapacityOperation) => {
+        held.add(op);
+        holdShardShared(shardId, op);
+      },
+      releaseCapacity: (op?: FakeCapacityOperation) => {
+        if (op) held.delete(op);
+        else held.clear();
+        releaseShardShared(shardId, op);
+      },
     };
     fake = new Proxy(fakePersistentOrchestrator, {
       get(target, prop, receiver) {
@@ -271,18 +287,56 @@ export function fakePersistentOrchestratorForShard(shardId: string): ShardPersis
         return (...args: unknown[]) => {
           calls.push(prop);
           const op = prop === 'provisionPersistent' ? 'provision' : prop;
-          if ((op === 'provision' || op === 'start') && held.has(op)) {
+          const shared = shardFakeJournalShared();
+          if (shared && op !== 'provision') {
+            appendShardFakeCall({ shardId, op: prop, ref: refOf(args) });
+          }
+          if (
+            (op === 'provision' || op === 'start') &&
+            (held.has(op) || (shared && shardHeldShared(shardId, op)))
+          ) {
+            if (shared && op === 'provision') {
+              appendShardFakeCall({ shardId, op: prop, ref: null });
+            }
             return Promise.reject(
               new OrchestratorCapacityError('fake', 422, 'quota_exceeded', null, 'held'),
             );
           }
-          return (value as (...a: unknown[]) => unknown).apply(target, args);
+          const answer = (value as (...a: unknown[]) => unknown).apply(target, args);
+          if (shared && op === 'provision') {
+            // A provision names its machine only once it has made one.
+            return Promise.resolve(answer).then(
+              (handle) => {
+                appendShardFakeCall({
+                  shardId,
+                  op: prop,
+                  ref: (handle as PersistentContainerHandle).machineId,
+                });
+                return handle;
+              },
+              (err: unknown) => {
+                appendShardFakeCall({ shardId, op: prop, ref: null });
+                throw err;
+              },
+            );
+          }
+          return answer;
         };
       },
     }) as unknown as ShardPersistentFake;
     persistentShardFakes.set(shardId, fake);
   }
   return fake;
+}
+
+/** The machine (else the disk) a persistent call names: a handle's, or the
+ *  `(app, id)` pair of a destroy. */
+function refOf(args: readonly unknown[]): string | null {
+  const [first, second] = args;
+  if (first && typeof first === 'object' && 'machineId' in first) {
+    return String((first as PersistentContainerHandle).machineId);
+  }
+  return typeof second === 'string' ? second : null;
 }
 
 /** Forget every account's fake — for tests. */
