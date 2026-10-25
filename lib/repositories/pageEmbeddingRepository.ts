@@ -65,15 +65,6 @@ function rankable(projectId: string, model: string): Prisma.Sql {
         AND e."embedding" IS NOT NULL`;
 }
 
-/** The backfill's live-page filter over an optional workspace / project scope. */
-function liveScope(scope: { workspaceId?: string; projectId?: string }): Prisma.PageWhereInput {
-  return {
-    archivedAt: null,
-    ...(scope.workspaceId ? { workspaceId: scope.workspaceId } : {}),
-    ...(scope.projectId ? { projectId: scope.projectId } : {}),
-  };
-}
-
 export const pageEmbeddingRepository = {
   /**
    * Write (or replace) a page's embedding — the typed columns AND the vector in
@@ -156,26 +147,23 @@ export const pageEmbeddingRepository = {
   },
 
   /**
-   * How many LIVE pages a scope holds — the backfill's M (MOTIR-9573). The same
-   * live predicate as {@link countEmbeddedLive}, so N never exceeds M.
+   * How many LIVE pages a project holds (M), and how many of them have an
+   * embedding row in ANY model (N) — the backfill's "embedded N of M"
+   * (MOTIR-9573), what tells an operator `not-indexed` from `nothing similar`.
+   * One query under {@link PAGE_SEARCH_LIVE_IN_PROJECT}, so N never exceeds M.
    */
-  async countLive(
-    scope: { workspaceId?: string; projectId?: string },
+  async countLiveAndEmbedded(
+    projectId: string,
     tx: Prisma.TransactionClient,
-  ): Promise<number> {
-    return tx.page.count({ where: liveScope(scope) });
-  },
-
-  /**
-   * How many LIVE pages of a scope have an embedding row, in any model — the
-   * backfill's N (MOTIR-9573). With {@link countLive} it is "embedded N of M",
-   * what tells an operator `not-indexed` from `nothing similar`.
-   */
-  async countEmbeddedLive(
-    scope: { workspaceId?: string; projectId?: string },
-    tx: Prisma.TransactionClient,
-  ): Promise<number> {
-    return tx.page.count({ where: { ...liveScope(scope), embedding: { isNot: null } } });
+  ): Promise<{ embedded: number; total: number }> {
+    const rows = await tx.$queryRaw<{ embedded: bigint; total: bigint }[]>`
+      SELECT COUNT(e."page_id")::bigint AS "embedded", COUNT(*)::bigint AS "total"
+      FROM "page" p
+      LEFT JOIN "page_embedding" e ON e."page_id" = p."id"
+      WHERE ${PAGE_SEARCH_LIVE_IN_PROJECT(projectId)}`;
+    /* istanbul ignore next -- an aggregate with no GROUP BY always returns one row. */
+    const row = rows[0] ?? { embedded: BigInt(0), total: BigInt(0) };
+    return { embedded: Number(row.embedded), total: Number(row.total) };
   },
 
   /**

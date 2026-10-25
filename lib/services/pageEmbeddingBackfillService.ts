@@ -102,10 +102,9 @@ async function embeddedOfTotal(
   let embedded = 0;
   let total = 0;
   for (const project of projects) {
-    const counts = await withWorkspaceServiceContext(project.workspaceId, async (tx) => ({
-      total: await pageEmbeddingRepository.countLive({ projectId: project.id }, tx),
-      embedded: await pageEmbeddingRepository.countEmbeddedLive({ projectId: project.id }, tx),
-    }));
+    const counts = await withWorkspaceServiceContext(project.workspaceId, (tx) =>
+      pageEmbeddingRepository.countLiveAndEmbedded(project.id, tx),
+    );
     embedded += counts.embedded;
     total += counts.total;
   }
@@ -146,7 +145,7 @@ export const pageEmbeddingBackfillService = {
       let afterId: string | null = null;
       for (;;) {
         const batch = await withWorkspaceServiceContext(project.workspaceId, (tx) =>
-          pageRepository.listLiveIdsAfter(afterId, batchSize, { projectId: project.id }, tx),
+          pageRepository.listLiveIdsAfter(project.id, afterId, batchSize, tx),
         );
         for (const page of batch) {
           if (opts.signal?.aborted) {

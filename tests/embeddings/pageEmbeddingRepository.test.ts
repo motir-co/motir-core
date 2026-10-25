@@ -293,8 +293,8 @@ describe('the one access predicate', () => {
     expect(source).toContain(
       "import { PAGE_SEARCH_LIVE_IN_PROJECT } from '@/lib/repositories/pageRepository'",
     );
-    // Interpolated in the shared `rankable` fragment (ranking + countRankable) and the coverage count.
-    expect(source.match(/\$\{PAGE_SEARCH_LIVE_IN_PROJECT\(/g)?.length).toBe(2);
+    // Interpolated in the shared `rankable` fragment (ranking + countRankable) and the two coverage counts.
+    expect(source.match(/\$\{PAGE_SEARCH_LIVE_IN_PROJECT\(/g)?.length).toBe(3);
     expect(source).not.toMatch(/archived_at"?\s+IS\s+NULL/i);
     expect(source).not.toMatch(/p\."project_id"\s*=/);
   });

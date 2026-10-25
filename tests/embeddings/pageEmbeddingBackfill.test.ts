@@ -123,7 +123,7 @@ describe('pnpm db:backfill:page-embeddings', () => {
     const live = ids.filter((id) => id !== archived).sort();
     expect(visited).toEqual(live);
     expect(scan.mock.calls.length).toBe(4); // 2 + 2 + 2 + 0
-    for (const call of scan.mock.calls) expect(call[1]).toBe(2);
+    for (const call of scan.mock.calls) expect(call[2]).toBe(2);
     expect(await adminDb.pageEmbedding.findUnique({ where: { pageId: archived } })).toBeNull();
   });
 

@@ -431,27 +431,25 @@ export const pageRepository = {
   },
 
   /**
-   * The next `take` LIVE page ids of a scope after `afterId`, in id order — the
-   * page embedding backfill's keyset scan (MOTIR-9573). A seek on `id`, never an
-   * OFFSET, so an interrupted run resumes by simply running again.
+   * The next `take` LIVE page ids of one project after `afterId`, in id order —
+   * the page embedding backfill's keyset scan (MOTIR-9573). A seek on `id`,
+   * never an OFFSET, so an interrupted run resumes by simply running again. The
+   * live restriction is {@link PAGE_SEARCH_LIVE_IN_PROJECT}, the one predicate
+   * every page-search read uses.
    */
   async listLiveIdsAfter(
+    projectId: string,
     afterId: string | null,
     take: number,
-    scope: { workspaceId?: string; projectId?: string },
     tx: Prisma.TransactionClient,
   ): Promise<Array<{ id: string; workspaceId: string }>> {
-    return tx.page.findMany({
-      where: {
-        archivedAt: null,
-        ...(scope.workspaceId ? { workspaceId: scope.workspaceId } : {}),
-        ...(scope.projectId ? { projectId: scope.projectId } : {}),
-        ...(afterId ? { id: { gt: afterId } } : {}),
-      },
-      select: { id: true, workspaceId: true },
-      orderBy: { id: 'asc' },
-      take,
-    });
+    const seek = afterId ? Prisma.sql`AND p."id" > ${afterId}` : Prisma.empty;
+    return tx.$queryRaw<Array<{ id: string; workspaceId: string }>>`
+      SELECT p."id", p."workspace_id" AS "workspaceId"
+      FROM "page" p
+      WHERE ${PAGE_SEARCH_LIVE_IN_PROJECT(projectId)} ${seek}
+      ORDER BY p."id" ASC
+      LIMIT ${take}`;
   },
 
   /**
