@@ -390,6 +390,8 @@ export interface PageMarkdownDto {
   markdown: string;
   /** ISO-8601. */
   updatedAt: string;
+  /** ISO-8601 when the page is archived; `null` on a live page (MOTIR-9566). */
+  archivedAt: string | null;
   /**
    * Present ONLY on a read of one version (`get_page { version }`, MOTIR-7429):
    * the version whose body `markdown` then carries, with its decision marks

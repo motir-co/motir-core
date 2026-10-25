@@ -2,6 +2,8 @@ import type { WorkspaceRole } from '@/generated/prisma/client';
 import { POST as CREATE_PAGE } from '@/app/api/v1/projects/[projectKey]/pages/route';
 import { GET as GET_PAGE, PATCH as PATCH_PAGE } from '@/app/api/v1/pages/[pageId]/route';
 import { PATCH as MOVE_PAGE } from '@/app/api/v1/pages/[pageId]/placement/route';
+import { POST as ARCHIVE_PAGE } from '@/app/api/v1/pages/[pageId]/archive/route';
+import { POST as RESTORE_PAGE } from '@/app/api/v1/pages/[pageId]/restore/route';
 import { GET as SEARCH_PAGES } from '@/app/api/v1/projects/[projectKey]/pages/search/route';
 import { workspacesService } from '@/lib/services/workspacesService';
 import type { TokenGrant } from '@/lib/tokens/grant';
@@ -66,6 +68,22 @@ export function movePageV1(caller: Headers, pageId: string, body: unknown): Prom
       headers: json(caller.headers),
       body: typeof body === 'string' ? body : JSON.stringify(body),
     }),
+    { params: Promise.resolve({ pageId }) },
+  );
+}
+
+/** `POST /api/v1/pages/{pageId}/archive` — no body. */
+export function archivePageV1(caller: Headers, pageId: string): Promise<Response> {
+  return ARCHIVE_PAGE(
+    new Request(`${V1_BASE}/pages/${pageId}/archive`, { method: 'POST', headers: caller.headers }),
+    { params: Promise.resolve({ pageId }) },
+  );
+}
+
+/** `POST /api/v1/pages/{pageId}/restore` — no body. */
+export function restorePageV1(caller: Headers, pageId: string): Promise<Response> {
+  return RESTORE_PAGE(
+    new Request(`${V1_BASE}/pages/${pageId}/restore`, { method: 'POST', headers: caller.headers }),
     { params: Promise.resolve({ pageId }) },
   );
 }
