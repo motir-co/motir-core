@@ -56,6 +56,9 @@ export const PAGE_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Object
   CROSS_PROJECT_PAGE_PARENT: 422,
   PAGE_NEIGHBOUR_INVALID: 422,
   PAGE_PARENT_ARCHIVED: 422,
+  // Search (MOTIR-9552): the codes `lib/pages/searchErrors.ts` carries.
+  PAGE_SEARCH_QUERY_EMPTY: 422,
+  PAGE_SEARCH_QUERY_TOO_LONG: 422,
 });
 
 /**

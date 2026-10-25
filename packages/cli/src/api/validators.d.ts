@@ -93,6 +93,7 @@ export declare const operation_reportDispatchRunStop: ValidateFunction;
 export declare const operation_reportDispatchRunUnbuildable: ValidateFunction;
 export declare const operation_reportWorkItemImplementation: ValidateFunction;
 export declare const operation_restoreWorkItem: ValidateFunction;
+export declare const operation_searchPages: ValidateFunction;
 export declare const operation_startSprint: ValidateFunction;
 export declare const operation_submitPlanSession: ValidateFunction;
 export declare const operation_submitWorkItemAgentReview: ValidateFunction;
