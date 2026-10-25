@@ -431,6 +431,30 @@ export const pageRepository = {
   },
 
   /**
+   * The next `take` LIVE page ids of a scope after `afterId`, in id order — the
+   * page embedding backfill's keyset scan (MOTIR-9573). A seek on `id`, never an
+   * OFFSET, so an interrupted run resumes by simply running again.
+   */
+  async listLiveIdsAfter(
+    afterId: string | null,
+    take: number,
+    scope: { workspaceId?: string; projectId?: string },
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string; workspaceId: string }>> {
+    return tx.page.findMany({
+      where: {
+        archivedAt: null,
+        ...(scope.workspaceId ? { workspaceId: scope.workspaceId } : {}),
+        ...(scope.projectId ? { projectId: scope.projectId } : {}),
+        ...(afterId ? { id: { gt: afterId } } : {}),
+      },
+      select: { id: true, workspaceId: true },
+      orderBy: { id: 'asc' },
+      take,
+    });
+  },
+
+  /**
    * The ids of the LIVE pages of one project whose title or body matches `q` as
    * words, best match first, at most `take` (Story MOTIR-9490 · MOTIR-9572) —
    * the full-text half of the fused page search. The same match and order as

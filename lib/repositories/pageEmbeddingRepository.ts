@@ -65,6 +65,15 @@ function rankable(projectId: string, model: string): Prisma.Sql {
         AND e."embedding" IS NOT NULL`;
 }
 
+/** The backfill's live-page filter over an optional workspace / project scope. */
+function liveScope(scope: { workspaceId?: string; projectId?: string }): Prisma.PageWhereInput {
+  return {
+    archivedAt: null,
+    ...(scope.workspaceId ? { workspaceId: scope.workspaceId } : {}),
+    ...(scope.projectId ? { projectId: scope.projectId } : {}),
+  };
+}
+
 export const pageEmbeddingRepository = {
   /**
    * Write (or replace) a page's embedding — the typed columns AND the vector in
@@ -144,6 +153,29 @@ export const pageEmbeddingRepository = {
     /* istanbul ignore next -- an aggregate with no GROUP BY always returns one row. */
     const row = rows[0] ?? { embedded: BigInt(0), total: BigInt(0) };
     return { embedded: Number(row.embedded), total: Number(row.total) };
+  },
+
+  /**
+   * How many LIVE pages a scope holds — the backfill's M (MOTIR-9573). The same
+   * live predicate as {@link countEmbeddedLive}, so N never exceeds M.
+   */
+  async countLive(
+    scope: { workspaceId?: string; projectId?: string },
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    return tx.page.count({ where: liveScope(scope) });
+  },
+
+  /**
+   * How many LIVE pages of a scope have an embedding row, in any model — the
+   * backfill's N (MOTIR-9573). With {@link countLive} it is "embedded N of M",
+   * what tells an operator `not-indexed` from `nothing similar`.
+   */
+  async countEmbeddedLive(
+    scope: { workspaceId?: string; projectId?: string },
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    return tx.page.count({ where: { ...liveScope(scope), embedding: { isNot: null } } });
   },
 
   /**
