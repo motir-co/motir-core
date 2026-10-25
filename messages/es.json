@@ -10080,6 +10080,11 @@
             },
             "pool": {
               "grow": "Amplió un grupo de la flota"
+            },
+            "capacity_request": {
+              "list": "Listó las solicitudes de capacidad de la flota",
+              "link": "Vinculó una solicitud de capacidad a un aumento de cuota",
+              "close": "Cerró una solicitud de capacidad de la flota"
             }
           },
           "idea": {

@@ -116,7 +116,10 @@ export class FleetPoolValueInvalidError extends Error {
       | 'grantedValue'
       | 'quotaCode'
       | 'awsRequestId'
-      | 'figures',
+      | 'figures'
+      | 'desiredVcpu'
+      | 'reason'
+      | 'note',
     readonly value: unknown,
   ) {
     super(`invalid fleet pool ${field}: ${String(value)}`);
@@ -246,5 +249,64 @@ export class GrowthKindNotAwsError extends Error {
   constructor(readonly fleetKind: string) {
     super(`fleet kind ${fleetKind} is still on Fly; its AWS pool is not grown`);
     this.name = 'GrowthKindNotAwsError';
+  }
+}
+
+// ── Capacity requests (Story MOTIR-9365 · MOTIR-9583) ───────────────────────
+
+/** The account is not one of the asking organisation's own. A shared account,
+ *  another organisation's and an unknown id read the same, on purpose. */
+export class FleetCapacityRequestNotOwnedError extends Error {
+  readonly code = 'FLEET_CAPACITY_REQUEST_NOT_OWNED' as const;
+  constructor(readonly shardId: string) {
+    super(`fleet account ${shardId} is not one of this organisation's own accounts`);
+    this.name = 'FleetCapacityRequestNotOwnedError';
+  }
+}
+
+/** The AWS account already has an open or filed request for another figure. */
+export class FleetCapacityRequestOpenError extends Error {
+  readonly code = 'FLEET_CAPACITY_REQUEST_OPEN' as const;
+  constructor(
+    readonly awsAccountId: string,
+    readonly activeRequestId: string,
+  ) {
+    super(`AWS account ${awsAccountId} already has capacity request ${activeRequestId}`);
+    this.name = 'FleetCapacityRequestOpenError';
+  }
+}
+
+/** No capacity request has that id. */
+export class FleetCapacityRequestNotFoundError extends Error {
+  readonly code = 'FLEET_CAPACITY_REQUEST_NOT_FOUND' as const;
+  constructor(readonly requestId: string) {
+    super(`no fleet capacity request ${requestId}`);
+    this.name = 'FleetCapacityRequestNotFoundError';
+  }
+}
+
+/** The request is in a status the action does not apply to (a closed one). */
+export class FleetCapacityRequestStateError extends Error {
+  readonly code = 'FLEET_CAPACITY_REQUEST_STATE' as const;
+  constructor(
+    readonly requestId: string,
+    readonly status: string,
+  ) {
+    super(`fleet capacity request ${requestId} is ${status}`);
+    this.name = 'FleetCapacityRequestStateError';
+  }
+}
+
+/** The quota request linked is on another AWS account than the capacity request. */
+export class FleetCapacityRequestLinkMismatchError extends Error {
+  readonly code = 'FLEET_CAPACITY_REQUEST_LINK_MISMATCH' as const;
+  constructor(
+    readonly requestId: string,
+    readonly quotaRequestId: string,
+  ) {
+    super(
+      `quota request ${quotaRequestId} is not on the AWS account of capacity request ${requestId}`,
+    );
+    this.name = 'FleetCapacityRequestLinkMismatchError';
   }
 }

@@ -32,6 +32,15 @@ export const fleetShardRepository = {
     return client.fleetShard.findUnique({ where: { id } });
   },
 
+  /** Every row naming one AWS account — two for a merged Host account
+   *  (MOTIR-9583), one otherwise. */
+  async listByAwsAccountInTx(
+    awsAccountId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<FleetShard[]> {
+    return tx.fleetShard.findMany({ where: { awsAccountId }, orderBy: { createdAt: 'asc' } });
+  },
+
   async findByName(name: string, tx?: Prisma.TransactionClient): Promise<FleetShard | null> {
     const client = tx ?? dbRead;
     return client.fleetShard.findUnique({ where: { name } });

@@ -10080,6 +10080,11 @@
             },
             "pool": {
               "grow": "Een vlootpool uitgebreid"
+            },
+            "capacity_request": {
+              "list": "Capaciteitsaanvragen van de vloot opgesomd",
+              "link": "Capaciteitsaanvraag aan een quotumverhoging gekoppeld",
+              "close": "Capaciteitsaanvraag van de vloot gesloten"
             }
           },
           "idea": {

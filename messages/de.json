@@ -10080,6 +10080,11 @@
             },
             "pool": {
               "grow": "Flottenpool erweitert"
+            },
+            "capacity_request": {
+              "list": "Kapazitätsanfragen der Flotte aufgelistet",
+              "link": "Kapazitätsanfrage mit einer Kontingenterhöhung verknüpft",
+              "close": "Kapazitätsanfrage der Flotte geschlossen"
             }
           },
           "idea": {

@@ -256,6 +256,11 @@ describe('the reason rule', () => {
     'fleet.pool.grow': 'required',
     // `fleet-admin request-quota` (MOTIR-9463): raises filed on fleet accounts.
     'fleet.shard.quota_request': 'required',
+    // A Host organisation's capacity requests (MOTIR-9583): reading the list is a
+    // read; linking and closing are writes that say why.
+    'fleet.capacity_request.list': 'never',
+    'fleet.capacity_request.link': 'required',
+    'fleet.capacity_request.close': 'required',
     // The idea store (Story MOTIR-7662 · MOTIR-7671): retiring and deleting say
     // why an idea left the public list; the rest carry the caller's context.
     'idea.add': 'inherited',
@@ -292,6 +297,8 @@ describe('the reason rule', () => {
       'user.impersonation_view',
       'audit.read',
       'audit.verify',
+      // The platform admin's list of capacity requests (MOTIR-9583).
+      'fleet.capacity_request.list',
     ];
     for (const action of Object.keys(PLATFORM_AUDIT_ACTIONS)) {
       const key = action as keyof typeof PLATFORM_AUDIT_ACTIONS;
