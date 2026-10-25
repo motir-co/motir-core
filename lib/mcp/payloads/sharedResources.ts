@@ -149,11 +149,6 @@ export const MCP_UNREACHABLE_RESOURCES: Partial<Record<SharedResourceName, strin
     '"An agent moves, archives and links pages over the MCP", which reuses the same ' +
     '`pagesService.movePage` door. When that tool lands it probes this resource and this entry ' +
     'closes; it is not a permanent divergence.',
-  PageSearchHit:
-    'Story MOTIR-9489 (MOTIR-9552) publishes one hit of `GET /api/v1/projects/{projectKey}/pages/search` ' +
-    'as `PageSearchHit`. The MCP `search_pages` tool is the sibling card MOTIR-9553, which reads the ' +
-    'same `pagesService.searchPages` door; when it lands it probes this resource and this entry ' +
-    'closes. It is not a permanent divergence.',
   ScopeClaim:
     'MOTIR-3049’s SCOPE claim ships on `/api/v1` ONLY, and the absence is argued rather than ' +
     'incidental: its caller is `motir run <story-id>` / `motir run sprint` in `packages/cli`, ' +

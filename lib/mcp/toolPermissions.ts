@@ -66,6 +66,9 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // (`GRANTABLE_PERMISSIONS` is derived from this map). `CLI_TOKEN_GRANT` is NOT
   // widened here — MOTIR-7412 adds the page keys to it.
   get_page: 'page:view',
+  // `pagesService.searchPages` asserts `assertCanViewPages` through
+  // `authorizePageSearch` (MOTIR-9553), the key the REST search route checks.
+  search_pages: 'page:view',
   // ── page:edit — the page writes (MOTIR-7411) ──────────────────────────────
   // `pagesService.createPageFromMarkdown` / `savePageMarkdown` assert
   // `assertCanEditPages` (`page:edit`), the key the editor's save route checks.
