@@ -460,6 +460,28 @@ export interface PageLinkCandidatesDto {
 }
 
 /**
+ * One full-text page search hit (Story MOTIR-9489 · MOTIR-9551) — and nothing
+ * else: no body, no markdown, no count. `place` is the picker's own place, so
+ * every search door shows where a page lives the same way.
+ */
+export interface PageSearchHitDto {
+  id: string;
+  title: string;
+  place: PageMentionCandidateDto['place'];
+  /** A short excerpt of the searchable body around the match; `''` for an empty body. */
+  snippet: string;
+  /** `ts_rank`; higher is a better match. Comparable only within one search. */
+  rank: number;
+}
+
+/** One page of a full-text page search. */
+export interface PageSearchResultDto {
+  items: PageSearchHitDto[];
+  /** Opaque; non-null exactly when a further hit exists. */
+  nextCursor: string | null;
+}
+
+/**
  * The live data a page chip renders. `unavailable` carries NO title by
  * construction: it is the one answer for a reader without `page:view`, a
  * Visitor, an archived page, a deleted page and an id of another project, so

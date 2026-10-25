@@ -21,6 +21,7 @@ import {
   toPageMarkdownAtVersionDto,
   toPageMentionCandidateDto,
   toPageRefSummaryDto,
+  toPageSearchHitDto,
   toPageVersionDto,
   toPageVersionListItemDto,
   toPageVersionRow,
@@ -86,7 +87,19 @@ import type {
   SavePageUpdateInput,
 } from '@/lib/dto/pages';
 import { PAGE_ARCHIVE_SET_TITLES } from '@/lib/dto/pages';
-import type { PageLinkCandidatesDto, PageMentionCandidateDto, PageRefMap } from '@/lib/dto/pages';
+import type {
+  PageLinkCandidatesDto,
+  PageMentionCandidateDto,
+  PageRefMap,
+  PageSearchResultDto,
+} from '@/lib/dto/pages';
+import { authorizePageSearch } from '@/lib/pages/pageSearchAccess';
+import { decodePageSearchCursor, encodePageSearchCursor } from '@/lib/pages/pageSearchCursor';
+import {
+  PAGE_SEARCH_QUERY_MAX_LENGTH,
+  PageSearchQueryEmptyError,
+  PageSearchQueryTooLongError,
+} from '@/lib/pages/searchErrors';
 import {
   decodePageTitleSearchCursor,
   encodePageTitleSearchCursor,
@@ -171,6 +184,9 @@ async function findInProject(store: PageStore, projectId: string, pageId: string
  */
 /** The `@` picker's Pages section shows a short, fixed list (MOTIR-7697). */
 export const PAGE_MENTION_SEARCH_LIMIT = 10;
+
+/** One page of full-text page search hits (MOTIR-9551). */
+export const PAGE_SEARCH_LIMIT = 20;
 
 /**
  * Page title-search rows with their PLACE: the parent page's title and the folder
@@ -1077,6 +1093,50 @@ export const pagesService = {
         nextCursor:
           window.length > PAGE_MENTION_SEARCH_LIMIT && last
             ? encodePageTitleSearchCursor({ updatedAt: last.updatedAt, id: last.id })
+            : null,
+      };
+    });
+  },
+
+  /**
+   * Full-text page search (Story MOTIR-9489 · MOTIR-9551): the LIVE pages of one
+   * project whose title or body holds the words of `q`, best match first,
+   * {@link PAGE_SEARCH_LIMIT} at a time, each as id, title, place, snippet and
+   * rank only.
+   *
+   * ⚠️ THE ORDER IS THE CONTRACT. Access first, through `authorizePageSearch` —
+   * the one filter — so a caller without `page:view` is refused by name whatever
+   * the query or cursor, before any page is read. Then the query: trimmed-empty
+   * is `PageSearchQueryEmptyError` (never every page), over
+   * {@link PAGE_SEARCH_QUERY_MAX_LENGTH} is `PageSearchQueryTooLongError`. Then
+   * the cursor (`PAGE_CURSOR_INVALID` for one this service did not issue). A
+   * one-row look-ahead decides `nextCursor`. No total is returned anywhere.
+   */
+  async searchPages(
+    ctx: ServiceContext,
+    input: { projectId: string; q: string; cursor?: string | null },
+  ): Promise<PageSearchResultDto> {
+    return withWorkspaceContext(scopeTo(ctx, input.projectId), async (tx) => {
+      const scope = await authorizePageSearch(ctx, input.projectId, tx);
+      const q = input.q.trim();
+      if (q.length === 0) throw new PageSearchQueryEmptyError();
+      if (q.length > PAGE_SEARCH_QUERY_MAX_LENGTH) throw new PageSearchQueryTooLongError();
+      const after = input.cursor ? decodePageSearchCursor(input.cursor) : null;
+      const window = await pageRepository.searchLiveFullText(
+        scope.projectId,
+        q,
+        PAGE_SEARCH_LIMIT + 1,
+        tx,
+        after,
+      );
+      const served = window.slice(0, PAGE_SEARCH_LIMIT);
+      const candidates = await candidatesWithPlace(served, ctx.workspaceId, tx);
+      const last = served[served.length - 1];
+      return {
+        items: served.map((row, i) => toPageSearchHitDto(candidates[i]!, row)),
+        nextCursor:
+          window.length > PAGE_SEARCH_LIMIT && last
+            ? encodePageSearchCursor({ rank: last.rank, id: last.id })
             : null,
       };
     });
