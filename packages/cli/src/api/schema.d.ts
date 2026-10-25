@@ -1512,7 +1512,7 @@ export interface paths {
         };
         /**
          * Search a project’s pages
-         * @description Find the project’s LIVE pages by a word in the title or the body — Postgres full-text search, words matched as typed in any language (no stemming). Hits are ranked best match first and keyset-paged by an opaque `cursor`: pass back the `nextCursor` you were given, `null` when there is no further hit; no total is returned. A hit is the page’s id, title, place, a short `snippet` of the body around the match, and its `rank` — never the body itself: read a page with `GET /api/v1/pages/{pageId}`. Archived pages and other projects’ pages never appear. ⚠️ An empty or whitespace-only `q` is REFUSED by name, 422 `PAGE_SEARCH_QUERY_EMPTY` — it never returns every page. A `q` over 200 characters is 422 `PAGE_SEARCH_QUERY_TOO_LONG`, and a cursor this API did not issue 422 `PAGE_CURSOR_INVALID`. A caller who can browse the project but may not view its pages is 403 `PROJECT_ACCESS_DENIED`, whatever the query or cursor; a project the caller cannot browse is 404 `PAGE_NOT_FOUND`. Neither refusal names a page or a count. The MCP `search_pages` tool is the same search with the same codes.
+         * @description Find the project’s LIVE pages by meaning and by words. The query is matched two ways — Postgres full-text search on the title and body (words matched as typed in any language, no stemming), and similarity of meaning against each page’s embedded text — and the two rankings are merged by reciprocal-rank fusion, so a page found both ways ranks above a page found one way, and appears once. There is no similarity threshold: ranking, not filtering, is the answer. Hits are best match first and keyset-paged by an opaque `cursor`: pass back the `nextCursor` you were given, `null` when there is no further hit; no total is returned. A hit is the page’s id, title, place, a short `snippet` of the body, and its `rank` (the fused score) — never the body itself: read a page with `GET /api/v1/pages/{pageId}`. `mode` says how the hits were ranked: `merged` (words and meaning), `full-text-only` (the embedding service did not answer, so semantic search did not run) or `not-indexed` (no page of the project is indexed for meaning yet). `full-text-only` and `not-indexed` carry a `message`, and neither is evidence that no similar page exists. Archived pages and other projects’ pages never appear. ⚠️ An empty or whitespace-only `q` is REFUSED by name, 422 `PAGE_SEARCH_QUERY_EMPTY` — it never returns every page. A `q` over 200 characters is 422 `PAGE_SEARCH_QUERY_TOO_LONG`, and a cursor this API did not issue 422 `PAGE_CURSOR_INVALID`. A caller who can browse the project but may not view its pages is 403 `PROJECT_ACCESS_DENIED`, whatever the query or cursor; a project the caller cannot browse is 404 `PAGE_NOT_FOUND`. Neither refusal names a page or a count. The MCP `search_pages` tool is the same search with the same codes.
          *
          *     Requires the `page:view` permission.
          */
@@ -3174,7 +3174,29 @@ export interface components {
                 parentPageTitle: string | null;
             };
             snippet: string;
+            /** @description Fused score, higher is better, comparable only within one search. */
             rank: number;
+        };
+        PageSearchResult: {
+            items: {
+                id: string;
+                title: string;
+                place: {
+                    folderPath: string[];
+                    parentPageTitle: string | null;
+                };
+                snippet: string;
+                /** @description Fused score, higher is better, comparable only within one search. */
+                rank: number;
+            }[];
+            nextCursor: string | null;
+            /**
+             * @description `merged`: words and meaning, fused. `full-text-only`: semantic search did not run. `not-indexed`: no page of the project is indexed for meaning yet.
+             * @enum {string}
+             */
+            mode: "merged" | "full-text-only" | "not-indexed";
+            /** @description Why semantic search did not contribute — never evidence that nothing similar exists. `null` when `mode` is `merged`. */
+            message: string | null;
         };
         /** @enum {string} */
         WorkItemObsolescence: "outdated" | "deprecated";
@@ -15736,7 +15758,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description A page of hits, best match first. */
+            /** @description A page of hits, best match first, and the mode they were ranked in. */
             200: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -15752,9 +15774,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PageEnvelope"] & {
-                        items?: components["schemas"]["PageSearchHit"][];
-                    };
+                    "application/json": components["schemas"]["PageSearchResult"];
                 };
             };
             /** @description Authentication required. No token, or a token that is malformed, unknown, revoked or expired — the five are deliberately undifferentiated. */

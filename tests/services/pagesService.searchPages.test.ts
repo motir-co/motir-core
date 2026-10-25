@@ -19,7 +19,9 @@ import { createCustomRoleAs, setProjectRoleDefinitionFor } from '../helpers/work
 // Full-text page search on real Postgres (Story MOTIR-9489 · MOTIR-9551): a word
 // in the title or the body, ranked and keyset-paged, under the ONE access filter
 // (`authorizePageSearch`), with the named refusals for an empty query, an
-// over-long one and a cursor this service did not issue.
+// over-long one and a cursor this service did not issue. No AI backend is
+// configured here, so every search below is `full-text-only` and `rank` is the
+// fused score over the one full-text list (MOTIR-9572) — the same order.
 
 let fx: WorkItemFixture;
 
@@ -100,6 +102,7 @@ describe('pagesService.searchPages', () => {
     });
     expect(hit!.snippet).toContain('spring');
     expect(hit!.rank).toBeGreaterThan(0);
+    expect(byBody.mode).toBe('full-text-only');
 
     const byTitle = await search('retro');
     expect(byTitle.items.map((r) => r.id)).toEqual([titled.id]);
@@ -190,7 +193,7 @@ describe('pagesService.searchPages', () => {
 
   it('refuses an empty or whitespace query by name, running no search', async () => {
     await newPage('Roadmap', 'zephyr');
-    const read = vi.spyOn(pageRepository, 'searchLiveFullText');
+    const read = vi.spyOn(pageRepository, 'searchLiveFullTextIds');
     for (const q of ['', '   ', '\n\t']) {
       await expect(search(q)).rejects.toBeInstanceOf(PageSearchQueryEmptyError);
     }
@@ -199,12 +202,12 @@ describe('pagesService.searchPages', () => {
 
   it('refuses a query over 200 characters, and accepts one of exactly 200', async () => {
     await expect(search('a'.repeat(201))).rejects.toBeInstanceOf(PageSearchQueryTooLongError);
-    await expect(search('a'.repeat(200))).resolves.toEqual({ items: [], nextCursor: null });
+    await expect(search('a'.repeat(200))).resolves.toMatchObject({ items: [], nextCursor: null });
   });
 
   it('answers an empty list for a query with no words, and treats operators as text', async () => {
     await newPage('Roadmap', 'zephyr');
-    expect(await search('!!! ... &&')).toEqual({ items: [], nextCursor: null });
+    expect(await search('!!! ... &&')).toMatchObject({ items: [], nextCursor: null });
     for (const q of ["it's", '100%', 'back\\slash', 'a & b | !c', '"quoted" <-> :*']) {
       await expect(search(q)).resolves.toBeDefined();
     }
@@ -215,7 +218,7 @@ describe('pagesService.searchPages', () => {
   it('refuses a member without page:view as edit, before the query or cursor is read', async () => {
     await newPage('Secret plan', 'zephyr');
     const reader = await browseOnlyReader();
-    const read = vi.spyOn(pageRepository, 'searchLiveFullText');
+    const read = vi.spyOn(pageRepository, 'searchLiveFullTextIds');
     for (const [q, cursor] of [
       ['zephyr', null],
       ['', null],

@@ -227,23 +227,39 @@ export const pageSearchPlaceSchema = z.object({
   parentPageTitle: z.string().nullable(),
 });
 
-/** One full-text hit: the page's identity and place, a snippet and a rank — never its body. */
+/** One page search hit: the page's identity and place, a snippet and a rank — never its body. */
 export const pageSearchHitSchema = z.object({
   id: z.string(),
   title: z.string(),
   place: pageSearchPlaceSchema,
   /** A short excerpt of the body around the match; `''` for a page with no body. */
   snippet: z.string(),
-  /** Higher is a better match. Comparable only within one search. */
-  rank: z.number(),
+  /** Fused score, higher is better, comparable only within one search. */
+  rank: z.number().describe('Fused score, higher is better, comparable only within one search.'),
 });
 export type V1PageSearchHit = z.infer<typeof pageSearchHitSchema>;
 
-/** One page of hits — the plain cursor envelope, no total. */
-export interface V1PageSearchResult {
-  items: V1PageSearchHit[];
-  nextCursor: string | null;
-}
+/**
+ * One page of hits, and how they were ranked (MOTIR-9574) — no total. `mode`
+ * says whether meaning took part; `message` says why not, and is `null` when it did.
+ */
+export const pageSearchResultSchema = z.object({
+  items: z.array(pageSearchHitSchema),
+  /** Opaque; `null` when there is no further hit. */
+  nextCursor: z.string().nullable(),
+  mode: z
+    .enum(['merged', 'full-text-only', 'not-indexed'])
+    .describe(
+      '`merged`: words and meaning, fused. `full-text-only`: semantic search did not run. `not-indexed`: no page of the project is indexed for meaning yet.',
+    ),
+  message: z
+    .string()
+    .nullable()
+    .describe(
+      'Why semantic search did not contribute — never evidence that nothing similar exists. `null` when `mode` is `merged`.',
+    ),
+});
+export type V1PageSearchResult = z.infer<typeof pageSearchResultSchema>;
 
 /**
  * `GET /api/v1/projects/{projectKey}/pages/search` — WIRE types only. A missing
@@ -269,5 +285,7 @@ export function presentPageSearch(result: PageSearchResultDto): V1PageSearchResu
       rank: hit.rank,
     })),
     nextCursor: result.nextCursor,
+    mode: result.mode,
+    message: result.message,
   };
 }

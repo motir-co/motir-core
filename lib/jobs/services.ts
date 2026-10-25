@@ -55,6 +55,7 @@ import { childStatusCascadeService } from '@/lib/services/childStatusCascadeServ
 import { planDriftService } from '@/lib/services/planDriftService';
 import { migrateOnboardingService } from '@/lib/services/migrateOnboardingService';
 import { workItemEmbeddingsService } from '@/lib/services/workItemEmbeddingsService';
+import { pageEmbeddingsService } from '@/lib/services/pageEmbeddingsService';
 import { planTargetLockService } from '@/lib/services/planTargetLockService';
 import { planSessionEndService } from '@/lib/services/planSessionEndService';
 import { planningSessionGateService } from '@/lib/services/planningSessionGateService';
@@ -154,6 +155,7 @@ export const jobServices = {
   planDrift: planDriftService,
   migrateOnboarding: migrateOnboardingService,
   workItemEmbeddings: workItemEmbeddingsService,
+  pageEmbeddings: pageEmbeddingsService,
   planTargetLock: planTargetLockService,
   planSessionEnd: planSessionEndService,
   planningSessionGate: planningSessionGateService,

@@ -241,6 +241,32 @@ export const pageRepository = {
   },
 
   /**
+   * Read what a page's MEANING VECTOR is derived from, and whether it is live
+   * (Story MOTIR-9490 · MOTIR-9571) — `pageEmbeddingsService.embedPage`'s re-read.
+   * `null` when absent or invisible. Archived pages included: the service decides
+   * that an archived page's row goes.
+   */
+  async findEmbeddingSourceById(
+    id: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Pick<
+    Page,
+    'id' | 'workspaceId' | 'projectId' | 'title' | 'bodyText' | 'archivedAt'
+  > | null> {
+    return tx.page.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        workspaceId: true,
+        projectId: true,
+        title: true,
+        bodyText: true,
+        archivedAt: true,
+      },
+    });
+  },
+
+  /**
    * Read one page with its derived MARKDOWN and no lock — the agent's read door
    * (`pagesService.getPageMarkdown`, MOTIR-7409). The Yjs state is not selected:
    * serving markdown never needs the canonical bytes. `null` when absent or invisible.
@@ -402,6 +428,81 @@ export const pageRepository = {
         LIMIT ${take}
       ) h
       ORDER BY h."rank" DESC, h."id" DESC`;
+  },
+
+  /**
+   * The next `take` LIVE page ids of one project after `afterId`, in id order —
+   * the page embedding backfill's keyset scan (MOTIR-9573). A seek on `id`,
+   * never an OFFSET, so an interrupted run resumes by simply running again. The
+   * live restriction is {@link PAGE_SEARCH_LIVE_IN_PROJECT}, the one predicate
+   * every page-search read uses.
+   */
+  async listLiveIdsAfter(
+    projectId: string,
+    afterId: string | null,
+    take: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string; workspaceId: string }>> {
+    const seek = afterId ? Prisma.sql`AND p."id" > ${afterId}` : Prisma.empty;
+    return tx.$queryRaw<Array<{ id: string; workspaceId: string }>>`
+      SELECT p."id", p."workspace_id" AS "workspaceId"
+      FROM "page" p
+      WHERE ${PAGE_SEARCH_LIVE_IN_PROJECT(projectId)} ${seek}
+      ORDER BY p."id" ASC
+      LIMIT ${take}`;
+  },
+
+  /**
+   * The ids of the LIVE pages of one project whose title or body matches `q` as
+   * words, best match first, at most `take` (Story MOTIR-9490 · MOTIR-9572) —
+   * the full-text half of the fused page search. The same match and order as
+   * {@link searchLiveFullText} (`ts_rank` desc, id desc), under the same
+   * {@link PAGE_SEARCH_LIVE_IN_PROJECT}, with no snippet: only the served rows
+   * are read for one, by {@link findSearchRowsByIds}.
+   */
+  async searchLiveFullTextIds(
+    projectId: string,
+    q: string,
+    take: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    const config = Prisma.raw(`'${PAGE_SEARCH_CONFIG}'`);
+    const query = Prisma.sql`plainto_tsquery(${config}, ${q})`;
+    const rows = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT m."id" FROM (
+        SELECT p."id", ts_rank(${PAGE_SEARCH_DOCUMENT}, ${query})::float8 AS "rank"
+        FROM "page" p
+        WHERE ${PAGE_SEARCH_LIVE_IN_PROJECT(projectId)} AND ${PAGE_SEARCH_DOCUMENT} @@ ${query}
+      ) m
+      ORDER BY m."rank" DESC, m."id" DESC
+      LIMIT ${take}`;
+    return rows.map((r) => r.id);
+  },
+
+  /**
+   * The hit rows of exactly `ids` — id, title, ancestor ids, folder id and a
+   * `ts_headline` snippet for `q` — in ONE query, under
+   * {@link PAGE_SEARCH_LIVE_IN_PROJECT} (MOTIR-9572). A page with no word match
+   * (a by-meaning hit) gets the body's leading words, an empty body `''`. Rows
+   * come back in no particular order; an id that is not a live page of the
+   * project is absent. `rank` is 0 — the caller owns the fused score.
+   */
+  async findSearchRowsByIds(
+    projectId: string,
+    ids: readonly string[],
+    q: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<PageSearchRow[]> {
+    if (ids.length === 0) return [];
+    const config = Prisma.raw(`'${PAGE_SEARCH_CONFIG}'`);
+    const query = Prisma.sql`plainto_tsquery(${config}, ${q})`;
+    return tx.$queryRaw<PageSearchRow[]>`
+      SELECT p."id", p."title", p."ancestor_page_ids" AS "ancestorPageIds",
+             p."folder_id" AS "folderId", 0::float8 AS "rank",
+             ts_headline(${config}, left(p."body_text", ${Prisma.raw(String(PAGE_SEARCH_BODY_LIMIT))}),
+               ${query}, 'MaxFragments=1, MinWords=8, MaxWords=24, StartSel="", StopSel=""') AS "snippet"
+      FROM "page" p
+      WHERE ${PAGE_SEARCH_LIVE_IN_PROJECT(projectId)} AND p."id" IN (${Prisma.join([...ids])})`;
   },
 
   /**
