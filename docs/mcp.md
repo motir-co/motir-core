@@ -3320,8 +3320,9 @@ not come back where it was.
 | `pageId`     | string | yes      | The page id — the `<id>` in `/pages/<id>`. |
 | `action`     | string | no       | `archive` (the default) or `restore`.      |
 
-**Output** — archive: `{ archivedIds, rootId, subPageCount }`, the root first.
-Restore: `{ restoredIds, landing: { kind, parentPageId, folderId, title } }`.
+**Output** — archive: v1's `PageArchive`, `{ archivedIds, rootId, subPageCount }`,
+the root first. Restore: v1's `PageRestore`,
+`{ restoredIds, landing: { kind, parentPageId, folderId, title } }`.
 
 #### `link_page`
 
@@ -3347,7 +3348,8 @@ since can still be removed.
 | `workItemKey` | string | yes      | The work item's key, e.g. `"ACME-7"`, in `projectKey`. |
 | `action`      | string | no       | `link` (the default) or `unlink`.                      |
 
-**Output** — `{ pageId, workItemId, source: "manual", action, changed }`.
+**Output** — v1's `PageLinkPair` plus `action` and `changed`:
+`{ pageId, workItemId, source: "manual", action, changed }`.
 
 #### `publish_decision_page`
 

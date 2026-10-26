@@ -4,6 +4,8 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { db } from '@/lib/db';
 import { buildMcpServer } from '@/lib/mcp/registry';
+import { checkPayloadDrift } from '@/lib/mcp/payloads/driftGuard';
+import { TOOL_PAYLOADS } from '@/lib/mcp/payloads/registry';
 import { PERMISSION_NOT_GRANTED_CODE } from '@/lib/mcp/permissionGate';
 import { TOOL_ANNOTATIONS } from '@/lib/mcp/toolAnnotations';
 import { CLI_TOKEN_GRANT, TOOL_PERMISSIONS } from '@/lib/mcp/toolPermissions';
@@ -100,6 +102,8 @@ describe('link_page', () => {
       action: 'link',
       changed: true,
     });
+    // The pair inside it IS v1's `PageLinkPair` (MOTIR-9604).
+    expect(checkPayloadDrift(TOOL_PAYLOADS.link_page!, structured(res))).toEqual([]);
     expect(textOf(res)).toContain(`Linked page ${page.id} to ${item.identifier}.`);
     const strip = await pageLinksService.listPagesForWorkItem(fx.ctx, { workItemId: item.id });
     expect(strip.rows.map((r) => r.pageId)).toContain(page.id);
@@ -118,6 +122,7 @@ describe('link_page', () => {
 
     expect(again.isError, textOf(again)).toBeFalsy();
     expect(structured<LinkPayload>(again).changed).toBe(false);
+    expect(checkPayloadDrift(TOOL_PAYLOADS.link_page!, structured(again))).toEqual([]);
     expect(textOf(again)).toContain('nothing changed');
     expect(await manualRows(page.id, item.id)).toBe(1);
     await client.close();

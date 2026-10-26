@@ -190,6 +190,10 @@ const DERIVED_TOOL_NAMES: Record<DerivedToolName, true> = {
   search_pages: true,
   // MOTIR-9556 — the page move, `PagePlacement` whole.
   move_page: true,
+  // MOTIR-9604 — archive / restore, each branch probing `PageArchive` / `PageRestore`.
+  archive_page: true,
+  // MOTIR-9604 — the hand link, probing `PageLinkPair`.
+  link_page: true,
   // MOTIR-6807 — the repair claim, `WorkItemRepairClaim` whole (its touch and
   // close siblings are EXEMPT: a run's liveness is not the `DispatchRun` resource).
   claim_work_item_repair: true,

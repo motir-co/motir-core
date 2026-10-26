@@ -5,6 +5,8 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { ArchivePageResultDto, RestorePageResultDto } from '@/lib/dto/pages';
 import { db } from '@/lib/db';
 import { buildMcpServer } from '@/lib/mcp/registry';
+import { checkPayloadDrift } from '@/lib/mcp/payloads/driftGuard';
+import { TOOL_PAYLOADS } from '@/lib/mcp/payloads/registry';
 import { PERMISSION_NOT_GRANTED_CODE } from '@/lib/mcp/permissionGate';
 import { TOOL_ANNOTATIONS } from '@/lib/mcp/toolAnnotations';
 import { CLI_TOKEN_GRANT, TOOL_PERMISSIONS } from '@/lib/mcp/toolPermissions';
@@ -87,6 +89,8 @@ describe('archive_page', () => {
     expect(out.rootId).toBe(parent.id);
     expect(out.archivedIds).toEqual([parent.id, child.id]);
     expect(out.subPageCount).toBe(1);
+    // The archive branch IS v1's `PageArchive` (MOTIR-9604).
+    expect(checkPayloadDrift(TOOL_PAYLOADS.archive_page!, out)).toEqual([]);
     expect(textOf(res)).toContain(`Archived page ${parent.id} with 1 sub-page.`);
     const rows = await adminDb.page.findMany({ where: { id: { in: [parent.id, child.id] } } });
     expect(rows).toHaveLength(2);
@@ -110,6 +114,8 @@ describe('archive_page', () => {
     const out = structured<RestorePageResultDto>(res);
     expect(new Set(out.restoredIds)).toEqual(new Set([parent.id, child.id]));
     expect(out.landing.kind).toBe('original');
+    // The restore branch IS v1's `PageRestore` (MOTIR-9604).
+    expect(checkPayloadDrift(TOOL_PAYLOADS.archive_page!, out)).toEqual([]);
     expect(textOf(res)).toContain('where it was');
     const row = await adminDb.page.findUniqueOrThrow({ where: { id: child.id } });
     expect(row.archivedAt).toBeNull();

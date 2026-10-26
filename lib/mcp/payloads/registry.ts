@@ -44,7 +44,7 @@ import {
 } from './workLoop';
 import { folderDeletionPayload, folderWritePayload, listFoldersPayload } from './folders';
 import { sectionSetsPayload } from './sectionSets';
-import { movePagePayload, searchPagesPayload } from './pages';
+import { archivePagePayload, linkPagePayload, movePagePayload, searchPagesPayload } from './pages';
 
 // The TOOL → PAYLOAD map (Story 11.6 · Subtask 11.6.6 — MOTIR-2232).
 //
@@ -122,6 +122,12 @@ export const TOOL_PAYLOADS: Partial<Record<McpToolName, PayloadDefinition<never>
   search_pages: searchPagesPayload as unknown as PayloadDefinition<never>,
   // MOTIR-9556 — the page move: v1's `PagePlacement` whole, and it PROBES it.
   move_page: movePagePayload as unknown as PayloadDefinition<never>,
+  // MOTIR-9604 — archive / restore: the union of v1's `PageArchive` and
+  // `PageRestore`, each branch PROBING its own resource.
+  archive_page: archivePagePayload as unknown as PayloadDefinition<never>,
+  // MOTIR-9604 — the hand link: v1's `PageLinkPair` plus `action` and `changed`,
+  // and it PROBES the pair.
+  link_page: linkPagePayload as unknown as PayloadDefinition<never>,
   update_folder: folderWritePayload as unknown as PayloadDefinition<never>,
   delete_folder: folderDeletionPayload as unknown as PayloadDefinition<never>,
   attach_file: attachFilePayload as unknown as PayloadDefinition<never>,
