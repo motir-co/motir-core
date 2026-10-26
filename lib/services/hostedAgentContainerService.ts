@@ -6,7 +6,7 @@ import {
 import { fleetCeilingService, type FleetSlotVerdict } from '@/lib/services/fleetCeilingService';
 import {
   classifyProvisionRefusal,
-  HOSTED_AGENT_SHARD_CAPACITY_DETAIL,
+  fleetShardAdmissionService,
 } from '@/lib/services/fleetShardAdmissionService';
 import { fleetShardOrchestratorService } from '@/lib/services/fleetShardOrchestratorService';
 import { fleetShardService } from '@/lib/services/fleetShardService';
@@ -750,7 +750,11 @@ export const hostedAgentContainerService = {
             outcome: {
               outcome: 'admission_deferred',
               reason: 'shard_capacity',
-              detail: HOSTED_AGENT_SHARD_CAPACITY_DETAIL,
+              // A Host org's own account was the one tried (MOTIR-9586): its words.
+              detail: await fleetShardAdmissionService.capacityDetail({
+                fleetKind: 'hosted_agent',
+                organizationId: request.organizationId,
+              }),
             },
           };
         }

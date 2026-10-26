@@ -435,7 +435,8 @@ export const codeGraphIndexAdmissionService = {
           return {
             outcome: 'deferred' as const,
             reason: 'pool_full' as const,
-            detail: INDEX_POOL_FULL_DETAIL,
+            // A Host org's own indexer account is full (MOTIR-9586): its words.
+            detail: placement.own ? placement.detail : INDEX_POOL_FULL_DETAIL,
           };
         }
 

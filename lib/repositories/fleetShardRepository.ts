@@ -165,6 +165,26 @@ export const fleetShardRepository = {
     return tx.fleetShard.update({ where: { id }, data: times });
   },
 
+  /** The organisation's own account of one kind that is LIVE (MOTIR-9586): role
+   *  `org_owned`, owned by it, `active`, `liveAt` set. At most one per kind — the
+   *  (AWS account, kind) uniqueness and one account per slot. */
+  async findLiveOrgOwnedInTx(
+    organizationId: string,
+    fleetKind: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<FleetShard | null> {
+    return tx.fleetShard.findFirst({
+      where: {
+        role: 'org_owned',
+        ownerOrganizationId: organizationId,
+        fleetKind,
+        state: 'active',
+        liveAt: { not: null },
+      },
+      orderBy: [{ liveAt: 'asc' }, { id: 'asc' }],
+    });
+  },
+
   /** Set each given state time on EVERY `org_owned` row of one AWS account — but
    *  only on a row where it is still null (MOTIR-9585), so a replay, a race or a
    *  later pass never moves a time. The merged account's two rows are one call. */
