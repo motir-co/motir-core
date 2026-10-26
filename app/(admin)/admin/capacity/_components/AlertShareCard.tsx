@@ -123,7 +123,7 @@ function AlertShareHeader() {
   const t = useTranslations('platformAdmin.capacity');
   return (
     <div className="flex items-center gap-3">
-      <span className="inline-flex h-7.5 w-7.5 items-center justify-center rounded-(--radius-control) bg-(--el-tint-yellow) text-(--el-warning)">
+      <span className="inline-flex h-(--height-control-28) w-(--height-control-28) items-center justify-center rounded-(--radius-control) bg-(--el-tint-yellow) text-(--el-warning)">
         <Gauge aria-hidden className="h-4 w-4" />
       </span>
       <div>
