@@ -415,17 +415,24 @@ describe('Host in the plan-change flow', () => {
     expect(posts(fetchMock, 'upgrade')).toEqual([{ toPlanKey: 'host', prorationDate: 1792238400 }]);
   });
 
-  it('an org holding Pool 250,000 unfolds the regular plans and is offered Upgrade to Host', async () => {
-    const fetchMock = stubFetch([onPlan('pool_250k', 'Pool 250,000', 250000)], {
-      'upgrade/preview': ok({ ...TO_HOST, fromPlan: 'pool_250k', fromPool: 250000 }),
+  it('an org holding Pool 600,000 unfolds the regular plans and is offered Downgrade to Host', async () => {
+    const fetchMock = stubFetch([onPlan('pool_600k', 'Pool 600,000', 600000)], {
+      'downgrade/preview': ok({
+        ...DOWNGRADE,
+        fromPlan: 'pool_600k',
+        toPlan: 'host',
+        fromPool: 600000,
+        fullPool: 300000,
+        toPriceCents: 150000,
+      }),
     });
     await openPlans();
     await screen.findByText('Motir AI — plans & subscription');
     fireEvent.click(screen.getByRole('button', { name: 'See all regular plans' }));
-    const upgrade = within(card('Host')).getByRole('button', { name: 'Upgrade to Host' });
-    fireEvent.click(upgrade);
+    const downgrade = within(card('Host')).getByRole('button', { name: 'Downgrade to Host' });
+    fireEvent.click(downgrade);
     await screen.findByRole('dialog');
-    expect(posts(fetchMock, 'upgrade/preview')).toEqual([{ toPlanKey: 'host' }]);
+    expect(posts(fetchMock, 'downgrade/preview')).toEqual([{ toPlanKey: 'host' }]);
   });
 
   it('an org on Host sees the five-card row with Host current and downgrades to Max ×2', async () => {
