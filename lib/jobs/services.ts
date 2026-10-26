@@ -41,6 +41,8 @@ import { fleetDebitMonitorService } from '@/lib/services/fleetDebitMonitorServic
 import { fleetShardHeadroomService } from '@/lib/services/fleetShardHeadroomService';
 import { capacityAlertJobService } from '@/lib/services/capacityAlertJobService';
 import { fleetPoolGrowthPassService } from '@/lib/services/fleetPoolGrowthPassService';
+import { hostAccountReconcileService } from '@/lib/services/hostAccountReconcileService';
+import { hostAccountStateService } from '@/lib/services/hostAccountStateService';
 import { ciLiveChargeService } from '@/lib/services/ciLiveChargeService';
 import { ciActionsGateService } from '@/lib/services/ciActionsGateService';
 import { ciRunnerBootService } from '@/lib/services/ciRunnerBootService';
@@ -132,6 +134,9 @@ export const jobServices = {
   capacityAlertJob: capacityAlertJobService,
   // The pool growth pass (Story MOTIR-9362 · MOTIR-9462).
   fleetPoolGrowthPass: fleetPoolGrowthPassService,
+  // The Host account reconcile (Story MOTIR-9365 · MOTIR-9582).
+  hostAccountReconcile: hostAccountReconcileService,
+  hostAccountState: hostAccountStateService,
   ciActionsGate: ciActionsGateService,
   ciRunnerBoot: ciRunnerBootService,
   // The GitHub-side reconcile of the fleet's queue (MOTIR-8976).

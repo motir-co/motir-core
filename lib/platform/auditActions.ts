@@ -347,6 +347,17 @@ export const PLATFORM_AUDIT_ACTIONS = {
    */
   'fleet.shard.quota_request': { kind: 'write', reason: 'required' },
   /**
+   * A Host organisation's CAPACITY REQUESTS (Story MOTIR-9365 · MOTIR-9583), as
+   * `fleet-admin` works them: `list` (the open and filed requests were read),
+   * `link` (a request linked to the quota raise the platform admin filed) and
+   * `close` (closed with the operator's note). Target is `platform` with the
+   * request's id; `metadata` is `{ organizationId, awsAccountId, fleetKind,
+   * desiredVcpu, quotaRequestId? }`, never a credential.
+   */
+  'fleet.capacity_request.list': { kind: 'read', reason: 'never' },
+  'fleet.capacity_request.link': { kind: 'write', reason: 'required' },
+  'fleet.capacity_request.close': { kind: 'write', reason: 'required' },
+  /**
    * The IDEA STORE's writes (Story MOTIR-7662 · MOTIR-7671), `targetKind:
    * 'idea'`, written by `ideasAdminService` inside `withPlatformWrite`. Reached
    * from the console session OR — on `/api/platform/ideas/**` alone — a staff

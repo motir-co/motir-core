@@ -240,6 +240,14 @@ export default defineConfig({
       // (matched above); the token grammar and the Visitor's label redaction.
       'tests/mentions/pageRefs.test.ts',
       'tests/visitor/redactPageRefLabels.test.ts',
+      // Story MOTIR-9491 (search from the Pages tree; MOTIR-9639): the session route
+      // `/api/pages/search` and the `/pages` search box fall under this lane's
+      // `app/api/pages/*/route.ts` and `app/**/pages/_components/*.tsx` globs, so the
+      // story's gate, route test and the box's component test run here too.
+      'tests/integration/pages/pageSearchStoryGate.test.ts',
+      'tests/api/pagesSearchRoute.test.ts',
+      'tests/components/use-page-search.test.tsx',
+      'tests/components/pages-search.test.tsx',
     ],
     coverage: {
       provider: 'v8',

@@ -23,6 +23,7 @@ import { NewFolderButton } from './_components/NewFolderButton';
 import { NewPageButton } from './_components/NewPageButton';
 import { PagesIndex } from './_components/PagesIndex';
 import { PagesIndexFrame } from './_components/PagesIndexFrame';
+import { PagesSearch } from './_components/PagesSearch';
 
 // THE PAGES INDEX, `/pages` (Story MOTIR-5752 · MOTIR-7300; a TREE since Story
 // MOTIR-5753 · MOTIR-7373) — the project's folders and pages, drawn by
@@ -69,6 +70,11 @@ import { PagesIndexFrame } from './_components/PagesIndexFrame';
 // holding the tree's focus. A folder that is unknown, in another project, or
 // that this reader cannot browse is IGNORED — the tree opens at its root, never
 // a 404 (design-notes § Open questions) — the roadmap's `?folder=` silence.
+//
+// ── THE SEARCH BOX (Story MOTIR-9491 · MOTIR-9638) ─────────────────────────
+// `PagesSearch` wraps the <Suspense>: the box paints above the tree, and while
+// a query is active its result list replaces the tree, which stays mounted
+// under `hidden` so its expanded rows survive (`pages--tree--search.mock.html`).
 
 /** The shipped folder writes, as the `/pages` tree receives them. */
 const FOLDER_ACTIONS: FolderCommandActions = {
@@ -119,16 +125,18 @@ export default async function PagesIndexPage({ searchParams }: SearchParams = {}
             <NewPageButton />
           </div>
         </header>
-        <Suspense fallback={<PagesIndexFrame />}>
-          <PagesIndexData
-            service={scope.service}
-            projectId={scope.projectId}
-            projectKey={scope.project.identifier}
-            canEdit={held.has('page:edit')}
-            canEditFolders={held.has('work_item:edit')}
-            folderId={folderId}
-          />
-        </Suspense>
+        <PagesSearch projectId={scope.projectId}>
+          <Suspense fallback={<PagesIndexFrame />}>
+            <PagesIndexData
+              service={scope.service}
+              projectId={scope.projectId}
+              projectKey={scope.project.identifier}
+              canEdit={held.has('page:edit')}
+              canEditFolders={held.has('work_item:edit')}
+              folderId={folderId}
+            />
+          </Suspense>
+        </PagesSearch>
       </div>
     </FolderCommandsProvider>
   );

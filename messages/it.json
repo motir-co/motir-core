@@ -10081,6 +10081,11 @@
             },
             "pool": {
               "grow": "Ampliato un pool della flotta"
+            },
+            "capacity_request": {
+              "list": "Elencate le richieste di capacità della flotta",
+              "link": "Collegata una richiesta di capacità a un aumento di quota",
+              "close": "Chiusa una richiesta di capacità della flotta"
             }
           },
           "idea": {
@@ -15245,6 +15250,23 @@
       "refused": "Non puoi modificare i collegamenti di questa pagina.",
       "gone": "Quell’elemento di lavoro non esiste più.",
       "unlinkFailed": "Impossibile scollegare quell’elemento di lavoro. Riprova."
+    },
+    "search": {
+      "label": "Cerca pagine",
+      "placeholder": "Cerca le pagine per parola o per significato",
+      "clear": "Cancella ricerca",
+      "pending": "Ricerca in corso…",
+      "emptyHint": "Digita una parola o una frase per cercare nei titoli e nel testo delle pagine.",
+      "tooLong": "Le ricerche sono limitate a {limit} caratteri: accorciala per cercare.",
+      "mode": {
+        "fullText": "Solo corrispondenze di parole: questa volta la ricerca per significato non è stata eseguita.",
+        "notIndexed": "Solo corrispondenze di parole: le pagine non sono ancora indicizzate per la ricerca per significato."
+      },
+      "noResults": "Nessuna pagina corrisponde a «{query}».",
+      "failed": "Impossibile cercare nelle pagine.",
+      "results": "Risultati della ricerca",
+      "loading": "Caricamento…",
+      "updated": "Risultati della ricerca aggiornati."
     }
   },
   "sharpen": {

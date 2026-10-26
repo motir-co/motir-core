@@ -62,7 +62,6 @@ import {
 import {
   classifyProvisionRefusal,
   fleetShardAdmissionService,
-  SHARD_CAPACITY_DETAIL,
 } from '@/lib/services/fleetShardAdmissionService';
 import {
   ciFleetAdmissionLockRepository as locks,
@@ -1397,7 +1396,11 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
       return terminal({
         outcome: 'gate_deferred',
         reason: 'shard_capacity',
-        detail: SHARD_CAPACITY_DETAIL,
+        // A Host org's own account was the one tried (MOTIR-9586): its words.
+        detail: await fleetShardAdmissionService.capacityDetail({
+          fleetKind: 'ci_runner',
+          organizationId: intent.organizationId,
+        }),
       });
     }
     bootShardId = nextId;

@@ -203,6 +203,22 @@ export default defineConfig({
         // `workItemContinue-transport.test.ts`): 100 / 90.62 / 100 / 100. Its
         // service, `workItemContinueService.ts`, is already gated.
         'lib/mcp/tools/workItemContinue.ts',
+        // Story MOTIR-9491 · MOTIR-9639 — page search on `/pages`: the session route, the
+        // client function and hook, and the search box with its result list. Pinned at the
+        // project floor in `thresholds` below after being MEASURED on this branch against
+        // the story's own specs (`tests/integration/pages/pageSearchStoryGate.test.ts`,
+        // `tests/api/pagesSearchRoute.test.ts`, `tests/components/use-page-search.test.tsx`,
+        // `tests/components/pages-search.test.tsx`): all seven files 100 / 100 / 100 / 100
+        // on lines / statements / functions / branches. The route group is spanned by
+        // `app/**`. The two branches the route card added to the shared
+        // `lib/pages/routeErrors.ts` are measured in the PR body; it is not newly pinned.
+        'app/api/pages/search/route.ts',
+        'components/pages/search/pageSearchClient.ts',
+        'components/pages/search/usePageSearch.ts',
+        'app/**/pages/_components/PagesSearch.tsx',
+        'app/**/pages/_components/PageSearchResults.tsx',
+        'app/**/pages/_components/PageSearchHitRow.tsx',
+        'app/**/pages/_components/snippetEmphasis.ts',
         // Story MOTIR-9487 · MOTIR-9559 — the three page tools an agent moves, archives and
         // links pages with. Pinned at the project floor in `thresholds` below after being
         // MEASURED on this branch against the story's own specs
@@ -4147,6 +4163,49 @@ export default defineConfig({
           statements: 90,
         },
         'lib/mcp/tools/workItemContinue.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // Story MOTIR-9491 · MOTIR-9639 — page search on `/pages`; measured above, pinned at the floor.
+        'app/api/pages/search/route.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/pages/search/pageSearchClient.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/pages/search/usePageSearch.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/pages/_components/PagesSearch.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/pages/_components/PageSearchResults.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/pages/_components/PageSearchHitRow.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/pages/_components/snippetEmphasis.ts': {
           lines: 90,
           functions: 90,
           branches: 90,

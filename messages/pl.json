@@ -10081,6 +10081,11 @@
             },
             "pool": {
               "grow": "Rozszerzono pulę floty"
+            },
+            "capacity_request": {
+              "list": "Wyświetlono prośby o pojemność floty",
+              "link": "Powiązano prośbę o pojemność z podniesieniem limitu",
+              "close": "Zamknięto prośbę o pojemność floty"
             }
           },
           "idea": {
@@ -15245,6 +15250,23 @@
       "refused": "Nie możesz zmieniać połączeń tej strony.",
       "gone": "Ten element roboczy już nie istnieje.",
       "unlinkFailed": "Nie udało się rozłączyć tego elementu roboczego. Spróbuj ponownie."
+    },
+    "search": {
+      "label": "Szukaj stron",
+      "placeholder": "Szukaj stron według słowa lub znaczenia",
+      "clear": "Wyczyść wyszukiwanie",
+      "pending": "Wyszukiwanie…",
+      "emptyHint": "Wpisz słowo lub frazę, aby przeszukać tytuły i treść stron.",
+      "tooLong": "Wyszukiwanie jest ograniczone do {limit} znaków — skróć je, aby wyszukać.",
+      "mode": {
+        "fullText": "Pokazano tylko dopasowania słów — tym razem wyszukiwanie według znaczenia nie zostało uruchomione.",
+        "notIndexed": "Pokazano tylko dopasowania słów — strony nie są jeszcze zindeksowane do wyszukiwania według znaczenia."
+      },
+      "noResults": "Żadna strona nie pasuje do „{query}”.",
+      "failed": "Nie udało się przeszukać stron.",
+      "results": "Wyniki wyszukiwania",
+      "loading": "Ładowanie…",
+      "updated": "Wyniki wyszukiwania zostały zaktualizowane."
     }
   },
   "sharpen": {
