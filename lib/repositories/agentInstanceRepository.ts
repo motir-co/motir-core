@@ -462,27 +462,24 @@ export const agentInstanceRepository = {
   },
 
   /**
-   * How many of the org's MEMBERS hold at least `figure` live instances in ANY
-   * project (MOTIR-9660) — the per-user cap's count
-   * ({@link countLiveForOwnerEverywhere}, the same live predicate), taken for
-   * every member at once. Only the number: never who.
+   * How many of `ownerIds` hold at least `figure` live instances in ANY project
+   * (MOTIR-9660) — the per-user cap's count ({@link countLiveForOwnerEverywhere},
+   * the same live predicate), taken for every owner at once. Only the number:
+   * never who. The caller resolves the org's members; this reads
+   * `agent_instance` alone, under its system read arm, so no org GUC is needed.
    */
-  async countMembersAtLiveFigure(
-    organizationId: string,
+  async countOwnersAtLiveFigure(
+    ownerIds: readonly string[],
     figure: number,
     tx: Prisma.TransactionClient,
   ): Promise<number> {
-    const rows = await tx.$queryRaw<Array<{ n: number }>>`
-      SELECT COUNT(*)::int AS "n" FROM (
-        SELECT om."userId"
-        FROM "organization_membership" om
-        JOIN "agent_instance" a ON a."owner_id" = om."userId" AND a."deleted_at" IS NULL
-        WHERE om."organizationId" = ${organizationId}
-        GROUP BY om."userId"
-        HAVING COUNT(a."id") >= ${figure}
-      ) AS "at_figure"
-    `;
-    return rows[0]?.n ?? 0;
+    if (ownerIds.length === 0) return 0;
+    const rows = await tx.agentInstance.groupBy({
+      by: ['ownerId'],
+      where: { ownerId: { in: [...ownerIds] }, ...LIVE },
+      _count: { _all: true },
+    });
+    return rows.filter((row) => row._count._all >= figure).length;
   },
 
   /** Live instances in any of `states`, oldest state change first — the sweep's discovery. */

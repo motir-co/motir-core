@@ -1,6 +1,7 @@
 import { withSystemContext } from '@/lib/workspaces/context';
 import { bindOrganizationContext } from '@/lib/organizations/context';
 import { agentInstanceRepository } from '@/lib/repositories/agentInstanceRepository';
+import { organizationMembershipRepository } from '@/lib/repositories/organizationMembershipRepository';
 import { ciRunnerProvisioningIntentRepository as intents } from '@/lib/repositories/ciRunnerProvisioningIntentRepository';
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
 import { fleetInFlightSlotRepository } from '@/lib/repositories/fleetInFlightSlotRepository';
@@ -78,6 +79,21 @@ export function bucketWaitingReasons(
   return out;
 }
 
+/**
+ * The org's member ids, for the per-person count. `organization_membership` has
+ * no system arm: its rows are visible only under the org's own GUC, bound here
+ * from the caller's TRUSTED org id, in a transaction of its own — the members'
+ * agents in OTHER orgs still count, and those are read in the census
+ * transaction through `agent_instance`'s system read arm, which an org-bound
+ * transaction would not be adjudicated to reach.
+ */
+async function memberIdsOf(organizationId: string): Promise<string[]> {
+  return withSystemContext(async (tx) => {
+    await bindOrganizationContext(tx, organizationId);
+    return organizationMembershipRepository.findUserIdsByOrganization(organizationId, tx);
+  });
+}
+
 export const fleetUseCountsService = {
   /**
    * The org's fleet use counts at `now`. `figures.agentsPerUser` is the plan's
@@ -89,6 +105,10 @@ export const fleetUseCountsService = {
     figures: { agentsPerUser: number | null },
     now: Date,
   ): Promise<FleetUseCounts> {
+    const perPerson =
+      figures.agentsPerUser === null
+        ? null
+        : { figure: figures.agentsPerUser, memberIds: await memberIdsOf(organizationId) };
     // Sequential on one `tx`, as `orgCensus` is: Prisma serialises a single
     // transaction's queries anyway.
     return withSystemContext(async (tx) => {
@@ -113,19 +133,14 @@ export const fleetUseCountsService = {
         now,
         tx,
       );
-      let membersAtFigure: number | null = null;
-      if (figures.agentsPerUser !== null) {
-        // `organization_membership` has no system arm: its rows are visible only
-        // under the org's own GUC, bound here from the caller's TRUSTED org id.
-        // The member's agents in OTHER orgs still count — read through
-        // `agent_instance`'s system read arm, exactly as the per-user cap reads them.
-        await bindOrganizationContext(tx, organizationId);
-        membersAtFigure = await agentInstanceRepository.countMembersAtLiveFigure(
-          organizationId,
-          figures.agentsPerUser,
-          tx,
-        );
-      }
+      const membersAtFigure =
+        perPerson === null
+          ? null
+          : await agentInstanceRepository.countOwnersAtLiveFigure(
+              perPerson.memberIds,
+              perPerson.figure,
+              tx,
+            );
 
       return {
         agentRuns: {

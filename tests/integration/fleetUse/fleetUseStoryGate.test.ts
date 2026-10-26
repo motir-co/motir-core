@@ -693,11 +693,15 @@ describe('the page reads the figures and counts the gates enforce', () => {
     remember(other.userId);
 
     const fleetUse = await fleetUseOf(owner(), orgId());
-    const membersAt = await withSystemContext(async (tx) => {
-      const { bindOrganizationContext } = await import('@/lib/organizations/context');
-      await bindOrganizationContext(tx, orgId());
-      return agentInstanceRepository.countMembersAtLiveFigure(orgId(), caps.agentsPerUser, tx);
-    });
+    const memberIds = (
+      await adminDb.organizationMembership.findMany({
+        where: { organizationId: orgId() },
+        select: { userId: true },
+      })
+    ).map((m) => m.userId);
+    const membersAt = await withSystemContext((tx) =>
+      agentInstanceRepository.countOwnersAtLiveFigure(memberIds, caps.agentsPerUser, tx),
+    );
 
     expect(fleetUse.figures.agentsPerPerson).toEqual({
       figure: caps.agentsPerUser,

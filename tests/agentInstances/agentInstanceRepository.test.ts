@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
-import { bindOrganizationContext } from '@/lib/organizations/context';
 import { agentInstanceRepository } from '@/lib/repositories/agentInstanceRepository';
 import { agentInstanceIntervalRepository } from '@/lib/repositories/agentInstanceIntervalRepository';
 import {
@@ -439,33 +438,25 @@ describe('agentInstanceRepository', () => {
     ).toBeNull();
   });
 
-  it('counts the org members at the per-person figure, live instances in any project (MOTIR-9660)', async () => {
+  it('counts the owners at the per-person figure, live instances in any project (MOTIR-9660)', async () => {
     const f = await seedFixture();
-    await adminDb.organizationMembership.createMany({
-      data: [
-        { organizationId: f.organizationId, userId: f.ownerId, role: 'owner' },
-        { organizationId: f.organizationId, userId: f.otherUserId },
-      ],
-    });
-    await createInstance(f, { name: 'a' });
+    const a = await createInstance(f, { name: 'a' });
     await createInstance(f, { name: 'b' });
     await createInstance(f, { name: 'c', ownerId: f.otherUserId });
-    const atFigure = (figure: number) =>
-      // `organization_membership` is visible only under the org's own GUC.
-      withSystemContext(async (tx) => {
-        await bindOrganizationContext(tx, f.organizationId);
-        return agentInstanceRepository.countMembersAtLiveFigure(f.organizationId, figure, tx);
-      });
+    const atFigure = (figure: number, ownerIds: string[] = [f.ownerId, f.otherUserId]) =>
+      withSystemContext((tx) =>
+        agentInstanceRepository.countOwnersAtLiveFigure(ownerIds, figure, tx),
+      );
     expect(await atFigure(1)).toBe(2);
     expect(await atFigure(2)).toBe(1);
     expect(await atFigure(3)).toBe(0);
-    // No row back reads as nobody.
-    const empty = { $queryRaw: async () => [] } as unknown as Parameters<
-      typeof agentInstanceRepository.countMembersAtLiveFigure
-    >[2];
-    expect(await agentInstanceRepository.countMembersAtLiveFigure(f.organizationId, 1, empty)).toBe(
-      0,
-    );
+    // Only the owners asked about count.
+    expect(await atFigure(1, [f.otherUserId])).toBe(1);
+    // No owners: nobody, and no query.
+    expect(await atFigure(1, [])).toBe(0);
+    // A deleted instance no longer counts.
+    await adminDb.agentInstance.update({ where: { id: a.id }, data: { deletedAt: new Date() } });
+    expect(await atFigure(2)).toBe(0);
   });
 });
 
