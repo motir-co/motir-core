@@ -265,6 +265,7 @@ export const SWITCH_TABLE: readonly SwitchRow[] = [
       'PLANE_OAUTH_CLIENT_ID',
       'PLANE_OAUTH_CLIENT_SECRET',
       'MOTIR_GATEWAY_URL',
+      'MOTIR_GATEWAY_RUN_URL',
       'MOTIR_RUN_KEY_MINT_SECRET',
       'MOTIR_RELAY_URL',
       'CORE_CALLBACK_SECRET',
