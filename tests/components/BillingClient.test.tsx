@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { ToastProvider } from '@/components/ui/Toast';
-import { BILLING_CATALOG } from '@/lib/billing/catalog';
+import { BILLING_CATALOG, largerPoolPlans } from '@/lib/billing/catalog';
 import type { BillingStatusDTO } from '@/lib/dto/billing';
 import type { CiEntitlementStateDTO } from '@/lib/dto/ciAllowance';
 import { BillingClient } from '@/app/(authed)/settings/organization/billing/_components/BillingClient';
@@ -1316,7 +1316,11 @@ describe('BillingClient — the Agents line', () => {
     const pool = BILLING_CATALOG.aiPlans.find((p) => p.band === 'larger_pool')!;
     function poolOrg(): BillingStatusDTO {
       const base = activeStandard();
-      const tier = { key: pool.key, name: pool.name, monthlyCreditAllotment: 80_000 };
+      const tier = {
+        key: pool.key,
+        name: pool.name,
+        monthlyCreditAllotment: pool.allotment!.credits,
+      };
       return {
         ...base,
         motirAi: {
@@ -1366,8 +1370,72 @@ describe('BillingClient — the Agents line', () => {
       fireEvent.click(hide);
       expect(screen.queryByText('Max ×2')).toBeNull();
       expect(screen.getByTestId('plans-need-more').textContent).toContain(
-        'If your organization outgrows its 80,000 credits a month',
+        `If your organization outgrows its ${pool.allotment!.credits.toLocaleString('en-US')} credits a month`,
       );
+    });
+
+    // MOTIR-9654: the larger pools above Host (design/billing § "Amendment 2026-10-26").
+    const LINES = [
+      "Three AWS accounts of your organization's own: one for CI runners, one for agent runs, and one shared by the indexer and the hosted agents, each sized for this pool",
+      "Until each account's quotas are granted, the plan runs at Max's limits on Motir's shared pools",
+    ];
+    const host = BILLING_CATALOG.aiPlans.find((p) => p.band === 'host')!;
+    // The plan card that renders the rung lines (the page also names the plan up top).
+    const heldCard = () => screen.getByTestId('plan-rung-entitlements').parentElement!;
+
+    it('the held rung card: Current, its price, the seat line and both rung entitlement lines', async () => {
+      expect(largerPoolPlans().map((p) => p.key)).toContain(pool.key);
+      renderWithBody(poolOrg());
+      await openPlans();
+      const card = heldCard() as HTMLElement;
+      expect(card.textContent).toContain('Current');
+      expect(card.textContent).toContain(pool.prices!.annual.amountUsd.toLocaleString('en-US'));
+      expect(within(card).getByTestId('plan-included-seat')).toBeTruthy();
+      const lines = within(card).getByTestId('plan-rung-entitlements');
+      expect([...lines.querySelectorAll('li')].map((li) => li.textContent)).toEqual(LINES);
+    });
+
+    it('a held rung no longer on sale: Current with neither line, and Upgrade to Host on Host', async () => {
+      const retired = {
+        ...pool,
+        key: `${pool.key}_retired` as (typeof pool)['key'],
+        name: `${pool.name} (retired)`,
+        allotment: { ...pool.allotment!, credits: host.allotment!.credits - 50_000 },
+      };
+      const body = poolOrg();
+      const tier = {
+        key: retired.key,
+        name: retired.name,
+        monthlyCreditAllotment: retired.allotment.credits,
+      };
+      renderWithBody({
+        ...body,
+        catalog: { ...body.catalog, aiPlans: [...body.catalog.aiPlans, retired] },
+        motirAi: {
+          ...body.motirAi,
+          tier,
+          subscription: { ...body.motirAi.subscription, planTier: tier },
+        },
+      });
+      await openPlans();
+      expect(screen.getAllByText(retired.name).length).toBeGreaterThan(0);
+      expect(screen.getByText('Current')).toBeTruthy();
+      expect(screen.queryByTestId('plan-rung-entitlements')).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'See all regular plans' }));
+      expect(screen.getByRole('button', { name: `Upgrade to ${host.name}` })).toBeTruthy();
+    });
+
+    it('with no pool held, the callout names Host and its pool, and still opens the Calculator', async () => {
+      renderWithBody(activeStandard());
+      await openPlans();
+      const entry = screen.getByTestId('plans-need-more');
+      expect(entry.textContent).toContain(
+        `If your organization uses more than ${host.name}'s ${host.allotment!.credits.toLocaleString('en-US')} credits a month`,
+      );
+      expect(entry.textContent).not.toContain('60,000');
+      expect(screen.queryByTestId('plan-rung-entitlements')).toBeNull();
+      fireEvent.click(within(entry).getByRole('button', { name: 'Open the Calculator' }));
+      await waitFor(() => expect(screen.getByText('Estimate your usage')).toBeTruthy());
     });
   });
 });

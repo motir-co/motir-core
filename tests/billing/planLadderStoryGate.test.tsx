@@ -217,9 +217,10 @@ describe('the assembled row', () => {
         expect(maxX2.getByText('$300 / mo')).toBeTruthy();
       }
 
-      // The callout still names the ladder's top, Max ×2, never Host (MOTIR-9403).
+      // The callout names Host, the floor of the larger offer (MOTIR-9654; it named
+      // the ladder's top, Max ×2, until the larger pools moved above Host).
       expect(
-        screen.getByText(/If your organization uses more than Max ×2's 60,000 credits a month/),
+        screen.getByText(/If your organization uses more than Host's 300,000 credits a month/),
       ).toBeTruthy();
 
       const page = document.body.textContent ?? '';

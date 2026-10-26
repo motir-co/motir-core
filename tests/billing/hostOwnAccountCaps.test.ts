@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hostCapsFromGranted, VCPU_PER_MACHINE } from '@/lib/billing/hostOwnAccountCaps';
+import { ownAccountCapsFromGranted, VCPU_PER_MACHINE } from '@/lib/billing/hostOwnAccountCaps';
 import { capsForPlanKey, HOST_PLAN_KEY } from '@/lib/billing/planCaps';
 
 // THE HOST FIGURES FROM GRANTED vCPU (Story MOTIR-9365 · MOTIR-9587): granted ÷ 2,
@@ -7,14 +7,18 @@ import { capsForPlanKey, HOST_PLAN_KEY } from '@/lib/billing/planCaps';
 
 const FLOOR = capsForPlanKey(HOST_PLAN_KEY)!;
 
-describe('hostCapsFromGranted', () => {
+describe('ownAccountCapsFromGranted', () => {
   it('a machine is 2 vCPU', () => {
     expect(VCPU_PER_MACHINE).toBe(2);
   });
 
   it('keeps the floor while no own account is live', () => {
     expect(
-      hostCapsFromGranted({ floor: FLOOR, agentRunnerGrantedVcpu: null, ciGrantedVcpu: null }),
+      ownAccountCapsFromGranted({
+        floor: FLOOR,
+        agentRunnerGrantedVcpu: null,
+        ciGrantedVcpu: null,
+      }),
     ).toEqual(FLOOR);
   });
 
@@ -24,7 +28,7 @@ describe('hostCapsFromGranted', () => {
     [64, 32],
     [1, 0],
   ])('agent runner granted %i → %i agent runs', (granted, runs) => {
-    const caps = hostCapsFromGranted({
+    const caps = ownAccountCapsFromGranted({
       floor: FLOOR,
       agentRunnerGrantedVcpu: granted,
       ciGrantedVcpu: null,
@@ -34,7 +38,7 @@ describe('hostCapsFromGranted', () => {
   });
 
   it('CI granted 200 → 100 in flight, agent runs on the floor', () => {
-    const caps = hostCapsFromGranted({
+    const caps = ownAccountCapsFromGranted({
       floor: FLOOR,
       agentRunnerGrantedVcpu: null,
       ciGrantedVcpu: 200,
@@ -44,7 +48,7 @@ describe('hostCapsFromGranted', () => {
   });
 
   it('never touches the per-user and per-org agent figures', () => {
-    const caps = hostCapsFromGranted({
+    const caps = ownAccountCapsFromGranted({
       floor: FLOOR,
       agentRunnerGrantedVcpu: 64,
       ciGrantedVcpu: 200,

@@ -22,7 +22,7 @@ import { isUnlimitedAgentOrg } from '@/lib/agentInstances/config';
 import { agentInstanceRepository } from '@/lib/repositories/agentInstanceRepository';
 import { ciRunnerProvisioningIntentRepository as intents } from '@/lib/repositories/ciRunnerProvisioningIntentRepository';
 import { fleetInFlightSlotRepository as slots } from '@/lib/repositories/fleetInFlightSlotRepository';
-import { HOST_PLAN_KEY } from '@/lib/billing/planCaps';
+import { planCarriesOwnAccounts } from '@/lib/billing/ownAccountPlans';
 import { mergedAccountSplit } from '@/lib/ciFleet/hostMergedAccountSplit';
 import { planCapsService } from '@/lib/services/planCapsService';
 import { fleetQuotaRequestRepository } from '@/lib/repositories/fleetQuotaRequestRepository';
@@ -186,9 +186,11 @@ export const fleetShardAdmissionService = {
 
   /**
    * The org's live own account of the kind, if it may take a NEW job
-   * (MOTIR-9590): only while the org's plan reads Host now. The plan is read
-   * through `planCapsService.capsFor`, which follows a downgrade's effective
-   * date, so an org that left Host gets null (its new jobs take the shared set)
+   * (MOTIR-9590): only while the org's plan carries its own accounts now — Host
+   * or a larger pool on sale (`planCarriesOwnAccounts`, MOTIR-9653), so a move
+   * between the two keeps the same accounts. The plan is read through
+   * `planCapsService.capsFor`, which follows a downgrade's effective date, so an
+   * org that left those plans gets null (its new jobs take the shared set)
    * and its accounts take no new job. `plan_unknown` for an org that has one: it
    * is placed on neither side. Nothing is written, and running jobs and agent
    * instances keep their recorded account. The plan is read only for an org
@@ -206,7 +208,7 @@ export const fleetShardAdmissionService = {
     if (!own) return null;
     const answer = await planCapsService.capsFor(job.organizationId);
     if (answer.kind === 'plan_unknown') return 'plan_unknown';
-    return answer.kind === 'capped' && answer.planKey === HOST_PLAN_KEY ? own : null;
+    return answer.kind === 'capped' && planCarriesOwnAccounts(answer.planKey) ? own : null;
   },
 
   /** The shared accounts a job may use — `primary`, and `spare` for an exempt org. */

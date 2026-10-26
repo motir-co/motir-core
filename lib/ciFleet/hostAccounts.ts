@@ -1,18 +1,25 @@
 import type { FleetWorkloadKind } from '@motir/orchestrator';
+import { hostMonthlyPlanCredits } from '@/lib/billing/catalog';
 
-// A HOST ORGANISATION'S OWN AWS ACCOUNTS (Story MOTIR-9365 · MOTIR-9582). A Host
-// organisation runs on three AWS accounts of its own, each created by the
-// unattended add-shard and asked for its `L-1216C47A` quota at creation:
+// AN ORGANISATION'S OWN AWS ACCOUNTS (Story MOTIR-9365 · MOTIR-9582; every plan
+// that carries them, MOTIR-9366 · MOTIR-9651 — Host and the larger pools on sale,
+// `lib/billing/ownAccountPlans.ts`). Such an organisation runs on three AWS
+// accounts of its own, each created by the unattended add-shard and asked for its
+// `L-1216C47A` quota at creation. At Host's pool:
 //   * the CI runner account          — `ci_runner`,                  200 vCPU;
 //   * the agent runner account       — `hosted_agent`,                32 vCPU;
 //   * ONE merged account             — `code_graph_index` + `agent_instance`,
 //                                      120 vCPU, recorded as TWO rows naming one
 //                                      AWS account (an account has one quota, so
 //                                      one raise, on the first kind's row).
+// A larger pool scales the first two linearly with its pool; the merged account
+// asks 120 whatever the plan.
 //
-// Each name is derived from the organisation id, so a pass interrupted after
-// `CreateAccount` recomputes the same name — and with it the member email — and
-// FINDS the account instead of creating a second. Pure: no `db`, no `process.env`.
+// Each name is derived from the organisation id ONLY — never the plan — so a pass
+// interrupted after `CreateAccount` recomputes the same name, and with it the
+// member email, and FINDS the account instead of creating a second; and an org
+// that moves between Host and a rung keeps the same three accounts, only their
+// raise target moving. Pure: no `db`, no `process.env`.
 
 export type HostAccountSlot = 'ci_runner' | 'agent_runner' | 'merged';
 
@@ -22,13 +29,26 @@ export const HOST_ACCOUNT_SLOTS: readonly HostAccountSlot[] = [
   'merged',
 ];
 
-/** The vCPU each Host account asks AWS for at creation — pre-launch targets,
- *  beside the shared pool's `POOL_ACCOUNT_RAISE_TARGET_VCPU`. */
+/** The vCPU each own account asks AWS for AT HOST'S POOL — the base
+ *  `ownAccountRaiseTargetVcpu` scales by plan. Pre-launch targets, beside the
+ *  shared pool's `POOL_ACCOUNT_RAISE_TARGET_VCPU`. */
 export const HOST_ACCOUNT_RAISE_TARGET_VCPU: Readonly<Record<HostAccountSlot, number>> = {
   ci_runner: 200,
   agent_runner: 32,
   merged: 120,
 };
+
+/**
+ * The vCPU one slot asks AWS for on a plan of `poolCredits` a month: the CI and
+ * agent-runner bases × (pool ÷ Host's pool), rounded up so the ask is never below
+ * the linear figure; the merged account's base whatever the pool. Pre-launch
+ * targets — an account runs on what AWS grants.
+ */
+export function ownAccountRaiseTargetVcpu(slot: HostAccountSlot, poolCredits: number): number {
+  const base = HOST_ACCOUNT_RAISE_TARGET_VCPU[slot];
+  if (slot === 'merged') return base;
+  return Math.ceil((base * poolCredits) / hostMonthlyPlanCredits());
+}
 
 export interface HostAccountRowPlan {
   name: string;
@@ -57,9 +77,13 @@ function hostName(organizationId: string, suffix: string): string {
   return `host-${orgSegment(organizationId)}-${suffix}`;
 }
 
-/** What one slot of one organisation creates. */
-export function hostAccountPlan(organizationId: string, slot: HostAccountSlot): HostAccountPlan {
-  const raiseTargetVcpu = HOST_ACCOUNT_RAISE_TARGET_VCPU[slot];
+/** What one slot of one organisation creates, on a plan of `poolCredits` a month. */
+export function hostAccountPlan(
+  organizationId: string,
+  slot: HostAccountSlot,
+  poolCredits: number,
+): HostAccountPlan {
+  const raiseTargetVcpu = ownAccountRaiseTargetVcpu(slot, poolCredits);
   switch (slot) {
     case 'ci_runner':
       return {
