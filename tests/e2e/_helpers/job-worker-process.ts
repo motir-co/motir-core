@@ -154,6 +154,9 @@ export function hostedRunSeamEnv(): Record<string, string> {
     ...(process.env['MOTIR_GATEWAY_URL']
       ? { MOTIR_GATEWAY_URL: process.env['MOTIR_GATEWAY_URL'] }
       : {}),
+    ...(process.env['MOTIR_GATEWAY_RUN_URL']
+      ? { MOTIR_GATEWAY_RUN_URL: process.env['MOTIR_GATEWAY_RUN_URL'] }
+      : {}),
     ...(process.env['MOTIR_RUN_KEY_MINT_SECRET']
       ? { MOTIR_RUN_KEY_MINT_SECRET: process.env['MOTIR_RUN_KEY_MINT_SECRET'] }
       : {}),

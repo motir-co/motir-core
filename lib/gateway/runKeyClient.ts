@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { isPrivateNetworkHost } from '@/lib/ai/containerAiAddress';
 import {
   GatewayRunKeyConfigError,
   GatewayRunKeyRefusedError,
@@ -27,25 +28,73 @@ import {
 // the module import cleanly in a deployment that never runs hosted.
 
 export const MOTIR_GATEWAY_URL_ENV_VAR = 'MOTIR_GATEWAY_URL';
+/** The CONTAINER-facing origin (MOTIR-7656) — see {@link gatewayRunUrl}. */
+export const MOTIR_GATEWAY_RUN_URL_ENV_VAR = 'MOTIR_GATEWAY_RUN_URL';
 export const MOTIR_RUN_KEY_MINT_SECRET_ENV_VAR = 'MOTIR_RUN_KEY_MINT_SECRET';
 
 /** The deadline on one mint or revoke — both are single-row writes at the far end. */
 export const GATEWAY_RUN_KEY_TIMEOUT_MS = 15_000;
 
 /**
- * The gateway's ORIGIN, as `MOTIR_GATEWAY_URL` names it — trailing slashes
- * removed. It is also the value the container receives verbatim (the egress
- * contract appends `/v1` itself), so a value that already ends in `/v1` is a
+ * The gateway's ORIGIN for motir-core's OWN calls — mint, revoke, status — as
+ * `MOTIR_GATEWAY_URL` names it, trailing slashes removed. In production it is the
+ * PRIVATE `http://motir-gateway.flycast`, which no hosted-run container can reach:
+ * a container is given {@link gatewayRunUrl} instead (MOTIR-7656,
+ * `docs/decisions/hosted-agent-run.md` §9).
+ */
+export function gatewayBaseUrl(): string {
+  return gatewayOrigin(MOTIR_GATEWAY_URL_ENV_VAR);
+}
+
+/**
+ * The gateway's ORIGIN as a HOSTED-RUN CONTAINER reaches it (MOTIR-7656) — the
+ * public run-lane edge, `https://gateway-run.motir.co` in production, named by
+ * `MOTIR_GATEWAY_RUN_URL` and handed to the container AS `MOTIR_GATEWAY_URL` (the
+ * egress contract's name, which the image's OpenCode config substitutes).
+ *
+ * ⚠️ THERE IS DELIBERATELY NO FALLBACK TO `MOTIR_GATEWAY_URL`. That fallback IS
+ * the defect: motir-core's own origin is private in production, and a container
+ * boots in the `motir-fleet` org or on an AWS VM, where it does not resolve —
+ * MOTIR-4518's mistake, for the gateway. For the same reason a PRIVATE,
+ * network-scoped host (`.flycast`, `.internal`, a ULA literal) is refused here,
+ * at mint, rather than discovered as a run whose every model call fails to
+ * resolve after the machine has booted.
+ */
+export function gatewayRunUrl(): string {
+  const url = gatewayOrigin(MOTIR_GATEWAY_RUN_URL_ENV_VAR);
+  let host = '';
+  try {
+    host = new URL(url).hostname;
+  } catch {
+    // Left empty — refused just below, with the other unusable shapes.
+  }
+  if (!host) {
+    throw new GatewayRunKeyConfigError(
+      `${MOTIR_GATEWAY_RUN_URL_ENV_VAR} is not an absolute http(s) URL with a host`,
+    );
+  }
+  if (isPrivateNetworkHost(host)) {
+    throw new GatewayRunKeyConfigError(
+      `${MOTIR_GATEWAY_RUN_URL_ENV_VAR} names ${host}, a PRIVATE address no hosted-run ` +
+        `container can resolve; it must be the gateway's public run-lane edge (MOTIR-7656)`,
+    );
+  }
+  return url;
+}
+
+/**
+ * One gateway origin from `envVar`, trailing slashes removed. The egress contract
+ * appends `/v1` itself, so a value that already ends in `/v1` is a
  * misconfiguration that would send OpenCode to `/v1/v1/messages`: refused here,
  * loudly, rather than discovered as a run whose every model call 404s.
  */
-export function gatewayBaseUrl(): string {
-  const raw = process.env[MOTIR_GATEWAY_URL_ENV_VAR]?.trim();
-  if (!raw) throw new GatewayRunKeyConfigError(`${MOTIR_GATEWAY_URL_ENV_VAR} is not set`);
+function gatewayOrigin(envVar: string): string {
+  const raw = process.env[envVar]?.trim();
+  if (!raw) throw new GatewayRunKeyConfigError(`${envVar} is not set`);
   const url = raw.replace(/\/+$/, '');
   if (/\/v1$/.test(url)) {
     throw new GatewayRunKeyConfigError(
-      `${MOTIR_GATEWAY_URL_ENV_VAR} must be the gateway's origin, without a trailing /v1`,
+      `${envVar} must be the gateway's origin, without a trailing /v1`,
     );
   }
   return url;

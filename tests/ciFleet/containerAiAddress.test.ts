@@ -65,6 +65,8 @@ describe('motirAiContainerBaseUrl — a SECOND accessor, with no fallback to the
 describe('isPrivateNetworkHost — the structural half, decided without a network', () => {
   it.each([
     ['motir-ai.internal', true],
+    // Flycast is org-scoped like 6PN (MOTIR-7656).
+    ['motir-gateway.flycast', true],
     ['MOTIR-AI.INTERNAL', true],
     ['some.service.svc.cluster.local', true],
     ['localhost', true],

@@ -17,7 +17,8 @@ import { describe, expect, it } from 'vitest';
 //     siblings over the service, not layered on each other;
 //   - an import of the document conversion — `@motir/pages` (markdownToUpdate,
 //     parseMarkdown, serializeMarkdown, stateToMarkdown…), `yjs`, `lib/markdown`;
-//   - a route file that never calls `pagesService`.
+//   - a route file that never calls `pagesService` — or, for the page ↔ work-item
+//     hand link (MOTIR-9567), `pageLinksService`.
 
 const REPO_ROOT = process.cwd();
 
@@ -76,11 +77,11 @@ export function checkPageRestSource(file: string, source: string): ServiceOnlyVi
     }
   }
   const isRoute = file.split(/[\\/]/).at(-1) === 'route.ts';
-  if (isRoute && !/\bpagesService\s*\.\s*\w+\s*\(/.test(source)) {
+  if (isRoute && !/\b(?:pagesService|pageLinksService)\s*\.\s*\w+\s*\(/.test(source)) {
     violations.push({
       file,
       rule: 'route-without-service',
-      detail: 'a page route must call pagesService',
+      detail: 'a page route must call pagesService or pageLinksService',
     });
   }
   return violations;
@@ -107,7 +108,7 @@ function pageRestSources(): Map<string, string> {
 describe('the page REST surface goes through pagesService only', () => {
   it('finds the route files and helpers at all — the walk is not silently empty', () => {
     const files = [...pageRestSources().keys()];
-    expect(files.filter((f) => f.endsWith('/route.ts'))).toHaveLength(4);
+    expect(files.filter((f) => f.endsWith('/route.ts'))).toHaveLength(8);
     expect(files).toEqual(
       expect.arrayContaining([
         'lib/api/v1/pages/errors.ts',
@@ -157,6 +158,13 @@ describe('the checker fails on a violation', () => {
       expect.objectContaining({ rule: 'forbidden-import' }),
       expect.objectContaining({ rule: 'route-without-service' }),
     ]);
+  });
+
+  it('accepts a route that calls pageLinksService, the hand link’s door', () => {
+    const source = 'export const POST = () => pageLinksService.linkPageForWorkItem(ctx, input);\n';
+    expect(checkPageRestSource('app/api/v1/pages/[pageId]/work-items/route.ts', source)).toEqual(
+      [],
+    );
   });
 
   it('allows a type-only import, and a helper that is not a route need not call the service', () => {

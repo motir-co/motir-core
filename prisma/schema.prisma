@@ -469,6 +469,9 @@ model User {
   // reconciler reads the null binder and records a named failure telling someone
   // to re-bind, rather than inventing another identity.
   boundMonitorConnections          MonitorConnection[]                 @relation("MonitorConnectionBinder")
+  // The capacity alert share this person last set (Story MOTIR-9539 ·
+  // MOTIR-9609). SetNull: removing the person keeps the setting.
+  capacityAlertSettingsUpdated     CapacityAlertSetting[]              @relation("CapacityAlertSettingUpdater")
 
   @@index([lastActiveProjectId])
   @@map("user")
@@ -15118,4 +15121,45 @@ model GithubRunnerCallEvent {
   @@index([githubOrg, at])
   @@index([at])
   @@map("github_runner_call_event")
+}
+
+/// The capacity ALERT SHARE (Story MOTIR-9539 · MOTIR-9609): the percentage of
+/// any one provider limit at which platform admins are alerted. A singleton
+/// (`id` is always `'platform'`); no row means the default, 80, so nothing seeds
+/// it. RLS: `app.system_admin` (the alert job reads it) OR `app.platform_staff`
+/// (the audited console write).
+model CapacityAlertSetting {
+  id                String   @id @default("platform")
+  /// An integer 1–100, held by a CHECK.
+  alertSharePercent Int      @map("alert_share_percent")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  updatedByUserId   String?  @map("updated_by_user_id")
+
+  updatedBy User? @relation("CapacityAlertSettingUpdater", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([updatedByUserId])
+  @@map("capacity_alert_setting")
+}
+
+/// One RAISED capacity alert (Story MOTIR-9539 · MOTIR-9609): a provider model's
+/// limit unit at or over the alert share. A row present means raised; clearing
+/// deletes it. The snapshot is what raised it. No tenant, user or organisation
+/// column, by design. RLS: every operation under `app.system_admin`; SELECT also
+/// under `app.platform_staff`.
+model CapacityRaisedAlert {
+  id                String   @id @default(cuid())
+  /// `claude` | `qwen` | `deepseek` (`lib/capacity/alertKeys.ts`), held by a CHECK.
+  provider          String
+  model             String
+  /// One of the gateway contract's six limit units, held by a CHECK.
+  limitUnit         String   @map("limit_unit")
+  raisedAt          DateTime @default(now()) @map("raised_at")
+  /// BigInt: a `tpd` usage or limit can pass 2^31.
+  observedValue     BigInt   @map("observed_value")
+  limitValue        BigInt   @map("limit_value")
+  /// The share in force when the alert was raised.
+  alertSharePercent Int      @map("alert_share_percent")
+
+  @@unique([provider, model, limitUnit])
+  @@map("capacity_raised_alert")
 }

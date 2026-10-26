@@ -9881,7 +9881,8 @@
       "navPlanningLessons": "Planningslessen",
       "navIdeas": "Ideeën",
       "navRunModels": "Modellen voor gehoste runs",
-      "navFleetSettings": "Vlootinstellingen"
+      "navFleetSettings": "Vlootinstellingen",
+      "navCapacity": "Providercapaciteit"
     },
     "nav": {
       "overview": "Overzicht",
@@ -10095,6 +10096,14 @@
             "tag_add": "Een ideetag toegevoegd",
             "tag_translate": "Een ideetag vertaald",
             "research_run": "Een onderzoeksrun voor ideeën vastgelegd"
+          },
+          "capacity": {
+            "alert_share": {
+              "set": "Waarschuwingsaandeel voor capaciteit gewijzigd"
+            },
+            "limits": {
+              "edit": "Capaciteitslimieten van een providermodel bewerkt"
+            }
           }
         }
       }
@@ -12258,6 +12267,135 @@
           "body": "Waar nieuwe agents worden aangemaakt, kon niet worden gelezen, dus er wordt geen status getoond en geen schakelaar aangeboden. Dit is een leesfout — er is niets veranderd en er wordt geen waarde geraden.",
           "retry": "Opnieuw proberen"
         }
+      }
+    },
+    "capacity": {
+      "nav": "Providercapaciteit",
+      "title": "Providercapaciteit",
+      "subtitle": "Hoe dicht elk providermodel bij zijn gepubliceerde limieten zit, voor planning en agent-runs samen. Bewerk de limieten van een model wanneer het niveau bij de provider verandert.",
+      "loading": "Capaciteit laden",
+      "percent": "{value} %",
+      "fresh": {
+        "readAt": "Gelezen om {time} UTC",
+        "every": "ververst elke {seconds} s",
+        "refresh": "Verversen",
+        "failed": "Verversen mislukt"
+      },
+      "scope": {
+        "instance": "De cijfers komen van één gateway-instantie en kunnen onvolledig zijn."
+      },
+      "unavailable": {
+        "notice": "Live cijfers zijn niet beschikbaar: de gateway kon zijn tellers niet lezen. Limieten, niveaunotities en planningsaandelen worden getoond zoals ze zijn opgeslagen."
+      },
+      "slow": {
+        "notice": "De live cijfers voor dit model zijn niet op tijd gelezen. Alle andere modellen zijn live."
+      },
+      "alerts": {
+        "title": "{count, plural, one {1 limiet zit boven het waarschuwingsaandeel} other {# limieten zitten boven het waarschuwingsaandeel}}",
+        "line": "{provider} · {model} · {limit} — {share} %",
+        "since": "actief sinds {time} UTC"
+      },
+      "alertShare": {
+        "title": "Waarschuwingsaandeel",
+        "hsub": "Eén aandeel voor elke limiet van elk model",
+        "label": "Waarschuwen wanneer een limiet dit bereikt",
+        "note": "Eén keer per minuut gecontroleerd, en elke keer dat deze pagina laadt.",
+        "saved": "Opgeslagen. De volgende controle gebruikt {share} %.",
+        "range": "Voer een geheel getal van 1 tot en met 100 in.",
+        "failed": "Het waarschuwingsaandeel kon niet worden opgeslagen. Er is niets gewijzigd; probeer het opnieuw.",
+        "edit": "Bewerken",
+        "isDefault": "standaard",
+        "unchanged": "Dat is al het waarschuwingsaandeel. Er is niets gewijzigd.",
+        "notPermitted": "Uw rol mag het waarschuwingsaandeel niet wijzigen, dus er is niets opgeslagen."
+      },
+      "entry": {
+        "tierNote": "Niveaunotitie: {note}",
+        "noTierNote": "Geen niveaunotitie",
+        "planningShare": "Planningsaandeel {share} %",
+        "unknownNote": "Onbekend: {note}",
+        "edit": "Limieten bewerken"
+      },
+      "col": {
+        "limit": "Limiet",
+        "usage": "Gebruik / limiet",
+        "share": "Gebruikt aandeel",
+        "state": "Status"
+      },
+      "lanes": "Planning {planning} · Agent {agent}",
+      "unit": {
+        "max_concurrency": "Gelijktijdigheid",
+        "rpm": "Verzoeken / min",
+        "input_tpm": "Invoertokens / min",
+        "output_tpm": "Uitvoertokens / min",
+        "tpm": "Tokens / min",
+        "tpd": "Tokens / dag"
+      },
+      "state": {
+        "normal": "Normaal",
+        "near": "Dicht bij de limiet",
+        "over": "Boven het waarschuwingsaandeel",
+        "unavailable": "Niet beschikbaar",
+        "unknown": "Limiet onbekend",
+        "na": "Niet van toepassing",
+        "unreported": "Gebruik niet gemeld"
+      },
+      "limitZero": "Limiet 0",
+      "limitUnknown": "limiet niet bekend",
+      "r429": {
+        "label": "429-antwoorden",
+        "minute": "Deze minuut",
+        "day": "Vandaag (UTC)",
+        "note": "Geen limiet — alleen geteld"
+      },
+      "fold": "Eenheden die deze provider niet begrenst ({count})",
+      "provider": {
+        "claude": "Claude",
+        "deepseek": "DeepSeek",
+        "qwen": "Qwen"
+      },
+      "error": {
+        "unreachable": {
+          "title": "De capaciteit kon niet worden gelezen",
+          "body": "De gateway gaf geen antwoord, of kon zijn limietentabel niet lezen. Er wordt niets getoond tot een leesactie slaagt."
+        },
+        "auth": {
+          "title": "De gateway-inloggegevens worden niet geaccepteerd",
+          "missing": "Op de server van Motir zijn geen gateway-inloggegevens ingesteld. Er kan geen gebruik worden gelezen tot ze zijn ingesteld.",
+          "invalid": "De gateway herkent de serverinloggegevens van Motir niet. Er kan geen gebruik worden gelezen tot ze zijn vervangen.",
+          "forbidden": "De gateway-inloggegevens horen bij een gebruiker die geen gateway-beheerder is. Er kan geen gebruik worden gelezen tot ze zijn vervangen.",
+          "body": "Op de server van Motir zijn geen gateway-inloggegevens ingesteld, of de gateway accepteert ze niet. Er kan geen gebruik worden gelezen tot dit is opgelost."
+        },
+        "retry": "Opnieuw proberen"
+      },
+      "empty": {
+        "title": "Geen providermodellen ingesteld",
+        "body": "De limietentabel van de gateway heeft geen rijen, dus er is niets te tonen. Modellen worden in de gateway toegevoegd, niet hier."
+      },
+      "edit": {
+        "title": "Limieten bewerken · {model}",
+        "intro": "Alleen de waarden die u wijzigt worden verzonden. Een limiet gemarkeerd als Onbekend wordt opgeslagen als niet bekend, nooit als 0.",
+        "unknown": "Onbekend",
+        "planningShare": "Planningsaandeel %",
+        "tierNote": "Niveaunotitie",
+        "count": "{count} / 1000",
+        "save": "Opslaan",
+        "saving": "Opslaan…",
+        "cancel": "Annuleren",
+        "saved": "Limieten opgeslagen voor {model}."
+      },
+      "editError": {
+        "wholeNumber": "{limit} moet een geheel getal van 0 of meer zijn.",
+        "tooLarge": "{limit} is groter dan de gateway kan opslaan.",
+        "planningShare": "Het planningsaandeel moet een geheel getal van 0 tot en met 100 zijn.",
+        "tierNote": "De niveaunotitie mag maximaal 1000 tekens lang zijn.",
+        "invalidBody": "De gateway kon deze wijziging niet lezen. Er is niets gewijzigd.",
+        "unknownModel": "Dit model staat niet meer in de limietentabel van de gateway. Er is niets gewijzigd; sluit en ververs.",
+        "unknownProvider": "De gateway kent deze provider niet. Er is niets gewijzigd.",
+        "storeError": "De gateway kon de wijziging niet opslaan. Er is niets gewijzigd; probeer het opnieuw.",
+        "auth": "De gateway-inloggegevens worden niet geaccepteerd, dus er is niets opgeslagen.",
+        "unreachable": "De gateway gaf geen antwoord. Er is niets opgeslagen; probeer het opnieuw.",
+        "notPermitted": "Uw rol mag geen limieten bewerken, dus er is niets opgeslagen.",
+        "failed": "De limieten konden niet worden opgeslagen. Er is niets gewijzigd; probeer het opnieuw."
       }
     }
   },

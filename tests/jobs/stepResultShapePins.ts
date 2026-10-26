@@ -454,6 +454,12 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ accounts: number; alerted: number; failures: number; kinds: number; moves: { [key: string]: { capacity_refused?: number | undefined; provider_unavailable?: number | undefined } }; orgs: number; readings: Array<{ capacity: number; fraction: number; limit: string; subject: { fleetKind: string } | { githubOrg: string } | { shardId: string }; used: number }> }',
   },
+  // Story MOTIR-9539 · MOTIR-9612 — the capacity alert pass.
+  'capacity-alert-evaluation': {
+    file: 'lib/jobs/definitions/capacityAlertEvaluation.ts',
+    shape:
+      '{ outcome: "evaluated"; overShareCount: number; raisedCount: number; readAt: string } | { outcome: "failed" } | { outcome: "unavailable"; raisedCount: number; reason: string }',
+  },
   // Story MOTIR-9362 · MOTIR-9462 — the pool-growth pass.
   'fleet-pool-growth': {
     file: 'lib/jobs/definitions/fleetPoolGrowth.ts',

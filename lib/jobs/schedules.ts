@@ -70,8 +70,8 @@ export const SUB_HOURLY_CADENCE = '*/5 * * * *';
 
 /**
  * Sub-hourly jobs allowed a cadence other than `SUB_HOURLY_CADENCE`, each with a
- * one-line reason. Two today: the fleet headroom pass and the growth pass acting
- * on it. A job
+ * one-line reason. Three today: the fleet headroom pass, the growth pass acting
+ * on it, and the capacity alert pass. A job
  * joins only when its own decision derives a different cadence — never to make a
  * test pass.
  */
@@ -86,6 +86,9 @@ export const SUB_HOURLY_CADENCE_EXCEPTIONS: Readonly<Record<string, string>> = {
   'system.host-account-reconcile': 'a Host purchase starts its quota wait at account creation',
   // MOTIR-9585 · the state pass follows the every-minute quota reads it derives from.
   'system.host-account-state': 'an own account follows the every-minute quota reads',
+  // MOTIR-9612 · the gateway capacity contract §3 *Lanes*.
+  'system.capacity-alert-evaluation':
+    'the gateway counts rpm/tpm per fixed clock minute, so one late read per minute is one reading per window',
 };
 
 /**

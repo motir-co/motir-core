@@ -1188,6 +1188,40 @@ describe('every operation’s REAL response validates against its declared schem
       { projectKey: pk },
     );
 
+    // ── The page lifecycle (Story MOTIR-9488) ────────────────────────────────
+    // Link the story above to the page and unlink it, then archive the page and
+    // restore it — last, so every read above saw it live.
+    const storyId = (
+      await adminDb.workItem.findFirstOrThrow({
+        where: { identifier: key, projectId: caller.fixture.projectId },
+        select: { id: true },
+      })
+    ).id;
+    await drive(
+      'linkPageWorkItem',
+      () => import('@/app/api/v1/pages/[pageId]/work-items/route'),
+      send(`/api/v1/pages/${pageId}/work-items`, 'POST', { workItemId: storyId }),
+      { pageId },
+    );
+    await drive(
+      'unlinkPageWorkItem',
+      () => import('@/app/api/v1/pages/[pageId]/work-items/[workItemId]/route'),
+      send(`/api/v1/pages/${pageId}/work-items/${storyId}`, 'DELETE'),
+      { pageId, workItemId: storyId },
+    );
+    await drive(
+      'archivePage',
+      () => import('@/app/api/v1/pages/[pageId]/archive/route'),
+      send(`/api/v1/pages/${pageId}/archive`, 'POST'),
+      { pageId },
+    );
+    await drive(
+      'restorePage',
+      () => import('@/app/api/v1/pages/[pageId]/restore/route'),
+      send(`/api/v1/pages/${pageId}/restore`, 'POST'),
+      { pageId },
+    );
+
     // ── The activity read (Story 11.7) ──────────────────────────────────────
     // Driven on the item that has BOTH a comment and a change trail by now, so
     // the `all` view's union validates against real entries of both types.

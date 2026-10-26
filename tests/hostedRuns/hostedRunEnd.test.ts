@@ -295,6 +295,7 @@ beforeEach(async () => {
   vi.stubEnv('MOTIR_AI_URL', `${AI}/`);
   vi.stubEnv('MOTIR_AI_SERVICE_TOKEN', 'svc-token');
   vi.stubEnv('MOTIR_GATEWAY_URL', GATEWAY);
+  vi.stubEnv('MOTIR_GATEWAY_RUN_URL', GATEWAY);
   vi.stubEnv('MOTIR_RUN_KEY_MINT_SECRET', 'mint-secret');
   vi.stubEnv('GITHUB_STUDIO_APP_ID', '111');
   vi.stubEnv('GITHUB_STUDIO_APP_PRIVATE_KEY', PEM);

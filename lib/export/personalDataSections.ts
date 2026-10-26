@@ -791,6 +791,12 @@ export const EXCLUDED_FROM_EXPORT: Readonly<Record<string, string>> = {
     'written only from the platform tier, not a record about the operator as a data ' +
     'subject — `PlatformFleetOrgCi`’s argument; every flip is recorded in the audit log ' +
     '(`fleet.agent_hosting.enable` / `fleet.agent_hosting.disable`) with the same actor.',
+  CapacityAlertSetting:
+    'The single platform-wide provider-capacity alert share (MOTIR-9609), whose only ' +
+    'User FK is the platform operator who last set it. Platform configuration written ' +
+    'only from the platform tier, not a record about the operator as a data subject — ' +
+    '`PlatformRunModel`’s argument; every change is recorded in the audit log ' +
+    '(`capacity.alert_share.set`) with the same actor.',
   PlatformRunModel:
     'A row of the platform-wide hosted-run model list (MOTIR-7525) whose only User FK ' +
     'is the moooon B.V. operator who added the model. Platform configuration written ' +
