@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { PageLinkAlreadyExistsError, PageLinkNotFoundError } from '@/lib/pages/linkErrors';
+import { PageSearchQueryEmptyError, PageSearchQueryTooLongError } from '@/lib/pages/searchErrors';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import {
   CrossProjectPageParentError,
@@ -105,6 +106,17 @@ export function pageErrorResponse(err: unknown): NextResponse {
   }
   if (err instanceof PageLevelCursorInvalidError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 400 });
+  }
+  // Page search's query refusals (Story MOTIR-9491 · MOTIR-9636), named so the
+  // search box can show a too-long query as a hint rather than an error.
+  if (err instanceof PageSearchQueryEmptyError) {
+    return NextResponse.json({ code: err.code, error: err.message }, { status: err.status });
+  }
+  if (err instanceof PageSearchQueryTooLongError) {
+    return NextResponse.json(
+      { code: err.code, error: err.message, limit: err.limit },
+      { status: err.status },
+    );
   }
   // The archive refusals (Story MOTIR-5755 · MOTIR-7422). A write to an archived
   // page and an action on the wrong archive state are conflicts with the page's

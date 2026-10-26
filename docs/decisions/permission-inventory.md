@@ -829,6 +829,7 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 | `/api/work-items/[id]/pages/[pageId]`           | DELETE    | `pageLinksService.unlinkPageForWorkItem` → `assertCanEdit` on the item, then `assertCanViewPages`; removes the hand link only (MOTIR-9197)                                                                           | `work_item:edit` + `page:view` | new      | R82 |
 | `/api/pages/[pageId]/work-items`                | GET       | `pageLinksService.listWorkItemsForPage` → `assertCanViewPages`; hand links of a page, keyset paged, `canLink` read from the caller's capabilities (MOTIR-9198)                                                       | `page:view`                    | new      | R82 |
 | `/api/pages/link-search`                        | GET       | `pagesService.searchPagesForLink` → `assertCanViewPages`; live pages by title for the link picker, keyset paged (MOTIR-9204)                                                                                         | `page:view`                    | new      | R82 |
+| `/api/pages/search`                             | GET       | `pagesService.searchPages` → `authorizePageSearch`; live pages by word and meaning for the `/pages` search box, keyset paged (MOTIR-9636)                                                                            | `page:view`                    | new      | R82 |
 
 ### `project`
 
