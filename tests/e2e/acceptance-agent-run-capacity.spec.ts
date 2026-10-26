@@ -123,7 +123,11 @@ interface ModelsBody {
 }
 
 const main = (page: Page): Locator => page.getByRole('main');
-const modelCombobox = (page: Page): Locator => main(page).getByRole('combobox', { name: 'Model' });
+/** The picker's trigger, by its label in either locale the walk reads. */
+const modelCombobox = (page: Page): Locator =>
+  main(page).getByRole('combobox', {
+    name: new RegExp(`^(${picker.label}|${zhPicker.label})$`),
+  });
 const option = (page: Page, model: string): Locator =>
   page.getByRole('option').filter({ hasText: model });
 const tagOf = (page: Page, model: string): Locator =>
