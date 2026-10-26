@@ -8478,6 +8478,16 @@
       "failureLinePlanAgain": "Nie udało się kontynuować tej próby · {when}. Twoja następna wiadomość zaplanuje ją od nowa.",
       "failureLinePlanAgainAgain": "Tej próby znów nie udało się kontynuować · {when}. Twoja następna wiadomość zaplanuje ją od nowa."
     },
+    "providerLimit": {
+      "retryingTitle": "Czekamy na dostawcę modelu",
+      "retryingBody": "Jest teraz przeciążony. Planowanie samo spróbuje ponownie; nic nie zostanie utracone.",
+      "walkBecause": "ponieważ dostawca modelu osiągnął swój limit",
+      "walkKept": "Nic nie zostało utracone. Kliknij Wznów, gdy zechcesz spróbować ponownie; planowanie będzie kontynuowane od miejsca, w którym się zatrzymało.",
+      "failureLine": "Twoja ostatnia zmiana w tym planie nie mogła zostać wprowadzona: dostawca modelu osiągnął swój limit · {when}. Wyślij ją ponownie, gdy będziesz gotowy.",
+      "failureLineAgain": "Twoja ostatnia zmiana znów nie mogła zostać wprowadzona: dostawca modelu osiągnął swój limit · {when}. Wyślij ją ponownie, gdy będziesz gotowy.",
+      "failureLinePlanAgain": "Nie udało się kontynuować tej próby: dostawca modelu osiągnął swój limit · {when}. Twoja następna wiadomość zaplanuje ją od nowa.",
+      "failureLinePlanAgainAgain": "Znów nie udało się kontynuować tej próby: dostawca modelu osiągnął swój limit · {when}. Twoja następna wiadomość zaplanuje ją od nowa."
+    },
     "grill": {
       "control": {
         "label": "Przepytaj mnie",
@@ -10160,10 +10170,12 @@
           "degradedValue": "Wolna · {ms} ms",
           "degradedDetail": "Odpowiada, ale powyżej progu {threshold} ms. motir-gateway {version} · działa od {since}.",
           "unreachable": {
+            "badAnswer": "Nieczytelna odpowiedź z bramy",
             "noAnswer": "Brak odpowiedzi z bramy",
             "notConfigured": "Brama nie jest skonfigurowana"
           },
           "unreachableDetail": {
+            "badAnswer": "Brama odpowiedziała, ale nie udało się odczytać jej statusu: {why, select, httpStatus {odpowiedziała kodem HTTP {status}} notJson {treść nie była w formacie JSON} noSuccess {nie zgłosiła powodzenia} noData {nie zawierała danych} noVersion {nie zawierała wersji} noStartTime {nie zawierała czasu uruchomienia} other {odpowiedź została odrzucona}}. Żądania AI przechodzące przez bramę mogą kończyć się niepowodzeniem. Nic nie zostało zmierzone, więc opóźnienie nie jest pokazywane.",
             "noAnswer": "Sprawdzenie statusu nie otrzymało odpowiedzi w ciągu {timeout} s. Żądania AI przechodzące przez bramę mogą kończyć się niepowodzeniem. Nic nie zostało zmierzone, więc opóźnienie nie jest pokazywane.",
             "notConfigured": "Zmienna MOTIR_GATEWAY_URL nie jest ustawiona, więc nie ma czego sprawdzać. Oczekiwane w instancji bez bramy."
           },

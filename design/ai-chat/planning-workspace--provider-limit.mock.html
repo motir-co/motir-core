@@ -1,0 +1,1136 @@
+<!doctype html>
+<!--
+  design/ai-chat/planning-workspace--provider-limit.mock.html
+
+  A DELTA. It amends, without editing either record:
+    - `planning-workspace--waiting-on-you.mock.html` (the failed-walk face, panels 3–6 / 8–10;
+      design-notes § "The overlay waits with you"), and
+    - `planning-workspace--failed-with-waiting-plan.mock.html` (the failure-line and plan-again
+      faces; design-notes § "The overlay on an OPEN failed session whose plan waits").
+  It holds only what changes when a model provider refuses planning calls for rate: the
+  provider-limit retrying banner, the provider-limit stopped wording inside the three shipped
+  failed faces, and the banner placement. The spec is `design-notes.md`, the section
+  "The overlay when the model provider is at its limit".
+
+  TOKENS: the token blocks are the shipped values (Tier-0 `--color-*` under `@layer theme`, the
+  Tier-3 `--el-*` layer), copied from the sibling delta mock, plus the six shipped Tier-3 tokens
+  that mock leaves out (`--el-card`, `--el-icon-muted`, `--el-input-border`, `--el-button-border`,
+  `--el-chip-bg`, `--el-chip-border`). Component rules name ONLY `--el-*` colours and the
+  element-semantic shape tokens — no raw hue.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The overlay when the model provider is at its limit</title>
+    <style>
+      @layer properties;
+      @layer theme, base, components, utilities;
+      @layer theme {
+        :root,
+        :host {
+          --font-sans:
+            var(--font-sans-pairing, 'Segoe UI'),
+            var(--font-script-sans, var(--font-sans-tail, sans-serif)),
+            var(--font-sans-tail, sans-serif);
+          --font-mono:
+            var(--font-mono-pairing, 'SF Mono'),
+            var(--font-script-mono, var(--font-mono-tail, monospace)),
+            var(--font-mono-tail, monospace);
+          --spacing: 0.25rem;
+          --text-xs: 0.75rem;
+          --text-xs--line-height: calc(1 / 0.75);
+          --text-sm: 0.875rem;
+          --text-sm--line-height: calc(1.25 / 0.875);
+          --font-weight-medium: 500;
+          --font-weight-semibold: 600;
+          --tracking-wide: 0.025em;
+          --leading-snug: 1.375;
+          --leading-relaxed: 1.625;
+          --animate-spin: spin 1s linear infinite;
+          --default-transition-duration: 150ms;
+          --default-transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+          --default-font-family: var(--font-sans);
+          --default-mono-font-family: var(--font-mono);
+          --color-primary: #5645d4;
+          --color-primary-foreground: #ffffff;
+          --color-primary-pressed: #4534b3;
+          --color-primary-fill: #5645d4;
+          --color-background: #ffffff;
+          --color-foreground: #1a1a1a;
+          --color-surface: #f6f5f4;
+          --color-surface-soft: #fafaf9;
+          --color-canvas: #ecebe7;
+          --color-ink: #1a1a1a;
+          --color-charcoal: #37352f;
+          --color-slate: #5d5b54;
+          --color-steel: #787671;
+          --color-stone: #a4a097;
+          --color-muted: #f3f4f6;
+          --color-muted-foreground: #787671;
+          --color-hairline: #e5e3df;
+          --color-hairline-soft: #ede9e4;
+          --color-hairline-strong: #c8c4be;
+          --color-border: #e5e3df;
+          --color-accent: #ff64c8;
+          --color-accent-orange: #dd5b00;
+          --color-accent-teal: #2a9d99;
+          --color-accent-green: #1aae39;
+          --color-tint-peach: #ffe8d4;
+          --color-tint-rose: #fde0ec;
+          --color-tint-mint: #d9f3e1;
+          --color-tint-lavender: #e6e0f5;
+          --color-tint-sky: #dcecfa;
+          --color-tint-yellow: #fef7d6;
+          --color-success: #1aae39;
+          --color-warning: #dd5b00;
+          --color-destructive: #e03131;
+          --color-destructive-foreground: #ffffff;
+          --color-info: #0075de;
+          --color-link: #0070d2;
+          --color-link-pressed: #005bab;
+          --radius-btn: 8px;
+          --radius-card: 12px;
+          --radius-input: 8px;
+          --radius-badge: 9999px;
+          --radius-control: 6px;
+          --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+          --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+          --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+          --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+          --spacing-input-x: 16px;
+          --spacing-control-x: 10px;
+          --spacing-control-y: 6px;
+          --spacing-icon-btn: 4px;
+          --spacing-chip-x: 10px;
+          --spacing-chip-y: 2px;
+          --spacing-kbd-x: 6px;
+          --spacing-kbd-y: 2px;
+          --height-btn-sm: 32px;
+          --height-input: 44px;
+          --spacing-rail-inset: 0px;
+          --transition-duration: 150ms;
+          --active-scale: 0.98;
+          --focus-ring-color: var(--color-primary);
+        }
+      }
+      :root,
+      [data-appearance-scope] {
+        --el-page-bg: var(--color-background);
+        --el-page-text: var(--color-foreground);
+        --el-page-text-muted: var(--color-muted-foreground);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-progress-fill: var(--color-primary-fill);
+        --el-editor-focus: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-canvas: var(--color-canvas);
+        --el-surface-text: var(--color-foreground);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-danger-on-surface: var(--el-danger);
+        @supports (color: color-mix(in lab, red, red)) {
+          --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+        }
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-tint-sage: color-mix(in srgb, #1aae39 26%, #f6f5f4);
+        @supports (color: color-mix(in lab, red, red)) {
+          --el-tint-sage: color-mix(in srgb, var(--color-success) 26%, var(--color-surface));
+        }
+        --el-status-todo: var(--color-stone);
+        --el-status-in-progress: var(--color-info);
+        --el-status-planning: var(--color-accent-teal);
+        --el-status-implemented: color-mix(in srgb, #ff64c8 75%, #37352f);
+        @supports (color: color-mix(in lab, red, red)) {
+          --el-status-implemented: color-mix(
+            in srgb,
+            var(--color-accent) 75%,
+            var(--color-charcoal)
+          );
+        }
+        --el-status-in-review: var(--color-primary);
+        --el-status-approved: color-mix(in srgb, #1aae39 30%, #1a1a1a);
+        @supports (color: color-mix(in lab, red, red)) {
+          --el-status-approved: color-mix(in srgb, var(--color-success) 30%, var(--color-ink));
+        }
+        --el-status-done: color-mix(in srgb, #1aae39 85%, #37352f);
+        @supports (color: color-mix(in lab, red, red)) {
+          --el-status-done: color-mix(in srgb, var(--color-success) 85%, var(--color-charcoal));
+        }
+        --el-status-blocked: var(--color-warning);
+        --el-status-cancelled: var(--color-steel);
+        --el-priority-highest: var(--color-destructive);
+        --el-priority-high: var(--color-warning);
+        --el-priority-medium: var(--color-slate);
+        --el-priority-low: var(--color-info);
+        --el-priority-lowest: var(--color-stone);
+        --el-danger-surface: var(--color-tint-rose);
+        --el-danger-surface-text: var(--color-charcoal);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-warning-text: var(--color-charcoal);
+        --el-success-surface: var(--color-tint-mint);
+        --el-notice-info-bg: var(--color-tint-sky);
+        --el-notice-info-border: var(--color-info);
+        --el-callout-bg: var(--color-tint-lavender);
+        --el-callout-text: var(--color-charcoal);
+        --el-role-admin: var(--color-tint-lavender);
+        --el-role-member: var(--color-tint-sky);
+        --el-role-viewer: var(--color-tint-mint);
+        --el-role-custom: var(--color-tint-peach);
+        --el-org-role-owner: var(--color-tint-lavender);
+        --el-org-role-admin: var(--color-tint-sky);
+        --el-org-role-member: var(--color-tint-mint);
+        --el-privacy-private: var(--color-tint-lavender);
+        --el-privacy-public: var(--color-tint-sky);
+        --el-label-1: var(--color-tint-peach);
+        --el-label-2: var(--color-tint-rose);
+        --el-label-3: var(--color-tint-mint);
+        --el-card: var(--color-background);
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-input-border: var(--color-hairline-strong);
+        --el-button-border: var(--color-hairline-strong);
+        --el-chip-bg: var(--color-surface);
+        --el-chip-border: var(--color-border);
+      }
+
+      body {
+        background: var(--el-canvas);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        margin: 0;
+        padding: 24px 16px;
+      }
+      h1 {
+        font-size: 20px;
+        margin: 0 0 4px;
+        color: var(--el-text);
+      }
+      h2 {
+        font-size: 15px;
+        margin: 32px 0 12px;
+        color: var(--el-text-strong);
+      }
+      .lede {
+        color: var(--el-text-secondary);
+        font-size: 14px;
+        margin: 0 0 24px;
+        max-width: 80ch;
+      }
+      .board {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 24px;
+        align-items: flex-start;
+      }
+      figure {
+        margin: 0;
+      }
+      figcaption {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        margin: 0 0 8px;
+        max-width: 640px;
+      }
+      figcaption b {
+        color: var(--el-text-strong);
+      }
+      /* The rail — PlanChangeRail's <aside>: --el-surface, a left hairline. */
+      .rail {
+        width: 352px;
+        height: 560px;
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      .rail.wide {
+        width: 640px;
+      }
+      .rail-h {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 9999px;
+        background: var(--el-success);
+      }
+      .rail-label {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: var(--tracking-wide);
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .chip {
+        margin-left: auto;
+        font-size: 12px;
+        font-weight: 500;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        background: var(--el-chip-bg);
+        color: var(--el-text-secondary);
+        border: 1px solid var(--el-chip-border);
+      }
+      .chip.awaiting {
+        margin-left: 0;
+        background: var(--el-tint-yellow);
+        color: var(--el-text-strong);
+        border-color: transparent;
+      }
+      .chip.inline {
+        margin-left: 0;
+      }
+      /* THE PROVIDER-LIMIT RETRYING BANNER — a strip between the rail head and the log. */
+      .pl-banner {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        margin: 12px 16px 0;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        background: var(--el-notice-info-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        color: var(--el-text-strong);
+      }
+      .spin {
+        flex: none;
+        width: 16px;
+        height: 16px;
+        margin-top: 2px;
+        border-radius: 9999px;
+        border: 1.5px solid var(--el-text-strong);
+        border-top-color: transparent;
+        animation: var(--animate-spin);
+        box-sizing: border-box;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .spin {
+          animation: none;
+        }
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .pl-title {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .pl-body {
+        margin: 2px 0 0;
+        font-size: 12px;
+        line-height: var(--leading-relaxed);
+        color: var(--el-text-strong);
+      }
+      .log {
+        flex: 1;
+        min-height: 0;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        padding: 16px;
+      }
+      .bubble {
+        max-width: 85%;
+        font-size: 14px;
+        line-height: var(--leading-snug);
+        border-radius: var(--radius-card);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+      }
+      .bubble.user {
+        align-self: flex-end;
+        background: var(--el-card);
+        border: 1px solid var(--el-border-soft);
+        color: var(--el-text);
+      }
+      .bubble.ai {
+        align-self: flex-start;
+        background: var(--el-card);
+        border: 1px solid var(--el-border-soft);
+        color: var(--el-text-secondary);
+      }
+      .narr {
+        margin: 0;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      /* FailedWaitingNotice — shipped shape: --el-page-bg card, hourglass, awaiting pill. */
+      .failed {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+      }
+      .f-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+      }
+      .glyph {
+        color: var(--el-icon-muted);
+        font-size: 14px;
+      }
+      .f-title {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .f-line {
+        margin: 0;
+        font-size: 12px;
+        line-height: var(--leading-relaxed);
+        color: var(--el-text-secondary);
+      }
+      .f-line b {
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .f-actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+      }
+      .f-actions span {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        height: var(--height-btn-sm);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-btn);
+        font-size: 13px;
+        font-weight: 600;
+        font-family: inherit;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        border: 1px solid var(--el-accent);
+      }
+      .btn[disabled] {
+        opacity: 0.6;
+      }
+      .btn:focus-visible {
+        outline: 2px solid var(--focus-ring-color);
+        outline-offset: 2px;
+      }
+      /* WaitingPlanFailureLine — shipped shape: rose tint, warning glyph, strong ink. */
+      .fline {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        margin: 0;
+        background: var(--el-tint-rose);
+        border-radius: var(--radius-card);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        font-size: 14px;
+        color: var(--el-text-strong);
+      }
+      .composer {
+        border-top: 1px solid var(--el-border);
+        padding: 12px 16px;
+        background: var(--el-surface);
+      }
+      .composer-in {
+        display: block;
+        background: var(--el-card);
+        border: 1px solid var(--el-input-border);
+        border-radius: var(--radius-input);
+        padding: var(--spacing-control-y) var(--spacing-input-x);
+        font-size: 14px;
+        color: var(--el-text-secondary);
+      }
+      .composer.held .composer-in {
+        background: var(--el-surface);
+      }
+      .copy {
+        margin-top: 32px;
+        max-width: 1100px;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 13px;
+        background: var(--el-card);
+      }
+      th,
+      td {
+        border: 1px solid var(--el-border);
+        padding: 6px 10px;
+        text-align: left;
+        vertical-align: top;
+        color: var(--el-text);
+      }
+      th {
+        background: var(--el-card);
+        color: var(--el-text-strong);
+      }
+      code {
+        font-family: var(--font-mono);
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>The overlay when the model provider is at its limit</h1>
+    <p class="lede">
+      Light theme. Each panel is the planning overlay’s conversation rail
+      (<code>PlanChangeRail</code>), at its widest (640px, half of a 1280px overlay) or narrowest
+      (352px) width. The canvas pane and its live progress line are not drawn: nothing on them
+      changes.
+    </p>
+    <h2>Retrying — the provider-limit retrying banner and its placement</h2>
+    <div class="board">
+      <figure data-state="1">
+        <figcaption>
+          <b>1.</b> <b>Baseline — planning running normally.</b> No provider-limit element anywhere.
+          The live progress line stays where it ships, on the canvas pane; the rail shows head,
+          conversation, composer. Widest rail (640px).
+        </figcaption>
+        <aside class="rail wide" aria-label="Motir AI">
+          <div class="rail-h">
+            <span class="dot" aria-hidden="true"></span><span class="rail-label">Motir AI</span
+            ><span class="chip">plan change</span>
+          </div>
+          <div class="log" role="log">
+            <div class="bubble user">Split the export story so CSV ships first.</div>
+            <div class="bubble ai">I’ll lay the export story’s children again, CSV first.</div>
+            <p class="narr">Reading the export story and its two subtasks.</p>
+          </div>
+          <div class="composer"><span class="composer-in">Message Motir AI…</span></div>
+        </aside>
+      </figure>
+      <figure data-state="2">
+        <figcaption>
+          <b>2.</b> <b>Retrying, seen live.</b> The first refusal arrives while the overlay is open:
+          the <b>provider-limit retrying banner</b> appears between the rail head and the
+          conversation. The conversation and the canvas progress line are untouched. No action, no
+          dismiss, no countdown, no attempt number. Widest rail.
+        </figcaption>
+        <aside class="rail wide" aria-label="Motir AI">
+          <div class="rail-h">
+            <span class="dot" aria-hidden="true"></span><span class="rail-label">Motir AI</span
+            ><span class="chip">plan change</span>
+          </div>
+          <div
+            class="pl-banner"
+            role="status"
+            aria-labelledby="pl-2"
+            data-testid="provider-limit-retrying"
+            data-element="provider-limit-retrying-banner"
+          >
+            <span class="spin" aria-hidden="true"></span>
+            <div>
+              <p class="pl-title" id="pl-2">Waiting on the model provider</p>
+              <p class="pl-body">
+                It is busy right now. Planning will retry by itself; nothing is lost.
+              </p>
+            </div>
+          </div>
+          <div class="log" role="log">
+            <div class="bubble user">Split the export story so CSV ships first.</div>
+            <div class="bubble ai">I’ll lay the export story’s children again, CSV first.</div>
+            <p class="narr">Reading the export story and its two subtasks.</p>
+          </div>
+          <div class="composer"><span class="composer-in">Message Motir AI…</span></div>
+        </aside>
+      </figure>
+      <figure data-state="3">
+        <figcaption>
+          <b>3.</b> <b>Retrying, opened mid-retry.</b> The person opens or reloads the overlay while
+          a retry waits: the same banner, identical, read from the progress snapshot. No entrance
+          animation is needed. Narrowest rail (352px): the banner wraps to three lines and the
+          composer stays on screen.
+        </figcaption>
+        <aside class="rail" aria-label="Motir AI">
+          <div class="rail-h">
+            <span class="dot" aria-hidden="true"></span><span class="rail-label">Motir AI</span
+            ><span class="chip">plan change</span>
+          </div>
+          <div
+            class="pl-banner"
+            role="status"
+            aria-labelledby="pl-3"
+            data-testid="provider-limit-retrying"
+            data-element="provider-limit-retrying-banner"
+          >
+            <span class="spin" aria-hidden="true"></span>
+            <div>
+              <p class="pl-title" id="pl-3">Waiting on the model provider</p>
+              <p class="pl-body">
+                It is busy right now. Planning will retry by itself; nothing is lost.
+              </p>
+            </div>
+          </div>
+          <div class="log" role="log">
+            <div class="bubble user">Split the export story so CSV ships first.</div>
+            <div class="bubble ai">I’ll lay the export story’s children again, CSV first.</div>
+            <p class="narr">Reading the export story and its two subtasks.</p>
+          </div>
+          <div class="composer"><span class="composer-in">Message Motir AI…</span></div>
+        </aside>
+      </figure>
+      <figure data-state="4">
+        <figcaption>
+          <b>4.</b> <b>Retry succeeded.</b> The banner clears with no success toast and no record
+          line; the walk’s next narration simply follows.
+        </figcaption>
+        <aside class="rail" aria-label="Motir AI">
+          <div class="rail-h">
+            <span class="dot" aria-hidden="true"></span><span class="rail-label">Motir AI</span
+            ><span class="chip">plan change</span>
+          </div>
+          <div class="log" role="log">
+            <div class="bubble user">Split the export story so CSV ships first.</div>
+            <div class="bubble ai">I’ll lay the export story’s children again, CSV first.</div>
+            <p class="narr">Reading the export story and its two subtasks.</p>
+            <p class="narr">Laying the children of “Export a report”.</p>
+          </div>
+          <div class="composer"><span class="composer-in">Message Motir AI…</span></div>
+        </aside>
+      </figure>
+      <figure data-state="5">
+        <figcaption>
+          <b>5.</b> <b>Retrying again later in the same walk.</b> A second refusal burst after a
+          success: the same banner returns, word for word. No burst count.
+        </figcaption>
+        <aside class="rail" aria-label="Motir AI">
+          <div class="rail-h">
+            <span class="dot" aria-hidden="true"></span><span class="rail-label">Motir AI</span
+            ><span class="chip">plan change</span>
+          </div>
+          <div
+            class="pl-banner"
+            role="status"
+            aria-labelledby="pl-5"
+            data-testid="provider-limit-retrying"
+            data-element="provider-limit-retrying-banner"
+          >
+            <span class="spin" aria-hidden="true"></span>
+            <div>
+              <p class="pl-title" id="pl-5">Waiting on the model provider</p>
+              <p class="pl-body">
+                It is busy right now. Planning will retry by itself; nothing is lost.
+              </p>
+            </div>
+          </div>
+          <div class="log" role="log">
+            <div class="bubble user">Split the export story so CSV ships first.</div>
+            <div class="bubble ai">I’ll lay the export story’s children again, CSV first.</div>
+            <p class="narr">Reading the export story and its two subtasks.</p>
+            <p class="narr">Laying the children of “Export a report”.</p>
+          </div>
+          <div class="composer"><span class="composer-in">Message Motir AI…</span></div>
+        </aside>
+      </figure>
+    </div>
+    <h2>Stopped — the provider-limit stopped wording in the three shipped failed faces</h2>
+    <div class="board">
+      <figure data-state="6">
+        <figcaption>
+          <b>6.</b>
+          <b>Stopped, resumable — the failed-walk face with reason <code>rate_limited</code>.</b>
+          The <b>provider-limit stopped wording</b> replaces the generic reason segment and the kept
+          sentence; the one shipped Resume and the held composer stay. Warning role (hourglass,
+          yellow <i>Waiting to resume</i> pill), no danger ink. The retrying banner is gone.
+        </figcaption>
+        <aside class="rail" aria-label="Motir AI">
+          <div class="rail-h">
+            <span class="dot" aria-hidden="true"></span><span class="rail-label">Motir AI</span
+            ><span class="chip">plan change</span>
+          </div>
+          <div class="log" role="log">
+            <div class="bubble user">Split the export story so CSV ships first.</div>
+            <div class="bubble ai">I’ll lay the export story’s children again, CSV first.</div>
+            <p class="narr">Reading the export story and its two subtasks.</p>
+            <section
+              class="failed"
+              aria-label="This attempt stopped"
+              data-testid="planning-failed-waiting"
+              data-state="waiting"
+            >
+              <div class="f-head">
+                <span class="glyph" aria-hidden="true">&#8987;</span>
+                <p class="f-title">This attempt stopped</p>
+                <span class="chip awaiting">Waiting to resume</span>
+              </div>
+              <p class="f-line">
+                <span>Stopped at </span><b>Writing “Export a report as CSV”</b
+                ><span aria-hidden="true"> · </span
+                ><span data-element="provider-limit-stopped-wording"
+                  >because the model provider is at its limit</span
+                ><span aria-hidden="true"> · </span><span>failed 2 minutes ago</span>
+              </p>
+              <p class="f-line" data-element="provider-limit-stopped-wording">
+                Nothing was lost. Resume when you are ready to try again; it continues from where it
+                stopped.
+              </p>
+              <div class="f-actions">
+                <button class="btn" type="button" data-testid="planning-resume">Resume</button
+                ><span>Resume the failed attempt first. Sending is paused while it waits.</span>
+              </div>
+            </section>
+          </div>
+          <div class="composer held">
+            <span class="composer-in" aria-disabled="true">Message Motir AI…</span>
+          </div>
+        </aside>
+      </figure>
+      <figure data-state="7">
+        <figcaption>
+          <b>7.</b> <b>Resume pressed.</b> The face’s shipped resume-pending state:
+          <i>Resuming…</i> on the pill and the disabled button. The provider-limit stopped wording
+          is gone at once — only the head and the control remain until the walk reports again.
+        </figcaption>
+        <aside class="rail" aria-label="Motir AI">
+          <div class="rail-h">
+            <span class="dot" aria-hidden="true"></span><span class="rail-label">Motir AI</span
+            ><span class="chip">plan change</span>
+          </div>
+          <div class="log" role="log">
+            <div class="bubble user">Split the export story so CSV ships first.</div>
+            <div class="bubble ai">I’ll lay the export story’s children again, CSV first.</div>
+            <p class="narr">Reading the export story and its two subtasks.</p>
+            <section
+              class="failed"
+              aria-label="This attempt stopped"
+              data-testid="planning-failed-waiting"
+              data-state="resuming"
+            >
+              <div class="f-head">
+                <span class="glyph" aria-hidden="true">&#8987;</span>
+                <p class="f-title">This attempt stopped</p>
+                <span class="chip awaiting">Resuming…</span>
+              </div>
+              <div class="f-actions">
+                <button class="btn" type="button" data-testid="planning-resume" disabled>
+                  Resuming…</button
+                ><span>Resume the failed attempt first. Sending is paused while it waits.</span>
+              </div>
+            </section>
+          </div>
+          <div class="composer held">
+            <span class="composer-in" aria-disabled="true">Message Motir AI…</span>
+          </div>
+        </aside>
+      </figure>
+      <figure data-state="8a">
+        <figcaption>
+          <b>8a.</b> <b>Resumed, then refused again.</b> The walk is running again, so the failed
+          face has left; the retrying banner returns, exactly as in panel 2.
+        </figcaption>
+        <aside class="rail" aria-label="Motir AI">
+          <div class="rail-h">
+            <span class="dot" aria-hidden="true"></span><span class="rail-label">Motir AI</span
+            ><span class="chip">plan change</span>
+          </div>
+          <div
+            class="pl-banner"
+            role="status"
+            aria-labelledby="pl-8"
+            data-testid="provider-limit-retrying"
+            data-element="provider-limit-retrying-banner"
+          >
+            <span class="spin" aria-hidden="true"></span>
+            <div>
+              <p class="pl-title" id="pl-8">Waiting on the model provider</p>
+              <p class="pl-body">
+                It is busy right now. Planning will retry by itself; nothing is lost.
+              </p>
+            </div>
+          </div>
+          <div class="log" role="log">
+            <div class="bubble user">Split the export story so CSV ships first.</div>
+            <div class="bubble ai">I’ll lay the export story’s children again, CSV first.</div>
+            <p class="narr">Reading the export story and its two subtasks.</p>
+            <p class="narr">Picking up at “Export a report as CSV”.</p>
+          </div>
+          <div class="composer"><span class="composer-in">Message Motir AI…</span></div>
+        </aside>
+      </figure>
+      <figure data-state="8b">
+        <figcaption>
+          <b>8b.</b> <b>…and exhausted again.</b> The failed-walk face in its shipped
+          <i>again</i> form (the <i>Second attempt</i> pill), with the same provider-limit stopped
+          wording. Still exactly one Resume.
+        </figcaption>
+        <aside class="rail" aria-label="Motir AI">
+          <div class="rail-h">
+            <span class="dot" aria-hidden="true"></span><span class="rail-label">Motir AI</span
+            ><span class="chip">plan change</span>
+          </div>
+          <div class="log" role="log">
+            <div class="bubble user">Split the export story so CSV ships first.</div>
+            <div class="bubble ai">I’ll lay the export story’s children again, CSV first.</div>
+            <p class="narr">Reading the export story and its two subtasks.</p>
+            <p class="narr">Picking up at “Export a report as CSV”.</p>
+            <section
+              class="failed"
+              aria-label="This attempt stopped"
+              data-testid="planning-failed-waiting"
+              data-state="failed-again"
+            >
+              <div class="f-head">
+                <span class="glyph" aria-hidden="true">&#8987;</span>
+                <p class="f-title">This attempt stopped</p>
+                <span class="chip inline">Second attempt</span
+                ><span class="chip awaiting">Waiting to resume</span>
+              </div>
+              <p class="f-line">
+                <span>Stopped at </span><b>Writing “Export a report as CSV”</b
+                ><span aria-hidden="true"> · </span
+                ><span data-element="provider-limit-stopped-wording"
+                  >because the model provider is at its limit</span
+                ><span aria-hidden="true"> · </span><span>failed just now</span>
+              </p>
+              <p class="f-line" data-element="provider-limit-stopped-wording">
+                Nothing was lost. Resume when you are ready to try again; it continues from where it
+                stopped.
+              </p>
+              <div class="f-actions">
+                <button class="btn" type="button" data-testid="planning-resume">Resume</button
+                ><span>Resume the failed attempt first. Sending is paused while it waits.</span>
+              </div>
+            </section>
+          </div>
+          <div class="composer held">
+            <span class="composer-in" aria-disabled="true">Message Motir AI…</span>
+          </div>
+        </aside>
+      </figure>
+      <figure data-state="9">
+        <figcaption>
+          <b>9.</b>
+          <b
+            >Stopped beside a waiting plan — the failure-line face with
+            <code>rate_limited</code>.</b
+          >
+          The line reads the provider-limit wording; the composer is open; no Resume (the next turn
+          continues the session). Rose tint and warning glyph as shipped.
+        </figcaption>
+        <aside class="rail" aria-label="Motir AI">
+          <div class="rail-h">
+            <span class="dot" aria-hidden="true"></span><span class="rail-label">Motir AI</span
+            ><span class="chip">plan change</span>
+          </div>
+          <div class="log" role="log">
+            <div class="bubble user">Move the PDF export into its own story.</div>
+            <p
+              class="fline"
+              role="status"
+              data-testid="planning-failure-line"
+              data-element="provider-limit-stopped-wording"
+            >
+              <span class="glyph" aria-hidden="true">&#9888;</span
+              ><span
+                >Your last change to this plan could not be made: the model provider is at its limit
+                · 3 minutes ago. Send it again when you are ready.</span
+              >
+            </p>
+          </div>
+          <div class="composer"><span class="composer-in">Message Motir AI…</span></div>
+        </aside>
+      </figure>
+      <figure data-state="10">
+        <figcaption>
+          <b>10.</b>
+          <b>Stopped and not resumable — the plan-again face with <code>rate_limited</code>.</b>
+          Provider-limit wording plus <i>Your next message plans it again.</i> Open composer, no
+          Resume.
+        </figcaption>
+        <aside class="rail" aria-label="Motir AI">
+          <div class="rail-h">
+            <span class="dot" aria-hidden="true"></span><span class="rail-label">Motir AI</span
+            ><span class="chip">plan change</span>
+          </div>
+          <div class="log" role="log">
+            <div class="bubble user">Split the export story so CSV ships first.</div>
+            <div class="bubble ai">I’ll lay the export story’s children again, CSV first.</div>
+            <p class="narr">Reading the export story and its two subtasks.</p>
+            <p
+              class="fline"
+              role="status"
+              data-testid="planning-failure-line"
+              data-element="provider-limit-stopped-wording"
+            >
+              <span class="glyph" aria-hidden="true">&#9888;</span
+              ><span
+                >This attempt could not be continued: the model provider is at its limit · 3 minutes
+                ago. Your next message plans it again.</span
+              >
+            </p>
+          </div>
+          <div class="composer"><span class="composer-in">Message Motir AI…</span></div>
+        </aside>
+      </figure>
+    </div>
+    <h2>Chinese (zh)</h2>
+    <div class="board">
+      <figure data-state="11">
+        <figcaption>
+          <b>11.</b> <b>A non-rate failure — the negative reference.</b> Reason
+          <code>internal</code> (the same for <code>job_failed</code>, <code>out_of_credits</code>,
+          a provider 500): the shipped face, unchanged — the shared reason string and the shipped
+          kept sentence. No provider-limit element.
+        </figcaption>
+        <aside class="rail" aria-label="Motir AI">
+          <div class="rail-h">
+            <span class="dot" aria-hidden="true"></span><span class="rail-label">Motir AI</span
+            ><span class="chip">plan change</span>
+          </div>
+          <div class="log" role="log">
+            <div class="bubble user">Split the export story so CSV ships first.</div>
+            <div class="bubble ai">I’ll lay the export story’s children again, CSV first.</div>
+            <p class="narr">Reading the export story and its two subtasks.</p>
+            <section
+              class="failed"
+              aria-label="This attempt stopped"
+              data-testid="planning-failed-waiting"
+              data-state="waiting"
+            >
+              <div class="f-head">
+                <span class="glyph" aria-hidden="true">&#8987;</span>
+                <p class="f-title">This attempt stopped</p>
+                <span class="chip awaiting">Waiting to resume</span>
+              </div>
+              <p class="f-line">
+                <span>Stopped at </span><b>Writing “Export a report as CSV”</b
+                ><span aria-hidden="true"> · </span
+                ><span>because something went wrong on our side</span
+                ><span aria-hidden="true"> · </span><span>failed 2 minutes ago</span>
+              </p>
+              <p class="f-line">
+                The plan so far is kept, and the work items it covers stay at Planning.
+              </p>
+              <div class="f-actions">
+                <button class="btn" type="button" data-testid="planning-resume">Resume</button
+                ><span>Resume the failed attempt first. Sending is paused while it waits.</span>
+              </div>
+            </section>
+          </div>
+          <div class="composer held">
+            <span class="composer-in" aria-disabled="true">Message Motir AI…</span>
+          </div>
+        </aside>
+      </figure>
+      <figure data-state="12a">
+        <figcaption>
+          <b>12a.</b> <b>Chinese — the retrying banner</b> at the narrowest rail (352px). No English
+          left in.
+        </figcaption>
+        <aside class="rail" aria-label="Motir AI" lang="zh">
+          <div class="rail-h">
+            <span class="dot" aria-hidden="true"></span><span class="rail-label">Motir AI</span
+            ><span class="chip">调整计划</span>
+          </div>
+          <div
+            class="pl-banner"
+            role="status"
+            aria-labelledby="pl-12"
+            data-testid="provider-limit-retrying"
+            data-element="provider-limit-retrying-banner"
+          >
+            <span class="spin" aria-hidden="true"></span>
+            <div>
+              <p class="pl-title" id="pl-12">正在等待模型服务</p>
+              <p class="pl-body">模型服务暂时繁忙。规划会自动重试，不会丢失任何内容。</p>
+            </div>
+          </div>
+          <div class="log" role="log">
+            <div class="bubble user">把导出故事拆开，先发布 CSV。</div>
+            <div class="bubble ai">我会重新铺设导出故事的子项，CSV 优先。</div>
+            <p class="narr">正在阅读导出故事和它的两个子任务。</p>
+          </div>
+          <div class="composer"><span class="composer-in">给 Motir AI 发消息…</span></div>
+        </aside>
+      </figure>
+      <figure data-state="12b">
+        <figcaption>
+          <b>12b.</b> <b>Chinese — the failed-walk face’s stopped wording</b> at the narrowest rail.
+          No English left in.
+        </figcaption>
+        <aside class="rail" aria-label="Motir AI" lang="zh">
+          <div class="rail-h">
+            <span class="dot" aria-hidden="true"></span><span class="rail-label">Motir AI</span
+            ><span class="chip">调整计划</span>
+          </div>
+          <div class="log" role="log">
+            <div class="bubble user">把导出故事拆开，先发布 CSV。</div>
+            <div class="bubble ai">我会重新铺设导出故事的子项，CSV 优先。</div>
+            <p class="narr">正在阅读导出故事和它的两个子任务。</p>
+            <section
+              class="failed"
+              aria-label="这次尝试停下了"
+              data-testid="planning-failed-waiting"
+              data-state="waiting"
+            >
+              <div class="f-head">
+                <span class="glyph" aria-hidden="true">&#8987;</span>
+                <p class="f-title">这次尝试停下了</p>
+                <span class="chip awaiting">待继续</span>
+              </div>
+              <p class="f-line">
+                <span>停在 </span><b>正在撰写「将报表导出为 CSV」</b
+                ><span aria-hidden="true"> · </span
+                ><span data-element="provider-limit-stopped-wording"
+                  >原因：模型服务已达到使用上限</span
+                ><span aria-hidden="true"> · </span><span>2 分钟前失败</span>
+              </p>
+              <p class="f-line" data-element="provider-limit-stopped-wording">
+                没有丢失任何内容。准备好后点击继续即可再试，它会从停下的地方接着进行。
+              </p>
+              <div class="f-actions">
+                <button class="btn" type="button" data-testid="planning-resume">继续</button
+                ><span>请先继续这次失败的尝试。在它等待期间，发送已暂停。</span>
+              </div>
+            </section>
+          </div>
+          <div class="composer held">
+            <span class="composer-in" aria-disabled="true">给 Motir AI 发消息…</span>
+          </div>
+        </aside>
+      </figure>
+    </div>
+    <section class="copy">
+      <h2>Copy — every new string, en and zh</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Message key</th>
+            <th>en</th>
+            <th>zh</th>
+            <th>Where</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>planningWorkspace.providerLimit.retryingTitle</code></td>
+            <td>Waiting on the model provider</td>
+            <td lang="zh">正在等待模型服务</td>
+            <td>The retrying banner’s title (its accessible name).</td>
+          </tr>
+          <tr>
+            <td><code>planningWorkspace.providerLimit.retryingBody</code></td>
+            <td>It is busy right now. Planning will retry by itself; nothing is lost.</td>
+            <td lang="zh">模型服务暂时繁忙。规划会自动重试，不会丢失任何内容。</td>
+            <td>The retrying banner’s line.</td>
+          </tr>
+          <tr>
+            <td><code>planningWorkspace.providerLimit.walkBecause</code></td>
+            <td>because the model provider is at its limit</td>
+            <td lang="zh">原因：模型服务已达到使用上限</td>
+            <td>
+              Failed-walk face: replaces <code>workbench.planningSession.because</code> +
+              <code>reason.rate_limited</code> in the stop line.
+            </td>
+          </tr>
+          <tr>
+            <td><code>planningWorkspace.providerLimit.walkKept</code></td>
+            <td>
+              Nothing was lost. Resume when you are ready to try again; it continues from where it
+              stopped.
+            </td>
+            <td lang="zh">
+              没有丢失任何内容。准备好后点击继续即可再试，它会从停下的地方接着进行。
+            </td>
+            <td>Failed-walk face: replaces <code>planningWorkspace.waiting.kept</code>.</td>
+          </tr>
+          <tr>
+            <td><code>planningWorkspace.providerLimit.failureLine</code></td>
+            <td>
+              Your last change to this plan could not be made: the model provider is at its limit ·
+              {when}. Send it again when you are ready.
+            </td>
+            <td lang="zh">
+              你上一次对这个计划的修改没能完成：模型服务已达到使用上限 ·
+              {when}。准备好后再发送一次即可。
+            </td>
+            <td>Failure-line face: replaces <code>waiting.failureLine</code>.</td>
+          </tr>
+          <tr>
+            <td><code>planningWorkspace.providerLimit.failureLineAgain</code></td>
+            <td>
+              Your last change could not be made again: the model provider is at its limit · {when}.
+              Send it again when you are ready.
+            </td>
+            <td lang="zh">
+              你上一次的修改再次没能完成：模型服务已达到使用上限 · {when}。准备好后再发送一次即可。
+            </td>
+            <td>
+              Failure-line face, <i>again</i>: replaces <code>waiting.failureLineAgain</code>.
+            </td>
+          </tr>
+          <tr>
+            <td><code>planningWorkspace.providerLimit.failureLinePlanAgain</code></td>
+            <td>
+              This attempt could not be continued: the model provider is at its limit · {when}. Your
+              next message plans it again.
+            </td>
+            <td lang="zh">
+              这次尝试无法继续：模型服务已达到使用上限 · {when}。你的下一条消息会重新规划。
+            </td>
+            <td>Plan-again face: replaces <code>waiting.failureLinePlanAgain</code>.</td>
+          </tr>
+          <tr>
+            <td><code>planningWorkspace.providerLimit.failureLinePlanAgainAgain</code></td>
+            <td>
+              This attempt could not be continued again: the model provider is at its limit ·
+              {when}. Your next message plans it again.
+            </td>
+            <td lang="zh">
+              这次尝试再次无法继续：模型服务已达到使用上限 · {when}。你的下一条消息会重新规划。
+            </td>
+            <td>
+              Plan-again face, <i>again</i>: replaces
+              <code>waiting.failureLinePlanAgainAgain</code>.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+  </body>
+</html>

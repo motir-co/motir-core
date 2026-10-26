@@ -42,8 +42,11 @@ export type PlatformSignalId =
    * motir-gateway (MOTIR-742). `values` when it answers: `ms` (latency),
    * `version`, `since` (ISO-8601, when the gateway process started) and
    * `threshold` (the slow bar in ms). Unreachable: `reason` — `notConfigured`
-   * (no `MOTIR_GATEWAY_URL`) or `noAnswer`, the latter with `timeout` as a string (the probe's
-   * deadline in seconds, a setting and not a measurement).
+   * (no `MOTIR_GATEWAY_URL`), `noAnswer`, with `timeout` as a string (the probe's
+   * deadline in seconds, a setting and not a measurement), or `badAnswer` (the gateway
+   * answered and the answer was rejected, MOTIR-9641), with `why` — `httpStatus`,
+   * `notJson`, `noSuccess`, `noData`, `noVersion` or `noStartTime` — and, on
+   * `httpStatus`, `status` as a string.
    */
   | 'gateway'
   | 'schedules'

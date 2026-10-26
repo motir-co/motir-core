@@ -32,6 +32,7 @@ import { PlanChangeRail } from '@/components/planning/PlanChangeRail';
 import { FollowPlannerControl } from '@/components/planning/FollowPlannerControl';
 import type { ProjectRoadmapCanvasProps } from '@/components/planning/ProjectRoadmapCanvas';
 import { usePlanProgressReading } from '@/lib/hooks/usePlanProgressReading';
+import { providerLimitView } from '@/lib/planChange/providerLimitView';
 import { drivenFollowRequest, nextDrivenStep, type DrivenStep } from '@/lib/planning/plannerDrive';
 import { GuideWorkspaceHost } from '@/components/planning/GuideWorkspaceHost';
 import { PlanCloseGuard } from '@/components/planning/PlanCloseGuard';
@@ -761,6 +762,14 @@ function PlanWorkspaceHost({
     failing: state.liveFailing,
   });
   const paneId = paneReview?.id ?? null;
+  // THE PROVIDER LIMIT (Story MOTIR-9540 · MOTIR-9622): the same reading carries the session's
+  // provider-retry wait, so a mid-retry open or a reload shows the banner on first paint. A
+  // stored failure wins over a wait; the rail words a `rate_limited` one inside its failed face.
+  const railProviderLimit =
+    providerLimitView(state.session?.failure ?? null, paneReading?.providerWait ?? null) ===
+    'retrying'
+      ? 'retrying'
+      : null;
   const [drive, setDrive] = useState<{
     planId: string | null;
     /** The pane was LIVE when this plan was first seen — only then is it driven. */
@@ -1329,6 +1338,7 @@ function PlanWorkspaceHost({
           onDeclinePlanOffer={(turnId) => void declinePlanOffer(turnId)}
           offerAnsweringTurnId={state.offerAnsweringTurnId ?? null}
           offerRefusal={state.offerRefusal ?? null}
+          providerLimit={railProviderLimit}
           onAnswerRunPause={(choice) => void answerRunPause(choice)}
           // THE CARRY (MOTIR-7932): the hook routes an ended session's send to it, and
           // its swap re-keys the address through `onRestarted`, the restart's path.

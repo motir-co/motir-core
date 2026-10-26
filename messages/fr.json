@@ -8478,6 +8478,16 @@
       "failureLinePlanAgain": "Cette tentative n’a pas pu être poursuivie · {when}. Votre prochain message relance la planification.",
       "failureLinePlanAgainAgain": "Cette tentative n’a de nouveau pas pu être poursuivie · {when}. Votre prochain message relance la planification."
     },
+    "providerLimit": {
+      "retryingTitle": "En attente du fournisseur de modèle",
+      "retryingBody": "Il est très sollicité en ce moment. La planification réessaiera d’elle-même ; rien n’est perdu.",
+      "walkBecause": "car le fournisseur de modèle a atteint sa limite",
+      "walkKept": "Rien n’a été perdu. Cliquez sur Reprendre quand vous voulez réessayer ; la planification reprend là où elle s’est arrêtée.",
+      "failureLine": "Votre dernière modification de ce plan n’a pas pu être effectuée : le fournisseur de modèle a atteint sa limite · {when}. Renvoyez-la quand vous êtes prêt.",
+      "failureLineAgain": "Votre dernière modification n’a de nouveau pas pu être effectuée : le fournisseur de modèle a atteint sa limite · {when}. Renvoyez-la quand vous êtes prêt.",
+      "failureLinePlanAgain": "Cette tentative n’a pas pu être poursuivie : le fournisseur de modèle a atteint sa limite · {when}. Votre prochain message relance la planification.",
+      "failureLinePlanAgainAgain": "Cette tentative n’a de nouveau pas pu être poursuivie : le fournisseur de modèle a atteint sa limite · {when}. Votre prochain message relance la planification."
+    },
     "grill": {
       "control": {
         "label": "Cuisine-moi",
@@ -10160,10 +10170,12 @@
           "degradedValue": "Lente · {ms} ms",
           "degradedDetail": "Répond, mais au-delà du seuil de {threshold} ms. motir-gateway {version} · active depuis {since}.",
           "unreachable": {
+            "badAnswer": "Réponse illisible de la passerelle",
             "noAnswer": "Aucune réponse de la passerelle",
             "notConfigured": "Passerelle non configurée"
           },
           "unreachableDetail": {
+            "badAnswer": "La passerelle a répondu, mais son état n'a pas pu être lu : {why, select, httpStatus {elle a répondu HTTP {status}} notJson {le corps n'était pas du JSON} noSuccess {elle n'a pas signalé de succès} noData {elle ne contenait aucune donnée} noVersion {elle ne contenait aucune version} noStartTime {elle ne contenait aucune heure de démarrage} other {la réponse a été rejetée}}. Les requêtes d'IA passant par la passerelle échouent peut-être. Rien n'a été mesuré, aucune latence n'est donc affichée.",
             "noAnswer": "La vérification d'état n'a reçu aucune réponse en {timeout} s. Les requêtes d'IA passant par la passerelle échouent peut-être. Rien n'a été mesuré, aucune latence n'est donc affichée.",
             "notConfigured": "MOTIR_GATEWAY_URL n'est pas défini ; il n'y a donc rien à vérifier. Normal sur une instance qui n'exécute aucune passerelle."
           },

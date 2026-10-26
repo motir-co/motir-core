@@ -363,6 +363,7 @@ describe('the review read carries both fields', () => {
     ]);
     expect(Object.keys(live.inFlightSteps![0]!).sort()).toEqual([
       'kind',
+      'providerWait',
       'sessionKey',
       'startedAt',
       'targetRef',

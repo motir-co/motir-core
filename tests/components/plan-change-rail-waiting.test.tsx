@@ -74,7 +74,7 @@ function session(turns: PlanChangeTurnDto[], extra: Partial<PlanChangeSessionDto
 
 const FAILURE: PlanSessionFailureDto = {
   failedAt: '2026-07-27T11:00:00.000Z',
-  reason: 'rate_limited',
+  reason: 'internal',
   stopPhase: 'author',
   stopRef: 'ACME-20',
   stopTitle: 'Export a report',
@@ -152,7 +152,7 @@ describe('a failed hosted attempt reads as WAITING TO RESUME, not Closed', () =>
     expect(within(block).getByText(tw.failedHead)).toBeTruthy();
     expect(within(block).getByText(t.waitingToResume)).toBeTruthy();
     expect(within(block).getByText('Writing Export a report')).toBeTruthy();
-    expect(within(block).getByText('because the model was rate-limited')).toBeTruthy();
+    expect(within(block).getByText('because something went wrong on our side')).toBeTruthy();
     expect(within(block).getByText(tw.kept)).toBeTruthy();
     expect(within(block).getByTestId('planning-resume').textContent).toBe('Resume');
     // …and none of the Closed face, nor the generic retryable error.
@@ -162,10 +162,15 @@ describe('a failed hosted attempt reads as WAITING TO RESUME, not Closed', () =>
     expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
   });
 
-  it.each(RESUME_REASON_CODES)('the %s reason reads in its own words', (code) => {
-    renderRail({ session: waitingSession({ ...FAILURE, reason: code }) });
-    expect(screen.getByText(`because ${t.reason[code]}`)).toBeTruthy();
-  });
+  // `rate_limited` is worded as the provider limit instead (MOTIR-9622), pinned in
+  // `plan-change-rail-provider-limit.test.tsx`.
+  it.each(RESUME_REASON_CODES.filter((code) => code !== 'rate_limited'))(
+    'the %s reason reads in its own words',
+    (code) => {
+      renderRail({ session: waitingSession({ ...FAILURE, reason: code }) });
+      expect(screen.getByText(`because ${t.reason[code]}`)).toBeTruthy();
+    },
+  );
 
   it('an unknown reason code reads as the `internal` sentence, never the raw code', () => {
     renderRail({

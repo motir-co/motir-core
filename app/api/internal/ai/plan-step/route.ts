@@ -4,6 +4,10 @@ import { mapJobRequestError } from '@/lib/ai/jobAuthResponse';
 import { aiPlanGateErrorResponse } from '@/lib/ai/planGateResponse';
 import { aiGenerationService } from '@/lib/services/aiGenerationService';
 import {
+  PLAN_PROVIDER_RETRY_ATTEMPTS_MAX,
+  type PlanProviderRetryInput,
+} from '@/lib/services/plansService';
+import {
   InvalidPlanStepError,
   NoPlanForJobError,
   PlanNotFoundError,
@@ -32,7 +36,16 @@ import {
 // `narration: string[]` — the session's own plain-language sentences — INSTEAD
 // of `step`, never with it and never with a `target`. They are appended to the
 // plan's kept history; the caps and the "session holds a step" rule are the
-// store's (`plansService.recordPlanNarration`). Exactly one of the two is sent.
+// store's (`plansService.recordPlanNarration`).
+//
+// PROVIDER RETRY (Story MOTIR-9540 · MOTIR-9619): the body may carry
+// `providerRetry` INSTEAD — `{ state: 'waiting', attempt, maxAttempts, retryAt }`
+// when a model call starts waiting out a provider limit (`attempt` the retry
+// about to be made, integers in 1..20 with `attempt ≤ maxAttempts`, `retryAt` an
+// ISO-8601 time core clamps to the next 15 minutes), or `{ state: 'cleared' }`
+// on every way out of that wait. It names no `target`, it never touches the
+// session's step, and it answers `{ planId, providerWait }` (`null` once
+// cleared). Exactly one of `step` / `narration` / `providerRetry` is sent.
 //
 // The signal is ADVISORY, so every refusal is a stable `{ code, error }` and
 // never a 500: the walk matches the code and carries on.
@@ -57,6 +70,30 @@ type Step = (typeof STEPS)[number];
 
 function isStep(v: unknown): v is Step {
   return typeof v === 'string' && (STEPS as readonly string[]).includes(v);
+}
+
+function isAttempt(v: unknown): v is number {
+  return (
+    Number.isInteger(v) && (v as number) >= 1 && (v as number) <= PLAN_PROVIDER_RETRY_ATTEMPTS_MAX
+  );
+}
+
+/** Why a `providerRetry` body is the wrong shape, or `null` when it is right. */
+function providerRetryRefusal(v: unknown): string | null {
+  if (v === null || typeof v !== 'object' || Array.isArray(v)) {
+    return '`providerRetry` must be an object.';
+  }
+  const { state, attempt, maxAttempts, retryAt } = v as Record<string, unknown>;
+  if (state === 'cleared') return null;
+  if (state !== 'waiting') return '`providerRetry.state` must be one of: waiting, cleared.';
+  if (!isAttempt(attempt) || !isAttempt(maxAttempts)) {
+    return `\`attempt\` and \`maxAttempts\` must be integers in 1..${PLAN_PROVIDER_RETRY_ATTEMPTS_MAX}.`;
+  }
+  if (attempt > maxAttempts) return '`attempt` must not exceed `maxAttempts`.';
+  if (typeof retryAt !== 'string' || Number.isNaN(Date.parse(retryAt))) {
+    return '`retryAt` must be an ISO-8601 time.';
+  }
+  return null;
 }
 
 export async function POST(req: Request): Promise<Response> {
@@ -87,9 +124,10 @@ export async function POST(req: Request): Promise<Response> {
   if (typeof sessionKey !== 'string') {
     return fail(INVALID, '`sessionKey` is required and must be a string.', 400);
   }
-  const { narration } = b;
-  if ((step === undefined) === (narration === undefined)) {
-    return fail(INVALID, 'Send exactly one of `step` or `narration`.', 400);
+  const { narration, providerRetry } = b;
+  const forms = [step, narration, providerRetry].filter((form) => form !== undefined).length;
+  if (forms !== 1) {
+    return fail(INVALID, 'Send exactly one of `step`, `narration` or `providerRetry`.', 400);
   }
   if (step !== undefined && !isStep(step)) {
     return fail(INVALID, `\`step\` must be one of: ${STEPS.join(', ')}.`, 400);
@@ -106,6 +144,14 @@ export async function POST(req: Request): Promise<Response> {
     }
   }
 
+  if (providerRetry !== undefined) {
+    const refusal = providerRetryRefusal(providerRetry);
+    if (refusal) return fail(INVALID, refusal, 400);
+    if (target != null) {
+      return fail(INVALID, 'A `providerRetry` call names no `target`.', 400);
+    }
+  }
+
   try {
     const result = await aiGenerationService.recordPlanStepForJob(
       {
@@ -115,6 +161,9 @@ export async function POST(req: Request): Promise<Response> {
         targetRef: (target as string | undefined) ?? null,
         ...(step !== undefined ? { step: step as Step } : {}),
         ...(narration !== undefined ? { narration: narration as string[] } : {}),
+        ...(providerRetry !== undefined
+          ? { providerRetry: providerRetry as PlanProviderRetryInput }
+          : {}),
       },
       auth,
     );

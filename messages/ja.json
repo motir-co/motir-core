@@ -8475,6 +8475,16 @@
       "failureLinePlanAgain": "この試行は続行できませんでした · {when}。次のメッセージで計画し直します。",
       "failureLinePlanAgainAgain": "この試行は再び続行できませんでした · {when}。次のメッセージで計画し直します。"
     },
+    "providerLimit": {
+      "retryingTitle": "モデルプロバイダーの応答を待っています",
+      "retryingBody": "現在混み合っています。計画は自動で再試行します。失われるものはありません。",
+      "walkBecause": "モデルプロバイダーが利用上限に達したため",
+      "walkKept": "失われたものはありません。準備ができたら「再開」を押してもう一度お試しください。止まったところから続行します。",
+      "failureLine": "この計画への直前の変更を反映できませんでした：モデルプロバイダーが利用上限に達しています · {when}。準備ができたらもう一度送信してください。",
+      "failureLineAgain": "直前の変更を再び反映できませんでした：モデルプロバイダーが利用上限に達しています · {when}。準備ができたらもう一度送信してください。",
+      "failureLinePlanAgain": "この試行は続行できませんでした：モデルプロバイダーが利用上限に達しています · {when}。次のメッセージで計画し直します。",
+      "failureLinePlanAgainAgain": "この試行は再び続行できませんでした：モデルプロバイダーが利用上限に達しています · {when}。次のメッセージで計画し直します。"
+    },
     "grill": {
       "control": {
         "label": "質問攻め",
@@ -10157,10 +10167,12 @@
           "degradedValue": "低速 · {ms} ms",
           "degradedDetail": "応答していますが、しきい値の {threshold} ms を超えています。motir-gateway {version} · {since} から稼働中。",
           "unreachable": {
+            "badAnswer": "ゲートウェイの応答を読み取れません",
             "noAnswer": "ゲートウェイから応答なし",
             "notConfigured": "ゲートウェイ未設定"
           },
           "unreachableDetail": {
+            "badAnswer": "ゲートウェイは応答しましたが、ステータスを読み取れませんでした: {why, select, httpStatus {HTTP {status} が返されました} notJson {本文が JSON ではありませんでした} noSuccess {成功が報告されませんでした} noData {データが含まれていませんでした} noVersion {バージョンが含まれていませんでした} noStartTime {起動時刻が含まれていませんでした} other {応答が拒否されました}}。ゲートウェイを経由する AI リクエストが失敗している可能性があります。何も測定されていないため、レイテンシは表示されません。",
             "noAnswer": "ステータスチェックは {timeout} 秒以内に応答を得られませんでした。ゲートウェイを経由する AI リクエストが失敗している可能性があります。何も測定されていないため、レイテンシは表示されません。",
             "notConfigured": "MOTIR_GATEWAY_URL が設定されていないため、確認するものはありません。ゲートウェイを実行しないインスタンスでは想定どおりです。"
           },
