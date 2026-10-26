@@ -110,9 +110,11 @@ export const platformCapacityService = {
       return toPlatformCapacityStoredEntryDTO(row);
     } catch (err) {
       if (applied) {
+        // A constant message: `console.error` reads its first argument as a format
+        // string, and the provider and model are the caller's input.
         console.error(
-          `[platform-capacity] the gateway applied an edit to ${target.provider}/${target.model} ` +
-            `(${Object.keys(keys).join(', ')}), but the audit row did not commit`,
+          '[platform-capacity] the gateway applied an edit, but the audit row did not commit',
+          { ...target, keys: Object.keys(keys) },
           err,
         );
       }
