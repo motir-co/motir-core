@@ -499,3 +499,244 @@ describe('FleetUseSection — Request more capacity', () => {
     expect(within(dialog).queryByText(/could not be read/)).toBeNull();
   });
 });
+
+// ── Top-ups for MOTIR-9664's coverage lane: the rarer readings, the races the
+// sequence guard settles, and the dialog's edges. ──────────────────────────────
+
+describe('FleetUseSection — rarer account and request readings', () => {
+  const host = (accounts: FleetUseHostAccountDTO[], over: Partial<FleetUseDTO> = {}) =>
+    proAtLimit({
+      plan: { kind: 'limited', planKey: 'host', planName: 'Host', noFleet: false },
+      hostAccounts: accounts,
+      ...over,
+    });
+
+  it('a just-created account on the shared floor, with nothing asked and no readable time', async () => {
+    const data = host([
+      account({
+        state: 'created',
+        createdAt: 'not a date',
+        quotaRequestedAt: null,
+        grantedAt: null,
+        liveAt: null,
+        vcpuAsked: null,
+        vcpuGranted: null,
+        quotaOutcome: null,
+        onSharedFloor: true,
+      }),
+    ]);
+    data.figures.ciJobsInFlight = { ...data.figures.ciJobsInFlight, figure: null };
+    stubFetch([ok(data)]);
+    renderSection();
+    const row = await screen.findByTestId('fleet-account-ci_runner');
+    expect(within(row).getByText('Created')).toBeTruthy();
+    expect(within(row).queryByText(/^since /)).toBeNull();
+    expect(within(row).getByText('—')).toBeTruthy();
+    expect(within(row).getByText('None yet')).toBeTruthy();
+    expect(within(row).getByText(/Still on the shared floor: CI at — runners/)).toBeTruthy();
+  });
+
+  const request = (over: Record<string, unknown>) => ({
+    id: 'r1',
+    fleetKind: 'ci_runner' as const,
+    desiredVcpu: 512,
+    reasonMd: 'x',
+    status: 'closed' as const,
+    closedNote: null,
+    createdAt: '2026-10-24T10:00:00.000Z',
+    filedAt: null,
+    closedAt: '2026-10-25T10:00:00.000Z',
+    outcome: null,
+    ...over,
+  });
+
+  it.each([
+    ['open', request({ status: 'open', closedAt: null }), 'Open', /sent to Motir/],
+    [
+      'closed with a note',
+      request({ closedNote: 'Duplicate' }),
+      'Closed',
+      /closed by Motir: “Duplicate”/,
+    ],
+    [
+      'denied',
+      request({ outcome: { status: 'not_approved', grantedValue: null, lastReadAt: null } }),
+      'Denied by AWS',
+      /AWS refused the raise/,
+    ],
+    [
+      'closed by AWS',
+      request({ outcome: { status: 'case_closed', grantedValue: null, lastReadAt: null } }),
+      'Closed',
+      /AWS answered: AWS closed the case/,
+    ],
+    ['closed with no answer', request({ createdAt: 'bad' }), 'Closed', /AWS answered: Not read/],
+    [
+      'granted with no value read',
+      request({ outcome: { status: 'approved', grantedValue: null, lastReadAt: null } }),
+      'Granted 512 vCPU',
+      /AWS granted it/,
+    ],
+  ])('a request %s reads its own pill and words', async (_, req, pill, words) => {
+    stubFetch([ok(host([account({ capacityRequests: [req as never] })]))]);
+    renderSection();
+    const line = await screen.findByTestId('fleet-request-status');
+    expect(within(line).getByText(pill)).toBeTruthy();
+    expect(line.textContent).toMatch(words);
+  });
+
+  it('retries an accounts read it could not make', async () => {
+    const fetchMock = stubFetch([ok(host({ kind: 'not_read' } as never)), ok(host([account()]))]);
+    renderSection();
+    const block = await screen.findByTestId('fleet-own-accounts');
+    fireEvent.click(within(block).getByRole('button', { name: 'Try again' }));
+    expect(await screen.findByTestId('fleet-account-ci_runner')).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('FleetUseSection — only the latest read lands', () => {
+  function deferred<T>() {
+    let resolve!: (v: T) => void;
+    let reject!: (e: unknown) => void;
+    const promise = new Promise<T>((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    return { promise, resolve, reject };
+  }
+
+  /** Each read answers when the test says so. */
+  function manualFetch() {
+    const pending: ReturnType<typeof deferred<Response>>[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => {
+        const d = deferred<Response>();
+        pending.push(d);
+        return d.promise;
+      }),
+    );
+    return pending;
+  }
+
+  const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
+
+  it('a slower, older read is ignored — whether it answers, fails or throws late', async () => {
+    const reads = manualFetch();
+    renderSection();
+    reads[0]!.resolve(json(null, 500));
+    const retry = await screen.findByRole('button', { name: 'Try again' });
+    fireEvent.click(retry);
+    fireEvent.click(retry);
+    fireEvent.click(retry);
+    await waitFor(() => expect(reads).toHaveLength(4));
+
+    reads[3]!.resolve(json({ fleetUse: proAtLimit() }));
+    expect(await screen.findByText('3 of 3')).toBeTruthy();
+
+    // An older read answering 500, one throwing, one whose body arrives late.
+    reads[1]!.resolve(json(null, 500));
+    reads[2]!.reject(new TypeError('network'));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.getByText('3 of 3')).toBeTruthy();
+    expect(screen.queryByText('Plan not read')).toBeNull();
+  });
+
+  it('a body that arrives after a newer read began is ignored', async () => {
+    const reads = manualFetch();
+    renderSection();
+    reads[0]!.resolve(json(null, 500));
+    const retry = await screen.findByRole('button', { name: 'Try again' });
+    fireEvent.click(retry);
+    await waitFor(() => expect(reads).toHaveLength(2));
+    const late = deferred<unknown>();
+    reads[1]!.resolve({ ok: true, status: 200, json: () => late.promise } as unknown as Response);
+    await new Promise((r) => setTimeout(r, 0));
+    fireEvent.click(retry);
+    await waitFor(() => expect(reads).toHaveLength(3));
+    late.resolve({ fleetUse: proAtLimit({ plan: { kind: 'no_plan_limits' } }) });
+    reads[2]!.resolve(json({ fleetUse: proAtLimit() }));
+    expect(await screen.findByText('3 of 3')).toBeTruthy();
+    expect(screen.queryByText('No plan limits')).toBeNull();
+  });
+
+  it('a read that throws reads as not read', async () => {
+    const reads = manualFetch();
+    renderSection();
+    reads[0]!.reject(new TypeError('network'));
+    expect(await screen.findByText('Plan not read')).toBeTruthy();
+  });
+});
+
+describe('FleetUseSection — the dialog’s edges', () => {
+  const hostWith = (over: Partial<FleetUseHostAccountDTO> = {}) =>
+    proAtLimit({
+      plan: { kind: 'limited', planKey: 'host', planName: 'Host', noFleet: false },
+      hostAccounts: [account(over)],
+    });
+
+  async function open(reads: Answer[], post?: Answer) {
+    const fetchMock = stubFetch(reads, post);
+    renderSection();
+    fireEvent.click(await screen.findByRole('button', { name: 'Request more capacity' }));
+    return { fetchMock, dialog: await screen.findByRole('dialog') };
+  }
+
+  it('an account with nothing granted says so and asks for more than 0', async () => {
+    const { dialog } = await open([ok(hostWith({ vcpuGranted: null }))]);
+    expect(within(dialog).getByText(/nothing granted yet/)).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Send request' }));
+    expect(await within(dialog).findByText(/above 0/)).toBeTruthy();
+  });
+
+  it('closes from its own close button', async () => {
+    const { dialog } = await open([ok(hostWith())]);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+
+  it('a refusal with no readable body reads as not sent', async () => {
+    const fetchMock = vi.fn(async (url: string) =>
+      url === URL_POST
+        ? new Response('<html>bad gateway</html>', { status: 502 })
+        : new Response(JSON.stringify({ fleetUse: hostWith() }), { status: 200 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    renderSection();
+    fireEvent.click(await screen.findByRole('button', { name: 'Request more capacity' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('vCPU you need'), { target: { value: '512' } });
+    fireEvent.change(within(dialog).getByLabelText('Why you need it'), {
+      target: { value: 'more' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Send request' }));
+    expect((await within(dialog).findByRole('alert')).textContent).toMatch(/was not sent/);
+  });
+
+  it('a second press while sending sends nothing more', async () => {
+    let answer!: (r: Response) => void;
+    const fetchMock = vi.fn((url: string) =>
+      url === URL_POST
+        ? new Promise<Response>((res) => (answer = res))
+        : Promise.resolve(new Response(JSON.stringify({ fleetUse: hostWith() }), { status: 200 })),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    renderSection();
+    fireEvent.click(await screen.findByRole('button', { name: 'Request more capacity' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('vCPU you need'), { target: { value: '512' } });
+    fireEvent.change(within(dialog).getByLabelText('Why you need it'), {
+      target: { value: 'more' },
+    });
+    const send = within(dialog).getByRole('button', { name: 'Send request' });
+    fireEvent.click(send);
+    fireEvent.click(send);
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.filter(([url]) => url === URL_POST)).toHaveLength(1),
+    );
+    answer(new Response(JSON.stringify({ code: 'X' }), { status: 500 }));
+    expect(await within(dialog).findByRole('alert')).toBeTruthy();
+    expect(fetchMock.mock.calls.filter(([url]) => url === URL_POST)).toHaveLength(1);
+  });
+});

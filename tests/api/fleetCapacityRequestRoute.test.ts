@@ -322,3 +322,29 @@ describe('the figure and the reason', () => {
     },
   );
 });
+
+// Top-up (MOTIR-9664's coverage lane): the body that is no object at all, and an
+// error the route does not map.
+describe('a body it cannot read, and an error it does not map', () => {
+  it.each([
+    ['a non-JSON body', 'not json'],
+    ['a JSON array', []],
+    ['JSON null', null],
+  ] as const)('%s is 400 naming the body', async (_, body) => {
+    signInAs(host.owner);
+    const res = await post(host.organizationId, body === null ? 'null' : body);
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ code: 'INVALID_BODY', field: 'body' });
+  });
+
+  it('an unmapped error is rethrown, never turned into a 4xx', async () => {
+    const { fleetCapacityRequestService } =
+      await import('@/lib/services/fleetCapacityRequestService');
+    const spy = vi
+      .spyOn(fleetCapacityRequestService, 'requestForOrganization')
+      .mockRejectedValue(new Error('database gone'));
+    signInAs(host.owner);
+    await expect(post(host.organizationId, askCi)).rejects.toThrow('database gone');
+    spy.mockRestore();
+  });
+});

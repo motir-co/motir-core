@@ -151,6 +151,9 @@ describe('CI Postgres container (MOTIR-1742)', () => {
       // MOTIR-9591's Host own-accounts coverage lane (Story MOTIR-9365): the story gate
       // drives reconcile, state, admission, caps and attribution against a real database.
       'ci.yml:story-9365-coverage',
+      // MOTIR-9664's Fleet use coverage lane (Story MOTIR-9368): the story gate drives real
+      // admission into its deferrals and reads the real routes against a real database.
+      'ci.yml:story-9368-coverage',
       // MOTIR-9624's provider-limit coverage lane (Story MOTIR-9540): the story gate stores
       // and clears a provider wait through the hosted door and resumes a rate_limited session.
       'ci.yml:story-9540-coverage',

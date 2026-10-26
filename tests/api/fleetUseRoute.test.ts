@@ -153,3 +153,13 @@ describe('GET fleet-use', () => {
     expect((await get(org.organizationId)).status).toBe(401);
   });
 });
+
+// Top-up (MOTIR-9664's coverage lane): an error the route does not map.
+describe('an error the route does not map', () => {
+  it('is rethrown, never turned into a 4xx', async () => {
+    const { fleetUseService } = await import('@/lib/services/fleetUseService');
+    vi.spyOn(fleetUseService, 'readForOrganization').mockRejectedValue(new Error('database gone'));
+    signInAs(org.owner);
+    await expect(get(org.organizationId)).rejects.toThrow('database gone');
+  });
+});
