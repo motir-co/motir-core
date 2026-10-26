@@ -7,6 +7,7 @@ import { TriangleAlert } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { repositoryRowHref } from '@/lib/projectRepos/repositoryAnchor';
 import { isLiveRun } from '@/lib/runs/timeline';
+import { allHeld } from '@/components/hosted/hostedModels';
 import { useHostedRun, type HostedRunRefusal } from './HostedRunProvider';
 
 // WHAT THE RUN HOSTED DOOR ANSWERS, in the Run section's body (Story MOTIR-683 ·
@@ -46,6 +47,11 @@ export function HostedDoorNotices() {
       ) : door.models.models.length === 0 ? (
         <Notice testId="hosted-models-empty">
           <span>{t('picker.emptyBody')}</span>
+        </Notice>
+      ) : allHeld(door.models) ? (
+        // The All-models-held line (MOTIR-9630, design N5): the empty face's slot.
+        <Notice testId="hosted-models-all-held">
+          <span>{t('picker.allHeldBody')}</span>
         </Notice>
       ) : null}
       {!door.ready ? (
@@ -96,8 +102,8 @@ export function RefusalNotice({ refusal }: { refusal: HostedRunRefusal }) {
     );
   }
   const title =
-    refusal.kind === 'modelNotOffered'
-      ? t('modelNotOffered.title', { model: refusal.model })
+    refusal.kind === 'modelNotOffered' || refusal.kind === 'noCapacity'
+      ? t(`${refusal.kind}.title`, { model: refusal.model })
       : t(`${refusal.kind}.title`);
   return (
     <Notice testId={`hosted-refused-${refusal.kind}`}>

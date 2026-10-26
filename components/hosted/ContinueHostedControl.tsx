@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { Cloud, TriangleAlert } from 'lucide-react';
@@ -8,10 +8,10 @@ import { Button } from '@/components/ui/Button';
 import { repositoryRowHref } from '@/lib/projectRepos/repositoryAnchor';
 import { formatRunInstant } from '@/lib/runs/runClock';
 import { relativeLabel } from '@/components/github/RepairFixPart';
-import { HostedModelPicker } from './HostedModelPicker';
+import { HostedHeldLine, HostedModelPicker } from './HostedModelPicker';
 import { useHostedModels } from './HostedModelsProvider';
 import { useContinueHosted } from './useContinueHosted';
-import type { ContinueHostedRefusal } from './hostedModels';
+import { isHeld, type ContinueHostedRefusal } from './hostedModels';
 import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 
 // CONTINUE HOSTED, AS A CONTROL ANY SURFACE CAN PLACE (MOTIR-6879), built to
@@ -32,12 +32,15 @@ import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 // pushed, Implemented, a viewer who may not edit: the surface that places the
 // control decides those, and passes a null target where it is not offered.
 
-/** The picker and the button — the primary action (C1–C3, C4a). */
+/** The picker and the button — the primary action (C1–C3, C4a). A held selected model
+ *  holds the button with the *Held Run line* (MOTIR-9630, design N7), which gives way
+ *  to a standing no-capacity refusal (`refused`). */
 export function ContinueHostedButtonRow({
   continueTarget,
   itemKey,
   starting,
   onPress,
+  refused = false,
 }: {
   /** The key the press continues — the card's own, or its dead parent run's. */
   continueTarget: string | null;
@@ -45,14 +48,19 @@ export function ContinueHostedButtonRow({
   itemKey: string;
   starting: boolean;
   onPress: () => void;
+  /** A no-capacity refusal stands under the door — it names the model instead. */
+  refused?: boolean;
 }) {
   const t = useTranslations('github.development.continue.hosted');
   const tDoor = useTranslations('runs.hosted.door');
   const hosted = useHostedModels();
+  const heldId = useId();
   if (!hosted || !continueTarget) return null;
 
   const modelsReady = hosted.models.state === 'ok' && hosted.models.models.length > 0;
   const parent = continueTarget !== itemKey ? continueTarget : null;
+  const held = isHeld(hosted.models, hosted.continueModel);
+  const heldLine = held && !refused ? hosted.continueModel : null;
 
   return (
     <div className="flex flex-wrap items-center gap-2" data-testid="continue-hosted-door">
@@ -66,14 +74,16 @@ export function ContinueHostedButtonRow({
         type="button"
         variant="primary"
         size="sm"
-        disabled={!modelsReady || starting || !hosted.continueModel}
+        disabled={!modelsReady || starting || !hosted.continueModel || held}
         loading={starting}
         onClick={onPress}
         leftIcon={<Cloud className="size-3.5" aria-hidden="true" />}
+        aria-describedby={heldLine ? heldId : undefined}
         data-testid="continue-hosted"
       >
         {starting ? tDoor('starting') : parent ? t('buttonParent', { key: parent }) : t('button')}
       </Button>
+      <HostedHeldLine model={heldLine} id={heldId} />
     </div>
   );
 }
@@ -135,6 +145,7 @@ export function ContinueHostedControl({
         itemKey={itemKey ?? continueTarget}
         starting={press.starting}
         onPress={() => void press.start()}
+        refused={press.refusal?.kind === 'noCapacity'}
       />
       <ContinueHostedAnswer
         continueTarget={continueTarget}
@@ -258,8 +269,9 @@ function Refusal({
       body = t('outOfCredits.body');
       break;
     case 'modelNotOffered':
-      title = tRun('modelNotOffered.title', { model: refusal.model });
-      body = tRun('modelNotOffered.body');
+    case 'noCapacity':
+      title = tRun(`${refusal.kind}.title`, { model: refusal.model });
+      body = tRun(`${refusal.kind}.body`);
       break;
     default:
       title = tRun(`${refusal.kind}.title`);

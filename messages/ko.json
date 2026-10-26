@@ -9706,7 +9706,8 @@
         "dispatcher_gone": "실행을 시작한 <b>{name}</b> 님이 더 이상 이 워크스페이스에 없습니다",
         "dispatcher_goneAnon": "실행을 시작한 사람이 더 이상 이 워크스페이스에 없습니다",
         "repository_not_writable": "Motir가 더 이상 {repo}에 푸시할 수 없습니다",
-        "card_not_ready": "{key}은(는) 실행할 준비가 되지 않았습니다 — 차단되었거나 더 이상 진행 중이 아닙니다"
+        "card_not_ready": "{key}은(는) 실행할 준비가 되지 않았습니다 — 차단되었거나 더 이상 진행 중이 아닙니다",
+        "no_capacity": "실행에 사용한 모델 {model}에 지금은 에이전트 실행 용량이 없습니다"
       },
       "repair": {
         "out_of_credits": "결제에서 크레딧을 추가한 다음 이어서 하기를 누르거나, 터미널에서 이어가세요.",
@@ -9717,7 +9718,8 @@
         "no_project_access": "직접 이어서 진행하세요 — 조직의 크레딧으로 본인 권한으로 실행됩니다.",
         "dispatcher_gone": "직접 이어서 진행하세요 — 조직의 크레딧으로 본인 권한으로 실행됩니다.",
         "repository_not_writable": "프로젝트 설정에서 저장소를 다시 연결한 다음 이어서 하기를 누르세요.",
-        "card_not_ready": "{key}을(를) 차단하는 요인을 해결하거나 다시 진행 중으로 옮긴 다음 이어서 하기를 누르세요."
+        "card_not_ready": "{key}을(를) 차단하는 요인을 해결하거나 다시 진행 중으로 옮긴 다음 이어서 하기를 누르세요.",
+        "no_capacity": "다른 모델을 선택하고 이어서 하기를 누르거나, 잠시 후 다시 시도하세요."
       },
       "copyAria": "{key}의 재개 명령 복사",
       "member": {
@@ -13031,7 +13033,8 @@
       "door": {
         "run": "실행",
         "runAgain": "다시 실행",
-        "starting": "시작하는 중…"
+        "starting": "시작하는 중…",
+        "heldModel": "<b>{model}</b>에 지금은 에이전트 실행 용량이 없습니다. 다른 모델을 선택하거나 용량이 돌아올 때까지 기다리세요."
       },
       "picker": {
         "label": "모델",
@@ -13048,7 +13051,10 @@
         "fromDifficulty": "난이도 기준: <b>{difficulty}</b>",
         "override": "<b>{difficulty}</b>에 대한 프로젝트 재정의",
         "fromLeaves": "하위 리프 항목 중 가장 높은 난이도: <b>{difficulty}</b>",
-        "overrideFromLeaves": "하위 리프 항목 중 가장 높은 난이도인 <b>{difficulty}</b>에 대한 프로젝트 재정의"
+        "overrideFromLeaves": "하위 리프 항목 중 가장 높은 난이도인 <b>{difficulty}</b>에 대한 프로젝트 재정의",
+        "noCapacityTag": "용량 없음",
+        "noCapacityReason": "지금은 에이전트 실행 용량이 없습니다. 잠시 후 다시 시도하세요.",
+        "allHeldBody": "지금은 에이전트 실행 용량이 있는 모델이 없습니다. 잠시 후 다시 시도하세요. 로컬 실행에는 영향이 없습니다."
       },
       "notReady": "이 작업 항목이 준비되면 실행할 수 있습니다 — {count, plural, other {열린 차단 항목이 #개}} 있습니다.",
       "refused": {
@@ -13081,6 +13087,10 @@
         "failed": {
           "title": "시작되지 않음 — Motir가 실행을 시작하지 못했습니다.",
           "body": "부팅된 것이 없습니다. 잠시 후 다시 시도하세요."
+        },
+        "noCapacity": {
+          "title": "시작되지 않음 — {model}에 지금은 에이전트 실행 용량이 없습니다.",
+          "body": "부팅된 것도, 청구된 것도 없습니다. 다른 모델을 선택하거나 잠시 후 다시 시도하세요."
         }
       },
       "phase": {
@@ -14259,7 +14269,8 @@
           "no_verdictNoRun": "리뷰 실행이 판정 없이 종료되었습니다.",
           "boot_failed": "리뷰용 호스팅 머신을 시작할 수 없었습니다.",
           "no_actor": "실행할 사람이 없습니다 — 작업 항목에 담당자나 보고자가 없고, 워크스페이스에 대리 관리자도 없습니다.",
-          "unknown": "리뷰 실행을 시작할 수 없었습니다."
+          "unknown": "리뷰 실행을 시작할 수 없었습니다.",
+          "noCapacity": "리뷰에 사용할 모델에 지금은 에이전트 실행 용량이 없습니다. 잠시 후 다시 시도하세요."
         },
         "why": "리뷰가 실행되거나 누군가 리뷰 없이 계속하기 전까지는 아무것도 병합되지 않습니다.",
         "whyNotYours": "{name} 님을 기다리는 중입니다. 리뷰가 실행되거나 해당 사용자가 리뷰 없이 계속하기 전까지는 아무것도 병합되지 않습니다."
@@ -14296,7 +14307,8 @@
         "out_of_credits": "조직의 크레딧이 소진되었습니다.",
         "credits_unavailable": "크레딧 잔액을 읽을 수 없었습니다.",
         "repository_not_writable": "Motir가 {detail}에 쓸 수 없습니다.",
-        "card_not_ready": "다른 사람이 먼저 작업 항목을 가져갔습니다."
+        "card_not_ready": "다른 사람이 먼저 작업 항목을 가져갔습니다.",
+        "no_capacity": "마지막으로 실행한 모델인 {detail}에 지금은 에이전트 실행 용량이 없습니다."
       },
       "next": {
         "cap_reached": "호스팅 에이전트에서 실행",
@@ -14307,7 +14319,8 @@
         "models_unavailable": "호스팅 에이전트에서 실행",
         "out_of_credits": "크레딧 구매",
         "credits_unavailable": "호스팅 에이전트에서 실행",
-        "repository_not_writable": "저장소"
+        "repository_not_writable": "저장소",
+        "no_capacity": "다른 모델을 선택하고 실행"
       }
     },
     "manualWork": {

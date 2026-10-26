@@ -9712,7 +9712,8 @@
         "dispatcher_gone": "<b>{name}</b>, quem a iniciou, não está mais neste espaço de trabalho",
         "dispatcher_goneAnon": "a pessoa que a iniciou não está mais neste espaço de trabalho",
         "repository_not_writable": "o Motir não consegue mais enviar para {repo}",
-        "card_not_ready": "{key} não está pronto para execução — está bloqueado ou não está mais em andamento"
+        "card_not_ready": "{key} não está pronto para execução — está bloqueado ou não está mais em andamento",
+        "no_capacity": "o modelo com que ela foi executada, {model}, está sem capacidade para execuções de agente agora"
       },
       "repair": {
         "out_of_credits": "Adicione créditos no faturamento e depois pressione Continuar — ou continue pelo seu terminal.",
@@ -9723,7 +9724,8 @@
         "no_project_access": "Continue você mesmo — ela é executada como você, com os créditos da sua organização.",
         "dispatcher_gone": "Continue você mesmo — ela é executada como você, com os créditos da sua organização.",
         "repository_not_writable": "Reconecte o repositório nas configurações do projeto e depois pressione Continuar.",
-        "card_not_ready": "Resolva o que bloqueia {key} ou mova-o de volta para Em andamento e depois pressione Continuar."
+        "card_not_ready": "Resolva o que bloqueia {key} ou mova-o de volta para Em andamento e depois pressione Continuar.",
+        "no_capacity": "Escolha outro modelo e pressione Continuar, ou tente novamente em breve."
       },
       "copyAria": "Copiar o comando de retomada de {key}",
       "member": {
@@ -13037,7 +13039,8 @@
       "door": {
         "run": "Executar",
         "runAgain": "Executar novamente",
-        "starting": "Iniciando…"
+        "starting": "Iniciando…",
+        "heldModel": "<b>{model}</b> está sem capacidade para execuções de agente agora. Escolha outro modelo ou aguarde até que ele tenha capacidade."
       },
       "picker": {
         "label": "Modelo",
@@ -13054,7 +13057,10 @@
         "fromDifficulty": "Pela dificuldade: <b>{difficulty}</b>",
         "override": "Substituição do projeto para <b>{difficulty}</b>",
         "fromLeaves": "Maior dificuldade entre as folhas: <b>{difficulty}</b>",
-        "overrideFromLeaves": "Substituição do projeto para <b>{difficulty}</b>, a maior dificuldade entre as folhas"
+        "overrideFromLeaves": "Substituição do projeto para <b>{difficulty}</b>, a maior dificuldade entre as folhas",
+        "noCapacityTag": "Sem capacidade",
+        "noCapacityReason": "Sem capacidade para execuções de agente agora. Tente novamente em breve.",
+        "allHeldBody": "Nenhum modelo tem capacidade para execuções de agente agora. Tente novamente em breve; as execuções locais não são afetadas."
       },
       "notReady": "Executar fica disponível quando este item de trabalho estiver pronto — ele tem {count, plural, one {# bloqueador aberto} other {# bloqueadores abertos}}.",
       "refused": {
@@ -13087,6 +13093,10 @@
         "failed": {
           "title": "Não iniciado — o Motir não conseguiu iniciar a execução.",
           "body": "Nada foi inicializado. Tente novamente em breve."
+        },
+        "noCapacity": {
+          "title": "Não iniciado — {model} está sem capacidade para execuções de agente agora.",
+          "body": "Nada foi inicializado e nada foi cobrado. Escolha outro modelo ou tente novamente em breve."
         }
       },
       "phase": {
@@ -14265,7 +14275,8 @@
           "no_verdictNoRun": "a execução da revisão terminou sem um veredito.",
           "boot_failed": "a máquina hospedada para a revisão não conseguiu iniciar.",
           "no_actor": "ninguém pode executá-la — o item de trabalho não tem responsável nem relator, e o workspace não tem um gerente substituto.",
-          "unknown": "a execução da revisão não conseguiu iniciar."
+          "unknown": "a execução da revisão não conseguiu iniciar.",
+          "noCapacity": "o modelo da revisão está sem capacidade para execuções de agente agora. Tente novamente em breve."
         },
         "why": "Nada é mesclado até que a revisão seja executada, ou que alguém continue sem ela.",
         "whyNotYours": "Aguardando {name}. Nada é mesclado até que a revisão seja executada, ou que essa pessoa continue sem ela."
@@ -14302,7 +14313,8 @@
         "out_of_credits": "a organização está sem créditos.",
         "credits_unavailable": "não foi possível ler o saldo de créditos.",
         "repository_not_writable": "o Motir não consegue gravar em {detail}.",
-        "card_not_ready": "alguém assumiu o item de trabalho primeiro."
+        "card_not_ready": "alguém assumiu o item de trabalho primeiro.",
+        "no_capacity": "{detail}, o modelo em que ele rodou por último, está sem capacidade para execuções de agente agora."
       },
       "next": {
         "cap_reached": "Executar no agente hospedado",
@@ -14313,7 +14325,8 @@
         "models_unavailable": "Executar no agente hospedado",
         "out_of_credits": "Comprar créditos",
         "credits_unavailable": "Executar no agente hospedado",
-        "repository_not_writable": "Repositórios"
+        "repository_not_writable": "Repositórios",
+        "no_capacity": "Escolher outro modelo e executar"
       }
     },
     "manualWork": {
