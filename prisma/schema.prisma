@@ -5973,6 +5973,8 @@ enum DesignAutoRerunSkipReason {
   repository_not_writable
   /// The card is not ready or not claimable (for example, a person claimed it first).
   card_not_ready
+  /// The model has no agent-run capacity right now (MOTIR-9633). Recorded, never retried.
+  no_capacity
 
   @@map("design_auto_rerun_skip_reason")
 }
@@ -7805,17 +7807,27 @@ enum PlanStepKind {
 /// No `workspace_id`, deliberately — the `PlanRevision` tenancy: the RLS policy
 /// joins to the parent `plan`.
 model PlanStep {
-  id         String       @id @default(cuid())
-  planId     String       @map("plan_id")
+  id                      String       @id @default(cuid())
+  planId                  String       @map("plan_id")
   /// The planner's own opaque id for one running session (≤ 128 chars).
-  sessionKey String       @map("session_key")
-  kind       PlanStepKind
+  sessionKey              String       @map("session_key")
+  kind                    PlanStepKind
   /// `planItem:<id>` or a work-item id, exactly as the planner sent it. NULL for
   /// `settle` always, and for the two untargeted forms of `lay` / `author` —
   /// "no ref exists yet", never "unknown".
-  targetRef  String?      @map("target_ref")
+  targetRef               String?      @map("target_ref")
   /// The SERVER's clock at the report, never a caller field.
-  startedAt  DateTime     @map("started_at")
+  startedAt               DateTime     @map("started_at")
+  /// The session's provider-retry WAIT (MOTIR-9619): set while a model call is
+  /// waiting out a provider limit, NULL otherwise. All four are set or all four
+  /// are NULL (CHECK `plan_step_provider_wait_complete`). `providerWaitSince` is
+  /// the server's clock at the report; `providerWaitUntil` is the retry's time,
+  /// clamped by the service. A new step report nulls them; a wait report never
+  /// touches `kind` / `targetRef` / `startedAt`.
+  providerWaitSince       DateTime?    @map("provider_wait_since") @db.Timestamptz
+  providerWaitUntil       DateTime?    @map("provider_wait_until") @db.Timestamptz
+  providerWaitAttempt     Int?         @map("provider_wait_attempt")
+  providerWaitMaxAttempts Int?         @map("provider_wait_max_attempts")
 
   plan Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
 
@@ -12905,6 +12917,8 @@ enum GateResumeSkipReason {
   already_resumed
   /// The continue claim refused it for another reason (`detail` names it).
   not_resumable
+  /// The run's model has no agent-run capacity right now (MOTIR-9633). Never retried.
+  no_capacity
 
   @@map("gate_resume_skip_reason")
 }

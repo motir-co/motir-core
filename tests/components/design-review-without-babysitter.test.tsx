@@ -5,7 +5,9 @@ import { renderWithIntl } from '../helpers/renderWithIntl';
 import { ToastProvider } from '@/components/ui/Toast';
 import { ApprovalGateControl } from '@/components/approvals/ApprovalGateControl';
 import { DesignApprovalGateCard } from '@/app/(authed)/settings/project/approvals/_components/DesignApprovalGateCard';
+import { AutoRerunLine } from '@/components/approvals/AutoRerunLine';
 import type { ApprovalGateDTO, DesignAutoRerunDTO } from '@/lib/dto/approvalGate';
+import zhMessages from '@/messages/zh.json';
 
 // STORY MOTIR-693's THREE SURFACES (MOTIR-702), each drawn state of MOTIR-694's
 // published design asserted:
@@ -201,6 +203,13 @@ describe('ApprovalGateControl — the automatic re-run line', () => {
     ],
     ['models_unavailable', null, /list of models could not be read/, 'Run on the hosted agent'],
     ['out_of_credits', null, /out of credits/, 'Buy credits'],
+    // MOTIR-9633: recorded with the model, never retried.
+    [
+      'no_capacity',
+      'claude-opus-5-5',
+      /claude-opus-5-5, the model it last ran on, has no agent-run capacity right now/,
+      'Pick another model and run',
+    ],
     ['credits_unavailable', null, /credit balance could not be read/, 'Run on the hosted agent'],
     [
       'repository_not_writable',
@@ -213,6 +222,19 @@ describe('ApprovalGateControl — the automatic re-run line', () => {
     expect(screen.getByText('Automatic re-run skipped')).toBeTruthy();
     expect(screen.getByText(why)).toBeTruthy();
     expect(screen.getByRole('link', { name: next })).toBeTruthy();
+  });
+
+  it('skipped · no_capacity reads in zh, naming the model (MOTIR-9633)', () => {
+    renderWithIntl(
+      <AutoRerunLine rerun={rerun({ skipReason: 'no_capacity', detail: 'claude-opus-5-5' })} />,
+      { locale: 'zh', messages: zhMessages },
+    );
+    expect(screen.getByTestId('auto-rerun-line').textContent).toContain(
+      '它上次使用的模型 claude-opus-5-5 目前没有智能体运行容量。',
+    );
+    expect(
+      screen.getByRole('link', { name: zhMessages.approvalGate.autoRerun.next.no_capacity }),
+    ).toBeTruthy();
   });
 
   it('skipped · card_not_ready: says why and offers nothing', () => {

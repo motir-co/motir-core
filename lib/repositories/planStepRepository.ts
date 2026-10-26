@@ -8,6 +8,20 @@ export interface PlanStepWriteInput {
   kind: PlanStepKind;
   targetRef: string | null;
   startedAt: Date;
+  /** The provider-retry wait (MOTIR-9619) — a step write passes all four null,
+   *  which is how a session that moved on clears its wait. */
+  providerWaitSince: Date | null;
+  providerWaitUntil: Date | null;
+  providerWaitAttempt: number | null;
+  providerWaitMaxAttempts: number | null;
+}
+
+/** A session's provider-retry wait as one write carries it (MOTIR-9619). */
+export interface PlanStepProviderWaitInput {
+  since: Date;
+  until: Date;
+  attempt: number;
+  maxAttempts: number;
 }
 
 // Plan-step repository — single Prisma operations on the `plan_step` table
@@ -37,6 +51,48 @@ export const planStepRepository = {
       create: { planId, sessionKey, ...data },
       update: data,
     });
+  },
+
+  /**
+   * Set — or, with `null`, clear — a session's provider-retry wait (MOTIR-9619):
+   * ONE `updateMany` on the four wait columns that leaves `kind` / `targetRef` /
+   * `startedAt` alone. Returns how many rows it touched (0 when the session
+   * holds no step, 1 otherwise).
+   */
+  async setProviderWait(
+    planId: string,
+    sessionKey: string,
+    wait: PlanStepProviderWaitInput | null,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const r = await tx.planStep.updateMany({
+      where: { planId, sessionKey },
+      data: {
+        providerWaitSince: wait?.since ?? null,
+        providerWaitUntil: wait?.until ?? null,
+        providerWaitAttempt: wait?.attempt ?? null,
+        providerWaitMaxAttempts: wait?.maxAttempts ?? null,
+      },
+    });
+    return r.count;
+  },
+
+  /**
+   * Clear EVERY session's provider-retry wait on one plan (MOTIR-9642) — the
+   * Resume bind's sweep of a dead job's waits. Leaves the steps themselves alone.
+   * Returns how many rows it touched.
+   */
+  async clearProviderWaitsForPlan(planId: string, tx: Prisma.TransactionClient): Promise<number> {
+    const r = await tx.planStep.updateMany({
+      where: { planId, providerWaitUntil: { not: null } },
+      data: {
+        providerWaitSince: null,
+        providerWaitUntil: null,
+        providerWaitAttempt: null,
+        providerWaitMaxAttempts: null,
+      },
+    });
+    return r.count;
   },
 
   /** Clear a session's step. Returns how many rows went (0 or 1). */

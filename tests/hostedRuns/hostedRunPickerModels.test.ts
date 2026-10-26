@@ -1,6 +1,18 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import type { WorkspaceContext } from '@/lib/workspaces';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import type { CapacityEntry } from '@/lib/gateway/capacityClient';
+import {
+  CAPACITY_FAKE_STATE_PATH_ENV_VAR,
+  writeCapacityFakeStateFile,
+} from '@/lib/gateway/capacityFakeState';
+import {
+  __resetAgentRunCapacityForTests,
+  agentRunCapacityService,
+} from '@/lib/services/agentRunCapacityService';
 import { hostedRunPickerService } from '@/lib/services/hostedRunPickerService';
 import { projectHostedAgentSettingsService } from '@/lib/services/projectHostedAgentSettingsService';
 import { makeWorkItemFixture, createTestWorkItem } from '../fixtures/workItemFixtures';
@@ -44,6 +56,9 @@ const OFFERED = {
   },
 };
 
+/** The offered list as the picker read answers it: each model with its capacity (MOTIR-9629). */
+const OFFERED_WIRE = OFFERED.models.map((m) => ({ ...m, capacity: { verdict: 'available' } }));
+
 let modelCalls = 0;
 
 function serveModels(body: unknown = OFFERED, status = 200) {
@@ -62,6 +77,7 @@ function serveModels(body: unknown = OFFERED, status = 200) {
 
 beforeEach(async () => {
   await truncateAuthTables();
+  __resetAgentRunCapacityForTests();
   vi.stubEnv('MOTIR_AI_URL', 'https://ai.test/');
   vi.stubEnv('MOTIR_AI_SERVICE_TOKEN', 'svc-token');
   serveModels();
@@ -95,7 +111,7 @@ describe('hostedRunPickerService.readModels', () => {
   it('answers exactly the old shape — no `resolved` key — when no card is named', async () => {
     const fx = await makeWorkItemFixture();
     const read = await hostedRunPickerService.readModels(null, ctxFor(fx));
-    expect(read).toEqual({ state: 'ok', models: OFFERED.models, default: 'claude-opus-5-5' });
+    expect(read).toEqual({ state: 'ok', models: OFFERED_WIRE, default: 'claude-opus-5-5' });
     expect(read).not.toHaveProperty('resolved');
   });
 
@@ -170,7 +186,7 @@ describe('hostedRunPickerService.readModels', () => {
     );
     expect(read).toEqual({
       state: 'ok',
-      models: OFFERED.models,
+      models: OFFERED_WIRE,
       default: 'claude-opus-5-5',
       resolved: null,
     });
@@ -239,7 +255,7 @@ describe('GET /api/hosted-runs/models?workItem=', () => {
     expect(res.status).toBe(200);
     expect(res.headers.get('Cache-Control')).toBe('private, no-store');
     expect(await res.json()).toEqual({
-      models: OFFERED.models,
+      models: OFFERED_WIRE,
       default: 'claude-opus-5-5',
       resolved: {
         model: 'claude-opus-5',
@@ -255,7 +271,7 @@ describe('GET /api/hosted-runs/models?workItem=', () => {
     requireCompliantWorkspaceContext.mockResolvedValue({ ok: true, ctx: ctxFor(fx) });
     for (const query of ['', '?workItem=', '?workItem=%20']) {
       const res = await get(query);
-      expect(await res.json()).toEqual({ models: OFFERED.models, default: 'claude-opus-5-5' });
+      expect(await res.json()).toEqual({ models: OFFERED_WIRE, default: 'claude-opus-5-5' });
     }
   });
 
@@ -274,5 +290,203 @@ describe('GET /api/hosted-runs/models?workItem=', () => {
     const res = await get(`?workItem=${fx.projectIdentifier}-1`);
     expect(res.status).toBe(503);
     expect(await res.json()).toMatchObject({ code: 'hosted_models_unavailable' });
+  });
+});
+
+// ── CAPACITY ON EACH MODEL (Story MOTIR-9541 · MOTIR-9629) ──────────────────
+// The verdict is driven through the capacity client's FILE-BACKED FAKE (MOTIR-9608 ·
+// MOTIR-9617) — the real binding, the real verdict service and the real rule — so a
+// test names the entries it expects a verdict from.
+
+const LIMITS = {
+  max_concurrency: { status: 'unknown' as const },
+  rpm: { status: 'unknown' as const },
+  input_tpm: { status: 'unknown' as const },
+  output_tpm: { status: 'unknown' as const },
+  tpm: { status: 'unknown' as const },
+  tpd: { status: 'unknown' as const },
+};
+
+/** A claude entry; distinctive numbers so a leak into the body would be visible. */
+function claude(model: string, over: Partial<CapacityEntry> = {}): CapacityEntry {
+  const lane = {
+    inFlight: 7,
+    requestsPerMinute: 4321,
+    tokensPerMinute: 987_654,
+    tokensPerDay: 13_579_246,
+    rateLimited429: { minute: 0, day: 0 },
+  };
+  return {
+    provider: 'claude',
+    model,
+    tierNote: 'secret-tier-note',
+    unknownNote: '',
+    planningSharePercent: 50,
+    limits: LIMITS,
+    lanes: { planning: lane, agent: lane },
+    providerHint: null,
+    ...over,
+  };
+}
+
+let fakeDir: string | null = null;
+
+function serveCapacity(entries: CapacityEntry[], mode: 'live' | 'unreachable' = 'live'): void {
+  fakeDir = mkdtempSync(join(tmpdir(), 'capacity-'));
+  const path = join(fakeDir, 'state.json');
+  writeCapacityFakeStateFile(path, { mode, scope: 'shared', entries });
+  vi.stubEnv('MOTIR_E2E_FAKE_GATEWAY_CAPACITY', '1');
+  vi.stubEnv(CAPACITY_FAKE_STATE_PATH_ENV_VAR, path);
+}
+
+afterEach(() => {
+  if (fakeDir) rmSync(fakeDir, { recursive: true, force: true });
+  fakeDir = null;
+});
+
+const SHARE_FULL = claude('claude-opus-5', {
+  limits: { ...LIMITS, max_concurrency: { status: 'set', value: 14 } },
+});
+const RATE_LIMITED = (model: string) =>
+  claude(model, {
+    lanes: {
+      planning: null,
+      agent: {
+        inFlight: 1,
+        requestsPerMinute: 1,
+        tokensPerMinute: 1,
+        tokensPerDay: 1,
+        rateLimited429: { minute: 3, day: 3 },
+      },
+    },
+  });
+
+function expectClosedShape(models: unknown[]): void {
+  for (const m of models as Array<{ capacity: object }>) {
+    expect(Object.keys(m).sort()).toEqual(['capacity', 'id', 'provider']);
+    expect(Object.keys(m.capacity).length).toBeGreaterThanOrEqual(1);
+    expect(['verdict', 'reason']).toEqual(expect.arrayContaining(Object.keys(m.capacity)));
+  }
+}
+
+describe('capacity on each offered model', () => {
+  it('a model whose agent share is used reads no_capacity / agent_share_exhausted; the rest available', async () => {
+    const fx = await makeWorkItemFixture();
+    serveCapacity([SHARE_FULL]);
+    const read = await hostedRunPickerService.readModels(null, ctxFor(fx));
+    expect(read).toEqual({
+      state: 'ok',
+      default: 'claude-opus-5-5',
+      models: [
+        {
+          id: 'claude-opus-5',
+          provider: 'anthropic',
+          capacity: { verdict: 'no_capacity', reason: 'agent_share_exhausted' },
+        },
+        { id: 'claude-opus-5-5', provider: 'anthropic', capacity: { verdict: 'available' } },
+        { id: 'claude-sonnet-5-5', provider: 'anthropic', capacity: { verdict: 'available' } },
+      ],
+    });
+  });
+
+  it('the same for provider_rate_limited', async () => {
+    const fx = await makeWorkItemFixture();
+    serveCapacity([RATE_LIMITED('claude-sonnet-5-5')]);
+    const read = await hostedRunPickerService.readModels(null, ctxFor(fx));
+    expect(read.state === 'ok' && read.models.map((m) => m.capacity)).toEqual([
+      { verdict: 'available' },
+      { verdict: 'available' },
+      { verdict: 'no_capacity', reason: 'provider_rate_limited' },
+    ]);
+  });
+
+  it('one readModels makes one verdictsFor call over every offered model', async () => {
+    const fx = await makeWorkItemFixture();
+    const spy = vi.spyOn(agentRunCapacityService, 'verdictsFor');
+    const item = await leaf(fx, 'low');
+    await hostedRunPickerService.readModels(item.identifier, ctxFor(fx));
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy.mock.calls[0]![0].map((m) => m.id)).toEqual(OFFERED.models.map((m) => m.id));
+  });
+
+  it('a capacity read that cannot be made reads every model available', async () => {
+    const fx = await makeWorkItemFixture();
+    serveCapacity([SHARE_FULL], 'unreachable');
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const read = await hostedRunPickerService.readModels(null, ctxFor(fx));
+    expect(read).toEqual({ state: 'ok', default: 'claude-opus-5-5', models: OFFERED_WIRE });
+  });
+
+  it('motir-ai unavailable: unavailable as today, and the verdict is never asked', async () => {
+    const fx = await makeWorkItemFixture();
+    serveModels({ code: 'internal_error' }, 503);
+    const spy = vi.spyOn(agentRunCapacityService, 'verdictsFor');
+    expect(await hostedRunPickerService.readModels(null, ctxFor(fx))).toEqual({
+      state: 'unavailable',
+    });
+    expect(spy).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET /api/hosted-runs/models — capacity', () => {
+  const get = (query = '') => GET(new Request(`http://localhost/api/hosted-runs/models${query}`));
+
+  it('carries capacity beside resolved, in a closed shape, with nothing of the read leaking', async () => {
+    const fx = await makeWorkItemFixture();
+    requireCompliantWorkspaceContext.mockResolvedValue({ ok: true, ctx: ctxFor(fx) });
+    serveCapacity([SHARE_FULL, RATE_LIMITED('claude-sonnet-5-5')]);
+    const item = await leaf(fx, 'high');
+
+    const res = await get(`?workItem=${encodeURIComponent(item.identifier)}`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Cache-Control')).toBe('private, no-store');
+    const text = await res.clone().text();
+    const body = (await res.json()) as { models: unknown[]; resolved: unknown };
+    expect(body.resolved).toMatchObject({ model: 'claude-opus-5-5', difficulty: 'high' });
+    expectClosedShape(body.models);
+    expect(body.models.map((m) => (m as { capacity: unknown }).capacity)).toEqual([
+      { verdict: 'no_capacity', reason: 'agent_share_exhausted' },
+      { verdict: 'available' },
+      { verdict: 'no_capacity', reason: 'provider_rate_limited' },
+    ]);
+    for (const leak of ['4321', '987654', '13579246', 'secret-tier-note', '"14"', ':14']) {
+      expect(text).not.toContain(leak);
+    }
+    for (const id of [fx.workspaceId, fx.projectId, fx.ownerId]) expect(text).not.toContain(id);
+  });
+
+  it('a verdict read that rejects still answers 200, every model available, with one error logged', async () => {
+    const fx = await makeWorkItemFixture();
+    requireCompliantWorkspaceContext.mockResolvedValue({ ok: true, ctx: ctxFor(fx) });
+    vi.spyOn(agentRunCapacityService, 'verdictsFor').mockRejectedValueOnce(new Error('boom'));
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const res = await get();
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ models: OFFERED_WIRE, default: 'claude-opus-5-5' });
+    expect(error).toHaveBeenCalledTimes(1);
+    expect(String(error.mock.calls[0]![0])).toContain('capacity verdict failed');
+  });
+
+  it('a capacity client answering not_configured: 200 with every model available', async () => {
+    const fx = await makeWorkItemFixture();
+    requireCompliantWorkspaceContext.mockResolvedValue({ ok: true, ctx: ctxFor(fx) });
+    vi.stubEnv('MOTIR_E2E_FAKE_GATEWAY_CAPACITY', '');
+    vi.stubEnv('MOTIR_GATEWAY_CAPACITY_TOKEN', '');
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const res = await get();
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ models: OFFERED_WIRE, default: 'claude-opus-5-5' });
+  });
+
+  it('motir-ai unavailable: the same 503 body as today, and no verdict asked', async () => {
+    const fx = await makeWorkItemFixture();
+    requireCompliantWorkspaceContext.mockResolvedValue({ ok: true, ctx: ctxFor(fx) });
+    serveModels({ code: 'internal_error' }, 503);
+    const spy = vi.spyOn(agentRunCapacityService, 'verdictsFor');
+    const res = await get();
+    expect(res.status).toBe(503);
+    expect(await res.json()).toMatchObject({ code: 'hosted_models_unavailable' });
+    expect(spy).not.toHaveBeenCalled();
   });
 });

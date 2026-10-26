@@ -8478,6 +8478,16 @@
       "failureLinePlanAgain": "Deze poging kon niet worden voortgezet · {when}. Je volgende bericht plant opnieuw.",
       "failureLinePlanAgainAgain": "Deze poging kon opnieuw niet worden voortgezet · {when}. Je volgende bericht plant opnieuw."
     },
+    "providerLimit": {
+      "retryingTitle": "Wachten op de modelaanbieder",
+      "retryingBody": "Die is nu druk bezet. De planning probeert het zelf opnieuw; er gaat niets verloren.",
+      "walkBecause": "omdat de modelaanbieder zijn limiet heeft bereikt",
+      "walkKept": "Er is niets verloren. Klik op Hervatten wanneer je het opnieuw wilt proberen; het gaat verder waar het stopte.",
+      "failureLine": "Je laatste wijziging aan dit plan kon niet worden doorgevoerd: de modelaanbieder heeft zijn limiet bereikt · {when}. Stuur hem opnieuw wanneer je klaar bent.",
+      "failureLineAgain": "Je laatste wijziging kon opnieuw niet worden doorgevoerd: de modelaanbieder heeft zijn limiet bereikt · {when}. Stuur hem opnieuw wanneer je klaar bent.",
+      "failureLinePlanAgain": "Deze poging kon niet worden voortgezet: de modelaanbieder heeft zijn limiet bereikt · {when}. Je volgende bericht plant opnieuw.",
+      "failureLinePlanAgainAgain": "Deze poging kon opnieuw niet worden voortgezet: de modelaanbieder heeft zijn limiet bereikt · {when}. Je volgende bericht plant opnieuw."
+    },
     "grill": {
       "control": {
         "label": "Ondervraag me",
@@ -9712,7 +9722,8 @@
         "dispatcher_gone": "<b>{name}</b>, die het heeft gestart, zit niet meer in deze werkruimte",
         "dispatcher_goneAnon": "de persoon die het heeft gestart, zit niet meer in deze werkruimte",
         "repository_not_writable": "Motir kan niet meer naar {repo} pushen",
-        "card_not_ready": "{key} is niet klaar om uit te voeren — het is geblokkeerd of staat niet meer op Bezig"
+        "card_not_ready": "{key} is niet klaar om uit te voeren — het is geblokkeerd of staat niet meer op Bezig",
+        "no_capacity": "het model waarmee het draaide, {model}, heeft nu geen capaciteit voor agentruns"
       },
       "repair": {
         "out_of_credits": "Voeg credits toe bij facturering en druk dan op Voortzetten — of zet het voort vanuit je terminal.",
@@ -9723,7 +9734,8 @@
         "no_project_access": "Zet het zelf voort — het draait dan als jou, op de credits van je organisatie.",
         "dispatcher_gone": "Zet het zelf voort — het draait dan als jou, op de credits van je organisatie.",
         "repository_not_writable": "Koppel de repository opnieuw in de projectinstellingen en druk dan op Voortzetten.",
-        "card_not_ready": "Hef op wat {key} blokkeert of zet het terug op Bezig, en druk dan op Voortzetten."
+        "card_not_ready": "Hef op wat {key} blokkeert of zet het terug op Bezig, en druk dan op Voortzetten.",
+        "no_capacity": "Kies een ander model en druk op Voortzetten, of probeer het zo opnieuw."
       },
       "copyAria": "De hervatopdracht voor {key} kopiëren",
       "member": {
@@ -10158,10 +10170,12 @@
           "degradedValue": "Traag · {ms} ms",
           "degradedDetail": "Antwoordt, maar boven de drempel van {threshold} ms. motir-gateway {version} · actief sinds {since}.",
           "unreachable": {
+            "badAnswer": "Onleesbaar antwoord van de gateway",
             "noAnswer": "Geen antwoord van de gateway",
             "notConfigured": "Gateway niet geconfigureerd"
           },
           "unreachableDetail": {
+            "badAnswer": "De gateway antwoordde, maar de status kon niet worden gelezen: {why, select, httpStatus {hij antwoordde met HTTP {status}} notJson {de inhoud was geen JSON} noSuccess {hij meldde geen succes} noData {hij bevatte geen gegevens} noVersion {hij bevatte geen versie} noStartTime {hij bevatte geen starttijd} other {het antwoord werd afgewezen}}. AI-verzoeken die via de gateway lopen, mislukken mogelijk. Er is niets gemeten, dus er wordt geen latentie getoond.",
             "noAnswer": "De statuscontrole kreeg binnen {timeout} s geen antwoord. AI-verzoeken die via de gateway lopen, mislukken mogelijk. Er is niets gemeten, dus er wordt geen latentie getoond.",
             "notConfigured": "MOTIR_GATEWAY_URL is niet ingesteld, dus er valt niets te controleren. Verwacht bij een installatie zonder gateway."
           },
@@ -13037,7 +13051,8 @@
       "door": {
         "run": "Run",
         "runAgain": "Opnieuw draaien",
-        "starting": "Starten…"
+        "starting": "Starten…",
+        "heldModel": "<b>{model}</b> heeft nu geen capaciteit voor agentruns. Kies een ander model, of wacht tot het weer capaciteit heeft."
       },
       "picker": {
         "label": "Model",
@@ -13054,7 +13069,10 @@
         "fromDifficulty": "Op basis van moeilijkheid: <b>{difficulty}</b>",
         "override": "Projectoverschrijving voor <b>{difficulty}</b>",
         "fromLeaves": "Hoogste moeilijkheid onder de onderliggende items: <b>{difficulty}</b>",
-        "overrideFromLeaves": "Projectoverschrijving voor <b>{difficulty}</b>, de hoogste moeilijkheid onder de onderliggende items"
+        "overrideFromLeaves": "Projectoverschrijving voor <b>{difficulty}</b>, de hoogste moeilijkheid onder de onderliggende items",
+        "noCapacityTag": "Geen capaciteit",
+        "noCapacityReason": "Nu geen capaciteit voor agentruns. Probeer het zo opnieuw.",
+        "allHeldBody": "Geen enkel model heeft nu capaciteit voor agentruns. Probeer het zo opnieuw; lokale runs worden niet beïnvloed."
       },
       "notReady": "Run is beschikbaar zodra dit werkitem klaar is om te starten — het heeft {count, plural, one {# open blokkade} other {# open blokkades}}.",
       "refused": {
@@ -13087,6 +13105,10 @@
         "failed": {
           "title": "Niet gestart — Motir kon de run niet starten.",
           "body": "Er is niets opgestart. Probeer het zo opnieuw."
+        },
+        "noCapacity": {
+          "title": "Niet gestart — {model} heeft nu geen capaciteit voor agentruns.",
+          "body": "Er is niets opgestart en niets gerekend. Kies een ander model, of probeer het zo opnieuw."
         }
       },
       "phase": {
@@ -14265,7 +14287,8 @@
           "no_verdictNoRun": "de reviewrun eindigde zonder oordeel.",
           "boot_failed": "de gehoste machine voor de review kon niet starten.",
           "no_actor": "niemand kan hem draaien — het werkitem heeft geen verantwoordelijke of maker, en de werkruimte heeft geen vervangende beheerder.",
-          "unknown": "de reviewrun kon niet starten."
+          "unknown": "de reviewrun kon niet starten.",
+          "noCapacity": "het model voor de review heeft nu geen capaciteit voor agentruns. Probeer het zo opnieuw."
         },
         "why": "Er wordt niets gemerged totdat de review draait, of iemand zonder review doorgaat.",
         "whyNotYours": "Wacht op {name}. Er wordt niets gemerged totdat de review draait, of zij zonder review doorgaan."
@@ -14302,7 +14325,8 @@
         "out_of_credits": "de organisatie heeft geen credits meer.",
         "credits_unavailable": "het creditsaldo kon niet worden gelezen.",
         "repository_not_writable": "Motir kan niet schrijven naar {detail}.",
-        "card_not_ready": "iemand heeft het werkitem eerder opgepakt."
+        "card_not_ready": "iemand heeft het werkitem eerder opgepakt.",
+        "no_capacity": "{detail}, het model waarop het laatst is gedraaid, heeft nu geen capaciteit voor agentruns."
       },
       "next": {
         "cap_reached": "Draaien op de gehoste agent",
@@ -14313,7 +14337,8 @@
         "models_unavailable": "Draaien op de gehoste agent",
         "out_of_credits": "Credits kopen",
         "credits_unavailable": "Draaien op de gehoste agent",
-        "repository_not_writable": "Repository’s"
+        "repository_not_writable": "Repository’s",
+        "no_capacity": "Ander model kiezen en draaien"
       }
     },
     "manualWork": {

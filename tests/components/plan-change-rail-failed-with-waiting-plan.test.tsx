@@ -51,7 +51,7 @@ const turn = (seq: number, body: string): PlanChangeTurnDto => ({
 
 const FAILURE: PlanSessionFailureDto = {
   failedAt: '2026-07-27T11:00:00.000Z',
-  reason: 'rate_limited',
+  reason: 'internal',
   stopPhase: null,
   stopRef: null,
   stopTitle: null,

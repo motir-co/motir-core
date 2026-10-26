@@ -61,6 +61,10 @@ export default defineConfig({
       // model; the picker's read (`hostedRunPickerService`) is measured by
       // `tests/hostedRuns/hostedRunPickerModels.test.ts`, above.
       'tests/components/run-hosted-from-difficulty.test.tsx',
+      // Story MOTIR-9541 · MOTIR-9630 / MOTIR-9631 — a model with no agent-run capacity
+      // is held in the picker and at the door; the story's integration gate.
+      'tests/components/hosted-model-capacity.test.tsx',
+      'tests/integration/hostedRuns/**/*.test.ts',
       // Story MOTIR-6989 · MOTIR-6997 — the story's integration gate (settings
       // save → models read → a real start, across a withdrawn override), plus
       // the resolver's and the settings service's own suites.

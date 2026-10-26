@@ -1,11 +1,11 @@
 'use client';
 
-import { useCallback, useState, type ReactNode } from 'react';
+import { useCallback, useId, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { Cloud } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { HostedModelPicker } from './HostedModelPicker';
-import { useHostedModels } from './HostedModelsProvider';
+import { HostedHeldLine, HostedModelPicker } from './HostedModelPicker';
+import { reReadAfter, useHostedModels } from './HostedModelsProvider';
 import {
   ModelsEmpty,
   ModelsUnavailable,
@@ -13,7 +13,14 @@ import {
   NotWritableNotice,
   When,
 } from './ContinueHostedControl';
-import { fixRefusalOf, fixStateMoved, pressKey, type FixHostedRefusal } from './hostedModels';
+import {
+  fixRefusalOf,
+  fixStateMoved,
+  isHeld,
+  pressKey,
+  standingRefusal,
+  type FixHostedRefusal,
+} from './hostedModels';
 
 // FIX ON THE HOSTED AGENT (Story MOTIR-1626 · MOTIR-6930), built to
 // `design/github/design-notes.md` § 30 Panels 3–3e
@@ -57,7 +64,6 @@ export function useFixHosted(
 ): UseFixHostedValue {
   const hostedModels = useHostedModels();
   const selectedModel = hostedModels?.selectedModel ?? null;
-  const reloadModels = hostedModels?.reloadModels;
   const { onStarted, onStateMoved } = opts;
   const [refusal, setRefusal] = useState<FixHostedRefusal | null>(null);
   const [starting, setStarting] = useState(false);
@@ -79,33 +85,43 @@ export function useFixHosted(
       const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
       const refused = fixRefusalOf(res.status, body, selectedModel);
       setRefusal(refused);
-      if (refused.kind === 'modelNotOffered') reloadModels?.();
+      // A no-capacity refusal is not stale: the door stays (MOTIR-9630).
+      reReadAfter(refused, hostedModels);
       if (fixStateMoved(refused)) onStateMoved?.();
     } catch {
       setRefusal({ kind: 'failed' });
     } finally {
       setStarting(false);
     }
-  }, [itemKey, onStarted, onStateMoved, reloadModels, selectedModel, starting]);
+  }, [itemKey, hostedModels, onStarted, onStateMoved, selectedModel, starting]);
 
-  return { start, starting, refusal };
+  // A no-capacity refusal clears when the person picks another model.
+  return { start, starting, refusal: standingRefusal(refusal, selectedModel) };
 }
 
-/** The picker and the button — Panel 3's door (3a while the press is in flight). */
+/** The picker and the button — Panel 3's door (3a while the press is in flight). A held
+ *  selected model holds the button with the *Held Run line* (MOTIR-9630, design N8),
+ *  which gives way to a standing no-capacity refusal (`refused`). */
 export function FixHostedButtonRow({
   starting,
   onPress,
   testId = 'fix-hosted-door',
+  refused = false,
 }: {
   starting: boolean;
   onPress: () => void;
   testId?: string;
+  /** A no-capacity refusal stands under the door — it names the model instead. */
+  refused?: boolean;
 }) {
   const t = useTranslations('github.development.fix.hosted');
   const tDoor = useTranslations('runs.hosted.door');
   const hosted = useHostedModels();
+  const heldId = useId();
   if (!hosted) return null;
   const modelsReady = hosted.models.state === 'ok' && hosted.models.models.length > 0;
+  const held = isHeld(hosted.models, hosted.selectedModel);
+  const heldLine = held && !refused ? hosted.selectedModel : null;
   return (
     <div className="flex flex-wrap items-center gap-2" data-testid={testId}>
       <HostedModelPicker
@@ -118,14 +134,16 @@ export function FixHostedButtonRow({
         type="button"
         variant="primary"
         size="sm"
-        disabled={!modelsReady || starting || !hosted.selectedModel}
+        disabled={!modelsReady || starting || !hosted.selectedModel || held}
         loading={starting}
         onClick={onPress}
         leftIcon={<Cloud className="size-3.5" aria-hidden="true" />}
+        aria-describedby={heldLine ? heldId : undefined}
         data-testid="fix-hosted"
       >
         {starting ? tDoor('starting') : t('button')}
       </Button>
+      <HostedHeldLine model={heldLine} id={heldId} />
     </div>
   );
 }
@@ -185,8 +203,9 @@ function Refusal({ refusal, viewerId }: { refusal: FixHostedRefusal; viewerId: s
       body = t('outOfCredits.body');
       break;
     case 'modelNotOffered':
-      title = tRun('modelNotOffered.title', { model: refusal.model });
-      body = tRun('modelNotOffered.body');
+    case 'noCapacity':
+      title = tRun(`${refusal.kind}.title`, { model: refusal.model });
+      body = tRun(`${refusal.kind}.body`);
       break;
     case 'stale':
       // The card is no longer a review's to repair — the page re-reads, and the door goes.
@@ -224,7 +243,11 @@ export function FixHostedControl({
   const press = useFixHosted(itemKey, { onStarted, onStateMoved });
   return (
     <div className="flex flex-col gap-2" data-testid="fix-hosted-control">
-      <FixHostedButtonRow starting={press.starting} onPress={() => void press.start()} />
+      <FixHostedButtonRow
+        starting={press.starting}
+        onPress={() => void press.start()}
+        refused={press.refusal?.kind === 'noCapacity'}
+      />
       <FixHostedAnswer live refusal={press.refusal} viewerId={viewerId} />
     </div>
   );

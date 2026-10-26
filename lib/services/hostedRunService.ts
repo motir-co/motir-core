@@ -21,6 +21,7 @@ import {
   HostedFixRefusedError,
   HostedRunCardNotReadyError,
   HostedRunCreditsUnavailableError,
+  HostedRunNoCapacityError,
   HostedRunNotFoundError,
   HostedRunOutOfCreditsError,
   HostedRunRepositoryNotReadableError,
@@ -51,6 +52,7 @@ import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { agentInstanceRunService } from '@/lib/services/agentInstanceRunService';
+import { agentRunCapacityService } from '@/lib/services/agentRunCapacityService';
 import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import {
@@ -345,8 +347,22 @@ interface HostedRunPreflight {
 }
 
 /**
- * EVERY REFUSAL BEFORE ANY SPEND, in order: the CI-credit gate, the model, the
- * organization's credits, every repository of the run writable, the fleet
+ * ── 2b · Capacity (MOTIR-9628). The RESOLVED model — picked, difficulty-resolved,
+ * continued or the review default — is refused when it has no agent-run capacity
+ * right now, before credits, any open or claim, the run key, admission or boot.
+ * Nothing is queued: the person picks another model or tries again. The verdict
+ * fails open by itself, so only an explicit `no_capacity` refuses.
+ */
+async function refuseNoCapacity(offered: AgentModel): Promise<void> {
+  const capacity = await agentRunCapacityService.verdictFor(offered);
+  if (capacity.verdict === 'no_capacity') {
+    throw new HostedRunNoCapacityError(offered.id, capacity.reason);
+  }
+}
+
+/**
+ * EVERY REFUSAL BEFORE ANY SPEND, in order: the CI-credit gate, the model, its
+ * agent-run capacity (MOTIR-9628), the organization's credits, every repository of the run writable, the fleet
  * configured. Each is a read. Shared by Run hosted and Continue hosted
  * (MOTIR-6792) so a continue costs and refuses exactly like a run — and by the
  * REVIEW start (MOTIR-6820), which passes no model (it takes the offered list's
@@ -372,6 +388,7 @@ async function preflight(
       ? await hostedRunModelService.defaultOffered()
       : await hostedRunModelService.assertOffered(input.model);
   const model = offered.id;
+  await refuseNoCapacity(offered); // ── 2b · Capacity, before any credit round trip
 
   // ── 3 · Credits — the gateway's own balance rule ────────────────────────
   const organizationId = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
@@ -1139,6 +1156,7 @@ export const hostedRunService = {
    *
    * Throws, before anything is opened: `HostedRunCardNotReadyError`,
    * `HostedModelNotOfferedError` / `HostedModelsUnavailableError`,
+   * `HostedRunNoCapacityError` (the model has no agent-run capacity right now),
    * `HostedRunOutOfCreditsError` / `HostedRunCreditsUnavailableError`,
    * `HostedRunRepositoryNotWritableError`, `RunGitCredentialUnavailableError`,
    * `OrchestratorNotConfiguredError`, `CiCreditsExhaustedError`, and the not-found

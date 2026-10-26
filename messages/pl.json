@@ -8478,6 +8478,16 @@
       "failureLinePlanAgain": "Nie udało się kontynuować tej próby · {when}. Twoja następna wiadomość zaplanuje ją od nowa.",
       "failureLinePlanAgainAgain": "Tej próby znów nie udało się kontynuować · {when}. Twoja następna wiadomość zaplanuje ją od nowa."
     },
+    "providerLimit": {
+      "retryingTitle": "Czekamy na dostawcę modelu",
+      "retryingBody": "Jest teraz przeciążony. Planowanie samo spróbuje ponownie; nic nie zostanie utracone.",
+      "walkBecause": "ponieważ dostawca modelu osiągnął swój limit",
+      "walkKept": "Nic nie zostało utracone. Kliknij Wznów, gdy zechcesz spróbować ponownie; planowanie będzie kontynuowane od miejsca, w którym się zatrzymało.",
+      "failureLine": "Twoja ostatnia zmiana w tym planie nie mogła zostać wprowadzona: dostawca modelu osiągnął swój limit · {when}. Wyślij ją ponownie, gdy będziesz gotowy.",
+      "failureLineAgain": "Twoja ostatnia zmiana znów nie mogła zostać wprowadzona: dostawca modelu osiągnął swój limit · {when}. Wyślij ją ponownie, gdy będziesz gotowy.",
+      "failureLinePlanAgain": "Nie udało się kontynuować tej próby: dostawca modelu osiągnął swój limit · {when}. Twoja następna wiadomość zaplanuje ją od nowa.",
+      "failureLinePlanAgainAgain": "Znów nie udało się kontynuować tej próby: dostawca modelu osiągnął swój limit · {when}. Twoja następna wiadomość zaplanuje ją od nowa."
+    },
     "grill": {
       "control": {
         "label": "Przepytaj mnie",
@@ -9712,7 +9722,8 @@
         "dispatcher_gone": "<b>{name}</b>, osoba, która je uruchomiła, nie należy już do tego obszaru roboczego",
         "dispatcher_goneAnon": "osoba, która je uruchomiła, nie należy już do tego obszaru roboczego",
         "repository_not_writable": "Motir nie może już wypychać zmian do {repo}",
-        "card_not_ready": "{key} nie jest gotowy do uruchomienia — jest zablokowany lub nie jest już w toku"
+        "card_not_ready": "{key} nie jest gotowy do uruchomienia — jest zablokowany lub nie jest już w toku",
+        "no_capacity": "model, z którym działało, {model}, nie ma teraz przepustowości dla uruchomień agenta"
       },
       "repair": {
         "out_of_credits": "Dodaj kredyty w rozliczeniach, a potem naciśnij Kontynuuj — albo kontynuuj z terminala.",
@@ -9723,7 +9734,8 @@
         "no_project_access": "Kontynuuj samodzielnie — uruchomienie działa jako Ty, na kredytach Twojej organizacji.",
         "dispatcher_gone": "Kontynuuj samodzielnie — uruchomienie działa jako Ty, na kredytach Twojej organizacji.",
         "repository_not_writable": "Połącz ponownie repozytorium w ustawieniach projektu, a potem naciśnij Kontynuuj.",
-        "card_not_ready": "Usuń to, co blokuje {key}, lub przenieś go z powrotem do W toku, a potem naciśnij Kontynuuj."
+        "card_not_ready": "Usuń to, co blokuje {key}, lub przenieś go z powrotem do W toku, a potem naciśnij Kontynuuj.",
+        "no_capacity": "Wybierz inny model i naciśnij Kontynuuj albo spróbuj ponownie za chwilę."
       },
       "copyAria": "Skopiuj polecenie wznowienia dla {key}",
       "member": {
@@ -10158,10 +10170,12 @@
           "degradedValue": "Wolna · {ms} ms",
           "degradedDetail": "Odpowiada, ale powyżej progu {threshold} ms. motir-gateway {version} · działa od {since}.",
           "unreachable": {
+            "badAnswer": "Nieczytelna odpowiedź z bramy",
             "noAnswer": "Brak odpowiedzi z bramy",
             "notConfigured": "Brama nie jest skonfigurowana"
           },
           "unreachableDetail": {
+            "badAnswer": "Brama odpowiedziała, ale nie udało się odczytać jej statusu: {why, select, httpStatus {odpowiedziała kodem HTTP {status}} notJson {treść nie była w formacie JSON} noSuccess {nie zgłosiła powodzenia} noData {nie zawierała danych} noVersion {nie zawierała wersji} noStartTime {nie zawierała czasu uruchomienia} other {odpowiedź została odrzucona}}. Żądania AI przechodzące przez bramę mogą kończyć się niepowodzeniem. Nic nie zostało zmierzone, więc opóźnienie nie jest pokazywane.",
             "noAnswer": "Sprawdzenie statusu nie otrzymało odpowiedzi w ciągu {timeout} s. Żądania AI przechodzące przez bramę mogą kończyć się niepowodzeniem. Nic nie zostało zmierzone, więc opóźnienie nie jest pokazywane.",
             "notConfigured": "Zmienna MOTIR_GATEWAY_URL nie jest ustawiona, więc nie ma czego sprawdzać. Oczekiwane w instancji bez bramy."
           },
@@ -13037,7 +13051,8 @@
       "door": {
         "run": "Uruchom",
         "runAgain": "Uruchom ponownie",
-        "starting": "Uruchamianie…"
+        "starting": "Uruchamianie…",
+        "heldModel": "<b>{model}</b> nie ma teraz przepustowości dla uruchomień agenta. Wybierz inny model albo poczekaj, aż ją odzyska."
       },
       "picker": {
         "label": "Model",
@@ -13054,7 +13069,10 @@
         "fromDifficulty": "Na podstawie trudności: <b>{difficulty}</b>",
         "override": "Nadpisanie projektu dla poziomu <b>{difficulty}</b>",
         "fromLeaves": "Najwyższa trudność wśród jego liści: <b>{difficulty}</b>",
-        "overrideFromLeaves": "Nadpisanie projektu dla poziomu <b>{difficulty}</b>, najwyższej trudności wśród jego liści"
+        "overrideFromLeaves": "Nadpisanie projektu dla poziomu <b>{difficulty}</b>, najwyższej trudności wśród jego liści",
+        "noCapacityTag": "Brak przepustowości",
+        "noCapacityReason": "Brak przepustowości dla uruchomień agenta. Spróbuj ponownie za chwilę.",
+        "allHeldBody": "Żaden model nie ma teraz przepustowości dla uruchomień agenta. Spróbuj ponownie za chwilę; nie dotyczy to uruchomień lokalnych."
       },
       "notReady": "Opcja Uruchom będzie dostępna, gdy ten element roboczy będzie gotowy — {count, plural, one {ma # otwarty element blokujący} few {ma # otwarte elementy blokujące} many {ma # otwartych elementów blokujących} other {ma # otwartego elementu blokującego}}.",
       "refused": {
@@ -13087,6 +13105,10 @@
         "failed": {
           "title": "Nie uruchomiono — Motir nie mógł rozpocząć uruchomienia.",
           "body": "Nic nie zostało uruchomione. Spróbuj ponownie za chwilę."
+        },
+        "noCapacity": {
+          "title": "Nie uruchomiono — {model} nie ma teraz przepustowości dla uruchomień agenta.",
+          "body": "Nic nie zostało uruchomione i nic nie zostało naliczone. Wybierz inny model albo spróbuj ponownie za chwilę."
         }
       },
       "phase": {
@@ -14265,7 +14287,8 @@
           "no_verdictNoRun": "uruchomienie przeglądu zakończyło się bez werdyktu.",
           "boot_failed": "nie udało się uruchomić hostowanej maszyny dla przeglądu.",
           "no_actor": "nikt nie może go uruchomić — element roboczy nie ma osoby odpowiedzialnej ani autora, a obszar roboczy nie ma zastępczego menedżera.",
-          "unknown": "nie udało się rozpocząć uruchomienia przeglądu."
+          "unknown": "nie udało się rozpocząć uruchomienia przeglądu.",
+          "noCapacity": "model przeglądu nie ma teraz przepustowości dla uruchomień agenta. Spróbuj ponownie za chwilę."
         },
         "why": "Nic nie zostanie scalone, dopóki przegląd się nie odbędzie lub ktoś nie zdecyduje się kontynuować bez niego.",
         "whyNotYours": "Czeka na: {name}. Nic nie zostanie scalone, dopóki przegląd się nie odbędzie lub ta osoba nie zdecyduje się kontynuować bez niego."
@@ -14302,7 +14325,8 @@
         "out_of_credits": "organizacji skończyły się kredyty.",
         "credits_unavailable": "nie udało się odczytać salda kredytów.",
         "repository_not_writable": "Motir nie może zapisywać w {detail}.",
-        "card_not_ready": "ktoś inny podjął się wcześniej tego elementu roboczego."
+        "card_not_ready": "ktoś inny podjął się wcześniej tego elementu roboczego.",
+        "no_capacity": "{detail}, model, na którym ostatnio działał, nie ma teraz przepustowości dla uruchomień agenta."
       },
       "next": {
         "cap_reached": "Uruchom na hostowanym agencie",
@@ -14313,7 +14337,8 @@
         "models_unavailable": "Uruchom na hostowanym agencie",
         "out_of_credits": "Kup kredyty",
         "credits_unavailable": "Uruchom na hostowanym agencie",
-        "repository_not_writable": "Repozytoria"
+        "repository_not_writable": "Repozytoria",
+        "no_capacity": "Wybierz inny model i uruchom"
       }
     },
     "manualWork": {

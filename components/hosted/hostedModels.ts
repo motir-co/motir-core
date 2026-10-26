@@ -1,6 +1,7 @@
 import type { ClaimActorDto } from '@/lib/dto/claim';
 import type { ResolvedWorkItemHostedModelDto } from '@/lib/dto/projectHostedAgentSettings';
 import { isWorkItemDifficulty } from '@/lib/issues/difficulty';
+import { AGENT_CAPACITY_REASONS, type AgentCapacityReason } from '@/lib/hostedRuns/capacityReasons';
 
 // THE HOSTED DOORS' PURE HELPERS (Story MOTIR-683 · MOTIR-691; Story MOTIR-6527 ·
 // MOTIR-6796), lifted out of the item page's `HostedRunProvider` unchanged
@@ -15,13 +16,27 @@ import { isWorkItemDifficulty } from '@/lib/issues/difficulty';
  *  server's `resolveForWorkItem`, never re-derived here. */
 export type HostedResolvedModel = ResolvedWorkItemHostedModelDto;
 
+/** Whether a hosted agent run on the model can start right now (Story MOTIR-9541 ·
+ *  MOTIR-9630) — the verdict and its reason code, and nothing else: the parser below
+ *  is the client's tenant-safety line, so no counter or limit reaches state. */
+export type HostedModelCapacity =
+  | { verdict: 'available' }
+  | { verdict: 'no_capacity'; reason: AgentCapacityReason };
+
+/** One offered model, as the picker draws it. */
+export interface HostedModel {
+  id: string;
+  provider: string;
+  capacity: HostedModelCapacity;
+}
+
 /** The offered-model read, as the picker draws it: three faces, never one. */
 export type HostedModelsState =
   | { state: 'loading' }
   | { state: 'unavailable' }
   | {
       state: 'ok';
-      models: { id: string; provider: string }[];
+      models: HostedModel[];
       default: string | null;
       /** The card's resolved preselection — null where the read named no card
        *  or the server could not resolve it. */
@@ -41,6 +56,7 @@ export type HostedRunRefusal =
   | { kind: 'notReady' }
   | { kind: 'outOfCredits' }
   | { kind: 'modelNotOffered'; model: string }
+  | { kind: 'noCapacity'; model: string }
   | { kind: 'notWritable'; repositories: HostedRepositoryRefusal[]; total: number | null }
   | { kind: 'unavailable' }
   | { kind: 'bootFailed' }
@@ -85,6 +101,33 @@ export function preselectedModel(models: HostedModelsState): string | null {
   return models.models[0]!.id;
 }
 
+/** The model is offered and has no agent-run capacity right now — its option is
+ *  held and the door's start button is off (design § The preselect decision: the
+ *  selection STAYS, whichever of the three sources chose it). */
+export function isHeld(models: HostedModelsState, id: string | null): boolean {
+  if (models.state !== 'ok' || id === null) return false;
+  return models.models.some((m) => m.id === id && m.capacity.verdict === 'no_capacity');
+}
+
+/** Every offered model is held — the door's *All-models-held line*. */
+export function allHeld(models: HostedModelsState): boolean {
+  return (
+    models.state === 'ok' &&
+    models.models.length > 0 &&
+    models.models.every((m) => m.capacity.verdict === 'no_capacity')
+  );
+}
+
+/** A refusal the door still shows: a no-capacity refusal is about ONE model, and
+ *  picking another clears it (design § No-capacity refusal). */
+export function standingRefusal<R extends { kind: string; model?: string }>(
+  refusal: R | null,
+  selected: string | null,
+): R | null {
+  if (refusal?.kind === 'noCapacity' && refusal.model !== selected) return null;
+  return refusal;
+}
+
 /** The list without its card resolution — the preselect as it was before
  *  MOTIR-6996, which Continue hosted keeps (a continuation is not re-resolved). */
 export function withoutResolution(models: HostedModelsState): HostedModelsState {
@@ -126,6 +169,26 @@ function resolvedOf(v: unknown): HostedResolvedModel | null {
   };
 }
 
+const REASONS: ReadonlySet<string> = new Set(AGENT_CAPACITY_REASONS);
+
+/** The wire `capacity` → the client's. Missing, malformed or an unknown reason reads
+ *  `available`, so an older server or a bad payload never holds a model. */
+export function capacityOf(v: unknown): HostedModelCapacity {
+  const o = v as Record<string, unknown> | null | undefined;
+  if (!o || typeof o !== 'object' || o.verdict !== 'no_capacity') return { verdict: 'available' };
+  if (typeof o.reason !== 'string' || !REASONS.has(o.reason)) return { verdict: 'available' };
+  return { verdict: 'no_capacity', reason: o.reason as AgentCapacityReason };
+}
+
+/** The wire models → the client's, field by field (no wire key rides along). */
+function modelsOf(v: unknown[]): HostedModel[] {
+  return v.flatMap((m) => {
+    const o = m as Record<string, unknown> | null;
+    if (!o || typeof o.id !== 'string' || typeof o.provider !== 'string') return [];
+    return [{ id: o.id, provider: o.provider, capacity: capacityOf(o.capacity) }];
+  });
+}
+
 /** Read the offered list; with `workItemKey`, also that card's resolved model. */
 export async function readModels(workItemKey?: string | null): Promise<HostedModelsState> {
   try {
@@ -135,14 +198,14 @@ export async function readModels(workItemKey?: string | null): Promise<HostedMod
     const res = await fetch(url, { headers: { Accept: 'application/json' } });
     if (!res.ok) return { state: 'unavailable' };
     const body = (await res.json()) as {
-      models?: { id: string; provider: string }[];
+      models?: unknown;
       default?: string | null;
       resolved?: unknown;
     };
     if (!Array.isArray(body.models)) return { state: 'unavailable' };
     return {
       state: 'ok',
-      models: body.models,
+      models: modelsOf(body.models),
       default: body.default ?? null,
       resolved: resolvedOf(body.resolved),
     };
@@ -257,6 +320,9 @@ export function refusalOf(
 ): HostedRunRefusal {
   const code = typeof body.code === 'string' ? body.code : '';
   if (code === 'hosted_model_not_offered') return { kind: 'modelNotOffered', model };
+  if (code === 'hosted_run_no_capacity') {
+    return { kind: 'noCapacity', model: typeof body.model === 'string' ? body.model : model };
+  }
   if (status === 402) return { kind: 'outOfCredits' };
   if (code === 'hosted_repository_not_writable') {
     return {

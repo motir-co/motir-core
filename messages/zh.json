@@ -8469,6 +8469,16 @@
       "failureLinePlanAgain": "这次尝试无法继续 · {when}。你的下一条消息会重新规划。",
       "failureLinePlanAgainAgain": "这次尝试再次无法继续 · {when}。你的下一条消息会重新规划。"
     },
+    "providerLimit": {
+      "retryingTitle": "正在等待模型服务",
+      "retryingBody": "模型服务暂时繁忙。规划会自动重试，不会丢失任何内容。",
+      "walkBecause": "原因：模型服务已达到使用上限",
+      "walkKept": "没有丢失任何内容。准备好后点击继续即可再试，它会从停下的地方接着进行。",
+      "failureLine": "你上一次对这个计划的修改没能完成：模型服务已达到使用上限 · {when}。准备好后再发送一次即可。",
+      "failureLineAgain": "你上一次的修改再次没能完成：模型服务已达到使用上限 · {when}。准备好后再发送一次即可。",
+      "failureLinePlanAgain": "这次尝试无法继续：模型服务已达到使用上限 · {when}。你的下一条消息会重新规划。",
+      "failureLinePlanAgainAgain": "这次尝试再次无法继续：模型服务已达到使用上限 · {when}。你的下一条消息会重新规划。"
+    },
     "grill": {
       "control": {
         "label": "追问我",
@@ -9703,7 +9713,8 @@
         "dispatcher_gone": "启动它的 <b>{name}</b> 已不在此工作区",
         "dispatcher_goneAnon": "启动它的人已不在此工作区",
         "repository_not_writable": "Motir 已无法推送到 {repo}",
-        "card_not_ready": "{key} 尚不能运行——它被阻塞或已不在进行中"
+        "card_not_ready": "{key} 尚不能运行——它被阻塞或已不在进行中",
+        "no_capacity": "它使用的模型 {model} 目前没有智能体运行容量"
       },
       "repair": {
         "out_of_credits": "在账单中充值后按“继续”——或在终端中继续。",
@@ -9714,7 +9725,8 @@
         "no_project_access": "由你来继续——它将以你的身份运行，使用你所在组织的积分。",
         "dispatcher_gone": "由你来继续——它将以你的身份运行，使用你所在组织的积分。",
         "repository_not_writable": "在项目设置中重新连接代码仓库后按“继续”。",
-        "card_not_ready": "解除 {key} 的阻塞或将其移回进行中后按“继续”。"
+        "card_not_ready": "解除 {key} 的阻塞或将其移回进行中后按“继续”。",
+        "no_capacity": "选择其他模型后按“继续”，或稍后再试。"
       },
       "copyAria": "复制 {key} 的继续命令",
       "member": {
@@ -10149,10 +10161,12 @@
           "degradedValue": "响应慢 · {ms} 毫秒",
           "degradedDetail": "有响应，但超过了 {threshold} 毫秒的阈值。motir-gateway {version} · 自 {since} 起运行。",
           "unreachable": {
+            "badAnswer": "无法读取网关的响应",
             "noAnswer": "网关没有响应",
             "notConfigured": "未配置网关"
           },
           "unreachableDetail": {
+            "badAnswer": "网关已响应，但无法读取其状态：{why, select, httpStatus {它返回了 HTTP {status}} notJson {响应体不是 JSON} noSuccess {它没有报告成功} noData {它没有携带数据} noVersion {它没有携带版本} noStartTime {它没有携带启动时间} other {响应被拒绝}}。经过网关的 AI 请求可能正在失败。没有测到任何数据，因此不显示延迟。",
             "noAnswer": "状态检查在 {timeout} 秒内没有得到响应。经过网关的 AI 请求可能正在失败。没有测到任何数据，因此不显示延迟。",
             "notConfigured": "未设置 MOTIR_GATEWAY_URL，因此没有可检查的对象。不运行网关的实例出现这种情况是正常的。"
           },
@@ -13028,7 +13042,8 @@
       "door": {
         "run": "运行",
         "runAgain": "再次运行",
-        "starting": "正在启动…"
+        "starting": "正在启动…",
+        "heldModel": "<b>{model}</b> 目前没有智能体运行容量。请选择其他模型，或等它恢复。"
       },
       "picker": {
         "label": "模型",
@@ -13045,7 +13060,10 @@
         "fromDifficulty": "按难度：<b>{difficulty}</b>",
         "override": "项目为<b>{difficulty}</b>难度设置的模型",
         "fromLeaves": "其子项中的最高难度：<b>{difficulty}</b>",
-        "overrideFromLeaves": "项目为<b>{difficulty}</b>难度设置的模型（其子项中的最高难度）"
+        "overrideFromLeaves": "项目为<b>{difficulty}</b>难度设置的模型（其子项中的最高难度）",
+        "noCapacityTag": "暂无容量",
+        "noCapacityReason": "目前没有智能体运行容量，请稍后再试。",
+        "allHeldBody": "目前没有模型有智能体运行容量。请稍后再试；本地运行不受影响。"
       },
       "notReady": "此工作项就绪后即可运行——它还有 {count, plural, other {#}} 个未完成的阻塞项。",
       "refused": {
@@ -13078,6 +13096,10 @@
         "failed": {
           "title": "未启动——Motir 无法启动这次运行。",
           "body": "没有启动任何机器。请稍后再试。"
+        },
+        "noCapacity": {
+          "title": "未启动——{model} 目前没有智能体运行容量。",
+          "body": "没有启动任何机器，也没有产生任何费用。请选择其他模型，或稍后再试。"
         }
       },
       "phase": {
@@ -14256,7 +14278,8 @@
           "no_verdictNoRun": "审查运行结束时没有给出结论。",
           "boot_failed": "审查所用的托管机器未能启动。",
           "no_actor": "没有人可以运行它——该工作项没有负责人或创建人，工作区也没有代理管理员。",
-          "unknown": "审查运行未能启动。"
+          "unknown": "审查运行未能启动。",
+          "noCapacity": "审查所用的模型目前没有智能体运行容量，请稍后再试。"
         },
         "why": "在审查完成或有人决定不经审查继续之前，不会合并任何内容。",
         "whyNotYours": "等待 {name} 处理。在审查完成或对方决定不经审查继续之前，不会合并任何内容。"
@@ -14293,7 +14316,8 @@
         "out_of_credits": "组织的额度已用完。",
         "credits_unavailable": "无法读取额度余额。",
         "repository_not_writable": "Motir 无法写入 {detail}。",
-        "card_not_ready": "已有人先领取了此工作项。"
+        "card_not_ready": "已有人先领取了此工作项。",
+        "no_capacity": "它上次使用的模型 {detail} 目前没有智能体运行容量。"
       },
       "next": {
         "cap_reached": "在托管智能体上运行",
@@ -14304,7 +14328,8 @@
         "models_unavailable": "在托管智能体上运行",
         "out_of_credits": "购买额度",
         "credits_unavailable": "在托管智能体上运行",
-        "repository_not_writable": "仓库"
+        "repository_not_writable": "仓库",
+        "no_capacity": "选择其他模型并运行"
       }
     },
     "manualWork": {

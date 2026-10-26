@@ -8478,6 +8478,16 @@
       "failureLinePlanAgain": "Non è stato possibile continuare questo tentativo · {when}. Il tuo prossimo messaggio lo pianifica di nuovo.",
       "failureLinePlanAgainAgain": "Questo tentativo non è stato continuato di nuovo · {when}. Il tuo prossimo messaggio lo pianifica di nuovo."
     },
+    "providerLimit": {
+      "retryingTitle": "In attesa del fornitore del modello",
+      "retryingBody": "Al momento è sovraccarico. La pianificazione riproverà da sola; non si perde nulla.",
+      "walkBecause": "perché il fornitore del modello ha raggiunto il suo limite",
+      "walkKept": "Non è andato perso nulla. Premi Riprendi quando vuoi riprovare; continua da dove si è fermata.",
+      "failureLine": "Non è stato possibile applicare la tua ultima modifica a questo piano: il fornitore del modello ha raggiunto il suo limite · {when}. Inviala di nuovo quando vuoi.",
+      "failureLineAgain": "Non è stato possibile applicare di nuovo la tua ultima modifica: il fornitore del modello ha raggiunto il suo limite · {when}. Inviala di nuovo quando vuoi.",
+      "failureLinePlanAgain": "Non è stato possibile continuare questo tentativo: il fornitore del modello ha raggiunto il suo limite · {when}. Il tuo prossimo messaggio lo pianifica di nuovo.",
+      "failureLinePlanAgainAgain": "Non è stato possibile continuare di nuovo questo tentativo: il fornitore del modello ha raggiunto il suo limite · {when}. Il tuo prossimo messaggio lo pianifica di nuovo."
+    },
     "grill": {
       "control": {
         "label": "Interrogami",
@@ -9712,7 +9722,8 @@
         "dispatcher_gone": "<b>{name}</b>, che l’ha avviata, non fa più parte di questa area di lavoro",
         "dispatcher_goneAnon": "la persona che l’ha avviata non fa più parte di questa area di lavoro",
         "repository_not_writable": "Motir non può più eseguire il push su {repo}",
-        "card_not_ready": "{key} non è pronto per l’esecuzione: è bloccato o non è più in corso"
+        "card_not_ready": "{key} non è pronto per l’esecuzione: è bloccato o non è più in corso",
+        "no_capacity": "il modello con cui è stata eseguita, {model}, al momento non ha capacità per le esecuzioni dell’agente"
       },
       "repair": {
         "out_of_credits": "Aggiungi crediti nella fatturazione, poi premi Continua, oppure continua dal tuo terminale.",
@@ -9723,7 +9734,8 @@
         "no_project_access": "Continuala tu: verrà eseguita a tuo nome, con i crediti della tua organizzazione.",
         "dispatcher_gone": "Continuala tu: verrà eseguita a tuo nome, con i crediti della tua organizzazione.",
         "repository_not_writable": "Ricollega il repository nelle impostazioni del progetto, poi premi Continua.",
-        "card_not_ready": "Rimuovi ciò che blocca {key} o riportalo In corso, poi premi Continua."
+        "card_not_ready": "Rimuovi ciò che blocca {key} o riportalo In corso, poi premi Continua.",
+        "no_capacity": "Scegli un altro modello e premi Continua, oppure riprova tra poco."
       },
       "copyAria": "Copia il comando di ripresa per {key}",
       "member": {
@@ -10158,10 +10170,12 @@
           "degradedValue": "Lento · {ms} ms",
           "degradedDetail": "Risponde, ma oltre la soglia di {threshold} ms. motir-gateway {version} · attivo dal {since}.",
           "unreachable": {
+            "badAnswer": "Risposta illeggibile dal gateway",
             "noAnswer": "Nessuna risposta dal gateway",
             "notConfigured": "Gateway non configurato"
           },
           "unreachableDetail": {
+            "badAnswer": "Il gateway ha risposto, ma non è stato possibile leggerne lo stato: {why, select, httpStatus {ha risposto HTTP {status}} notJson {il corpo non era JSON} noSuccess {non ha segnalato successo} noData {non conteneva dati} noVersion {non conteneva una versione} noStartTime {non conteneva un orario di avvio} other {la risposta è stata rifiutata}}. Le richieste AI che passano dal gateway potrebbero non riuscire. Non è stato misurato nulla, quindi non viene mostrata alcuna latenza.",
             "noAnswer": "Il controllo dello stato non ha ricevuto risposta entro {timeout} s. Le richieste AI che passano dal gateway potrebbero non riuscire. Non è stato misurato nulla, quindi non viene mostrata alcuna latenza.",
             "notConfigured": "MOTIR_GATEWAY_URL non è impostato, quindi non c’è nulla da controllare. È normale su un’istanza senza gateway."
           },
@@ -13037,7 +13051,8 @@
       "door": {
         "run": "Esegui",
         "runAgain": "Esegui di nuovo",
-        "starting": "Avvio…"
+        "starting": "Avvio…",
+        "heldModel": "<b>{model}</b> al momento non ha capacità per le esecuzioni dell’agente. Scegli un altro modello o attendi che torni disponibile."
       },
       "picker": {
         "label": "Modello",
@@ -13054,7 +13069,10 @@
         "fromDifficulty": "In base alla difficoltà: <b>{difficulty}</b>",
         "override": "Impostazione del progetto per <b>{difficulty}</b>",
         "fromLeaves": "Difficoltà più alta tra le sue foglie: <b>{difficulty}</b>",
-        "overrideFromLeaves": "Impostazione del progetto per <b>{difficulty}</b>, la difficoltà più alta tra le sue foglie"
+        "overrideFromLeaves": "Impostazione del progetto per <b>{difficulty}</b>, la difficoltà più alta tra le sue foglie",
+        "noCapacityTag": "Nessuna capacità",
+        "noCapacityReason": "Al momento non c’è capacità per le esecuzioni dell’agente. Riprova tra poco.",
+        "allHeldBody": "Al momento nessun modello ha capacità per le esecuzioni dell’agente. Riprova tra poco; le esecuzioni locali non sono interessate."
       },
       "notReady": "Esegui è disponibile quando questo elemento di lavoro è pronto — ha {count, plural, one {# elemento bloccante aperto} other {# elementi bloccanti aperti}}.",
       "refused": {
@@ -13087,6 +13105,10 @@
         "failed": {
           "title": "Non avviata — Motir non è riuscito ad avviare l’esecuzione.",
           "body": "Non è stato avviato nulla. Riprova tra poco."
+        },
+        "noCapacity": {
+          "title": "Non avviata — {model} al momento non ha capacità per le esecuzioni dell’agente.",
+          "body": "Non è stato avviato nulla e non è stato addebitato nulla. Scegli un altro modello oppure riprova tra poco."
         }
       },
       "phase": {
@@ -14265,7 +14287,8 @@
           "no_verdictNoRun": "l’esecuzione della revisione è terminata senza un verdetto.",
           "boot_failed": "la macchina ospitata per la revisione non è riuscita ad avviarsi.",
           "no_actor": "nessuno può eseguirla — l’elemento di lavoro non ha né Responsabile né Autore, e l’area di lavoro non ha un manager sostituto.",
-          "unknown": "l’esecuzione della revisione non è riuscita ad avviarsi."
+          "unknown": "l’esecuzione della revisione non è riuscita ad avviarsi.",
+          "noCapacity": "il modello della revisione al momento non ha capacità per le esecuzioni dell’agente. Riprova tra poco."
         },
         "why": "Non viene unito nulla finché la revisione non viene eseguita, o qualcuno non prosegue senza.",
         "whyNotYours": "In attesa di {name}. Non viene unito nulla finché la revisione non viene eseguita, o non prosegue senza."
@@ -14302,7 +14325,8 @@
         "out_of_credits": "l’organizzazione ha esaurito i crediti.",
         "credits_unavailable": "non è stato possibile leggere il saldo dei crediti.",
         "repository_not_writable": "Motir non può scrivere su {detail}.",
-        "card_not_ready": "qualcuno ha preso in carico l’elemento di lavoro per primo."
+        "card_not_ready": "qualcuno ha preso in carico l’elemento di lavoro per primo.",
+        "no_capacity": "{detail}, il modello usato l’ultima volta, al momento non ha capacità per le esecuzioni dell’agente."
       },
       "next": {
         "cap_reached": "Esegui sull’agente ospitato",
@@ -14313,7 +14337,8 @@
         "models_unavailable": "Esegui sull’agente ospitato",
         "out_of_credits": "Acquista crediti",
         "credits_unavailable": "Esegui sull’agente ospitato",
-        "repository_not_writable": "Repository"
+        "repository_not_writable": "Repository",
+        "no_capacity": "Scegli un altro modello ed esegui"
       }
     },
     "manualWork": {

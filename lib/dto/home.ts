@@ -468,6 +468,7 @@ export interface GateResumeAttemptDto {
     | 'card_not_ready'
     | 'already_resumed'
     | 'not_resumable'
+    | 'no_capacity'
     | null;
   /** What the line names (the dispatcher, the model, the repository, the refusal). */
   detail: string | null;

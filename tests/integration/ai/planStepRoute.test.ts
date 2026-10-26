@@ -341,3 +341,185 @@ describe('the narration arm (Story MOTIR-8060 · MOTIR-8062)', () => {
     expect(res.status).toBe(409);
   });
 });
+
+describe('the provider-retry arm (Story MOTIR-9540 · MOTIR-9619)', () => {
+  type WaitBody = {
+    planId: string;
+    providerWait: { attempt: number; maxAttempts: number; since: string; retryAt: string } | null;
+  };
+  const waiting = (retryAt: string, attempt = 1, maxAttempts = 3) => ({
+    state: 'waiting',
+    attempt,
+    maxAttempts,
+    retryAt,
+  });
+  const row = (planId: string, sessionKey: string) =>
+    adminDb.planStep.findUniqueOrThrow({ where: { planId_sessionKey: { planId, sessionKey } } });
+  const lastActivity = async (planId: string) =>
+    (await adminDb.plan.findUniqueOrThrow({ where: { id: planId } })).lastActivityAt.getTime();
+
+  it('stores a waiting report on the session’s step without touching the step, and stamps activity', async () => {
+    const fx = await makeFixture();
+    const jobId = 'job_retry_happy';
+    const { planId, addId } = await generatingPlan(fx, jobId);
+    await report(fx, jobId, { sessionKey: 's', step: 'author', target: `planItem:${addId}` });
+    const before = await row(planId, 's');
+    const activityBefore = await lastActivity(planId);
+    await new Promise((r) => setTimeout(r, 5));
+
+    const retryAt = new Date(Date.now() + 4_000).toISOString();
+    const res = await report(fx, jobId, { sessionKey: 's', providerRetry: waiting(retryAt) });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as WaitBody;
+    expect(body.planId).toBe(planId);
+    expect(body.providerWait).toMatchObject({ attempt: 1, maxAttempts: 3, retryAt });
+    expect(Date.parse(body.providerWait!.since)).toBeGreaterThan(before.startedAt.getTime());
+
+    const after = await row(planId, 's');
+    expect([after.kind, after.targetRef, after.startedAt.toISOString()]).toEqual([
+      before.kind,
+      before.targetRef,
+      before.startedAt.toISOString(),
+    ]);
+    expect(after.providerWaitUntil!.toISOString()).toBe(retryAt);
+    expect(await lastActivity(planId)).toBeGreaterThan(activityBefore);
+
+    // Every overlay read carries it, with no extra call.
+    const [step] = await steps(planId, fx);
+    expect(step!.providerWait).toEqual(body.providerWait);
+  });
+
+  it('`cleared` nulls all four wait columns and answers `providerWait: null`', async () => {
+    const fx = await makeFixture();
+    const jobId = 'job_retry_cleared';
+    const { planId } = await generatingPlan(fx, jobId);
+    await report(fx, jobId, { sessionKey: 's', step: 'settle' });
+    await report(fx, jobId, {
+      sessionKey: 's',
+      providerRetry: waiting(new Date(Date.now() + 2_000).toISOString()),
+    });
+
+    const res = await report(fx, jobId, { sessionKey: 's', providerRetry: { state: 'cleared' } });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ planId, providerWait: null });
+    const after = await row(planId, 's');
+    expect([
+      after.providerWaitSince,
+      after.providerWaitUntil,
+      after.providerWaitAttempt,
+      after.providerWaitMaxAttempts,
+    ]).toEqual([null, null, null, null]);
+  });
+
+  it('a new step clears the wait, narration leaves it, and `end` takes it with the row', async () => {
+    const fx = await makeFixture();
+    const jobId = 'job_retry_precedence';
+    const { planId, addId } = await generatingPlan(fx, jobId);
+    await report(fx, jobId, { sessionKey: 's', step: 'settle' });
+    const retryAt = new Date(Date.now() + 3_000).toISOString();
+    await report(fx, jobId, { sessionKey: 's', providerRetry: waiting(retryAt, 2, 3) });
+
+    expect((await report(fx, jobId, { sessionKey: 's', narration: ['Waiting.'] })).status).toBe(
+      200,
+    );
+    expect((await row(planId, 's')).providerWaitAttempt).toBe(2);
+
+    for (const step of [
+      { step: 'lay', target: `planItem:${addId}` },
+      { step: 'author', target: `planItem:${addId}` },
+      { step: 'settle' },
+    ]) {
+      await report(fx, jobId, { sessionKey: 's', providerRetry: waiting(retryAt) });
+      expect((await report(fx, jobId, { sessionKey: 's', ...step })).status).toBe(200);
+      expect((await row(planId, 's')).providerWaitSince, JSON.stringify(step)).toBeNull();
+    }
+
+    await report(fx, jobId, { sessionKey: 's', providerRetry: waiting(retryAt) });
+    expect((await report(fx, jobId, { sessionKey: 's', step: 'end' })).status).toBe(200);
+    expect(await adminDb.planStep.count({ where: { planId } })).toBe(0);
+  });
+
+  it('clamps `retryAt` to [now, now + 15 min]', async () => {
+    const fx = await makeFixture();
+    const jobId = 'job_retry_clamp';
+    const { planId } = await generatingPlan(fx, jobId);
+    await report(fx, jobId, { sessionKey: 's', step: 'settle' });
+
+    const past = await report(fx, jobId, {
+      sessionKey: 's',
+      providerRetry: waiting(new Date(Date.now() - 60_000).toISOString()),
+    });
+    const pastWait = ((await past.json()) as WaitBody).providerWait!;
+    expect(pastWait.retryAt).toBe(pastWait.since);
+
+    const far = await report(fx, jobId, {
+      sessionKey: 's',
+      providerRetry: waiting(new Date(Date.now() + 3_600_000).toISOString()),
+    });
+    const farWait = ((await far.json()) as WaitBody).providerWait!;
+    expect(Date.parse(farWait.retryAt) - Date.parse(farWait.since)).toBe(900_000);
+    expect((await row(planId, 's')).providerWaitUntil!.toISOString()).toBe(farWait.retryAt);
+  });
+
+  it('400 on a malformed providerRetry body, writing nothing', async () => {
+    const fx = await makeFixture();
+    const jobId = 'job_retry_400';
+    const { planId } = await generatingPlan(fx, jobId);
+    await report(fx, jobId, { sessionKey: 's', step: 'settle' });
+    const at = new Date(Date.now() + 1_000).toISOString();
+
+    for (const extra of [
+      { step: 'settle', providerRetry: { state: 'cleared' } },
+      { narration: ['Both.'], providerRetry: { state: 'cleared' } },
+      { providerRetry: { state: 'cleared' }, target: 'planItem:x' },
+      { providerRetry: 'waiting' },
+      { providerRetry: [] },
+      { providerRetry: null },
+      { providerRetry: { state: 'sleeping' } },
+      { providerRetry: waiting(at, 1.5, 3) },
+      { providerRetry: waiting(at, 0, 3) },
+      { providerRetry: waiting(at, 1, 21) },
+      { providerRetry: waiting(at, 4, 3) },
+      { providerRetry: { state: 'waiting', attempt: '1', maxAttempts: 3, retryAt: at } },
+      { providerRetry: waiting('soon') },
+      { providerRetry: { state: 'waiting', attempt: 1, maxAttempts: 3 } },
+    ]) {
+      const res = await report(fx, jobId, { sessionKey: 's', ...extra });
+      expect(res.status, JSON.stringify(extra)).toBe(400);
+      expect(((await res.json()) as { code: string }).code).toBe('PLAN_STEP_INVALID');
+    }
+    expect((await row(planId, 's')).providerWaitSince).toBeNull();
+  });
+
+  it('422 for a session with no step, 409 once the plan is not generating', async () => {
+    const fx = await makeFixture();
+    const jobId = 'job_retry_refusals';
+    const { planId } = await generatingPlan(fx, jobId);
+    await report(fx, jobId, { sessionKey: 's', step: 'settle' });
+    const providerRetry = waiting(new Date(Date.now() + 1_000).toISOString());
+
+    const ghost = await report(fx, jobId, { sessionKey: 'ghost', providerRetry });
+    expect(ghost.status).toBe(422);
+    expect(((await ghost.json()) as { code: string }).code).toBe('PLAN_STEP_INVALID');
+    expect(await adminDb.planStep.count({ where: { planId } })).toBe(1);
+
+    await plansService.markPlanned(planId, fx.ctx);
+    const late = await report(fx, jobId, { sessionKey: 's', providerRetry });
+    expect(late.status).toBe(409);
+    expect((await row(planId, 's')).providerWaitSince).toBeNull();
+  });
+
+  it('the database refuses a half-written wait', async () => {
+    const fx = await makeFixture();
+    const jobId = 'job_retry_check';
+    const { planId } = await generatingPlan(fx, jobId);
+    await report(fx, jobId, { sessionKey: 's', step: 'settle' });
+
+    await expect(
+      adminDb.planStep.update({
+        where: { planId_sessionKey: { planId, sessionKey: 's' } },
+        data: { providerWaitAttempt: 1 },
+      }),
+    ).rejects.toThrow(/plan_step_provider_wait_complete/);
+  });
+});

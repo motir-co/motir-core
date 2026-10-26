@@ -5,6 +5,7 @@ import {
   readGatewayStatus,
 } from '@/lib/gateway/statusClient';
 import { gatewayStatusReader, usingFakeGatewayStatus } from '@/lib/gateway/statusProvider';
+import { GatewayStatusMalformedError } from '@/lib/gateway/statusErrors';
 
 // THE GATEWAY STATUS CLIENT (MOTIR-742). motir-core never imports motir-gateway
 // (the open-core boundary), so `fetch` is the seam stubbed here — as in
@@ -148,6 +149,76 @@ describe('readGatewayStatus', () => {
       }),
     );
     await expect(readGatewayStatus()).rejects.toThrow('fetch failed');
+  });
+});
+
+describe('which kind of no (MOTIR-9641)', () => {
+  // An answer that arrived and was rejected is typed, with WHY; a missing answer
+  // is not. The console's Gateway card reads the difference.
+  async function rejection(): Promise<unknown> {
+    return readGatewayStatus().then(
+      () => null,
+      (err: unknown) => err,
+    );
+  }
+
+  it.each([
+    ['a 503', () => answer({ error: 'unavailable' }, 503), 'httpStatus', 503],
+    ['a body that is not JSON', () => new Response('<html>oops</html>'), 'notJson', null],
+    ['success:false', () => answer({ success: false, data: null }), 'noSuccess', null],
+    ['no data', () => answer({ success: true }), 'noData', null],
+    [
+      'an empty version',
+      () => answer({ success: true, data: { version: '', start_time: 1 } }),
+      'noVersion',
+      null,
+    ],
+    [
+      'no start time',
+      () => answer({ success: true, data: { version: 'v1' } }),
+      'noStartTime',
+      null,
+    ],
+  ])('%s throws GatewayStatusMalformedError naming why', async (_label, reply, why, status) => {
+    vi.stubEnv('MOTIR_GATEWAY_URL', 'https://gateway.example.test');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => reply()),
+    );
+    const err = await rejection();
+    expect(err).toBeInstanceOf(GatewayStatusMalformedError);
+    expect((err as GatewayStatusMalformedError).why).toBe(why);
+    expect((err as GatewayStatusMalformedError).httpStatus).toBe(status);
+  });
+
+  it('a deadline that passes is NOT a malformed answer', async () => {
+    vi.useFakeTimers();
+    vi.stubEnv('MOTIR_GATEWAY_URL', 'https://gateway.example.test');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        (_url: string, init: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            init.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+          }),
+      ),
+    );
+    const pending = rejection();
+    await vi.advanceTimersByTimeAsync(GATEWAY_STATUS_TIMEOUT_MS);
+    const err = await pending;
+    expect(err).toBeInstanceOf(Error);
+    expect(err).not.toBeInstanceOf(GatewayStatusMalformedError);
+  });
+
+  it('a network failure is NOT a malformed answer', async () => {
+    vi.stubEnv('MOTIR_GATEWAY_URL', 'https://gateway.example.test');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new TypeError('fetch failed');
+      }),
+    );
+    expect(await rejection()).not.toBeInstanceOf(GatewayStatusMalformedError);
   });
 });
 

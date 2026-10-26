@@ -101,6 +101,18 @@ export function toPlanStepDto(row: PlanStep): PlanStepDto {
     kind: row.kind,
     targetRef: row.targetRef,
     startedAt: row.startedAt.toISOString(),
+    providerWait:
+      row.providerWaitSince !== null &&
+      row.providerWaitUntil !== null &&
+      row.providerWaitAttempt !== null &&
+      row.providerWaitMaxAttempts !== null
+        ? {
+            attempt: row.providerWaitAttempt,
+            maxAttempts: row.providerWaitMaxAttempts,
+            since: row.providerWaitSince.toISOString(),
+            retryAt: row.providerWaitUntil.toISOString(),
+          }
+        : null,
   };
 }
 

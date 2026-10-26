@@ -7,7 +7,9 @@ import { pagesService } from '@/lib/services/pagesService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolError, toolOk } from '../toolResult';
-import { exempt } from '../payloads/define';
+import { presentPageLinkPair } from '@/lib/api/v1/pages/schema';
+import { derived } from '../payloads/define';
+import { linkPagePayload } from '../payloads/pages';
 import { pageIdField, pageProjectKeyField, resolvePageProject } from './pageRef';
 import { resolveWorkItemByKey, workItemKeyField } from './workItemRef';
 
@@ -33,8 +35,10 @@ import { resolveWorkItemByKey, workItemKeyField } from './workItemRef';
 //    `PAGE_NOT_FOUND`, the one answer an unknown id gets.
 //  • NO LEAK. No text names a page's or a work item's title — only ids and keys.
 //
-// EXEMPT from payload derivation (`payloads/exemptions.ts`): no `/api/v1`
-// operation returns a link pair.
+// DERIVED (MOTIR-9604): `/api/v1` answers a link or an unlink with the bare
+// pair, `PageLinkPair` (MOTIR-9567). This payload is that pair, presented through
+// v1's own presenter, plus `action` and `changed` — and the drift guard probes
+// the pair inside it (`payloads/pages.ts`).
 
 export const LINK_PAGE_TOOL_NAME = 'link_page';
 
@@ -87,23 +91,23 @@ export async function runLinkPage(
     const input = { workItemId: item.id, pageId: args.pageId };
     const action = args.action ?? 'link';
     if (action === 'unlink') {
-      const pair = await pageLinksService.unlinkPageForWorkItem(ctx, input);
+      const pair = presentPageLinkPair(await pageLinksService.unlinkPageForWorkItem(ctx, input));
       return toolOk(
         `Unlinked page ${pair.pageId} from ${item.identifier}.`,
-        exempt(LINK_PAGE_TOOL_NAME, { ...pair, action, changed: true }),
+        derived(linkPagePayload, { ...pair, action, changed: true }),
       );
     }
     try {
-      const pair = await pageLinksService.linkPageForWorkItem(ctx, input);
+      const pair = presentPageLinkPair(await pageLinksService.linkPageForWorkItem(ctx, input));
       return toolOk(
         `Linked page ${pair.pageId} to ${item.identifier}.`,
-        exempt(LINK_PAGE_TOOL_NAME, { ...pair, action, changed: true }),
+        derived(linkPagePayload, { ...pair, action, changed: true }),
       );
     } catch (err) {
       if (!(err instanceof PageLinkAlreadyExistsError)) throw err;
       return toolOk(
         `Page ${args.pageId} is already linked to ${item.identifier} — nothing changed.`,
-        exempt(LINK_PAGE_TOOL_NAME, {
+        derived(linkPagePayload, {
           pageId: args.pageId,
           workItemId: item.id,
           source: 'manual' as const,

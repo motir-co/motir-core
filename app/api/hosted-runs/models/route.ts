@@ -17,6 +17,11 @@ import { hostedRunPickerService } from '@/lib/services/hostedRunPickerService';
 // preselection from its difficulty, and why — or `resolved: null` where it cannot
 // be told (a key the caller cannot browse reads exactly like one that names
 // nothing). Without it the answer is unchanged.
+//
+// Each model carries `capacity` (Story MOTIR-9541 · MOTIR-9629): `{ verdict:
+// 'available' }` or `{ verdict: 'no_capacity', reason }` — the verdict and its reason
+// code only, never a counter, limit, share or tenant identifier, so the field is
+// tenant-safe by construction. A failed capacity read reads every model available.
 export async function GET(request: Request): Promise<Response> {
   const gate = await requireCompliantWorkspaceContext();
   if (!gate.ok) return gate.response;
