@@ -10158,10 +10158,12 @@
           "degradedValue": "Lento · {ms} ms",
           "degradedDetail": "Risponde, ma oltre la soglia di {threshold} ms. motir-gateway {version} · attivo dal {since}.",
           "unreachable": {
+            "badAnswer": "Risposta illeggibile dal gateway",
             "noAnswer": "Nessuna risposta dal gateway",
             "notConfigured": "Gateway non configurato"
           },
           "unreachableDetail": {
+            "badAnswer": "Il gateway ha risposto, ma non è stato possibile leggerne lo stato: {why, select, httpStatus {ha risposto HTTP {status}} notJson {il corpo non era JSON} noSuccess {non ha segnalato successo} noData {non conteneva dati} noVersion {non conteneva una versione} noStartTime {non conteneva un orario di avvio} other {la risposta è stata rifiutata}}. Le richieste AI che passano dal gateway potrebbero non riuscire. Non è stato misurato nulla, quindi non viene mostrata alcuna latenza.",
             "noAnswer": "Il controllo dello stato non ha ricevuto risposta entro {timeout} s. Le richieste AI che passano dal gateway potrebbero non riuscire. Non è stato misurato nulla, quindi non viene mostrata alcuna latenza.",
             "notConfigured": "MOTIR_GATEWAY_URL non è impostato, quindi non c’è nulla da controllare. È normale su un’istanza senza gateway."
           },

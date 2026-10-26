@@ -9,6 +9,7 @@ import type {
   PlatformSignalDTO,
 } from '@/lib/dto/platformHealth';
 import { GATEWAY_STATUS_TIMEOUT_MS } from '@/lib/gateway/statusClient';
+import { GatewayStatusMalformedError } from '@/lib/gateway/statusErrors';
 import { gatewayStatusReader } from '@/lib/gateway/statusProvider';
 import { serverSentryDsn } from '@/lib/monitoring/config';
 import { errorCountReader } from '@/lib/monitoring/errorCountProvider';
@@ -400,13 +401,18 @@ async function hostingSignal(): Promise<PlatformSignalDTO> {
  * the console asked it nothing: an outage showed up only as runs failing one by
  * one, each looking like its own problem, under an all-green board.
  *
- * ⚠️ TWO UNREACHABLE REASONS, AND THEY ARE NOT THE SAME SENTENCE. A deployment
+ * ⚠️ THREE UNREACHABLE REASONS, AND THEY ARE NOT THE SAME SENTENCE. A deployment
  * with no `MOTIR_GATEWAY_URL` runs no gateway — a self-hosted instance, a dev box
  * — and that is `notConfigured`, an expected state. A configured gateway that
- * does not answer cleanly is `noAnswer`, which is an incident. Neither carries a
- * latency or a version: `values` holds the reason and, for `noAnswer`, the
+ * gives no answer — the deadline passed, the connection failed — is `noAnswer`,
+ * which is an incident on the way TO the gateway. A gateway that ANSWERED, with a
+ * non-2xx or a body the client rejects, is `badAnswer` (MOTIR-9641): an incident
+ * in the gateway's payload or its deploy, and saying "no answer" there sent an
+ * operator chasing the network for a gateway that replied in 100 ms. None carries
+ * a latency or a version: `values` holds the reason and, for `noAnswer`, the
  * deadline the copy names ("no answer within {timeout} s") — a setting of this
- * probe, never a measurement of the gateway.
+ * probe, never a measurement of the gateway — and, for `badAnswer`, `why` (the
+ * rejection's code) and, on an HTTP rejection, `status` as a string.
  *
  * ⚠️ THE LINK-OUT IS THE STATUS ENDPOINT ITSELF, not a hosting dashboard. Naming
  * the gateway's hosting provider here would leak it into `lib/`, which
@@ -421,7 +427,19 @@ async function gatewaySignal(): Promise<PlatformSignalDTO> {
   // read below fails on the same URL, so the card is `noAnswer` with no link
   // rather than a link to an address that cannot be right.
   const linkOut = await probe(async () => reader.statusUrl());
-  const status = await probe(() => reader.read());
+  // A rejected ANSWER resolves rather than throws, so `probe()` stays the one
+  // place a throw becomes `unreachable` and only a missing answer reaches it.
+  const read = await probe(() =>
+    reader.read().then(
+      (status) => ({ status, rejected: null }),
+      (err: unknown) => {
+        if (err instanceof GatewayStatusMalformedError) return { status: null, rejected: err };
+        throw err;
+      },
+    ),
+  );
+  if (read?.rejected) return badAnswer(read.rejected, linkOut);
+  const status = read?.status ?? null;
   if (status === null) {
     return {
       id: 'gateway',
@@ -444,6 +462,18 @@ async function gatewaySignal(): Promise<PlatformSignalDTO> {
     },
     linkOut,
   };
+}
+
+/**
+ * The gateway answered, and the answer was rejected (MOTIR-9641). `why` is the
+ * rejection's code, which the copy names in words; an HTTP rejection adds the
+ * status it answered with — as TEXT, under the same no-number rule as the
+ * deadline above, because the card measured nothing.
+ */
+function badAnswer(rejected: GatewayStatusMalformedError, linkOut: string | null) {
+  const values: Record<string, string> = { reason: 'badAnswer', why: rejected.why };
+  if (rejected.httpStatus !== null) values['status'] = String(rejected.httpStatus);
+  return { id: 'gateway', state: 'unreachable', values, linkOut } satisfies PlatformSignalDTO;
 }
 
 async function scheduleSignalFrom(
