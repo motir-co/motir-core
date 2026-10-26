@@ -115,6 +115,7 @@ import {
 import {
   AlsoWaitingPlan,
   FailedWaitingNotice,
+  ProviderLimitRetryingBanner,
   WaitingPlanFailureLine,
 } from '@/components/planning/SessionWaitingParts';
 import { workbenchTabHref } from '@/lib/workbench/tab';
@@ -367,6 +368,12 @@ export interface PlanChangeRailProps {
   offerAnsweringTurnId?: string | null;
   /** The last refused answer, on the offer it was for. */
   offerRefusal?: { turnId: string; code: string } | null;
+  /**
+   * THE PROVIDER LIMIT (Story MOTIR-9540 · MOTIR-9622): `'retrying'` while the session waits to
+   * retry a provider 429 and carries no failure — the host derives it from the progress reading
+   * with `providerLimitView`, so a failure already won. Absent or null, no banner.
+   */
+  providerLimit?: 'retrying' | null;
 }
 
 export function PlanChangeRail({
@@ -415,6 +422,7 @@ export function PlanChangeRail({
   onDeclinePlanOffer,
   offerAnsweringTurnId = null,
   offerRefusal = null,
+  providerLimit = null,
 }: PlanChangeRailProps) {
   const t = useTranslations('planningWorkspace');
   const readerRoutes = useReaderRoutes();
@@ -970,6 +978,13 @@ export function PlanChangeRail({
             if (sessionId !== state.session?.id) onOpenSession(sessionId, targetKeys);
           }}
         />
+      ) : null}
+
+      {/* THE PROVIDER-LIMIT RETRYING BANNER (MOTIR-9622; design panels 2–5): between the head
+          (and History) and the log, outside its scroll, so it stays in view while turns scroll. A
+          failure wins — the host passes it only when the session carries none. */}
+      {providerLimit === 'retrying' && !ended && failure === null ? (
+        <ProviderLimitRetryingBanner />
       ) : null}
 
       <div

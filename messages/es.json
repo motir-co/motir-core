@@ -8478,6 +8478,16 @@
       "failureLinePlanAgain": "No se pudo continuar este intento · {when}. Tu próximo mensaje lo vuelve a planificar.",
       "failureLinePlanAgainAgain": "Este intento no se pudo continuar de nuevo · {when}. Tu próximo mensaje lo vuelve a planificar."
     },
+    "providerLimit": {
+      "retryingTitle": "Esperando al proveedor del modelo",
+      "retryingBody": "Ahora mismo está saturado. La planificación volverá a intentarlo sola; no se pierde nada.",
+      "walkBecause": "porque el proveedor del modelo alcanzó su límite",
+      "walkKept": "No se perdió nada. Pulsa Reanudar cuando quieras volver a intentarlo; continúa desde donde se detuvo.",
+      "failureLine": "No se pudo hacer tu último cambio en este plan: el proveedor del modelo alcanzó su límite · {when}. Envíalo de nuevo cuando quieras.",
+      "failureLineAgain": "Tu último cambio no se pudo hacer otra vez: el proveedor del modelo alcanzó su límite · {when}. Envíalo de nuevo cuando quieras.",
+      "failureLinePlanAgain": "No se pudo continuar este intento: el proveedor del modelo alcanzó su límite · {when}. Tu próximo mensaje lo vuelve a planificar.",
+      "failureLinePlanAgainAgain": "No se pudo continuar este intento otra vez: el proveedor del modelo alcanzó su límite · {when}. Tu próximo mensaje lo vuelve a planificar."
+    },
     "grill": {
       "control": {
         "label": "Interrógame",

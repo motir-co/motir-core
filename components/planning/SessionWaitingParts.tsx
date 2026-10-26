@@ -5,6 +5,8 @@ import { Hourglass, TriangleAlert } from 'lucide-react';
 
 import { Button } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';
+import { Spinner } from '@/components/ui/Spinner';
+import { providerLimitView } from '@/lib/planChange/providerLimitView';
 import { PlanOverlayDoor } from '@/components/planning/PlanOverlayDoor';
 import type { PlanChangeSessionDto, PlanSessionFailureDto } from '@/lib/dto/planChange';
 import {
@@ -34,6 +36,11 @@ import {
  *
  * `canResume` false is the read-only face for a member who neither started the session nor
  * manages the project (panel 3c): no Resume, and the sentence names who can.
+ *
+ * A `rate_limited` failure is worded as the provider limit (MOTIR-9622; design
+ * `planning-workspace--provider-limit.mock.html` panels 6 / 8b): the *because* segment and the
+ * kept sentence change, nothing else. Once Resume is pressed (panel 7) the shipped resuming face
+ * is drawn as it is for every reason.
  */
 export function FailedWaitingNotice({
   failure,
@@ -54,8 +61,10 @@ export function FailedWaitingNotice({
 }) {
   const t = useTranslations('workbench.planningSession');
   const tw = useTranslations('planningWorkspace.waiting');
+  const tl = useTranslations('planningWorkspace.providerLimit');
   const format = useFormatter();
   const stop = stopPhraseKeyOf(failure);
+  const providerLimit = providerLimitView(failure, null) === 'stopped' && !resuming;
   const refusal = resumeError === null ? null : resumeRefusalKeyOf(resumeError);
   const showRefusal = refusal !== null && refusal !== 'alreadyStarted';
   const sessionGone = refusal !== null && refusalEndsWaiting(refusal);
@@ -78,7 +87,11 @@ export function FailedWaitingNotice({
           {t(`stop.${stop}`, { title: failure.stopTitle ?? '' })}
         </span>
         <span aria-hidden> · </span>
-        <span>{t('because', { reason: t(`reason.${resumeReasonKeyOf(failure.reason)}`) })}</span>
+        <span data-testid={providerLimit ? 'provider-limit-because' : undefined}>
+          {providerLimit
+            ? tl('walkBecause')
+            : t('because', { reason: t(`reason.${resumeReasonKeyOf(failure.reason)}`) })}
+        </span>
         <span aria-hidden> · </span>
         <span
           title={format.dateTime(new Date(failure.failedAt), {
@@ -89,7 +102,12 @@ export function FailedWaitingNotice({
           {t('failedAt', { when: format.relativeTime(new Date(failure.failedAt)) })}
         </span>
       </p>
-      <p className="text-xs leading-relaxed text-(--el-text-secondary)">{tw('kept')}</p>
+      <p
+        data-testid={providerLimit ? 'provider-limit-kept' : undefined}
+        className="text-xs leading-relaxed text-(--el-text-secondary)"
+      >
+        {providerLimit ? tl('walkKept') : tw('kept')}
+      </p>
       {showRefusal ? (
         <p role="alert" className="text-xs text-(--el-text)">
           <span className="font-medium">{t('couldNot')}</span> {t(`refusal.${refusal}`)}
@@ -129,6 +147,9 @@ export function FailedWaitingNotice({
  *
  * Only the CURRENT failure is drawn: the session stores one failure record, a later turn clears
  * it and a newer failure overwrites it, so an earlier one is never redrawn after a reload.
+ *
+ * A `rate_limited` failure says the provider was at its limit, in each of the four forms
+ * (MOTIR-9622; design `planning-workspace--provider-limit.mock.html` panels 9 / 10).
  */
 export function WaitingPlanFailureLine({
   failure,
@@ -145,20 +166,24 @@ export function WaitingPlanFailureLine({
   planAgain?: boolean;
 }) {
   const tw = useTranslations('planningWorkspace.waiting');
+  const tl = useTranslations('planningWorkspace.providerLimit');
   const format = useFormatter();
   const when = format.relativeTime(new Date(failure.failedAt));
-  const text = planAgain
+  const providerLimit = providerLimitView(failure, null) === 'stopped';
+  const key = planAgain
     ? again
-      ? tw('failureLinePlanAgainAgain', { when })
-      : tw('failureLinePlanAgain', { when })
+      ? 'failureLinePlanAgainAgain'
+      : 'failureLinePlanAgain'
     : again
-      ? tw('failureLineAgain', { when })
-      : tw('failureLine', { when });
+      ? 'failureLineAgain'
+      : 'failureLine';
+  const text = providerLimit ? tl(key, { when }) : tw(key, { when });
   return (
     <p
       role="status"
       data-testid="planning-failure-line"
       data-again={again ? 'true' : undefined}
+      data-provider-limit={providerLimit ? 'true' : undefined}
       className="flex items-start gap-2 rounded-(--radius-card) bg-(--el-tint-rose) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) text-sm text-(--el-text-strong)"
     >
       <TriangleAlert className="mt-0.5 size-4 flex-none text-(--el-icon-muted)" aria-hidden />
@@ -191,5 +216,32 @@ export function AlsoWaitingPlan({ session }: { session: PlanChangeSessionDto }) 
         {plan.title ?? '…'}
       </PlanOverlayDoor>
     </p>
+  );
+}
+
+/**
+ * THE PROVIDER-LIMIT RETRYING BANNER (Story MOTIR-9540 · MOTIR-9622; design
+ * `planning-workspace--provider-limit.mock.html` panels 2–5): the planner is waiting to retry a
+ * provider 429 by itself. Info tone — nothing failed and the person has nothing to do — so no
+ * action, no dismiss, no countdown and no attempt number. A polite `role="status"`, labelled by
+ * its title, never an alert. The rail draws it between its head and the log, outside the scroll.
+ */
+export function ProviderLimitRetryingBanner() {
+  const tl = useTranslations('planningWorkspace.providerLimit');
+  return (
+    <div
+      role="status"
+      aria-labelledby="provider-limit-retrying-title"
+      data-testid="provider-limit-retrying"
+      className="mx-4 mt-3 flex flex-none items-start gap-2 rounded-(--radius-card) border border-(--el-border) bg-(--el-notice-info-bg) px-(--spacing-control-x) py-(--spacing-control-y) text-(--el-text-strong)"
+    >
+      <Spinner size="sm" aria-hidden="true" className="mt-0.5 flex-none text-(--el-text-strong)" />
+      <div className="min-w-0">
+        <p id="provider-limit-retrying-title" className="text-sm font-semibold">
+          {tl('retryingTitle')}
+        </p>
+        <p className="mt-0.5 text-xs leading-relaxed">{tl('retryingBody')}</p>
+      </div>
+    </div>
   );
 }

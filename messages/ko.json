@@ -8472,6 +8472,16 @@
       "failureLinePlanAgain": "이 시도를 계속하지 못했습니다 · {when}. 다음 메시지로 다시 계획합니다.",
       "failureLinePlanAgainAgain": "이 시도를 다시 계속하지 못했습니다 · {when}. 다음 메시지로 다시 계획합니다."
     },
+    "providerLimit": {
+      "retryingTitle": "모델 제공업체를 기다리는 중",
+      "retryingBody": "지금은 요청이 많습니다. 계획은 자동으로 다시 시도하며, 잃는 것은 없습니다.",
+      "walkBecause": "모델 제공업체가 사용 한도에 도달했기 때문에",
+      "walkKept": "잃은 것은 없습니다. 준비되면 재개를 눌러 다시 시도하세요. 멈춘 곳부터 이어서 진행합니다.",
+      "failureLine": "이 계획에 대한 마지막 변경을 반영하지 못했습니다: 모델 제공업체가 사용 한도에 도달했습니다 · {when}. 준비되면 다시 보내세요.",
+      "failureLineAgain": "마지막 변경을 다시 반영하지 못했습니다: 모델 제공업체가 사용 한도에 도달했습니다 · {when}. 준비되면 다시 보내세요.",
+      "failureLinePlanAgain": "이 시도를 계속하지 못했습니다: 모델 제공업체가 사용 한도에 도달했습니다 · {when}. 다음 메시지로 다시 계획합니다.",
+      "failureLinePlanAgainAgain": "이 시도를 다시 계속하지 못했습니다: 모델 제공업체가 사용 한도에 도달했습니다 · {when}. 다음 메시지로 다시 계획합니다."
+    },
     "grill": {
       "control": {
         "label": "질문 공세",

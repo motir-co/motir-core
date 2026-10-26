@@ -8478,6 +8478,16 @@
       "failureLinePlanAgain": "Dieser Versuch konnte nicht fortgesetzt werden · {when}. Ihre nächste Nachricht plant neu.",
       "failureLinePlanAgainAgain": "Dieser Versuch konnte erneut nicht fortgesetzt werden · {when}. Ihre nächste Nachricht plant neu."
     },
+    "providerLimit": {
+      "retryingTitle": "Warten auf den Modellanbieter",
+      "retryingBody": "Er ist gerade ausgelastet. Die Planung versucht es von selbst erneut; nichts geht verloren.",
+      "walkBecause": "weil der Modellanbieter sein Limit erreicht hat",
+      "walkKept": "Nichts ist verloren. Klicken Sie auf Fortsetzen, sobald Sie es erneut versuchen möchten; es geht dort weiter, wo es angehalten hat.",
+      "failureLine": "Ihre letzte Änderung an diesem Plan konnte nicht vorgenommen werden: Der Modellanbieter hat sein Limit erreicht · {when}. Senden Sie sie erneut, sobald Sie bereit sind.",
+      "failureLineAgain": "Ihre letzte Änderung konnte erneut nicht vorgenommen werden: Der Modellanbieter hat sein Limit erreicht · {when}. Senden Sie sie erneut, sobald Sie bereit sind.",
+      "failureLinePlanAgain": "Dieser Versuch konnte nicht fortgesetzt werden: Der Modellanbieter hat sein Limit erreicht · {when}. Ihre nächste Nachricht plant neu.",
+      "failureLinePlanAgainAgain": "Dieser Versuch konnte erneut nicht fortgesetzt werden: Der Modellanbieter hat sein Limit erreicht · {when}. Ihre nächste Nachricht plant neu."
+    },
     "grill": {
       "control": {
         "label": "Löchere mich",

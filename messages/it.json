@@ -8478,6 +8478,16 @@
       "failureLinePlanAgain": "Non è stato possibile continuare questo tentativo · {when}. Il tuo prossimo messaggio lo pianifica di nuovo.",
       "failureLinePlanAgainAgain": "Questo tentativo non è stato continuato di nuovo · {when}. Il tuo prossimo messaggio lo pianifica di nuovo."
     },
+    "providerLimit": {
+      "retryingTitle": "In attesa del fornitore del modello",
+      "retryingBody": "Al momento è sovraccarico. La pianificazione riproverà da sola; non si perde nulla.",
+      "walkBecause": "perché il fornitore del modello ha raggiunto il suo limite",
+      "walkKept": "Non è andato perso nulla. Premi Riprendi quando vuoi riprovare; continua da dove si è fermata.",
+      "failureLine": "Non è stato possibile applicare la tua ultima modifica a questo piano: il fornitore del modello ha raggiunto il suo limite · {when}. Inviala di nuovo quando vuoi.",
+      "failureLineAgain": "Non è stato possibile applicare di nuovo la tua ultima modifica: il fornitore del modello ha raggiunto il suo limite · {when}. Inviala di nuovo quando vuoi.",
+      "failureLinePlanAgain": "Non è stato possibile continuare questo tentativo: il fornitore del modello ha raggiunto il suo limite · {when}. Il tuo prossimo messaggio lo pianifica di nuovo.",
+      "failureLinePlanAgainAgain": "Non è stato possibile continuare di nuovo questo tentativo: il fornitore del modello ha raggiunto il suo limite · {when}. Il tuo prossimo messaggio lo pianifica di nuovo."
+    },
     "grill": {
       "control": {
         "label": "Interrogami",

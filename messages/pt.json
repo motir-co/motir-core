@@ -8478,6 +8478,16 @@
       "failureLinePlanAgain": "Não foi possível continuar esta tentativa · {when}. Sua próxima mensagem planeja de novo.",
       "failureLinePlanAgainAgain": "Esta tentativa não pôde ser continuada de novo · {when}. Sua próxima mensagem planeja de novo."
     },
+    "providerLimit": {
+      "retryingTitle": "Aguardando o provedor do modelo",
+      "retryingBody": "Ele está sobrecarregado agora. O planejamento tentará de novo sozinho; nada se perde.",
+      "walkBecause": "porque o provedor do modelo atingiu o limite",
+      "walkKept": "Nada foi perdido. Clique em Retomar quando quiser tentar de novo; o planejamento continua de onde parou.",
+      "failureLine": "Sua última alteração neste plano não pôde ser feita: o provedor do modelo atingiu o limite · {when}. Envie de novo quando quiser.",
+      "failureLineAgain": "Sua última alteração não pôde ser feita de novo: o provedor do modelo atingiu o limite · {when}. Envie de novo quando quiser.",
+      "failureLinePlanAgain": "Não foi possível continuar esta tentativa: o provedor do modelo atingiu o limite · {when}. Sua próxima mensagem planeja de novo.",
+      "failureLinePlanAgainAgain": "Não foi possível continuar esta tentativa de novo: o provedor do modelo atingiu o limite · {when}. Sua próxima mensagem planeja de novo."
+    },
     "grill": {
       "control": {
         "label": "Me questione",
