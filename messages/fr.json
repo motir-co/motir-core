@@ -10470,6 +10470,157 @@
         "prev": "Préc.",
         "next": "Suiv.",
         "pageOf": "Page {page} sur {pages}"
+      },
+      "pools": {
+        "title": "Pools",
+        "subtitle": "Le pool de comptes AWS de chaque type de flotte : capacité, utilisation par rapport à 70 %, le compte de réserve Motir, les augmentations de quota demandées à AWS et si la croissance a fait son travail. Lu d’après ce que la passe de croissance a enregistré en dernier — charger cette page n’interroge pas AWS.",
+        "kind": {
+          "ci_runner": "Runner CI",
+          "hosted_agent": "Runner d’agents",
+          "code_graph_index": "Indexeur",
+          "agent_instance": "Hébergeur d’agents"
+        },
+        "block": {
+          "title": "Pool · {kind}",
+          "subtitle": {
+            "aws": "Ses comptes partagés, le compte de réserve Motir, les augmentations de quota demandées à AWS et les événements de croissance — tels que la passe de croissance les a lus en dernier.",
+            "fly": "Ce type est basculé sur Fly, il n’a donc pas de pool AWS.",
+            "other": "Ses comptes partagés, le compte de réserve Motir, les augmentations de quota et les événements de croissance."
+          }
+        },
+        "provider": {
+          "aws": "Fonctionne sur AWS",
+          "fly": "Fonctionne sur Fly"
+        },
+        "overCount": "{count, plural, one {# compte au-delà de 70 %} other {# comptes au-delà de 70 %}}",
+        "growthInFlight": "Croissance en cours",
+        "fly": {
+          "title": "{kind} fonctionne sur Fly",
+          "body": "Son interrupteur est réglé sur Fly, il n’y a donc ni capacité, ni quota, ni croissance AWS à afficher. Ses conteneurs en cours d’exécution sont comptés par organisation dans la section Flotte ci-dessus."
+        },
+        "error": {
+          "title": "Impossible de lire le pool {kind}",
+          "body": "La lecture de ce pool n’a pas répondu, rien n’est donc chargé ici — rien de tout cela n’est zéro, et aucun fournisseur n’est affirmé. Les autres pools et le reste de cette page ne sont pas affectés. Rechargez pour réessayer."
+        },
+        "sectionError": {
+          "title": "Impossible de lire les pools",
+          "body": "La lecture des pools n’a pas répondu, aucun pool n’est donc chargé — rien de tout cela n’est zéro, et aucun fournisseur n’est affirmé. Le reste de cette page n’est pas affecté. Rechargez pour réessayer."
+        },
+        "total": {
+          "capacity": "Capacité · quota accordé de {count, plural, one {# compte partagé} other {# comptes partagés}} · la réserve non comptée",
+          "used": "vCPU utilisés sur ces comptes",
+          "percent": "De la capacité utilisée · la croissance démarre quand un compte dépasse 70 %",
+          "percentShort": "De la capacité utilisée",
+          "capacityShort": "Capacité · quota de vCPU accordé",
+          "usedShort": "vCPU utilisés",
+          "incomplete": "{count, plural, one {Le quota de # compte n’est pas lu} other {Le quota de # comptes n’est pas lu}}, le total n’est donc pas connu",
+          "noAccount": "Aucun compte pour l’instant",
+          "noAccountBody": "Ce pool n’a encore aucun compte AWS, il n’a donc aucune capacité à lire. Son premier compte s’ajoute avec <cmd>{command}</cmd>."
+        },
+        "vcpu": "{n} vCPU",
+        "percent": "{n} %",
+        "notAvailable": "Non disponible",
+        "accounts": {
+          "title": "Comptes partagés",
+          "count": "{count, plural, one {# compte} other {# comptes}}",
+          "col": {
+            "account": "Compte",
+            "role": "Rôle",
+            "state": "État",
+            "granted": "Quota accordé",
+            "used": "Utilisés",
+            "percent": "Pourcentage",
+            "toThreshold": "Jusqu’à 70 %"
+          }
+        },
+        "role": {
+          "shared": "Partagé"
+        },
+        "state": {
+          "active": "Actif",
+          "provisioning": "En provisionnement",
+          "disabled": "Désactivé"
+        },
+        "readAgo": "lu {age}",
+        "notRead": "Non lu",
+        "notReadLabel": "Quota non lu depuis AWS",
+        "lastRead": "dernière lecture {age}",
+        "neverRead": "jamais lu",
+        "toGo": "encore {n} vCPU",
+        "over": "Au-delà de 70 %",
+        "overBy": "{n} vCPU au-delà",
+        "atThreshold": "exactement à 70 %",
+        "spare": {
+          "title": "Compte de réserve Motir",
+          "none": "Pas encore de compte de réserve Motir pour ce type.",
+          "ready": "Prêt à rejoindre",
+          "waiting": "En attente de quota",
+          "granted": "accordé · lu {age}",
+          "notRead": "Quota non lu · {when}",
+          "readyBody": "Non compté dans la capacité. Il rejoint le pool partagé la prochaine fois qu’un compte dépasse 70 %, et un nouveau compte de réserve est créé derrière lui.",
+          "raisingBody": "Une augmentation à {n} vCPU a été demandée {age} et est toujours ouverte. Le compte de réserve rejoint le pool partagé dès qu’AWS l’accorde.",
+          "notReadBody": "Son quota n’est pas lu, il n’est donc pas compté comme prêt. La croissance ne le promeut qu’une fois un quota accordé lu.",
+          "belowBody": "Son quota accordé est inférieur à ce dont un compte partagé a besoin, il n’est donc pas compté comme prêt. La croissance ne le promeut qu’une fois l’augmentation accordée par AWS."
+        },
+        "requests": {
+          "title": "Augmentations de quota demandées à AWS",
+          "count": "{count, plural, one {# requête} other {# requêtes}} · {open} ouvertes",
+          "none": "aucune",
+          "empty": "Aucune augmentation de quota n’a été demandée à AWS pour ce type.",
+          "col": {
+            "account": "Compte",
+            "asked": "Valeur demandée",
+            "status": "Statut",
+            "granted": "Accordé",
+            "when": "Demandée",
+            "lastRead": "Dernière lecture depuis AWS"
+          },
+          "status": {
+            "pending": "Ouverte · en attente",
+            "case_opened": "Ouverte · dossier ouvert",
+            "approved": "Approuvée",
+            "denied": "Refusée",
+            "not_approved": "Non approuvée",
+            "case_closed": "Dossier clos",
+            "invalid_request": "Requête non valide"
+          },
+          "notYet": "Pas encore",
+          "notGranted": "Non accordé",
+          "quotaStays": "le quota reste à {n} vCPU",
+          "quotaUnchanged": "quota inchangé",
+          "notReadYet": "pas encore lu",
+          "foot": "{from}–{to} sur {total} · ouvertes d’abord, puis les plus récentes",
+          "pagerLabel": "Pages des augmentations de quota {kind}"
+        },
+        "events": {
+          "title": "Événements de croissance · 70 % atteints",
+          "count": "{count, plural, one {# événement} other {# événements}}",
+          "empty": "Pas encore d’événement de croissance — aucun compte de ce type n’a atteint 70 %.",
+          "col": {
+            "when": "Quand",
+            "account": "Compte déclencheur",
+            "use": "Son utilisation",
+            "outcome": "Résultat"
+          },
+          "use": "<b>{used}</b> sur {granted} vCPU",
+          "usePercent": "{p} % de son quota accordé",
+          "accountRemoved": "compte supprimé",
+          "outcome": {
+            "spare_promoted": "Réserve promue",
+            "account_created": "Compte créé",
+            "waiting_for_quota": "En attente de quota",
+            "refused": "Refusé"
+          },
+          "promoted": "{spare} a rejoint le pool partagé",
+          "promotedNew": "{spare} a rejoint le pool partagé ; nouvelle réserve {created} en cours de création",
+          "created": "{created} ajouté, sans réserve à promouvoir",
+          "waiting": "l’augmentation de la réserve est toujours ouverte, rien n’a donc encore rejoint le pool",
+          "awsSaid": "AWS a répondu : « {reason} »",
+          "refusedNote": "aucun compte n’a été ajouté ; la prochaine passe réessaie après un délai",
+          "foot": "{from}–{to} sur {total} · les plus récents d’abord",
+          "pagerLabel": "Pages des événements de croissance {kind}"
+        },
+        "readOnly": "Lecture seule. Pour demander plus de quota à AWS, exécutez <cmd>{command}</cmd> dans un terminal."
       }
     },
     "orgs": {

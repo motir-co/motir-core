@@ -10470,6 +10470,157 @@
         "prev": "Anterior",
         "next": "Próxima",
         "pageOf": "Página {page} de {pages}"
+      },
+      "pools": {
+        "title": "Pools",
+        "subtitle": "O pool de contas da AWS de cada tipo de frota: capacidade, uso em relação a 70%, a conta reserva da Motir, os aumentos de cota pedidos à AWS e se o crescimento tem feito o seu trabalho. Lido do que a passada de crescimento registrou por último — carregar esta página não pergunta nada à AWS.",
+        "kind": {
+          "ci_runner": "Runner de CI",
+          "hosted_agent": "Runner de agentes",
+          "code_graph_index": "Indexador",
+          "agent_instance": "Hospedagem de agentes"
+        },
+        "block": {
+          "title": "Pool · {kind}",
+          "subtitle": {
+            "aws": "Suas contas compartilhadas, a conta reserva da Motir, os aumentos de cota pedidos à AWS e os eventos de crescimento — como a passada de crescimento os leu por último.",
+            "fly": "Este tipo foi alternado para o Fly, então não tem pool da AWS.",
+            "other": "Suas contas compartilhadas, a conta reserva da Motir, os aumentos de cota e os eventos de crescimento."
+          }
+        },
+        "provider": {
+          "aws": "Roda na AWS",
+          "fly": "Roda no Fly"
+        },
+        "overCount": "{count, plural, one {# conta acima de 70%} other {# contas acima de 70%}}",
+        "growthInFlight": "Crescimento em andamento",
+        "fly": {
+          "title": "{kind} roda no Fly",
+          "body": "A chave está em Fly, então não há capacidade, cota ou crescimento da AWS para mostrar. Os contêineres em execução são contados por organização na seção Frota acima."
+        },
+        "error": {
+          "title": "Não foi possível ler o pool de {kind}",
+          "body": "A leitura deste pool não respondeu, então nada aqui foi carregado — nada disso é zero, e nenhum provedor é afirmado. Os outros pools e o resto desta página não são afetados. Recarregue para tentar de novo."
+        },
+        "sectionError": {
+          "title": "Não foi possível ler os pools",
+          "body": "A leitura dos pools não respondeu, então nenhum pool foi carregado — nada disso é zero, e nenhum provedor é afirmado. O resto desta página não é afetado. Recarregue para tentar de novo."
+        },
+        "total": {
+          "capacity": "Capacidade · cota concedida de {count, plural, one {# conta compartilhada} other {# contas compartilhadas}} · sem contar a reserva",
+          "used": "vCPU em uso nelas",
+          "percent": "Da capacidade em uso · o crescimento começa quando uma conta passa de 70%",
+          "percentShort": "Da capacidade em uso",
+          "capacityShort": "Capacidade · cota de vCPU concedida",
+          "usedShort": "vCPU em uso",
+          "incomplete": "{count, plural, one {A cota de # conta não foi lida} other {A cota de # contas não foi lida}}, então o total não é conhecido",
+          "noAccount": "Ainda sem conta",
+          "noAccountBody": "Este pool ainda não tem conta da AWS, então não tem capacidade para ler. A primeira conta é adicionada com <cmd>{command}</cmd>."
+        },
+        "vcpu": "{n} vCPU",
+        "percent": "{n}%",
+        "notAvailable": "Não disponível",
+        "accounts": {
+          "title": "Contas compartilhadas",
+          "count": "{count, plural, one {# conta} other {# contas}}",
+          "col": {
+            "account": "Conta",
+            "role": "Função",
+            "state": "Estado",
+            "granted": "Cota concedida",
+            "used": "Em uso",
+            "percent": "Porcentagem",
+            "toThreshold": "Até 70%"
+          }
+        },
+        "role": {
+          "shared": "Compartilhada"
+        },
+        "state": {
+          "active": "Ativa",
+          "provisioning": "Em provisionamento",
+          "disabled": "Desativada"
+        },
+        "readAgo": "lida {age}",
+        "notRead": "Não lida",
+        "notReadLabel": "Cota não lida da AWS",
+        "lastRead": "última leitura {age}",
+        "neverRead": "nunca lida",
+        "toGo": "faltam {n} vCPU",
+        "over": "Acima de 70%",
+        "overBy": "{n} vCPU acima",
+        "atThreshold": "exatamente em 70%",
+        "spare": {
+          "title": "Conta reserva da Motir",
+          "none": "Ainda não há conta reserva da Motir para este tipo.",
+          "ready": "Pronta para entrar",
+          "waiting": "Aguardando cota",
+          "granted": "concedida · lida {age}",
+          "notRead": "Cota não lida · {when}",
+          "readyBody": "Não conta na capacidade. Entra no pool compartilhado na próxima vez que uma conta passar de 70%, e uma nova conta reserva é criada atrás dela.",
+          "raisingBody": "Um aumento para {n} vCPU foi pedido {age} e continua aberto. A conta reserva entra no pool compartilhado assim que a AWS o conceder.",
+          "notReadBody": "A cota dela não foi lida, então ela não conta como pronta. O crescimento só a promove depois que uma cota concedida for lida.",
+          "belowBody": "A cota concedida dela está abaixo do que uma conta compartilhada precisa, então ela não conta como pronta. O crescimento só a promove quando a AWS conceder o aumento."
+        },
+        "requests": {
+          "title": "Aumentos de cota pedidos à AWS",
+          "count": "{count, plural, one {# pedido} other {# pedidos}} · {open} abertos",
+          "none": "nenhum",
+          "empty": "Nenhum aumento de cota foi pedido à AWS para este tipo.",
+          "col": {
+            "account": "Conta",
+            "asked": "Valor pedido",
+            "status": "Status",
+            "granted": "Concedido",
+            "when": "Pedido",
+            "lastRead": "Última leitura da AWS"
+          },
+          "status": {
+            "pending": "Aberto · pendente",
+            "case_opened": "Aberto · caso aberto",
+            "approved": "Aprovado",
+            "denied": "Negado",
+            "not_approved": "Não aprovado",
+            "case_closed": "Caso encerrado",
+            "invalid_request": "Pedido inválido"
+          },
+          "notYet": "Ainda não",
+          "notGranted": "Não concedido",
+          "quotaStays": "a cota continua em {n} vCPU",
+          "quotaUnchanged": "cota inalterada",
+          "notReadYet": "ainda não lido",
+          "foot": "Mostrando {from}–{to} de {total} · abertos primeiro, depois os mais recentes",
+          "pagerLabel": "Páginas de aumentos de cota de {kind}"
+        },
+        "events": {
+          "title": "Eventos de crescimento · 70% atingido",
+          "count": "{count, plural, one {# evento} other {# eventos}}",
+          "empty": "Ainda não há eventos de crescimento — nenhuma conta deste tipo chegou a 70%.",
+          "col": {
+            "when": "Quando",
+            "account": "Conta que disparou",
+            "use": "Uso dela",
+            "outcome": "Resultado"
+          },
+          "use": "<b>{used}</b> de {granted} vCPU",
+          "usePercent": "{p}% da cota concedida dela",
+          "accountRemoved": "conta removida",
+          "outcome": {
+            "spare_promoted": "Reserva promovida",
+            "account_created": "Conta criada",
+            "waiting_for_quota": "Aguardando cota",
+            "refused": "Recusado"
+          },
+          "promoted": "{spare} entrou no pool compartilhado",
+          "promotedNew": "{spare} entrou no pool compartilhado; nova reserva {created} sendo criada",
+          "created": "{created} adicionada, sem reserva para promover",
+          "waiting": "o aumento da reserva continua aberto, então nada entrou ainda",
+          "awsSaid": "A AWS disse: “{reason}”",
+          "refusedNote": "nenhuma conta foi adicionada; a próxima passada tenta de novo após uma espera",
+          "foot": "Mostrando {from}–{to} de {total} · mais recentes primeiro",
+          "pagerLabel": "Páginas de eventos de crescimento de {kind}"
+        },
+        "readOnly": "Somente leitura. Para pedir mais cota à AWS, execute <cmd>{command}</cmd> em um terminal."
       }
     },
     "orgs": {

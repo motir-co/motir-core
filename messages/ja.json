@@ -10467,6 +10467,157 @@
         "prev": "前へ",
         "next": "次へ",
         "pageOf": "{pages} ページ中 {page} ページ"
+      },
+      "pools": {
+        "title": "プール",
+        "subtitle": "各フリート種別の AWS アカウントのプールです。容量、70% に対する使用量、Motir の予備アカウント、AWS に申請したクォータ引き上げ、そして拡張が正しく働いているかを表示します。拡張処理が最後に記録した内容を読み込んでいます。このページの読み込みで AWS に問い合わせることはありません。",
+        "kind": {
+          "ci_runner": "CI ランナー",
+          "hosted_agent": "エージェントランナー",
+          "code_graph_index": "インデクサー",
+          "agent_instance": "エージェントホスト"
+        },
+        "block": {
+          "title": "プール · {kind}",
+          "subtitle": {
+            "aws": "共有アカウント、Motir の予備アカウント、AWS に申請したクォータ引き上げ、拡張イベントです。拡張処理が最後に読み込んだ時点の内容です。",
+            "fly": "この種別は Fly に切り替えられているため、AWS のプールはありません。",
+            "other": "共有アカウント、Motir の予備アカウント、クォータ引き上げ、拡張イベントです。"
+          }
+        },
+        "provider": {
+          "aws": "AWS で稼働",
+          "fly": "Fly で稼働"
+        },
+        "overCount": "{count, plural, other {# 件のアカウントが 70% 超}}",
+        "growthInFlight": "拡張中",
+        "fly": {
+          "title": "{kind}は Fly で稼働しています",
+          "body": "スイッチが Fly に設定されているため、表示する AWS の容量、クォータ、拡張はありません。実行中のコンテナーは、上のフリートのセクションで組織ごとに数えられています。"
+        },
+        "error": {
+          "title": "{kind}のプールを読み込めませんでした",
+          "body": "このプールの読み込みが応答しなかったため、ここには何も読み込まれていません。いずれの値もゼロではなく、プロバイダーも示していません。他のプールとこのページの残りの部分には影響はありません。再読み込みしてもう一度お試しください。"
+        },
+        "sectionError": {
+          "title": "プールを読み込めませんでした",
+          "body": "プールの読み込みが応答しなかったため、どのプールも読み込まれていません。いずれの値もゼロではなく、プロバイダーも示していません。このページの残りの部分には影響はありません。再読み込みしてもう一度お試しください。"
+        },
+        "total": {
+          "capacity": "容量 · {count, plural, other {# 件の共有アカウント}}に付与されたクォータ · 予備は含みません",
+          "used": "それらで使用中の vCPU",
+          "percent": "容量の使用率 · いずれかのアカウントが 70% を超えると拡張が始まります",
+          "percentShort": "容量の使用率",
+          "capacityShort": "容量 · 付与された vCPU クォータ",
+          "usedShort": "使用中の vCPU",
+          "incomplete": "{count, plural, other {# 件のアカウントのクォータが未読み込みのため}}、合計は不明です",
+          "noAccount": "アカウントはまだありません",
+          "noAccountBody": "このプールにはまだ AWS アカウントがないため、読み込める容量はありません。最初のアカウントは <cmd>{command}</cmd> で追加します。"
+        },
+        "vcpu": "{n} vCPU",
+        "percent": "{n}%",
+        "notAvailable": "利用不可",
+        "accounts": {
+          "title": "共有アカウント",
+          "count": "{count, plural, other {# 件のアカウント}}",
+          "col": {
+            "account": "アカウント",
+            "role": "役割",
+            "state": "状態",
+            "granted": "付与済みクォータ",
+            "used": "使用中",
+            "percent": "割合",
+            "toThreshold": "70% まで"
+          }
+        },
+        "role": {
+          "shared": "共有"
+        },
+        "state": {
+          "active": "有効",
+          "provisioning": "準備中",
+          "disabled": "無効"
+        },
+        "readAgo": "{age}に読み込み",
+        "notRead": "未読み込み",
+        "notReadLabel": "クォータは AWS から読み込まれていません",
+        "lastRead": "最終読み込み {age}",
+        "neverRead": "一度も読み込まれていません",
+        "toGo": "あと {n} vCPU",
+        "over": "70% 超",
+        "overBy": "{n} vCPU 超過",
+        "atThreshold": "ちょうど 70%",
+        "spare": {
+          "title": "Motir の予備アカウント",
+          "none": "この種別の Motir 予備アカウントはまだありません。",
+          "ready": "参加可能",
+          "waiting": "クォータ待ち",
+          "granted": "付与済み · {age}に読み込み",
+          "notRead": "クォータ未読み込み · {when}",
+          "readyBody": "容量には含まれません。次にいずれかのアカウントが 70% を超えたときに共有プールに参加し、その後ろに新しい予備アカウントが作成されます。",
+          "raisingBody": "{n} vCPU への引き上げを{age}に申請しており、まだ完了していません。AWS が付与すると、予備アカウントは共有プールに参加します。",
+          "notReadBody": "クォータが読み込まれていないため、参加可能とはみなされません。付与されたクォータが読み込まれて初めて、拡張によって昇格します。",
+          "belowBody": "付与されたクォータが共有アカウントに必要な量を下回っているため、参加可能とはみなされません。AWS が引き上げを付与して初めて、拡張によって昇格します。"
+        },
+        "requests": {
+          "title": "AWS に申請したクォータ引き上げ",
+          "count": "{count, plural, other {# 件の申請}} · 未完了 {open} 件",
+          "none": "なし",
+          "empty": "この種別では、AWS にクォータ引き上げを申請していません。",
+          "col": {
+            "account": "アカウント",
+            "asked": "申請値",
+            "status": "ステータス",
+            "granted": "付与",
+            "when": "申請日時",
+            "lastRead": "AWS からの最終読み込み"
+          },
+          "status": {
+            "pending": "未完了 · 保留中",
+            "case_opened": "未完了 · ケース作成済み",
+            "approved": "承認済み",
+            "denied": "却下",
+            "not_approved": "未承認",
+            "case_closed": "ケース終了",
+            "invalid_request": "無効な申請"
+          },
+          "notYet": "まだ",
+          "notGranted": "付与なし",
+          "quotaStays": "クォータは {n} vCPU のまま",
+          "quotaUnchanged": "クォータは変更なし",
+          "notReadYet": "まだ読み込まれていません",
+          "foot": "{total} 件中 {from}–{to} 件を表示 · 未完了を先に、その後は新しい順",
+          "pagerLabel": "{kind}のクォータ引き上げのページ"
+        },
+        "events": {
+          "title": "拡張イベント · 70% 到達",
+          "count": "{count, plural, other {# 件のイベント}}",
+          "empty": "拡張イベントはまだありません。この種別のアカウントで 70% に達したものはありません。",
+          "col": {
+            "when": "日時",
+            "account": "きっかけのアカウント",
+            "use": "使用量",
+            "outcome": "結果"
+          },
+          "use": "<b>{used}</b> / {granted} vCPU",
+          "usePercent": "付与済みクォータの {p}%",
+          "accountRemoved": "アカウントは削除済み",
+          "outcome": {
+            "spare_promoted": "予備を昇格",
+            "account_created": "アカウントを作成",
+            "waiting_for_quota": "クォータ待ち",
+            "refused": "拒否"
+          },
+          "promoted": "{spare} が共有プールに参加しました",
+          "promotedNew": "{spare} が共有プールに参加しました。新しい予備 {created} を作成中です",
+          "created": "{created} を追加しました(昇格できる予備はありませんでした)",
+          "waiting": "予備の引き上げがまだ完了していないため、まだ何も参加していません",
+          "awsSaid": "AWS の回答:「{reason}」",
+          "refusedNote": "アカウントは追加されていません。次の処理で待機後に再試行します",
+          "foot": "{total} 件中 {from}–{to} 件を表示 · 新しい順",
+          "pagerLabel": "{kind}の拡張イベントのページ"
+        },
+        "readOnly": "読み取り専用です。AWS にクォータの追加を申請するには、ターミナルで <cmd>{command}</cmd> を実行してください。"
       }
     },
     "orgs": {

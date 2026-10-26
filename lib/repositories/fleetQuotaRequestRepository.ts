@@ -120,4 +120,17 @@ export const fleetQuotaRequestRepository = {
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
   },
+
+  /** Every raise of a fleet kind, however long ago it closed, with its account's
+   *  name, newest first — the monitoring page's whole list (MOTIR-9562). */
+  async listByKindInTx(
+    fleetKind: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<FleetQuotaRequest & { shard: { name: string } }>> {
+    return tx.fleetQuotaRequest.findMany({
+      where: { fleetKind },
+      include: { shard: { select: { name: true } } },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    });
+  },
 };

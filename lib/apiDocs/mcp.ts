@@ -687,8 +687,8 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   },
   search_pages: {
     summary:
-      'Find a project’s live pages by a word in the title or body — ranked hits with a snippet, paged by cursor.',
-    descriptionFingerprint: '6300effbffe9',
+      'Find a project’s live pages by words or by meaning — merged ranked hits with a snippet and the ranking mode, paged by cursor.',
+    descriptionFingerprint: '207472930227',
   },
   move_page: {
     summary:

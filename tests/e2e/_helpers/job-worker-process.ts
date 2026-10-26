@@ -200,6 +200,35 @@ export function hostedRunSeamEnv(): Record<string, string> {
   };
 }
 
+/**
+ * THE motir-ai EMBEDDINGS SEAM, mirrored into the worker (Story MOTIR-9490 ·
+ * MOTIR-9577).
+ *
+ * A page's embedding is written by the `page/embedding.requested` JOB, so its
+ * `POST /v1/embeddings` is made HERE, while the search query's is made by the
+ * webServer. Both must reach the same fake, or a saved page is never findable
+ * by meaning and the spec waits for a hit that cannot come. The fake keeps no
+ * state in memory (its vectors are a pure function of the text, its control and
+ * journal are files), so a second copy in this process agrees with the first.
+ * `MOTIR_AI_URL` and its token already reach this process from the runner.
+ *
+ * Opt-in (`E2E_JOB_WORKER_EMBEDDINGS_SEAM=1`, set by
+ * `playwright.acceptance.config.ts`), because only that lane's server selects
+ * this seam.
+ */
+export function embeddingsSeamEnv(): Record<string, string> {
+  if (process.env['E2E_JOB_WORKER_EMBEDDINGS_SEAM'] !== '1') return {};
+  return {
+    E2E_TEST_EMBEDDINGS: '1',
+    ...(process.env['MOTIR_AI_EMBEDDINGS_CONTROL_PATH']
+      ? { MOTIR_AI_EMBEDDINGS_CONTROL_PATH: process.env['MOTIR_AI_EMBEDDINGS_CONTROL_PATH'] }
+      : {}),
+    ...(process.env['MOTIR_AI_EMBEDDINGS_JOURNAL_PATH']
+      ? { MOTIR_AI_EMBEDDINGS_JOURNAL_PATH: process.env['MOTIR_AI_EMBEDDINGS_JOURNAL_PATH'] }
+      : {}),
+  };
+}
+
 /** A fresh RSA private key (PKCS#8 PEM) for an App JWT nothing will verify. */
 function generateAppPrivateKey(): string {
   const { privateKey } = generateKeyPairSync('rsa', {
@@ -382,6 +411,7 @@ export async function startJobWorker(): Promise<void> {
       ...githubMergeSeamEnv(),
       // The hosted-run gateway/motir-ai/GitHub seams — see `hostedRunSeamEnv`.
       ...hostedRunSeamEnv(),
+      ...embeddingsSeamEnv(),
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -502,6 +532,7 @@ export async function startSpecJobWorker(routingFile: string): Promise<Date> {
       ...githubMergeSeamEnv(),
       // The hosted-run gateway/motir-ai/GitHub seams — see `hostedRunSeamEnv`.
       ...hostedRunSeamEnv(),
+      ...embeddingsSeamEnv(),
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });

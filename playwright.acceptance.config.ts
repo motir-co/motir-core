@@ -146,6 +146,19 @@ process.env['MOTIR_AI_BILLING_FIXTURE_PATH'] ??= MOTIR_AI_BILLING_FIXTURE_PATH;
 // the webServer's mock answers from it — the same two-sided path as the billing file.
 const MOTIR_AI_PLATFORM_FIXTURE_PATH = path.resolve('/tmp/motir-acceptance-platform-fixture.json');
 process.env['MOTIR_AI_PLATFORM_FIXTURE_PATH'] ??= MOTIR_AI_PLATFORM_FIXTURE_PATH;
+// Page search by meaning (Story MOTIR-9490 · MOTIR-9577, `lib/test-embeddings-mock.ts`):
+// motir-ai's `POST /v1/embeddings`, crossed by the webServer (the search query) AND
+// the job worker (a page's embedding after a save). Its state is two files, so the
+// spec steers both processes through one control file and reads one journal.
+const MOTIR_AI_EMBEDDINGS_CONTROL_PATH = path.resolve(
+  '/tmp/motir-acceptance-embeddings-control.json',
+);
+const MOTIR_AI_EMBEDDINGS_JOURNAL_PATH = path.resolve(
+  '/tmp/motir-acceptance-embeddings-journal.jsonl',
+);
+process.env['MOTIR_AI_EMBEDDINGS_CONTROL_PATH'] ??= MOTIR_AI_EMBEDDINGS_CONTROL_PATH;
+process.env['MOTIR_AI_EMBEDDINGS_JOURNAL_PATH'] ??= MOTIR_AI_EMBEDDINGS_JOURNAL_PATH;
+process.env['E2E_JOB_WORKER_EMBEDDINGS_SEAM'] ??= '1';
 
 // ── The GitHub repo-provisioning seam (MOTIR-1785) ───────────────────────────
 //
@@ -571,6 +584,11 @@ export default defineConfig({
         MOTIR_AI_SHARPEN_CONTROL_PATH,
         E2E_TEST_AI_JOBS: '1',
         MOTIR_AI_JOBS_FIXTURE_PATH,
+        // Page search by meaning (MOTIR-9577) — the query's embedding; the worker
+        // mirrors the same seam for a page's (`embeddingsSeamEnv`).
+        E2E_TEST_EMBEDDINGS: '1',
+        MOTIR_AI_EMBEDDINGS_CONTROL_PATH,
+        MOTIR_AI_EMBEDDINGS_JOURNAL_PATH,
         MOTIR_AI_SERVICE_TOKEN: 'e2e-acceptance-placeholder-token',
         // The seat push the agent-billing walk makes (MOTIR-6924) — the literal
         // lives with the helper that signs with it.

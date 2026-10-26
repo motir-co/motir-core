@@ -22,6 +22,7 @@ closest existing usage surface.
 | **ENTERPRISE REQUESTS — the rail row · the list (state filter, cursor paging, count) · the detail per state · support read-only · stale refusal** (AMENDMENT 2026-10-05) | **`console--enterprise-requests.mock.html`** (delta, Panels 1–10) | A new Platform-group page at `/admin/enterprise-requests` where staff work the requests orgs send from the Enterprise card’s Contact sales. **Gates MOTIR-7609.** |
 | **IDEAS — the rail row · the list (status / kind / category / tag / text filters in the URL, keyset pages) · the detail · edit with evidence rows · retire with a reason · a superadmin’s delete · support read-only** (AMENDMENT 2026-10-07) | **`console--ideas.mock.html`** (delta, Panels 1–12) | A new Operations page at `/admin/ideas` where staff review, correct, retire and delete the ideas motir.co shows. **Gates MOTIR-7680 and MOTIR-7681.** |
 | **FLEET SETTINGS — the rail row · the superadmin setting “Run Motir’s private repositories’ CI on the fleet” · the nine-condition readiness verdict · confirm ON / OFF with a reason · the refusals · read failed · not superadmin** (AMENDMENT 2026-10, MOTIR-8703) | **`console--fleet-settings.mock.html`** (delta, Panels 1–13) | A new Operations page at `/admin/fleet-settings` where a superadmin moves Motir’s private repositories’ CI onto the fleet once it is ready, and off at any time. **Gates the /admin setting UI card (story MOTIR-8699, `blocked_by` MOTIR-8703).** |
+| **MONITORING · POOLS — one block per fleet kind on `/admin/monitoring`: provider, pool total, account rows, the Motir spare, quota raises, growth events, every state** (AMENDMENT 2026-10-25) | **`monitoring--pools.mock.html`** (delta, Panels 1–9, each light then dark) | A section added after the Fleet section of the shipped monitoring page; no new route. See § _AMENDMENT 2026-10-25 — Monitoring · Pools_. |
 
 ## What this area is
 
@@ -3114,3 +3115,277 @@ Retired: `stat.pooled`, `group.pool`, `group.own`, `col.poolUsed`, `col.agentIns
 - **Per-user agent counts** — the per-person figure is shown as the plan's figure only; the table
   has no per-user breakdown.
 - **Loading** — server-rendered read, as before. **A `.png` export** — retired (AMENDMENT 4).
+
+---
+
+# AMENDMENT 2026-10-25 — Monitoring · Pools
+
+**Design system (step 1, read before drawing).** `package.json` depends on `@motir/design-system`
+(`workspace:*`, the in-repo package `packages/design-system`), and `app/globals.css` imports
+`@motir/design-system/theme.css` (line 13): **on Motir Design, branch (a).** The project's own axes
+come from `app/layout.tsx` (`data-style` / `data-palette` / `data-type` from the applied
+appearance; the console renders the defaults): `warm-editorial` · `motir` · `motir`. The mock is
+built with `renderMock` from `@motir/design-system/mock` at those axes, from the package's `Card`
+and `Pill`; every other piece is the shipped Fleet section's own local markup, composed one for
+one (below). No part is missing from the package, so nothing is proposed as an addition.
+
+**Mock:** `design/platform-admin/monitoring--pools.mock.html` — a DELTA mock. It ADDS one section
+to `/admin/monitoring` and amends no drawn panel: the Fleet section's mocks (§ _AMENDMENT
+2026-10-23 — Monitoring · Fleet orgs under per-plan caps_ and the Fleet design it amends) stand as
+records, and the shipped health cards, Overdue schedules, Index allowance and Fleet cards are not
+redrawn. This section is the asset's whole specification.
+
+**Verified on the default branch before drawing** (`origin/main` at the time of drawing):
+`app/(admin)/admin/monitoring/page.tsx` — the page is `requirePlatformStaffPage('support')`, a
+Server Component with `dynamic = 'force-dynamic'`, rendering in order: the breadcrumb _Platform ·
+Monitoring_, the title _System health_, seven health cards, the Overdue schedules card,
+`IndexAllowanceSection`, then `FleetSection`; each fleet read is settled on its own by
+`settleFleetRead` so its failure stays in its card.
+`app/(admin)/admin/monitoring/_components/FleetSection.tsx` — the card pattern this section
+composes: `CardHead` (lavender icon tile, `h2` title, secondary subtitle, pills at the right),
+`InsetState` (an empty / error state drawn inside the card body, `role="alert"` on error),
+`MiniStat`, the paged-list `Foot` (an Info note with _Showing {from}–{to} of {total}_ and
+Prev / _Page n of m_ / Next links that keep every other list's search params), `Th` / `Td` with
+the 3px leading rail, `Mono`, `Sub`. The data this section draws is the shape of
+`lib/services/fleetPoolStatusService.ts` / `lib/dto/fleetPools.ts` (the view behind
+`fleet-admin pool-status` and `growth-events`) and the shard record in `prisma/schema.prisma`
+(`FleetShardRole` `primary` | `spare`, `FleetShardState` `provisioning` | `active` | `disabled`).
+
+## What this section is
+
+One question for a Motir platform admin: **does any pool need a quota request from me, and has
+growth been doing its job?** Each fleet kind has its own pool of AWS accounts that grows by itself
+at 70% of an account's granted vCPU quota; this section shows each pool as the growth pass last
+recorded it. It is **read-only** like the rest of the page: the only way to act is the
+`fleet-admin request-quota` command, named in plain text.
+
+## The access path (Panel 1)
+
+**No new route and no new rail row.** The section is reached by opening the existing
+`/admin/monitoring` page from the console's **Operations → Monitoring** row, exactly as its peers
+are. It is the **last section of the page, directly after the Fleet section** (after the
+_Fleet · reconciler kills_ card): the Fly blocks point _up_ to the Fleet section, where a Fly
+kind's containers are counted per organisation. Panel 1 draws the page header and the shipped
+sections collapsed above it.
+
+## Elements — each named once
+
+| Name                   | What it is                                                                                                                                                                                                                                                                                                                                                                                           |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Pools section**      | A `<section aria-labelledby>` with an `h2` _Pools_ (serif, the page's section weight) and one secondary sentence, then the four Pool blocks in a fixed order: **CI runner · Agent runner · Indexer · Agent hoster**.                                                                                                                                                                                 |
+| **Pool block**         | One `Card` per fleet kind, its own frame, so a failed read stays inside it. Header = the Fleet `CardHead` with an `h3` _Pool · {kind}_, the subtitle, and the pills (Provider statement, then the Over-70 count pill and the Growth-in-progress pill when they apply). Footer (AWS only) = the Read-only note.                                                                                       |
+| **Provider statement** | A `Pill` in words with a glyph: **Runs on AWS** (`severity="info"`, cloud glyph) or **Runs on Fly** (`tone="neutral"`, plane glyph). Read from the kind's own switch.                                                                                                                                                                                                                                |
+| **Pool total**         | Three `MiniStat`s: **Capacity** (the sum of the granted vCPU quotas of the shared accounts — the spare and disabled accounts not counted), **vCPU in use** across them, **Of capacity in use** (whole percent).                                                                                                                                                                                      |
+| **Account row**        | One table row per shared account: Account (mono name) · Role (_Shared_) · State (`Pill`: _Active_ neutral, _Provisioning_ info) · Granted quota (`{n} vCPU` with _read {age}_ under it) · In use (`{n} vCPU`) · Percent (`{n}%` over the Use bar) · To 70% (`{n} vCPU to go`, or the Over-70 mark).                                                                                                  |
+| **Use bar**            | The Fleet section's usage bar (`--radius-badge`, `--el-surface` track, `--el-accent` fill) plus a 1px tick at 70% in `--el-text-secondary`; at or past 70% the fill takes `--el-warning`. `aria-hidden` — the percent beside it carries the meaning.                                                                                                                                                 |
+| **Over-70 mark**       | On an account at or past 70%: the `Pill severity="warning"` with a triangle glyph reading **Over 70%**, the sub-line **{n} vCPU past it** (or _at 70% exactly_), and the 3px **warning rail** on the row's leading cell. Words + glyph + rail: never colour alone. The header adds **{n} account(s) over 70%** in the same pill.                                                                     |
+| **Not-read mark**      | Where a granted quota was never read or its read failed: the `Pill tone="awaiting"` with a help glyph reading **Not read** (`aria-label="Quota not read from AWS"`), and under it **last read {age}** (the last successful read) or **never read**. Every figure derived from it — that account's Percent and To 70%, the pool's Capacity and percent — reads **Not available** in italic secondary. |
+| **Spare line**         | A soft box (`--el-surface-soft`, `--el-border-soft`, `--radius-card`) titled **Motir spare**: the spare's mono name, **Ready to join** (`severity="success"`, check glyph — its quota is granted and read) or **Waiting for quota** (`tone="awaiting"`, hourglass), its quota or the Not-read words, and one sentence saying what happens next. No spare reads _No Motir spare for this kind yet._   |
+| **Quota request list** | A titled table (count at the right: _{n} requests · {open} open_): Account · Value asked · Status · Granted · Asked (sorted, ↓) · Last read from AWS. **Open requests first, then newest first.** Paged with the Fleet `Foot`.                                                                                                                                                                       |
+| **Growth event list**  | A titled table (_Growth events · 70% reached_, count at the right): When (sorted, ↓, newest first) · Triggering account · Its use (`{used} of {granted} vCPU` with _{p}% of its granted quota_) · Outcome (the Outcome pill + one detail line). Paged with the Fleet `Foot`.                                                                                                                         |
+| **Read-only note**     | The block footer: an Info glyph and _Read-only. To ask AWS for more quota, run `fleet-admin request-quota --account <name> --vcpu <n>` at a terminal._ Plain text — not a button, not a link.                                                                                                                                                                                                        |
+| **Block error**        | The Fleet `InsetState` with `tone="error"` inside the block's card.                                                                                                                                                                                                                                                                                                                                  |
+| **Block skeleton**     | The loading state: the header (title and subtitle, no pills), three `--el-muted` skeleton tiles and three skeleton lines, `aria-busy="true"` and one `role="status"` sentence.                                                                                                                                                                                                                       |
+
+**Status pills (Quota request list).** `pending` → **Open · pending** and `case_opened` → **Open ·
+case opened** (`tone="awaiting"`, hourglass) — both count as open; `approved` → **Approved**
+(`severity="success"`, check); `denied` → **Denied** and `not_approved` → **Not approved**
+(`severity="danger"`, triangle); `invalid_request` → **Invalid request** (danger); `case_closed`
+→ **Case closed** (`tone="neutral"`, minus). Granted cell: the granted value; an open request
+reads _Not yet_; a closed request with no grant reads _Not granted_ with _quota stays {n} vCPU_
+(or _quota unchanged_) — the account's quota is never shown as changed by a denial.
+
+**Outcome pills (Growth event list).** `spare_promoted` → **Spare promoted** (success) — _{spare}
+joined the shared pool; new spare {name} being created_ (the second clause only when one was
+created); `account_created` → **Account created** (success, server glyph) — _{name} added, with no
+spare to promote_; `waiting_for_quota` → **Waiting for quota** (awaiting) — _the spare's raise is
+still open, so nothing joined yet_; `refused` → **Refused** (danger) — then **AWS said: "{reason}"**
+in `--el-danger-on-surface` with a triangle glyph (AWS's own words, verbatim), then _no account
+was added; the next pass tries again after a backoff_, and the row's **danger rail**.
+
+## The panels (review EACH) — every state in light, then the same state in dark
+
+| #   | Panel                           | What it shows                                                                                                                                                                                                                                                                                            |
+| --- | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | In place — the access path      | The page header, the shipped sections collapsed, then the Pools section: CI runner **on AWS, healthy** (two shared accounts under 70%, the spare ready, three approved raises, one promoted event) · Agent runner **on AWS with no account yet** · Indexer and Agent hoster **on Fly**.                  |
+| 2   | Account past 70% — growth fired | iad-1 at 75% with the Over-70 mark and rail; the header pill _1 account over 70%_ and _Growth in progress_; a third shared account (the spare promoted); the new spare **Waiting for quota** with its open raise listed first; a new _Spare promoted_ event.                                             |
+| 3   | Not-read quota                  | iad-2's read failed (_Not read · last read 3 d ago_), iad-3 was never read (_Not read · never read_); their Percent and To 70% and the pool's Capacity and percent read _Not available_; the spare's quota not read, so it is not ready. vCPU in use stays a figure — it is measured, not read from AWS. |
+| 4   | Quota raises                    | Two open requests first (case opened, pending), then a **Denied** one (_Not granted · quota stays 128 vCPU_), then approved ones, newest first.                                                                                                                                                          |
+| 5   | Growth events                   | A **Refused** growth with AWS's reason in words, beside a _Spare promoted_ with no new spare, a _Waiting for quota_ and an older _Spare promoted_; the spare line reads _No Motir spare for this kind yet._                                                                                              |
+| 6   | Empty lists                     | One account, a ready spare, and both lists empty: _No quota raise has been asked of AWS for this kind._ · _No growth events yet — no account of this kind has reached 70%._                                                                                                                              |
+| 7   | Many accounts and paged lists   | Seven shared accounts (three over 70%), a request list on page 1 of 2 (_Showing 1–10 of 14_) and an event list on page 2 of 3 (_Showing 11–20 of 23_).                                                                                                                                                   |
+| 8   | A block that fails              | The Agent runner block's read threw: its Block error in its own card, no provider claimed and no figure; the CI runner, Indexer and Agent hoster blocks render as usual.                                                                                                                                 |
+| 9   | Loading                         | Two AWS blocks in their Block skeleton beside the two Fly blocks.                                                                                                                                                                                                                                        |
+
+Each panel is followed by **the same state under `data-theme="dark"`** (a nested
+`data-appearance-scope` board, so Tier 3 recomputes dark).
+
+## Rules the drawing holds
+
+- **A figure AWS has not answered for never renders as a number.** A null granted quota is the
+  Not-read mark; nothing defaults it to 0, and every figure computed from it reads _Not available_.
+  The pool's Capacity is _Not available_ (with _{n} account(s)' quota is not read, so the total is
+  not known_) whenever any shared account's quota is not read — a partial sum is never shown as
+  the pool's capacity.
+- **A Fly kind shows words only**: the Provider statement, an `InsetState` _{kind} runs on Fly_ and
+  one sentence pointing to the Fleet section above. No figure, no account row, no spare, no list.
+- **A pool with no account yet** shows _No account yet_ in all three Pool total tiles, one sentence
+  (_This pool has no AWS account yet, so it has no capacity to read. Its first account is added
+  with `fleet-admin add-shard`._), no Account rows, and the spare line's _No Motir spare_ sentence.
+- **Nothing on this section files, retries, promotes or changes anything.** The only interactive
+  elements are the Prev / Next pager links, in the Fleet section's pattern; their search params are
+  per list and per kind (the build names them), and they keep every other list's place.
+- **No credential, credential reference, AWS account id, GitHub org or member email** is drawn: an
+  account is named by its shard name only.
+- **No Host organisation's own accounts** appear in any pool.
+
+## Data — what each element reads
+
+From the pools read service (one staff-gated, audited, system-context read; it calls no AWS API):
+per kind `provider` (`aws` | `fly` | `unavailable`); for an AWS kind the pool total
+(`grantedVcpu`, `usedVcpu`, `percent`, `complete`), the accounts (`name`, `state`, `grantedVcpu`,
+`grantedReadAt`, `usedVcpu`, `percent`, `toThreshold`, `overThreshold`), the spares (`name`,
+`state`, quota, read time, `ready`), every quota request (account, desired value, status, granted
+value, `createdAt`, `lastReadAt`) and the growth events (newest first). _vCPU past it_ is
+`usedVcpu − ⌈70% × grantedVcpu⌉`. Times render as the Fleet section's coarse _{age} ago_.
+
+## Copy (en — a new `platformAdmin.monitoring.pools` namespace; every string needs a `zh` twin)
+
+All strings below are new, and **every one needs a zh counterpart** (the build card adds both).
+Account names, the command text and AWS's reason are data, not copy, and are not translated.
+
+| key                       | en                                                                                                                                                                                                                                              |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `title`                   | Pools                                                                                                                                                                                                                                           |
+| `subtitle`                | Each fleet kind’s pool of AWS accounts: capacity, use against 70%, the Motir spare, the quota raises asked of AWS and whether growth has been doing its job. Read from what the growth pass last recorded — loading this page asks AWS nothing. |
+| `kind.ci_runner`          | CI runner                                                                                                                                                                                                                                       |
+| `kind.hosted_agent`       | Agent runner                                                                                                                                                                                                                                    |
+| `kind.code_graph_index`   | Indexer                                                                                                                                                                                                                                         |
+| `kind.agent_instance`     | Agent hoster                                                                                                                                                                                                                                    |
+| `block.title`             | Pool · {kind}                                                                                                                                                                                                                                   |
+| `block.subtitle.aws`      | Its shared accounts, the Motir spare, quota raises asked of AWS and the growth events — as the growth pass last read them.                                                                                                                      |
+| `block.subtitle.fly`      | This kind is switched to Fly, so it has no AWS pool.                                                                                                                                                                                            |
+| `block.subtitle.other`    | Its shared accounts, the Motir spare, quota raises and growth events.                                                                                                                                                                           |
+| `provider.aws`            | Runs on AWS                                                                                                                                                                                                                                     |
+| `provider.fly`            | Runs on Fly                                                                                                                                                                                                                                     |
+| `overCount`               | {count, plural, one {# account over 70%} other {# accounts over 70%}}                                                                                                                                                                           |
+| `growthInFlight`          | Growth in progress                                                                                                                                                                                                                              |
+| `fly.title`               | {kind} runs on Fly                                                                                                                                                                                                                              |
+| `fly.body`                | Its switch is set to Fly, so there is no AWS capacity, quota or growth to show for it. Its running containers are counted per organisation in the Fleet section above.                                                                          |
+| `error.title`             | Couldn’t read the {kind} pool                                                                                                                                                                                                                   |
+| `error.body`              | This pool’s read didn’t answer, so nothing here is loaded — none of it is zero, and no provider is claimed. The other pools and the rest of this page are unaffected. Reload to try again.                                                      |
+| `loading`                 | Loading the {kind} pool                                                                                                                                                                                                                         |
+| `total.capacity`          | Capacity · granted quota of {count, plural, one {# shared account} other {# shared accounts}} · the spare not counted                                                                                                                           |
+| `total.used`              | vCPU in use across them                                                                                                                                                                                                                         |
+| `total.percent`           | Of capacity in use · growth starts when one account passes 70%                                                                                                                                                                                  |
+| `total.percentShort`      | Of capacity in use                                                                                                                                                                                                                              |
+| `total.capacityShort`     | Capacity · granted vCPU quota                                                                                                                                                                                                                   |
+| `total.usedShort`         | vCPU in use                                                                                                                                                                                                                                     |
+| `total.incomplete`        | {count, plural, one {# account’s quota is not read} other {# accounts’ quota is not read}}, so the total is not known                                                                                                                           |
+| `total.noAccount`         | No account yet                                                                                                                                                                                                                                  |
+| `total.noAccountBody`     | This pool has no AWS account yet, so it has no capacity to read. Its first account is added with {command}.                                                                                                                                     |
+| `vcpu`                    | {n} vCPU                                                                                                                                                                                                                                        |
+| `percent`                 | {n}%                                                                                                                                                                                                                                            |
+| `notAvailable`            | Not available                                                                                                                                                                                                                                   |
+| `accounts.title`          | Shared accounts                                                                                                                                                                                                                                 |
+| `accounts.count`          | {count, plural, one {# account} other {# accounts}}                                                                                                                                                                                             |
+| `accounts.col.*`          | Account · Role · State · Granted quota · In use · Percent · To 70%                                                                                                                                                                              |
+| `role.shared`             | Shared                                                                                                                                                                                                                                          |
+| `state.active`            | Active                                                                                                                                                                                                                                          |
+| `state.provisioning`      | Provisioning                                                                                                                                                                                                                                    |
+| `readAgo`                 | read {age}                                                                                                                                                                                                                                      |
+| `notRead`                 | Not read                                                                                                                                                                                                                                        |
+| `notReadLabel`            | Quota not read from AWS                                                                                                                                                                                                                         |
+| `lastRead`                | last read {age}                                                                                                                                                                                                                                 |
+| `neverRead`               | never read                                                                                                                                                                                                                                      |
+| `toGo`                    | {n} vCPU to go                                                                                                                                                                                                                                  |
+| `over`                    | Over 70%                                                                                                                                                                                                                                        |
+| `overBy`                  | {n} vCPU past it                                                                                                                                                                                                                                |
+| `atThreshold`             | at 70% exactly                                                                                                                                                                                                                                  |
+| `spare.title`             | Motir spare                                                                                                                                                                                                                                     |
+| `spare.none`              | No Motir spare for this kind yet.                                                                                                                                                                                                               |
+| `spare.ready`             | Ready to join                                                                                                                                                                                                                                   |
+| `spare.waiting`           | Waiting for quota                                                                                                                                                                                                                               |
+| `spare.granted`           | granted · read {age}                                                                                                                                                                                                                            |
+| `spare.notRead`           | Quota not read · {when}                                                                                                                                                                                                                         |
+| `spare.readyBody`         | Not counted in capacity. It joins the shared pool the next time an account passes 70%, and a new spare is created behind it.                                                                                                                    |
+| `spare.raisingBody`       | A raise to {n} vCPU was asked {age} and is still open. The spare joins the shared pool once AWS grants it.                                                                                                                                      |
+| `spare.notReadBody`       | Its quota is not read, so it is not counted as ready. Growth promotes it only once a granted quota has been read.                                                                                                                               |
+| `requests.title`          | Quota raises asked of AWS                                                                                                                                                                                                                       |
+| `requests.count`          | {count, plural, one {# request} other {# requests}} · {open} open                                                                                                                                                                               |
+| `requests.none`           | none                                                                                                                                                                                                                                            |
+| `requests.empty`          | No quota raise has been asked of AWS for this kind.                                                                                                                                                                                             |
+| `requests.col.*`          | Account · Value asked · Status · Granted · Asked · Last read from AWS                                                                                                                                                                           |
+| `requests.status.*`       | Open · pending · Open · case opened · Approved · Denied · Not approved · Case closed · Invalid request                                                                                                                                          |
+| `requests.notYet`         | Not yet                                                                                                                                                                                                                                         |
+| `requests.notGranted`     | Not granted                                                                                                                                                                                                                                     |
+| `requests.quotaStays`     | quota stays {n} vCPU                                                                                                                                                                                                                            |
+| `requests.quotaUnchanged` | quota unchanged                                                                                                                                                                                                                                 |
+| `requests.notReadYet`     | not read yet                                                                                                                                                                                                                                    |
+| `requests.foot`           | Showing {from}–{to} of {total} · open first, then newest                                                                                                                                                                                        |
+| `requests.pagerLabel`     | {kind} quota raises pages                                                                                                                                                                                                                       |
+| `events.title`            | Growth events · 70% reached                                                                                                                                                                                                                     |
+| `events.count`            | {count, plural, one {# event} other {# events}}                                                                                                                                                                                                 |
+| `events.empty`            | No growth events yet — no account of this kind has reached 70%.                                                                                                                                                                                 |
+| `events.col.*`            | When · Triggering account · Its use · Outcome                                                                                                                                                                                                   |
+| `events.use`              | {used} of {granted} vCPU                                                                                                                                                                                                                        |
+| `events.usePercent`       | {p}% of its granted quota                                                                                                                                                                                                                       |
+| `events.accountRemoved`   | account removed                                                                                                                                                                                                                                 |
+| `events.outcome.*`        | Spare promoted · Account created · Waiting for quota · Refused                                                                                                                                                                                  |
+| `events.promoted`         | {spare} joined the shared pool                                                                                                                                                                                                                  |
+| `events.promotedNew`      | {spare} joined the shared pool; new spare {created} being created                                                                                                                                                                               |
+| `events.created`          | {created} added, with no spare to promote                                                                                                                                                                                                       |
+| `events.waiting`          | the spare’s raise is still open, so nothing joined yet                                                                                                                                                                                          |
+| `events.awsSaid`          | AWS said: “{reason}”                                                                                                                                                                                                                            |
+| `events.refusedNote`      | no account was added; the next pass tries again after a backoff                                                                                                                                                                                 |
+| `events.foot`             | Showing {from}–{to} of {total} · newest first                                                                                                                                                                                                   |
+| `events.pagerLabel`       | {kind} growth events pages                                                                                                                                                                                                                      |
+| `readOnly`                | Read-only. To ask AWS for more quota, run {command} at a terminal.                                                                                                                                                                              |
+
+Reused from `platformAdmin.monitoring.fleet` (shipped, with their zh twins): `prev`, `next`,
+`pageOf`, `ago`, `duration.*`.
+
+## Colour and shape roles (`--el-*` only)
+
+| element                                               | role                                                                                                                  |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| section title · block title · figures · account cells | `--el-text`                                                                                                           |
+| subtitles · labels · sub-lines · Not available · ages | `--el-text-secondary` (AA on the white card, `--el-surface-soft` and every surface)                                   |
+| account and spare names                               | `--el-text-identifier`, mono                                                                                          |
+| Provider statement                                    | Runs on AWS: `Pill severity="info"` (`--el-tint-sky`); Runs on Fly: `Pill tone="neutral"`                             |
+| Over-70 mark · rail                                   | `Pill severity="warning"` (`--el-tint-peach` + `--el-text-strong`); rail `--el-warning`, 3px                          |
+| Not-read mark · Waiting · Open statuses               | `Pill tone="awaiting"` (`--el-tint-yellow` + `--el-text-strong`)                                                      |
+| Ready · Approved · Spare promoted · Account created   | `Pill severity="success"` (`--el-tint-mint`)                                                                          |
+| Denied · Not approved · Invalid · Refused             | `Pill severity="danger"` (`--el-tint-rose`); AWS's reason `--el-danger-on-surface`; event rail `--el-danger`          |
+| Use bar                                               | track `--el-surface`, fill `--el-accent`, at or past 70% `--el-warning`, tick `--el-text-secondary`; `--radius-badge` |
+| Spare line box                                        | `--el-surface-soft`, `--el-border-soft`, `--radius-card`, `--spacing-card-padding-12`                                 |
+| Mini stats · cards · icon tile                        | the shipped MiniStat / `Card` / `CardHead` (`--el-border-soft`, `--radius-card`, `--el-tint-lavender` tile)           |
+| Command chip                                          | `--el-muted` + `--el-text`, `--radius-control`, `--spacing-kbd-x/y`                                                   |
+| Skeleton                                              | `--el-muted`, `--radius-card` (tiles) / `--radius-control` (lines)                                                    |
+
+## Accessibility contract
+
+- **Every mark has text.** Over 70%, Not read, Ready to join, Waiting for quota, each status and
+  each outcome is a word in its pill; glyphs are `aria-hidden`. Rails and bars are graphics beside
+  the word and never the only signal; the Use bar is `aria-hidden` and its percent is in text.
+- **The Not-read mark carries `aria-label="Quota not read from AWS"`**, and its last-read time is
+  text beside it.
+- **Lists are tables with headers**: `<th scope="col">` on every column; the sorted column carries
+  `aria-sort="descending"` (Asked on requests, When on events). Each list has a visible title
+  (`h4`) and its count in text.
+- **Headings follow the page**: the section `h2` _Pools_, each block's `h3` _Pool · {kind}_, each
+  list's `h4`.
+- **Errors announce**: the Block error is `role="alert"`, inside its card. A loading block is
+  `aria-busy="true"` with one `role="status"` sentence.
+- **Focus order follows block order**: CI runner, Agent runner, Indexer, Agent hoster; within a
+  block, the request pager then the event pager. Pager links carry an `aria-label`ed `nav`
+  (_{kind} quota raises pages_ / _{kind} growth events pages_) and the visible focus ring
+  (`--focus-ring-color`); a disabled end is `aria-disabled="true"`.
+
+## What this amendment does NOT draw
+
+- **Any action**: filing, retrying, promoting, pausing or changing a ceiling stay the
+  `fleet-admin` commands and the shard controls that own them.
+- **The shipped sections** — health cards, Overdue schedules, Index allowance, Fleet — unchanged.
+- **A Host organisation's own accounts**, any tenant-facing view, and any measurement or alert.
+- **A `.png` export** — retired (AMENDMENT 4).
