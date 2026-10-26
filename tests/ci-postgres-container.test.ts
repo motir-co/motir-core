@@ -148,6 +148,9 @@ describe('CI Postgres container (MOTIR-1742)', () => {
       // MOTIR-9406's Host plan coverage lane (Story MOTIR-9364): the story gate
       // drives checkout and plan changes against a real database.
       'ci.yml:story-9364-coverage',
+      // MOTIR-9591's Host own-accounts coverage lane (Story MOTIR-9365): the story gate
+      // drives reconcile, state, admission, caps and attribution against a real database.
+      'ci.yml:story-9365-coverage',
       'ci.yml:test',
     ]);
   });
