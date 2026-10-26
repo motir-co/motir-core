@@ -165,6 +165,37 @@ export const fleetShardRepository = {
     return tx.fleetShard.update({ where: { id }, data: times });
   },
 
+  /** Set each given state time on EVERY `org_owned` row of one AWS account — but
+   *  only on a row where it is still null (MOTIR-9585), so a replay, a race or a
+   *  later pass never moves a time. The merged account's two rows are one call. */
+  async fillAccountStateTimesInTx(
+    awsAccountId: string,
+    times: Partial<Record<'quotaRequestedAt' | 'grantedAt' | 'liveAt', Date>>,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    for (const column of ['quotaRequestedAt', 'grantedAt', 'liveAt'] as const) {
+      const at = times[column];
+      if (!at) continue;
+      await tx.fleetShard.updateMany({
+        where: { awsAccountId, role: 'org_owned', [column]: null },
+        data: { [column]: at },
+      });
+    }
+  },
+
+  /** Settle every still-`provisioning` `org_owned` row of one AWS account to
+   *  `active` (MOTIR-9585); answers how many moved. */
+  async settleOrgOwnedAccountInTx(
+    awsAccountId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const { count } = await tx.fleetShard.updateMany({
+      where: { awsAccountId, role: 'org_owned', state: 'provisioning' },
+      data: { state: 'active' },
+    });
+    return count;
+  },
+
   /** Lock one account by name for a platform admin's change (MOTIR-8972), so two
    *  changes of one account apply one after the other. Null when none has it. */
   async lockByNameForUpdateInTx(

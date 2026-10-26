@@ -7,6 +7,7 @@ import type {
   FleetShardRoleDTO,
 } from '@/lib/dto/fleetShard';
 import type { GithubAppRole } from '@/lib/github/appAuth';
+import { stateFromTimes } from '@/lib/ciFleet/hostAccountState';
 
 export const FLEET_SHARD_LIMIT_NAMES: readonly FleetShardLimitName[] = [
   'vcpuQuota',
@@ -82,6 +83,7 @@ export function toFleetShardDTO(row: FleetShard): FleetShardDTO {
     quotaRequestedAt: row.quotaRequestedAt?.toISOString() ?? null,
     grantedAt: row.grantedAt?.toISOString() ?? null,
     liveAt: row.liveAt?.toISOString() ?? null,
+    accountState: row.role === 'org_owned' ? stateFromTimes(row) : null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

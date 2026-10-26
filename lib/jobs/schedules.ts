@@ -84,6 +84,8 @@ export const SUB_HOURLY_CADENCE_EXCEPTIONS: Readonly<Record<string, string>> = {
   // MOTIR-9582 · a Host purchase starts a days-long quota wait at account
   // creation, so the reconcile runs at the growth pass's cadence.
   'system.host-account-reconcile': 'a Host purchase starts its quota wait at account creation',
+  // MOTIR-9585 · the state pass follows the every-minute quota reads it derives from.
+  'system.host-account-state': 'an own account follows the every-minute quota reads',
 };
 
 /**

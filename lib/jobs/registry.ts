@@ -47,6 +47,7 @@ import { fleetDebitMonitor } from './definitions/fleetDebitMonitor';
 import { fleetShardHeadroom } from './definitions/fleetShardHeadroom';
 import { fleetPoolGrowth } from './definitions/fleetPoolGrowth';
 import { hostAccountReconcile } from './definitions/hostAccountReconcile';
+import { hostAccountState } from './definitions/hostAccountState';
 import { hostedRunAdmit } from './definitions/hostedRunAdmit';
 import { hostedRunSupervise } from './definitions/hostedRunSupervise';
 import {
@@ -155,6 +156,7 @@ export const jobDefinitions = [
   fleetShardHeadroom,
   fleetPoolGrowth,
   hostAccountReconcile,
+  hostAccountState,
   hostedRunAdmit,
   hostedRunSupervise,
   planDriftOnTransitioned,

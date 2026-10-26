@@ -380,6 +380,7 @@ describe('inventoryForShard routes an indexer AWS account to its own listing (MO
       quotaRequestedAt: null,
       grantedAt: null,
       liveAt: null,
+      accountState: null,
       limits: {
         vcpuQuota: null,
         machineLimit: null,

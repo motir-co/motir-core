@@ -461,6 +461,12 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ failures: number; organizations: Array<{ host: boolean; organizationId: string; slots: { agent_runner?: "already" | "backing_off" | "created" | "failed" | "no_primary" | "raise_failed" | "refused" | undefined; ci_runner?: "already" | "backing_off" | "created" | "failed" | "no_primary" | "raise_failed" | "refused" | undefined; merged?: "already" | "backing_off" | "created" | "failed" | "no_primary" | "raise_failed" | "refused" | undefined } }>; ran: boolean }',
   },
+  // Story MOTIR-9365 · MOTIR-9585 — the Host account state pass.
+  'host-account-state': {
+    file: 'lib/jobs/definitions/hostAccountState.ts',
+    shape:
+      '{ failures: number; ran: boolean; settled: number; states: { created?: number | undefined; granted?: number | undefined; live?: number | undefined; quota_requested?: number | undefined } }',
+  },
   'fleet-debit-monitor': {
     file: 'lib/jobs/definitions/fleetDebitMonitor.ts',
     shape: '{ alerted: number; failures: number; mismatched: number; orgs: number }',

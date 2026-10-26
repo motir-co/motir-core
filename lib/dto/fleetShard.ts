@@ -1,4 +1,5 @@
 import type { FleetWorkloadKind } from '@motir/orchestrator';
+import type { HostAccountState } from '@/lib/ciFleet/hostAccountState';
 import type { GithubAppRole } from '@/lib/github/appAuth';
 
 // One account of one fleet kind's pool (Story MOTIR-8953 · MOTIR-8961).
@@ -49,6 +50,9 @@ export interface FleetShardDTO {
   quotaRequestedAt: string | null;
   grantedAt: string | null;
   liveAt: string | null;
+  /** An own account's state, derived from the three times (MOTIR-9585); null
+   *  for a shared account or a spare. */
+  accountState: HostAccountState | null;
   createdAt: string;
   updatedAt: string;
 }

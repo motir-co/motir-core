@@ -680,6 +680,10 @@ export interface JobEventDataMap {
    *  plan reads `host` gets its three AWS accounts and their quota raises.
    *  Cross-tenant by design: it walks every Host org. */
   'system.host-account-reconcile': SystemScheduledData;
+  /** The Host account state pass (Story MOTIR-9365 · MOTIR-9585) — every own AWS
+   *  account's state and entry times. Cross-tenant by design: it walks every
+   *  Host org's accounts. */
+  'system.host-account-state': SystemScheduledData;
   'system.billing-seat-sync': BillingSeatSyncData;
   /** A settled fleet container's usage-and-cost report to motir-ai (MOTIR-5286). */
   'system.platform-meter-report': PlatformMeterReportData;
