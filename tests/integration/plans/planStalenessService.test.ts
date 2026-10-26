@@ -582,4 +582,12 @@ describe('planStalenessService — the append anchors baseRevision (MOTIR-9603)'
     // Refused before the park: the card was never moved.
     expect(await statusOf(targetId)).toBe('todo');
   });
+
+  it('resolveAnchors answers an empty map for no ids — `IN ()` is never sent', async () => {
+    const fx = await makeWorkItemFixture();
+    const anchors = await withWorkspaceContext(fx.ctx, (tx) =>
+      workItemRevisionRepository.resolveAnchors([], tx),
+    );
+    expect(anchors.size).toBe(0);
+  });
 });
