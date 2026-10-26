@@ -8478,6 +8478,16 @@
       "failureLinePlanAgain": "Cette tentative n’a pas pu être poursuivie · {when}. Votre prochain message relance la planification.",
       "failureLinePlanAgainAgain": "Cette tentative n’a de nouveau pas pu être poursuivie · {when}. Votre prochain message relance la planification."
     },
+    "providerLimit": {
+      "retryingTitle": "En attente du fournisseur de modèle",
+      "retryingBody": "Il est très sollicité en ce moment. La planification réessaiera d’elle-même ; rien n’est perdu.",
+      "walkBecause": "car le fournisseur de modèle a atteint sa limite",
+      "walkKept": "Rien n’a été perdu. Cliquez sur Reprendre quand vous voulez réessayer ; la planification reprend là où elle s’est arrêtée.",
+      "failureLine": "Votre dernière modification de ce plan n’a pas pu être effectuée : le fournisseur de modèle a atteint sa limite · {when}. Renvoyez-la quand vous êtes prêt.",
+      "failureLineAgain": "Votre dernière modification n’a de nouveau pas pu être effectuée : le fournisseur de modèle a atteint sa limite · {when}. Renvoyez-la quand vous êtes prêt.",
+      "failureLinePlanAgain": "Cette tentative n’a pas pu être poursuivie : le fournisseur de modèle a atteint sa limite · {when}. Votre prochain message relance la planification.",
+      "failureLinePlanAgainAgain": "Cette tentative n’a de nouveau pas pu être poursuivie : le fournisseur de modèle a atteint sa limite · {when}. Votre prochain message relance la planification."
+    },
     "grill": {
       "control": {
         "label": "Cuisine-moi",

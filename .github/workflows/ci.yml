@@ -2905,6 +2905,53 @@ jobs:
       - run: pnpm -r --filter './packages/*' build
       - run: pnpm test:coverage:plan-progress
 
+  story-9540-coverage:
+    name: Coverage (provider limit)
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
+    # Story MOTIR-9540 (a planning call that hits a provider limit) — MOTIR-9624's per-file
+    # floor over the module the story created (`vitest.coverage.provider-limit.config.ts`), with
+    # the files it widened reported, measured by the story gate (the stored wait through the
+    # hosted door, rate_limited in To resume and Resume, the host and rail rendered from the
+    # server's answers) and the cards' suites against Postgres. Locally it ran 5 files in about
+    # a minute.
+    timeout-minutes: 20
+    needs: changes
+    if: ${{ needs.changes.outputs.app == 'true' && github.event_name != 'push' }}
+    permissions:
+      contents: read
+    env:
+      DATABASE_URL: postgresql://prodect:prodect@localhost:5432/prodect
+      BETTER_AUTH_SECRET: ci-test-only-not-a-real-secret-do-not-reuse
+      GOOGLE_CLIENT_ID: ci-test-placeholder
+      GOOGLE_CLIENT_SECRET: ci-test-placeholder
+      HUSKY: '0'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Start Postgres
+        uses: ./.github/actions/postgres
+      - uses: ./.github/actions/pnpm
+      - name: Cache node_modules
+        id: cache-node-modules-story-9540
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Cache Prisma client
+        id: cache-prisma-story-9540
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules/.prisma
+            node_modules/@prisma/client
+          key: ${{ runner.os }}-prisma-client-${{ hashFiles('prisma/schema.prisma') }}
+      - run: pnpm install --frozen-lockfile
+        if: steps.cache-node-modules-story-9540.outputs.cache-hit != 'true'
+      - run: pnpm prisma generate
+        if: steps.cache-prisma-story-9540.outputs.cache-hit != 'true'
+      - run: pnpm prisma migrate deploy
+      - run: pnpm -r --filter './packages/*' build
+      - run: pnpm coverage:provider-limit
+
   story-8060-coverage:
     name: Coverage (planner narration)
     runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
@@ -3587,6 +3634,7 @@ jobs:
         story-7630-coverage,
         story-7631-coverage,
         story-7820-coverage,
+        story-9540-coverage,
         story-7883-coverage,
         story-8982-coverage,
         story-7928-coverage,

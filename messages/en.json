@@ -8475,6 +8475,16 @@
       "failureLinePlanAgain": "This attempt could not be continued · {when}. Your next message plans it again.",
       "failureLinePlanAgainAgain": "This attempt could not be continued again · {when}. Your next message plans it again."
     },
+    "providerLimit": {
+      "retryingTitle": "Waiting on the model provider",
+      "retryingBody": "It is busy right now. Planning will retry by itself; nothing is lost.",
+      "walkBecause": "because the model provider is at its limit",
+      "walkKept": "Nothing was lost. Resume when you are ready to try again; it continues from where it stopped.",
+      "failureLine": "Your last change to this plan could not be made: the model provider is at its limit · {when}. Send it again when you are ready.",
+      "failureLineAgain": "Your last change could not be made again: the model provider is at its limit · {when}. Send it again when you are ready.",
+      "failureLinePlanAgain": "This attempt could not be continued: the model provider is at its limit · {when}. Your next message plans it again.",
+      "failureLinePlanAgainAgain": "This attempt could not be continued again: the model provider is at its limit · {when}. Your next message plans it again."
+    },
     "grill": {
       "control": {
         "label": "Grill me",

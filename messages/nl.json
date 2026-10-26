@@ -8478,6 +8478,16 @@
       "failureLinePlanAgain": "Deze poging kon niet worden voortgezet · {when}. Je volgende bericht plant opnieuw.",
       "failureLinePlanAgainAgain": "Deze poging kon opnieuw niet worden voortgezet · {when}. Je volgende bericht plant opnieuw."
     },
+    "providerLimit": {
+      "retryingTitle": "Wachten op de modelaanbieder",
+      "retryingBody": "Die is nu druk bezet. De planning probeert het zelf opnieuw; er gaat niets verloren.",
+      "walkBecause": "omdat de modelaanbieder zijn limiet heeft bereikt",
+      "walkKept": "Er is niets verloren. Klik op Hervatten wanneer je het opnieuw wilt proberen; het gaat verder waar het stopte.",
+      "failureLine": "Je laatste wijziging aan dit plan kon niet worden doorgevoerd: de modelaanbieder heeft zijn limiet bereikt · {when}. Stuur hem opnieuw wanneer je klaar bent.",
+      "failureLineAgain": "Je laatste wijziging kon opnieuw niet worden doorgevoerd: de modelaanbieder heeft zijn limiet bereikt · {when}. Stuur hem opnieuw wanneer je klaar bent.",
+      "failureLinePlanAgain": "Deze poging kon niet worden voortgezet: de modelaanbieder heeft zijn limiet bereikt · {when}. Je volgende bericht plant opnieuw.",
+      "failureLinePlanAgainAgain": "Deze poging kon opnieuw niet worden voortgezet: de modelaanbieder heeft zijn limiet bereikt · {when}. Je volgende bericht plant opnieuw."
+    },
     "grill": {
       "control": {
         "label": "Ondervraag me",

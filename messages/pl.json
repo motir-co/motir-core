@@ -8478,6 +8478,16 @@
       "failureLinePlanAgain": "Nie udało się kontynuować tej próby · {when}. Twoja następna wiadomość zaplanuje ją od nowa.",
       "failureLinePlanAgainAgain": "Tej próby znów nie udało się kontynuować · {when}. Twoja następna wiadomość zaplanuje ją od nowa."
     },
+    "providerLimit": {
+      "retryingTitle": "Czekamy na dostawcę modelu",
+      "retryingBody": "Jest teraz przeciążony. Planowanie samo spróbuje ponownie; nic nie zostanie utracone.",
+      "walkBecause": "ponieważ dostawca modelu osiągnął swój limit",
+      "walkKept": "Nic nie zostało utracone. Kliknij Wznów, gdy zechcesz spróbować ponownie; planowanie będzie kontynuowane od miejsca, w którym się zatrzymało.",
+      "failureLine": "Twoja ostatnia zmiana w tym planie nie mogła zostać wprowadzona: dostawca modelu osiągnął swój limit · {when}. Wyślij ją ponownie, gdy będziesz gotowy.",
+      "failureLineAgain": "Twoja ostatnia zmiana znów nie mogła zostać wprowadzona: dostawca modelu osiągnął swój limit · {when}. Wyślij ją ponownie, gdy będziesz gotowy.",
+      "failureLinePlanAgain": "Nie udało się kontynuować tej próby: dostawca modelu osiągnął swój limit · {when}. Twoja następna wiadomość zaplanuje ją od nowa.",
+      "failureLinePlanAgainAgain": "Znów nie udało się kontynuować tej próby: dostawca modelu osiągnął swój limit · {when}. Twoja następna wiadomość zaplanuje ją od nowa."
+    },
     "grill": {
       "control": {
         "label": "Przepytaj mnie",

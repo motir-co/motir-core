@@ -42,6 +42,7 @@ import { planRevisionRepository } from '@/lib/repositories/planRevisionRepositor
 import { planStepRepository } from '@/lib/repositories/planStepRepository';
 import { planNarrationRepository } from '@/lib/repositories/planNarrationRepository';
 import { PLAN_NARRATION_BATCH_MAX, cleanNarrationSentence } from '@/lib/plans/planNarration';
+import { PLAN_STALLED_AFTER_MS } from '@/lib/plans/planProgress';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import {
   workItemRepository,
@@ -229,6 +230,7 @@ import type {
   PlanNarrationDto,
   PlanStepDto,
   PlanStepKindDto,
+  PlanStepProviderWaitDto,
 } from '@/lib/dto/plans';
 import {
   PLAN_ITEM_REASON_MAX,
@@ -5221,7 +5223,27 @@ async function resolveStepTargetTitle(
 export type ReportPlanStepResult =
   | { kind: 'step'; step: PlanStepDto }
   | { kind: 'end' }
-  | { kind: 'narration'; narration: PlanNarrationDto[] };
+  | { kind: 'narration'; narration: PlanNarrationDto[] }
+  | { kind: 'providerRetry'; providerWait: PlanStepProviderWaitDto | null };
+
+/** The most retries one provider wait may name (MOTIR-9619) — `attempt` and
+ *  `maxAttempts` are integers in `1..PLAN_PROVIDER_RETRY_ATTEMPTS_MAX`. */
+export const PLAN_PROVIDER_RETRY_ATTEMPTS_MAX = 20;
+
+/**
+ * A session's provider-retry report (Story MOTIR-9540 · MOTIR-9619): `waiting`
+ * names the retry about to be made, of how many, and when it goes out; `cleared`
+ * says the wait is over, however it ended.
+ */
+export type PlanProviderRetryInput =
+  | { state: 'waiting'; attempt: number; maxAttempts: number; retryAt: string }
+  | { state: 'cleared' };
+
+function isRetryAttempt(v: unknown): v is number {
+  return (
+    Number.isInteger(v) && (v as number) >= 1 && (v as number) <= PLAN_PROVIDER_RETRY_ATTEMPTS_MAX
+  );
+}
 
 /**
  * The one transaction both step writes share (MOTIR-7822): find the plan, assert
@@ -7419,7 +7441,16 @@ export const plansService = {
       const row = await planStepRepository.upsertForSession(
         planId,
         sessionKey,
-        { kind: input.kind, targetRef, startedAt: now },
+        {
+          kind: input.kind,
+          targetRef,
+          startedAt: now,
+          // A session that moved on was evidently served (MOTIR-9619).
+          providerWaitSince: null,
+          providerWaitUntil: null,
+          providerWaitAttempt: null,
+          providerWaitMaxAttempts: null,
+        },
         tx,
       );
       // The session's STEP WORDS (MOTIR-8062), in the same transaction: the head
@@ -7492,6 +7523,78 @@ export const plansService = {
   },
 
   /**
+   * Record — or clear — a session's provider-retry WAIT (Story MOTIR-9540 ·
+   * MOTIR-9619). A `waiting` report is checked (integers in
+   * `1..PLAN_PROVIDER_RETRY_ATTEMPTS_MAX`, `attempt ≤ maxAttempts`, a `retryAt`
+   * that parses), its `retryAt` CLAMPED to `[now, now + PLAN_STALLED_AFTER_MS]`,
+   * and stored with the server's clock as `since`; `cleared` nulls it. Refused
+   * {@link InvalidPlanStepError} when the session holds no step on the plan.
+   *
+   * ⚠️ IT NEVER TOUCHES THE STEP, exactly as narration does not: the wait is its
+   * own four columns, so the overlay's step words and `startedAt` hold still
+   * through a retry. It stamps the plan's activity (via `withGeneratingPlanStep`),
+   * so a long retry-after is not read as a stall.
+   */
+  async recordProviderRetry(
+    planId: string,
+    input: { sessionKey: string; providerRetry: unknown },
+    ctx: ServiceContext,
+  ): Promise<PlanStepProviderWaitDto | null> {
+    const sessionKey = assertSessionKey(input.sessionKey);
+    const raw = (input.providerRetry ?? null) as Record<string, unknown> | null;
+    const state = raw && typeof raw === 'object' ? raw.state : undefined;
+    let wait: { attempt: number; maxAttempts: number; retryAtMs: number } | null = null;
+    if (state === 'waiting') {
+      const { attempt, maxAttempts, retryAt } = raw!;
+      if (!isRetryAttempt(attempt) || !isRetryAttempt(maxAttempts) || attempt > maxAttempts) {
+        throw new InvalidPlanStepError(
+          `\`attempt\` and \`maxAttempts\` are integers in 1..${PLAN_PROVIDER_RETRY_ATTEMPTS_MAX} ` +
+            'with `attempt` ≤ `maxAttempts` — nothing was recorded.',
+        );
+      }
+      const retryAtMs = typeof retryAt === 'string' ? Date.parse(retryAt) : Number.NaN;
+      if (Number.isNaN(retryAtMs)) {
+        throw new InvalidPlanStepError('`retryAt` is an ISO-8601 time — nothing was recorded.');
+      }
+      wait = { attempt, maxAttempts, retryAtMs };
+    } else if (state !== 'cleared') {
+      throw new InvalidPlanStepError(
+        '`providerRetry.state` is `waiting` or `cleared` — nothing was recorded.',
+      );
+    }
+    return withGeneratingPlanStep(planId, ctx, async (_plan, tx, now) => {
+      const stored = wait
+        ? {
+            since: now,
+            until: new Date(
+              Math.min(
+                Math.max(wait.retryAtMs, now.getTime()),
+                now.getTime() + PLAN_STALLED_AFTER_MS,
+              ),
+            ),
+            attempt: wait.attempt,
+            maxAttempts: wait.maxAttempts,
+          }
+        : null;
+      const count = await planStepRepository.setProviderWait(planId, sessionKey, stored, tx);
+      if (count === 0) {
+        throw new InvalidPlanStepError(
+          `Session \`${sessionKey}\` has no step on this plan — report \`settle\` / \`lay\` / ` +
+            '`author` first; nothing was recorded.',
+        );
+      }
+      return stored
+        ? {
+            attempt: stored.attempt,
+            maxAttempts: stored.maxAttempts,
+            since: stored.since.toISOString(),
+            retryAt: stored.until.toISOString(),
+          }
+        : null;
+    });
+  },
+
+  /**
    * Clear a session's step (MOTIR-7822). A session with no step is a no-op
    * SUCCESS — a planner clearing on every exit must not be able to fail — and
    * still stamps the activity: an ending session is a sign of life. Refused on a
@@ -7519,19 +7622,36 @@ export const plansService = {
       step?: PlanStepKindDto | 'end';
       targetRef: string | null;
       narration?: string[];
+      /** The session's provider-retry wait (MOTIR-9619) — the third exclusive form. */
+      providerRetry?: PlanProviderRetryInput;
     },
     ctx: ServiceContext,
   ): Promise<ReportPlanStepResult> {
-    // EXACTLY ONE of `step` / `narration` (MOTIR-8062): a step report re-stamps
-    // `startedAt`, so keeping the two apart is what lets a narration call never
-    // touch the step.
-    const hasStep = input.step !== undefined;
-    const hasNarration = input.narration !== undefined;
-    if (hasStep === hasNarration) {
+    // EXACTLY ONE of `step` / `narration` / `providerRetry` (MOTIR-8062 ·
+    // MOTIR-9619): a step report re-stamps `startedAt`, so keeping them apart is
+    // what lets a narration or a wait never touch the step.
+    const forms = [input.step, input.narration, input.providerRetry].filter(
+      (form) => form !== undefined,
+    ).length;
+    if (forms !== 1) {
       throw new InvalidPlanStepError(
-        'Send exactly one of `step` or `narration` — nothing was recorded.',
+        'Send exactly one of `step`, `narration` or `providerRetry` — nothing was recorded.',
       );
     }
+    if (input.providerRetry !== undefined) {
+      if (input.targetRef !== null) {
+        throw new InvalidPlanStepError(
+          'A `providerRetry` call names no target — send it with none; nothing was recorded.',
+        );
+      }
+      const providerWait = await plansService.recordProviderRetry(
+        planId,
+        { sessionKey: input.sessionKey, providerRetry: input.providerRetry },
+        ctx,
+      );
+      return { kind: 'providerRetry', providerWait };
+    }
+    const hasNarration = input.narration !== undefined;
     if (hasNarration) {
       if (input.targetRef !== null) {
         throw new InvalidPlanStepError(

@@ -7339,3 +7339,112 @@ The cannot-save line is **not** the cannot-start line: cannot-start replaces the
 - The offer panel's label, request block, Confirm, Decline and helper — as in § _The plan offer on an answer turn_.
 - A targeted _plan this_ and the bug offer — neither carries a requirement.
 - Which code builds which element, and where the page is stored.
+
+## ⭐ The overlay when the model provider is at its limit — retrying, then stopped with Resume (2026-10-26)
+
+Mock: `planning-workspace--provider-limit.mock.html` (a DELTA; holds only the panels that change).
+It amends, and does not edit:
+
+- § _The overlay waits with you_ and its mock `planning-workspace--waiting-on-you.mock.html` — the
+  **failed-walk face** (panels 3–6, 8–10; `FailedWaitingNotice`);
+- § _The overlay on an OPEN failed session whose plan waits_ and its mock
+  `planning-workspace--failed-with-waiting-plan.mock.html` — the **failure-line face** (5a / 5e)
+  and the **plan-again line** (`WaitingPlanFailureLine`, `planAgain`).
+
+Surface: the planning overlay's conversation rail (`PlanChangeRail`, mounted by
+`PlanningWorkspaceHost`). A model provider refusing planning calls for rate (a provider 429 the
+gateway relays) produces two moments: the planner **waiting to retry by itself**, and, once every
+retry was refused, the session **stopped** as failed-waiting with reason `rate_limited`.
+
+### The three elements
+
+1. **The provider-limit retrying banner** (`data-testid="provider-limit-retrying"`). The retrying
+   state's only element.
+   - **Tone: info / neutral — not warning, never danger.** Nothing has failed and the person has
+     nothing to do. Surface `--el-notice-info-bg`, border `--el-border`, ink `--el-text-strong`
+     for both lines (the hue sits in the tint, the text stays strong: finding #35), radius
+     `--radius-card`, padding `--spacing-control-y` / `--spacing-control-x`.
+   - **Glyph:** the `Spinner` primitive at `sm` in `--el-text-strong`, `aria-hidden`. It stops
+     under `prefers-reduced-motion` (the shipped `animate-spin` gate); the title still says what
+     is happening.
+   - **Copy:** title _Waiting on the model provider_, line _It is busy right now. Planning will
+     retry by itself; nothing is lost._ (`planningWorkspace.providerLimit.retryingTitle` /
+     `.retryingBody`). The same words on every retry.
+   - **No action, no dismiss, no countdown, no attempt number.** The wait doubles with jitter and
+     is raised to a provider retry-after, so a time shown would be wrong, and a counter invites the
+     person to act. The stored wait carries `attempt` / `retryAt`, but this design draws neither;
+     adding one later is a new delta.
+   - **Lifecycle.** It appears when the overlay's reading carries a provider wait
+     (`PlanProgressReading.providerWait` not null) and clears when it does not. Opened mid-retry
+     it is identical (panel 3) — no entrance animation explains it. A retry that succeeds clears
+     it with no toast and no record line (panel 4). A later burst in the same walk brings back
+     the same banner, with no burst count (panel 5). Where the session also carries a failure,
+     **the failure wins**: the banner is not drawn beside a failed face.
+2. **The banner placement.** A strip between the rail head (and the History section when it is
+   shown) and the turn log, **outside** the log's scroll, with 12px top margin and 16px side
+   insets (layout, not a box). So it stays in view while the turns scroll, it is never drawn over
+   the canvas, and it does not move the live progress line, which stays where it ships on the
+   canvas pane. At the narrowest rail (352px, panel 3) it wraps to three lines and the composer
+   stays on screen; at the widest (640px, panel 2) it is one title line and one body line.
+3. **The provider-limit stopped wording.** The `rate_limited` reason worded INSIDE each of the
+   three shipped failed faces. It is never a second panel and never a second Resume: every panel
+   of the mock holds at most one `planning-resume`, and only the failed-walk face has one.
+   - **Failed-walk face** (`FailedWaitingNotice`, panels 6, 8b, 12b). Title (_This attempt
+     stopped_), the yellow _Waiting to resume_ pill, the hourglass, Resume (label unchanged,
+     `workbench.planningSession.resume`) and the held composer's reason all stay as shipped. Two
+     segments change when `failure.reason === 'rate_limited'`: the stop line's _because {reason}_
+     segment reads `providerLimit.walkBecause` (_because the model provider is at its limit_), and
+     the kept sentence (`waiting.kept`) reads `providerLimit.walkKept` (_Nothing was lost. Resume
+     when you are ready to try again; it continues from where it stopped._). Failed again keeps
+     the shipped _Second attempt_ pill (panel 8b): that pill is this face's _again_ form.
+   - **Resume pressed** (panel 7): the face's shipped resuming state (_Resuming…_ pill, disabled
+     button). The provider-limit stopped wording is gone at once; nothing new is drawn.
+   - **Resumed, then refused again** (panel 8a): the walk is running, so the retrying banner
+     returns as in panel 2; exhausted again is panel 8b.
+   - **Failure-line face** (panel 9): `providerLimit.failureLine` / `.failureLineAgain` replace
+     `waiting.failureLine` / `.failureLineAgain`. Open composer, no Resume.
+   - **Plan-again face** (panel 10): `providerLimit.failureLinePlanAgain` /
+     `.failureLinePlanAgainAgain` replace `waiting.failureLinePlanAgain` / `…AgainAgain`.
+     Open composer, no Resume.
+   - **Tone:** the warning role those faces already use (`--el-icon-muted` glyphs, the
+     `--el-tint-yellow` awaiting pill, the `--el-tint-rose` line with `--el-text-strong`). No
+     `--el-danger-*` anywhere.
+   - **The shared reason string is NOT reworded.** `workbench.planningSession.reason.rate_limited`
+     (_the model was rate-limited_) stays: the Workbench To resume row renders it too, and that row
+     is out of scope. The new keys are used only in the overlay's faces.
+   - **Negative reference** (panel 11): any other reason (`internal`, `job_failed`,
+     `out_of_credits`, a provider 500) draws the shipped face unchanged, with no provider-limit
+     element.
+
+### Accessibility
+
+- The retrying banner is `role="status"` (a polite live region), labelled by its title. It is
+  never `role="alert"`, which the shipped faces avoid as well.
+- The stopped wording takes the semantics of the face it lives in: the failed-walk face is a
+  labelled `section`, the line faces are their shipped `role="status"` paragraphs.
+- Contrast: `--el-text-strong` on `--el-notice-info-bg` (`--color-tint-sky`) and on
+  `--el-tint-rose`; `--el-text-secondary` on the page-bg card of the failed-walk face. Each pair
+  meets AA in light and dark themes; no `--el-text-muted` or `--el-text-faint` carries text, in
+  the rail or the board chrome.
+- Nothing is carried by colour alone: the banner's title says the state in words.
+
+### Copy (en / zh) — every new string, under `planningWorkspace.providerLimit`
+
+| key                         | en                                                                                                                              | zh                                                                                          |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `retryingTitle`             | Waiting on the model provider                                                                                                   | 正在等待模型服务                                                                            |
+| `retryingBody`              | It is busy right now. Planning will retry by itself; nothing is lost.                                                           | 模型服务暂时繁忙。规划会自动重试，不会丢失任何内容。                                        |
+| `walkBecause`               | because the model provider is at its limit                                                                                      | 原因：模型服务已达到使用上限                                                                |
+| `walkKept`                  | Nothing was lost. Resume when you are ready to try again; it continues from where it stopped.                                   | 没有丢失任何内容。准备好后点击继续即可再试，它会从停下的地方接着进行。                      |
+| `failureLine`               | Your last change to this plan could not be made: the model provider is at its limit · {when}. Send it again when you are ready. | 你上一次对这个计划的修改没能完成：模型服务已达到使用上限 · {when}。准备好后再发送一次即可。 |
+| `failureLineAgain`          | Your last change could not be made again: the model provider is at its limit · {when}. Send it again when you are ready.        | 你上一次的修改再次没能完成：模型服务已达到使用上限 · {when}。准备好后再发送一次即可。       |
+| `failureLinePlanAgain`      | This attempt could not be continued: the model provider is at its limit · {when}. Your next message plans it again.             | 这次尝试无法继续：模型服务已达到使用上限 · {when}。你的下一条消息会重新规划。               |
+| `failureLinePlanAgainAgain` | This attempt could not be continued again: the model provider is at its limit · {when}. Your next message plans it again.       | 这次尝试再次无法继续：模型服务已达到使用上限 · {when}。你的下一条消息会重新规划。           |
+
+The build adds these to `messages/en.json` and `messages/zh.json` as written and carries them into
+the app's other locale catalogues. Panels 12a / 12b render the zh strings at 352px with no English
+left in.
+
+- **GIVES:** the overlay banner build — the three elements, the failure-wins precedence, the copy
+  keys. **TAKES:** nothing; the shipped faces, their resuming and _again_ states are composed as
+  they ship.

@@ -119,6 +119,7 @@ describe('the plan page draws the planner narration (MOTIR-8064)', () => {
             kind: 'author',
             targetRef: 'ref-s-a',
             startedAt: '2026-10-09T10:00:00.000Z',
+            providerWait: null,
           },
         ],
       }),

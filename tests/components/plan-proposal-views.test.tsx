@@ -260,6 +260,7 @@ describe('PlanProposalViews — the progress line', () => {
         targetNodeId: 'pi_1',
         targetTitle: 'Invoice export',
         startedAt: new Date(T0 - 60_000).toISOString(),
+        providerWait: null,
       },
     ],
   };
@@ -336,6 +337,7 @@ describe('PlanProposalViews — the canvas cues read the one clock', () => {
         targetNodeId: 'pi_1',
         targetTitle: 'Invoice export',
         startedAt: new Date(T0 - 14 * 60_000).toISOString(),
+        providerWait: null,
       },
     ],
   };
