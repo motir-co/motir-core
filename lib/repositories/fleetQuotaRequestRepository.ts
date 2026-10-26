@@ -58,7 +58,6 @@ export const fleetQuotaRequestRepository = {
     });
   },
 
-  /** Every request of one account, open or closed — newest first. */
   /** The largest granted value among every quota request of one AWS ACCOUNT —
    *  across all its rows, so the merged account's two rows read one figure
    *  (MOTIR-9586). Null while none reads a granted value. */
@@ -73,6 +72,7 @@ export const fleetQuotaRequestRepository = {
     return _max.grantedValue;
   },
 
+  /** Every request of one account, open or closed — newest first. */
   async listByShard(shardId: string, tx: Prisma.TransactionClient): Promise<FleetQuotaRequest[]> {
     return tx.fleetQuotaRequest.findMany({
       where: { shardId },
@@ -132,7 +132,6 @@ export const fleetQuotaRequestRepository = {
     shardIds: readonly string[],
     tx: Prisma.TransactionClient,
   ): Promise<FleetQuotaRequest[]> {
-    if (shardIds.length === 0) return [];
     return tx.fleetQuotaRequest.findMany({
       where: { shardId: { in: [...shardIds] } },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],

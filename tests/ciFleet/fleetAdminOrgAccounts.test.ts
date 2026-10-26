@@ -174,6 +174,33 @@ describe('fleet-admin org-accounts', () => {
     ]);
   });
 
+  it('an account with no raise yet prints no figures; the merged pair takes its most advanced row', async () => {
+    const org = await seedOrg();
+    await ownAccount(org, 'host-agents', ['hosted_agent']);
+    const [index, hoster] = await ownAccount(org, 'host-merged', [
+      'code_graph_index',
+      'agent_instance',
+    ]);
+    // The index row reads live while the hoster row has only asked.
+    await adminDb.fleetShard.update({
+      where: { id: index!.id },
+      data: { quotaRequestedAt: NOW, grantedAt: NOW, liveAt: NOW },
+    });
+    await adminDb.fleetShard.update({
+      where: { id: hoster!.id },
+      data: { quotaRequestedAt: NOW },
+    });
+
+    const out = (await run('org-accounts', '--org', org)).out;
+    expect(out).toContain(`${org}  hosted_agent  host-agents  created  requested -  granted -`);
+    expect(out).toContain(
+      `${org}  code_graph_index  host-merged-code_graph_index  live  requested -  granted -`,
+    );
+    expect(out).toContain(
+      `${org}  agent_instance  host-merged-agent_instance  live  requested -  granted -`,
+    );
+  });
+
   it('--org and --kind narrow the listing; the merged figures hold under --kind', async () => {
     const org = await seedOrg();
     const other = await seedOrg();
