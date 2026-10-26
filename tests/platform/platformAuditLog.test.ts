@@ -268,6 +268,9 @@ describe('the reason rule', () => {
     // The capacity alert share (Story MOTIR-9539 · MOTIR-9609): a write whose
     // reason the service supplies when the screen gives none.
     'capacity.alert_share.set': 'inherited',
+    // The capacity limits edit (Story MOTIR-9539 · MOTIR-9613): a gateway write
+    // audited in core, with a default reason when the screen gives none.
+    'capacity.limits.edit': 'inherited',
   } as const;
 
   it('every action carries the policy the ADR allocates it', () => {

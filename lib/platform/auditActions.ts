@@ -376,6 +376,16 @@ export const PLATFORM_AUDIT_ACTIONS = {
    * screen supplies none.
    */
   'capacity.alert_share.set': { kind: 'write', reason: 'inherited' },
+  /**
+   * A provider/model's capacity LIMITS were edited on the gateway (Story
+   * MOTIR-9539 · MOTIR-9613): a limit, the planning share or the tier note.
+   * `targetKind: 'platform'`, `targetId: '<provider>/<model>'`, `metadata`
+   * `{ provider, model, keys }` where `keys` maps each edited wire key to its new
+   * value (`null` is "unknown"). The gateway write runs inside the audited
+   * transaction, so a refused edit leaves no row. `inherited`: the service
+   * writes a default reason when the screen supplies none.
+   */
+  'capacity.limits.edit': { kind: 'write', reason: 'inherited' },
 } as const satisfies Record<
   string,
   { kind: PlatformAuditActionKind; reason: PlatformAuditReasonPolicy }

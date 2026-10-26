@@ -135,7 +135,8 @@ export interface CapacityLimitsEdit {
   tierNote?: string;
 }
 
-const EDIT_KEYS: ReadonlyArray<[keyof CapacityLimitsEdit, string]> = [
+/** Each edit key and its wire (snake_case) name, in the contract's order. */
+export const CAPACITY_EDIT_KEYS: ReadonlyArray<[keyof CapacityLimitsEdit, string]> = [
   ['maxConcurrency', 'max_concurrency'],
   ['rpm', 'rpm'],
   ['inputTpm', 'input_tpm'],
@@ -382,7 +383,7 @@ export async function readGatewayCapacity(): Promise<CapacityRead> {
 /** The wire body: only the keys present, in the contract's snake_case. */
 export function capacityEditBody(edit: CapacityLimitsEdit): Record<string, unknown> {
   const body: Record<string, unknown> = {};
-  for (const [key, wire] of EDIT_KEYS) {
+  for (const [key, wire] of CAPACITY_EDIT_KEYS) {
     if (edit[key] !== undefined) body[wire] = edit[key];
   }
   return body;

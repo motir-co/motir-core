@@ -55,3 +55,23 @@ const UNIT_WORDS: Record<string, string> = {
   tpm: 'tokens per minute',
   tpd: 'tokens per day',
 };
+
+/** The codes core refuses a limit edit with before it reaches the gateway — the
+ *  gateway's own §4 vocabulary, so the screen reads one set of codes. */
+export type CapacityLimitEditInvalidCode =
+  | 'capacity_unknown_provider'
+  | 'capacity_invalid_body'
+  | 'capacity_empty_edit'
+  | 'capacity_invalid_value';
+
+/** A limit edit refused by core's validation (MOTIR-9613); `field` is the
+ *  gateway's snake_case key at fault, when there is one. */
+export class CapacityLimitEditInvalidError extends Error {
+  constructor(
+    readonly code: CapacityLimitEditInvalidCode,
+    readonly field: string | null = null,
+  ) {
+    super(`capacity limit edit refused: ${code}${field ? ` (${field})` : ''}`);
+    this.name = 'CapacityLimitEditInvalidError';
+  }
+}
