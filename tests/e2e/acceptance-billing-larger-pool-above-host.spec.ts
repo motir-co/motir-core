@@ -465,6 +465,8 @@ test.describe('The larger pools start above Host', () => {
           withPlanChange(onPlan(HOST, 12_000), { upgradePreview: { [RUNG.key]: UPGRADE } }),
         );
         before = await openBilling(page, seed);
+        // The counter is the whole walk's; Recipe 4's purchase is already in it.
+        const checkouts = posts['checkout'] ?? 0;
         await openPlans(page, copy.ai.changePlan);
         await openCalculator(page);
         engine.high = poolOf(RUNG);
@@ -491,7 +493,7 @@ test.describe('The larger pools start above Host', () => {
         expect((await req.response())?.status()).toBe(200);
         await expect(dialog).toContainText(format(up.success, { plan: RUNG.name }));
         await reloaded;
-        expect(posts['checkout'] ?? 0).toBe(0);
+        expect(posts['checkout'] ?? 0).toBe(checkouts);
 
         // The upgrade invoice lands once; a replay adds nothing.
         const landed = onPlan(RUNG, before + UPGRADE.extraCredits);
