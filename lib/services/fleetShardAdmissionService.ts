@@ -22,6 +22,7 @@ import { isUnlimitedAgentOrg } from '@/lib/agentInstances/config';
 import { agentInstanceRepository } from '@/lib/repositories/agentInstanceRepository';
 import { ciRunnerProvisioningIntentRepository as intents } from '@/lib/repositories/ciRunnerProvisioningIntentRepository';
 import { fleetInFlightSlotRepository as slots } from '@/lib/repositories/fleetInFlightSlotRepository';
+import { mergedAccountSplit } from '@/lib/ciFleet/hostMergedAccountSplit';
 import { fleetQuotaRequestRepository } from '@/lib/repositories/fleetQuotaRequestRepository';
 import { fleetShardRepository } from '@/lib/repositories/fleetShardRepository';
 import { withSystemContext } from '@/lib/workspaces/context';
@@ -251,10 +252,15 @@ export const fleetShardAdmissionService = {
    * The granted value is read across every row of the account, because the
    * tracker records it on the row the raise was filed on — the merged account's
    * indexer row — and the hoster row's own `vcpuQuota` stays null. No known
-   * grant ⇒ no job. The merged account's two ceilings are refined by its own card.
+   * grant ⇒ no job.
+   *
+   * The merged indexer + agent hoster account (MOTIR-9589) shares that one grant
+   * between its two rows: its indexer row takes the split's index cap and its
+   * hoster row the agent cap (`mergedAccountSplit`), so the two kinds together
+   * never exceed the one quota.
    */
   async ownCeilingInTx(
-    shard: Pick<FleetShard, 'admissionCeilingOverride' | 'awsAccountId'>,
+    shard: Pick<FleetShard, 'admissionCeilingOverride' | 'awsAccountId' | 'fleetKind'>,
     tx: Prisma.TransactionClient,
   ): Promise<number> {
     if (shard.admissionCeilingOverride !== null) return shard.admissionCeilingOverride;
@@ -263,7 +269,26 @@ export const fleetShardAdmissionService = {
       shard.awsAccountId,
       tx,
     );
+    if (shard.fleetKind === 'code_graph_index') return mergedAccountSplit(granted).indexCap;
+    if (shard.fleetKind === 'agent_instance') return mergedAccountSplit(granted).agentCap;
     return shardAdmissionCeiling({ vcpuQuota: granted, machineLimit: null }) ?? 0;
+  },
+
+  /**
+   * Does the org's own account take this kind's jobs (MOTIR-9589) — the kind is
+   * on its pool and the org has a live own account of it. The same switch and
+   * live-own read `chooseInTx` places by, so a caller exempting the org from a
+   * shared bound can never disagree with where the job lands.
+   */
+  async ownAccountTakesInTx(
+    job: ShardPlacementJob,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    if (!(await fleetKindOnPool(job.fleetKind))) return false;
+    return (
+      (await fleetShardRepository.findLiveOrgOwnedInTx(job.organizationId, job.fleetKind, tx)) !==
+      null
+    );
   },
 
   /** The `shard_capacity` words for a job no account could take — its own

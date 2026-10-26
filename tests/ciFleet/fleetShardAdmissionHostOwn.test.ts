@@ -309,7 +309,8 @@ describe('a live own account', () => {
     const ceiling = await withSystemContext((tx) =>
       fleetShardAdmissionService.ownCeilingInTx(hoster!, tx),
     );
-    expect(ceiling).toBe(20);
+    // The merged account's split (MOTIR-9589): 40 granted, 10 index spots kept.
+    expect(ceiling).toBe(10);
   });
 
   it('is never chosen for another org, nor for a Motir exempt org', async () => {
