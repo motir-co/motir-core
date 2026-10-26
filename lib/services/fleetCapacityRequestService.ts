@@ -9,9 +9,13 @@ import {
   FleetQuotaRequestNotFoundError,
 } from '@/lib/ciFleet/errors';
 import { FLEET_WORKLOAD_KINDS } from '@/lib/ciFleet/workloads';
-import type { FleetCapacityRequestDTO } from '@/lib/dto/fleetCapacityRequest';
+import type {
+  FleetCapacityRequestDTO,
+  OrgFleetCapacityRequestDTO,
+} from '@/lib/dto/fleetCapacityRequest';
 import {
   toFleetCapacityRequestDTO,
+  toOrgFleetCapacityRequestDTO,
   type FleetCapacityRequestRow,
 } from '@/lib/mappers/fleetCapacityRequestMappers';
 import { DEFAULT_FLEET_QUOTA_CODE } from '@/lib/mappers/fleetPoolMappers';
@@ -20,6 +24,7 @@ import type { PlatformPrincipal } from '@/lib/platform/auth';
 import { fleetCapacityRequestRepository } from '@/lib/repositories/fleetCapacityRequestRepository';
 import { fleetQuotaRequestRepository } from '@/lib/repositories/fleetQuotaRequestRepository';
 import { fleetShardRepository } from '@/lib/repositories/fleetShardRepository';
+import { billingService } from '@/lib/services/billingService';
 import { platformAuditService } from '@/lib/services/platformAuditService';
 import { withSystemContext } from '@/lib/workspaces/context';
 
@@ -164,6 +169,53 @@ export const fleetCapacityRequestService = {
     // After the commit: an alert that fails changes nothing about the ask.
     if (created) alertFleetCapacityRequest(dto);
     return dto;
+  },
+
+  /**
+   * The org admin's Request more capacity (Story MOTIR-9368 · MOTIR-9662): an
+   * owner or admin of the org names its OWN account by fleet kind — never by id —
+   * and gets the tenant-safe record back. The merged indexer + agent hoster
+   * account is one row per kind on one AWS account, so either kind resolves to
+   * its own row and {@link request}'s one-ask-per-account rule holds the pair.
+   *
+   * @throws BillingNotAvailableError / OrganizationNotFoundError /
+   *   BillingForbiddenError / OrganizationClosingError (the billing mutation
+   *   gate); FleetPoolValueInvalidError for an unknown kind, before any lookup;
+   *   FleetCapacityRequestNotOwnedError when the org owns no account of that
+   *   kind; and whatever {@link request} throws.
+   */
+  async requestForOrganization(input: {
+    organizationId: string;
+    actorUserId: string;
+    fleetKind: string;
+    desiredVcpu: number;
+    reason: string;
+  }): Promise<OrgFleetCapacityRequestDTO> {
+    await billingService.assertBillingManagerForMutation({
+      organizationId: input.organizationId,
+      actorUserId: input.actorUserId,
+    });
+    if (!(FLEET_WORKLOAD_KINDS as string[]).includes(input.fleetKind)) {
+      throw new FleetPoolValueInvalidError('fleetKind', input.fleetKind);
+    }
+    const [account] = await withSystemContext((tx) =>
+      fleetShardRepository.listOrgOwned(
+        { organizationId: input.organizationId, fleetKind: input.fleetKind },
+        tx,
+      ),
+    );
+    // No account of that kind (a non-Host org, or one not created yet): the same
+    // no-tell-apart refusal as another org's account.
+    if (!account) throw new FleetCapacityRequestNotOwnedError(input.fleetKind);
+    const dto = await this.request({
+      organizationId: input.organizationId,
+      userId: input.actorUserId,
+      shardId: account.id,
+      fleetKind: input.fleetKind,
+      desiredVcpu: input.desiredVcpu,
+      reason: input.reason,
+    });
+    return toOrgFleetCapacityRequestDTO(dto);
   },
 
   /**
