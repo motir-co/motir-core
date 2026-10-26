@@ -651,7 +651,7 @@ describe('a larger pool on sale carries the same three accounts, sized to its po
     },
   );
 
-  it('a retired rung gets no account, row, raise, refusal or alert, and is not in the summary', async () => {
+  it('a removed rung’s key gets no account, row, raise, refusal or alert, and is not in the summary', async () => {
     const org = await seedOrg();
     plans.set(org.id, onPlan('pool_250k'));
 

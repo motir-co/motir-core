@@ -572,10 +572,10 @@ only vs the PM tools above, not vs Cursor).
 > Each is sold under `<tierKey>_pool_monthly` / `<tierKey>_pool_annual`, the form §3 already uses,
 > at quantity 1 with one included tracker seat.
 >
-> **The retired rungs.** `pool_80k`, `pool_100k`, `pool_120k`, `pool_150k`, `pool_200k` and
-> `pool_250k` are off sale: no Checkout and no change of plan to them. An org that holds one keeps
-> it, with its grant, until it changes plan. No migration is planned, because none are expected
-> before launch.
+> **The removed rungs.** `pool_80k`, `pool_100k`, `pool_120k`, `pool_150k`, `pool_200k` and
+> `pool_250k` are removed from the catalog outright (owner, 2026-10-26): no Checkout, no change of
+> plan, no bill line and no caps row. No org held one (production, 2026-10-26), so nothing is
+> migrated.
 >
 > **The calculator** recommends a rung only for an estimate above Host's pool. Between Max ×2 and
 > Host it answers Max ×2 with top-ups. It never recommends Host.
@@ -584,8 +584,8 @@ only vs the PM tools above, not vs Cursor).
 > org's own as Host: a CI runner account, an agent runner account, and one merged indexer + agent
 > hoster account. Their quota raises are filed at CI 200 × (pool ÷ 300,000), agent runner 32 ×
 > (pool ÷ 300,000), and 120 vCPU for the merged account, so 600k asks 400 / 64 / 120 and 2,400k
-> asks 1,600 / 256 / 120. Until an account of a kind is live, the org runs on the shared floor at
-> Max's figures (CI at 50). The mechanisms belong to the Host accounts story, MOTIR-9365; this
+> asks 1,600 / 256 / 120. Until an account of a kind is live, the org runs on the shared floor: 5
+> agent runs, agents 10 per user and 50 running per org, and CI at 20 (owner, 2026-10-26). The mechanisms belong to the Host accounts story, MOTIR-9365; this
 > record states only the figures.
 >
 > **What stands.** The ladder's pools and prices, the top-up path and its price, the included

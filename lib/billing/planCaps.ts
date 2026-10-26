@@ -32,8 +32,8 @@ import { HOST_PLAN_KEY, planCarriesOwnAccounts } from '@/lib/billing/ownAccountP
 // `pool_<N>k` no catalog entry sells has no row.
 //
 // A plan that carries its own AWS accounts (Host and the larger pools on sale,
-// `lib/billing/ownAccountPlans.ts`) reads `OWN_ACCOUNT_FLOOR_CAPS` here — its
-// SHARED FLOOR. Once its own account of a kind is live, `planCapsService`
+// `lib/billing/ownAccountPlans.ts`) reads its SHARED FLOOR here — Host's row,
+// `HOST_FLOOR_CAPS`, or the larger pools' `LARGER_POOL_FLOOR_CAPS`. Once its own account of a kind is live, `planCapsService`
 // replaces that kind's figure with the account's own (`hostOwnAccountCaps.ts`).
 
 export interface PlanCaps {
@@ -57,19 +57,21 @@ function caps(
 }
 
 /**
- * THE SHARED FLOOR of every plan that carries its own accounts — Host and the
- * larger pools on sale (MOTIR-9587; the rungs, MOTIR-9366 · MOTIR-9653): Max ×2's
- * agent figures with a CI burst of 50. An org runs at these until its own account
- * of a kind is live; then `planCapsService` replaces that kind's figure (agent
- * runs, CI burst) with the account's granted vCPU ÷ 2. `agentsPerUser` and
- * `agentsRunningPerOrg` stay the floor's on every such plan.
+ * HOST'S SHARED FLOOR (MOTIR-9587): Max ×2's agent figures with a CI burst of 50. A
+ * Host org runs at these until its own account of a kind is live; then
+ * `planCapsService` replaces that kind's figure (agent runs, CI burst) with the
+ * account's granted vCPU ÷ 2. Not the larger pools' floor: the two differ.
  */
-export const OWN_ACCOUNT_FLOOR_CAPS: PlanCaps = caps(5, 10, 50, 50);
+export const HOST_FLOOR_CAPS: PlanCaps = caps(5, 10, 50, 50);
 
-/** The six rungs MOTIR-9366 retired (`pool_80k` … `pool_250k`), resolved by
- *  their exact keys: the figures their holders ran at before, on the shared
- *  pools only. Any other `pool_<N>k` shape has no row. */
-export const RETIRED_POOL_CAPS: PlanCaps = caps(5, 10, 50, 50);
+/**
+ * THE LARGER POOLS' SHARED FLOOR (MOTIR-9366 · MOTIR-9653): every rung on sale runs
+ * at these until its own account of a kind is live — 5 runs, agents 10 per user and
+ * 50 running per org, and a CI burst of 20 (owner, 2026-10-26). Its own accounts
+ * then replace the runs and CI figures exactly as Host's do; the agent figures are
+ * already the rungs' 10 / 50 and stay.
+ */
+export const LARGER_POOL_FLOOR_CAPS: PlanCaps = caps(5, 10, 50, 20);
 
 /** The exactly-keyed rows. `free` is all zeros: it pays for no fleet, and the
  *  paid-plan gate refuses it before any figure is read. */
@@ -79,22 +81,14 @@ export const PLAN_CAPS: Readonly<Record<string, PlanCaps>> = Object.freeze({
   pro: caps(3, 5, 30, 10),
   max: caps(5, 10, 50, 25),
   max_x2: caps(5, 10, 50, 25),
-  [HOST_PLAN_KEY]: OWN_ACCOUNT_FLOOR_CAPS,
-  // The rungs retired by MOTIR-9366: their holders keep the figures they ran at,
-  // on the shared pools for good — a retired rung carries no accounts of its own.
-  pool_80k: RETIRED_POOL_CAPS,
-  pool_100k: RETIRED_POOL_CAPS,
-  pool_120k: RETIRED_POOL_CAPS,
-  pool_150k: RETIRED_POOL_CAPS,
-  pool_200k: RETIRED_POOL_CAPS,
-  pool_250k: RETIRED_POOL_CAPS,
+  [HOST_PLAN_KEY]: HOST_FLOOR_CAPS,
 });
 
 /** The plan's four figures, or `null` when the key has no row. Never a default:
  *  a key is resolved exactly, or — for an on-sale larger pool, named through the
- *  catalog by `planCarriesOwnAccounts`, never by its key's shape — to the floor
- *  of the plans that carry their own accounts. */
+ *  catalog by `planCarriesOwnAccounts`, never by its key's shape — to the larger
+ *  pools' floor. */
 export function capsForPlanKey(key: string): PlanCaps | null {
   if (Object.prototype.hasOwnProperty.call(PLAN_CAPS, key)) return PLAN_CAPS[key]!;
-  return planCarriesOwnAccounts(key) ? OWN_ACCOUNT_FLOOR_CAPS : null;
+  return planCarriesOwnAccounts(key) ? LARGER_POOL_FLOOR_CAPS : null;
 }

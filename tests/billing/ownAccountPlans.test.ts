@@ -12,7 +12,7 @@ import {
 // WHICH PLANS CARRY THEIR OWN AWS ACCOUNTS, AND HOW BIG A QUOTA EACH ASKS FOR
 // (MOTIR-9651). The on-sale set is read from the catalog, never typed: Host and
 // every rung `largerPoolPlans()` returns carry the accounts; the ladder, Free, the
-// retired rungs and an unknown key do not. Every expected target is derived from
+// keys of the six removed rungs and an unknown key do not. Every expected target is derived from
 // the catalog and the three Host bases.
 
 const ON_SALE = new Set([HOST_PLAN_KEY, ...largerPoolPlans().map((p) => p.key)]);
@@ -24,23 +24,21 @@ describe('planCarriesOwnAccounts', () => {
     expect(planCarriesOwnAccounts(key)).toBe(ON_SALE.has(key));
   });
 
-  it('is true for Host and the five on-sale rungs, and false for the ladder and the retired six', () => {
+  it('is true for Host and the five on-sale rungs, and false for the ladder and the removed six', () => {
     expect(ON_SALE.size).toBe(1 + largerPoolPlans().length);
     for (const key of ['free', 'standard', 'pro', 'max', 'max_x2']) {
       expect(planCarriesOwnAccounts(key), key).toBe(false);
     }
-    const retired = BILLING_CATALOG.aiPlans.filter(
-      (p) => p.band === 'larger_pool' && !ON_SALE.has(p.key),
-    );
-    expect(retired.map((p) => p.key)).toEqual([
+    for (const key of [
       'pool_80k',
       'pool_100k',
       'pool_120k',
       'pool_150k',
       'pool_200k',
       'pool_250k',
-    ]);
-    for (const p of retired) expect(planCarriesOwnAccounts(p.key), p.key).toBe(false);
+    ]) {
+      expect(planCarriesOwnAccounts(key), key).toBe(false);
+    }
   });
 
   it('is false for an unknown key, a rung-shaped key no rung carries, and a lookup key', () => {

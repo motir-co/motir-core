@@ -48,8 +48,8 @@ export interface CatalogPrice {
  * Which part of the AI catalog an entry belongs to (MOTIR-8990). `ladder` is a
  * standing rung every owner can pick from the plan row (Free, Standard, Pro, Max,
  * Max ×2). `larger_pool` is a rung ABOVE Host's pool, sold only to an org whose own
- * estimate passes it (MOTIR-9366; entries at or below Host are retired rungs, kept
- * only so a holder still resolves). `host` is a standing plan sold from the plan
+ * estimate passes it (MOTIR-9366; the six first rungs, at or below Host, were
+ * removed outright — no org held one). `host` is a standing plan sold from the plan
  * row (MOTIR-9364): it is never counted by the ladder ceiling, the rung table or the
  * calculator, and only the two allow-lists name it. The ceiling, the rung table and
  * both allow-lists are derived against this field, so neither a larger pool nor Host
@@ -201,85 +201,6 @@ export const BILLING_CATALOG: BillingCatalog = {
       includedTrackerSeats: 1,
       band: 'ladder',
     },
-    // RETIRED rungs (MOTIR-8990, retired by MOTIR-9366): the six pools the first rung
-    // table sold between the ladder's top and Host. They are no longer sold — the
-    // rung table is floored at Host's pool, so they leave both allow-lists — but they
-    // stay here, unchanged, because the holder-time readers look a HELD key up across
-    // this whole array: `buildOrgBill` bills the held entry's price, `aiCadence` scans
-    // its lookup keys, and `capsForPlanKey` resolves any `pool_<N>k`. An org already on
-    // one keeps its bill line, cadence and caps until it changes plan.
-    {
-      key: 'pool_80k',
-      name: 'Pool 80,000',
-      allotment: { credits: 80000, cadence: 'monthly' },
-      recommended: false,
-      prices: {
-        monthly: { amountUsd: 390, priceLookupKey: 'pool_80k_pool_monthly' },
-        annual: { amountUsd: 3200, priceLookupKey: 'pool_80k_pool_annual' },
-      },
-      includedTrackerSeats: 1,
-      band: 'larger_pool',
-    },
-    {
-      key: 'pool_100k',
-      name: 'Pool 100,000',
-      allotment: { credits: 100000, cadence: 'monthly' },
-      recommended: false,
-      prices: {
-        monthly: { amountUsd: 480, priceLookupKey: 'pool_100k_pool_monthly' },
-        annual: { amountUsd: 4000, priceLookupKey: 'pool_100k_pool_annual' },
-      },
-      includedTrackerSeats: 1,
-      band: 'larger_pool',
-    },
-    {
-      key: 'pool_120k',
-      name: 'Pool 120,000',
-      allotment: { credits: 120000, cadence: 'monthly' },
-      recommended: false,
-      prices: {
-        monthly: { amountUsd: 570, priceLookupKey: 'pool_120k_pool_monthly' },
-        annual: { amountUsd: 4800, priceLookupKey: 'pool_120k_pool_annual' },
-      },
-      includedTrackerSeats: 1,
-      band: 'larger_pool',
-    },
-    {
-      key: 'pool_150k',
-      name: 'Pool 150,000',
-      allotment: { credits: 150000, cadence: 'monthly' },
-      recommended: false,
-      prices: {
-        monthly: { amountUsd: 705, priceLookupKey: 'pool_150k_pool_monthly' },
-        annual: { amountUsd: 6000, priceLookupKey: 'pool_150k_pool_annual' },
-      },
-      includedTrackerSeats: 1,
-      band: 'larger_pool',
-    },
-    {
-      key: 'pool_200k',
-      name: 'Pool 200,000',
-      allotment: { credits: 200000, cadence: 'monthly' },
-      recommended: false,
-      prices: {
-        monthly: { amountUsd: 930, priceLookupKey: 'pool_200k_pool_monthly' },
-        annual: { amountUsd: 8000, priceLookupKey: 'pool_200k_pool_annual' },
-      },
-      includedTrackerSeats: 1,
-      band: 'larger_pool',
-    },
-    {
-      key: 'pool_250k',
-      name: 'Pool 250,000',
-      allotment: { credits: 250000, cadence: 'monthly' },
-      recommended: false,
-      prices: {
-        monthly: { amountUsd: 1155, priceLookupKey: 'pool_250k_pool_monthly' },
-        annual: { amountUsd: 10000, priceLookupKey: 'pool_250k_pool_annual' },
-      },
-      includedTrackerSeats: 1,
-      band: 'larger_pool',
-    },
     // The larger pools above Host (MOTIR-9366), the rung table on sale: MOTIR-8987's
     // rule with its anchor moved from Max ×2 to Host. Monthly is Host's $1,500 plus
     // $4.50 per 1,000 credits above 300,000 (10% off the top-up); annual is Host's
@@ -430,9 +351,8 @@ export function hostMonthlyPlanCredits(): number {
 /**
  * The larger-pool rung table on sale (MOTIR-9366): every `larger_pool` entry with a
  * monthly allotment strictly above `hostMonthlyPlanCredits()`, ascending by pool. The
- * floor is what retires the rungs at or below Host: their entries stay in the catalog
- * for a holder, and this list — the source of both allow-lists — leaves them out. A
- * FRESH array per call; it mutates nothing. A hoisted declaration on purpose — the
+ * floor keeps a rung at or below Host off this list — the source of both allow-lists
+ * — should one ever be added back to the catalog. A FRESH array per call; it mutates nothing. A hoisted declaration on purpose — the
  * allow-lists below call it while the module initialises.
  */
 export function largerPoolPlans(): AiPlanCatalogEntry[] {

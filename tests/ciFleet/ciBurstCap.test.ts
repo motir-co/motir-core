@@ -184,7 +184,7 @@ describe('each plan’s CI burst cap, over CI runners alone', () => {
     ['max', 25],
     ['max_x2', 25],
     ['host', 50],
-    ['pool_100k', 50],
+    ['pool_600k', 20],
   ] as const)('%s admits %i and defers the next plan_cap', async (planKey, figure) => {
     stubPaidAiPlan(planKey);
     const fx = await seedTenant();

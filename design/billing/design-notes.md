@@ -2108,6 +2108,9 @@ component is added. The mono lines are board chrome, not product copy.
    rung entitlement lines, because a retired rung brings no accounts of its own. Its unfolded
    regular plans show Upgrade to Host on Host. No retired rung (Pool 80,000 … Pool 250,000) is
    offered as a choice anywhere.
+   **Dated note (2026-10-26, owner):** void. The six first rungs are removed from the catalog
+   outright, not kept for a holder (no org held one), so no org can be on one and this card is
+   never rendered. Panel 11 stays in the mock as a record only.
 9. **Roles, `zh` and narrow (panels 6, 12, 13).** A member without `manageBilling` sees the offer's
    control disabled with the shipped `plans.upgrade.disabledReason`. The `zh` panel renders the Pool
    900,000 offer card with the entitlement lines, the Max ×2 with top-ups answer and the re-worded callout. At 375px the

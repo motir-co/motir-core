@@ -7,12 +7,7 @@ import type { RawSubscriptionResponse } from '@/lib/ai/types';
 import { MOTIR_SYSTEM_USER_EMAIL } from '@/lib/ai/systemPrincipal';
 import { largerPoolPlans } from '@/lib/billing/catalog';
 import { planCarriesOwnAccounts } from '@/lib/billing/ownAccountPlans';
-import {
-  capsForPlanKey,
-  HOST_PLAN_KEY,
-  OWN_ACCOUNT_FLOOR_CAPS,
-  RETIRED_POOL_CAPS,
-} from '@/lib/billing/planCaps';
+import { capsForPlanKey, HOST_PLAN_KEY, LARGER_POOL_FLOOR_CAPS } from '@/lib/billing/planCaps';
 import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
 import { wireFleetKindSwitch } from '@/lib/ciFleet/shardTargets';
 import { AWS_MEMBER_EMAIL_TEMPLATE_ENV } from '@/lib/fleetShards/awsMemberAccountPlan';
@@ -37,10 +32,10 @@ import {
 // A RUNG ORG ON ITS OWN ACCOUNTS (MOTIR-9653, story MOTIR-9366). A larger pool
 // plan on sale carries the three AWS accounts Host does, and from the moment
 // one is live it is admitted, capped and let go exactly as a Host org: the
-// shared floor at Max's agent figures with CI 50 until a kind's account is
+// shared floor of 5 runs, agents 10 / 50 and CI 20 until a kind's account is
 // live, then only that account, runs and CI at the granted vCPU ÷ 2, agents
-// 10 / 50 and the merged account's 10 kept index spots. A retired rung carries
-// no accounts and keeps its figures on the shared pools.
+// 10 / 50 and the merged account's 10 kept index spots. A removed rung's key
+// carries no accounts and no caps row: the plan is unknown.
 //
 // The world is the Host recipe's (`hostOwnAccountsRecipe.test.ts`): all four
 // fleet kinds on AWS, a shared account per kind, the add-shard's fake AWS, and
@@ -514,11 +509,11 @@ describe('a pool_600k org on its own accounts', () => {
     );
   });
 
-  it('on the floor: capped at 5 / 10 / 50 / 50 under its own key, the sixth run waits on the plan, CI held to 50 on shared', async () => {
+  it('on the floor: capped at 5 / 10 / 50 / 20 under its own key, the sixth run waits on the plan, CI held to 20 on shared', async () => {
     expect(await answerOf(rung.organizationId)).toMatchObject({
       kind: 'capped',
       planKey: RUNG,
-      caps: OWN_ACCOUNT_FLOOR_CAPS,
+      caps: LARGER_POOL_FLOOR_CAPS,
     });
 
     const runs = [];
@@ -528,13 +523,13 @@ describe('a pool_600k org on its own accounts', () => {
     expect((runs[5]!.landed as { detail: string }).detail).toContain('runs 5');
 
     const jobs = [];
-    for (let i = 0; i < 51; i++) jobs.push(await ciJob(rung));
+    for (let i = 0; i < 21; i++) jobs.push(await ciJob(rung));
     expect(
       jobs
-        .slice(0, 50)
+        .slice(0, 20)
         .every((j) => 'shardId' in j.landed && j.landed.shardId === shared.ci_runner!.id),
     ).toBe(true);
-    expect(jobs[50]!.landed).toMatchObject({ deferred: 'plan_cap' });
+    expect(jobs[20]!.landed).toMatchObject({ deferred: 'plan_cap' });
 
     await finishHosted(runs.map((r) => r.ref));
     await finishCi(jobs.map((j) => j.intentId));
@@ -546,7 +541,7 @@ describe('a pool_600k org on its own accounts', () => {
     const runner = await row(rung.organizationId, 'hosted_agent');
     expect(runner.liveAt).not.toBeNull();
     const caps64 = await caps(rung.organizationId);
-    expect(caps64).toEqual({ ...OWN_ACCOUNT_FLOOR_CAPS, agentRunsInParallel: 32 });
+    expect(caps64).toEqual({ ...LARGER_POOL_FLOOR_CAPS, agentRunsInParallel: 32 });
 
     const runs = [];
     for (let i = 0; i < 33; i++) runs.push(await hostedRun(rung));
@@ -575,11 +570,11 @@ describe('a pool_600k org on its own accounts', () => {
     expect((await caps(rung.organizationId)).agentRunsInParallel).toBe(64);
   });
 
-  it('CI stays shared at 50 while only the agent runner is live; granted at 400 it reads 200 and goes only to its own account', async () => {
+  it('CI stays shared at 20 while only the agent runner is live; granted at 400 it reads 200 and goes only to its own account', async () => {
     setNow(new Date(now.getTime() + 5 * MINUTE));
     const pending = await ciJob(rung);
     expect(pending.landed).toEqual(on(shared.ci_runner!));
-    expect((await caps(rung.organizationId)).ciBurstCap).toBe(50);
+    expect((await caps(rung.organizationId)).ciBurstCap).toBe(20);
 
     await answer(rung.organizationId, 'ci_runner', 'APPROVED', 400);
     await statePass();
@@ -703,7 +698,7 @@ describe('a pool_2400k org', () => {
     await statePass();
     const read = await caps(top.organizationId);
     expect(read).toEqual({
-      ...OWN_ACCOUNT_FLOOR_CAPS,
+      ...LARGER_POOL_FLOOR_CAPS,
       agentRunsInParallel: 128,
       ciBurstCap: 800,
     });
@@ -714,23 +709,18 @@ describe('a pool_2400k org', () => {
   });
 });
 
-describe('a retired rung', () => {
-  it('pool_250k carries no accounts: none created, its figures on the shared pools for good', async () => {
-    const retired = await seedTenant();
+describe('a removed rung', () => {
+  it('pool_250k carries no accounts and no caps row: none created, the plan unknown', async () => {
+    const removed = await seedTenant();
     const createsBefore = creates().length;
-    await setPlan(retired.organizationId, 'pool_250k');
+    await setPlan(removed.organizationId, 'pool_250k');
     await reconcile();
     await statePass();
     expect(creates()).toHaveLength(createsBefore);
-    expect(await ownRows(retired.organizationId)).toEqual([]);
-    expect(await answerOf(retired.organizationId)).toMatchObject({
-      kind: 'capped',
+    expect(await ownRows(removed.organizationId)).toEqual([]);
+    expect(await answerOf(removed.organizationId)).toEqual({
+      kind: 'plan_unknown',
       planKey: 'pool_250k',
-      caps: RETIRED_POOL_CAPS,
     });
-    const run = await hostedRun(retired);
-    expect(run.landed).toEqual(on(shared.hosted_agent!));
-    await finishHosted([run.ref]);
-    expect((await ciJob(retired)).landed).toEqual(on(shared.ci_runner!));
   });
 });

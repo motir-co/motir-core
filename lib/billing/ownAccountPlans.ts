@@ -2,12 +2,11 @@ import { BILLING_CATALOG, largerPoolPlans } from '@/lib/billing/catalog';
 
 // WHICH PLANS CARRY AWS ACCOUNTS OF THE ORG'S OWN (Story MOTIR-9366 · MOTIR-9651).
 // Host (MOTIR-9365) and every larger pool ON SALE bring the same three own
-// accounts; the ladder, Free and the retired rungs at or below Host do not. This
-// is the ONE definition — the account reconcile selects with it, and admission
-// and the caps read it — so selection and admission can never disagree about
-// which orgs have accounts. Every key and pool is read from the catalog: Host's
-// entry and `largerPoolPlans()`, whose floor is what retires a rung. Pure: no
-// `db`, no `process.env`.
+// accounts; the ladder and Free do not. This is the ONE definition — the account
+// reconcile selects with it, and admission and the caps read it — so selection and
+// admission can never disagree about which orgs have accounts. Every key and pool
+// is read from the catalog: Host's entry and `largerPoolPlans()`, floored at Host's
+// pool. Pure: no `db`, no `process.env`.
 
 /**
  * The Host plan's key. Declared here, beside the predicate that reads it, so

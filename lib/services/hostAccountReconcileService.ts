@@ -29,9 +29,8 @@ import { withSystemContext } from '@/lib/workspaces/context';
 // plan carries its own accounts (`host` or a larger pool on sale,
 // `planCarriesOwnAccounts`), make sure its three AWS accounts exist
 // (`lib/ciFleet/hostAccounts.ts`), each created by the unattended add-shard with
-// its quota raise filed at creation, sized to the plan's pool. A retired rung is
-// not selected. A change between Host and a rung keeps the same accounts (their
-// names carry no plan); only the raise target moves, and the walk files the new
+// its quota raise filed at creation, sized to the plan's pool. A change between
+// Host and a rung keeps the same accounts (their names carry no plan); only the raise target moves, and the walk files the new
 // one once no request of another value is open.
 //
 // A RECONCILE, NOT A PURCHASE EVENT: a replayed paid invoice selects the same org

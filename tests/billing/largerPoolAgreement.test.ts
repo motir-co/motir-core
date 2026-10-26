@@ -30,9 +30,10 @@ import { adminDb } from '../helpers/adminDb';
 // by the rule the approved record MOTIR-8987 fixes with its anchor moved to Host
 // (MOTIR-9366): monthly is Host's monthly price plus every credit above its pool at
 // the top-up rate less the discount; annual is Host's own annual per-credit rate. No
-// band figure is typed. The six rungs at or below Host are RETIRED: still in the
-// catalogue for an org that holds one, off every sale-time list. The motir-ai client is the one external leaf, so it is mocked; the org is
-// seeded through the real services against the real Postgres.
+// band figure is typed. The six first rungs, at or below Host, are removed from the
+// catalogue outright; a stale key for one is refused at Checkout. The motir-ai client
+// is the one external leaf, so it is mocked; the org is seeded through the real
+// services against the real Postgres.
 
 const createCheckoutSessionMock = vi.fn<(i: unknown) => Promise<CheckoutSessionOutcome>>();
 vi.mock('@/lib/ai/motirAiClient', () => ({
@@ -61,9 +62,9 @@ const LADDER = BILLING_CATALOG.aiPlans
 const TOP = LADDER[LADDER.length - 1]!;
 const HOST = BILLING_CATALOG.aiPlans.find((p) => p.band === 'host')!;
 const BAND = largerPoolPlans();
-const RETIRED = BILLING_CATALOG.aiPlans.filter(
-  (p) => p.band === 'larger_pool' && poolOf(p) <= poolOf(HOST),
-);
+/** The six first rungs, removed from the catalogue (owner, 2026-10-26). */
+const REMOVED_KEYS = ['pool_80k', 'pool_100k', 'pool_120k', 'pool_150k', 'pool_200k', 'pool_250k'];
+const REMOVED_PRICE_KEYS = REMOVED_KEYS.flatMap((k) => CADENCES.map((c) => `${k}_pool_${c}`));
 const TOPUP = BILLING_CATALOG.creditTopup;
 
 /** What the rule says a rung of `pool` credits costs, in cents, anchored on `anchor`. */
@@ -76,9 +77,6 @@ function ruleCents(pool: number, cadence: Cadence, anchor: AiPlanCatalogEntry = 
     priceCents(anchor, 'monthly') + (pool - poolOf(anchor)) * topupRate * LARGER_POOL_DISCOUNT,
   );
 }
-
-const rungKeys = (plans: AiPlanCatalogEntry[]) =>
-  plans.flatMap((p) => CADENCES.map((c) => p.prices![c].priceLookupKey));
 
 const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
 
@@ -314,42 +312,31 @@ describe('the band moved nothing below it', () => {
   });
 });
 
-describe('the retired rungs: off sale, still resolvable for a holder', () => {
-  it('the six rungs at or below Host are still in the catalogue, priced on the old Max ×2 rule', () => {
-    expect(RETIRED.map((p) => p.key)).toEqual([
-      'pool_80k',
-      'pool_100k',
-      'pool_120k',
-      'pool_150k',
-      'pool_200k',
-      'pool_250k',
-    ]);
-    for (const rung of RETIRED) {
-      expect(poolOf(rung), rung.key).toBeGreaterThan(maxMonthlyPlanCredits());
-      expect(largerPoolCreditsForPrice(rung.prices!.monthly.priceLookupKey)).toBe(poolOf(rung));
-      for (const cadence of CADENCES) {
-        expect(rung.prices![cadence].priceLookupKey).toBe(`${rung.key}_pool_${cadence}`);
-        expect(priceCents(rung, cadence), `${rung.key} ${cadence}`).toBe(
-          ruleCents(poolOf(rung), cadence, TOP),
-        );
-      }
+describe('the removed first rungs: gone from the catalogue, refused at Checkout', () => {
+  it('none of the six is in the catalogue, has a caps row or carries accounts', () => {
+    const keys = BILLING_CATALOG.aiPlans.map((p) => p.key as string);
+    for (const key of REMOVED_KEYS) {
+      expect(keys, key).not.toContain(key);
+      expect(capsForPlanKey(key), key).toBeNull();
+      expect(isPlanChangeKey(key), key).toBe(false);
     }
+    expect(
+      BILLING_CATALOG.aiPlans.filter((p) => p.band === 'larger_pool' && poolOf(p) <= poolOf(HOST)),
+    ).toEqual([]);
   });
 
   it('none of their twelve keys is on either allow-list', () => {
-    const keys = rungKeys(RETIRED);
-    expect(keys).toHaveLength(12);
-    for (const key of keys) {
+    expect(REMOVED_PRICE_KEYS).toHaveLength(12);
+    for (const key of REMOVED_PRICE_KEYS) {
       expect(CHECKOUT_PRICE_LOOKUP_KEYS.has(key), key).toBe(false);
       expect(isKnownCheckoutPrice(key), key).toBe(false);
       expect(isLargerPoolPlanKey(key), key).toBe(false);
     }
-    for (const rung of RETIRED) expect(isPlanChangeKey(rung.key), rung.key).toBe(false);
   });
 
-  it('Checkout refuses every retired key with the at-or-below error, floored at Host', async () => {
+  it('Checkout refuses every stale key with the at-or-below error, floored at Host', async () => {
     const actor = await makeOwnerOrg();
-    for (const key of rungKeys(RETIRED)) {
+    for (const key of REMOVED_PRICE_KEYS) {
       const refusal = billingService.startCheckout({ ...actor, priceLookupKey: key });
       await expect(refusal, key).rejects.toBeInstanceOf(LargerPoolAtOrBelowCeilingError);
       await expect(refusal, key).rejects.toMatchObject({
@@ -358,21 +345,4 @@ describe('the retired rungs: off sale, still resolvable for a holder', () => {
     }
     expect(createCheckoutSessionMock).not.toHaveBeenCalled();
   });
-
-  it.each(CADENCES)(
-    'an org that holds one is still billed at its own entry, and capped, on %s',
-    (cadence) => {
-      for (const rung of RETIRED) {
-        const bill = buildOrgBill(statusOn(rung, cadence), 1);
-        expect(bill.money, rung.key).toEqual([
-          {
-            key: 'aiPlan',
-            basis: { credits: poolOf(rung), cadence },
-            amountCents: priceCents(rung, cadence),
-          },
-        ]);
-        expect(capsForPlanKey(rung.key), rung.key).not.toBeNull();
-      }
-    },
-  );
 });

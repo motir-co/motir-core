@@ -2,8 +2,8 @@ import type { PlanCaps } from '@/lib/billing/planCaps';
 
 // AN OWN-ACCOUNTS ORGANISATION'S FIGURES FROM ITS OWN ACCOUNTS (Story MOTIR-9365
 // · MOTIR-9587; every plan that carries them — Host and the larger pools on sale —
-// MOTIR-9366 · MOTIR-9653). The plan's row (`OWN_ACCOUNT_FLOOR_CAPS`) is the
-// SHARED FLOOR. Once the org's own account of
+// MOTIR-9366 · MOTIR-9653). The plan's row (`HOST_FLOOR_CAPS` or
+// `LARGER_POOL_FLOOR_CAPS`) is the SHARED FLOOR. Once the org's own account of
 // a kind is live, that kind's figure is what the account can hold: its granted
 // vCPU ÷ 2 (one fleet machine is 2 vCPU), rounded down —
 //   * the agent-runner account → `agentRunsInParallel`;

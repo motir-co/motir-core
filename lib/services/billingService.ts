@@ -368,8 +368,9 @@ export const billingService = {
     await this.assertBillingManagerForMutation(input);
 
     // A larger pool at or below Host's pool — a size Host or the ladder already
-    // covers, or a retired rung — earns its own refusal (MOTIR-8990, floored at Host
-    // by MOTIR-9366), before the generic unknown-price one would swallow it.
+    // covers, or a stale key for one of the removed first rungs — earns its own
+    // refusal (MOTIR-8990, floored at Host by MOTIR-9366), before the generic
+    // unknown-price one would swallow it.
     const requestedPool = largerPoolCreditsForPrice(input.priceLookupKey);
     const floor = hostMonthlyPlanCredits();
     if (requestedPool !== null && requestedPool <= floor) {
