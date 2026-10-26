@@ -17,6 +17,7 @@ import { withSystemContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomInt, randomToken } from '../helpers/random';
+import { HOST_PLAN_KEY } from '@/lib/billing/planCaps';
 import { grantPaidAiPlan } from '../helpers/paidAiPlan';
 
 // A HOST ORGANISATION'S JOB IS PLACED PER FLEET KIND (Story MOTIR-9365 ·
@@ -191,7 +192,7 @@ const onPool = () => {
   for (const kind of KINDS) wireFleetKindSwitch(kind, async () => true);
 };
 
-grantPaidAiPlan();
+grantPaidAiPlan(HOST_PLAN_KEY);
 
 beforeEach(async () => {
   await truncateAuthTables();

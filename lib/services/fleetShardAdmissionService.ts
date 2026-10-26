@@ -22,7 +22,9 @@ import { isUnlimitedAgentOrg } from '@/lib/agentInstances/config';
 import { agentInstanceRepository } from '@/lib/repositories/agentInstanceRepository';
 import { ciRunnerProvisioningIntentRepository as intents } from '@/lib/repositories/ciRunnerProvisioningIntentRepository';
 import { fleetInFlightSlotRepository as slots } from '@/lib/repositories/fleetInFlightSlotRepository';
+import { HOST_PLAN_KEY } from '@/lib/billing/planCaps';
 import { mergedAccountSplit } from '@/lib/ciFleet/hostMergedAccountSplit';
+import { planCapsService } from '@/lib/services/planCapsService';
 import { fleetQuotaRequestRepository } from '@/lib/repositories/fleetQuotaRequestRepository';
 import { fleetShardRepository } from '@/lib/repositories/fleetShardRepository';
 import { withSystemContext } from '@/lib/workspaces/context';
@@ -173,14 +175,38 @@ export const fleetShardAdmissionService = {
     job: ShardPlacementJob,
     tx: Prisma.TransactionClient,
   ): Promise<FleetShard[]> {
-    // The org's own LIVE account of the kind is the whole set (MOTIR-9586).
+    // The org's own LIVE account of the kind is the whole set (MOTIR-9586) —
+    // while the org is on Host now (MOTIR-9590). Unreadable ⇒ an empty set, so
+    // the job defers rather than landing on either side.
+    const own = await this.ownAccountInTx(job, tx);
+    if (own === 'plan_unknown') return [];
+    if (own) return [own];
+    return this.sharedSetInTx(job, tx);
+  },
+
+  /**
+   * The org's live own account of the kind, if it may take a NEW job
+   * (MOTIR-9590): only while the org's plan reads Host now. The plan is read
+   * through `planCapsService.capsFor`, which follows a downgrade's effective
+   * date, so an org that left Host gets null (its new jobs take the shared set)
+   * and its accounts take no new job. `plan_unknown` for an org that has one: it
+   * is placed on neither side. Nothing is written, and running jobs and agent
+   * instances keep their recorded account. The plan is read only for an org
+   * that has a live own account.
+   */
+  async ownAccountInTx(
+    job: ShardPlacementJob,
+    tx: Prisma.TransactionClient,
+  ): Promise<FleetShard | null | 'plan_unknown'> {
     const own = await fleetShardRepository.findLiveOrgOwnedInTx(
       job.organizationId,
       job.fleetKind,
       tx,
     );
-    if (own) return [own];
-    return this.sharedSetInTx(job, tx);
+    if (!own) return null;
+    const answer = await planCapsService.capsFor(job.organizationId);
+    if (answer.kind === 'plan_unknown') return 'plan_unknown';
+    return answer.kind === 'capped' && answer.planKey === HOST_PLAN_KEY ? own : null;
   },
 
   /** The shared accounts a job may use — `primary`, and `spare` for an exempt org. */
@@ -285,20 +311,16 @@ export const fleetShardAdmissionService = {
     tx: Prisma.TransactionClient,
   ): Promise<boolean> {
     if (!(await fleetKindOnPool(job.fleetKind))) return false;
-    return (
-      (await fleetShardRepository.findLiveOrgOwnedInTx(job.organizationId, job.fleetKind, tx)) !==
-      null
-    );
+    const own = await this.ownAccountInTx(job, tx);
+    return own !== null && own !== 'plan_unknown';
   },
 
   /** The `shard_capacity` words for a job no account could take — its own
    *  account's when its org has a live one of the kind (MOTIR-9586). For a boot
    *  whose in-boot move found no account left, outside the admission's lock. */
   async capacityDetail(job: ShardPlacementJob): Promise<string> {
-    const own = await withSystemContext((tx) =>
-      fleetShardRepository.findLiveOrgOwnedInTx(job.organizationId, job.fleetKind, tx),
-    );
-    if (own) return OWN_ACCOUNT_CAPACITY_DETAIL_BY_KIND[job.fleetKind];
+    const own = await withSystemContext((tx) => this.ownAccountInTx(job, tx));
+    if (own && own !== 'plan_unknown') return OWN_ACCOUNT_CAPACITY_DETAIL_BY_KIND[job.fleetKind];
     return SHARD_CAPACITY_DETAIL_BY_KIND[job.fleetKind] ?? SHARD_CAPACITY_DETAIL;
   },
 

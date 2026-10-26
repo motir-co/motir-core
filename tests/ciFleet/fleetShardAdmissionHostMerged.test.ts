@@ -16,6 +16,7 @@ import { withSystemContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomInt, randomToken } from '../helpers/random';
+import { HOST_PLAN_KEY } from '@/lib/billing/planCaps';
 import { grantPaidAiPlan } from '../helpers/paidAiPlan';
 
 // THE MERGED INDEXER + AGENT HOSTER ACCOUNT SHARES ONE QUOTA (Story MOTIR-9365 ·
@@ -182,7 +183,7 @@ const ownFull = (kind: FleetWorkloadKind) => ({
   own: true,
 });
 
-grantPaidAiPlan();
+grantPaidAiPlan(HOST_PLAN_KEY);
 
 beforeEach(async () => {
   await truncateAuthTables();

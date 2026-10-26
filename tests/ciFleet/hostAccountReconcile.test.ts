@@ -414,6 +414,31 @@ describe('which organisations get accounts', () => {
     const after = await ownedRows(org.id);
     expect(after).toEqual(before.filter((r) => r.fleetKind !== 'agent_instance'));
   });
+
+  it('an org that leaves Host and buys it again reuses its accounts and creates none (MOTIR-9590)', async () => {
+    const org = await seedOrg();
+    plans.set(org.id, host());
+    await hostAccountReconcileService.runReconcile(deps());
+    const before = await ownedRows(org.id);
+    const requests = await ownedRequests(org.id);
+
+    plans.delete(org.id);
+    await hostAccountReconcileService.runReconcile(deps());
+    expect(await ownedRows(org.id)).toEqual(before);
+    expect(await ownedRequests(org.id)).toEqual(requests);
+
+    plans.set(org.id, host());
+    const back = await hostAccountReconcileService.runReconcile(deps());
+    expect(back.organizations[0]!.slots).toEqual({
+      ci_runner: 'already',
+      agent_runner: 'already',
+      merged: 'already',
+    });
+    expect(creates()).toHaveLength(3);
+    expect(organization.accounts.size).toBe(3);
+    expect((await ownedRows(org.id)).map((r) => r.id)).toEqual(before.map((r) => r.id));
+    expect(await ownedRequests(org.id)).toHaveLength(3);
+  });
 });
 
 describe('a refused CreateAccount', () => {
