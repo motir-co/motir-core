@@ -41,6 +41,7 @@ import { ciLineFigures, type CiLineVariant } from './ciFigures';
 import { searchLineFigures } from './searchFigures';
 import { agentLineFigures } from './agentFigures';
 import { fmt, fmtDate } from './billingFormat';
+import { RungEntitlements } from './RungEntitlements';
 import { DowngradeDialog, UpgradeDialog, type PlanNames } from './PlanChangeDialog';
 import { CalculatorView } from './CalculatorView';
 
@@ -1608,14 +1609,10 @@ function PlansView({
     (holdsPlan && aiPlans.find((p) => p.key === tier?.key && p.band === 'larger_pool')) || null;
   const [showRegular, setShowRegular] = useState(false);
   const regularId = useId();
-  // The callout names the LADDER's top (Max ×2), never Host: its sentence is about
-  // outgrowing the ladder, and Host is not a rung of it (MOTIR-9403).
-  const topRung = paidPlans
-    .filter((p) => p.band === 'ladder')
-    .reduce<AiPlanCatalogEntry | null>(
-      (top, p) => ((p.allotment?.credits ?? 0) > (top?.allotment?.credits ?? 0) ? p : top),
-      null,
-    );
+  // The callout names HOST, the floor of the larger offer: the Calculator offers a
+  // larger pool only above Host's pool (MOTIR-9654; design/billing § "Amendment
+  // 2026-10-26 — the larger pools above Host", panel 7).
+  const hostPlan = paidPlans.find((p) => p.band === 'host') ?? null;
   const renderCard = (
     plan: AiPlanCatalogEntry,
     previous: AiPlanCatalogEntry | null,
@@ -1783,7 +1780,7 @@ function PlansView({
         </div>
       )}
 
-      <NeedMoreCredits held={heldPool} topRung={topRung} openCalculator={openCalculator} t={t} />
+      <NeedMoreCredits held={heldPool} floorPlan={hostPlan} openCalculator={openCalculator} t={t} />
 
       {change?.kind === 'upgrade' ? (
         <UpgradeDialog
@@ -2074,6 +2071,8 @@ function PlanCard({
           {t('plans.seatIncluded', { count: plan.includedTrackerSeats })}
         </p>
       ) : null}
+      {/* the rung entitlement lines — an on-sale larger pool only (MOTIR-9654) */}
+      {pool ? <RungEntitlements plan={plan} testId="plan-rung-entitlements" /> : null}
       {/* cumulative feature list */}
       <ul className="flex flex-col gap-1.5 font-sans text-xs text-(--el-text-secondary)">
         {hasPrev ? (
@@ -2100,12 +2099,13 @@ function PlanCard({
 // holder reads it worded for the pool they hold.
 function NeedMoreCredits({
   held,
-  topRung,
+  floorPlan,
   openCalculator,
   t,
 }: {
   held: AiPlanCatalogEntry | null;
-  topRung: AiPlanCatalogEntry | null;
+  /** The plan the larger offer starts above — Host. */
+  floorPlan: AiPlanCatalogEntry | null;
   openCalculator: () => void;
   t: T;
 }) {
@@ -2121,8 +2121,8 @@ function NeedMoreCredits({
             {held
               ? t('plans.needMore.bodyHeld', { credits: fmt(held.allotment?.credits ?? 0, locale) })
               : t('plans.needMore.body', {
-                  plan: topRung?.name ?? '',
-                  credits: fmt(topRung?.allotment?.credits ?? 0, locale),
+                  plan: floorPlan?.name ?? '',
+                  credits: fmt(floorPlan?.allotment?.credits ?? 0, locale),
                 })}
           </p>
         </div>

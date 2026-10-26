@@ -488,16 +488,18 @@ test.describe('The Calculator on Billing & plans', () => {
             }),
           );
         await ask(page);
-        await expect(
-          live(page).getByText(
-            t('calculator.result.aboveTopRung', {
-              ceiling: maxMonthlyPlanCredits().toLocaleString('en-US'),
-            }),
-          ),
-        ).toBeVisible();
+        // MOTIR-9654: the regular plan with top-ups — its own pool, and the top-up box.
+        await expect(live(page).getByTestId('calculator-regular-topups')).toHaveText(
+          t('calculator.result.regularWithTopUps', {
+            plan: TOP.name,
+            credits: (TOP.allotment?.credits ?? 0).toLocaleString('en-US'),
+          }),
+        );
         await expect(page.getByTestId('calculator-larger')).toHaveCount(0);
         await expect(live(page).getByTestId('calculator-plan')).toContainText(TOP.name);
-        await expect(live(page).getByTestId('calculator-topup')).toBeVisible();
+        await expect(live(page).getByTestId('calculator-above-topup')).toContainText(
+          (maxMonthlyPlanCredits() * 2 - (TOP.allotment?.credits ?? 0)).toLocaleString('en-US'),
+        );
       },
     );
     await beat();

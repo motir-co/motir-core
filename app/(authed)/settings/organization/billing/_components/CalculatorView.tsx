@@ -27,6 +27,7 @@ import {
 } from '@/lib/billing/calculatorClient';
 import { largerPoolRefusalFor, type LargerPoolRefusal } from '@/lib/billing/largerPoolRefusal';
 import { UpgradeDialog, type PlanNames } from './PlanChangeDialog';
+import { RungEntitlements, isOnSaleRung } from './RungEntitlements';
 import { fmt } from './billingFormat';
 
 // The Calculator view on Billing & plans (Story MOTIR-8381 · MOTIR-8639 · MOTIR-9224 ·
@@ -41,7 +42,10 @@ import { fmt } from './billingFormat';
 //
 // The answer sells the larger pool itself (design/billing § "Amendment 2026-10-21 — the
 // larger credit pool plan", approved 2026-10-22): Choose starts Checkout here, and an
-// org on a smaller live plan gets the shipped change-of-plan dialog instead.
+// org on a smaller live plan gets the shipped change-of-plan dialog instead. The larger
+// offer starts above HOST's pool (§ "Amendment 2026-10-26 — the larger pools above
+// Host"): below it the engine answers the regular plan with top-ups, and only a rung the
+// catalog sells is ever offered.
 //
 // ⚠️ The recommendation ARM is read, never derived. `ceiling.outcome` is the engine's
 // own statement of which situation the high end is in, so nothing below compares a
@@ -629,7 +633,7 @@ function Estimate({
   const t = useTranslations('billing');
   const { cadence, locale, goToPlan } = view;
   const arm = armOf(answer);
-  const { recommendation, topUp, ceiling, split } = answer;
+  const { recommendation, topUp, split } = answer;
   const { aiPlans, seatPlan } = data.catalog;
 
   // Every plan figure is the CATALOG's: `recommendation.monthlyPriceUsd` is the monthly
@@ -660,7 +664,9 @@ function Estimate({
   const shares = [...new Set(split.categories.map((c) => percent.format(c.weight)))];
   const names = split.categories.map((c) => categoryLabel(c.key));
   const pool = arm === 'larger' || arm === 'largest';
-  const offer = pool && entry?.prices ? entry : null;
+  // Only a rung on sale is offered: a pool key the catalog does not sell (unlisted, or
+  // no longer on sale) gets no offer card and no buy control.
+  const offer = pool && entry?.prices && isOnSaleRung(entry) ? entry : null;
   // A pool key this catalog cannot sell is shown as the answer names it, with no buy.
   const named = arm === 'regular' || arm === 'above' || (pool && !offer);
   const hasTopUp = topUp.high.credits > 0;
@@ -731,27 +737,42 @@ function Estimate({
             {t('calculator.result.planLabel')}
           </span>
           <span className="font-sans text-lg font-semibold text-(--el-text)">{planName}</span>
+          {/* The regular plan with top-ups (design panel 1): the plan and its pool are the
+              catalog entry's, and no Host or rung is named here. */}
+          {arm === 'above' ? (
+            <p
+              className="font-sans text-sm text-(--el-text)"
+              data-testid="calculator-regular-topups"
+            >
+              {t('calculator.result.regularWithTopUps', {
+                plan: planName ?? '',
+                credits: fmt(entryPool ?? 0, locale),
+              })}
+            </p>
+          ) : null}
           <PlanPrice
             cadence={cadence}
             locale={locale}
             amountUsd={entry?.prices?.[cadence].amountUsd ?? recommendation.monthlyPriceUsd}
             fromCatalog={entry?.prices != null}
           />
+          {arm === 'above' && topUp.high.units > 0 ? (
+            <TopUpBox
+              testId="calculator-above-topup"
+              excess={Math.max(0, answer.credits.high - (entryPool ?? 0))}
+              topUp={topUp.high}
+              locale={locale}
+            />
+          ) : null}
           <p className="font-sans text-xs text-(--el-text-secondary)">
             {t('calculator.result.perOrg')}
           </p>
         </div>
       ) : null}
 
-      {arm === 'above' ? (
-        <Note>
-          {t('calculator.result.aboveTopRung', { ceiling: fmt(ceiling.credits ?? 0, locale) })}
-        </Note>
-      ) : null}
-
       {arm === 'topup_only' ? <Note>{t('calculator.result.topupOnly')}</Note> : null}
 
-      {!offer && hasTopUp ? (
+      {!offer && arm !== 'above' && hasTopUp ? (
         <div className="flex flex-col gap-0.5" data-testid="calculator-topup">
           <span className="font-sans text-xs font-medium text-(--el-text-secondary)">
             {t('calculator.result.topupLabel')}
@@ -844,7 +865,6 @@ function PoolOffer({
   // An org whose live plan already holds at least this pool is not sold it again.
   const covered = holdsPlan && !isCurrent && currentPool !== null && currentPool >= pool;
   const planNames: PlanNames = Object.fromEntries(data.catalog.aiPlans.map((p) => [p.key, p.name]));
-  const unitCredits = topUp.units > 0 ? topUp.credits / topUp.units : 0;
 
   const buy = () => {
     setRefusal(null);
@@ -890,20 +910,12 @@ function PoolOffer({
           {t('plans.creditsAllotment', { n: fmt(poolCredits || pool, locale) })}
         </p>
         {largest && topUp.units > 0 ? (
-          <p
-            data-testid="calculator-largest-topup"
-            className="flex items-start gap-1.5 rounded-(--radius-control) border border-(--el-border-soft) bg-(--el-surface-soft) px-(--spacing-control-x-12) py-(--spacing-control-y-8) font-sans text-sm text-(--el-text)"
-          >
-            <Coins className="mt-0.5 h-4 w-4 shrink-0 text-(--el-accent-on-surface)" aria-hidden />
-            <span>
-              {t('calculator.result.largestPoolTopUp', {
-                excess: fmt(excess, locale),
-                units: fmt(topUp.units, locale),
-                unitCredits: fmt(unitCredits, locale),
-                price: fmt(topUp.priceUsd, locale),
-              })}
-            </span>
-          </p>
+          <TopUpBox
+            testId="calculator-largest-topup"
+            excess={excess}
+            topUp={topUp}
+            locale={locale}
+          />
         ) : null}
         <p className="font-sans text-xs text-(--el-text-secondary)">
           {t('calculator.result.largerPlanEstimate')}
@@ -912,6 +924,7 @@ function PoolOffer({
           <Users className="h-3.5 w-3.5 shrink-0 text-(--el-accent-on-surface)" aria-hidden />
           {t('calculator.result.perOrg')}
         </p>
+        <RungEntitlements plan={plan} testId="calculator-rung-entitlements" />
         {!canManage ? (
           <p id={reasonId} className="font-sans text-xs text-(--el-text-secondary)">
             {t('plans.upgrade.disabledReason')}
@@ -950,6 +963,39 @@ function PoolOffer({
         />
       ) : null}
     </div>
+  );
+}
+
+// The top-up box (design panels 1 and 5): the credits a month past the plan's pool, and
+// the top-ups the answer prices for them. Every figure is the answer's or the entry's.
+function TopUpBox({
+  testId,
+  excess,
+  topUp,
+  locale,
+}: {
+  testId: string;
+  excess: number;
+  topUp: CalculatorEstimateDTO['topUp']['high'];
+  locale: string;
+}) {
+  const t = useTranslations('billing');
+  const unitCredits = topUp.units > 0 ? topUp.credits / topUp.units : 0;
+  return (
+    <p
+      data-testid={testId}
+      className="flex items-start gap-1.5 rounded-(--radius-control) border border-(--el-border-soft) bg-(--el-surface-soft) px-(--spacing-control-x-12) py-(--spacing-control-y-8) font-sans text-sm text-(--el-text)"
+    >
+      <Coins className="mt-0.5 h-4 w-4 shrink-0 text-(--el-accent-on-surface)" aria-hidden />
+      <span>
+        {t('calculator.result.largestPoolTopUp', {
+          excess: fmt(excess, locale),
+          units: fmt(topUp.units, locale),
+          unitCredits: fmt(unitCredits, locale),
+          price: fmt(topUp.priceUsd, locale),
+        })}
+      </span>
+    </p>
   );
 }
 
