@@ -81,6 +81,8 @@ export interface FleetPoolSpareDTO {
   name: string;
   state: string;
   vcpuQuota: number | null;
+  /** When the granted value was last read from the provider (MOTIR-9562). */
+  grantedReadAt: string | null;
 }
 
 export interface FleetPoolRequestDTO {

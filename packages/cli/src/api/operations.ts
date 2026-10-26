@@ -560,7 +560,7 @@ export const V1_OPERATIONS = {
     path: "/api/v1/projects/{projectKey}/pages/search",
     permission: "page:view",
     successStatus: 200,
-    responseComponent: undefined,
+    responseComponent: "PageSearchResult",
   },
   "startSprint": {
     method: "POST",

@@ -472,15 +472,33 @@ export interface PageSearchHitDto {
   place: PageMentionCandidateDto['place'];
   /** A short excerpt of the searchable body around the match; `''` for an empty body. */
   snippet: string;
-  /** `ts_rank`; higher is a better match. Comparable only within one search. */
+  /**
+   * The fused score (reciprocal-rank fusion of the full-text and by-meaning
+   * rankings, MOTIR-9572); higher is a better match. Comparable only within one
+   * search.
+   */
   rank: number;
 }
 
-/** One page of a full-text page search. */
+/**
+ * How a page search ranked (MOTIR-9572). `merged`: words and meaning, fused.
+ * `full-text-only`: the embedding backend did not answer, so semantic search did
+ * not run. `not-indexed`: it answered, but no page of the project is indexed yet.
+ */
+export type PageSearchMode = 'merged' | 'full-text-only' | 'not-indexed';
+
+/** One page of a page search. */
 export interface PageSearchResultDto {
   items: PageSearchHitDto[];
   /** Opaque; non-null exactly when a further hit exists. */
   nextCursor: string | null;
+  mode: PageSearchMode;
+  /**
+   * Why semantic search did not contribute, for `full-text-only` and
+   * `not-indexed` — never evidence that nothing similar exists; `null` when
+   * `merged`.
+   */
+  message: string | null;
 }
 
 /**

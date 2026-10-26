@@ -21,8 +21,11 @@ import { requirePlatformStaffPage } from '@/lib/platform/pageGate';
 import { platformHealthService } from '@/lib/services/platformHealthService';
 import { platformFleetMonitorService } from '@/lib/services/platformFleetMonitorService';
 import { platformIndexAllowanceService } from '@/lib/services/platformIndexAllowanceService';
+import { platformFleetPoolsService } from '@/lib/services/platformFleetPoolsService';
+import { PLATFORM_POOL_KIND_ORDER } from '@/lib/dto/platformFleetPools';
 import { FleetSection, type FleetRead } from './_components/FleetSection';
 import { IndexAllowanceSection } from './_components/IndexAllowanceSection';
+import { PoolsSection, poolEventsParam, poolRequestsParam } from './_components/PoolsSection';
 
 /**
  * The system-health board — design `platform-admin/design-notes.md` **Panel 8**
@@ -98,6 +101,8 @@ export default async function AdminMonitoringPage({
     page?: string;
     fleetPage?: string;
     killsPage?: string;
+    // The Pools section's pagers: one request list and one event list per kind.
+    [poolsPage: string]: string | undefined;
   }>;
 }) {
   const principal = await requirePlatformStaffPage('support');
@@ -105,7 +110,7 @@ export default async function AdminMonitoringPage({
   const format = await getFormatter();
   const params = await searchParams;
   const now = new Date();
-  const [health, indexAllowance, fleetOrgs, fleetKills] = await Promise.all([
+  const [health, indexAllowance, fleetOrgs, fleetKills, pools] = await Promise.all([
     platformHealthService.read(principal),
     // Monitoring · Index allowance (MOTIR-4595, design Panel 13) — internal
     // accounting only; Motir does not charge for code indexing.
@@ -132,7 +137,28 @@ export default async function AdminMonitoringPage({
         now,
       ),
     ),
+    // Monitoring · Pools (MOTIR-9563, design MOTIR-9561) — settled on its own like
+    // the Fleet reads, so a throw renders one error inside the Pools section.
+    settleFleetRead('pools', platformFleetPoolsService.listPools(principal, now)),
   ]);
+
+  // Every list's page, carried through every pager link so paging one never resets
+  // another. The Pools pagers are validated like the Fleet ones.
+  const poolsPages: Record<string, string | undefined> = {};
+  for (const kind of PLATFORM_POOL_KIND_ORDER) {
+    for (const key of [poolRequestsParam(kind), poolEventsParam(kind)]) {
+      const page = pageParam(params[key]);
+      poolsPages[key] = page === undefined ? undefined : String(page);
+    }
+  }
+  const listQuery = {
+    reason: params.reason,
+    q: params.q,
+    page: params.page,
+    fleetPage: params.fleetPage,
+    killsPage: params.killsPage,
+    ...poolsPages,
+  };
 
   return (
     <div className="mx-auto flex max-w-[72rem] flex-col gap-4 px-6 py-6">
@@ -233,18 +259,9 @@ export default async function AdminMonitoringPage({
 
       <IndexAllowanceSection data={indexAllowance} />
 
-      <FleetSection
-        orgs={fleetOrgs}
-        kills={fleetKills}
-        now={now}
-        query={{
-          reason: params.reason,
-          q: params.q,
-          page: params.page,
-          fleetPage: params.fleetPage,
-          killsPage: params.killsPage,
-        }}
-      />
+      <FleetSection orgs={fleetOrgs} kills={fleetKills} now={now} query={listQuery} />
+
+      <PoolsSection read={pools} query={listQuery} now={now} />
     </div>
   );
 }

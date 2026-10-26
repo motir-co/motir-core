@@ -291,6 +291,11 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ coordinationRowsDeleted: number; due: number; failed: number; localRootsRemoved: number; offboarded: number; remaining: number; snapshotObjectsDeleted: number }',
   },
+  'embed-page': {
+    file: 'lib/jobs/definitions/pageEmbedding.ts',
+    shape:
+      '{ embedded: false; reason: "ai-not-configured" | "not-found" | "removed" | "unchanged" } | { embedded: true; model: string }',
+  },
   'embed-work-item': {
     file: 'lib/jobs/definitions/workItemEmbedding.ts',
     shape:

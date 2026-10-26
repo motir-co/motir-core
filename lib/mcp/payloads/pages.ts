@@ -1,7 +1,7 @@
 import { z } from 'zod/v4';
 import {
   pagePlacementResultSchema,
-  pageSearchHitSchema,
+  pageSearchResultSchema,
   type V1PagePlacement,
   type V1PageSearchResult,
 } from '@/lib/api/v1/pages/schema';
@@ -12,18 +12,22 @@ import { definePayload } from './define';
 // returns the same page of hits the REST route does — so each hit PROBES that
 // resource: the drift guard compares the MCP hit with the v1 one directly, and a
 // field added on one surface and forgotten on the other fails the build. The
-// `{ items, nextCursor }` envelope stays the plain cursor envelope both doors use.
+// envelope IS v1's `pageSearchResultSchema` (MOTIR-9575) — `items`, `nextCursor`,
+// and the `mode` / `message` that say whether meaning took part — reused, not
+// redeclared, so the two doors cannot disagree about it.
 //
 // The other page tools stay EXEMPT (`exemptions.ts`): they return a superset of
 // v1's `Page`, which a search hit is not.
 
 /** One page of `search_pages` hits — v1's search result, each hit a `PageSearchHit`. */
 export const searchPagesPayload = definePayload({
-  schema: z.object({
-    items: z.array(pageSearchHitSchema),
-    nextCursor: z.string().nullable(),
-  }) as unknown as z.ZodType<V1PageSearchResult & Record<string, unknown>>,
-  probes: [{ resource: 'PageSearchHit', select: (p) => p.items }],
+  schema: pageSearchResultSchema as unknown as z.ZodType<
+    V1PageSearchResult & Record<string, unknown>
+  >,
+  probes: [
+    { resource: 'PageSearchHit', select: (p) => p.items },
+    { resource: 'PageSearchResult', select: (p) => [p] },
+  ],
 });
 
 // The `move_page` payload (Story MOTIR-9487 · MOTIR-9556). `PATCH /api/v1/pages/

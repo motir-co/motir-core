@@ -4,7 +4,9 @@ import type { PageSearchSeek } from '@/lib/repositories/pageRepository';
 // The page full-text search's keyset cursor (Story MOTIR-9489 · MOTIR-9551) —
 // the title-search codec (`pageTitleSearchCursor.ts`) applied to this read's
 // seek key. Opaque base64url of `[rank, id]`, the last hit served; anything this
-// module did not issue is the tree level's `PAGE_CURSOR_INVALID`.
+// module did not issue is the tree level's `PAGE_CURSOR_INVALID`. Since
+// MOTIR-9572 the number is the FUSED score (reciprocal-rank fusion of the
+// full-text and by-meaning rankings), not `ts_rank`; the format is unchanged.
 
 export function encodePageSearchCursor(cursor: PageSearchSeek): string {
   return Buffer.from(JSON.stringify([cursor.rank, cursor.id])).toString('base64url');

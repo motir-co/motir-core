@@ -164,6 +164,18 @@ export const E2E_MOCK_SEAMS: readonly MockSeam[] = [
     },
   },
   {
+    // Story MOTIR-9490 · MOTIR-9577 — motir-ai's POST /v1/embeddings, which the
+    // server crosses to embed a page search query and the job WORKER crosses to
+    // embed a page after a save. File-backed control and journal, so it is safe
+    // to mirror into the worker (`tests/e2e/_helpers/job-worker-process.ts`).
+    flag: 'E2E_TEST_EMBEDDINGS',
+    message: 'motir-ai embeddings seam mocked (deterministic topic vectors).',
+    install: async (agent) => {
+      const { installEmbeddingsBoundaryMock } = await import('@/lib/test-embeddings-mock');
+      installEmbeddingsBoundaryMock(agent);
+    },
+  },
+  {
     flag: 'E2E_TEST_LESSONS',
     message: 'motir-ai lesson-library seam mocked.',
     install: async (agent) => {
