@@ -28,8 +28,9 @@
 //     the relay settles through `settleFailedJob` on its terminal frame.
 // That last relay runs only while the overlay subscribes to the job, so each failing plan's overlay
 // stays OPEN from its send to its failure, and the Workbench read is made in a second, unrecorded
-// tab of the same person. A REOPENED overlay polls without subscribing, which is why the reload
-// happens on the plan that ends by its own `final` append rather than by a failure.
+// tab of the same person. A REOPENED overlay polls without subscribing, which is why the reopen
+// (from the Workbench › Planning row, the way a person comes back to a plan being written) happens
+// on the plan that ends by its own `final` append rather than by a failure.
 //
 // DETERMINISM (the coding convention § E2E): every banner assertion follows the `GET
 // /api/plans/[id]` poll response that carries (or stops carrying) the wait, read as the pane reads
@@ -170,7 +171,7 @@ const AUTHOR: Report = { step: 'author' };
 
 // ── Locators ─────────────────────────────────────────────────────────────────
 
-const workspace = (page: Page) => page.getByRole('dialog', { name: /plan|规划/i });
+const workspace = (page: Page) => page.getByRole('dialog', { name: /plan|计划/i });
 const rail = (page: Page) => page.getByRole('complementary', { name: 'Motir AI' });
 const composer = (page: Page) => rail(page).getByRole('textbox');
 const entrance = (page: Page) => page.getByRole('main').getByTestId('work-item-plan-entrance');
@@ -367,10 +368,26 @@ test('a plan waiting on the model provider says so and carries on; refused for g
     );
 
     await chapter('Reopened mid-wait — the banner is there at once', async () => {
+      await page.goto(workbenchTabHref('planning'));
+      await expect(
+        page
+          .getByRole('navigation', { name: en.workbench.tabs.label })
+          .getByTestId('workbench-tab-planning'),
+      ).toHaveAttribute('aria-current', 'page', { timeout: FIRST_PAINT_MS });
+      const row = page
+        .getByRole('table', { name: en.workbench.tabs.planning })
+        .getByRole('row')
+        .filter({ hasText: seed.storyTitle });
+      await expect(row).toHaveCount(1, { timeout: FIRST_PAINT_MS });
       const reread = planPolled(page, first.planId, (b) => waitOf(b) !== null);
-      await page.reload();
-      await reread;
+      await row
+        .getByRole('link', { name: en.workbench.planning.rowAria.split('{sentence}')[0]! })
+        .click();
+      await page.waitForURL(
+        (url) => url.searchParams.has('planSession') || url.searchParams.has('plan'),
+      );
       await expect(workspace(page)).toBeVisible({ timeout: FIRST_PAINT_MS });
+      await reread;
       await expect(retrying(page)).toBeVisible();
       await expect(retrying(page)).toContainText(enLimit.retryingTitle);
       await beat();
