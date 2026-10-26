@@ -41,6 +41,8 @@ const { approvalGatesService } = await import('@/lib/services/approvalGatesServi
 const { approvalGateSettingsService } = await import('@/lib/services/approvalGateSettingsService');
 const { agentReviewStartService } = await import('@/lib/services/agentReviewStartService');
 const { hostedRunService } = await import('@/lib/services/hostedRunService');
+const { agentRunCapacityService } = await import('@/lib/services/agentRunCapacityService');
+const { HostedRunNoCapacityError } = await import('@/lib/hostedRuns/errors');
 const { _resetInstallationTokenCache } = await import('@/lib/github/appAuth');
 const { ReviewAgainForbiddenError, ReviewAgainGateNotFoundError, ReviewAgainNotOfferedError } =
   await import('@/lib/agentReview/errors');
@@ -804,5 +806,48 @@ describe('a superseded review’s run is cancelled (§12.5)', () => {
       new Date(),
     );
     expect(verdict).toMatchObject({ reason: 'gate_revoked' });
+  });
+});
+
+// ── NO AGENT-RUN CAPACITY (Story MOTIR-9541 · MOTIR-9628) ───────────────────
+describe('a review on a model with no agent-run capacity', () => {
+  it('startReview throws HostedRunNoCapacityError on the offered default, before any open', async () => {
+    const { s, item, review } = await reviewing('no-capacity-direct', 121);
+    const verdict = vi
+      .spyOn(agentRunCapacityService, 'verdictFor')
+      .mockResolvedValue({ verdict: 'no_capacity', reason: 'provider_rate_limited' });
+    const input = {
+      workItemId: item.id,
+      gateId: review.id,
+      subjectVersion: review.subjectVersion!,
+      idempotencyKey: `agent-review:${review.id}:raise`,
+    };
+    const ctx = { userId: item.reporterId, workspaceId: s.workspace.id };
+
+    const refused = await hostedRunService.startReview(input, ctx, {}).catch((e: unknown) => e);
+    expect(refused).toBeInstanceOf(HostedRunNoCapacityError);
+    expect(refused).toMatchObject({ model: MODEL, reason: 'provider_rate_limited' });
+    expect(verdict).toHaveBeenCalledWith(expect.objectContaining({ id: MODEL }));
+    expect(await runRows(s.workspace.id)).toEqual([]);
+    expect(mintCalls()).toEqual([]);
+    expect(fakeOrchestrator.provisioned).toEqual([]);
+  });
+
+  it('through the requested job, the gate records hosted_run_no_capacity and stays awaiting', async () => {
+    const { s, review, request } = await reviewing('no-capacity-job', 122);
+    vi.spyOn(agentRunCapacityService, 'verdictFor').mockResolvedValue({
+      verdict: 'no_capacity',
+      reason: 'provider_rate_limited',
+    });
+
+    expect(await agentReviewStartService.startRequested(request)).toEqual({
+      outcome: 'refused',
+      reason: 'hosted_run_no_capacity',
+    });
+    const gate = await gateRow(review.id);
+    expect(gate.state).toBe('awaiting');
+    expect(gate.reviewUnavailableReason).toBe('hosted_run_no_capacity');
+    expect(await runRows(s.workspace.id)).toEqual([]);
+    expect(fakeOrchestrator.provisioned).toEqual([]);
   });
 });

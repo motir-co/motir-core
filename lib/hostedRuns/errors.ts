@@ -9,6 +9,8 @@
 // The codes are the literals `docs/decisions/hosted-agent-run.md` §7 names, so
 // the start path, the route and the design all speak one spelling.
 
+import type { AgentCapacityReason } from './capacityReasons';
+
 /**
  * The chosen model is not on motir-ai's offered list — it was never offered,
  * or it has left the list since the page loaded. The person chooses again.
@@ -189,6 +191,26 @@ export class HostedRunOutOfCreditsError extends Error {
   constructor(readonly balanceCredits: number | null) {
     super('The organization has no credits left for a hosted run.');
     this.name = 'HostedRunOutOfCreditsError';
+  }
+}
+
+/**
+ * The resolved model has no agent-run capacity right now (MOTIR-9628) — the
+ * agent share of one of its limits is used, or the provider is answering it
+ * with 429s (`lib/services/agentRunCapacityService.ts`). Refused in the
+ * pre-flight, before the credit check: nothing was opened, minted, reserved or
+ * booted, and nothing is queued, deferred or retried — the person picks another
+ * model or tries again shortly. It carries the bare model id and the reason code
+ * only, never a counter, a limit or a share.
+ */
+export class HostedRunNoCapacityError extends Error {
+  readonly code = 'hosted_run_no_capacity' as const;
+  constructor(
+    readonly model: string,
+    readonly reason: AgentCapacityReason,
+  ) {
+    super(`The model ${model} has no agent-run capacity right now.`);
+    this.name = 'HostedRunNoCapacityError';
   }
 }
 
