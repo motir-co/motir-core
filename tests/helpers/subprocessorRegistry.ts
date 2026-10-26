@@ -118,6 +118,8 @@ export const NOT_A_VENDOR_HOST: Readonly<Record<string, string>> = {
   'motir.co': 'our own domain',
   'www.motir.co': 'our own marketing domain',
   'app.motir.co': 'the hosted service itself',
+  'gateway-run.motir.co':
+    "our own gateway's run-lane edge (MOTIR-7656), the origin a hosted-run container dials",
 
   // Synthetic URLs returned by the E2E billing mock. Nothing leaves localhost —
   // see `lib/test-billing-mock.ts`. Stripe's REAL host is in VENDOR_SIGNATURES,
