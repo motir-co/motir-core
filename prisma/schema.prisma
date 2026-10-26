@@ -5973,6 +5973,8 @@ enum DesignAutoRerunSkipReason {
   repository_not_writable
   /// The card is not ready or not claimable (for example, a person claimed it first).
   card_not_ready
+  /// The model has no agent-run capacity right now (MOTIR-9633). Recorded, never retried.
+  no_capacity
 
   @@map("design_auto_rerun_skip_reason")
 }
@@ -12897,6 +12899,8 @@ enum GateResumeSkipReason {
   already_resumed
   /// The continue claim refused it for another reason (`detail` names it).
   not_resumable
+  /// The run's model has no agent-run capacity right now (MOTIR-9633). Never retried.
+  no_capacity
 
   @@map("gate_resume_skip_reason")
 }

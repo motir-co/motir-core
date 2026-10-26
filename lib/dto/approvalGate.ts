@@ -459,7 +459,8 @@ export type DesignAutoRerunSkipReasonDTO =
   | 'out_of_credits'
   | 'credits_unavailable'
   | 'repository_not_writable'
-  | 'card_not_ready';
+  | 'card_not_ready'
+  | 'no_capacity';
 
 /**
  * THE APPROVAL A RE-ASKED MERGE GATE REPLACED (Bug MOTIR-5863; `design/github/design-notes.md`

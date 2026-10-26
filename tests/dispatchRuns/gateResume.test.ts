@@ -51,6 +51,7 @@ const {
   HostedRunBootFailedError,
   HostedRunCardNotReadyError,
   HostedRunCreditsUnavailableError,
+  HostedRunNoCapacityError,
   HostedRunOutOfCreditsError,
 } = await import('@/lib/hostedRuns/errors');
 const { CiCreditsExhaustedError } = await import('@/lib/ciMetering/errors');
@@ -519,6 +520,26 @@ describe('the handler — at most one resume per decision and per run', () => {
     expect(
       await adminDb.gateResume.findUniqueOrThrow({ where: { gateId: designGate } }),
     ).toMatchObject({ runId, outcome: 'skipped', skipReason: reason, resumedRunId: null });
+    expect(await adminDb.dispatchRun.count({ where: { command: 'continue' } })).toBe(0);
+  });
+
+  it('a model with no agent-run capacity records no_capacity naming it, and never retries (MOTIR-9633)', async () => {
+    const { runId, designGate } = await hostedStory();
+    await approve(designGate);
+    startSpy.mockRejectedValueOnce(new HostedRunNoCapacityError(MODEL, 'provider_rate_limited'));
+
+    // It does not throw, so the job does not retry it.
+    await expect(attempt(designGate)).resolves.toMatchObject({ outcome: 'recorded' });
+
+    expect(
+      await adminDb.gateResume.findUniqueOrThrow({ where: { gateId: designGate } }),
+    ).toMatchObject({
+      runId,
+      outcome: 'skipped',
+      skipReason: 'no_capacity',
+      detail: MODEL,
+      resumedRunId: null,
+    });
     expect(await adminDb.dispatchRun.count({ where: { command: 'continue' } })).toBe(0);
   });
 

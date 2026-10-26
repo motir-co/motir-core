@@ -407,6 +407,7 @@ export function WorkbenchResumeLine({
             itemKey={itemKey}
             starting={press.starting}
             onPress={() => void press.start()}
+            refused={press.refusal?.kind === 'noCapacity'}
           />
         ) : null}
         <FixCommand
@@ -604,7 +605,8 @@ export function skipReasonText(
     case 'models_unavailable':
       return t(`toResume.skip.${attempt.skipReason}`);
     case 'model_not_offered':
-      return t('toResume.skip.model_not_offered', { model: detail || '—' });
+    case 'no_capacity':
+      return t(`toResume.skip.${attempt.skipReason}`, { model: detail || '—' });
     case 'no_project_access':
       return t.rich('toResume.skip.no_project_access', { name: detail || '—', b: bold });
     case 'dispatcher_gone':
@@ -634,6 +636,7 @@ function repairText(
     case 'no_project_access':
     case 'dispatcher_gone':
     case 'repository_not_writable':
+    case 'no_capacity':
       return t(`toResume.repair.${attempt.skipReason}`);
     default:
       return t('toResume.repair.card_not_ready', { key: itemKey });

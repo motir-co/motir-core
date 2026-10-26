@@ -42,6 +42,7 @@ export type CouldNotRunCopy =
   | 'no_verdict'
   | 'boot_failed'
   | 'no_actor'
+  | 'noCapacity'
   | 'unknown';
 
 export function couldNotRunCopyOf(code: string): CouldNotRunCopy {
@@ -60,6 +61,9 @@ export function couldNotRunCopyOf(code: string): CouldNotRunCopy {
       return 'no_verdict';
     case 'review_no_actor':
       return 'no_actor';
+    // The review's model has no agent-run capacity right now (MOTIR-9633).
+    case 'hosted_run_no_capacity':
+      return 'noCapacity';
     default:
       return 'unknown';
   }
