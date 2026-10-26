@@ -860,3 +860,67 @@ describe('the Workbench To fix row', () => {
     expect(text).not.toMatch(/Being fixed|hosted agent/);
   });
 });
+
+// A MODEL WITH NO AGENT-RUN CAPACITY at the Fix door (Story MOTIR-9541 · MOTIR-9630;
+// `design/runs/run-section--no-capacity.mock.html` Panel N8): the same hold and the
+// same refusal as Run, which keeps the door (it is NOT stale) and re-reads the list.
+describe('no agent-run capacity (N8)', () => {
+  const held = {
+    status: 200,
+    body: {
+      models: [
+        { id: 'claude-sonnet-5', provider: 'anthropic', capacity: { verdict: 'available' } },
+        {
+          id: 'claude-opus-5-5',
+          provider: 'anthropic',
+          capacity: { verdict: 'no_capacity', reason: 'provider_rate_limited' },
+        },
+      ],
+      default: 'claude-opus-5-5',
+    },
+  };
+
+  it('a held preselected model holds Fix with the Held Run line', async () => {
+    models = held;
+    await mountControl();
+    const button = screen.getByTestId('fix-hosted') as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    const line = screen.getByTestId('hosted-held-line');
+    expect(line.textContent).toContain('claude-opus-5-5 has no agent-run capacity right now.');
+    expect(button.getAttribute('aria-describedby')).toBe(line.id);
+  });
+
+  it('a refused fix names the model, keeps the door and re-reads the list once', async () => {
+    const onStateMoved = vi.fn();
+    start = () => ({
+      status: 409,
+      body: { code: 'hosted_run_no_capacity', model: 'claude-opus-5-5', reason: 'x' },
+    });
+    await mountControl({ onStateMoved });
+    models = held;
+    await pressFix();
+    await flush();
+    const notice = screen.getByTestId('fix-hosted-refused-noCapacity');
+    expect(notice.textContent).toContain(
+      refused.noCapacity.title.replace('{model}', 'claude-opus-5-5'),
+    );
+    expect(notice.textContent).toContain(refused.noCapacity.body);
+    expect(onStateMoved).not.toHaveBeenCalled();
+    expect(screen.getByTestId('fix-hosted-door')).toBeTruthy();
+    expect(modelReads()).toBe(2);
+    expect(screen.queryByTestId('hosted-held-line')).toBeNull();
+  });
+
+  it('reads in zh', async () => {
+    start = () => ({
+      status: 409,
+      body: { code: 'hosted_run_no_capacity', model: 'claude-opus-5-5', reason: 'x' },
+    });
+    await mountControl({}, true);
+    await pressFix();
+    await flush();
+    expect(screen.getByTestId('fix-hosted-refused-noCapacity').textContent).toContain(
+      zhMessages.runs.hosted.refused.noCapacity.title.replace('{model}', 'claude-opus-5-5'),
+    );
+  });
+});

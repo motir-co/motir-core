@@ -77,6 +77,24 @@ export const planStepRepository = {
     return r.count;
   },
 
+  /**
+   * Clear EVERY session's provider-retry wait on one plan (MOTIR-9642) — the
+   * Resume bind's sweep of a dead job's waits. Leaves the steps themselves alone.
+   * Returns how many rows it touched.
+   */
+  async clearProviderWaitsForPlan(planId: string, tx: Prisma.TransactionClient): Promise<number> {
+    const r = await tx.planStep.updateMany({
+      where: { planId, providerWaitUntil: { not: null } },
+      data: {
+        providerWaitSince: null,
+        providerWaitUntil: null,
+        providerWaitAttempt: null,
+        providerWaitMaxAttempts: null,
+      },
+    });
+    return r.count;
+  },
+
   /** Clear a session's step. Returns how many rows went (0 or 1). */
   async deleteForSession(
     planId: string,

@@ -142,10 +142,12 @@ test('Run hosted lists DeepSeek with its provider and starts a run on deepseek/d
   await chapter('Run hosted lists DeepSeek beside Claude, each with its provider', async () => {
     const body = await openCard(page, leaf.identifier);
     // The stub answered: the mixed list, each entry carrying its own provider.
+    // The lane has no gateway, so the capacity verdict fails open (MOTIR-9541).
+    const AVAILABLE = { verdict: 'available' };
     expect(body.models).toEqual([
-      { id: OPUS, provider: 'anthropic' },
-      { id: SONNET, provider: 'anthropic' },
-      { id: DEEPSEEK, provider: 'deepseek' },
+      { id: OPUS, provider: 'anthropic', capacity: AVAILABLE },
+      { id: SONNET, provider: 'anthropic', capacity: AVAILABLE },
+      { id: DEEPSEEK, provider: 'deepseek', capacity: AVAILABLE },
     ]);
 
     await modelCombobox(page).click();

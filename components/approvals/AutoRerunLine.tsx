@@ -31,6 +31,8 @@ const NEXT_STEP: Record<DesignAutoRerunSkipReasonDTO, { href: string } | null> =
   credits_unavailable: { href: '#run-hosted' },
   repository_not_writable: { href: '/settings/project/repositories' },
   card_not_ready: null,
+  // No agent-run capacity right now (MOTIR-9633): the person starts it themselves.
+  no_capacity: { href: '#run-hosted' },
 };
 
 export function AutoRerunLine({ rerun }: { rerun: DesignAutoRerunDTO | null | undefined }) {

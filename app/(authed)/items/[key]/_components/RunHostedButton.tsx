@@ -6,8 +6,8 @@ import { Button } from '@/components/ui/Button';
 import { HostedRunCancel } from '@/app/(authed)/runs/_components/HostedRunCancel';
 import { isLiveRun } from '@/lib/runs/timeline';
 import { HostedModelPicker } from './HostedModelPicker';
-import { HostedModelProvenance } from '@/components/hosted/HostedModelPicker';
-import { provenanceFor } from '@/components/hosted/hostedModels';
+import { HostedHeldLine, HostedModelProvenance } from '@/components/hosted/HostedModelPicker';
+import { allHeld, isHeld, provenanceFor } from '@/components/hosted/hostedModels';
 import { useHostedRun } from './HostedRunProvider';
 
 // THE RUN SECTION'S HEADER DOOR (Story MOTIR-683 · MOTIR-691; revised by
@@ -53,16 +53,29 @@ export function RunHostedButton() {
  * last child says why — its difficulty, a project override, or a parent's
  * leaves. It goes when the person picks another model (F6), and comes back if
  * they re-pick it. `items-start` keeps the button level with the trigger.
+ *
+ * ⚠️ A HELD MODEL HOLDS RUN (MOTIR-9630; design § The preselect decision). When the
+ * selected model has no agent-run capacity the selection STAYS, Run is off, and
+ * the *Held Run line* follows the source line — except while the No-capacity
+ * refusal stands (it names the model) or every model is held (the notices' line
+ * says it once).
  */
 export function RunDoorControl() {
   const t = useTranslations('runs.hosted.door');
   const door = useHostedRun();
   const lineId = useId();
+  const heldId = useId();
   if (!door) return null;
   const run = door.currentRun;
   const modelsReady = door.models.state === 'ok' && door.models.models.length > 0;
   const sending = door.agentDoor?.sendingId != null;
-  const disabled = !door.ready || !modelsReady || door.starting || sending || !door.selectedModel;
+  const held = isHeld(door.models, door.selectedModel);
+  const disabled =
+    !door.ready || !modelsReady || door.starting || sending || !door.selectedModel || held;
+  const heldLine =
+    held && door.refusal?.kind !== 'noCapacity' && !allHeld(door.models)
+      ? door.selectedModel
+      : null;
   // "Run again" after a run in Motir's cloud — Motir's own, or one in an agent —
   // never after a local one.
   const again = run?.origin === 'hosted' || run?.origin === 'instance';
@@ -85,6 +98,7 @@ export function RunDoorControl() {
         disabled={disabled}
         loading={door.starting}
         onClick={() => void door.start()}
+        aria-describedby={heldLine ? heldId : undefined}
         data-testid="run-hosted"
         // The anchor the design card's "Automatic re-run skipped" lines link to (MOTIR-702).
         id="run-hosted"
@@ -92,6 +106,7 @@ export function RunDoorControl() {
         {door.starting ? t('starting') : again ? t('runAgain') : t('run')}
       </Button>
       <HostedModelProvenance provenance={provenance} id={lineId} />
+      <HostedHeldLine model={heldLine} id={heldId} />
     </div>
   );
 }

@@ -364,3 +364,71 @@ describe('the chosen model', () => {
     expect(hosted!.models.state === 'ok' && hosted!.models.models).toHaveLength(2);
   });
 });
+
+// A MODEL WITH NO AGENT-RUN CAPACITY at the Continue hosted door (Story MOTIR-9541 ·
+// MOTIR-9630; `design/runs/run-section--no-capacity.mock.html` Panel N7): the same
+// hold as Run (the model stays, the button is off, the Held Run line), and the same
+// No-capacity refusal, which keeps the door and quietly re-reads the list.
+describe('no agent-run capacity (N7)', () => {
+  const capacityList = (heldDefault: boolean) => ({
+    status: 200,
+    body: {
+      models: [
+        { id: 'claude-sonnet-5', provider: 'anthropic', capacity: { verdict: 'available' } },
+        {
+          id: 'claude-opus-5',
+          provider: 'anthropic',
+          capacity: heldDefault
+            ? { verdict: 'no_capacity', reason: 'agent_share_exhausted' }
+            : { verdict: 'available' },
+        },
+      ],
+      default: 'claude-opus-5',
+    },
+  });
+
+  it('a held preselected model holds Continue with the Held Run line', async () => {
+    routes[MODELS] = () => capacityList(true);
+    await mountTwo();
+    const button = row('a').getByTestId('continue-hosted') as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    const line = row('a').getByTestId('hosted-held-line');
+    expect(line.textContent).toContain('claude-opus-5 has no agent-run capacity right now.');
+    expect(button.getAttribute('aria-describedby')).toBe(line.id);
+  });
+
+  it('a refused continue names the model, stays drawn, and re-reads the list once', async () => {
+    const onStateMovedA = vi.fn();
+    routes[START_A] = () => ({
+      status: 409,
+      body: { code: 'hosted_run_no_capacity', model: 'claude-opus-5', reason: 'x' },
+    });
+    await mountTwo({ onStateMovedA });
+    routes[MODELS] = () => capacityList(true);
+    await press('a');
+    await act(async () => {});
+    const notice = row('a').getByTestId('continue-hosted-refused-noCapacity');
+    expect(notice.textContent).toContain(
+      'Not started — claude-opus-5 has no agent-run capacity right now.',
+    );
+    expect(onStateMovedA).not.toHaveBeenCalled();
+    expect(row('a').getByTestId('continue-hosted-door')).toBeTruthy();
+    expect(calls(MODELS)).toHaveLength(2);
+    // The refusal names the model, so the line under the button gives way to it.
+    expect(row('a').queryByTestId('hosted-held-line')).toBeNull();
+    expect((row('a').getByTestId('continue-hosted') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('reads in zh', async () => {
+    routes[START_A] = () => ({
+      status: 409,
+      body: { code: 'hosted_run_no_capacity', model: 'claude-opus-5', reason: 'x' },
+    });
+    await mountTwo({}, { zh: true });
+    await press('a');
+    await act(async () => {});
+    expect(row('a').getByTestId('continue-hosted-refused-noCapacity').textContent).toContain(
+      zhMessages.runs.hosted.refused.noCapacity.title.replace('{model}', 'claude-opus-5'),
+    );
+  });
+});

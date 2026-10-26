@@ -287,6 +287,12 @@ process.env['MOTIR_E2E_FAKE_GATEWAY_CAPACITY'] ??= '1';
 process.env['MOTIR_E2E_FAKE_GATEWAY_CAPACITY_STATE_PATH'] ??= path.resolve(
   'out/playwright-output-acceptance/.fake-gateway-capacity.json',
 );
+// Story MOTIR-9541 · MOTIR-9632 — SHORT AGENT-RUN CAPACITY WINDOWS for the lane,
+// so the Run hosted picker's no-capacity label can clear inside one spec: the
+// verdict's cache (production 5 s) and the window a provider 429 holds a model
+// for (production 60 s). Set on the runner and in the webServer's env below.
+process.env['MOTIR_AGENT_CAPACITY_CACHE_MS'] ??= '1000';
+process.env['MOTIR_AGENT_CAPACITY_429_WINDOW_MS'] ??= '8000';
 process.env['MOTIR_HOSTED_AGENT_IMAGE'] ??=
   'ghcr.io/motir-co/motir-hosted-agent@sha256:e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0';
 // Story MOTIR-6860 · MOTIR-6877 — the agent instances' PERSISTENT fake fleet, on
@@ -657,6 +663,9 @@ export default defineConfig({
         MOTIR_E2E_FAKE_GATEWAY_CAPACITY: process.env['MOTIR_E2E_FAKE_GATEWAY_CAPACITY']!,
         MOTIR_E2E_FAKE_GATEWAY_CAPACITY_STATE_PATH:
           process.env['MOTIR_E2E_FAKE_GATEWAY_CAPACITY_STATE_PATH']!,
+        // The short capacity windows (MOTIR-9541) — see beside the capacity fake above.
+        MOTIR_AGENT_CAPACITY_CACHE_MS: process.env['MOTIR_AGENT_CAPACITY_CACHE_MS']!,
+        MOTIR_AGENT_CAPACITY_429_WINDOW_MS: process.env['MOTIR_AGENT_CAPACITY_429_WINDOW_MS']!,
         MOTIR_HOSTED_AGENT_IMAGE: process.env['MOTIR_HOSTED_AGENT_IMAGE']!,
         E2E_HOSTED_RUN_STALL_WINDOW_MS: process.env['E2E_HOSTED_RUN_STALL_WINDOW_MS']!,
         // Story MOTIR-4928 · MOTIR-5264 — the MONITORING room's connect walk.

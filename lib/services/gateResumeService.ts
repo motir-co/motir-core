@@ -7,6 +7,7 @@ import {
   HostedRunBootFailedError,
   HostedRunCardNotReadyError,
   HostedRunCreditsUnavailableError,
+  HostedRunNoCapacityError,
   HostedRunOutOfCreditsError,
   HostedRunRepositoryNotWritableError,
 } from '@/lib/hostedRuns/errors';
@@ -63,6 +64,8 @@ function skipReasonFor(err: unknown): GateResumeSkipReason | null {
   if (err instanceof HostedModelNotOfferedError) return 'model_not_offered';
   if (err instanceof HostedModelsUnavailableError) return 'models_unavailable';
   if (err instanceof HostedRunOutOfCreditsError) return 'out_of_credits';
+  // No agent-run capacity right now (MOTIR-9633): recorded, never retried or queued.
+  if (err instanceof HostedRunNoCapacityError) return 'no_capacity';
   if (err instanceof HostedRunCreditsUnavailableError) return 'credits_unavailable';
   if (err instanceof HostedRunRepositoryNotWritableError) return 'repository_not_writable';
   if (err instanceof HostedRunCardNotReadyError) return 'card_not_ready';
@@ -180,7 +183,7 @@ export const gateResumeService = {
       if (skipReason === 'no_project_access' && run.createdById) {
         /* v8 ignore next -- the dispatcher was read a moment ago, when the start refused */
         detail = (await userRepository.findById(run.createdById, tx))?.name ?? null;
-      } else if (skipReason === 'model_not_offered') {
+      } else if (skipReason === 'model_not_offered' || skipReason === 'no_capacity') {
         detail = run.model;
       }
       return gateResumeRepository.create(

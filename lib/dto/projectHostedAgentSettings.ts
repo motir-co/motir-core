@@ -1,5 +1,6 @@
 import type { WorkItemDifficultyDto } from '@/lib/dto/workItems';
 import type { HostedModelSource } from '@/lib/hosted/resolveHostedModel';
+import type { AgentCapacityReason } from '@/lib/hostedRuns/capacityReasons';
 
 // DTOs for a project's HOSTED-AGENT settings (Story MOTIR-6989 · MOTIR-6993): the
 // model a hosted run uses for each leaf difficulty, what the project overrode,
@@ -62,11 +63,27 @@ export interface ResolvedWorkItemHostedModelDto {
  * `null` when it could not be resolved; the picker then preselects as it always
  * did (`default`, else the first offered model).
  */
+/**
+ * One offered model's agent-run capacity (Story MOTIR-9541 · MOTIR-9629): the
+ * verdict, and on `no_capacity` the reason code — nothing else, so no counter,
+ * limit or share can reach a browser. Fail-open reads `available`.
+ */
+export type HostedModelCapacityDto =
+  | { verdict: 'available' }
+  | { verdict: 'no_capacity'; reason: AgentCapacityReason };
+
+/** One offered model on the picker read — exactly these three keys. */
+export interface HostedPickerModelDto {
+  id: string;
+  provider: string;
+  capacity: HostedModelCapacityDto;
+}
+
 export type HostedPickerModelsDto =
   | { state: 'unavailable' }
   | {
       state: 'ok';
-      models: { id: string; provider: string }[];
+      models: HostedPickerModelDto[];
       default: string | null;
       resolved?: ResolvedWorkItemHostedModelDto | null;
     };

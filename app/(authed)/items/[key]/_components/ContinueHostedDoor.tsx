@@ -26,6 +26,7 @@ export function ContinueHostedDoor() {
       itemKey={door.itemKey}
       starting={door.continueStarting}
       onPress={() => void door.startContinue()}
+      refused={door.continueRefusal?.kind === 'noCapacity'}
     />
   );
 }

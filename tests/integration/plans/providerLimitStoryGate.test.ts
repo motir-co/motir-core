@@ -357,4 +357,43 @@ describe('B. exhausted: rate_limited in To resume, and Resume', () => {
       expect(listed[0]!.failure?.reason).toBe('rate_limited');
     },
   );
+
+  it(
+    'B3 — a dead job’s uncleared wait does not outlive the Resume; the resumed job’s own wait still reads (MOTIR-9642)',
+    T,
+    async () => {
+      const walk = await walkHoldingAStep();
+      // The first job waits out a 429 and dies WITHOUT the reporter's clear — a lost machine,
+      // or a job killed mid-wait — so its step keeps the wait.
+      await accepted(
+        hostedStep(routes, walk, {
+          sessionKey: 'author-1',
+          ...waiting(2, 5, new Date(Date.now() + 60_000)),
+        }),
+      );
+      expect(readAtObserved(await progressOf(walk)).providerWait).not.toBeNull();
+      gate.jobs.set(walk.jobId, rateLimitedJob(walk.planId));
+      await settleFailed(walk, walk.jobId);
+
+      const res = await resumeAsOwner(routes, walk);
+      const body = (await res.json()) as { jobId: string };
+      expect(res.status, JSON.stringify(body)).toBe(200);
+
+      // The resume re-bound the session: the dead job's wait is gone from the step and the
+      // reading, and the step itself is left for the quiet drop to judge.
+      const resumed = await progressOf(walk);
+      expect(resumed.steps.map((s) => s.sessionKey)).toEqual(['author-1']);
+      expect(resumed.steps[0]!.providerWait).toBeNull();
+      expect(readAtObserved(resumed).providerWait).toBeNull();
+
+      // The resumed job's OWN wait is reported exactly as before.
+      const retryAt = new Date(Date.now() + 30_000);
+      await accepted(
+        hostedStep(routes, walk, { sessionKey: 'author-1', ...waiting(1, 5, retryAt) }, body.jobId),
+      );
+      const waitingAgain = readAtObserved(await progressOf(walk)).providerWait;
+      expect(waitingAgain).toMatchObject({ attempt: 1, maxAttempts: 5 });
+      expect(Date.parse(waitingAgain!.retryAt)).toBe(retryAt.getTime());
+    },
+  );
 });

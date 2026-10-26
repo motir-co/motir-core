@@ -368,7 +368,11 @@ export function WorkbenchFixLine({
         {/* § 31: Continue hosted leads; the command keeps the right edge. § 32: so does
          *Fix on the hosted agent* on a row a review sent back (MOTIR-6930). */}
         {fixTarget ? (
-          <FixHostedButtonRow starting={fixPress.starting} onPress={() => void fixPress.start()} />
+          <FixHostedButtonRow
+            starting={fixPress.starting}
+            onPress={() => void fixPress.start()}
+            refused={fixPress.refusal?.kind === 'noCapacity'}
+          />
         ) : null}
         {hostedTarget ? (
           <ContinueHostedButtonRow
@@ -376,6 +380,7 @@ export function WorkbenchFixLine({
             itemKey={itemKey}
             starting={press.starting}
             onPress={() => void press.start()}
+            refused={press.refusal?.kind === 'noCapacity'}
           />
         ) : null}
         <FixCommand command={command} itemKey={itemKey} />

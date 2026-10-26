@@ -1,12 +1,14 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { presentPageArchive, presentPageRestore } from '@/lib/api/v1/pages/schema';
 import type { PageRestoreLandingDto } from '@/lib/dto/pages';
 import { pagesService } from '@/lib/services/pagesService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
-import { exempt } from '../payloads/define';
+import { derived } from '../payloads/define';
+import { archivePagePayload } from '../payloads/pages';
 import { pageIdField, pageProjectKeyField, resolvePageProject } from './pageRef';
 
 // `archive_page` (Story MOTIR-9487 · MOTIR-9557) — archive a page with its live
@@ -21,8 +23,10 @@ import { pageIdField, pageProjectKeyField, resolvePageProject } from './pageRef'
 //
 // Nothing is deleted: permanent delete is `page:delete`, which no tool carries.
 //
-// EXEMPT from payload derivation (`payloads/exemptions.ts`): no `/api/v1`
-// operation returns an archive or a restore result.
+// DERIVED (MOTIR-9604): `/api/v1` publishes each half as its own resource —
+// `PageArchive` and `PageRestore` (MOTIR-9566) — and both branches present
+// through v1's own presenters, so the drift guard probes each branch against the
+// resource it is (`payloads/pages.ts`).
 
 export const ARCHIVE_PAGE_TOOL_NAME = 'archive_page';
 
@@ -66,23 +70,23 @@ export async function runArchivePage(
     const project = await resolvePageProject(args.projectKey, ctx);
     const input = { projectId: project.id, pageId: args.pageId };
     if (args.action === 'restore') {
-      const restored = await pagesService.restorePage(ctx, input);
+      const restored = presentPageRestore(await pagesService.restorePage(ctx, input));
       const others = restored.restoredIds.length - 1;
       return toolOk(
         `Restored page ${args.pageId}` +
           (others > 0 ? ` with ${others} sub-page${others === 1 ? '' : 's'}` : '') +
           ` ${renderLanding(restored.landing)}.`,
-        exempt(ARCHIVE_PAGE_TOOL_NAME, { ...restored }),
+        derived(archivePagePayload, { ...restored }),
       );
     }
-    const archived = await pagesService.archivePage(ctx, input);
+    const archived = presentPageArchive(await pagesService.archivePage(ctx, input));
     return toolOk(
       `Archived page ${archived.rootId}` +
         (archived.subPageCount > 0
           ? ` with ${archived.subPageCount} sub-page${archived.subPageCount === 1 ? '' : 's'}`
           : '') +
         '. Nothing was deleted: restore it with `action: "restore"`.',
-      exempt(ARCHIVE_PAGE_TOOL_NAME, { ...archived }),
+      derived(archivePagePayload, { ...archived }),
     );
   } catch (err) {
     return toToolError(err);
