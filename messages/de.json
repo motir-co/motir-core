@@ -6793,6 +6793,156 @@
     "internalBilling": {
       "badge": "Interne Abrechnung",
       "note": "Dieser Organisation wird genau wie einem Kunden berechnet und anschließend alles erstattet – jeder Betrag unten ist echt, und das Guthaben gleicht sich auf null aus."
+    },
+    "fleetUse": {
+      "title": "Flottennutzung",
+      "lead": "Wie viel Ihr Plan gleichzeitig ausführen darf, was gerade läuft und was wartet",
+      "yourPlan": "Ihr Plan:",
+      "planNotRead": "Plan nicht gelesen",
+      "noPlanLimits": "Keine Plangrenzen",
+      "loading": "Wird geladen…",
+      "label": {
+        "agentRunsInParallel": "Parallele Agent-Läufe",
+        "agentsRunningInOrg": "Gehostete Agents pro Organisation",
+        "agentsPerPerson": "Gehostete Agents pro Person",
+        "ciJobsInFlight": "Laufende CI-Jobs"
+      },
+      "explain": {
+        "agentRunsInParallel": "Gehostete Agent-Jobs, die gleichzeitig laufen. Weitere warten in der Warteschlange.",
+        "agentsRunningInOrg": "Gehostete Agents, die in der ganzen Organisation gleichzeitig laufen. Darüber hinaus wird ein Start abgelehnt, nicht eingereiht.",
+        "agentsPerPerson": "Aktive gehostete Agents, die eine Person haben kann. Darüber hinaus wird ein neuer abgelehnt, nicht eingereiht.",
+        "ciJobsInFlight": "CI-Jobs, die gleichzeitig auf den Runnern von Motir laufen. Weitere warten in der Warteschlange."
+      },
+      "inUseOf": "{inUse} von {figure}",
+      "membersAt": "{count, plural, one {# Mitglied} other {# Mitglieder}} bei {figure} von {figure}",
+      "running": "{count} laufen",
+      "noLimit": "Keine Grenze",
+      "notRead": "Nicht gelesen",
+      "source": {
+        "staffOverride": "Von Motir für Ihre Organisation festgelegt: {figure} CI-Jobs gleichzeitig",
+        "notRead": "Ihre CI-Grenze wurde nicht gelesen, daher warten CI-Jobs, bis sie gelesen werden kann. Die anderen Zahlen sind aktuell.",
+        "granted": {
+          "agentRunsInParallel": "{figure} — {vcpu} genehmigte vCPU ÷ 2 auf Ihrem eigenen Agent-Runner-Konto",
+          "ciJobsInFlight": "{figure} — {vcpu} genehmigte vCPU ÷ 2 auf Ihrem eigenen CI-Runner-Konto"
+        },
+        "sharedFloor": {
+          "agentRunsInParallel": "Ihr Agent-Runner-Konto ist noch auf der gemeinsamen Untergrenze, mit den Grenzen von Max",
+          "ciJobsInFlight": "Die gemeinsame Untergrenze, bis Ihr CI-Runner-Konto live ist: {figure} Runner"
+        }
+      },
+      "waiting": {
+        "none": "Nichts wartet",
+        "count": "{count} in der Warteschlange",
+        "planLimit": "Durch Ihre Plangrenze · ein Planwechsel hebt sie auf",
+        "poolFull": {
+          "agentRunsInParallel": "Alle Agent-Runner-Konten sind voll · das ist die Kapazität von Motir, nicht Ihr Plan",
+          "ciJobsInFlight": "Alle CI-Runner-Konten sind voll · das ist die Kapazität von Motir, nicht Ihr Plan"
+        },
+        "other": "Aus einem anderen Grund"
+      },
+      "indexing": "Code-Graph-Indexierung: {count} laufen · zählt zu keiner Plangrenze",
+      "indexingNotRead": "Code-Graph-Indexierung: nicht gelesen · zählt zu keiner Plangrenze",
+      "whereItRuns": "Wo es läuft",
+      "kind": {
+        "ci_runner": "CI-Runner",
+        "code_graph_index": "Indexer",
+        "hosted_agent": "Agent-Runner",
+        "agent_instance": "Agent-Hosting"
+      },
+      "provider": {
+        "fly": "Fly",
+        "shared_aws_pool": "Gemeinsamer AWS-Pool von Motir",
+        "own_aws_account": "Eigenes AWS-Konto Ihrer Organisation"
+      },
+      "notReadNotice": "Ihre Plangrenzen und was gerade läuft, konnten nicht gelesen werden. Das ist nicht null, sondern unbekannt.",
+      "tryAgain": "Erneut versuchen",
+      "noPlanLimitsNote": "Diese Organisation wird von Motir betrieben und hat keine Plangrenzen. Was gerade läuft, wird ohne Grenze angezeigt.",
+      "noFleet": "Ihr Plan enthält keine gehosteten Agent-Läufe, CI-Runner oder Agents. Wählen Sie oben unter Motir AI einen Plan, um sie auszuführen.",
+      "accounts": {
+        "title": "Ihre eigenen AWS-Konten",
+        "notRead": "Der Status Ihrer Konten konnte gerade nicht gelesen werden.",
+        "kind": {
+          "ci_runner": "CI-Runner",
+          "hosted_agent": "Agent-Runner",
+          "indexer_and_hoster": "Indexer + Agent-Hosting"
+        },
+        "role": {
+          "ci_runner": "Führt Ihre CI-Jobs aus",
+          "hosted_agent": "Führt Ihre gehosteten Agent-Jobs aus",
+          "indexer_and_hoster": "Indexiert Ihren Code und hostet Ihre Agents"
+        },
+        "state": {
+          "created": "Angelegt",
+          "quota_requested": "Kontingent beantragt",
+          "granted": "Genehmigt",
+          "live": "Live"
+        },
+        "quotaDenied": "Kontingent abgelehnt",
+        "since": "seit {when}",
+        "vcpuAsked": "Beantragte vCPU",
+        "vcpuGranted": "Genehmigte vCPU",
+        "noneYet": "Noch keine",
+        "sharedFloor": {
+          "ci_runner": "Noch auf der gemeinsamen Untergrenze: CI {figure} Runner.",
+          "hosted_agent": "Noch auf der gemeinsamen Untergrenze, mit den Grenzen von Max: {figure} Agent-Läufe gleichzeitig.",
+          "indexer_and_hoster": "Indexierung und Agent-Hosting sind noch auf der gemeinsamen Untergrenze: gehostete Agents {perPerson} pro Person, {perOrg} pro Organisation."
+        },
+        "liveOnceNetwork": "Live, sobald das Netzwerk des Kontos aufgebaut ist.",
+        "deniedNote": "Das Konto bleibt bei „{state}“, bis AWS eine Erhöhung genehmigt.",
+        "keptSpots": "{count} Maschinenplätze bleiben immer für die Indexierung reserviert; Agent-Instanzen nutzen den Rest."
+      },
+      "quotaOutcome": {
+        "pending": "Bei AWS in Bearbeitung",
+        "case_opened": "AWS hat einen Fall eröffnet",
+        "approved": "Von AWS genehmigt",
+        "denied": "Von AWS abgelehnt",
+        "not_approved": "Von AWS nicht genehmigt",
+        "case_closed": "AWS hat den Fall geschlossen",
+        "invalid_request": "AWS konnte den Antrag nicht lesen"
+      },
+      "request": {
+        "button": "Mehr Kapazität anfragen",
+        "status": {
+          "open": "Angefragt",
+          "filed": "Bei AWS eingereicht",
+          "closed": "Geschlossen"
+        },
+        "granted": "{vcpu} vCPU genehmigt",
+        "asked": "{vcpu} vCPU am {date} angefragt",
+        "line": {
+          "open": "An Motir gesendet, Motir reicht sie bei AWS ein",
+          "filed": "Motir hat sie bei AWS eingereicht; AWS hat noch nicht geantwortet",
+          "granted": "AWS hat genehmigt; die Zahlen aktualisieren sich beim nächsten Lesen",
+          "denied": "AWS hat die Erhöhung abgelehnt; Sie können erneut anfragen",
+          "closedNote": "Von Motir geschlossen: „{note}“",
+          "closed": "Von Motir geschlossen; Antwort von AWS: {outcome}"
+        }
+      },
+      "dialog": {
+        "title": "Mehr Kapazität anfragen",
+        "account": "{account}-Konto · {vcpu} vCPU genehmigt. Motir beantragt die Erhöhung bei AWS und teilt Ihnen die Antwort von AWS mit.",
+        "accountNoneGranted": "{account}-Konto · noch keine vCPU genehmigt. Motir beantragt die Erhöhung bei AWS und teilt Ihnen die Antwort von AWS mit.",
+        "figureLabel": "Benötigte vCPU",
+        "figurePlaceholder": "z. B. 300",
+        "figureHelp": "Eine ganze Zahl über dem, was jetzt genehmigt ist.",
+        "figureInvalid": "Geben Sie eine ganze Zahl über {granted} ein (die jetzt genehmigten vCPU).",
+        "reasonLabel": "Warum Sie sie brauchen",
+        "reasonPlaceholder": "Was nicht reichen wird, und wann",
+        "reasonHelp": "Bis zu 2.000 Zeichen. Motir liest sie, bevor sie bei AWS eingereicht wird.",
+        "reasonInvalid": "Nennen Sie einen Grund mit bis zu 2.000 Zeichen.",
+        "cancel": "Abbrechen",
+        "send": "Anfrage senden",
+        "sending": "Wird gesendet…",
+        "sent": "Anfrage gesendet. Motir teilt Ihnen die Antwort von AWS mit.",
+        "refused": {
+          "open": "Für dieses Konto ist bereits eine Anfrage offen. Ihr Status steht in der Zeile des Kontos; fragen Sie erneut an, wenn sie geschlossen ist.",
+          "notFound": "Ihre Organisation hat noch kein eigenes Konto dieser Art, daher gibt es nichts zu erhöhen. Es wird mit dem Kauf von Host angelegt.",
+          "forbidden": "Nur Inhaber oder Administratoren der Organisation können mehr Kapazität anfragen.",
+          "network": "Die Anfrage konnte nicht gesendet werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut – es wurde nichts gesendet.",
+          "invalid": "Die Anfrage konnte nicht gelesen werden. Prüfen Sie beide Felder und senden Sie sie erneut.",
+          "failed": "Die Anfrage wurde nicht gesendet. Versuchen Sie es gleich noch einmal."
+        }
+      }
     }
   },
   "draftWithAi": {

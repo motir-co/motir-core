@@ -43,6 +43,7 @@ import { agentLineFigures } from './agentFigures';
 import { fmt, fmtDate } from './billingFormat';
 import { DowngradeDialog, UpgradeDialog, type PlanNames } from './PlanChangeDialog';
 import { CalculatorView } from './CalculatorView';
+import { FleetUseSection } from './FleetUseSection';
 
 // The §4 free-tier scale caps the Motir (free) line draws — mirrors
 // `lib/billing/entitlements.ts` PM_ENTITLEMENTS.free (the locked ADR §4 numbers).
@@ -336,7 +337,12 @@ export function BillingClient({ orgId, orgName, memberCount }: BillingClientProp
       ) : null}
 
       {view === 'home' ? (
-        <HomeView {...shared} goPlans={() => setView('plans')} goSeats={() => setView('seats')} />
+        <HomeView
+          {...shared}
+          orgId={orgId}
+          goPlans={() => setView('plans')}
+          goSeats={() => setView('seats')}
+        />
       ) : null}
       {view === 'plans' ? (
         <PlansView
@@ -457,7 +463,15 @@ function TierPill({ name }: { name: string }) {
 // ended, so "2,220 of 1,800" reads as a bar that is full plus an overshoot
 // rather than an unexplained 100%. It is a notch cut in `--el-page-bg`, not a
 // colour, so it stays legible under every palette.
-function Meter({ pct, low, tickPct }: { pct: number; low?: boolean; tickPct?: number | null }) {
+export function Meter({
+  pct,
+  low,
+  tickPct,
+}: {
+  pct: number;
+  low?: boolean;
+  tickPct?: number | null;
+}) {
   return (
     <div
       className="relative mt-2 h-1.5 w-full overflow-hidden rounded-full bg-(--el-muted)"
@@ -522,7 +536,8 @@ function HomeView({
   redirecting,
   goPlans,
   goSeats,
-}: SharedViewProps & { goPlans: () => void; goSeats: () => void }) {
+  orgId,
+}: SharedViewProps & { goPlans: () => void; goSeats: () => void; orgId: string }) {
   // ⚠️ THE ORDERING RULE (design-notes amendment, panel 8) — measured, not a
   // preference. In its normal third position the Motir CI card starts 756 px
   // down the page, below the ~700 px fold of a 1280×800 laptop, so a PAUSED
@@ -566,6 +581,10 @@ function HomeView({
       <AgentsLine data={data} t={t} canManage={canManage} goPlans={goPlans} />
       <MotirSearchLine data={data} t={t} />
       <PaymentCard t={t} canManage={canManage} portal={portal} redirecting={redirecting} />
+      {/* Fleet use (MOTIR-9663) — the last card of the settings view, after the
+          payment card (design/billing § Amendment 2026-10-26, element 1). Its own
+          island: its read fails and retries apart from this page's. */}
+      <FleetUseSection orgId={orgId} />
     </>
   );
 }
