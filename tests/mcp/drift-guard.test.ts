@@ -18,6 +18,7 @@ import {
 import { checkPayloadDrift, checkedResources } from '@/lib/mcp/payloads/driftGuard';
 import { definePayload } from '@/lib/mcp/payloads/define';
 import { presentMcpProjectRow } from '@/lib/mcp/payloads/planning';
+import { archivePagePayload, linkPagePayload } from '@/lib/mcp/payloads/pages';
 
 // The DRIFT GUARD (Story 11.6 · Subtask 11.6.6 — MOTIR-2232).
 //
@@ -212,5 +213,74 @@ describe('the violation REPORT is usable', () => {
 
   it('checkedResources is the run’s receipt — what was actually compared', () => {
     expect(checkedResources(probeProject)).toEqual(['Project']);
+  });
+});
+
+describe('the page archive, restore and link resources are PROBED, not explained away (MOTIR-9604)', () => {
+  const archived = { archivedIds: ['p1', 'p2'], rootId: 'p1', subPageCount: 1 };
+  const restored = {
+    restoredIds: ['p1', 'p2'],
+    landing: { kind: 'original', parentPageId: null, folderId: null, title: null },
+  };
+  const linked = {
+    pageId: 'p1',
+    workItemId: 'w1',
+    source: 'manual',
+    action: 'link',
+    changed: true,
+  };
+
+  it('all three are probed by a tool, and none is listed as unreachable', () => {
+    const probed = probedResources();
+    for (const name of ['PageArchive', 'PageRestore', 'PageLinkPair'] as const) {
+      expect(probed.has(name), `${name} is not probed`).toBe(true);
+      expect(name in MCP_UNREACHABLE_RESOURCES, `${name} is still listed unreachable`).toBe(false);
+    }
+    expect(TOOL_PAYLOADS.archive_page).toBe(archivePagePayload);
+    expect(TOOL_PAYLOADS.link_page).toBe(linkPagePayload);
+    expect('archive_page' in EXEMPT_TOOLS).toBe(false);
+    expect('link_page' in EXEMPT_TOOLS).toBe(false);
+  });
+
+  it('`archive_page` probes EACH branch against its own resource', () => {
+    const definition = archivePagePayload as never;
+    const [archiveProbe, restoreProbe] = archivePagePayload.probes;
+    expect(archiveProbe!.resource).toBe('PageArchive');
+    expect(restoreProbe!.resource).toBe('PageRestore');
+    expect(archiveProbe!.select(archived as never)).toEqual([archived]);
+    expect(restoreProbe!.select(archived as never)).toEqual([]);
+    expect(archiveProbe!.select(restored as never)).toEqual([]);
+    expect(restoreProbe!.select(restored as never)).toEqual([restored]);
+    expect(checkPayloadDrift(definition, archived)).toEqual([]);
+    expect(checkPayloadDrift(definition, restored)).toEqual([]);
+  });
+
+  it('a field dropped from either branch FAILS against that branch’s resource', () => {
+    const definition = archivePagePayload as never;
+    const { subPageCount: _a, ...brokenArchive } = archived;
+    const [archiveViolation] = checkPayloadDrift(definition, brokenArchive);
+    expect(archiveViolation!.resource).toBe('PageArchive');
+    expect(archiveViolation!.detail).toContain('subPageCount');
+
+    const { landing: _l, ...brokenRestore } = restored;
+    const [restoreViolation] = checkPayloadDrift(definition, brokenRestore);
+    expect(restoreViolation!.resource).toBe('PageRestore');
+    expect(restoreViolation!.detail).toContain('landing');
+  });
+
+  it('`link_page` probes the pair, and its `action` / `changed` extras do not hide a dropped pair field', () => {
+    const definition = linkPagePayload as never;
+    expect(checkPayloadDrift(definition, linked)).toEqual([]);
+    const { workItemId: _w, ...broken } = linked;
+    const [violation] = checkPayloadDrift(definition, broken);
+    expect(violation!.resource).toBe('PageLinkPair');
+    expect(violation!.detail).toContain('workItemId');
+  });
+
+  it('the payload schemas parse the tool answers they declare', () => {
+    expect(archivePagePayload.schema.safeParse(archived).success).toBe(true);
+    expect(archivePagePayload.schema.safeParse(restored).success).toBe(true);
+    expect(linkPagePayload.schema.safeParse(linked).success).toBe(true);
+    expect(linkPagePayload.schema.safeParse({ ...linked, changed: 'yes' }).success).toBe(false);
   });
 });
