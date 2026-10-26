@@ -237,6 +237,45 @@ export const workItemRevisionRepository = {
   },
 
   /**
+   * Resolve a set of client-supplied `baseRevision` values to the anchor
+   * {@link findLatestIdsByWorkItemIds} would have answered at that revision's
+   * moment (MOTIR-9603): the newest revision of the SAME work item at or before
+   * it, in that method's total order (`changedAt DESC, id DESC`), skipping a pure
+   * status move exactly as it does.
+   *
+   * Keyed by the value passed in, answering the revision's own `workItemId` and
+   * the resolved `anchorId`. A value naming no revision in this workspace — a
+   * timestamp, a work-item id, another tenant's revision under RLS — has no
+   * entry, which is how the caller tells an anchor from a value that cannot be
+   * one. `anchorId` is null only when nothing but status moves precedes it.
+   */
+  async resolveAnchors(
+    revisionIds: string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Map<string, { workItemId: string; anchorId: string | null }>> {
+    if (revisionIds.length === 0) return new Map();
+    const rows = await tx.$queryRaw<
+      Array<{ baseId: string; workItemId: string; anchorId: string | null }>
+    >`
+      SELECT b."id" AS "baseId", b."workItemId", (
+        SELECT r."id"
+        FROM "work_item_revision" r
+        WHERE r."workItemId" = b."workItemId"
+          AND (r."changedAt", r."id") <= (b."changedAt", b."id")
+          AND NOT (
+            r."diff" ?& ARRAY['status']
+            AND (SELECT count(*) FROM jsonb_object_keys(r."diff")) = 1
+          )
+        ORDER BY r."changedAt" DESC, r."id" DESC
+        LIMIT 1
+      ) AS "anchorId"
+      FROM "work_item_revision" b
+      WHERE b."id" IN (${Prisma.join(revisionIds)})
+    `;
+    return new Map(rows.map((r) => [r.baseId, { workItemId: r.workItemId, anchorId: r.anchorId }]));
+  },
+
+  /**
    * The `perItem` NEWEST revisions of each work item in `workItemIds`, reduced to
    * their `changeKind`, `changedAt` and the top-level KEYS of their `diff` — newest
    * first within each item (MOTIR-5399).

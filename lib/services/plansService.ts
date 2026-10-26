@@ -4192,6 +4192,62 @@ interface ReparentMove {
 }
 
 /**
+ * Resolve every `modify` / `remove` proposal's `baseRevision` to the anchor the
+ * staleness rule compares against, and REFUSE one that cannot be an anchor
+ * (MOTIR-9603). Returns the resolved value per incoming proposal index; a
+ * proposal with no `baseRevision` has no entry.
+ *
+ * ⚠️ WHY A VALUE THAT NAMES NO REVISION IS REFUSED RATHER THAN STORED. The field
+ * is client-supplied free text, and `base_revision_drift` compares it to the
+ * target's latest revision ID by equality. A value that is not one of that
+ * target's revision ids can never equal it, so the proposal reads "may be out of
+ * date" from the moment it is written, however untouched the card is — the
+ * reviewer learns to click through the warning, and it means nothing on the day
+ * a real concurrent edit happens. Plan `cmvoazqd0004ihnqweisfq5b8` is the
+ * fixture: its two flagged `modify`s carried the target's `updatedAt`
+ * (`2026-10-19T12:49:07.705Z`) as `baseRevision`, and its four unflagged ones
+ * carried none. The target lock's park was not the cause — a pure status move is
+ * already outside the anchor (MOTIR-5646).
+ *
+ * ⚠️ AND WHY A REAL REVISION IS RESOLVED RATHER THAN STORED AS SENT. The anchor
+ * skips a pure status move, so an author who took the id of the card's newest
+ * revision from its history — where that revision is a status move — would hold
+ * an id the anchor never answers, and trip the same false flag. Resolving it to
+ * the newest non-status revision at or before it gives the id `skeleton` would
+ * have served at that moment, so a genuine edit made after the author's read
+ * still moves the anchor and still flags `edited`.
+ */
+async function resolveBaseRevisionsAtAppend(
+  proposals: readonly ProposalInput[],
+  tx: Prisma.TransactionClient,
+): Promise<Map<number, string>> {
+  const sent = proposals.flatMap((p, index) =>
+    p.op !== 'add' && p.workItemId && p.baseRevision != null
+      ? [{ index, workItemId: p.workItemId, baseRevision: p.baseRevision }]
+      : [],
+  );
+  const resolved = new Map<number, string>();
+  if (sent.length === 0) return resolved;
+  const anchors = await workItemRevisionRepository.resolveAnchors(
+    [...new Set(sent.map((s) => s.baseRevision))],
+    tx,
+  );
+  for (const s of sent) {
+    const anchor = anchors.get(s.baseRevision);
+    if (!anchor || anchor.workItemId !== s.workItemId) {
+      throw new InvalidProposalError(
+        `${proposalLabel({ op: proposals[s.index]!.op, workItemId: s.workItemId })}: ` +
+          `baseRevision "${s.baseRevision}" is not a revision of its target. Send the ` +
+          'target’s `revision` as `skeleton` returns it — a revision id, never a timestamp ' +
+          'or a work-item id — or omit baseRevision.',
+      );
+    }
+    resolved.set(s.index, anchor.anchorId ?? s.baseRevision);
+  }
+  return resolved;
+}
+
+/**
  * Shared body of the two proposal-edit paths: lock the plan, assert it is in
  * `expectedStatus`, sparse-merge the `UpdateProposalInput` over the `add`'s
  * `proposedFields`, re-validate (non-empty title + leaf sizing), and persist —
@@ -5644,6 +5700,12 @@ export const plansService = {
             await assertFolderPlacementsLegalAtAppend(withIncoming, ctx, fresh.projectId, tx);
           }
 
+          // ⚠️ THE BASE-REVISION GATE, AT THE APPEND (MOTIR-9603) — a value that
+          // is not a revision of its target is refused, and a real one is
+          // resolved to the anchor the staleness rule compares against. Before
+          // the park, which writes nothing this resolution reads.
+          const baseRevisions = await resolveBaseRevisionsAtAppend(proposals, tx);
+
           // ⚠️ PARK THE PLAN'S COMMITTED TARGETS — BEFORE THE FIRST INSERT
           // (MOTIR-5645; `docs/decisions/agent-authored-plans.md` AMENDMENT 16
           // D1). This is the ONE park door: every authoring path reaches the
@@ -5696,7 +5758,7 @@ export const plansService = {
               parentRef: p.parentRef ?? null,
               blockedByRefs: p.blockedByRefs ?? [],
               supersedesRefs: p.op === 'add' ? (p.supersedesRefs ?? []) : [],
-              baseRevision: p.baseRevision ?? null,
+              baseRevision: baseRevisions.get(index) ?? p.baseRevision ?? null,
               reason: p.op === 'remove' && p.reason ? p.reason.trim() : null,
               ...(p.op === 'add' && p.proposedFields
                 ? {
