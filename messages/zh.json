@@ -6787,6 +6787,156 @@
     "internalBilling": {
       "badge": "内部计费",
       "note": "该组织与客户完全一样计费，随后被补偿——下方每个数字都是真实的，余额净额为零。"
+    },
+    "fleetUse": {
+      "title": "集群用量",
+      "lead": "你的计划允许同时运行多少、当前在运行什么、哪些在等待",
+      "yourPlan": "你的计划：",
+      "planNotRead": "未能读取计划",
+      "noPlanLimits": "无计划上限",
+      "loading": "加载中…",
+      "label": {
+        "agentRunsInParallel": "并行智能体运行",
+        "agentsRunningInOrg": "每个组织托管智能体",
+        "agentsPerPerson": "每人托管智能体",
+        "ciJobsInFlight": "进行中的 CI 任务"
+      },
+      "explain": {
+        "agentRunsInParallel": "同时运行的托管智能体任务，超出部分排队等待。",
+        "agentsRunningInOrg": "整个组织同时运行的托管智能体，超出时启动会被拒绝，不排队。",
+        "agentsPerPerson": "每人可持有的活动托管智能体，超出时新建会被拒绝，不排队。",
+        "ciJobsInFlight": "Motir 运行器上同时进行的 CI 任务，超出部分排队等待。"
+      },
+      "inUseOf": "{inUse} / {figure}",
+      "membersAt": "{count, plural, other {# 名成员}}达到 {figure} / {figure}",
+      "running": "{count} 个运行中",
+      "noLimit": "无上限",
+      "notRead": "未能读取",
+      "source": {
+        "staffOverride": "由 Motir 为你的组织设定：同时 {figure} 个 CI 任务",
+        "notRead": "未能读取你的 CI 上限，CI 任务会等到可以读取为止。其他数字是最新的。",
+        "granted": {
+          "agentRunsInParallel": "{figure} — 已批准 {vcpu} vCPU ÷ 2，使用你自己的智能体运行器账户",
+          "ciJobsInFlight": "{figure} — 已批准 {vcpu} vCPU ÷ 2，使用你自己的 CI 运行器账户"
+        },
+        "sharedFloor": {
+          "agentRunsInParallel": "你的智能体运行器账户仍在共享底线上，按 Max 上限",
+          "ciJobsInFlight": "你的 CI 运行器账户尚未上线时的共享底线上限：{figure} 个运行器"
+        }
+      },
+      "waiting": {
+        "none": "没有等待",
+        "count": "{count} 个排队",
+        "planLimit": "受计划上限限制 · 更换计划可以解除",
+        "poolFull": {
+          "agentRunsInParallel": "所有智能体运行器账户都已满 · 这是 Motir 的容量，不是你的计划",
+          "ciJobsInFlight": "所有 CI 运行器账户都已满 · 这是 Motir 的容量，不是你的计划"
+        },
+        "other": "其他原因"
+      },
+      "indexing": "代码图索引：{count} 个运行中 · 不计入任何计划上限",
+      "indexingNotRead": "代码图索引：未能读取 · 不计入任何计划上限",
+      "whereItRuns": "运行位置",
+      "kind": {
+        "ci_runner": "CI 运行器",
+        "code_graph_index": "索引器",
+        "hosted_agent": "智能体运行器",
+        "agent_instance": "智能体托管"
+      },
+      "provider": {
+        "fly": "Fly",
+        "shared_aws_pool": "Motir 的共享 AWS 池",
+        "own_aws_account": "你组织自己的 AWS 账户"
+      },
+      "notReadNotice": "未能读取你的计划上限或当前运行情况。这里不是零，而是未知。",
+      "tryAgain": "重试",
+      "noPlanLimitsNote": "该组织由 Motir 运营，没有计划上限。当前运行情况不显示上限。",
+      "noFleet": "你的计划不包含托管智能体运行、CI 运行器或智能体。请在上方的 Motir AI 中选择计划来运行它们。",
+      "accounts": {
+        "title": "你自己的 AWS 账户",
+        "notRead": "暂时未能读取你的账户状态。",
+        "kind": {
+          "ci_runner": "CI 运行器",
+          "hosted_agent": "智能体运行器",
+          "indexer_and_hoster": "索引器 + 智能体托管"
+        },
+        "role": {
+          "ci_runner": "运行你的 CI 任务",
+          "hosted_agent": "运行你的托管智能体任务",
+          "indexer_and_hoster": "为你的代码建索引并托管你的智能体"
+        },
+        "state": {
+          "created": "已创建",
+          "quota_requested": "已申请配额",
+          "granted": "已批准",
+          "live": "已上线"
+        },
+        "quotaDenied": "配额被拒",
+        "since": "自 {when}",
+        "vcpuAsked": "申请的 vCPU",
+        "vcpuGranted": "批准的 vCPU",
+        "noneYet": "暂无",
+        "sharedFloor": {
+          "ci_runner": "仍在共享底线上：CI {figure} 个运行器。",
+          "hosted_agent": "仍在共享底线上，按 Max 上限：同时 {figure} 个智能体运行。",
+          "indexer_and_hoster": "索引和智能体托管仍在共享底线上：托管智能体每人 {perPerson} 个、每个组织 {perOrg} 个。"
+        },
+        "liveOnceNetwork": "账户网络建好后即上线。",
+        "deniedNote": "在 AWS 批准提额之前，账户保持在“{state}”。",
+        "keptSpots": "始终为索引保留 {count} 个机器位；智能体实例使用其余部分。"
+      },
+      "quotaOutcome": {
+        "pending": "AWS 处理中",
+        "case_opened": "AWS 已建立工单",
+        "approved": "AWS 已批准",
+        "denied": "AWS 已拒绝",
+        "not_approved": "AWS 未批准",
+        "case_closed": "AWS 已关闭工单",
+        "invalid_request": "AWS 无法读取该申请"
+      },
+      "request": {
+        "button": "申请更多容量",
+        "status": {
+          "open": "已提交",
+          "filed": "已提交给 AWS",
+          "closed": "已关闭"
+        },
+        "granted": "已批准 {vcpu} vCPU",
+        "asked": "{date} 申请了 {vcpu} vCPU",
+        "line": {
+          "open": "已发给 Motir，由 Motir 向 AWS 提交",
+          "filed": "Motir 已向 AWS 提交，AWS 尚未答复",
+          "granted": "AWS 已批准；下次读取时数字会更新",
+          "denied": "AWS 拒绝了提额；可以再次申请",
+          "closedNote": "Motir 已关闭：“{note}”",
+          "closed": "Motir 已关闭；AWS 的答复：{outcome}"
+        }
+      },
+      "dialog": {
+        "title": "申请更多容量",
+        "account": "{account}账户 · 已批准 {vcpu} vCPU。Motir 会向 AWS 提交提额，并告诉你 AWS 的答复。",
+        "accountNoneGranted": "{account}账户 · 尚未批准任何 vCPU。Motir 会向 AWS 提交提额，并告诉你 AWS 的答复。",
+        "figureLabel": "需要的 vCPU",
+        "figurePlaceholder": "例如 300",
+        "figureHelp": "一个大于当前已批准数量的整数。",
+        "figureInvalid": "请填写大于 {granted}（当前已批准的 vCPU）的整数。",
+        "reasonLabel": "为什么需要",
+        "reasonPlaceholder": "什么会不够用，什么时候",
+        "reasonHelp": "最多 2,000 个字符。Motir 会在向 AWS 提交前阅读。",
+        "reasonInvalid": "请说明原因，最多 2,000 个字符。",
+        "cancel": "取消",
+        "send": "发送申请",
+        "sending": "发送中…",
+        "sent": "申请已发送。Motir 会告诉你 AWS 的答复。",
+        "refused": {
+          "open": "该账户已有一个未完成的申请。它的状态显示在账户行上；关闭后再申请。",
+          "notFound": "你的组织还没有这一类的自有账户，因此没有可提额的对象。购买 Host 后会创建。",
+          "forbidden": "只有组织的所有者或管理员可以申请更多容量。",
+          "network": "申请未能发送。请检查网络后重试——什么也没有发送。",
+          "invalid": "无法读取该申请。请检查两个字段后重新发送。",
+          "failed": "申请没有发送。请稍后重试。"
+        }
+      }
     }
   },
   "draftWithAi": {

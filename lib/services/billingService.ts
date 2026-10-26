@@ -496,6 +496,15 @@ export const billingService = {
   },
 
   /**
+   * The billing page's VIEW gate, exposed (Story MOTIR-9368 · MOTIR-9661) so the
+   * Fleet use read refuses exactly whom Billing & plans refuses: 404 off-cloud and
+   * for a non-member, 403 for a plain member.
+   */
+  async assertCanViewBilling(input: OrgActorInput): Promise<void> {
+    await assertCanViewBilling(input);
+  },
+
+  /**
    * Shared mutation gate: cloud-on + the actor holds the `manageBilling`
    * capability — the Owner or an Admin (ADR §7 as amended 2026-09-25 by
    * MOTIR-6305: billing mutations were owner-only until the role model,

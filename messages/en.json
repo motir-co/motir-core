@@ -6793,6 +6793,156 @@
     "internalBilling": {
       "badge": "Internal billing",
       "note": "This organization is charged exactly like a customer and then made whole — every figure below is real, and the balance nets to zero."
+    },
+    "fleetUse": {
+      "title": "Fleet use",
+      "lead": "What your plan lets run at once, what is running now, and what is waiting",
+      "yourPlan": "Your plan:",
+      "planNotRead": "Plan not read",
+      "noPlanLimits": "No plan limits",
+      "loading": "Loading…",
+      "label": {
+        "agentRunsInParallel": "Agent runs in parallel",
+        "agentsRunningInOrg": "Hosted agents per organisation",
+        "agentsPerPerson": "Hosted agents per person",
+        "ciJobsInFlight": "CI jobs in flight"
+      },
+      "explain": {
+        "agentRunsInParallel": "Hosted agent runs that run at the same time. More wait their turn in the queue.",
+        "agentsRunningInOrg": "Hosted agents running across the organisation at once. A start beyond it is refused, not queued.",
+        "agentsPerPerson": "Live hosted agents one person may hold. A new one beyond it is refused, not queued.",
+        "ciJobsInFlight": "CI jobs on Motir's runners at once. More wait in the queue."
+      },
+      "inUseOf": "{inUse} of {figure}",
+      "membersAt": "{count, plural, one {# member} other {# members}} at {figure} of {figure}",
+      "running": "{count} running",
+      "noLimit": "No limit",
+      "notRead": "Not read",
+      "source": {
+        "staffOverride": "Set by Motir for your organisation: {figure} CI jobs at once",
+        "notRead": "Your CI figure couldn't be read, so CI jobs wait until it can. The other figures are current.",
+        "granted": {
+          "agentRunsInParallel": "{figure} — {vcpu} vCPU granted ÷ 2, on your own agent runner account",
+          "ciJobsInFlight": "{figure} — {vcpu} vCPU granted ÷ 2, on your own CI runner account"
+        },
+        "sharedFloor": {
+          "agentRunsInParallel": "Max's limit while your agent runner account is on the shared floor",
+          "ciJobsInFlight": "The shared floor's limit while your CI runner account is not live: {figure} runners"
+        }
+      },
+      "waiting": {
+        "none": "Nothing waiting",
+        "count": "{count} waiting",
+        "planLimit": "for your plan's limit · a plan change would lift it",
+        "poolFull": {
+          "agentRunsInParallel": "because every agent runner account is full · Motir's capacity, not your plan",
+          "ciJobsInFlight": "because every CI runner account is full · Motir's capacity, not your plan"
+        },
+        "other": "for another reason"
+      },
+      "indexing": "Code-graph indexing: {count} running · counted against no plan limit",
+      "indexingNotRead": "Code-graph indexing: not read · counted against no plan limit",
+      "whereItRuns": "Where it runs",
+      "kind": {
+        "ci_runner": "CI runner",
+        "code_graph_index": "Indexer",
+        "hosted_agent": "Agent runner",
+        "agent_instance": "Agent hoster"
+      },
+      "provider": {
+        "fly": "Fly",
+        "shared_aws_pool": "Motir's shared AWS pool",
+        "own_aws_account": "Your organisation's own AWS account"
+      },
+      "notReadNotice": "We couldn't read your plan's figures or what is running. Nothing here is zero; it is unknown.",
+      "tryAgain": "Try again",
+      "noPlanLimitsNote": "This organisation is run by Motir and has no plan limits. What is running is shown without a limit.",
+      "noFleet": "Your plan includes no hosted agent runs, CI runners or agents. Choose a plan in Motir AI above to run them.",
+      "accounts": {
+        "title": "Your own AWS accounts",
+        "notRead": "We couldn't read your accounts' state just now.",
+        "kind": {
+          "ci_runner": "CI runner",
+          "hosted_agent": "Agent runner",
+          "indexer_and_hoster": "Indexer + agent hoster"
+        },
+        "role": {
+          "ci_runner": "Runs your CI jobs",
+          "hosted_agent": "Runs your hosted agent runs",
+          "indexer_and_hoster": "Indexes your code and hosts your agents"
+        },
+        "state": {
+          "created": "Created",
+          "quota_requested": "Quota requested",
+          "granted": "Granted",
+          "live": "Live"
+        },
+        "quotaDenied": "Quota denied",
+        "since": "since {when}",
+        "vcpuAsked": "vCPU asked",
+        "vcpuGranted": "vCPU granted",
+        "noneYet": "None yet",
+        "sharedFloor": {
+          "ci_runner": "Still on the shared floor: CI at {figure} runners.",
+          "hosted_agent": "Still on the shared floor at Max's limits: {figure} agent runs at once.",
+          "indexer_and_hoster": "Indexing and agent hosting still on the shared floor: hosted agents at {perPerson} per person and {perOrg} per organisation."
+        },
+        "liveOnceNetwork": "Live once the account's network is built.",
+        "deniedNote": "The account stays at “{state}” until AWS grants a raise.",
+        "keptSpots": "{count} machine spots are always kept for indexing; agent instances run on the rest."
+      },
+      "quotaOutcome": {
+        "pending": "Pending with AWS",
+        "case_opened": "AWS opened a case",
+        "approved": "Approved by AWS",
+        "denied": "Denied by AWS",
+        "not_approved": "Not approved by AWS",
+        "case_closed": "AWS closed the case",
+        "invalid_request": "AWS could not read the request"
+      },
+      "request": {
+        "button": "Request more capacity",
+        "status": {
+          "open": "Open",
+          "filed": "Filed with AWS",
+          "closed": "Closed"
+        },
+        "granted": "Granted {vcpu} vCPU",
+        "asked": "Asked {vcpu} vCPU on {date}",
+        "line": {
+          "open": "sent to Motir, which files it with AWS",
+          "filed": "Motir filed it with AWS; AWS has not answered yet",
+          "granted": "AWS granted it; your figures follow on the next read",
+          "denied": "AWS refused the raise; you can ask again",
+          "closedNote": "closed by Motir: “{note}”",
+          "closed": "closed by Motir; AWS answered: {outcome}"
+        }
+      },
+      "dialog": {
+        "title": "Request more capacity",
+        "account": "{account} account · {vcpu} vCPU granted. Motir files the raise with AWS and tells you what AWS answers.",
+        "accountNoneGranted": "{account} account · nothing granted yet. Motir files the raise with AWS and tells you what AWS answers.",
+        "figureLabel": "vCPU you need",
+        "figurePlaceholder": "e.g. 300",
+        "figureHelp": "A whole number above what is granted now.",
+        "figureInvalid": "Ask for a whole number above {granted}, the vCPU granted now.",
+        "reasonLabel": "Why you need it",
+        "reasonPlaceholder": "What runs out, and when",
+        "reasonHelp": "Up to 2,000 characters. Motir reads it before filing with AWS.",
+        "reasonInvalid": "Say why you need it, in up to 2,000 characters.",
+        "cancel": "Cancel",
+        "send": "Send request",
+        "sending": "Sending…",
+        "sent": "Request sent. Motir will tell you what AWS answers.",
+        "refused": {
+          "open": "A request for this account is already open. Its status is on the account row; ask again once it closes.",
+          "notFound": "Your organisation has no account of its own of this kind yet, so there is nothing to raise. It is created after you buy Host.",
+          "forbidden": "Only an owner or admin of the organisation can ask for more capacity.",
+          "network": "We couldn't send the request. Check your connection and try again — nothing was sent.",
+          "invalid": "The request could not be read. Check both fields and send it again.",
+          "failed": "The request was not sent. Try again in a moment."
+        }
+      }
     }
   },
   "draftWithAi": {

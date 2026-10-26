@@ -336,6 +336,28 @@ describe('billingService.getBillingStatus', () => {
 // → pool, the meter → consumption, the charge row → credits), never a
 // placeholder and never a hardcoded null. The motir-ai boundary is the suite's
 // existing mock; everything else runs against real Postgres.
+describe('billingService.assertCanViewBilling (the Fleet use gate, MOTIR-9661)', () => {
+  it('refuses exactly whom Billing & plans refuses, and admits an owner or admin', async () => {
+    const { organizationId, owner, admin, member, outsider } = await makeOrgWithRoles();
+    await expect(
+      billingService.assertCanViewBilling({ organizationId, actorUserId: owner.id }),
+    ).resolves.toBeUndefined();
+    await expect(
+      billingService.assertCanViewBilling({ organizationId, actorUserId: admin.id }),
+    ).resolves.toBeUndefined();
+    await expect(
+      billingService.assertCanViewBilling({ organizationId, actorUserId: member.id }),
+    ).rejects.toBeInstanceOf(BillingForbiddenError);
+    await expect(
+      billingService.assertCanViewBilling({ organizationId, actorUserId: outsider.id }),
+    ).rejects.toBeInstanceOf(OrganizationNotFoundError);
+    delete process.env['MOTIR_CLOUD'];
+    await expect(
+      billingService.assertCanViewBilling({ organizationId, actorUserId: owner.id }),
+    ).rejects.toBeInstanceOf(BillingNotAvailableError);
+  });
+});
+
 describe('billingService.getBillingStatus — the CI entitlement (③ Motir CI)', () => {
   beforeEach(() => {
     process.env['GITHUB_FALLBACK_ORG'] = 'motir-projects';

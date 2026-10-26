@@ -10867,6 +10867,14 @@ model CiRunnerProvisioningIntent {
   /// The intent's FIRST `shard_capacity` deferral (MOTIR-8968), at admission or
   /// at boot; never cleared. The headroom reading counts sustained deferral from it.
   shardCapacityDeferredAt DateTime?             @map("shard_capacity_deferred_at")
+  /// Why the intent is waiting NOW (MOTIR-9666): the `AdmissionDeferralReason`
+  /// the gate gave it on its latest pass, written only when it changes, and
+  /// cleared by the claim. NULL = not judged yet, or not waiting. The tenant's
+  /// Fleet use reading splits plan-limit waits from full-pool waits from it.
+  waitingReason           String?               @map("waiting_reason")
+  /// When `waitingReason` was first given (MOTIR-9666) — moves only when the
+  /// reason changes.
+  waitingSince            DateTime?             @map("waiting_since")
 
   /// GitHub's numeric runner id, from the JIT-config mint. Stored because
   /// `generate-jitconfig` REGISTERS the runner before any container exists

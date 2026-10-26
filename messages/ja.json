@@ -6793,6 +6793,156 @@
     "internalBilling": {
       "badge": "社内請求",
       "note": "この組織は顧客とまったく同じように請求され、その後補填されます。以下の数値はすべて実際のもので、残高は差し引きゼロになります。"
+    },
+    "fleetUse": {
+      "title": "フリートの利用状況",
+      "lead": "プランで同時に実行できる数、いま実行中のもの、待機中のもの",
+      "yourPlan": "プラン：",
+      "planNotRead": "プランを読み取れませんでした",
+      "noPlanLimits": "プランの上限なし",
+      "loading": "読み込み中…",
+      "label": {
+        "agentRunsInParallel": "並列のエージェント実行",
+        "agentsRunningInOrg": "組織あたりのホスト型エージェント",
+        "agentsPerPerson": "1 人あたりのホスト型エージェント",
+        "ciJobsInFlight": "進行中の CI ジョブ"
+      },
+      "explain": {
+        "agentRunsInParallel": "同時に実行されるホスト型エージェントのジョブです。上限を超えた分は待機します。",
+        "agentsRunningInOrg": "組織全体で同時に動くホスト型エージェントです。上限を超えると起動は拒否され、待機しません。",
+        "agentsPerPerson": "1 人が持てるアクティブなホスト型エージェントです。上限を超えると作成は拒否され、待機しません。",
+        "ciJobsInFlight": "Motir のランナーで同時に進行する CI ジョブです。上限を超えた分は待機します。"
+      },
+      "inUseOf": "{inUse} / {figure}",
+      "membersAt": "{count, plural, other {# 人のメンバー}}が {figure} / {figure} に到達",
+      "running": "{count} 件実行中",
+      "noLimit": "上限なし",
+      "notRead": "読み取れませんでした",
+      "source": {
+        "staffOverride": "Motir が組織向けに設定：同時に {figure} 件の CI ジョブ",
+        "notRead": "CI の上限を読み取れませんでした。読み取れるまで CI ジョブは待機します。その他の数値は最新です。",
+        "granted": {
+          "agentRunsInParallel": "{figure} — 承認済み {vcpu} vCPU ÷ 2、組織のエージェントランナーアカウントで実行",
+          "ciJobsInFlight": "{figure} — 承認済み {vcpu} vCPU ÷ 2、組織の CI ランナーアカウントで実行"
+        },
+        "sharedFloor": {
+          "agentRunsInParallel": "エージェントランナーアカウントはまだ共有の下限にあり、Max の上限で動いています",
+          "ciJobsInFlight": "CI ランナーアカウントが稼働するまでの共有の下限：{figure} 台のランナー"
+        }
+      },
+      "waiting": {
+        "none": "待機なし",
+        "count": "{count} 件待機中",
+        "planLimit": "プランの上限による待機 · プランを変更すると解消します",
+        "poolFull": {
+          "agentRunsInParallel": "すべてのエージェントランナーアカウントが満杯です · これは Motir の容量で、プランの上限ではありません",
+          "ciJobsInFlight": "すべての CI ランナーアカウントが満杯です · これは Motir の容量で、プランの上限ではありません"
+        },
+        "other": "その他の理由"
+      },
+      "indexing": "コードグラフのインデックス作成：{count} 件実行中 · どのプランの上限にも含まれません",
+      "indexingNotRead": "コードグラフのインデックス作成：読み取れませんでした · どのプランの上限にも含まれません",
+      "whereItRuns": "実行場所",
+      "kind": {
+        "ci_runner": "CI ランナー",
+        "code_graph_index": "インデクサー",
+        "hosted_agent": "エージェントランナー",
+        "agent_instance": "エージェントのホスト"
+      },
+      "provider": {
+        "fly": "Fly",
+        "shared_aws_pool": "Motir の共有 AWS プール",
+        "own_aws_account": "組織専用の AWS アカウント"
+      },
+      "notReadNotice": "プランの上限と現在の実行状況を読み取れませんでした。ここはゼロではなく、不明です。",
+      "tryAgain": "再試行",
+      "noPlanLimitsNote": "この組織は Motir が運営しており、プランの上限はありません。現在の実行状況は上限なしで表示されます。",
+      "noFleet": "このプランにはホスト型エージェントの実行、CI ランナー、エージェントが含まれていません。実行するには、上の Motir AI でプランを選んでください。",
+      "accounts": {
+        "title": "組織専用の AWS アカウント",
+        "notRead": "アカウントの状態をいまは読み取れませんでした。",
+        "kind": {
+          "ci_runner": "CI ランナー",
+          "hosted_agent": "エージェントランナー",
+          "indexer_and_hoster": "インデクサー + エージェントのホスト"
+        },
+        "role": {
+          "ci_runner": "CI ジョブを実行します",
+          "hosted_agent": "ホスト型エージェントのジョブを実行します",
+          "indexer_and_hoster": "コードのインデックスを作成し、エージェントをホストします"
+        },
+        "state": {
+          "created": "作成済み",
+          "quota_requested": "クォータ申請済み",
+          "granted": "承認済み",
+          "live": "稼働中"
+        },
+        "quotaDenied": "クォータ拒否",
+        "since": "{when} から",
+        "vcpuAsked": "申請した vCPU",
+        "vcpuGranted": "承認された vCPU",
+        "noneYet": "まだありません",
+        "sharedFloor": {
+          "ci_runner": "まだ共有の下限にあります：CI は {figure} 台のランナー。",
+          "hosted_agent": "まだ共有の下限にあり、Max の上限で動いています：同時に {figure} 件のエージェント実行。",
+          "indexer_and_hoster": "インデックス作成とエージェントのホストはまだ共有の下限にあります：ホスト型エージェントは 1 人あたり {perPerson}、組織あたり {perOrg}。"
+        },
+        "liveOnceNetwork": "アカウントのネットワークが構築されると稼働します。",
+        "deniedNote": "AWS が引き上げを承認するまで、アカウントは「{state}」のままです。",
+        "keptSpots": "インデックス作成のために常に {count} 台分のマシン枠を確保します。エージェントのインスタンスは残りを使います。"
+      },
+      "quotaOutcome": {
+        "pending": "AWS で処理中",
+        "case_opened": "AWS がケースを作成",
+        "approved": "AWS が承認",
+        "denied": "AWS が拒否",
+        "not_approved": "AWS が未承認",
+        "case_closed": "AWS がケースを終了",
+        "invalid_request": "AWS が申請を読み取れませんでした"
+      },
+      "request": {
+        "button": "容量の追加を申請",
+        "status": {
+          "open": "申請済み",
+          "filed": "AWS に提出済み",
+          "closed": "終了"
+        },
+        "granted": "{vcpu} vCPU を承認",
+        "asked": "{date} に {vcpu} vCPU を申請",
+        "line": {
+          "open": "Motir に送信済み。Motir が AWS に提出します",
+          "filed": "Motir が AWS に提出済み。AWS からはまだ回答がありません",
+          "granted": "AWS が承認しました。次回の読み取りで数値が更新されます",
+          "denied": "AWS が引き上げを拒否しました。再度申請できます",
+          "closedNote": "Motir が終了しました：「{note}」",
+          "closed": "Motir が終了しました。AWS の回答：{outcome}"
+        }
+      },
+      "dialog": {
+        "title": "容量の追加を申請",
+        "account": "{account}アカウント · 承認済み {vcpu} vCPU。Motir が AWS に引き上げを申請し、AWS の回答をお知らせします。",
+        "accountNoneGranted": "{account}アカウント · まだ vCPU は承認されていません。Motir が AWS に引き上げを申請し、AWS の回答をお知らせします。",
+        "figureLabel": "必要な vCPU",
+        "figurePlaceholder": "例：300",
+        "figureHelp": "現在の承認数より大きい整数です。",
+        "figureInvalid": "{granted}（現在承認されている vCPU）より大きい整数を入力してください。",
+        "reasonLabel": "必要な理由",
+        "reasonPlaceholder": "何が、いつ足りなくなるか",
+        "reasonHelp": "2,000 文字まで。Motir が AWS に提出する前に確認します。",
+        "reasonInvalid": "理由を 2,000 文字以内で入力してください。",
+        "cancel": "キャンセル",
+        "send": "申請を送信",
+        "sending": "送信中…",
+        "sent": "申請を送信しました。AWS の回答は Motir からお知らせします。",
+        "refused": {
+          "open": "このアカウントにはすでに未完了の申請があります。状態はアカウントの行に表示されます。終了してから再度申請してください。",
+          "notFound": "組織にはこの種類の専用アカウントがまだないため、引き上げる対象がありません。Host を購入すると作成されます。",
+          "forbidden": "容量の追加を申請できるのは、組織のオーナーまたは管理者だけです。",
+          "network": "申請を送信できませんでした。接続を確認して再試行してください。何も送信されていません。",
+          "invalid": "申請を読み取れませんでした。両方の欄を確認して、もう一度送信してください。",
+          "failed": "申請は送信されませんでした。しばらくしてから再試行してください。"
+        }
+      }
     }
   },
   "draftWithAi": {

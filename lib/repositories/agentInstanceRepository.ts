@@ -461,6 +461,27 @@ export const agentInstanceRepository = {
     return tx.agentInstance.count({ where: { ownerId, ...LIVE } });
   },
 
+  /**
+   * How many of `ownerIds` hold at least `figure` live instances in ANY project
+   * (MOTIR-9660) — the per-user cap's count ({@link countLiveForOwnerEverywhere},
+   * the same live predicate), taken for every owner at once. Only the number:
+   * never who. The caller resolves the org's members; this reads
+   * `agent_instance` alone, under its system read arm, so no org GUC is needed.
+   */
+  async countOwnersAtLiveFigure(
+    ownerIds: readonly string[],
+    figure: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    if (ownerIds.length === 0) return 0;
+    const rows = await tx.agentInstance.groupBy({
+      by: ['ownerId'],
+      where: { ownerId: { in: [...ownerIds] }, ...LIVE },
+      _count: { _all: true },
+    });
+    return rows.filter((row) => row._count._all >= figure).length;
+  },
+
   /** Live instances in any of `states`, oldest state change first — the sweep's discovery. */
   async listLiveInStates(
     states: readonly AgentInstanceState[],

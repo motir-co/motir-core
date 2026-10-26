@@ -6796,6 +6796,156 @@
     "internalBilling": {
       "badge": "Interne facturering",
       "note": "Deze organisatie wordt precies als een klant gefactureerd en daarna gecompenseerd — elk bedrag hieronder is echt, en het saldo komt netto op nul uit."
+    },
+    "fleetUse": {
+      "title": "Vlootgebruik",
+      "lead": "Hoeveel je plan tegelijk mag uitvoeren, wat er nu draait en wat er wacht",
+      "yourPlan": "Je plan:",
+      "planNotRead": "Plan niet gelezen",
+      "noPlanLimits": "Geen plangrenzen",
+      "loading": "Laden…",
+      "label": {
+        "agentRunsInParallel": "Parallelle agentruns",
+        "agentsRunningInOrg": "Gehoste agents per organisatie",
+        "agentsPerPerson": "Gehoste agents per persoon",
+        "ciJobsInFlight": "Lopende CI-jobs"
+      },
+      "explain": {
+        "agentRunsInParallel": "Jobs van gehoste agents die tegelijk draaien. Meer wacht in de wachtrij.",
+        "agentsRunningInOrg": "Gehoste agents die tegelijk draaien in de hele organisatie. Daarboven wordt een start geweigerd, niet in de wachtrij gezet.",
+        "agentsPerPerson": "Actieve gehoste agents die één persoon kan hebben. Daarboven wordt een nieuwe geweigerd, niet in de wachtrij gezet.",
+        "ciJobsInFlight": "CI-jobs die tegelijk draaien op de runners van Motir. Meer wacht in de wachtrij."
+      },
+      "inUseOf": "{inUse} van {figure}",
+      "membersAt": "{count, plural, one {# lid} other {# leden}} op {figure} van {figure}",
+      "running": "{count} actief",
+      "noLimit": "Geen grens",
+      "notRead": "Niet gelezen",
+      "source": {
+        "staffOverride": "Door Motir ingesteld voor je organisatie: {figure} CI-jobs tegelijk",
+        "notRead": "Je CI-grens is niet gelezen, dus CI-jobs wachten tot die gelezen kan worden. De andere cijfers zijn actueel.",
+        "granted": {
+          "agentRunsInParallel": "{figure} — {vcpu} toegekende vCPU ÷ 2 op je eigen agentrunner-account",
+          "ciJobsInFlight": "{figure} — {vcpu} toegekende vCPU ÷ 2 op je eigen CI-runner-account"
+        },
+        "sharedFloor": {
+          "agentRunsInParallel": "Je agentrunner-account staat nog op de gedeelde ondergrens, met de grenzen van Max",
+          "ciJobsInFlight": "De gedeelde ondergrens tot je CI-runner-account live is: {figure} runners"
+        }
+      },
+      "waiting": {
+        "none": "Niets wacht",
+        "count": "{count} in de wachtrij",
+        "planLimit": "Door je plangrens · een ander plan heft die op",
+        "poolFull": {
+          "agentRunsInParallel": "Alle agentrunner-accounts zijn vol · dat is de capaciteit van Motir, niet je plan",
+          "ciJobsInFlight": "Alle CI-runner-accounts zijn vol · dat is de capaciteit van Motir, niet je plan"
+        },
+        "other": "Om een andere reden"
+      },
+      "indexing": "Indexering van de codegraaf: {count} actief · telt voor geen enkele plangrens",
+      "indexingNotRead": "Indexering van de codegraaf: niet gelezen · telt voor geen enkele plangrens",
+      "whereItRuns": "Waar het draait",
+      "kind": {
+        "ci_runner": "CI-runner",
+        "code_graph_index": "Indexer",
+        "hosted_agent": "Agentrunner",
+        "agent_instance": "Agenthosting"
+      },
+      "provider": {
+        "fly": "Fly",
+        "shared_aws_pool": "Gedeelde AWS-pool van Motir",
+        "own_aws_account": "Eigen AWS-account van je organisatie"
+      },
+      "notReadNotice": "Je plangrenzen en wat er draait, konden niet gelezen worden. Dit is niet nul, maar onbekend.",
+      "tryAgain": "Opnieuw proberen",
+      "noPlanLimitsNote": "Deze organisatie wordt door Motir beheerd en heeft geen plangrenzen. Wat er draait, wordt zonder grens getoond.",
+      "noFleet": "Je plan bevat geen runs van gehoste agents, CI-runners of agents. Kies hierboven onder Motir AI een plan om ze uit te voeren.",
+      "accounts": {
+        "title": "Je eigen AWS-accounts",
+        "notRead": "De status van je accounts kon nu niet gelezen worden.",
+        "kind": {
+          "ci_runner": "CI-runner",
+          "hosted_agent": "Agentrunner",
+          "indexer_and_hoster": "Indexer + agenthosting"
+        },
+        "role": {
+          "ci_runner": "Voert je CI-jobs uit",
+          "hosted_agent": "Voert de jobs van je gehoste agents uit",
+          "indexer_and_hoster": "Indexeert je code en host je agents"
+        },
+        "state": {
+          "created": "Aangemaakt",
+          "quota_requested": "Quotum aangevraagd",
+          "granted": "Toegekend",
+          "live": "Live"
+        },
+        "quotaDenied": "Quotum geweigerd",
+        "since": "sinds {when}",
+        "vcpuAsked": "Aangevraagde vCPU",
+        "vcpuGranted": "Toegekende vCPU",
+        "noneYet": "Nog geen",
+        "sharedFloor": {
+          "ci_runner": "Nog op de gedeelde ondergrens: CI {figure} runners.",
+          "hosted_agent": "Nog op de gedeelde ondergrens, met de grenzen van Max: {figure} agentruns tegelijk.",
+          "indexer_and_hoster": "Indexering en agenthosting staan nog op de gedeelde ondergrens: gehoste agents {perPerson} per persoon, {perOrg} per organisatie."
+        },
+        "liveOnceNetwork": "Live zodra het netwerk van het account gebouwd is.",
+        "deniedNote": "Het account blijft op ‘{state}’ tot AWS een verhoging toekent.",
+        "keptSpots": "{count} machineplaatsen blijven altijd gereserveerd voor indexering; agentinstanties gebruiken de rest."
+      },
+      "quotaOutcome": {
+        "pending": "In behandeling bij AWS",
+        "case_opened": "AWS heeft een case geopend",
+        "approved": "Goedgekeurd door AWS",
+        "denied": "Geweigerd door AWS",
+        "not_approved": "Niet goedgekeurd door AWS",
+        "case_closed": "AWS heeft de case gesloten",
+        "invalid_request": "AWS kon de aanvraag niet lezen"
+      },
+      "request": {
+        "button": "Meer capaciteit aanvragen",
+        "status": {
+          "open": "Aangevraagd",
+          "filed": "Ingediend bij AWS",
+          "closed": "Gesloten"
+        },
+        "granted": "{vcpu} vCPU toegekend",
+        "asked": "{vcpu} vCPU aangevraagd op {date}",
+        "line": {
+          "open": "Naar Motir gestuurd, die het bij AWS indient",
+          "filed": "Motir heeft het bij AWS ingediend; AWS heeft nog niet geantwoord",
+          "granted": "AWS heeft het toegekend; de cijfers worden bij de volgende lezing bijgewerkt",
+          "denied": "AWS heeft de verhoging geweigerd; je kunt het opnieuw aanvragen",
+          "closedNote": "Gesloten door Motir: ‘{note}’",
+          "closed": "Gesloten door Motir; antwoord van AWS: {outcome}"
+        }
+      },
+      "dialog": {
+        "title": "Meer capaciteit aanvragen",
+        "account": "{account}-account · {vcpu} vCPU toegekend. Motir dient de verhoging in bij AWS en laat je het antwoord van AWS weten.",
+        "accountNoneGranted": "{account}-account · nog geen vCPU toegekend. Motir dient de verhoging in bij AWS en laat je het antwoord van AWS weten.",
+        "figureLabel": "Benodigde vCPU",
+        "figurePlaceholder": "bijv. 300",
+        "figureHelp": "Een geheel getal boven wat nu is toegekend.",
+        "figureInvalid": "Vul een geheel getal boven {granted} in (de vCPU die nu zijn toegekend).",
+        "reasonLabel": "Waarom je ze nodig hebt",
+        "reasonPlaceholder": "Wat niet genoeg zal zijn, en wanneer",
+        "reasonHelp": "Maximaal 2.000 tekens. Motir leest het voordat het bij AWS wordt ingediend.",
+        "reasonInvalid": "Geef een reden van maximaal 2.000 tekens.",
+        "cancel": "Annuleren",
+        "send": "Aanvraag versturen",
+        "sending": "Versturen…",
+        "sent": "Aanvraag verstuurd. Motir laat je het antwoord van AWS weten.",
+        "refused": {
+          "open": "Er staat al een aanvraag open voor dit account. De status staat in de rij van het account; vraag opnieuw aan zodra die gesloten is.",
+          "notFound": "Je organisatie heeft nog geen eigen account van dit type, dus er is niets te verhogen. Het wordt aangemaakt bij de aankoop van Host.",
+          "forbidden": "Alleen eigenaren of beheerders van de organisatie kunnen meer capaciteit aanvragen.",
+          "network": "De aanvraag kon niet verstuurd worden. Controleer je verbinding en probeer het opnieuw — er is niets verstuurd.",
+          "invalid": "De aanvraag kon niet gelezen worden. Controleer beide velden en verstuur hem opnieuw.",
+          "failed": "De aanvraag is niet verstuurd. Probeer het zo opnieuw."
+        }
+      }
     }
   },
   "draftWithAi": {

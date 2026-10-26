@@ -51,6 +51,7 @@ the same primitives — no design→code gap.
 | **The larger credit pool plan** (AMENDMENT)                 | **`billing--larger-pool.mock.html`** (HTML mockup)                 | One more card at the end of the plans row, offered only from an estimate, 12 panels (with a 2b neighbour): no estimate · offered (the arrival, annual) · upgrade · current · the ladder covers it (absent, no notice) · above the top band (absent, one notice) · read-only · cadence switched · purchase refused · loading · read fails · narrow + dark. Amends panel 5's plan row only. See § "Amendment 2026-10-21 — the larger credit pool plan" at the end of this file.                                                                                                                                                                                                                                                                                                                                                                                                   |
 | **The Calculator — planned and run ranges** (AMENDMENT)     | **`billing--calculator--planned-and-run.mock.html`** (HTML mockup) | The Calculator's one items range becomes two (items planned in Motir · items run on Motir's runner, with the own-agent help), 3 panels: the inputs · the priced-range line in the answer · both ranges at 0 refused. Amends the Calculator view's inputs only. See § "Amendment 2026-10-21 — the Calculator's planned and run ranges" at the end of this file.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | **The Host plan** (AMENDMENT)                               | **`billing--host.mock.html`** (HTML mockup)                        | A fifth paid card after Max ×2 and every state it brings, 13 panels: the row monthly · annual · Choose Host redirecting · member disabled · org on Max ×2 · the upgrade to Host (ready, loading, error) · its success and Host Current · Host in the unfolded regular plans (and Pool 250,000 → Host) · org on Host · the downgrade from Host and its success · the pending downgrade from Host · `zh` · narrow. Amends panel 5's plan row and the larger-pool amendment's unfolded regular plans. See § "Amendment 2026-10-23 — the Host plan" at the end of this file.                                                                                                                                                                                                                                                                                                        |
+| **The Fleet use section** (AMENDMENT)                       | **`billing--fleet-use.mock.html`** (HTML mockup)                   | A new section at the end of the settings view, 21 panels (11 in 11a–i): access path · Pro below every figure · Pro at 3 of 3 with a plan-limit wait · CI at 10 of 10 with plan-limit and full-pool waits apart · Standard · Max ×2 with a kind on Fly · Host after purchase · each own-account state and a denied quota · Host agent runner live · Host fully live · the Request more capacity dialog (empty, filled, validation, reason invalid, sending, sent, refused open, refused no account, refused not allowed, network error) · request statuses · loading · not read · staff override and CI alone not read · own accounts not read · Motir-owned · Free · member · dark · `zh` narrow. Amends the settings view only. See § "Amendment 2026-10-26 — the Fleet use section" at the end of this file.                                                                  |
 | **The larger pools above Host** (AMENDMENT)                 | **`billing--larger-pool--above-host.mock.html`** (HTML mockup)     | What moving the larger pools above Host changes, 13 panels: the Max ×2 with top-ups answer · the offer card at the Host-anchored rungs (Pool 900,000) monthly · annual · Choose pressed · Largest credit pool at Pool 2,400,000 · member disabled · the re-worded Need more credits? callout · the upgrade from Host to a rung (ready, loading, error) · its success and the held rung card · the held rung card (Pool 600,000) with the regular plans unfolded · the held retired rung card (Pool 250,000) · `zh` · narrow. Amends the larger-pool and Host amendments. See § "Amendment 2026-10-26 — the larger pools above Host" at the end of this file.                                                                                                                                                                                                                    |
 
 ## What this area is
@@ -2047,6 +2048,94 @@ tables and the larger-pool amendment's roles govern.
 
 The period end (Nov 1, 2026), the days left, the amounts due ($580.65 from Max ×2; $166.94 from
 Pool 250,000) and the credits and allowance added are illustrative.
+
+## Amendment 2026-10-26 — the Fleet use section
+
+Mock: **`billing--fleet-use.mock.html`**. It adds one section to the settings view of Billing &
+plans (`billing.mock.html` panel 2 and the billed-line amendments). Those mocks are records and are
+not edited.
+
+**Design system.** Read: `package.json` (depends on `@motir/design-system`, `workspace:*`) and
+`app/globals.css` (imports `@motir/design-system/theme.css`). Verdict: **on Motir Design**. The
+mock is rendered with `renderMock` from the package at the project's own axes (`warm-editorial` ·
+`motir` · `motir`, the root layout's), from its `Button`, `Card`, `Pill`, `Input`, `Textarea`,
+`FormField` and `EmptyState`. The dialog is drawn static with the shipped `Modal`'s classes; the
+meter is `BillingClient.tsx`'s own `Meter` recipe. The dark panel is an `[data-appearance-scope]
+[data-theme='dark']` scope. The mono lines are board chrome. No part is missing from the package.
+
+### Elements
+
+1. **Access path (panel 1).** The section is the last card of the settings view, after the billed
+   lines and the payment card, reached by opening Billing & plans as today. No new nav entry.
+2. **Fleet use header.** The section title, one line saying what it shows, and the plan named in
+   words ("Your plan: Pro"), at the right of the card header.
+3. **Figure rows.** Four rows: agent runs in parallel, hosted agents per organisation, hosted
+   agents per person, CI jobs in flight. The two hosted-agent rows say "hosted" in their labels, so
+   neither reads as a count of every agent a person uses (Yue, 2026-10-26). Each reads in use against the figure ("3 of 3"), a meter that is
+   never the only signal (it repeats the words), and one line explaining the figure. The
+   hosted-agents-per-person row reads the figure and how many members are at it ("2 members at 2 of 2"),
+   with no meter, no table and no name. The two agent-instance rows say a start beyond the figure is
+   refused, not queued, and draw no waiting count at all.
+4. **Indexing line.** "Code-graph indexing: N running · counted against no plan limit."
+5. **Waiting breakdown.** Only on agent runs in parallel and CI jobs in flight. Two counts kept
+   apart, each a `Pill` with words beside it: "N waiting — for your plan's limit · a plan change
+   would lift it" (`tone="awaiting"`) and "N waiting — because every … account is full · Motir's
+   capacity, not your plan" (`tone="neutral"`). None waiting reads "Nothing waiting".
+6. **Where it runs list.** One line per fleet kind (CI runner, indexer, agent runner, agent
+   hoster): Fly, Motir's shared AWS pool, or your organisation's own AWS account. Never an id.
+7. **Own accounts block (Host only).** Three **account rows**: CI runner; agent runner; indexer +
+   agent hoster (the merged account, naming both). Each has its **state pill** — Created
+   (`tone="neutral"`), Quota requested (`tone="awaiting"`), Granted (`severity="info"`), Live
+   (`severity="success"`), and a denied raise as Quota denied (`severity="danger"`) — with the
+   time it entered that state, vCPU asked and vCPU granted, and the **shared-floor note** while the
+   kind is on it ("Still on the shared floor: CI at 20 runners"). The merged
+   account says 10 machine spots are always kept for indexing and agent instances run on the rest.
+   On Host, the agent-runs and CI figure rows carry a source line: the shared-floor figure and the shared-floor
+   words before the account is live, then "16 — 32 vCPU granted ÷ 2" (CI "100 — 200 vCPU granted ÷
+   2") once it is. A staff override reads "Set by Motir for your organisation".
+8. **Request more capacity dialog.** A secondary button on each account row with a raise, for owner
+   and admin. The dialog names the account by kind and what is granted, then a vCPU field (a whole
+   number above what is granted) and a reason field (up to 2,000 characters), Cancel and Send
+   request. States: empty, filled, validation, reason invalid, sending, sent (the dialog closes, the
+   row shows the request, the shipped `Toast` confirms), refused because a request is open, refused
+   because the org has no own account of that kind, refused because only an owner or admin may ask,
+   and network error. Refusals are the `FormField` box grammar (`--el-danger-surface` with
+   `--el-danger-surface-text`).
+9. **Request status line.** Under the account row: a pill and "Asked N vCPU on <date> · …" — Open
+   (sent to Motir), Filed with AWS, Granted N vCPU, Denied by AWS, Closed with Motir's note. While a
+   request is open or filed the button is replaced by the line.
+10. **Not read state.** The plan or the counts could not be read: every figure reads "Not read",
+    with no meter, never 0 and never unlimited, and one dashed notice with Try again, inside the
+    section; the rest of the page stays. An unknown plan key reads the same. The CI figure alone
+    not read keeps the other rows. The own accounts block alone not read keeps everything else.
+11. **No plan limits state.** A Motir-owned org: one line, and use shown as "N running" with no
+    denominator.
+12. **No fleet on this plan.** A Free org: one line saying the plan includes no hosted runs, CI or
+    agents, pointing at the Motir AI plan row above.
+
+A member who is neither owner nor admin sees the shipped member gate and no section (panel 19).
+
+### Colour + shape roles
+
+No new token. Text is `--el-text` and `--el-text-secondary` (captions, labels: AA on every
+surface); the meter is `--el-muted` with an `--el-accent` fill; the header glyph tile is
+`--el-tint-sky`; dashed notices are `--el-border-strong` on `--el-surface-soft`; account rows are
+`--el-border-soft` with `--radius-control` and `--spacing-control-x-12`. Every state is said in
+words beside its pill or meter.
+
+### Copy
+
+The en strings are as drawn; the `zh` panel shows the Chinese. Every string lands in the `billing`
+namespace in every locale with the section's code.
+
+### The numbers are illustrative
+
+Plan figures are the fleet-capacity decision's, as corrected at its gate (MOTIR-9357, owner,
+2026-10-23), in the order agent runs / hosted agents per person / per organisation / CI: Standard
+1 / 1 / 2 / 2, Pro 3 / 2 / 10 / 3, Max ×2 5 / 3 / 20 / 5, Host 5 / 5 / 20 / 20 on the shared floor
+and 10 / 50 for hosted agents on its own accounts. `lib/billing/planCaps.ts` still carries the
+figures from before that correction (Pro 3 / 5 / 30 / 10); the mock draws the decision's, and the
+code is corrected separately. Host's raises are the creation targets (200 / 32 / 120 vCPU). Use, waits, dates and requests are illustrative.
 
 ## Amendment 2026-10-26 — the larger pools above Host
 

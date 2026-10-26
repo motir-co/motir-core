@@ -437,6 +437,27 @@ describe('agentInstanceRepository', () => {
       ),
     ).toBeNull();
   });
+
+  it('counts the owners at the per-person figure, live instances in any project (MOTIR-9660)', async () => {
+    const f = await seedFixture();
+    const a = await createInstance(f, { name: 'a' });
+    await createInstance(f, { name: 'b' });
+    await createInstance(f, { name: 'c', ownerId: f.otherUserId });
+    const atFigure = (figure: number, ownerIds: string[] = [f.ownerId, f.otherUserId]) =>
+      withSystemContext((tx) =>
+        agentInstanceRepository.countOwnersAtLiveFigure(ownerIds, figure, tx),
+      );
+    expect(await atFigure(1)).toBe(2);
+    expect(await atFigure(2)).toBe(1);
+    expect(await atFigure(3)).toBe(0);
+    // Only the owners asked about count.
+    expect(await atFigure(1, [f.otherUserId])).toBe(1);
+    // No owners: nobody, and no query.
+    expect(await atFigure(1, [])).toBe(0);
+    // A deleted instance no longer counts.
+    await adminDb.agentInstance.update({ where: { id: a.id }, data: { deletedAt: new Date() } });
+    expect(await atFigure(2)).toBe(0);
+  });
 });
 
 describe('agentInstanceIntervalRepository', () => {

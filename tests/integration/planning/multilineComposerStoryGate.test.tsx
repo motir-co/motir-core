@@ -371,6 +371,9 @@ describe('(5b) every `Textarea` caller in the tree is pinned by name', () => {
     'app/(authed)/code/_components/ConventionPanel.tsx',
     'app/(authed)/filters/_components/EditFilterDialog.tsx',
     'app/(authed)/items/_components/SaveFilterDialog.tsx',
+    // The Request more capacity reason (MOTIR-9663): a fixed editor, per design
+    // billing § Fleet use.
+    'app/(authed)/settings/organization/billing/_components/FleetUseRequestDialog.tsx',
     'app/(authed)/triage/_components/TriageDetail.tsx',
     'components/approvals/ApprovalGateControl.tsx',
     // The obsolescence note (MOTIR-6674): a fixed three-row editor, per its design.

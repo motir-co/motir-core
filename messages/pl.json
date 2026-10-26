@@ -6796,6 +6796,156 @@
     "internalBilling": {
       "badge": "Rozliczenie wewnętrzne",
       "note": "Ta organizacja jest obciążana dokładnie tak jak klient, a następnie otrzymuje zwrot — każda poniższa wartość jest prawdziwa, a saldo bilansuje się do zera."
+    },
+    "fleetUse": {
+      "title": "Wykorzystanie floty",
+      "lead": "Ile plan pozwala uruchomić naraz, co teraz działa i co czeka",
+      "yourPlan": "Plan:",
+      "planNotRead": "Nie odczytano planu",
+      "noPlanLimits": "Brak limitów planu",
+      "loading": "Wczytywanie…",
+      "label": {
+        "agentRunsInParallel": "Równoległe uruchomienia agentów",
+        "agentsRunningInOrg": "Hostowane agenty na organizację",
+        "agentsPerPerson": "Hostowane agenty na osobę",
+        "ciJobsInFlight": "Trwające zadania CI"
+      },
+      "explain": {
+        "agentRunsInParallel": "Zadania hostowanych agentów działające naraz. Kolejne czekają w kolejce.",
+        "agentsRunningInOrg": "Hostowane agenty działające naraz w całej organizacji. Powyżej limitu start jest odrzucany, a nie kolejkowany.",
+        "agentsPerPerson": "Aktywne hostowane agenty, które może mieć jedna osoba. Powyżej limitu nowy jest odrzucany, a nie kolejkowany.",
+        "ciJobsInFlight": "Zadania CI działające naraz na runnerach Motir. Kolejne czekają w kolejce."
+      },
+      "inUseOf": "{inUse} z {figure}",
+      "membersAt": "{count, plural, one {# członek} few {# członków} many {# członków} other {# członka}} na poziomie {figure} z {figure}",
+      "running": "Działa: {count}",
+      "noLimit": "Bez limitu",
+      "notRead": "Nie odczytano",
+      "source": {
+        "staffOverride": "Ustawione przez Motir dla organizacji: {figure} zadań CI naraz",
+        "notRead": "Nie odczytano limitu CI, więc zadania CI czekają, aż będzie można go odczytać. Pozostałe liczby są aktualne.",
+        "granted": {
+          "agentRunsInParallel": "{figure} — {vcpu} przyznanych vCPU ÷ 2 na własnym koncie runnera agentów",
+          "ciJobsInFlight": "{figure} — {vcpu} przyznanych vCPU ÷ 2 na własnym koncie runnera CI"
+        },
+        "sharedFloor": {
+          "agentRunsInParallel": "Konto runnera agentów jest wciąż na wspólnym minimum, z limitami planu Max",
+          "ciJobsInFlight": "Wspólne minimum, dopóki konto runnera CI nie zacznie działać: runnery: {figure}"
+        }
+      },
+      "waiting": {
+        "none": "Nic nie czeka",
+        "count": "W kolejce: {count}",
+        "planLimit": "Przez limit planu · zmiana planu go znosi",
+        "poolFull": {
+          "agentRunsInParallel": "Wszystkie konta runnerów agentów są pełne · to pojemność Motir, nie plan",
+          "ciJobsInFlight": "Wszystkie konta runnerów CI są pełne · to pojemność Motir, nie plan"
+        },
+        "other": "Z innego powodu"
+      },
+      "indexing": "Indeksowanie grafu kodu: działa {count} · nie wlicza się do żadnego limitu planu",
+      "indexingNotRead": "Indeksowanie grafu kodu: nie odczytano · nie wlicza się do żadnego limitu planu",
+      "whereItRuns": "Gdzie to działa",
+      "kind": {
+        "ci_runner": "Runner CI",
+        "code_graph_index": "Indekser",
+        "hosted_agent": "Runner agentów",
+        "agent_instance": "Hosting agentów"
+      },
+      "provider": {
+        "fly": "Fly",
+        "shared_aws_pool": "Wspólna pula AWS Motir",
+        "own_aws_account": "Własne konto AWS organizacji"
+      },
+      "notReadNotice": "Nie udało się odczytać limitów planu ani tego, co działa. To nie jest zero, tylko wartość nieznana.",
+      "tryAgain": "Spróbuj ponownie",
+      "noPlanLimitsNote": "Tę organizację prowadzi Motir i nie ma ona limitów planu. To, co działa, jest pokazane bez limitu.",
+      "noFleet": "Plan nie obejmuje uruchomień hostowanych agentów, runnerów CI ani agentów. Wybierz plan w Motir AI powyżej, aby je uruchamiać.",
+      "accounts": {
+        "title": "Własne konta AWS",
+        "notRead": "Nie udało się teraz odczytać stanu kont.",
+        "kind": {
+          "ci_runner": "Runner CI",
+          "hosted_agent": "Runner agentów",
+          "indexer_and_hoster": "Indekser + hosting agentów"
+        },
+        "role": {
+          "ci_runner": "Uruchamia zadania CI",
+          "hosted_agent": "Uruchamia zadania hostowanych agentów",
+          "indexer_and_hoster": "Indeksuje kod i hostuje agenty"
+        },
+        "state": {
+          "created": "Utworzone",
+          "quota_requested": "Złożono wniosek o limit",
+          "granted": "Przyznane",
+          "live": "Działa"
+        },
+        "quotaDenied": "Limit odrzucony",
+        "since": "od {when}",
+        "vcpuAsked": "Wnioskowane vCPU",
+        "vcpuGranted": "Przyznane vCPU",
+        "noneYet": "Jeszcze brak",
+        "sharedFloor": {
+          "ci_runner": "Wciąż na wspólnym minimum: runnery CI: {figure}.",
+          "hosted_agent": "Wciąż na wspólnym minimum, z limitami planu Max: uruchomienia agentów naraz: {figure}.",
+          "indexer_and_hoster": "Indeksowanie i hosting agentów są wciąż na wspólnym minimum: hostowane agenty {perPerson} na osobę, {perOrg} na organizację."
+        },
+        "liveOnceNetwork": "Zacznie działać, gdy sieć konta zostanie zbudowana.",
+        "deniedNote": "Konto pozostaje w stanie „{state}”, dopóki AWS nie przyzna zwiększenia.",
+        "keptSpots": "Miejsca na maszyny zawsze zarezerwowane na indeksowanie: {count}; instancje agentów korzystają z reszty."
+      },
+      "quotaOutcome": {
+        "pending": "W toku po stronie AWS",
+        "case_opened": "AWS otworzył sprawę",
+        "approved": "Zatwierdzone przez AWS",
+        "denied": "Odrzucone przez AWS",
+        "not_approved": "Niezatwierdzone przez AWS",
+        "case_closed": "AWS zamknął sprawę",
+        "invalid_request": "AWS nie mógł odczytać wniosku"
+      },
+      "request": {
+        "button": "Poproś o więcej mocy",
+        "status": {
+          "open": "Wysłana",
+          "filed": "Złożona w AWS",
+          "closed": "Zamknięta"
+        },
+        "granted": "Przyznano vCPU: {vcpu}",
+        "asked": "Poproszono o vCPU: {vcpu} ({date})",
+        "line": {
+          "open": "Wysłana do Motir, które składa ją w AWS",
+          "filed": "Motir złożyło ją w AWS; AWS jeszcze nie odpowiedział",
+          "granted": "AWS przyznał; liczby zaktualizują się przy następnym odczycie",
+          "denied": "AWS odrzucił zwiększenie; możesz poprosić ponownie",
+          "closedNote": "Zamknięta przez Motir: „{note}”",
+          "closed": "Zamknięta przez Motir; odpowiedź AWS: {outcome}"
+        }
+      },
+      "dialog": {
+        "title": "Poproś o więcej mocy",
+        "account": "Konto: {account} · przyznane vCPU: {vcpu}. Motir składa wniosek o zwiększenie w AWS i przekaże odpowiedź AWS.",
+        "accountNoneGranted": "Konto: {account} · jeszcze nie przyznano vCPU. Motir składa wniosek o zwiększenie w AWS i przekaże odpowiedź AWS.",
+        "figureLabel": "Potrzebne vCPU",
+        "figurePlaceholder": "np. 300",
+        "figureHelp": "Liczba całkowita większa niż obecnie przyznana.",
+        "figureInvalid": "Wpisz liczbę całkowitą większą niż {granted} (obecnie przyznane vCPU).",
+        "reasonLabel": "Dlaczego są potrzebne",
+        "reasonPlaceholder": "Czego zabraknie i kiedy",
+        "reasonHelp": "Do 2000 znaków. Motir przeczyta to przed złożeniem w AWS.",
+        "reasonInvalid": "Podaj powód, maksymalnie 2000 znaków.",
+        "cancel": "Anuluj",
+        "send": "Wyślij prośbę",
+        "sending": "Wysyłanie…",
+        "sent": "Prośba wysłana. Motir przekaże odpowiedź AWS.",
+        "refused": {
+          "open": "Dla tego konta jest już otwarta prośba. Jej stan widać w wierszu konta; poproś ponownie, gdy zostanie zamknięta.",
+          "notFound": "Organizacja nie ma jeszcze własnego konta tego rodzaju, więc nie ma czego zwiększać. Zostanie utworzone po zakupie Host.",
+          "forbidden": "O więcej mocy mogą prosić tylko właściciele lub administratorzy organizacji.",
+          "network": "Nie udało się wysłać prośby. Sprawdź połączenie i spróbuj ponownie — nic nie zostało wysłane.",
+          "invalid": "Nie udało się odczytać prośby. Sprawdź oba pola i wyślij ją ponownie.",
+          "failed": "Prośba nie została wysłana. Spróbuj ponownie za chwilę."
+        }
+      }
     }
   },
   "draftWithAi": {
