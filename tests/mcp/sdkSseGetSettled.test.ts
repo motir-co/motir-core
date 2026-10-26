@@ -90,11 +90,22 @@ function untrackedRouteFetch(token: string): typeof fetch {
   }) as unknown as typeof fetch;
 }
 
-/** Wrap a fetch so the test can see which methods the SDK client sent. */
-function recording(base: typeof fetch, methods: string[]): typeof fetch {
+/**
+ * Wrap a fetch so the test can see which methods the SDK client sent — and, when
+ * `gets` is given, keep the promise of each GET, so a test can wait for the GET
+ * itself without the harness tracking it (MOTIR-9634).
+ */
+function recording(
+  base: typeof fetch,
+  methods: string[],
+  gets?: Array<Promise<Response>>,
+): typeof fetch {
   return ((input: unknown, init: RequestInit = {}) => {
-    methods.push((init.method ?? 'GET').toUpperCase());
-    return base(input as never, init);
+    const method = (init.method ?? 'GET').toUpperCase();
+    methods.push(method);
+    const res = base(input as never, init);
+    if (method === 'GET') gets?.push(res);
+    return res;
   }) as typeof fetch;
 }
 
@@ -176,7 +187,8 @@ afterAll(async () => {
 describe('the SDK client leaves its SSE-stream GET running after connect (MOTIR-6324)', () => {
   it('REPRODUCTION: with an untracked harness, connect returns while the GET is inside its rate-limit transaction', async () => {
     const methods: string[] = [];
-    await connectWith(recording(untrackedRouteFetch(await fullToken()), methods));
+    const gets: Array<Promise<Response>> = [];
+    await connectWith(recording(untrackedRouteFetch(await fullToken()), methods, gets));
 
     // Connect has returned, and the client sent a GET it is not waiting for.
     await vi.waitFor(() => expect(methods).toContain('GET'), { timeout: HOLD_MS });
@@ -187,10 +199,16 @@ describe('the SDK client leaves its SSE-stream GET running after connect (MOTIR-
     });
     expect(pendingServerWork()).toBe(0);
 
-    // This test must not leak it: wait out the hold before ending.
-    await vi.waitFor(async () => expect(await inFlightBackends()).toEqual([]), {
-      timeout: HOLD_MS * 4,
-    });
+    // This test must not leak it: wait for the GET ITSELF before ending — its
+    // 405, the answer `spentOnConnect` waits for too. An empty reading of the
+    // backends is not enough on its own (MOTIR-9634): the limiter spends the
+    // agent's limb and then the workspace's, two held transactions one after
+    // the other, so the probe can read `[]` in the gap between them and the test
+    // would end while the second is opening — the `BEGIN` / counter `INSERT`
+    // leftover CI reported.
+    expect(gets).toHaveLength(1);
+    expect((await gets[0]).status).toBe(405);
+    expect(await inFlightBackends()).toEqual([]);
   });
 
   it('FIX: the shared harness tracks the GET, and settling it leaves no backend behind', async () => {
