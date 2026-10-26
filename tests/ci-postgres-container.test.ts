@@ -148,6 +148,9 @@ describe('CI Postgres container (MOTIR-1742)', () => {
       // MOTIR-9406's Host plan coverage lane (Story MOTIR-9364): the story gate
       // drives checkout and plan changes against a real database.
       'ci.yml:story-9364-coverage',
+      // MOTIR-9624's provider-limit coverage lane (Story MOTIR-9540): the story gate stores
+      // and clears a provider wait through the hosted door and resumes a rate_limited session.
+      'ci.yml:story-9540-coverage',
       'ci.yml:test',
     ]);
   });

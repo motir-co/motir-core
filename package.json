@@ -69,6 +69,7 @@
     "coverage:lost-machine-auto-resume": "vitest run --config vitest.coverage.lost-machine-auto-resume.config.ts --coverage",
     "coverage:session-lifecycle": "vitest run --config vitest.coverage.session-lifecycle.config.ts --coverage",
     "coverage:plan-something-new": "vitest run --config vitest.coverage.plan-something-new.config.ts --coverage",
+    "coverage:provider-limit": "vitest run --config vitest.coverage.provider-limit.config.ts --coverage",
     "coverage:mid-run-turns": "vitest run --config vitest.coverage.mid-run-turns.config.ts --coverage",
     "coverage:guide-replan-offer": "vitest run --config vitest.coverage.guide-replan-offer.config.ts --coverage",
     "coverage:to-resume": "vitest run --config vitest.coverage.to-resume.config.ts --coverage",
