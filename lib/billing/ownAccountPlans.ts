@@ -1,5 +1,4 @@
 import { BILLING_CATALOG, largerPoolPlans } from '@/lib/billing/catalog';
-import { HOST_PLAN_KEY } from '@/lib/billing/planCaps';
 
 // WHICH PLANS CARRY AWS ACCOUNTS OF THE ORG'S OWN (Story MOTIR-9366 · MOTIR-9651).
 // Host (MOTIR-9365) and every larger pool ON SALE bring the same three own
@@ -9,6 +8,13 @@ import { HOST_PLAN_KEY } from '@/lib/billing/planCaps';
 // which orgs have accounts. Every key and pool is read from the catalog: Host's
 // entry and `largerPoolPlans()`, whose floor is what retires a rung. Pure: no
 // `db`, no `process.env`.
+
+/**
+ * The Host plan's key. Declared here, beside the predicate that reads it, so
+ * `planCaps.ts` can import the predicate without an import cycle; `planCaps.ts`
+ * re-exports it under the same name.
+ */
+export const HOST_PLAN_KEY = 'host';
 
 /** True when an org on `planKey` gets its own three AWS accounts. */
 export function planCarriesOwnAccounts(planKey: string): boolean {

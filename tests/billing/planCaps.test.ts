@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { BILLING_CATALOG } from '@/lib/billing/catalog';
+import { BILLING_CATALOG, largerPoolPlans } from '@/lib/billing/catalog';
 import {
   HOST_PLAN_KEY,
-  LARGER_POOL_CAPS,
+  OWN_ACCOUNT_FLOOR_CAPS,
+  RETIRED_POOL_CAPS,
   capsForPlanKey,
   type PlanCaps,
 } from '@/lib/billing/planCaps';
@@ -26,17 +27,37 @@ describe('capsForPlanKey — the table', () => {
     expect(figures(capsForPlanKey(key))).toEqual(expected);
   });
 
-  it('every larger pool in the catalog takes the interim larger-pool row (5/10/50/50)', () => {
-    const pools = BILLING_CATALOG.aiPlans.filter((p) => /^pool_\d+k$/.test(p.key));
-    expect(pools.length).toBeGreaterThan(0);
-    for (const plan of pools) {
-      expect(figures(capsForPlanKey(plan.key)), plan.key).toEqual([5, 10, 50, 50]);
-      expect(capsForPlanKey(plan.key)).toBe(LARGER_POOL_CAPS);
+  it('host and every larger pool on sale take the own-accounts floor (5/10/50/50) (MOTIR-9653)', () => {
+    const onSale = largerPoolPlans();
+    expect(onSale.length).toBeGreaterThan(0);
+    expect(capsForPlanKey(HOST_PLAN_KEY)).toBe(OWN_ACCOUNT_FLOOR_CAPS);
+    for (const plan of onSale) {
+      expect(capsForPlanKey(plan.key), plan.key).toBe(OWN_ACCOUNT_FLOOR_CAPS);
     }
+    expect(figures(OWN_ACCOUNT_FLOOR_CAPS)).toEqual([5, 10, 50, 50]);
   });
 
-  it('a pool key the catalog does not list yet still has the pool shape, so it is capped', () => {
-    expect(figures(capsForPlanKey('pool_999k'))).toEqual([5, 10, 50, 50]);
+  it('the six retired rungs take the retired row (5/10/50/50), by their exact keys', () => {
+    const onSale = new Set(largerPoolPlans().map((p) => p.key));
+    const retired = BILLING_CATALOG.aiPlans.filter(
+      (p) => p.band === 'larger_pool' && !onSale.has(p.key),
+    );
+    expect(retired.map((p) => p.key)).toEqual([
+      'pool_80k',
+      'pool_100k',
+      'pool_120k',
+      'pool_150k',
+      'pool_200k',
+      'pool_250k',
+    ]);
+    for (const plan of retired) expect(capsForPlanKey(plan.key), plan.key).toBe(RETIRED_POOL_CAPS);
+    expect(figures(RETIRED_POOL_CAPS)).toEqual([5, 10, 50, 50]);
+  });
+
+  it('a pool-shaped key the catalog does not sell has no row', () => {
+    for (const key of ['pool_999k', 'pool_250k_extra', 'pool_700k', 'pool_60k']) {
+      expect(capsForPlanKey(key), key).toBeNull();
+    }
   });
 });
 
