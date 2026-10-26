@@ -149,13 +149,15 @@ test('Run hosted lists Kimi with moonshotai and starts a run on moonshotai/kimi-
   await chapter('Run hosted lists Kimi beside Claude, DeepSeek, GLM and Qwen', async () => {
     const body = await openCard(page, leaf.identifier);
     // The stub answered: all five providers, each entry carrying its own.
+    // The lane has no gateway, so the capacity verdict fails open (MOTIR-9541).
+    const AVAILABLE = { verdict: 'available' };
     expect(body.models).toEqual([
-      { id: OPUS, provider: 'anthropic' },
-      { id: SONNET, provider: 'anthropic' },
-      { id: DEEPSEEK, provider: 'deepseek' },
-      { id: GLM, provider: 'z-ai' },
-      { id: QWEN, provider: 'qwen' },
-      { id: KIMI, provider: 'moonshotai' },
+      { id: OPUS, provider: 'anthropic', capacity: AVAILABLE },
+      { id: SONNET, provider: 'anthropic', capacity: AVAILABLE },
+      { id: DEEPSEEK, provider: 'deepseek', capacity: AVAILABLE },
+      { id: GLM, provider: 'z-ai', capacity: AVAILABLE },
+      { id: QWEN, provider: 'qwen', capacity: AVAILABLE },
+      { id: KIMI, provider: 'moonshotai', capacity: AVAILABLE },
     ]);
 
     await modelCombobox(page).click();
