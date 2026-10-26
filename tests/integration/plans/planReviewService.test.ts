@@ -67,6 +67,17 @@ function lifecycleEvent<T extends { kind: string }>(history: T[], kind: string):
 // output BACK through the review DTO the client consumes, catching key drift the
 // unit layers mask.
 
+/** The target's newest revision id — the anchor a `modify` / `remove` carries. */
+async function latestRevisionId(workItemId: string): Promise<string> {
+  const row = await adminDb.workItemRevision.findFirst({
+    where: { workItemId },
+    orderBy: [{ changedAt: 'desc' }, { id: 'desc' }],
+    select: { id: true },
+  });
+  if (!row) throw new Error(`no revision for ${workItemId}`);
+  return row.id;
+}
+
 async function seedItem(
   fx: WorkItemFixture,
   title: string,
@@ -181,6 +192,8 @@ describe('planReviewService.getPlanReview', () => {
     const fx = await makeWorkItemFixture();
     const modifyTarget = await seedItem(fx, 'Seller onboarding', 'medium');
     const removeTarget = await seedItem(fx, 'Manual payout export');
+    const modifyBase = await latestRevisionId(modifyTarget.id);
+    const removeBase = await latestRevisionId(removeTarget.id);
 
     const plan = await plansService.createPlan(fx.projectId, { title: 'Payouts plan' }, fx.ctx);
     await plansService.addProposals(
@@ -191,13 +204,19 @@ describe('planReviewService.getPlanReview', () => {
           op: 'modify',
           workItemId: modifyTarget.id,
           patch: { title: 'Seller onboarding v2', priority: 'high' },
-          baseRevision: 'r1',
+          baseRevision: modifyBase,
         },
-        { op: 'remove', workItemId: removeTarget.id, baseRevision: 'r1' },
+        { op: 'remove', workItemId: removeTarget.id, baseRevision: removeBase },
       ],
       fx.ctx,
     );
     await plansService.markPlanned(plan.id, fx.ctx);
+    // A real edit after the plan read the card — the drift the model surfaces.
+    await workItemsService.updateWorkItem(
+      modifyTarget.id,
+      { descriptionMd: 'Edited out of band' },
+      fx.ctx,
+    );
 
     const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
 
@@ -220,9 +239,9 @@ describe('planReviewService.getPlanReview', () => {
     expect(priorityChange).toEqual({ field: 'priority', from: 'medium', to: 'high' });
     expect(modify.changes.find((c) => c.field === 'title')?.to).toBe('Seller onboarding v2');
 
-    // Staleness is JOINED into the model: the modify's stale `baseRevision` (`r1`
-    // never matches the target's real latest revision) surfaces as a drift reason,
-    // and the plan-level roll-up reflects it.
+    // Staleness is JOINED into the model: the modify's target was edited after
+    // its `baseRevision`, which surfaces as a drift reason, and the plan-level
+    // roll-up reflects it.
     expect(modify.stale).toBe(true);
     expect(modify.staleReasons.some((r) => r.code === 'base_revision_drift')).toBe(true);
     expect(review.stale).toBe(true);

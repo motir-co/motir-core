@@ -2,15 +2,16 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { plansService } from '@/lib/services/plansService';
 import { planStalenessService } from '@/lib/services/planStalenessService';
+import { planReviewService } from '@/lib/services/planReviewService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { foldersService } from '@/lib/services/foldersService';
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
-import { PlanNotFoundError } from '@/lib/plans/errors';
+import { InvalidProposalError, PlanNotFoundError } from '@/lib/plans/errors';
 import type { PlanItemStalenessDto } from '@/lib/dto/plans';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
-import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Integration tests for Subtask 7.21.3 / MOTIR-1340 — `planStalenessService`,
 // plan staleness detection (Story 7.21). Real Postgres (no mocks), per CLAUDE.md.
@@ -442,5 +443,143 @@ describe('planStalenessService — all-clear + purity + tenancy', () => {
     const result = await planStalenessService.computePlanStaleness(planId, a.ctx);
     expect(result.stale).toBe(false);
     expect(verdictFor(result.items, items[0]!.id).reasons).toEqual([]);
+  });
+});
+
+// ── MOTIR-9603 — a plan never flags its OWN proposals ─────────────────────────
+//
+// The card read the false "may be out of date" on plan `cmvoazqd0004ihnqweisfq5b8`
+// as the target lock's park: the append moves a not-yet-parked target to
+// `planning`, which writes a revision after the author's read. Every case here
+// goes THROUGH `addProposals`, so that park is really written — and asserted —
+// before the verdict is read. The park is not what flagged that plan (a pure
+// status move is outside the anchor, MOTIR-5646): its two flagged `modify`s
+// carried the target's `updatedAt` as `baseRevision`. So the append now refuses a
+// value that is not a revision of its target, and resolves a status-move id to
+// the anchor the rule compares against.
+describe('planStalenessService — the append anchors baseRevision (MOTIR-9603)', () => {
+  async function statusOf(workItemId: string): Promise<string> {
+    const row = await adminDb.workItem.findUniqueOrThrow({
+      where: { id: workItemId },
+      select: { status: true },
+    });
+    return row.status;
+  }
+
+  async function newestRevisionIsThePark(workItemId: string): Promise<boolean> {
+    const newest = await adminDb.workItemRevision.findFirstOrThrow({
+      where: { workItemId },
+      orderBy: [{ changedAt: 'desc' }, { id: 'desc' }],
+      select: { diff: true },
+    });
+    const diff = newest.diff as { status?: { to?: string } } | null;
+    return Object.keys(diff ?? {}).join() === 'status' && diff?.status?.to === 'planning';
+  }
+
+  it.each(['modify', 'remove'] as const)(
+    'a %s of a card the plan had NOT parked, anchored at its latest revision, is not stale after the append',
+    async (op) => {
+      const fx = await makeWorkItemFixture();
+      const targetId = await seed(fx, 'Untouched target');
+      const baseRevision = await latestRev(targetId, fx.workspaceId);
+
+      const { planId, items } = await plannedPlan(fx, [
+        op === 'modify'
+          ? { op, workItemId: targetId, patch: { title: 'Proposed' }, baseRevision }
+          : { op, workItemId: targetId, baseRevision, reason: 'No longer needed' },
+      ]);
+
+      // The append's park really ran, and wrote the revision the card blamed.
+      expect(await statusOf(targetId)).toBe('planning');
+      expect(await newestRevisionIsThePark(targetId)).toBe(true);
+      expect(items[0]!.baseRevision).toBe(baseRevision);
+
+      const result = await planStalenessService.computePlanStaleness(planId, fx.ctx);
+      expect(result.stale).toBe(false);
+      expect(verdictFor(result.items, items[0]!.id).reasons).toEqual([]);
+
+      const review = await planReviewService.getPlanReview(planId, fx.ctx);
+      expect(review.stale).toBe(false);
+      expect(review.items.find((i) => i.planItemId === items[0]!.id)!.stale).toBe(false);
+    },
+  );
+
+  it.each(['modify', 'remove'] as const)(
+    'a %s whose target was REALLY edited between the read and the append is still edited',
+    async (op) => {
+      const fx = await makeWorkItemFixture();
+      const targetId = await seed(fx, 'Original title');
+      const baseRevision = await latestRev(targetId, fx.workspaceId);
+
+      // Somebody edits the card after the author read it, before the append.
+      await workItemsService.updateWorkItem(targetId, { title: 'Edited after the read' }, fx.ctx);
+
+      const { planId, items } = await plannedPlan(fx, [
+        op === 'modify'
+          ? { op, workItemId: targetId, patch: { title: 'Proposed' }, baseRevision }
+          : { op, workItemId: targetId, baseRevision, reason: 'No longer needed' },
+      ]);
+      expect(await statusOf(targetId)).toBe('planning');
+
+      const result = await planStalenessService.computePlanStaleness(planId, fx.ctx);
+      expect(verdictFor(result.items, items[0]!.id).reasons).toEqual([
+        { code: 'base_revision_drift', change: 'edited' },
+      ]);
+    },
+  );
+
+  it('an anchor taken from a STATUS MOVE resolves to the anchor the rule reads — not stale', async () => {
+    const fx = await makeWorkItemFixture();
+    const targetId = await seed(fx, 'Moved card');
+    await withWorkspaceContext(fx.ctx, (tx) =>
+      workItemsService.applyStatusTransition(targetId, 'in_progress', fx.ctx, tx),
+    );
+    // The card's history shows this status move as its newest revision.
+    const statusMove = await adminDb.workItemRevision.findFirstOrThrow({
+      where: { workItemId: targetId },
+      orderBy: [{ changedAt: 'desc' }, { id: 'desc' }],
+      select: { id: true },
+    });
+    const anchor = await latestRev(targetId, fx.workspaceId);
+    expect(statusMove.id).not.toBe(anchor);
+
+    const { planId, items } = await plannedPlan(fx, [
+      { op: 'modify', workItemId: targetId, patch: { title: 'X' }, baseRevision: statusMove.id },
+    ]);
+    expect(items[0]!.baseRevision).toBe(anchor);
+
+    const result = await planStalenessService.computePlanStaleness(planId, fx.ctx);
+    expect(verdictFor(result.items, items[0]!.id).reasons).toEqual([]);
+  });
+
+  it.each([
+    ['a timestamp (the fixture plan’s `updatedAt`)', () => '2026-10-19T12:49:07.705Z'],
+    ['a work-item id', (ids: { targetId: string }) => ids.targetId],
+    ['ANOTHER card’s revision', (ids: { otherRev: string }) => ids.otherRev],
+  ] as const)('refuses %s as baseRevision, and leaves the plan untouched', async (_, value) => {
+    const fx = await makeWorkItemFixture();
+    const targetId = await seed(fx, 'Target');
+    const otherId = await seed(fx, 'Other card');
+    const otherRev = await latestRev(otherId, fx.workspaceId);
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Build it' }, fx.ctx);
+
+    await expect(
+      plansService.addProposals(
+        plan.id,
+        [
+          {
+            op: 'modify',
+            workItemId: targetId,
+            patch: { title: 'X' },
+            baseRevision: value({ targetId, otherRev }),
+          },
+        ],
+        fx.ctx,
+      ),
+    ).rejects.toBeInstanceOf(InvalidProposalError);
+
+    expect(await adminDb.planItem.count({ where: { planId: plan.id } })).toBe(0);
+    // Refused before the park: the card was never moved.
+    expect(await statusOf(targetId)).toBe('todo');
   });
 });

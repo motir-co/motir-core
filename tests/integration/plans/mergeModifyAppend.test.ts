@@ -42,6 +42,17 @@ afterAll(async () => {
   await adminDb.$disconnect();
 });
 
+/** The target's newest revision id — the anchor a `modify` carries. */
+async function latestRevisionId(workItemId: string): Promise<string> {
+  const row = await adminDb.workItemRevision.findFirst({
+    where: { workItemId },
+    orderBy: [{ changedAt: 'desc' }, { id: 'desc' }],
+    select: { id: true },
+  });
+  if (!row) throw new Error(`no revision for ${workItemId}`);
+  return row.id;
+}
+
 async function seedItem(
   fx: WorkItemFixture,
   title: string,
@@ -151,17 +162,23 @@ describe('the merge on the plan timeline and on a revision append', () => {
   it('merges on a `revision: true` append to a planned plan, keeping the earlier baseRevision', async () => {
     const fx = await makeWorkItemFixture();
     const x = await seedItem(fx, 'X');
+    // Real revision ids — an anchor that names no revision of its target is
+    // refused at the append (MOTIR-9603).
+    const revEarly = await latestRevisionId(x);
     const planId = await openPlan(fx);
     await plansService.addProposals(
       planId,
-      [{ op: 'modify', workItemId: x, patch: { title: 'A' }, baseRevision: 'rev-early' }],
+      [{ op: 'modify', workItemId: x, patch: { title: 'A' }, baseRevision: revEarly }],
       fx.ctx,
     );
     await plansService.markPlanned(planId, fx.ctx);
+    await workItemsService.updateWorkItem(x, { descriptionMd: 'Edited since' }, fx.ctx);
+    const revLate = await latestRevisionId(x);
+    expect(revLate).not.toBe(revEarly);
 
     const revised = await plansService.addProposals(
       planId,
-      [{ op: 'modify', workItemId: x, patch: { priority: 'high' }, baseRevision: 'rev-late' }],
+      [{ op: 'modify', workItemId: x, patch: { priority: 'high' }, baseRevision: revLate }],
       fx.ctx,
       { revision: true },
     );
@@ -169,7 +186,7 @@ describe('the merge on the plan timeline and on a revision append', () => {
     expect(rows).toHaveLength(1);
     expect(revised.appendedItemIds).toEqual([rows[0]!.id]);
     expect(rows[0]!.patch).toEqual({ title: 'A', priority: 'high' });
-    expect(rows[0]!.baseRevision).toBe('rev-early');
+    expect(rows[0]!.baseRevision).toBe(revEarly);
   });
 });
 

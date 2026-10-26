@@ -1288,7 +1288,7 @@ describe('plansService.updateProposal — edit a proposed add (7.21.6)', () => {
     const plan = await plansService.createPlan(fx.projectId, {}, fx.ctx);
     const withItems = await plansService.addProposals(
       plan.id,
-      [{ op: 'modify', workItemId: target, patch: { title: 'X' }, baseRevision: 'r1' }],
+      [{ op: 'modify', workItemId: target, patch: { title: 'X' } }],
       fx.ctx,
     );
     const itemId = withItems.items[0]!.id;
@@ -1446,7 +1446,7 @@ describe('plansService.deepenProposal — deepen a proposed add while generating
     const plan = await plansService.createPlan(fx.projectId, {}, fx.ctx);
     const withItems = await plansService.addProposals(
       plan.id,
-      [{ op: 'modify', workItemId: target, patch: { title: 'X' }, baseRevision: 'r1' }],
+      [{ op: 'modify', workItemId: target, patch: { title: 'X' } }],
       fx.ctx,
     );
     await expect(

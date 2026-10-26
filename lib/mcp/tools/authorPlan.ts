@@ -718,7 +718,12 @@ const proposalSchema = z.object({
   baseRevision: z
     .string()
     .optional()
-    .describe('`modify` / `remove` only: the target revision the change was computed against.'),
+    .describe(
+      '`modify` / `remove` only: the target revision the change was computed against — the ' +
+        '`revision` id `skeleton` returns for the target. Never a timestamp or a work-item id: ' +
+        'a value that is not a revision of the target is refused INVALID_PROPOSAL. Omit it ' +
+        'when you did not read one.',
+    ),
   reason: z
     .string()
     .optional()
