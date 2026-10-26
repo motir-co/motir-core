@@ -228,10 +228,25 @@ describe('no plan mutation escapes the trail', () => {
       expect(reaches(name, bodies).has('maxSeq'), `${name} no longer appends narration`).toBe(true);
     }
 
+    // ⚠️ NOR IS A PROVIDER-RETRY WAIT (Story MOTIR-9540 · MOTIR-9619). `recordProviderRetry`
+    // takes the same lock and sets — or clears — the wait columns on the session's own
+    // `plan_step` row while the model provider refuses a call. Like the step it rides on, it is
+    // ephemeral and says nothing about what the plan proposes; a trail row per retry would bury
+    // the history the same way.
+    const NOT_A_PLAN_CHANGE_WAIT = new Set(['recordProviderRetry']);
+    for (const name of NOT_A_PLAN_CHANGE_WAIT) {
+      expect(mutations, `${name} is no longer a derived mutation`).toContain(name);
+      expect(
+        reaches(name, bodies).has('setProviderWait'),
+        `${name} no longer writes the wait`,
+      ).toBe(true);
+    }
+
     const untracked = mutations.filter(
       (name) =>
         !NOT_A_PLAN_CHANGE.has(name) &&
         !NOT_A_PLAN_CHANGE_NARRATION.has(name) &&
+        !NOT_A_PLAN_CHANGE_WAIT.has(name) &&
         !reaches(name, bodies).has('recordRevision') &&
         !(name in PHASE_OF && reaches(PHASE_OF[name]!, bodies).has('recordRevision')),
     );
