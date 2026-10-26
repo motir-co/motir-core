@@ -16,6 +16,10 @@
 // has an axis of its own. Everything else is real: the session, the box's
 // debounced hook, `GET /api/pages/search`, the fused query and the page route.
 //
+// Step 6 switches the seam to 503 through its control file: with meaning search
+// running there is no query that matches nothing (it has no cut-off, MOTIR-9572),
+// so the No-results state is reached through word search alone.
+//
 // ── THE WAITS ───────────────────────────────────────────────────────────────
 // A page's vector lags its save in the worker, so the seeded pages' rows are
 // polled before the first chapter. The box sends one request once typing
@@ -271,8 +275,15 @@ test('A member searches pages from the Pages tree: the recipe, steps 1 to 6', as
   await chapter(
     'Step 6 · a query matching nothing says so, and Clear restores the tree',
     async () => {
+      // Meaning search has no similarity cut-off (MOTIR-9572): while it runs,
+      // every embedded page is a candidate, so no query can match nothing. A
+      // query matches nothing only by words, so the meaning half is switched
+      // off first, which the box draws as its word-matches-only note.
+      setBackend('unavailable');
       const body = await searchFor(page, NOTHING);
+      expect(body.mode).toBe('full-text-only');
       expect(body.items).toEqual([]);
+      await expect(page.getByRole('note')).toHaveText(S.mode.fullText);
       const message = fill(S.noResults, { query: NOTHING });
       await expect(page.getByRole('paragraph').filter({ hasText: message })).toBeVisible();
       // Two Clear controls now: the box's own, then the No-results message's.
