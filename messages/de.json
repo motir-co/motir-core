@@ -6501,7 +6501,7 @@
       "yourPlanTitle": "Ihr Plan",
       "needMore": {
         "title": "Mehr Credits nötig?",
-        "body": "Wenn Ihre Organisation mehr als die {credits} Credits pro Monat von {plan} verbraucht, schätzen Sie Ihre Nutzung – der Rechner bietet Ihnen dann einen größeren, darauf zugeschnittenen Credit-Pool an.",
+        "body": "Wenn Ihre Organisation mehr als die {credits} Credits pro Monat von {plan} verbraucht, schätzen Sie Ihre Nutzung – der Rechner bietet Ihnen dann einen größeren, darauf zugeschnittenen Credit-Pool mit eigenen AWS-Konten an.",
         "bodyHeld": "Wenn Ihre Organisation über ihre {credits} Credits pro Monat hinauswächst, schätzen Sie Ihre Nutzung – der Rechner bietet Ihnen dann einen größeren, darauf zugeschnittenen Pool an.",
         "action": "Rechner öffnen"
       },
@@ -6636,6 +6636,8 @@
         "caption": "Deine Schätzung liegt bei {low} bis {high} Credits im Monat. Dieser Pool ist auf das obere Ende ausgelegt, damit er nicht zu knapp wird. Es ist eine Schätzung und ändert sich mit deiner Schätzung.",
         "captionCurrent": "Das ist der Pool, den du gekauft hast, berechnet aus einer Schätzung von {low} bis {high} Credits im Monat. Eine spätere, niedrigere Schätzung ändert den Preis eines Plans, den du schon hast, nicht.",
         "priceEstimate": "Aus deiner Schätzung berechnet",
+        "ownAccounts": "Drei eigene AWS-Konten Ihrer Organisation: eines für CI-Runner, eines für Agentenläufe und eines, das sich der Indexer und die gehosteten Agenten teilen – jedes auf diesen Pool ausgelegt",
+        "sharedUntilGranted": "Bis die Kontingente jedes Kontos bewilligt sind, läuft der Plan mit den Limits von Max auf den gemeinsamen Pools von Motir",
         "basis": {
           "monthly": "Berechnet aus dem Monatspreis von {plan}; jeder Credit über dessen Pool kostet weniger als beim Aufladen.",
           "annual": "Berechnet zum selben Preis pro Credit wie {plan} bei jährlicher Abrechnung. Abgerechnet wird einmal im Jahr, der Pool kommt weiterhin Monat für Monat."
@@ -6708,6 +6710,7 @@
         "largestPoolLabel": "Größter Credit-Pool",
         "largestPool": "Ihre Schätzung liegt über unserem größten Pool, daher lautet die Antwort dieser Pool – {plan} – plus Aufladungen für den Rest.",
         "largestPoolTopUp": "Die übrigen rund {excess} Credits pro Monat decken Aufladungen ab: {units} × {unitCredits} Credits, etwa {price} $ pro Monat.",
+        "regularWithTopUps": "Ihre Schätzung liegt über den {credits} Credits pro Monat von {plan}, daher lautet die Antwort {plan} plus Aufladungen für den Rest.",
         "aboveTopRung": "Das sind mehr als die {ceiling} Credits pro Monat des größten regulären Plans, und derzeit ist kein größerer Pool verfügbar, daher wird der Überschuss durch Credit-Aufladungen gedeckt.",
         "upgradeNote": "Ein Upgrade mitten im Zeitraum wird für die verbleibenden Tage berechnet. Der Betrag wird angezeigt, bevor etwas berechnet wird.",
         "goToPlan": "Zu diesem Plan"

@@ -6501,7 +6501,7 @@
       "yourPlanTitle": "Seu plano",
       "needMore": {
         "title": "Precisa de mais créditos?",
-        "body": "Se sua organização usa mais do que os {credits} créditos por mês do {plan}, estime seu uso e a calculadora oferece um pool de créditos maior, dimensionado para ele.",
+        "body": "Se sua organização usa mais do que os {credits} créditos por mês do {plan}, estime seu uso e a calculadora oferece um pool de créditos maior, dimensionado para ele, com contas AWS próprias.",
         "bodyHeld": "Se sua organização ultrapassar seus {credits} créditos por mês, estime seu uso e a calculadora oferece um pool maior, dimensionado para ele.",
         "action": "Abrir a calculadora"
       },
@@ -6636,6 +6636,8 @@
         "caption": "Sua estimativa vai de {low} a {high} créditos por mês. Este pool é dimensionado pelo topo dessa faixa, para não faltar. É uma estimativa e muda quando a sua muda.",
         "captionCurrent": "Este é o pool que você comprou, calculado a partir de uma estimativa de {low} a {high} créditos por mês. Uma estimativa menor depois não muda o preço de um plano que você já tem.",
         "priceEstimate": "Calculado a partir da sua estimativa",
+        "ownAccounts": "Três contas AWS próprias da sua organização: uma para runners de CI, uma para execuções de agentes e uma compartilhada pelo indexador e pelos agentes hospedados, cada uma dimensionada para este pool",
+        "sharedUntilGranted": "Até que as cotas de cada conta sejam concedidas, o plano roda com os limites do Max nos pools compartilhados do Motir",
         "basis": {
           "monthly": "Calculado a partir do preço mensal do {plan}, com cada crédito acima do pool dele mais barato que numa recarga.",
           "annual": "Calculado pelo mesmo preço por crédito do {plan} no faturamento anual. A cobrança é uma vez por ano, e o pool continua chegando mês a mês."
@@ -6708,6 +6710,7 @@
         "largestPoolLabel": "Maior pool de créditos",
         "largestPool": "Sua estimativa passa do nosso maior pool, então a resposta é esse pool — {plan} — com recargas para o restante.",
         "largestPoolTopUp": "Os outros {excess} créditos, mais ou menos, por mês são cobertos por recargas: {units} × {unitCredits} créditos, cerca de US$ {price} por mês.",
+        "regularWithTopUps": "Sua estimativa passa dos {credits} créditos por mês do {plan}, então a resposta é o {plan} com recargas para o restante.",
         "aboveTopRung": "Isso passa dos {ceiling} créditos por mês do maior plano regular, e não há um pool maior disponível no momento, então o excedente é coberto com recargas de créditos.",
         "upgradeNote": "Fazer upgrade no meio do período é cobrado pelos dias restantes. O valor aparece antes de qualquer cobrança.",
         "goToPlan": "Ir para este plano"

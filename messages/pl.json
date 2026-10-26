@@ -6501,7 +6501,7 @@
       "yourPlanTitle": "Twój plan",
       "needMore": {
         "title": "Potrzebujesz więcej kredytów?",
-        "body": "Jeśli Twoja organizacja zużywa więcej niż {credits} kredytów miesięcznie z planu {plan}, oszacuj swoje zużycie, a kalkulator zaproponuje większą pulę kredytów dopasowaną do niego.",
+        "body": "Jeśli Twoja organizacja zużywa więcej niż {credits} kredytów miesięcznie z planu {plan}, oszacuj swoje zużycie, a kalkulator zaproponuje większą pulę kredytów dopasowaną do niego, z własnymi kontami AWS.",
         "bodyHeld": "Jeśli Twoja organizacja wyrasta ze swoich {credits} kredytów miesięcznie, oszacuj swoje zużycie, a kalkulator zaproponuje większą pulę dopasowaną do niego.",
         "action": "Otwórz kalkulator"
       },
@@ -6636,6 +6636,8 @@
         "caption": "Twoja szacunkowa wartość to od {low} do {high} kredytów miesięcznie. Ta pula jest dopasowana do górnej granicy zakresu, więc nie zabraknie jej. To szacunek, który zmienia się razem z Twoim.",
         "captionCurrent": "To pula, którą kupiono, wyliczona z szacunku od {low} do {high} kredytów miesięcznie. Późniejszy, niższy szacunek nie zmienia ceny planu, który już masz.",
         "priceEstimate": "Wyliczone z Twojego szacunku",
+        "ownAccounts": "Trzy własne konta AWS Twojej organizacji: jedno dla runnerów CI, jedno dla uruchomień agentów i jedno wspólne dla indeksera i hostowanych agentów, każde dopasowane do tej puli",
+        "sharedUntilGranted": "Dopóki przydziały zasobów każdego konta nie zostaną zatwierdzone, plan działa z limitami planu Max na wspólnych pulach Motir",
         "basis": {
           "monthly": "Wyceniane od miesięcznej ceny planu {plan}; każdy kredyt ponad jego pulę jest tańszy niż przy doładowaniu.",
           "annual": "Wyceniane po tej samej cenie za kredyt co {plan} w rozliczeniu rocznym. Płatność jest raz w roku, a pula nadal przychodzi co miesiąc."
@@ -6708,6 +6710,7 @@
         "largestPoolLabel": "Największa pula kredytów",
         "largestPool": "Twój szacunek przekracza naszą największą pulę, więc odpowiedzią jest ta pula — {plan} — z doładowaniami na resztę.",
         "largestPoolTopUp": "Pozostałe około {excess} kredytów miesięcznie pokrywają doładowania: {units} × {unitCredits} kredytów, około {price} $ miesięcznie.",
+        "regularWithTopUps": "Twój szacunek przekracza {credits} kredytów miesięcznie z planu {plan}, więc odpowiedzią jest {plan} z doładowaniami na resztę.",
         "aboveTopRung": "To więcej niż {ceiling} kredytów miesięcznie w największym zwykłym planie, a większa pula nie jest teraz dostępna, więc nadwyżkę pokrywają doładowania kredytów.",
         "upgradeNote": "Zmiana na wyższy plan w trakcie okresu jest wyceniana za pozostałe dni. Kwota jest pokazywana, zanim cokolwiek zostanie pobrane.",
         "goToPlan": "Przejdź do tego planu"
