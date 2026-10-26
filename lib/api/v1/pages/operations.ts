@@ -8,8 +8,12 @@ import {
 } from '@/lib/api/v1/openapi/operation';
 import {
   createPageBodySchema,
+  linkPageBodySchema,
+  pageLinkPairSchema,
   movePageBodySchema,
+  pageArchiveResultSchema,
   pagePlacementResultSchema,
+  pageRestoreResultSchema,
   pageSchema,
   pageSearchHitSchema,
   pageSearchResultSchema,
@@ -70,7 +74,7 @@ export const PAGE_OPERATIONS: readonly V1Operation[] = [
     operationId: 'getPage',
     summary: 'Read a page',
     description:
-      'One page by id: its title, where it is filed, its current `revision`, who saved its newest version, and its body as markdown. A page that never existed, a page in another project or workspace, and a page in a project the caller cannot browse are the same 404 `PAGE_NOT_FOUND` — the existence-oracle rule — and the body never names the page. A caller who can browse the project but may not view its pages is 403 `PROJECT_ACCESS_DENIED`.',
+      'One page by id: its title, where it is filed, its current `revision`, who saved its newest version, its body as markdown, and `archivedAt` — the time it was archived, `null` on a live page. An archived page is still readable; it cannot be updated, moved or linked until it is restored. A page that never existed, a page in another project or workspace, and a page in a project the caller cannot browse are the same 404 `PAGE_NOT_FOUND` — the existence-oracle rule — and the body never names the page. A caller who can browse the project but may not view its pages is 403 `PROJECT_ACCESS_DENIED`.',
     permission: 'page:view',
     parameters: [pageIdParameter],
     response: {
@@ -121,6 +125,80 @@ export const PAGE_OPERATIONS: readonly V1Operation[] = [
     errorStatuses: [403, 404, 409, 422],
   }),
   defineOperation({
+    method: 'POST',
+    path: '/api/v1/pages/{pageId}/archive',
+    operationId: 'archivePage',
+    summary: 'Archive a page',
+    description:
+      'Archive a page together with every LIVE sub-page under it, as one set, in ONE transaction — the app’s archive. The page becomes the set’s root: it is the one to restore, and a following read reports its `archivedAt`. No body and NO revision: an archive moves the set out of the tree without writing content, so it is not revision-checked, and a request against a page whose state has moved on is refused by that state instead. A page already archived — or a sub-page that left with an archived set — is 409 `PAGE_ARCHIVED` and nothing changes. A page the caller cannot see is the same 404 `PAGE_NOT_FOUND` as one that never existed, and the body never names it; a caller who can browse the project but may not edit its pages is 403 `PROJECT_ACCESS_DENIED`.',
+    permission: 'page:edit',
+    parameters: [pageIdParameter],
+    response: {
+      status: 200,
+      body: { kind: 'object', schema: pageArchiveResultSchema },
+      description: 'The archived set, root first.',
+    },
+    errorStatuses: [403, 404, 409],
+  }),
+  defineOperation({
+    method: 'POST',
+    path: '/api/v1/pages/{pageId}/restore',
+    operationId: 'restorePage',
+    summary: 'Restore an archived page',
+    description:
+      'Restore an archive ROOT and exactly the set that left with it, in ONE transaction — the app’s restore. It lands where it was when that place still holds, else under its nearest live ancestor page, else in its folder, else at the project root; `landing` says which, with the landing parent’s name (never the restored page’s own title). The page is then readable and editable again and a read reports `archivedAt: null`. No body and NO revision: a restore is not revision-checked, and is refused by the page’s state instead. A live page is 409 `PAGE_NOT_ARCHIVED`; a sub-page that left with its root is 409 `PAGE_ARCHIVE_ROOT_REQUIRED` — restore the root. Nothing changes on a refusal. A page the caller cannot see is the same 404 `PAGE_NOT_FOUND` as one that never existed; a caller who can browse the project but may not edit its pages is 403 `PROJECT_ACCESS_DENIED`.',
+    permission: 'page:edit',
+    parameters: [pageIdParameter],
+    response: {
+      status: 200,
+      body: { kind: 'object', schema: pageRestoreResultSchema },
+      description: 'The restored set, and where it landed.',
+    },
+    errorStatuses: [403, 404, 409],
+  }),
+  defineOperation({
+    method: 'POST',
+    path: '/api/v1/pages/{pageId}/work-items',
+    operationId: 'linkPageWorkItem',
+    summary: 'Link a work item to a page',
+    description:
+      'Link a work item to the page BY HAND — the `manual` link the app’s Link page action writes, which then shows on both sides: the page’s linked work items and the work item’s pages. A mention or embed in the page’s body is a derived link and is never written here. ⚠️ IDEMPOTENT: linking a pair that is already linked answers 200 with the same pair and writes no second row. The caller needs `work_item:edit` and `page:view` on the work item’s project. The page is looked up INSIDE the work item’s project, so a page of another project is 404 `PAGE_NOT_FOUND` — the same body an unknown page gets — and nothing is written. An archived page is 409 `PAGE_ARCHIVED` and writes no row. An unknown work item, or one in a project the caller cannot browse, is 404 `WORK_ITEM_NOT_FOUND`. A caller who may not edit the work item or view its project’s pages is 403 `PROJECT_ACCESS_DENIED`, naming no page. A missing or non-string `workItemId` is 422 `INVALID_BODY`.',
+    permission: 'page:edit',
+    parameters: [pageIdParameter],
+    requestBody: { schema: linkPageBodySchema, description: 'The work item to link.' },
+    response: {
+      status: 200,
+      body: { kind: 'object', schema: pageLinkPairSchema },
+      description: 'The linked pair.',
+    },
+    errorStatuses: [403, 404, 409, 422],
+  }),
+  defineOperation({
+    method: 'DELETE',
+    path: '/api/v1/pages/{pageId}/work-items/{workItemId}',
+    operationId: 'unlinkPageWorkItem',
+    summary: 'Unlink a work item from a page',
+    description:
+      'Remove the page’s HAND link to a work item, from both sides. A pair with no hand link is 404 `PAGE_LINK_NOT_FOUND` — a mention or embed in the body is not one and is left alone — so unlinking twice answers that the second time. An archived page’s link stays removable. A page of another project than the work item, an unknown page and a page the caller cannot see are the same 404 `PAGE_NOT_FOUND`; an unknown work item is 404 `WORK_ITEM_NOT_FOUND`; a caller who may not edit the work item or view its project’s pages is 403 `PROJECT_ACCESS_DENIED`, naming no page.',
+    permission: 'page:edit',
+    parameters: [
+      pageIdParameter,
+      {
+        name: 'workItemId',
+        in: 'path',
+        required: true,
+        description: 'The work item’s id — the `id` a work item read returns.',
+        schema: z.string().min(1),
+      },
+    ],
+    response: {
+      status: 200,
+      body: { kind: 'object', schema: pageLinkPairSchema },
+      description: 'The unlinked pair.',
+    },
+    errorStatuses: [403, 404],
+  }),
+  defineOperation({
     method: 'GET',
     path: '/api/v1/projects/{projectKey}/pages/search',
     operationId: 'searchPages',
@@ -159,6 +237,9 @@ export const PAGE_OPERATIONS: readonly V1Operation[] = [
 export const PAGE_COMPONENTS: Readonly<Record<string, ZodType>> = {
   Page: pageSchema,
   PagePlacement: pagePlacementResultSchema,
+  PageArchive: pageArchiveResultSchema,
+  PageRestore: pageRestoreResultSchema,
+  PageLinkPair: pageLinkPairSchema,
   PageSearchHit: pageSearchHitSchema,
   PageSearchResult: pageSearchResultSchema,
 };

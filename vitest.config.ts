@@ -412,6 +412,12 @@ export default defineConfig({
         'app/api/v1/projects/\\[projectKey\\]/pages/route.ts',
         'app/api/v1/pages/\\[pageId\\]/route.ts',
         'app/api/v1/pages/\\[pageId\\]/placement/route.ts',
+        // Story MOTIR-9488 · MOTIR-9568 — its archive, restore, link and unlink
+        // route files, held to the same floor.
+        'app/api/v1/pages/\\[pageId\\]/archive/route.ts',
+        'app/api/v1/pages/\\[pageId\\]/restore/route.ts',
+        'app/api/v1/pages/\\[pageId\\]/work-items/route.ts',
+        'app/api/v1/pages/\\[pageId\\]/work-items/\\[workItemId\\]/route.ts',
         'lib/plans/applySectionsInput.ts',
         'lib/services/sectionSchemaService.ts',
         // Story MOTIR-6016 · MOTIR-6102 — the three modules the DIFFICULTY story
@@ -4408,6 +4414,30 @@ export default defineConfig({
           statements: 90,
         },
         'app/api/v1/pages/\\[pageId\\]/placement/route.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/api/v1/pages/\\[pageId\\]/archive/route.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/api/v1/pages/\\[pageId\\]/restore/route.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/api/v1/pages/\\[pageId\\]/work-items/route.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/api/v1/pages/\\[pageId\\]/work-items/\\[workItemId\\]/route.ts': {
           lines: 90,
           functions: 90,
           branches: 90,

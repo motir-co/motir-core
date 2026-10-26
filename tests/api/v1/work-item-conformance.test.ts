@@ -607,6 +607,12 @@ describe('/api/v1 work-item conformance — an external client with a real PAT',
     // on an unparseable kind are all driven. The operation is additionally driven
     // end-to-end by the drift guard, so excluding it here hides nothing.
     const APPROVAL_GATE_SUBRESOURCE = /\/approval-gate\//;
+    // ⚠️ Story MOTIR-9488's page ↔ work-item HAND link lives under a PAGE
+    // (`/api/v1/pages/{pageId}/work-items…`): it is the page resource's door, not
+    // a work item's, and its journey is its own suite (`tests/api/v1/page-links.test.ts`
+    // and the lifecycle gate and recipe beside it). Both operations are also driven
+    // by the drift guard, so excluding them here hides nothing.
+    const PAGE_RESOURCE = /\/api\/v1\/pages\//;
     const shipped = v1RouteFiles(process.cwd()).filter(
       (f) =>
         f.includes('work-items') &&
@@ -614,7 +620,8 @@ describe('/api/v1 work-item conformance — an external client with a real PAT',
         !WORK_LOOP_SUBRESOURCES.test(f) &&
         !ATTACHMENT_SUBRESOURCE.test(f) &&
         !DESIGN_SUBRESOURCE.test(f) &&
-        !APPROVAL_GATE_SUBRESOURCE.test(f),
+        !APPROVAL_GATE_SUBRESOURCE.test(f) &&
+        !PAGE_RESOURCE.test(f),
     );
 
     // Enumerated rather than counted: a NEW work-item endpoint appears here as a
