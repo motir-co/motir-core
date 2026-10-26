@@ -387,6 +387,18 @@ test('a model with no agent-run capacity is labelled and refused, clears when ca
       route.fulfill({ status: 200, contentType: 'application/json', body: stale }),
     );
     setFullInFlight(3);
+    // The server's verdict is cached for the lane's window, so wait until the
+    // server itself answers share full. `page.request` is not routed, so this
+    // read reaches the server while the tab keeps its stale answer.
+    await expect
+      .poll(
+        async () => {
+          const res = await page.request.get('/api/hosted-runs/models');
+          return capacityIn((await res.json()) as ModelsBody, FULL)?.verdict;
+        },
+        { timeout: LABEL_CHANGE_MS },
+      )
+      .toBe('no_capacity');
     const refused = startResponse(page, card4.identifier);
     await main(page).getByTestId('run-hosted').click();
     expect((await refused).status()).toBe(409);
