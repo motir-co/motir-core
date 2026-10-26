@@ -9881,7 +9881,8 @@
       "navPlanningLessons": "Lições de planejamento",
       "navIdeas": "Ideias",
       "navRunModels": "Modelos de execução hospedada",
-      "navFleetSettings": "Configurações da frota"
+      "navFleetSettings": "Configurações da frota",
+      "navCapacity": "Capacidade dos provedores"
     },
     "nav": {
       "overview": "Visão geral",
@@ -10090,6 +10091,14 @@
             "tag_add": "Adicionou uma tag de ideia",
             "tag_translate": "Traduziu uma tag de ideia",
             "research_run": "Registrou uma execução de pesquisa de ideias"
+          },
+          "capacity": {
+            "alert_share": {
+              "set": "Alterou a cota de alerta de capacidade"
+            },
+            "limits": {
+              "edit": "Editou os limites de capacidade de um modelo de provedor"
+            }
           }
         }
       }
@@ -12102,6 +12111,135 @@
           "body": "Não foi possível ler onde novos agentes são criados, então nenhum estado é mostrado e nenhum interruptor é oferecido. É um erro de leitura — nada mudou e nenhum valor é presumido.",
           "retry": "Tentar novamente"
         }
+      }
+    },
+    "capacity": {
+      "nav": "Capacidade dos provedores",
+      "title": "Capacidade dos provedores",
+      "subtitle": "O quanto cada modelo de provedor está perto dos limites publicados, para planejamento e execuções de agentes juntos. Edite os limites de um modelo quando o nível dele no provedor mudar.",
+      "loading": "Carregando a capacidade",
+      "percent": "{value} %",
+      "fresh": {
+        "readAt": "Lido às {time} UTC",
+        "every": "atualiza a cada {seconds} s",
+        "refresh": "Atualizar",
+        "failed": "Não foi possível atualizar"
+      },
+      "scope": {
+        "instance": "Os números vêm de uma única instância do gateway e podem estar incompletos."
+      },
+      "unavailable": {
+        "notice": "Os números ao vivo não estão disponíveis: o gateway não conseguiu ler seus contadores. Limites, notas de nível e cotas de planejamento são mostrados como estão salvos."
+      },
+      "slow": {
+        "notice": "Os números ao vivo deste modelo não foram lidos a tempo. Todos os outros modelos estão ao vivo."
+      },
+      "alerts": {
+        "title": "{count, plural, one {1 limite está acima da cota de alerta} other {# limites estão acima da cota de alerta}}",
+        "line": "{provider} · {model} · {limit} — {share} %",
+        "since": "ativo desde {time} UTC"
+      },
+      "alertShare": {
+        "title": "Cota de alerta",
+        "hsub": "Uma única cota para cada limite de cada modelo",
+        "label": "Alertar quando qualquer limite atingir",
+        "note": "Verificada uma vez por minuto e sempre que esta página é carregada.",
+        "saved": "Salvo. A próxima avaliação usa {share} %.",
+        "range": "Digite um número inteiro de 1 a 100.",
+        "failed": "Não foi possível salvar a cota de alerta. Nada foi alterado; tente novamente.",
+        "edit": "Editar",
+        "isDefault": "padrão",
+        "unchanged": "Essa já é a cota de alerta. Nada foi alterado.",
+        "notPermitted": "Sua função não pode alterar a cota de alerta, então nada foi salvo."
+      },
+      "entry": {
+        "tierNote": "Nota de nível: {note}",
+        "noTierNote": "Sem nota de nível",
+        "planningShare": "Cota de planejamento {share} %",
+        "unknownNote": "Desconhecido: {note}",
+        "edit": "Editar limites"
+      },
+      "col": {
+        "limit": "Limite",
+        "usage": "Uso / limite",
+        "share": "Cota usada",
+        "state": "Estado"
+      },
+      "lanes": "Planejamento {planning} · Agente {agent}",
+      "unit": {
+        "max_concurrency": "Simultaneidade",
+        "rpm": "Requisições / min",
+        "input_tpm": "Tokens de entrada / min",
+        "output_tpm": "Tokens de saída / min",
+        "tpm": "Tokens / min",
+        "tpd": "Tokens / dia"
+      },
+      "state": {
+        "normal": "Normal",
+        "near": "Perto do limite",
+        "over": "Acima da cota de alerta",
+        "unavailable": "Indisponível",
+        "unknown": "Limite desconhecido",
+        "na": "Não se aplica",
+        "unreported": "Uso não informado"
+      },
+      "limitZero": "Limite 0",
+      "limitUnknown": "limite não conhecido",
+      "r429": {
+        "label": "Respostas 429",
+        "minute": "Este minuto",
+        "day": "Hoje (UTC)",
+        "note": "Sem limite — apenas contadas"
+      },
+      "fold": "Unidades que este provedor não limita ({count})",
+      "provider": {
+        "claude": "Claude",
+        "deepseek": "DeepSeek",
+        "qwen": "Qwen"
+      },
+      "error": {
+        "unreachable": {
+          "title": "Não foi possível ler a capacidade",
+          "body": "O gateway não respondeu ou não conseguiu ler sua tabela de limites. Nada é mostrado até que uma leitura tenha sucesso."
+        },
+        "auth": {
+          "title": "A credencial do gateway não foi aceita",
+          "missing": "O servidor do Motir não tem nenhuma credencial do gateway configurada. Nenhum uso pode ser lido até que ela seja definida.",
+          "invalid": "O gateway não reconhece a credencial do servidor do Motir. Nenhum uso pode ser lido até que ela seja substituída.",
+          "forbidden": "A credencial do gateway pertence a um usuário que não é administrador do gateway. Nenhum uso pode ser lido até que ela seja substituída.",
+          "body": "O servidor do Motir não tem nenhuma credencial do gateway configurada, ou o gateway não a aceita. Nenhum uso pode ser lido até que isso seja corrigido."
+        },
+        "retry": "Tentar novamente"
+      },
+      "empty": {
+        "title": "Nenhum modelo de provedor configurado",
+        "body": "A tabela de limites do gateway não tem linhas, então não há nada para mostrar. Os modelos são adicionados no gateway, não aqui."
+      },
+      "edit": {
+        "title": "Editar limites · {model}",
+        "intro": "Somente os valores que você alterar são enviados. Um limite marcado como Desconhecido é salvo como não conhecido, nunca como 0.",
+        "unknown": "Desconhecido",
+        "planningShare": "Cota de planejamento %",
+        "tierNote": "Nota de nível",
+        "count": "{count} / 1000",
+        "save": "Salvar",
+        "saving": "Salvando…",
+        "cancel": "Cancelar",
+        "saved": "Limites salvos para {model}."
+      },
+      "editError": {
+        "wholeNumber": "{limit} deve ser um número inteiro igual ou maior que 0.",
+        "tooLarge": "{limit} é maior do que o gateway consegue salvar.",
+        "planningShare": "A cota de planejamento deve ser um número inteiro de 0 a 100.",
+        "tierNote": "A nota de nível pode ter no máximo 1000 caracteres.",
+        "invalidBody": "O gateway não conseguiu ler esta edição. Nada foi alterado.",
+        "unknownModel": "Este modelo não está mais na tabela de limites do gateway. Nada foi alterado; feche e atualize.",
+        "unknownProvider": "O gateway não conhece este provedor. Nada foi alterado.",
+        "storeError": "O gateway não conseguiu salvar a alteração. Nada foi alterado; tente novamente.",
+        "auth": "A credencial do gateway não foi aceita, então nada foi salvo.",
+        "unreachable": "O gateway não respondeu. Nada foi salvo; tente novamente.",
+        "notPermitted": "Sua função não pode editar limites, então nada foi salvo.",
+        "failed": "Não foi possível salvar os limites. Nada foi alterado; tente novamente."
       }
     }
   },

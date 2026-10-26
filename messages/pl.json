@@ -9881,7 +9881,8 @@
       "navPlanningLessons": "Lekcje planowania",
       "navIdeas": "Pomysły",
       "navRunModels": "Modele hostowanych uruchomień",
-      "navFleetSettings": "Ustawienia floty"
+      "navFleetSettings": "Ustawienia floty",
+      "navCapacity": "Pojemność dostawców"
     },
     "nav": {
       "overview": "Przegląd",
@@ -10090,6 +10091,14 @@
             "tag_add": "Dodano tag pomysłu",
             "tag_translate": "Przetłumaczono tag pomysłu",
             "research_run": "Zarejestrowano przebieg badania pomysłów"
+          },
+          "capacity": {
+            "alert_share": {
+              "set": "Zmieniono udział alertu pojemności"
+            },
+            "limits": {
+              "edit": "Edytowano limity pojemności modelu dostawcy"
+            }
           }
         }
       }
@@ -12102,6 +12111,135 @@
           "body": "Nie udało się odczytać, gdzie tworzone są nowe agenty, więc nie jest wyświetlany żaden stan ani przełącznik. To błąd odczytu — nic się nie zmieniło i żadna wartość nie jest zgadywana.",
           "retry": "Ponów"
         }
+      }
+    },
+    "capacity": {
+      "nav": "Pojemność dostawców",
+      "title": "Pojemność dostawców",
+      "subtitle": "Jak blisko opublikowanych limitów jest każdy model dostawcy, łącznie dla planowania i uruchomień agentów. Edytuj limity modelu, gdy zmieni się jego poziom u dostawcy.",
+      "loading": "Wczytywanie pojemności",
+      "percent": "{value} %",
+      "fresh": {
+        "readAt": "Odczyt o {time} UTC",
+        "every": "odświeżanie co {seconds} s",
+        "refresh": "Odśwież",
+        "failed": "Nie udało się odświeżyć"
+      },
+      "scope": {
+        "instance": "Liczby pochodzą z jednej instancji bramy i mogą być niepełne."
+      },
+      "unavailable": {
+        "notice": "Liczby na żywo są niedostępne: brama nie mogła odczytać swoich liczników. Limity, notatki o poziomie i udziały planowania są pokazane tak, jak je zapisano."
+      },
+      "slow": {
+        "notice": "Liczby na żywo dla tego modelu nie zostały odczytane na czas. Wszystkie pozostałe modele są na żywo."
+      },
+      "alerts": {
+        "title": "{count, plural, one {1 limit przekracza udział alertu} few {# limity przekraczają udział alertu} many {# limitów przekracza udział alertu} other {# limitu przekracza udział alertu}}",
+        "line": "{provider} · {model} · {limit} — {share} %",
+        "since": "alert od {time} UTC"
+      },
+      "alertShare": {
+        "title": "Udział alertu",
+        "hsub": "Jeden udział dla każdego limitu każdego modelu",
+        "label": "Alertuj, gdy dowolny limit osiągnie",
+        "note": "Sprawdzane raz na minutę i przy każdym wczytaniu tej strony.",
+        "saved": "Zapisano. Następna ocena użyje {share} %.",
+        "range": "Wpisz liczbę całkowitą od 1 do 100.",
+        "failed": "Nie udało się zapisać udziału alertu. Nic nie zostało zmienione; spróbuj ponownie.",
+        "edit": "Edytuj",
+        "isDefault": "domyślny",
+        "unchanged": "To już jest udział alertu. Nic nie zostało zmienione.",
+        "notPermitted": "Twoja rola nie może zmieniać udziału alertu, więc nic nie zostało zapisane."
+      },
+      "entry": {
+        "tierNote": "Notatka o poziomie: {note}",
+        "noTierNote": "Brak notatki o poziomie",
+        "planningShare": "Udział planowania {share} %",
+        "unknownNote": "Nieznane: {note}",
+        "edit": "Edytuj limity"
+      },
+      "col": {
+        "limit": "Limit",
+        "usage": "Użycie / limit",
+        "share": "Wykorzystany udział",
+        "state": "Stan"
+      },
+      "lanes": "Planowanie {planning} · Agent {agent}",
+      "unit": {
+        "max_concurrency": "Współbieżność",
+        "rpm": "Żądania / min",
+        "input_tpm": "Tokeny wejściowe / min",
+        "output_tpm": "Tokeny wyjściowe / min",
+        "tpm": "Tokeny / min",
+        "tpd": "Tokeny / dzień"
+      },
+      "state": {
+        "normal": "Normalny",
+        "near": "Blisko limitu",
+        "over": "Powyżej udziału alertu",
+        "unavailable": "Niedostępne",
+        "unknown": "Nieznany limit",
+        "na": "Nie dotyczy",
+        "unreported": "Użycie niezgłaszane"
+      },
+      "limitZero": "Limit 0",
+      "limitUnknown": "limit nieznany",
+      "r429": {
+        "label": "Odpowiedzi 429",
+        "minute": "Ta minuta",
+        "day": "Dziś (UTC)",
+        "note": "Bez limitu — tylko liczone"
+      },
+      "fold": "Jednostki, których ten dostawca nie ogranicza ({count})",
+      "provider": {
+        "claude": "Claude",
+        "deepseek": "DeepSeek",
+        "qwen": "Qwen"
+      },
+      "error": {
+        "unreachable": {
+          "title": "Nie udało się odczytać pojemności",
+          "body": "Brama nie odpowiedziała albo nie mogła odczytać swojej tabeli limitów. Nic nie jest pokazywane, dopóki odczyt się nie powiedzie."
+        },
+        "auth": {
+          "title": "Dane uwierzytelniające bramy nie są akceptowane",
+          "missing": "Serwer Motir nie ma skonfigurowanych danych uwierzytelniających bramy. Użycia nie można odczytać, dopóki nie zostaną ustawione.",
+          "invalid": "Brama nie rozpoznaje danych uwierzytelniających serwera Motir. Użycia nie można odczytać, dopóki nie zostaną zastąpione.",
+          "forbidden": "Dane uwierzytelniające bramy należą do użytkownika, który nie jest administratorem bramy. Użycia nie można odczytać, dopóki nie zostaną zastąpione.",
+          "body": "Serwer Motir nie ma skonfigurowanych danych uwierzytelniających bramy albo brama ich nie akceptuje. Użycia nie można odczytać, dopóki nie zostanie to naprawione."
+        },
+        "retry": "Spróbuj ponownie"
+      },
+      "empty": {
+        "title": "Brak skonfigurowanych modeli dostawców",
+        "body": "Tabela limitów bramy nie ma wierszy, więc nie ma nic do pokazania. Modele dodaje się w bramie, nie tutaj."
+      },
+      "edit": {
+        "title": "Edytuj limity · {model}",
+        "intro": "Wysyłane są tylko zmienione wartości. Limit oznaczony jako Nieznany jest zapisywany jako nieznany, nigdy jako 0.",
+        "unknown": "Nieznany",
+        "planningShare": "Udział planowania %",
+        "tierNote": "Notatka o poziomie",
+        "count": "{count} / 1000",
+        "save": "Zapisz",
+        "saving": "Zapisywanie…",
+        "cancel": "Anuluj",
+        "saved": "Zapisano limity dla {model}."
+      },
+      "editError": {
+        "wholeNumber": "{limit} musi być liczbą całkowitą równą 0 lub większą.",
+        "tooLarge": "{limit} jest większy, niż brama może zapisać.",
+        "planningShare": "Udział planowania musi być liczbą całkowitą od 0 do 100.",
+        "tierNote": "Notatka o poziomie może mieć najwyżej 1000 znaków.",
+        "invalidBody": "Brama nie mogła odczytać tej zmiany. Nic nie zostało zmienione.",
+        "unknownModel": "Tego modelu nie ma już w tabeli limitów bramy. Nic nie zostało zmienione; zamknij i odśwież.",
+        "unknownProvider": "Brama nie zna tego dostawcy. Nic nie zostało zmienione.",
+        "storeError": "Brama nie mogła zapisać zmiany. Nic nie zostało zmienione; spróbuj ponownie.",
+        "auth": "Dane uwierzytelniające bramy nie są akceptowane, więc nic nie zostało zapisane.",
+        "unreachable": "Brama nie odpowiedziała. Nic nie zostało zapisane; spróbuj ponownie.",
+        "notPermitted": "Twoja rola nie może edytować limitów, więc nic nie zostało zapisane.",
+        "failed": "Nie udało się zapisać limitów. Nic nie zostało zmienione; spróbuj ponownie."
       }
     }
   },

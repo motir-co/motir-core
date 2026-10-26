@@ -26,6 +26,7 @@ const LABELS = {
   navUsers: 'Users',
   navMonitoring: 'Monitoring',
   navFleetSettings: 'Fleet settings',
+  navCapacity: 'Provider capacity',
   navAiPlanning: 'AI planning',
   navPlanningLessons: 'Planning lessons',
   navIdeas: 'Ideas',

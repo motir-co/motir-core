@@ -1102,20 +1102,6 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     address: '/login',
     why: "Not an address: Claude Code's own `/login` slash command, typed in the agent's terminal to sign in (docs/decisions/agent-terminal.md Q9: the sign-in completes through the vendor's own flow). The panel's not-signed-in line quotes it verbatim. PERMANENT.",
   },
-  // ── FORWARD-LOOKING: the Provider capacity page (Story MOTIR-9539 · MOTIR-9607) ──
-  //  MOTIR-9607 drew `/admin/capacity` before MOTIR-9614 builds the page. These two
-  //  rows go red in the pull request that adds `app/(admin)/admin/capacity/page.tsx`,
-  //  which is the signal for that card to delete them.
-  {
-    file: 'design/platform-admin/console--capacity.mock.html',
-    address: '/admin/capacity',
-    why: 'FORWARD-LOOKING: the Provider capacity page MOTIR-9607 drew; MOTIR-9614 builds the route and deletes this row.',
-  },
-  {
-    file: 'design/platform-admin/design-notes.md',
-    address: '/admin/capacity',
-    why: 'FORWARD-LOOKING: the Provider capacity amendment names the page MOTIR-9614 builds; that card deletes this row.',
-  },
 ];
 
 type Entry = { file: string; address: string; why: string };

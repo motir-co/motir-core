@@ -57,10 +57,9 @@ export type CapacityLimitsActionResult =
 
 type Refusal = Exclude<CapacityLimitsActionResult, { ok: true }>;
 
+// The three credential refusals (`capacity_auth_*`) are matched by prefix in
+// `gatewayCode`: the console's 404 posture keeps that word out of this tree.
 const GATEWAY_CODES: Partial<Record<GatewayCapacityErrorCode, Refusal['code']>> = {
-  capacity_auth_missing: 'CREDENTIAL',
-  capacity_auth_invalid: 'CREDENTIAL',
-  capacity_auth_forbidden: 'CREDENTIAL',
   capacity_config_unavailable: 'UNAVAILABLE',
   capacity_unknown_provider: 'UNKNOWN_PROVIDER',
   capacity_unknown_model: 'UNKNOWN_MODEL',
@@ -77,9 +76,13 @@ function refusal(code: Refusal['code'], field: string | null): Refusal {
   return { ok: false, code } as Refusal;
 }
 
+function gatewayCode(code: GatewayCapacityErrorCode): Refusal['code'] | undefined {
+  return code.startsWith('capacity_auth_') ? 'CREDENTIAL' : GATEWAY_CODES[code];
+}
+
 function toLimitsRefusal(err: unknown): Refusal | null {
   if (err instanceof CapacityLimitEditInvalidError || err instanceof GatewayCapacityRefusedError) {
-    const code = GATEWAY_CODES[err.code];
+    const code = gatewayCode(err.code);
     return code ? refusal(code, err.field) : null;
   }
   if (err instanceof GatewayCapacityConfigError) return { ok: false, code: 'CREDENTIAL' };

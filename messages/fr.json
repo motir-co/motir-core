@@ -9881,7 +9881,8 @@
       "navPlanningLessons": "Leçons de planification",
       "navIdeas": "Idées",
       "navRunModels": "Modèles des exécutions hébergées",
-      "navFleetSettings": "Paramètres de la flotte"
+      "navFleetSettings": "Paramètres de la flotte",
+      "navCapacity": "Capacité des fournisseurs"
     },
     "nav": {
       "overview": "Vue d'ensemble",
@@ -10090,6 +10091,14 @@
             "tag_add": "A ajouté une étiquette d'idée",
             "tag_translate": "A traduit une étiquette d'idée",
             "research_run": "A enregistré une exécution de recherche d'idées"
+          },
+          "capacity": {
+            "alert_share": {
+              "set": "Part d’alerte de capacité modifiée"
+            },
+            "limits": {
+              "edit": "Limites de capacité d’un modèle de fournisseur modifiées"
+            }
           }
         }
       }
@@ -12102,6 +12111,135 @@
           "body": "L’endroit où les nouveaux agents sont créés n’a pas pu être lu, donc aucun état n’est affiché et aucun interrupteur n’est proposé. Il s’agit d’une erreur de lecture : rien n’a changé, et aucune valeur n’est devinée.",
           "retry": "Réessayer"
         }
+      }
+    },
+    "capacity": {
+      "nav": "Capacité des fournisseurs",
+      "title": "Capacité des fournisseurs",
+      "subtitle": "À quel point chaque modèle de fournisseur est proche de ses limites publiées, pour la planification et les exécutions d’agents réunies. Modifiez les limites d’un modèle quand son palier chez le fournisseur change.",
+      "loading": "Chargement de la capacité",
+      "percent": "{value} %",
+      "fresh": {
+        "readAt": "Lu à {time} UTC",
+        "every": "actualisé toutes les {seconds} s",
+        "refresh": "Actualiser",
+        "failed": "Actualisation impossible"
+      },
+      "scope": {
+        "instance": "Les chiffres proviennent d’une seule instance de la passerelle et peuvent être partiels."
+      },
+      "unavailable": {
+        "notice": "Les chiffres en direct sont indisponibles : la passerelle n’a pas pu lire ses compteurs. Les limites, notes de palier et parts de planification sont affichées telles qu’enregistrées."
+      },
+      "slow": {
+        "notice": "Les chiffres en direct de ce modèle n’ont pas été lus à temps. Tous les autres modèles sont en direct."
+      },
+      "alerts": {
+        "title": "{count, plural, one {1 limite dépasse la part d’alerte} other {# limites dépassent la part d’alerte}}",
+        "line": "{provider} · {model} · {limit} — {share} %",
+        "since": "déclenchée depuis {time} UTC"
+      },
+      "alertShare": {
+        "title": "Part d’alerte",
+        "hsub": "Une seule part pour chaque limite de chaque modèle",
+        "label": "Alerter quand une limite atteint",
+        "note": "Vérifiée une fois par minute, et à chaque chargement de cette page.",
+        "saved": "Enregistré. La prochaine évaluation utilise {share} %.",
+        "range": "Saisissez un nombre entier de 1 à 100.",
+        "failed": "La part d’alerte n’a pas pu être enregistrée. Rien n’a été modifié ; réessayez.",
+        "edit": "Modifier",
+        "isDefault": "par défaut",
+        "unchanged": "C’est déjà la part d’alerte. Rien n’a été modifié.",
+        "notPermitted": "Votre rôle ne permet pas de modifier la part d’alerte, rien n’a donc été enregistré."
+      },
+      "entry": {
+        "tierNote": "Note de palier : {note}",
+        "noTierNote": "Aucune note de palier",
+        "planningShare": "Part de planification {share} %",
+        "unknownNote": "Inconnu : {note}",
+        "edit": "Modifier les limites"
+      },
+      "col": {
+        "limit": "Limite",
+        "usage": "Utilisation / limite",
+        "share": "Part utilisée",
+        "state": "État"
+      },
+      "lanes": "Planification {planning} · Agent {agent}",
+      "unit": {
+        "max_concurrency": "Simultanéité",
+        "rpm": "Requêtes / min",
+        "input_tpm": "Jetons d’entrée / min",
+        "output_tpm": "Jetons de sortie / min",
+        "tpm": "Jetons / min",
+        "tpd": "Jetons / jour"
+      },
+      "state": {
+        "normal": "Normal",
+        "near": "Proche de la limite",
+        "over": "Au-dessus de la part d’alerte",
+        "unavailable": "Indisponible",
+        "unknown": "Limite inconnue",
+        "na": "Sans objet",
+        "unreported": "Utilisation non signalée"
+      },
+      "limitZero": "Limite 0",
+      "limitUnknown": "limite inconnue",
+      "r429": {
+        "label": "Réponses 429",
+        "minute": "Cette minute",
+        "day": "Aujourd’hui (UTC)",
+        "note": "Aucune limite — comptées seulement"
+      },
+      "fold": "Unités que ce fournisseur ne limite pas ({count})",
+      "provider": {
+        "claude": "Claude",
+        "deepseek": "DeepSeek",
+        "qwen": "Qwen"
+      },
+      "error": {
+        "unreachable": {
+          "title": "La capacité n’a pas pu être lue",
+          "body": "La passerelle n’a pas répondu, ou n’a pas pu lire sa table des limites. Rien n’est affiché tant qu’une lecture n’a pas réussi."
+        },
+        "auth": {
+          "title": "L’identifiant de la passerelle n’est pas accepté",
+          "missing": "Le serveur de Motir n’a aucun identifiant de passerelle configuré. Aucune utilisation ne peut être lue tant qu’il n’est pas défini.",
+          "invalid": "La passerelle ne reconnaît pas l’identifiant du serveur de Motir. Aucune utilisation ne peut être lue tant qu’il n’est pas remplacé.",
+          "forbidden": "L’identifiant de la passerelle appartient à un utilisateur qui n’est pas administrateur de la passerelle. Aucune utilisation ne peut être lue tant qu’il n’est pas remplacé.",
+          "body": "Le serveur de Motir n’a aucun identifiant de passerelle configuré, ou la passerelle ne l’accepte pas. Aucune utilisation ne peut être lue tant que ce n’est pas corrigé."
+        },
+        "retry": "Réessayer"
+      },
+      "empty": {
+        "title": "Aucun modèle de fournisseur configuré",
+        "body": "La table des limites de la passerelle n’a aucune ligne, il n’y a donc rien à afficher. Les modèles s’ajoutent dans la passerelle, pas ici."
+      },
+      "edit": {
+        "title": "Modifier les limites · {model}",
+        "intro": "Seules les valeurs que vous modifiez sont envoyées. Une limite marquée Inconnue est enregistrée comme non connue, jamais comme 0.",
+        "unknown": "Inconnue",
+        "planningShare": "Part de planification %",
+        "tierNote": "Note de palier",
+        "count": "{count} / 1000",
+        "save": "Enregistrer",
+        "saving": "Enregistrement…",
+        "cancel": "Annuler",
+        "saved": "Limites enregistrées pour {model}."
+      },
+      "editError": {
+        "wholeNumber": "{limit} doit être un nombre entier égal ou supérieur à 0.",
+        "tooLarge": "{limit} est plus grand que ce que la passerelle peut enregistrer.",
+        "planningShare": "La part de planification doit être un nombre entier de 0 à 100.",
+        "tierNote": "La note de palier peut contenir au plus 1000 caractères.",
+        "invalidBody": "La passerelle n’a pas pu lire cette modification. Rien n’a été modifié.",
+        "unknownModel": "Ce modèle n’est plus dans la table des limites de la passerelle. Rien n’a été modifié ; fermez et actualisez.",
+        "unknownProvider": "La passerelle ne connaît pas ce fournisseur. Rien n’a été modifié.",
+        "storeError": "La passerelle n’a pas pu enregistrer la modification. Rien n’a été modifié ; réessayez.",
+        "auth": "L’identifiant de la passerelle n’est pas accepté, rien n’a donc été enregistré.",
+        "unreachable": "La passerelle n’a pas répondu. Rien n’a été enregistré ; réessayez.",
+        "notPermitted": "Votre rôle ne permet pas de modifier les limites, rien n’a donc été enregistré.",
+        "failed": "Les limites n’ont pas pu être enregistrées. Rien n’a été modifié ; réessayez."
       }
     }
   },
