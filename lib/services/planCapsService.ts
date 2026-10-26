@@ -1,5 +1,11 @@
-import { capsForPlanKey, type PlanCaps } from '@/lib/billing/planCaps';
+import { hostCapsFromGranted } from '@/lib/billing/hostOwnAccountCaps';
+import { capsForPlanKey, HOST_PLAN_KEY, type PlanCaps } from '@/lib/billing/planCaps';
+import { fleetKindOnPool } from '@/lib/ciFleet/shardTargets';
+import type { FleetWorkloadKind } from '@/lib/ciFleet/workloads';
+import { fleetQuotaRequestRepository } from '@/lib/repositories/fleetQuotaRequestRepository';
+import { fleetShardRepository } from '@/lib/repositories/fleetShardRepository';
 import { _resetOrgPlanCache, readOrgPlan } from '@/lib/services/orgPlanReader';
+import { withSystemContext } from '@/lib/workspaces/context';
 
 // THE PLAN-CAPS LOOKUP (Story MOTIR-9363 · MOTIR-9372) — ONE call answers what an
 // organisation's AI plan lets it run on Motir's fleets at once. The figures are
@@ -22,6 +28,59 @@ import { _resetOrgPlanCache, readOrgPlan } from '@/lib/services/orgPlanReader';
 //                      tier could not be read, or the key has no row. The key is
 //                      CARRIED, never replaced by a plausible default.
 
+//
+// A `host` org's two fleet figures follow its OWN accounts (MOTIR-9587): once the
+// agent-runner or CI account is live — and that kind's switch reads AWS, as
+// admission's does — the figure is the account's granted vCPU ÷ 2, read from its
+// quota requests on every call (a later raise shows on the next read, nothing is
+// copied). Any failure of that read answers the `host` row, the shared floor —
+// never a larger figure.
+
+const AGENT_RUNNER: FleetWorkloadKind = 'hosted_agent';
+const CI_RUNNER: FleetWorkloadKind = 'ci_runner';
+
+/** A live own account's granted vCPU per kind — only for a kind on its pool. */
+async function ownGranted(
+  organizationId: string,
+): Promise<Partial<Record<FleetWorkloadKind, number>>> {
+  const kinds = new Set<FleetWorkloadKind>();
+  for (const kind of [AGENT_RUNNER, CI_RUNNER]) {
+    if (await fleetKindOnPool(kind)) kinds.add(kind);
+  }
+  if (kinds.size === 0) return {};
+  return withSystemContext(async (tx) => {
+    const granted: Partial<Record<FleetWorkloadKind, number>> = {};
+    for (const row of await fleetShardRepository.listLiveOrgOwned(organizationId, tx)) {
+      const kind = row.fleetKind as FleetWorkloadKind;
+      if (!kinds.has(kind) || !row.awsAccountId) continue;
+      const value = await fleetQuotaRequestRepository.maxGrantedForAwsAccountInTx(
+        row.awsAccountId,
+        tx,
+      );
+      if (value !== null) granted[kind] = value;
+    }
+    return granted;
+  });
+}
+
+/** The `host` row, with each live own account's figure in place of the floor's. */
+async function hostCaps(organizationId: string, floor: PlanCaps): Promise<PlanCaps> {
+  try {
+    const granted = await ownGranted(organizationId);
+    return hostCapsFromGranted({
+      floor,
+      agentRunnerGrantedVcpu: granted[AGENT_RUNNER] ?? null,
+      ciGrantedVcpu: granted[CI_RUNNER] ?? null,
+    });
+  } catch (err) {
+    console.error("[planCapsService] could not read a Host org's own accounts — the floor", {
+      organizationId,
+      error: err instanceof Error ? err.name : 'UnknownError',
+    });
+    return floor;
+  }
+}
+
 export type PlanCapsAnswer =
   | { kind: 'capped'; planKey: string; planName: string; caps: PlanCaps }
   | { kind: 'exempt' }
@@ -43,6 +102,14 @@ export const planCapsService = {
         planKey: tier.key,
       });
       return { kind: 'plan_unknown', planKey: tier.key };
+    }
+    if (tier.key === HOST_PLAN_KEY) {
+      return {
+        kind: 'capped',
+        planKey: tier.key,
+        planName: tier.name,
+        caps: await hostCaps(organizationId, caps),
+      };
     }
     return { kind: 'capped', planKey: tier.key, planName: tier.name, caps };
   },

@@ -185,6 +185,24 @@ export const fleetShardRepository = {
     });
   },
 
+  /** An organisation's LIVE own accounts (`active`, `liveAt` set), every kind —
+   *  the Host caps read (MOTIR-9587). */
+  async listLiveOrgOwned(
+    organizationId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<FleetShard[]> {
+    const client = tx ?? dbRead;
+    return client.fleetShard.findMany({
+      where: {
+        role: 'org_owned',
+        ownerOrganizationId: organizationId,
+        state: 'active',
+        liveAt: { not: null },
+      },
+      orderBy: [{ liveAt: 'asc' }, { id: 'asc' }],
+    });
+  },
+
   /** Set each given state time on EVERY `org_owned` row of one AWS account — but
    *  only on a row where it is still null (MOTIR-9585), so a replay, a race or a
    *  later pass never moves a time. The merged account's two rows are one call. */
