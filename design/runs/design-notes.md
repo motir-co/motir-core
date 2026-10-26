@@ -2256,3 +2256,160 @@ because nothing failed. Three sprites are added, extracted from `lucide-react` w
 | MOTIR-9060 | **TAKES** S1–S5 and the room's two keys — the stored switch and its row                                                            |
 | MOTIR-9054 | **TAKES** that the row is off by default and that a not-usable agent means nothing starts; it draws nothing itself                 |
 | MOTIR-9056 | **TAKES** the states a person meets on the way: B1, C, D and the red-to-green settle (F)                                           |
+
+## Run hosted — a model with no agent-run capacity (2026-10-26)
+
+**Design system.** Read `package.json` (depends on `@motir/design-system`, `workspace:*`, installed
+0.17.1 per `packages/design-system/package.json`) and `app/globals.css` (imports
+`@motir/design-system/theme.css`): **both checks hold, so this is on Motir Design.** The project's own
+axes come from `app/layout.tsx` (`data-style`, `data-palette`, `data-type`, applied per viewer). The
+package exports `@motir/design-system/mock`, and this sheet does not use it: the start bar, the door and
+its notices are product-local components, so, like every sibling sheet in this area, it composes their
+shipped markup with `theme.css` inlined (the token, chrome and primitive layers are
+`run-section--from-difficulty.mock.html`'s, verbatim). **No part is proposed for the package**: the held
+option is the shipped `Combobox` `disabled` option, the tag is the shipped `Pill`, and the notices are
+the door's shipped `Notice` (`HostedDoorNotices.tsx`). The product-local pieces drawn are `StartBar`'s
+`StartOption`, `RunDoorControl`, `HostedModelPicker`, `HostedModelProvenance`, `HostedDoorNotices` /
+`RefusalNotice`, and the Continue and Fix hosted doors (`ContinueHostedControl`, `FixHostedControl`).
+
+**AMENDS** § _Run hosted — the picker says where its model came from_ above (Panels F1–F6,
+[`run-section--from-difficulty.mock.html`](./run-section--from-difficulty.mock.html)) and, in the
+published Run hosted design result (`run-section--hosted.mock.html` and its notes), **§ The model
+picker** and **§ Refusals live on the DOOR** (the model-refused state). The change is drawn in the delta
+**[`run-section--no-capacity.mock.html`](./run-section--no-capacity.mock.html)**. **No existing mock is
+edited**, and no image export ships (`docs/decisions/design-result.md` AMENDMENT 4).
+
+### What changes
+
+Every offered model carries an agent-run capacity verdict, `available` or `no_capacity` plus a reason
+code, on the models read the picker already makes, so there is **no separate loading face for
+capacity**. A `no_capacity` model stays in the menu, is labelled, and cannot be picked; a selected one
+holds the door's start button; a launch refused for that reason answers with a sibling of the shipped
+refusals. Planning surfaces are never labelled.
+
+### Panels
+
+| panel      | state                                                                                                                                           |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| N1 · N1-zh | Open menu, mixed: `claude-opus-5-5` with _Default · anthropic_, `claude-opus-5` ticked with the difficulty description, `claude-fable-5-1` held |
+| N2         | Keyboard focus resting on the held option: the active row, announced unavailable; Enter and click do nothing                                    |
+| N3 · N3-zh | The selected (difficulty-resolved) model is held: trigger, provenance line, Run disabled, Held Run line                                         |
+| N4         | The label clearing while the menu is open: before (held) and after (available), side by side, in place                                          |
+| N5 · N5-zh | Every model held: the menu, Run disabled, the All-models-held line                                                                              |
+| N6 · N6-zh | Run refused for no capacity: the No-capacity refusal under the start bar, the picker refreshed to held                                          |
+| N7         | The Continue hosted door: held (button disabled, Held Run line) and refused                                                                     |
+| N8         | The Fix hosted door: held and refused                                                                                                           |
+| N9         | Fail-open: the capacity read failed, is unconfigured or is degraded — identical to today's picker                                               |
+
+The access path is the shipped one: the start bar at the top of the work item's Run section (Run), and
+the Development block's hosted Continue and Fix doors. Nothing new opens anything.
+
+### The elements, named once
+
+- **Held model option** — the shipped `Combobox` option with `disabled: true`. It stays **focusable**
+  and is announced `aria-disabled`; its label reads in `--el-text-secondary` with **no opacity dim**
+  (the Combobox's own rule, which keeps AA); `cursor-default`; a click or Enter on it does nothing and
+  the menu stays open. Its `secondary` text (the provider, or _Default · provider_) is **dropped while it
+  is held** and the tag takes its slot. Why: the menu is `max-w-[18rem]`, and a model id, _Default ·
+  anthropic_ and a tag cannot share a row without truncating the id, which is the one thing a person
+  must read; and _Default_ / the provider are facts for choosing a model, which a held model cannot be.
+  Both come back the moment the label clears. If the held option is also the difficulty-resolved one,
+  the **Capacity reason line takes its `description` slot** and the provenance stays on the door's
+  `HostedModelProvenance` line under the trigger, which is still true.
+- **No-capacity tag** — `Pill severity="warning"` in the option's `trailing` (pinned right, `ml-auto`
+  since there is no `secondary` before it). Warning, not neutral: the state is temporary and
+  actionable, and the peach tint is the same family as the door's warning `Notice`, so the tag and the
+  refusal read as one thing.
+- **Capacity reason line** — the option's `description` (menu row only, never the trigger), text-xs,
+  `--el-text-secondary`.
+- **Held Run line** — a `<p>` that is the last, full-width child of the door row, after the
+  `HostedModelProvenance` line (`basis-full`, text-xs, `--el-text-secondary`, the model id in
+  `font-mono font-semibold --el-text`). It is the start button's `aria-describedby`. It is worded
+  without naming a button, so the same string serves Run, Continue and Fix.
+- **All-models-held line** — the door's shipped `Notice` in `HostedDoorNotices`, the slot the empty
+  face's line (`picker.emptyBody`) uses. When it shows, the door's Held Run line is **not** drawn, so the
+  state is said once.
+- **No-capacity refusal** — a new `RefusalNotice` reason, `noCapacity`, beside `modelNotOffered`: the
+  same `Notice`, a semibold title naming the model and a body. It is reached from Run, Continue and Fix
+  (each renders it through its own refusal renderer, reading `runs.hosted.refused.noCapacity.*` as they
+  read `modelNotOffered.*` today). As with _is no longer offered_, the answer **refreshes the picker in
+  place**, so the option then reads held and the button is off; while the refusal stands the door's Held
+  Run line is **not** drawn, so the model is named once. Picking another model clears the refusal. A
+  hosted review has no door of its own; its gate's could-not-run line is worded from this refusal's
+  title sentence.
+
+### The preselect decision — the model STAYS, and Run is held
+
+When the preselected default, the difficulty-resolved model or the person's own pick is `no_capacity`
+— when the door opens or while it is open — **the selection does not move**. The trigger keeps the
+model, the start button is disabled, and the Held Run line says why and what to do (Panel N3).
+
+**Why.** The preselection is the project's per-difficulty choice (its Hosted agent settings), and the
+model is what the run is billed on and built with. Silently moving it to "the first available model"
+would start a run on a model nobody picked, possibly a cheaper or weaker one, and the provenance line
+(_From difficulty: High_) would then be describing a model that is not in the trigger. And a person's
+own pick must never change under them while the menu is open. One rule for all three sources is also
+the only rule a person can predict. The cost is one extra choice when they are in a hurry, which the
+line invites in so many words, and the hold lifts by itself when capacity returns (Panel N4).
+
+The trigger is the shipped trigger: label alone while held, because the held option has no `secondary`
+and the trigger never draws `trailing`. The Held Run line carries the state.
+
+### The label clearing in place
+
+The verdict is re-read while the door is open. When capacity returns the row changes **in place**: the
+tag goes, `aria-disabled` goes, the reason line gives its slot back (to the difficulty line, if that
+option is the resolved one), the `secondary` returns, the Held Run line goes and the button turns on.
+**No spinner, no skeleton and no dim**, the menu neither closes nor moves its active row, and focus stays
+where it was. The refresh is silent, so the shell's navigation-pending grammar does not apply. Losing
+capacity while open is the same swap the other way.
+
+### Fail-open is the unchanged face
+
+When the capacity read fails, is not configured or is degraded, every model reads `available`, and the
+picker is **identical to today's** (Panel N9). There is **no "unknown capacity" state** — nothing to
+build. A launch is still checked at start; the No-capacity refusal (N6) is what a person meets if it is
+refused.
+
+### Tokens
+
+| element              | colour                                                                     | shape                                                                     |
+| -------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Held model option    | label `--el-text-secondary`; active row `--el-option-active-bg`            | `--radius-control`, `--spacing-control-x/y` (the Combobox row)            |
+| No-capacity tag      | `Pill severity="warning"`: `--el-tint-peach` fill, `--el-text-strong` ink  | `--radius-badge`, `--spacing-chip-x/y`                                    |
+| Capacity reason line | `--el-text-secondary`                                                      | the Combobox `description` (text-xs, `max-w-[18rem]`)                     |
+| Held Run line        | `--el-text-secondary`; model id `--el-text`                                | layout only (`basis-full`, `-mt-1`, `px-0.5`, as `HostedModelProvenance`) |
+| All-models-held line | `Notice`: `--el-warning-surface`, `--el-text-strong`, glyph `--el-warning` | `--radius-control`, `--spacing-control-x/y`                               |
+| No-capacity refusal  | `Notice`, as above                                                         | as above                                                                  |
+| start button, held   | `Button` primary sm, `disabled` (its shipped disabled look)                | `--radius-btn`, `--height-btn-sm`, `--spacing-btn-x-sm`                   |
+
+Every ink inside the start bar's option panel (`--el-surface-soft`) is `--el-text` or
+`--el-text-secondary`; `--el-text-muted` and `--el-text-faint` carry no text on this sheet. One sprite
+is added, `triangle-alert` (the `Notice` glyph), and `square-terminal` for the Send to my agent option.
+
+### Copy
+
+No string carries a number, a limit, a share, a counter or tenant wording, and the product noun is
+**work item**. `{model}` is the model id, never translated.
+
+| suggested key                          | en                                                                                              | zh                                                                    |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `runs.hosted.picker.noCapacityTag`     | No capacity                                                                                     | 暂无容量                                                              |
+| `runs.hosted.picker.noCapacityReason`  | No agent-run capacity right now. Try again shortly.                                             | 目前没有智能体运行容量，请稍后再试。                                  |
+| `runs.hosted.door.heldModel`           | `<b>{model}</b>` has no agent-run capacity right now. Pick another model, or wait until it has. | `<b>{model}</b>` 目前没有智能体运行容量。请选择其他模型，或等它恢复。 |
+| `runs.hosted.picker.allHeldBody`       | No model has agent-run capacity right now. Try again shortly; local runs are unaffected.        | 目前没有模型有智能体运行容量。请稍后再试；本地运行不受影响。          |
+| `runs.hosted.refused.noCapacity.title` | Not started — {model} has no agent-run capacity right now.                                      | 未启动——{model} 目前没有智能体运行容量。                              |
+| `runs.hosted.refused.noCapacity.body`  | Nothing was booted and nothing was charged. Pick another model, or try again shortly.           | 没有启动任何机器，也没有产生任何费用。请选择其他模型，或稍后再试。    |
+
+One reason sentence covers both causes behind `no_capacity` (the agent share is full, or the provider is
+answering with rate limits now): the person's remedy is the same and the copy shows no numbers, so the
+reason code does not need a second sentence.
+
+### Not drawn
+
+- A loading or "unknown capacity" face: the verdict rides the existing models read, and fail-open is
+  today's face.
+- The Continue and Fix doors' open menu: it is the shared picker, so Panel N1 is theirs.
+- The review gate's could-not-run line, To resume and automatic re-run lines: worded from the refusal
+  title above by the work that owns those surfaces.
+- The platform-admin capacity screen and any planning surface.

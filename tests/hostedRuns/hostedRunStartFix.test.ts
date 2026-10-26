@@ -10,6 +10,7 @@ import {
   HostedFixRefusedError,
   HostedModelNotOfferedError,
   HostedRunCreditsUnavailableError,
+  HostedRunNoCapacityError,
   HostedRunOutOfCreditsError,
   HostedRunRepositoryNotWritableError,
 } from '@/lib/hostedRuns/errors';
@@ -19,6 +20,7 @@ import {
   runRepositories,
 } from '@/lib/github/runGitCredential';
 import { recomputeWorkItemFixReason } from '@/lib/services/fixReasonService';
+import { agentRunCapacityService } from '@/lib/services/agentRunCapacityService';
 import { hostedRunService } from '@/lib/services/hostedRunService';
 import { usersService } from '@/lib/services/usersService';
 import { workItemRepairService } from '@/lib/services/workItemRepairService';
@@ -780,5 +782,28 @@ describe('Fix on the hosted agent with a DeepSeek model (MOTIR-7208)', () => {
       MOTIR_RUN_MODE: 'fix',
     });
     expect(mintCalls()[0]!.body!['models']).toEqual([DEEPSEEK]);
+  });
+});
+
+// ── NO AGENT-RUN CAPACITY (Story MOTIR-9541 · MOTIR-9628) ───────────────────
+describe('Fix on the hosted agent — a model with no agent-run capacity', () => {
+  it('refused before the repair claim: no run, no lock, and the next press succeeds', async () => {
+    const { card } = await sentBackCard();
+    const verdict = vi
+      .spyOn(agentRunCapacityService, 'verdictFor')
+      .mockResolvedValue({ verdict: 'no_capacity', reason: 'agent_share_exhausted' });
+
+    const refused = await pressFix(card.identifier).catch((err: unknown) => err);
+    expect(refused).toBeInstanceOf(HostedRunNoCapacityError);
+    expect(refused).toMatchObject({ model: MODEL, reason: 'agent_share_exhausted' });
+    expect(verdict).toHaveBeenCalledWith({ id: MODEL, provider: 'anthropic' });
+    await expectNothingStarted(card.id);
+    await expectCardUntouched(card.id);
+    expect(calls.filter((c) => c.url === `${AI}/v1/credits/agent-run-check`)).toEqual([]);
+
+    // No repair claim was taken: the person (or a local agent) can still take it.
+    vi.restoreAllMocks();
+    const started = await pressFix(card.identifier);
+    expect(started.created).toBe(true);
   });
 });

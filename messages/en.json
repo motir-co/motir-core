@@ -9719,7 +9719,8 @@
         "dispatcher_gone": "<b>{name}</b>, who started it, is no longer in this workspace",
         "dispatcher_goneAnon": "the person who started it is no longer in this workspace",
         "repository_not_writable": "Motir can no longer push to {repo}",
-        "card_not_ready": "{key} is not ready to run — it is blocked or no longer in progress"
+        "card_not_ready": "{key} is not ready to run — it is blocked or no longer in progress",
+        "no_capacity": "the model it ran with, {model}, has no agent-run capacity right now"
       },
       "repair": {
         "out_of_credits": "Add credits in billing, then press Continue — or continue from your terminal.",
@@ -9730,7 +9731,8 @@
         "no_project_access": "Continue it yourself — it runs as you, on your organization's credits.",
         "dispatcher_gone": "Continue it yourself — it runs as you, on your organization's credits.",
         "repository_not_writable": "Reconnect the repository in the project's settings, then press Continue.",
-        "card_not_ready": "Clear what blocks {key} or move it back to In Progress, then press Continue."
+        "card_not_ready": "Clear what blocks {key} or move it back to In Progress, then press Continue.",
+        "no_capacity": "Pick another model and press Continue, or try again shortly."
       },
       "copyAria": "Copy the resume command for {key}",
       "member": {
@@ -13046,7 +13048,8 @@
       "door": {
         "run": "Run",
         "runAgain": "Run again",
-        "starting": "Starting…"
+        "starting": "Starting…",
+        "heldModel": "<b>{model}</b> has no agent-run capacity right now. Pick another model, or wait until it has."
       },
       "picker": {
         "label": "Model",
@@ -13063,7 +13066,10 @@
         "fromDifficulty": "From difficulty: <b>{difficulty}</b>",
         "override": "Project override for <b>{difficulty}</b>",
         "fromLeaves": "Highest difficulty among its leaves: <b>{difficulty}</b>",
-        "overrideFromLeaves": "Project override for <b>{difficulty}</b>, the highest difficulty among its leaves"
+        "overrideFromLeaves": "Project override for <b>{difficulty}</b>, the highest difficulty among its leaves",
+        "noCapacityTag": "No capacity",
+        "noCapacityReason": "No agent-run capacity right now. Try again shortly.",
+        "allHeldBody": "No model has agent-run capacity right now. Try again shortly; local runs are unaffected."
       },
       "notReady": "Run is available once this work item is ready — it has {count, plural, one {# open blocker} other {# open blockers}}.",
       "refused": {
@@ -13096,6 +13102,10 @@
         "failed": {
           "title": "Not started — Motir couldn’t start the run.",
           "body": "Nothing was booted. Try again shortly."
+        },
+        "noCapacity": {
+          "title": "Not started — {model} has no agent-run capacity right now.",
+          "body": "Nothing was booted and nothing was charged. Pick another model, or try again shortly."
         }
       },
       "phase": {
@@ -14274,7 +14284,8 @@
           "no_verdictNoRun": "the review run ended without a verdict.",
           "boot_failed": "the hosted machine for the review could not start.",
           "no_actor": "nobody can run it — the work item has no assignee or reporter, and the workspace has no stand-in manager.",
-          "unknown": "the review run could not start."
+          "unknown": "the review run could not start.",
+          "noCapacity": "the model for the review has no agent-run capacity right now. Try again shortly."
         },
         "why": "Nothing merges until the review runs, or someone continues without it.",
         "whyNotYours": "Waiting on {name}. Nothing merges until the review runs, or they continue without it."
@@ -14311,7 +14322,8 @@
         "out_of_credits": "the organisation is out of credits.",
         "credits_unavailable": "the credit balance could not be read.",
         "repository_not_writable": "Motir cannot write to {detail}.",
-        "card_not_ready": "someone picked the work item up first."
+        "card_not_ready": "someone picked the work item up first.",
+        "no_capacity": "{detail}, the model it last ran on, has no agent-run capacity right now."
       },
       "next": {
         "cap_reached": "Run on the hosted agent",
@@ -14322,7 +14334,8 @@
         "models_unavailable": "Run on the hosted agent",
         "out_of_credits": "Buy credits",
         "credits_unavailable": "Run on the hosted agent",
-        "repository_not_writable": "Repositories"
+        "repository_not_writable": "Repositories",
+        "no_capacity": "Pick another model and run"
       }
     },
     "manualWork": {

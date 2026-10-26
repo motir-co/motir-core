@@ -402,6 +402,15 @@ describe('To resume — resuming and could not resume (§ 35.5, Panels 4–5)', 
     expect(screen.queryByTestId('workbench-resume-next-ACME-12')).toBeNull();
   });
 
+  it('a no-capacity skip in zh names the model in the reason and the repair (MOTIR-9633)', () => {
+    render(list([ready(attempt({ skipReason: 'no_capacity', detail: 'opus-3' }))]), {
+      locale: 'zh',
+      messages: zhMessages,
+    });
+    expect(line('ACME-12').textContent).toContain('它使用的模型 opus-3 目前没有智能体运行容量');
+    expect(next('ACME-12').textContent).toContain(zhMessages.workbench.toResume.repair.no_capacity);
+  });
+
   it('already_resumed reads as Resuming', () => {
     const view = ready(attempt({ skipReason: 'already_resumed' }));
     expect(
@@ -433,6 +442,13 @@ describe('To resume — resuming and could not resume (§ 35.5, Panels 4–5)', 
       'opus-3',
       'the model it ran with, opus-3, is no longer offered',
       'Pick another model and press Continue.',
+    ],
+    [
+      // MOTIR-9633: recorded, never retried — the person continues it themselves.
+      'no_capacity',
+      'opus-3',
+      'the model it ran with, opus-3, has no agent-run capacity right now',
+      'Pick another model and press Continue, or try again shortly.',
     ],
     [
       'models_unavailable',

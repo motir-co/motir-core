@@ -1,0 +1,2460 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · Run hosted — a model with no agent-run capacity</title>
+    <!--
+      DELTA MOCK — AMENDS the Run hosted model picker: design-notes.md § "Run hosted — the
+      picker says where its model came from" (run-section--from-difficulty.mock.html), and
+      the published Run hosted design result (run-section--hosted.mock.html, § The model
+      picker and § Refusals live on the door). Only the CHANGED panels are drawn: the start
+      bar's Run option with its picker, the open menu, the door's notices, and the Continue
+      and Fix doors' shared picker. Nothing else on the Run section changes.
+
+      ── WHAT CHANGES ──
+      Each offered model now carries an agent-run capacity verdict (available | no_capacity)
+      on the models read the picker already makes. A no_capacity model is a HELD option: the
+      shipped Combobox `disabled` option (focusable, aria-disabled, label in
+      --el-text-secondary, no opacity dim), a No-capacity tag (Pill severity="warning") in
+      `trailing`, and a Capacity reason line as its `description`. A held selection stays
+      selected and holds Run with a Held Run line. A launch refused for no capacity answers
+      with a sibling of the shipped refusal notices.
+
+      ── COMPOSED, NOT REDRAWN ──
+      The token, chrome and primitive layers are spliced VERBATIM from
+      run-section--from-difficulty.mock.html; the classes this sheet adds at the end of the
+      style block mirror StartBar's StartOption, the Pill's warning severity and the door's
+      `Notice`, all on --el-* and shape tokens. No Tier-0 --color-*, raw hue, opacity dim or
+      raw rounded-/p-/h- value in a product element.
+    -->
+    <style>
+      /* ═══ TOKENS — generated from @motir/design-system/theme.css ═══ */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-primary-fill: #5645d4;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-canvas: #ecebe7;
+        --color-ink: #1a1a1a;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-orange: #dd5b00;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+        --font-sans:
+          var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: var(--font-serif-source, Georgia), serif;
+        --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+        --font-size-xs: 0.75rem;
+        --font-size-sm: 0.875rem;
+        --font-size-base: 1rem;
+        --font-size-lg: 1.25rem;
+        --font-size-xl: 1.5rem;
+        --font-size-2xl: 2rem;
+        --font-size-3xl: 3rem;
+        --font-size-display: 5rem;
+        --radius-xs: 4px;
+        --radius-sm: 6px;
+        --radius-md: 8px;
+        --radius-lg: 12px;
+        --radius-xl: 16px;
+        --radius-pill: 9999px;
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+        --shadow-flat: none;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --shadow-hero-mockup: 0 24px 48px -8px rgba(15, 15, 15, 0.2);
+        --spacing-xxs: 4px;
+        --spacing-xs: 8px;
+        --spacing-sm: 12px;
+        --spacing-md: 16px;
+        --spacing-lg: 20px;
+        --spacing-xl: 24px;
+        --spacing-2xl: 32px;
+        --spacing-3xl: 40px;
+        --spacing-section: 64px;
+        --spacing-section-lg: 96px;
+        --spacing-hero: 120px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-btn-y-sm: 8px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-btn-lg: 48px;
+        --height-input: 44px;
+        --height-control: 36px;
+        --transition-duration: 150ms;
+        --transition-fast: 100ms;
+        --transition-slow: 250ms;
+        --hover-scale: 1;
+        --active-scale: 0.98;
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+        --focus-ring-color: var(--color-primary);
+        --el-page-bg: var(--color-background);
+        --el-page-text: var(--color-foreground);
+        --el-page-text-muted: var(--color-muted-foreground);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-canvas: var(--color-canvas);
+        --el-surface-text: var(--color-foreground);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        /* ADDED by MOTIR-4674, verbatim from packages/design-system/theme.css:
+           the ink for danger text ON a page surface. --el-danger-text is legal
+           ONLY on an element carrying bg-(--el-danger), and raw --el-danger is
+           under AA on the dark page in three palettes. */
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-status-todo: var(--color-stone);
+        --el-status-in-progress: var(--color-info);
+        --el-status-in-review: var(--color-primary);
+        --el-status-done: var(--color-success);
+        --el-status-blocked: var(--color-warning);
+        --el-status-cancelled: var(--color-steel);
+        --el-priority-highest: var(--color-destructive);
+        --el-priority-high: var(--color-warning);
+        --el-priority-medium: var(--color-slate);
+        --el-priority-low: var(--color-info);
+        --el-priority-lowest: var(--color-stone);
+        --el-danger-surface: var(--color-tint-rose);
+        --el-danger-surface-text: var(--color-charcoal);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-warning-text: var(--color-charcoal);
+        --el-success-surface: var(--color-tint-mint);
+        --el-notice-info-bg: var(--color-tint-sky);
+        --el-notice-info-border: var(--color-info);
+        --el-callout-bg: var(--color-tint-lavender);
+        --el-callout-text: var(--color-charcoal);
+        --el-role-admin: var(--color-tint-lavender);
+        --el-role-member: var(--color-tint-sky);
+        --el-role-viewer: var(--color-tint-mint);
+        --el-org-role-owner: var(--color-tint-lavender);
+        --el-org-role-admin: var(--color-tint-sky);
+        --el-org-role-member: var(--color-tint-mint);
+        --el-privacy-private: var(--color-tint-lavender);
+        --el-privacy-public: var(--color-tint-sky);
+        --el-label-1: var(--color-tint-peach);
+        --el-label-2: var(--color-tint-rose);
+        --el-label-3: var(--color-tint-mint);
+        --el-label-4: var(--color-tint-lavender);
+        --el-label-5: var(--color-tint-sky);
+        --el-label-6: var(--color-tint-yellow);
+        --el-avatar-peach: var(--color-tint-peach);
+        --el-avatar-rose: var(--color-tint-rose);
+        --el-avatar-mint: var(--color-tint-mint);
+        --el-avatar-lavender: var(--color-tint-lavender);
+        --el-avatar-sky: var(--color-tint-sky);
+        --el-avatar-yellow: var(--color-tint-yellow);
+        --el-avatar-fallback: var(--color-info);
+        --el-notif-mentioned: var(--color-primary-fill);
+        --el-notif-commented: var(--color-info);
+        --el-notif-assigned: var(--color-accent-green);
+        --el-notif-transitioned: var(--color-accent-teal);
+        --el-model-opus: var(--color-primary-fill);
+        --el-model-sonnet: var(--color-info);
+        --el-model-haiku: var(--color-success);
+        --el-model-deepseek: var(--color-accent-teal);
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-icon-active: var(--color-primary);
+        --el-icon-btn: var(--color-foreground);
+        --el-icon-heading: var(--color-charcoal);
+        --el-icon-field: var(--color-muted-foreground);
+        --el-text-eyebrow: var(--color-muted-foreground);
+        --el-text-subtitle: var(--color-slate);
+        --el-text-helper: var(--color-muted-foreground);
+        --el-text-identifier: var(--color-slate);
+        --el-tooltip-bg: var(--color-foreground);
+        --el-tooltip-text: var(--color-background);
+        --el-switch-on: var(--color-primary-fill);
+        --el-switch-knob: var(--color-surface);
+        --el-option-active-bg: var(--color-muted);
+        --el-overlay-scrim: #00000066;
+        --el-chip-bg: var(--color-surface);
+        --el-chip-border: var(--color-border);
+        --el-card: var(--color-background);
+        --el-input-border: var(--color-hairline-strong);
+        --el-button-border: var(--color-hairline-strong);
+        --el-count-bg: var(--color-muted);
+        --el-count-text: var(--color-slate);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --el-type-code: var(--color-info);
+        --el-type-design: var(--color-accent);
+        --el-type-test: var(--color-success);
+        --el-type-content: var(--color-accent-teal);
+        --el-type-research: var(--color-primary);
+        --el-type-review: var(--color-accent-orange);
+        --el-type-deploy: var(--color-destructive);
+        --el-type-decision: var(--color-charcoal);
+        --el-type-manual: var(--color-stone);
+        --el-type-chore: var(--color-slate);
+        --el-chart-guideline: var(--color-stone);
+        --el-chart-actual: var(--color-primary);
+        --el-chart-scope: var(--color-warning);
+        --el-chart-committed: var(--color-info);
+        --el-chart-completed: var(--color-success);
+        --el-chart-average: var(--color-charcoal);
+        --el-chart-plot: var(--color-surface-soft);
+        --el-chart-grid: var(--color-border);
+        --el-chart-axis: var(--color-steel);
+        --el-chart-cat-1: var(--color-primary);
+        --el-chart-cat-2: var(--color-info);
+        --el-chart-cat-3: var(--color-success);
+        --el-chart-cat-4: var(--color-warning);
+        --el-chart-cat-5: var(--color-accent-teal);
+        --el-chart-cat-6: var(--color-accent);
+        --el-chart-cat-7: var(--color-charcoal);
+        --el-chart-cat-none: var(--color-stone);
+        --el-chart-created: var(--color-info);
+        --el-chart-resolved: var(--color-success);
+        --el-chart-deficit: var(--color-destructive);
+        --el-chart-surplus: var(--color-success);
+        --el-chart-age: var(--color-warning);
+        --el-chart-resolution: var(--color-info);
+        --el-chart-cycle-scope: var(--color-stone);
+        --el-chart-cycle-started: var(--color-warning);
+        --el-chart-cycle-completed: var(--color-info);
+        --el-chart-cycle-target: var(--color-info);
+        --el-public-banner-bg: var(--color-tint-sky);
+        --el-public-banner-text: var(--color-charcoal);
+        --el-vote-bg: var(--color-tint-lavender);
+        --el-vote-active-bg: var(--color-primary);
+        --el-vote-active-text: var(--color-primary-foreground);
+        --el-roadmap-submitted: var(--color-tint-peach);
+        --el-roadmap-planned: var(--color-tint-lavender);
+        --el-roadmap-progress: var(--color-tint-sky);
+        --el-roadmap-done: var(--color-tint-mint);
+        --el-diff-added: var(--color-tint-mint);
+        --el-diff-removed: var(--color-tint-rose);
+        --el-diff-moved: var(--color-tint-sky);
+        --el-chat-bubble-user: var(--color-primary-fill);
+        --el-chat-bubble-ai: var(--color-surface-soft);
+        --el-canvas-edge-pending: var(--color-slate);
+        --el-canvas-edge-committed: var(--color-charcoal);
+        --el-station-tier-discovery: var(--color-tint-sky);
+        --el-station-tier-vision: var(--color-tint-lavender);
+        --el-station-tier-feasibility: var(--color-tint-mint);
+        --el-station-tier-validation: var(--color-tint-peach);
+        --el-hero-wash-a: var(--color-tint-lavender);
+        --el-hero-wash-b: var(--color-tint-sky);
+        --el-build-bg: var(--color-tint-lavender);
+        --el-build-text: var(--color-charcoal);
+        --el-build-glyph: var(--color-primary);
+        --el-selection-bg: var(--color-tint-sky);
+        --el-droptarget-bg: var(--color-tint-lavender);
+        --el-board-column-accent: var(--color-primary);
+        --el-overdue: var(--color-destructive);
+        --el-due-soon: var(--color-warning);
+        --el-sprint-accent: var(--color-tint-lavender);
+        --el-epic-accent: var(--color-accent);
+        --el-archived-pill-bg: var(--color-muted);
+        --el-archived-pill-text: var(--color-slate);
+        --el-auth-wash: var(--color-tint-sky);
+        --el-tabnav-track: var(--color-surface);
+        --el-tabnav-active: var(--color-primary);
+        --el-card-icon-bg: var(--color-muted);
+        --el-card-icon-fg: var(--color-primary);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+      }
+
+      /* ═══ MOCK BOARD CHROME (not product UI — the panel scaffolding) ═══ */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #f2f1ee;
+        color: var(--el-page-text);
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          Roboto,
+          'Helvetica Neue',
+          Arial,
+          sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .board {
+        max-width: 1240px;
+        margin: 0 auto;
+        padding: 40px 24px 72px;
+      }
+      .board > header {
+        margin-bottom: 32px;
+      }
+      .board h1 {
+        font-family: ui-serif, Georgia, 'Times New Roman', serif;
+        font-size: 30px;
+        line-height: 1.2;
+        margin: 0 0 8px;
+        color: var(--el-text);
+      }
+      .board > header p {
+        margin: 0 0 10px;
+        font-size: 14px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+        max-width: 84ch;
+      }
+      .panel-label {
+        margin: 44px 0 12px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--el-text-eyebrow);
+        border-top: 1px solid var(--el-border);
+        padding-top: 14px;
+      }
+      .panel-label b {
+        color: var(--el-text);
+        font-weight: 700;
+      }
+      .panel-note {
+        margin: 0 0 14px;
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+        max-width: 88ch;
+      }
+      .panel-note b {
+        color: var(--el-text);
+      }
+      .panel {
+        margin-bottom: 8px;
+      }
+      .sr {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+      }
+      .mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      code.k {
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 12px;
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+        border-radius: var(--radius-control);
+        padding: 2px 6px;
+      }
+      svg.i {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      svg.i.sm {
+        width: 14px;
+        height: 14px;
+      }
+      svg.i.lg {
+        width: 18px;
+        height: 18px;
+      }
+      svg.gh {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        fill: currentColor;
+      }
+      svg.gh.lg {
+        width: 18px;
+        height: 18px;
+      }
+
+      /* ═══ SHIPPED PRIMITIVES — classes mirror the cva recipes ═══ */
+      /* Button (packages/design-system/src/components/ui/Button.tsx) */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        line-height: 1;
+        border: 0;
+        cursor: pointer;
+        border-radius: var(--radius-btn);
+        height: var(--height-btn-md);
+        padding-inline: var(--spacing-btn-x);
+        background: transparent;
+        color: var(--el-text);
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-secondary {
+        border: 1px solid var(--el-button-border);
+        color: var(--el-text);
+      }
+      .btn-ghost {
+        color: var(--el-text);
+      }
+      .btn-sm {
+        height: var(--height-btn-sm);
+        padding-inline: var(--spacing-btn-x-sm);
+        font-size: 12px;
+      }
+      .btn[disabled] {
+        opacity: 0.5;
+        cursor: default;
+      }
+      .icon-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: var(--height-control);
+        height: var(--height-control);
+        border: 0;
+        background: transparent;
+        border-radius: var(--radius-control);
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      /* Card */
+      .card {
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-card);
+        padding: var(--spacing-card-padding);
+      }
+      /* Pill */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+      .pill-neutral {
+        background: var(--el-chip-bg);
+        color: var(--el-text-secondary);
+        border-color: var(--el-chip-border);
+      }
+      .pill-done {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .pill-warning {
+        background: var(--el-tint-peach);
+        color: var(--el-text-strong);
+      }
+      .pill-danger {
+        background: var(--el-tint-rose);
+        color: var(--el-text-strong);
+      }
+      /* Input + FormField */
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-width: 0;
+      }
+      .field > label {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .helper {
+        font-size: 14px;
+        line-height: 1.5;
+        color: var(--el-text-helper);
+        margin: 0;
+      }
+      .helper.xs {
+        font-size: 12px;
+      }
+      /* SectionLabel */
+      .eyebrow {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-eyebrow);
+      }
+      /* Spinner */
+      .spin {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        border-radius: 9999px;
+        border: 2px solid var(--el-border-strong);
+        border-top-color: var(--el-accent);
+      }
+      .link {
+        color: var(--el-link);
+        text-decoration: none;
+        font-weight: 500;
+      }
+      /* QuietAction — the shipped RepositoryRow affordance */
+      .quiet {
+        display: inline-flex;
+        width: fit-content;
+        align-items: center;
+        gap: 6px;
+        border: 0;
+        background: transparent;
+        padding: 0;
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-link);
+        cursor: pointer;
+      }
+      /* Combobox trigger */
+      .combo {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-input);
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-input-border);
+        background: var(--el-page-bg);
+        padding-inline: var(--spacing-input-x);
+        font-size: 14px;
+        color: var(--el-text);
+        min-width: 0;
+      }
+      .combo.disabled {
+        opacity: 0.6;
+      }
+      .listbox {
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 4px;
+        display: flex;
+        flex-direction: column;
+      }
+      .listbox .opt {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 14px;
+        color: var(--el-text);
+        min-width: 0;
+      }
+      .listbox .opt.active {
+        background: var(--el-option-active-bg);
+      }
+      /* ⚠️ --el-text-secondary, not --el-text-muted (MOTIR-4674). This rule was
+         carried over from takeover.mock.html and never exercised in this asset;
+         the picker is its first use, and muted is 4.12:1 on
+         --el-option-active-bg — the surface an ACTIVE option paints. */
+      .listbox .opt .sub {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      /* ⚠️ --el-text-eyebrow, not --el-text-faint (MOTIR-4674). Same story as
+         `.opt .sub` above — carried over, never exercised, and the picker's two
+         SEGMENT headings are the information the whole panel turns on, so they
+         are not decoration. Faint clears AA on no surface at all. */
+      .listbox .grp {
+        padding: 8px var(--spacing-control-x) 4px;
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--el-text-eyebrow);
+      }
+      /* Modal */
+      .modal {
+        border-radius: var(--radius-modal);
+        border: 1px solid var(--el-border);
+        background: var(--el-card);
+        box-shadow: var(--shadow-modal);
+        padding: var(--spacing-card-padding);
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        max-width: 34rem;
+      }
+      .modal-head {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .modal-head h4 {
+        margin: 0;
+        font-family: ui-serif, Georgia, serif;
+        font-size: 20px;
+        font-weight: 600;
+        line-height: 1.25;
+        color: var(--el-text);
+      }
+      .modal-foot {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .scrim {
+        border-radius: var(--radius-card);
+        background: var(--el-canvas);
+        padding: 28px;
+        display: flex;
+        justify-content: center;
+      }
+
+      /* ═══ THE ROOM — /settings/project/repositories ═══ */
+      .settings {
+        display: grid;
+        grid-template-columns: 15rem 1fr;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        overflow: hidden;
+        min-height: 460px;
+      }
+      .set-rail {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        border-right: 1px solid var(--el-sidebar-border);
+        background: var(--el-sidebar-bg);
+        padding: 20px 12px;
+      }
+      .set-rail .grp {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .set-rail .grp > .h {
+        padding: 6px var(--spacing-control-x) 2px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .rail-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        border-radius: var(--radius-control);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        font-size: 14px;
+        color: var(--el-text-secondary);
+      }
+      .rail-row svg {
+        color: var(--el-icon-muted);
+      }
+      .rail-row.active {
+        background: var(--el-sidebar-item-bg-active);
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .rail-row.active svg {
+        color: var(--el-icon-active);
+      }
+      .set-pane {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        padding: 28px;
+        min-width: 0;
+      }
+      .pane-head {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .pane-head h3 {
+        margin: 0;
+        font-family: ui-serif, Georgia, serif;
+        font-size: 22px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .pane-head p {
+        margin: 0;
+        max-width: 68ch;
+        font-size: 14px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+      /* callouts — every fill a palette token */
+      .note {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
+        padding: 12px 14px;
+        font-size: 14px;
+        line-height: 1.5;
+        color: var(--el-text);
+      }
+      .note svg {
+        color: var(--el-icon-muted);
+        margin-top: 2px;
+        flex: none;
+      }
+      .note .door {
+        display: block;
+        margin-top: 4px;
+        font-size: 13px;
+      }
+      .banner {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        border-radius: var(--radius-card);
+        padding: 12px 14px;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+      .banner.warn {
+        background: var(--el-warning-surface);
+        color: var(--el-warning-text);
+      }
+      .banner.warn svg {
+        color: var(--el-warning);
+        margin-top: 2px;
+        flex: none;
+      }
+      .banner.info {
+        background: var(--el-notice-info-bg);
+        color: var(--el-text-strong);
+      }
+      .banner.info svg {
+        color: var(--el-info);
+        margin-top: 2px;
+        flex: none;
+      }
+      .banner b {
+        font-weight: 600;
+      }
+
+      /* ═══ ADDED BY THIS ASSET — the Run card header with the door ═══ */
+      /* ContentSectionCard: --el-card, --el-border, --radius-card, --shadow-subtle */
+      .rc {
+        max-width: 46rem;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-card);
+        box-shadow: var(--shadow-subtle);
+      }
+      .rc-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 12px;
+        padding: 16px var(--spacing-card-padding);
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .rc-head h3 {
+        margin: 0;
+        font-size: 14.5px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .rc-head .hsub {
+        margin: 3px 0 0;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+      }
+      .rc-body {
+        padding: 18px var(--spacing-card-padding);
+        font-size: 13px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+      .rc-body b {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      /* RunHostedButton's row — `flex items-center gap-2` becomes items-start, so
+         the button stays level with the TRIGGER when the line sits under it. */
+      .door {
+        flex: 0 1 23rem;
+        display: flex;
+        align-items: flex-start;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      /* HostedModelPicker's wrapper — w-[15rem] max-w-full, unchanged */
+      .hmp {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        width: 15rem;
+        max-width: 100%;
+      }
+      /* The trigger, as the approved door draws it (development--continue-hosted
+         `.cc-combo`): h-(--height-control) rounded-(--radius-input) */
+      .cbx {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        font: inherit;
+        font-size: 14px;
+        color: var(--el-text);
+        text-align: left;
+      }
+      .cbx .val {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+        color: var(--el-text);
+      }
+      .cbx .sec {
+        margin-left: auto;
+        font-size: 12px;
+        white-space: nowrap;
+        color: var(--el-text-identifier);
+      }
+      .cbx > svg {
+        color: var(--el-icon-muted);
+      }
+      /* THE NEW LINE — a full-width last child of the door row (basis-full), so it
+         sits under the picker and may run under the button; text-xs,
+         --el-text-secondary (AA on every surface); the trigger's aria-describedby */
+      .prov {
+        flex-basis: 100%;
+        margin: -4px 0 0;
+        padding-inline: 2px;
+        font-size: 12px;
+        line-height: 1.4;
+        color: var(--el-text-secondary);
+      }
+      .prov b {
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .btn svg {
+        width: 14px;
+        height: 14px;
+      }
+      /* The open menu — the Combobox panel, drawn in flow under its trigger */
+      .menu {
+        width: 18rem;
+        max-width: none;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        box-shadow: var(--shadow-elevated);
+        padding: 4px;
+      }
+      .menu .opt {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .menu .opt.active {
+        background: var(--el-option-active-bg);
+      }
+      .menu .opt .col {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+      .menu .opt .desc {
+        font-size: 12px;
+        line-height: 1.35;
+        color: var(--el-text-secondary);
+      }
+      .menu .opt .sec {
+        margin-left: auto;
+        font-size: 12px;
+        white-space: nowrap;
+        color: var(--el-text-identifier);
+      }
+      .menu .opt .ck {
+        color: var(--el-accent-on-surface);
+      }
+      .menu .foot {
+        margin: 4px 0 0;
+        padding: 8px var(--spacing-control-x) 4px;
+        border-top: 1px solid var(--el-border-soft);
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      /* Board context over each panel — which work item, and its difficulty */
+      .ctx {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0 0 10px;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .ctx .key {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+        color: var(--el-text-identifier);
+      }
+      .ctx b {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .pill-sky {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+      }
+
+      /* ═══ ADDED BY THIS ASSET — the start bar, the held option, the door's notices ═══ */
+      /* StartBar's caption: font-sans text-xs font-semibold --el-text-secondary */
+      .sb-cap {
+        margin: 0 0 8px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+      }
+      .sb {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        max-width: 46rem;
+      }
+      .sb-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+      /* StartOption — rounded-(--radius-card) border-(--el-border-soft)
+         bg-(--el-surface-soft) p-(--spacing-card-padding). Every ink inside it is
+         --el-text or --el-text-secondary: --el-text-muted fails AA on this surface. */
+      .so {
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+        gap: 8px;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
+        padding: var(--spacing-card-padding);
+      }
+      .so-title {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin: 0;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .so-lead {
+        margin: 0;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .so-row {
+        margin-top: auto;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: 8px;
+      }
+      .so .door {
+        flex: 1 1 auto;
+      }
+      /* THE HELD MODEL OPTION — Combobox `disabled`: aria-disabled, cursor-default,
+         label --el-text-secondary (never an opacity dim). Its `secondary` is dropped. */
+      .menu .opt.held {
+        color: var(--el-text-secondary);
+        cursor: default;
+      }
+      .menu .opt .trail {
+        margin-left: auto;
+        display: flex;
+        flex: none;
+        align-items: center;
+        gap: 6px;
+      }
+      /* THE NO-CAPACITY TAG — Pill severity="warning": --el-tint-peach fill,
+         --el-text-strong ink, --radius-badge, --spacing-chip-x/y, text-xs. */
+      .pill-warn {
+        background: var(--el-tint-peach);
+        color: var(--el-text-strong);
+      }
+      /* THE HELD RUN LINE — basis-full under the door row, like the provenance line;
+         text-xs --el-text-secondary (AA on --el-surface-soft and on the page). */
+      .held {
+        flex-basis: 100%;
+        margin: -4px 0 0;
+        padding-inline: 2px;
+        font-size: 12px;
+        line-height: 1.4;
+        color: var(--el-text-secondary);
+      }
+      .held b {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      /* The door's Notice (HostedDoorNotices `Notice`): rounded-(--radius-control)
+         bg-(--el-warning-surface) px-(--spacing-control-x) py-(--spacing-control-y)
+         text-sm --el-text-strong, TriangleAlert in --el-warning. */
+      .notice {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        border-radius: var(--radius-control);
+        background: var(--el-warning-surface);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        font-size: 14px;
+        line-height: 1.45;
+        color: var(--el-text-strong);
+      }
+      .notice > svg {
+        margin-top: 2px;
+        color: var(--el-warning);
+      }
+      .notice .nb {
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .notice p {
+        margin: 0;
+      }
+      .notice .nt {
+        font-weight: 600;
+      }
+      /* The Development block's hosted doors (Continue / Fix), on the white page */
+      .dev {
+        max-width: 46rem;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-card);
+        padding: var(--spacing-card-padding);
+      }
+      .dev-lead {
+        margin: 0;
+        font-size: 14px;
+        color: var(--el-text-secondary);
+      }
+      .dev-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: 8px;
+      }
+      .pair {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        align-items: start;
+      }
+      .pair-cap {
+        margin: 0 0 8px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      kbd.kb {
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 11px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-kbd);
+        padding: var(--spacing-kbd-y) var(--spacing-kbd-x);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+      }
+    </style>
+  </head>
+  <body>
+    <svg class="sr" aria-hidden="true">
+      <defs>
+        <!-- lucide `check` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-check" viewBox="0 0 24 24">
+          <path d="M20 6 9 17l-5-5" />
+        </symbol>
+        <!-- lucide `chevrons-up-down` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-chevrons-up-down" viewBox="0 0 24 24">
+          <path d="m7 15 5 5 5-5" />
+          <path d="m7 9 5-5 5 5" />
+        </symbol>
+        <!-- lucide `cloud` — EXTRACTED from the installed `lucide-react@1.16.0` (Run hosted's glyph) -->
+        <symbol id="i-cloud" viewBox="0 0 24 24">
+          <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
+        </symbol>
+        <!-- lucide `triangle-alert` — the door Notice's glyph -->
+        <symbol id="i-alert" viewBox="0 0 24 24">
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </symbol>
+        <!-- lucide `square-terminal` — Send to my agent's glyph -->
+        <symbol id="i-term" viewBox="0 0 24 24">
+          <path d="m7 11 2-2-2-2" />
+          <path d="M11 13h4" />
+          <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+        </symbol>
+      </defs>
+    </svg>
+
+    <div class="board">
+      <header>
+        <h1>Run hosted &mdash; a model with no agent-run capacity</h1>
+        <p>
+          A delta on the Run hosted model picker. A model that has no agent-run capacity right now
+          is labelled in the menu and cannot be picked; a selected one holds Run with a line; a
+          launch refused for that reason says so and names the model. Only the start bar&rsquo;s Run
+          option, its picker and the door&rsquo;s notices are drawn, plus the Continue and Fix doors
+          that share the picker; the rest of the Run section and the item page are unchanged.
+        </p>
+        <p>
+          It amends <code class="k">run-section--from-difficulty.mock.html</code> and the published
+          Run hosted design (<code class="k">run-section--hosted.mock.html</code>). Copy for every
+          string, in English and Simplified Chinese, is in <code class="k">design-notes.md</code>.
+        </p>
+      </header>
+
+      <div class="panel-label">
+        Panel N1 &middot; <b>The menu, mixed</b> &mdash; one model is held
+      </div>
+      <p class="panel-note">
+        The project overrides High to <span class="mono">claude-opus-5</span>, so that option
+        carries the difficulty line as its <code class="k">description</code>;
+        <span class="mono">claude-opus-5-5</span> keeps its shipped
+        <i>Default &middot; anthropic</i> secondary. <span class="mono">claude-fable-5-1</span> has
+        no agent-run capacity right now, so it is a <b>Held model option</b>: the Combobox
+        <code class="k">disabled</code> option (focusable, <code class="k">aria-disabled</code>,
+        label in <code class="k">--el-text-secondary</code>, no dim), the <b>No-capacity tag</b> in
+        <code class="k">trailing</code>, and the <b>Capacity reason line</b> as its
+        <code class="k">description</code>. Its provider secondary is dropped while it is held; it
+        comes back with the label.
+      </p>
+      <div class="panel">
+        <p class="ctx">
+          <span class="key">ACME-21</span><span>Task &middot; Throttle the export worker</span
+          ><span aria-hidden="true">&middot;</span><span>Difficulty <b>High</b></span>
+        </p>
+        <div lang="en">
+          <div class="sb" data-testid="start-bar" lang="en">
+            <p class="sb-cap">Start this work item</p>
+            <div class="sb-grid" role="group" aria-label="Start this work item">
+              <div class="so">
+                <p class="so-title">
+                  <svg class="i sm" aria-hidden="true"><use href="#i-cloud" /></svg>Run
+                </p>
+                <p class="so-lead">
+                  Motir works it on a fresh machine, with the model you pick. Billed in credits.
+                </p>
+                <div class="so-row">
+                  <div class="door" data-testid="run-hosted-door">
+                    <div class="hmp" data-testid="hosted-model-picker">
+                      <button
+                        class="cbx"
+                        type="button"
+                        role="combobox"
+                        aria-haspopup="listbox"
+                        aria-expanded="true"
+                        aria-label="Model"
+                        aria-describedby="p-1"
+                      >
+                        <span class="val">claude-opus-5</span><span class="sec">anthropic</span
+                        ><svg class="i" aria-hidden="true"><use href="#i-chevrons-up-down" /></svg>
+                      </button>
+                      <div class="menu" role="listbox" aria-label="Model">
+                        <div class="opt" role="option" aria-selected="false">
+                          <span>claude-opus-5-5</span><span class="sec">Default · anthropic</span>
+                        </div>
+                        <div class="opt active" role="option" aria-selected="true">
+                          <span class="col"
+                            ><span>claude-opus-5</span
+                            ><span class="desc">From difficulty: High</span></span
+                          ><span class="sec">anthropic</span
+                          ><svg class="i ck" aria-hidden="true"><use href="#i-check" /></svg>
+                        </div>
+                        <div
+                          class="opt held"
+                          role="option"
+                          aria-selected="false"
+                          aria-disabled="true"
+                        >
+                          <span class="col"
+                            ><span>claude-fable-5-1</span
+                            ><span class="desc"
+                              >No agent-run capacity right now. Try again shortly.</span
+                            ></span
+                          ><span class="trail"
+                            ><span class="pill pill-warn">No capacity</span></span
+                          >
+                        </div>
+                        <p class="foot">
+                          The models Motir can run this work item with. The run is billed to your
+                          organization in credits.
+                        </p>
+                      </div>
+                    </div>
+                    <button class="btn btn-primary btn-sm" type="button">
+                      <svg class="i" aria-hidden="true"><use href="#i-cloud" /></svg>Run
+                    </button>
+                    <p class="prov" id="p-1">From difficulty: <b>High</b></p>
+                  </div>
+                </div>
+              </div>
+              <div class="so" data-testid="start-send">
+                <p class="so-title">
+                  <svg class="i sm" aria-hidden="true"><use href="#i-term" /></svg>Send to my agent
+                </p>
+                <p class="so-lead">
+                  One of your own agents works it, with its coding agent and your sign-in.
+                </p>
+                <div class="so-row">
+                  <button class="btn btn-secondary btn-sm" type="button">Send to my agent</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="panel-label">
+        Panel N1-zh &middot; <b>The menu, mixed — 中文</b> &mdash; one model is held
+      </div>
+      <p class="panel-note">
+        The same menu in Simplified Chinese. The tag, the reason line and the footer are the
+        catalogue strings in the notes&rsquo; copy table; model ids and the provider are never
+        translated.
+      </p>
+      <div class="panel">
+        <p class="ctx">
+          <span class="key">ACME-21</span><span>Task &middot; Throttle the export worker</span
+          ><span aria-hidden="true">&middot;</span><span>Difficulty <b>High</b></span>
+        </p>
+        <div lang="zh">
+          <div class="sb" data-testid="start-bar" lang="zh">
+            <p class="sb-cap">开始此工作项</p>
+            <div class="sb-grid" role="group" aria-label="开始此工作项">
+              <div class="so">
+                <p class="so-title">
+                  <svg class="i sm" aria-hidden="true"><use href="#i-cloud" /></svg>运行
+                </p>
+                <p class="so-lead">Motir 在一台全新的机器上用你选择的模型处理它。以积分计费。</p>
+                <div class="so-row">
+                  <div class="door" data-testid="run-hosted-door">
+                    <div class="hmp" data-testid="hosted-model-picker">
+                      <button
+                        class="cbx"
+                        type="button"
+                        role="combobox"
+                        aria-haspopup="listbox"
+                        aria-expanded="true"
+                        aria-label="模型"
+                        aria-describedby="p-3"
+                      >
+                        <span class="val">claude-opus-5</span><span class="sec">anthropic</span
+                        ><svg class="i" aria-hidden="true"><use href="#i-chevrons-up-down" /></svg>
+                      </button>
+                      <div class="menu" role="listbox" aria-label="模型">
+                        <div class="opt" role="option" aria-selected="false">
+                          <span>claude-opus-5-5</span><span class="sec">默认 · anthropic</span>
+                        </div>
+                        <div class="opt active" role="option" aria-selected="true">
+                          <span class="col"
+                            ><span>claude-opus-5</span><span class="desc">按难度：高</span></span
+                          ><span class="sec">anthropic</span
+                          ><svg class="i ck" aria-hidden="true"><use href="#i-check" /></svg>
+                        </div>
+                        <div
+                          class="opt held"
+                          role="option"
+                          aria-selected="false"
+                          aria-disabled="true"
+                        >
+                          <span class="col"
+                            ><span>claude-fable-5-1</span
+                            ><span class="desc">目前没有智能体运行容量，请稍后再试。</span></span
+                          ><span class="trail"><span class="pill pill-warn">暂无容量</span></span>
+                        </div>
+                        <p class="foot">
+                          Motir 可以用来运行此工作项的模型。运行以积分计费给你的组织。
+                        </p>
+                      </div>
+                    </div>
+                    <button class="btn btn-primary btn-sm" type="button">
+                      <svg class="i" aria-hidden="true"><use href="#i-cloud" /></svg>运行
+                    </button>
+                    <p class="prov" id="p-3">按难度：<b>高</b></p>
+                  </div>
+                </div>
+              </div>
+              <div class="so" data-testid="start-send">
+                <p class="so-title">
+                  <svg class="i sm" aria-hidden="true"><use href="#i-term" /></svg>发送到我的智能体
+                </p>
+                <p class="so-lead">由你自己的一个智能体处理它，使用它的编码智能体和你的登录。</p>
+                <div class="so-row">
+                  <button class="btn btn-secondary btn-sm" type="button">发送到我的智能体</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="panel-label">
+        Panel N2 &middot; <b>Keyboard focus on a held option</b> &mdash; announced, not pickable
+      </div>
+      <p class="panel-note">
+        The person pressed <kbd class="kb">&darr;</kbd> twice: the listbox&rsquo;s active descendant
+        rests on the held option, which paints the shipped active row (<code class="k"
+          >--el-option-active-bg</code
+        >, the same mark every option gets &mdash; this Combobox shows keyboard focus with the
+        active row, not a ring). A screen reader hears
+        <i>claude-fable-5-1, unavailable, No agent-run capacity right now</i>.
+        <kbd class="kb">Enter</kbd> and a click do nothing: the menu stays open, the tick stays on
+        <span class="mono">claude-opus-5</span>, and <kbd class="kb">&uarr;</kbd> moves on as usual.
+      </p>
+      <div class="panel">
+        <p class="ctx">
+          <span class="key">ACME-21</span><span>Task &middot; Throttle the export worker</span
+          ><span aria-hidden="true">&middot;</span><span>Difficulty <b>High</b></span>
+        </p>
+        <div class="sb" data-testid="start-bar" lang="en">
+          <p class="sb-cap">Start this work item</p>
+          <div class="sb-grid" role="group" aria-label="Start this work item">
+            <div class="so">
+              <p class="so-title">
+                <svg class="i sm" aria-hidden="true"><use href="#i-cloud" /></svg>Run
+              </p>
+              <p class="so-lead">
+                Motir works it on a fresh machine, with the model you pick. Billed in credits.
+              </p>
+              <div class="so-row">
+                <div class="door" data-testid="run-hosted-door">
+                  <div class="hmp" data-testid="hosted-model-picker">
+                    <button
+                      class="cbx"
+                      type="button"
+                      role="combobox"
+                      aria-haspopup="listbox"
+                      aria-expanded="true"
+                      aria-label="Model"
+                      aria-describedby="p-5"
+                    >
+                      <span class="val">claude-opus-5</span><span class="sec">anthropic</span
+                      ><svg class="i" aria-hidden="true"><use href="#i-chevrons-up-down" /></svg>
+                    </button>
+                    <div class="menu" role="listbox" aria-label="Model">
+                      <div class="opt" role="option" aria-selected="false">
+                        <span>claude-opus-5-5</span><span class="sec">Default · anthropic</span>
+                      </div>
+                      <div class="opt" role="option" aria-selected="true">
+                        <span class="col"
+                          ><span>claude-opus-5</span
+                          ><span class="desc">From difficulty: High</span></span
+                        ><span class="sec">anthropic</span
+                        ><svg class="i ck" aria-hidden="true"><use href="#i-check" /></svg>
+                      </div>
+                      <div
+                        class="opt active held"
+                        role="option"
+                        aria-selected="false"
+                        aria-disabled="true"
+                      >
+                        <span class="col"
+                          ><span>claude-fable-5-1</span
+                          ><span class="desc"
+                            >No agent-run capacity right now. Try again shortly.</span
+                          ></span
+                        ><span class="trail"><span class="pill pill-warn">No capacity</span></span>
+                      </div>
+                      <p class="foot">
+                        The models Motir can run this work item with. The run is billed to your
+                        organization in credits.
+                      </p>
+                    </div>
+                  </div>
+                  <button class="btn btn-primary btn-sm" type="button">
+                    <svg class="i" aria-hidden="true"><use href="#i-cloud" /></svg>Run
+                  </button>
+                  <p class="prov" id="p-5">From difficulty: <b>High</b></p>
+                </div>
+              </div>
+            </div>
+            <div class="so" data-testid="start-send">
+              <p class="so-title">
+                <svg class="i sm" aria-hidden="true"><use href="#i-term" /></svg>Send to my agent
+              </p>
+              <p class="so-lead">
+                One of your own agents works it, with its coding agent and your sign-in.
+              </p>
+              <div class="so-row">
+                <button class="btn btn-secondary btn-sm" type="button">Send to my agent</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="panel-label">
+        Panel N3 &middot; <b>The selected model has no capacity</b> &mdash; it stays, and Run is
+        held
+      </div>
+      <p class="panel-note">
+        High resolves to <span class="mono">claude-opus-5-5</span> (the platform default), and it
+        has no agent-run capacity when the door opens. <b>The preselection does not move.</b> The
+        trigger keeps the model &mdash; label alone, because the held option has no
+        <code class="k">secondary</code> and the shipped trigger never draws
+        <code class="k">trailing</code> &mdash; the provenance line stays true and stays, Run is
+        <code class="k">disabled</code>, and the <b>Held Run line</b> under it names the model and
+        is Run&rsquo;s <code class="k">aria-describedby</code>. The same holds when it is the
+        person&rsquo;s own pick that loses capacity while the door is open. Send to my agent is
+        untouched.
+      </p>
+      <div class="panel">
+        <p class="ctx">
+          <span class="key">ACME-21</span><span>Task &middot; Throttle the export worker</span
+          ><span aria-hidden="true">&middot;</span><span>Difficulty <b>High</b></span>
+        </p>
+        <div lang="en">
+          <div class="sb" data-testid="start-bar" lang="en">
+            <p class="sb-cap">Start this work item</p>
+            <div class="sb-grid" role="group" aria-label="Start this work item">
+              <div class="so">
+                <p class="so-title">
+                  <svg class="i sm" aria-hidden="true"><use href="#i-cloud" /></svg>Run
+                </p>
+                <p class="so-lead">
+                  Motir works it on a fresh machine, with the model you pick. Billed in credits.
+                </p>
+                <div class="so-row">
+                  <div class="door" data-testid="run-hosted-door">
+                    <div class="hmp" data-testid="hosted-model-picker">
+                      <button
+                        class="cbx"
+                        type="button"
+                        role="combobox"
+                        aria-haspopup="listbox"
+                        aria-expanded="false"
+                        aria-label="Model"
+                        aria-describedby="p-7"
+                      >
+                        <span class="val">claude-opus-5-5</span
+                        ><svg class="i" aria-hidden="true"><use href="#i-chevrons-up-down" /></svg>
+                      </button>
+                    </div>
+                    <button
+                      class="btn btn-primary btn-sm"
+                      type="button"
+                      disabled
+                      aria-describedby="h-8"
+                    >
+                      <svg class="i" aria-hidden="true"><use href="#i-cloud" /></svg>Run
+                    </button>
+                    <p class="prov" id="p-7">From difficulty: <b>High</b></p>
+                    <p class="held" id="h-8" data-testid="hosted-held-run">
+                      <b>claude-opus-5-5</b> has no agent-run capacity right now. Pick another
+                      model, or wait until it has.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div class="so" data-testid="start-send">
+                <p class="so-title">
+                  <svg class="i sm" aria-hidden="true"><use href="#i-term" /></svg>Send to my agent
+                </p>
+                <p class="so-lead">
+                  One of your own agents works it, with its coding agent and your sign-in.
+                </p>
+                <div class="so-row">
+                  <button class="btn btn-secondary btn-sm" type="button">Send to my agent</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="panel-label">
+        Panel N3-zh &middot; <b>The selected model has no capacity — 中文</b> &mdash; it stays, and
+        Run is held
+      </div>
+      <p class="panel-note">The held trigger in Simplified Chinese.</p>
+      <div class="panel">
+        <p class="ctx">
+          <span class="key">ACME-21</span><span>Task &middot; Throttle the export worker</span
+          ><span aria-hidden="true">&middot;</span><span>Difficulty <b>High</b></span>
+        </p>
+        <div lang="zh">
+          <div class="sb" data-testid="start-bar" lang="zh">
+            <p class="sb-cap">开始此工作项</p>
+            <div class="sb-grid" role="group" aria-label="开始此工作项">
+              <div class="so">
+                <p class="so-title">
+                  <svg class="i sm" aria-hidden="true"><use href="#i-cloud" /></svg>运行
+                </p>
+                <p class="so-lead">Motir 在一台全新的机器上用你选择的模型处理它。以积分计费。</p>
+                <div class="so-row">
+                  <div class="door" data-testid="run-hosted-door">
+                    <div class="hmp" data-testid="hosted-model-picker">
+                      <button
+                        class="cbx"
+                        type="button"
+                        role="combobox"
+                        aria-haspopup="listbox"
+                        aria-expanded="false"
+                        aria-label="模型"
+                        aria-describedby="p-9"
+                      >
+                        <span class="val">claude-opus-5-5</span
+                        ><svg class="i" aria-hidden="true"><use href="#i-chevrons-up-down" /></svg>
+                      </button>
+                    </div>
+                    <button
+                      class="btn btn-primary btn-sm"
+                      type="button"
+                      disabled
+                      aria-describedby="h-10"
+                    >
+                      <svg class="i" aria-hidden="true"><use href="#i-cloud" /></svg>运行
+                    </button>
+                    <p class="prov" id="p-9">按难度：<b>高</b></p>
+                    <p class="held" id="h-10" data-testid="hosted-held-run">
+                      <b>claude-opus-5-5</b> 目前没有智能体运行容量。请选择其他模型，或等它恢复。
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div class="so" data-testid="start-send">
+                <p class="so-title">
+                  <svg class="i sm" aria-hidden="true"><use href="#i-term" /></svg>发送到我的智能体
+                </p>
+                <p class="so-lead">由你自己的一个智能体处理它，使用它的编码智能体和你的登录。</p>
+                <div class="so-row">
+                  <button class="btn btn-secondary btn-sm" type="button">发送到我的智能体</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="panel-label">
+        Panel N4 &middot; <b>The label clears while the menu is open</b> &mdash; before, then after
+      </div>
+      <p class="panel-note">
+        The verdict is re-read while the door is open. When
+        <span class="mono">claude-opus-5-5</span> has capacity again, the row changes
+        <b>in place</b>: the tag goes, the option stops being <code class="k">aria-disabled</code>,
+        the reason line gives its <code class="k">description</code> slot back to the difficulty
+        line, <i>Default &middot; anthropic</i> returns, the Held Run line goes and Run turns on. No
+        spinner, no skeleton, no dim, and the menu neither closes nor moves its active row: the
+        refresh is silent, so the shell&rsquo;s navigation-pending grammar does not apply. The
+        reverse change (capacity lost while open) is the same swap the other way.
+      </p>
+      <div class="panel">
+        <p class="ctx">
+          <span class="key">ACME-21</span><span>Task &middot; Throttle the export worker</span
+          ><span aria-hidden="true">&middot;</span><span>Difficulty <b>High</b></span>
+        </p>
+        <div class="pair">
+          <div>
+            <p class="pair-cap">Before &middot; held</p>
+            <div class="sb" data-testid="start-bar" lang="en">
+              <p class="sb-cap">Start this work item</p>
+              <div class="sb-grid" role="group" aria-label="Start this work item">
+                <div class="so">
+                  <p class="so-title">
+                    <svg class="i sm" aria-hidden="true"><use href="#i-cloud" /></svg>Run
+                  </p>
+                  <p class="so-lead">
+                    Motir works it on a fresh machine, with the model you pick. Billed in credits.
+                  </p>
+                  <div class="so-row">
+                    <div class="door" data-testid="run-hosted-door">
+                      <div class="hmp" data-testid="hosted-model-picker">
+                        <button
+                          class="cbx"
+                          type="button"
+                          role="combobox"
+                          aria-haspopup="listbox"
+                          aria-expanded="true"
+                          aria-label="Model"
+                          aria-describedby="p-11"
+                        >
+                          <span class="val">claude-opus-5-5</span
+                          ><svg class="i" aria-hidden="true">
+                            <use href="#i-chevrons-up-down" />
+                          </svg>
+                        </button>
+                        <div class="menu" role="listbox" aria-label="Model">
+                          <div class="opt" role="option" aria-selected="false">
+                            <span>claude-sonnet-5-5</span><span class="sec">anthropic</span>
+                          </div>
+                          <div
+                            class="opt active held"
+                            role="option"
+                            aria-selected="true"
+                            aria-disabled="true"
+                          >
+                            <span class="col"
+                              ><span>claude-opus-5-5</span
+                              ><span class="desc"
+                                >No agent-run capacity right now. Try again shortly.</span
+                              ></span
+                            ><span class="trail"
+                              ><span class="pill pill-warn">No capacity</span></span
+                            ><svg class="i ck" aria-hidden="true"><use href="#i-check" /></svg>
+                          </div>
+                          <div class="opt" role="option" aria-selected="false">
+                            <span>claude-opus-5</span><span class="sec">anthropic</span>
+                          </div>
+                          <p class="foot">
+                            The models Motir can run this work item with. The run is billed to your
+                            organization in credits.
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        class="btn btn-primary btn-sm"
+                        type="button"
+                        disabled
+                        aria-describedby="h-12"
+                      >
+                        <svg class="i" aria-hidden="true"><use href="#i-cloud" /></svg>Run
+                      </button>
+                      <p class="prov" id="p-11">From difficulty: <b>High</b></p>
+                      <p class="held" id="h-12" data-testid="hosted-held-run">
+                        <b>claude-opus-5-5</b> has no agent-run capacity right now. Pick another
+                        model, or wait until it has.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div class="so" data-testid="start-send">
+                  <p class="so-title">
+                    <svg class="i sm" aria-hidden="true"><use href="#i-term" /></svg>Send to my
+                    agent
+                  </p>
+                  <p class="so-lead">
+                    One of your own agents works it, with its coding agent and your sign-in.
+                  </p>
+                  <div class="so-row">
+                    <button class="btn btn-secondary btn-sm" type="button">Send to my agent</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <p class="pair-cap">After &middot; capacity is back</p>
+            <div class="sb" data-testid="start-bar" lang="en">
+              <p class="sb-cap">Start this work item</p>
+              <div class="sb-grid" role="group" aria-label="Start this work item">
+                <div class="so">
+                  <p class="so-title">
+                    <svg class="i sm" aria-hidden="true"><use href="#i-cloud" /></svg>Run
+                  </p>
+                  <p class="so-lead">
+                    Motir works it on a fresh machine, with the model you pick. Billed in credits.
+                  </p>
+                  <div class="so-row">
+                    <div class="door" data-testid="run-hosted-door">
+                      <div class="hmp" data-testid="hosted-model-picker">
+                        <button
+                          class="cbx"
+                          type="button"
+                          role="combobox"
+                          aria-haspopup="listbox"
+                          aria-expanded="true"
+                          aria-label="Model"
+                          aria-describedby="p-13"
+                        >
+                          <span class="val">claude-opus-5-5</span
+                          ><span class="sec">Default · anthropic</span
+                          ><svg class="i" aria-hidden="true">
+                            <use href="#i-chevrons-up-down" />
+                          </svg>
+                        </button>
+                        <div class="menu" role="listbox" aria-label="Model">
+                          <div class="opt" role="option" aria-selected="false">
+                            <span>claude-sonnet-5-5</span><span class="sec">anthropic</span>
+                          </div>
+                          <div class="opt active" role="option" aria-selected="true">
+                            <span class="col"
+                              ><span>claude-opus-5-5</span
+                              ><span class="desc">From difficulty: High</span></span
+                            ><span class="sec">Default · anthropic</span
+                            ><svg class="i ck" aria-hidden="true"><use href="#i-check" /></svg>
+                          </div>
+                          <div class="opt" role="option" aria-selected="false">
+                            <span>claude-opus-5</span><span class="sec">anthropic</span>
+                          </div>
+                          <p class="foot">
+                            The models Motir can run this work item with. The run is billed to your
+                            organization in credits.
+                          </p>
+                        </div>
+                      </div>
+                      <button class="btn btn-primary btn-sm" type="button">
+                        <svg class="i" aria-hidden="true"><use href="#i-cloud" /></svg>Run
+                      </button>
+                      <p class="prov" id="p-13">From difficulty: <b>High</b></p>
+                    </div>
+                  </div>
+                </div>
+                <div class="so" data-testid="start-send">
+                  <p class="so-title">
+                    <svg class="i sm" aria-hidden="true"><use href="#i-term" /></svg>Send to my
+                    agent
+                  </p>
+                  <p class="so-lead">
+                    One of your own agents works it, with its coding agent and your sign-in.
+                  </p>
+                  <div class="so-row">
+                    <button class="btn btn-secondary btn-sm" type="button">Send to my agent</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="panel-label">
+        Panel N5 &middot; <b>Every model is held</b> &mdash; the menu, and the start bar&rsquo;s
+        line
+      </div>
+      <p class="panel-note">
+        No offered model has agent-run capacity. Every option is held; the trigger keeps the
+        preselected model and stays openable, so a person can still read why. Run is disabled. The
+        door&rsquo;s Held Run line is <b>not</b> drawn: the <b>All-models-held line</b> replaces it,
+        under the start bar in the door&rsquo;s shipped <code class="k">Notice</code>, the slot the
+        empty face&rsquo;s line uses. It clears in place as soon as any model has capacity again.
+      </p>
+      <div class="panel">
+        <p class="ctx">
+          <span class="key">ACME-21</span><span>Task &middot; Throttle the export worker</span
+          ><span aria-hidden="true">&middot;</span><span>Difficulty <b>High</b></span>
+        </p>
+        <div lang="en">
+          <div class="sb" data-testid="start-bar" lang="en">
+            <p class="sb-cap">Start this work item</p>
+            <div class="sb-grid" role="group" aria-label="Start this work item">
+              <div class="so">
+                <p class="so-title">
+                  <svg class="i sm" aria-hidden="true"><use href="#i-cloud" /></svg>Run
+                </p>
+                <p class="so-lead">
+                  Motir works it on a fresh machine, with the model you pick. Billed in credits.
+                </p>
+                <div class="so-row">
+                  <div class="door" data-testid="run-hosted-door">
+                    <div class="hmp" data-testid="hosted-model-picker">
+                      <button
+                        class="cbx"
+                        type="button"
+                        role="combobox"
+                        aria-haspopup="listbox"
+                        aria-expanded="true"
+                        aria-label="Model"
+                        aria-describedby="p-15"
+                      >
+                        <span class="val">claude-opus-5-5</span
+                        ><svg class="i" aria-hidden="true"><use href="#i-chevrons-up-down" /></svg>
+                      </button>
+                      <div class="menu" role="listbox" aria-label="Model">
+                        <div
+                          class="opt held"
+                          role="option"
+                          aria-selected="false"
+                          aria-disabled="true"
+                        >
+                          <span class="col"
+                            ><span>claude-sonnet-5-5</span
+                            ><span class="desc"
+                              >No agent-run capacity right now. Try again shortly.</span
+                            ></span
+                          ><span class="trail"
+                            ><span class="pill pill-warn">No capacity</span></span
+                          >
+                        </div>
+                        <div
+                          class="opt active held"
+                          role="option"
+                          aria-selected="true"
+                          aria-disabled="true"
+                        >
+                          <span class="col"
+                            ><span>claude-opus-5-5</span
+                            ><span class="desc"
+                              >No agent-run capacity right now. Try again shortly.</span
+                            ></span
+                          ><span class="trail"><span class="pill pill-warn">No capacity</span></span
+                          ><svg class="i ck" aria-hidden="true"><use href="#i-check" /></svg>
+                        </div>
+                        <div
+                          class="opt held"
+                          role="option"
+                          aria-selected="false"
+                          aria-disabled="true"
+                        >
+                          <span class="col"
+                            ><span>claude-opus-5</span
+                            ><span class="desc"
+                              >No agent-run capacity right now. Try again shortly.</span
+                            ></span
+                          ><span class="trail"
+                            ><span class="pill pill-warn">No capacity</span></span
+                          >
+                        </div>
+                        <p class="foot">
+                          The models Motir can run this work item with. The run is billed to your
+                          organization in credits.
+                        </p>
+                      </div>
+                    </div>
+                    <button class="btn btn-primary btn-sm" type="button" disabled>
+                      <svg class="i" aria-hidden="true"><use href="#i-cloud" /></svg>Run
+                    </button>
+                    <p class="prov" id="p-15">From difficulty: <b>High</b></p>
+                  </div>
+                </div>
+              </div>
+              <div class="so" data-testid="start-send">
+                <p class="so-title">
+                  <svg class="i sm" aria-hidden="true"><use href="#i-term" /></svg>Send to my agent
+                </p>
+                <p class="so-lead">
+                  One of your own agents works it, with its coding agent and your sign-in.
+                </p>
+                <div class="so-row">
+                  <button class="btn btn-secondary btn-sm" type="button">Send to my agent</button>
+                </div>
+              </div>
+            </div>
+            <div class="notice" role="status" data-testid="hosted-models-all-held">
+              <svg class="i" aria-hidden="true"><use href="#i-alert" /></svg>
+              <div class="nb">
+                <p>
+                  No model has agent-run capacity right now. Try again shortly; local runs are
+                  unaffected.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="panel-label">
+        Panel N5-zh &middot; <b>Every model is held — 中文</b> &mdash; the menu, and the start
+        bar&rsquo;s line
+      </div>
+      <p class="panel-note">Every model held, in Simplified Chinese.</p>
+      <div class="panel">
+        <p class="ctx">
+          <span class="key">ACME-21</span><span>Task &middot; Throttle the export worker</span
+          ><span aria-hidden="true">&middot;</span><span>Difficulty <b>High</b></span>
+        </p>
+        <div lang="zh">
+          <div class="sb" data-testid="start-bar" lang="zh">
+            <p class="sb-cap">开始此工作项</p>
+            <div class="sb-grid" role="group" aria-label="开始此工作项">
+              <div class="so">
+                <p class="so-title">
+                  <svg class="i sm" aria-hidden="true"><use href="#i-cloud" /></svg>运行
+                </p>
+                <p class="so-lead">Motir 在一台全新的机器上用你选择的模型处理它。以积分计费。</p>
+                <div class="so-row">
+                  <div class="door" data-testid="run-hosted-door">
+                    <div class="hmp" data-testid="hosted-model-picker">
+                      <button
+                        class="cbx"
+                        type="button"
+                        role="combobox"
+                        aria-haspopup="listbox"
+                        aria-expanded="true"
+                        aria-label="模型"
+                        aria-describedby="p-17"
+                      >
+                        <span class="val">claude-opus-5-5</span
+                        ><svg class="i" aria-hidden="true"><use href="#i-chevrons-up-down" /></svg>
+                      </button>
+                      <div class="menu" role="listbox" aria-label="模型">
+                        <div
+                          class="opt held"
+                          role="option"
+                          aria-selected="false"
+                          aria-disabled="true"
+                        >
+                          <span class="col"
+                            ><span>claude-sonnet-5-5</span
+                            ><span class="desc">目前没有智能体运行容量，请稍后再试。</span></span
+                          ><span class="trail"><span class="pill pill-warn">暂无容量</span></span>
+                        </div>
+                        <div
+                          class="opt active held"
+                          role="option"
+                          aria-selected="true"
+                          aria-disabled="true"
+                        >
+                          <span class="col"
+                            ><span>claude-opus-5-5</span
+                            ><span class="desc">目前没有智能体运行容量，请稍后再试。</span></span
+                          ><span class="trail"><span class="pill pill-warn">暂无容量</span></span
+                          ><svg class="i ck" aria-hidden="true"><use href="#i-check" /></svg>
+                        </div>
+                        <div
+                          class="opt held"
+                          role="option"
+                          aria-selected="false"
+                          aria-disabled="true"
+                        >
+                          <span class="col"
+                            ><span>claude-opus-5</span
+                            ><span class="desc">目前没有智能体运行容量，请稍后再试。</span></span
+                          ><span class="trail"><span class="pill pill-warn">暂无容量</span></span>
+                        </div>
+                        <p class="foot">
+                          Motir 可以用来运行此工作项的模型。运行以积分计费给你的组织。
+                        </p>
+                      </div>
+                    </div>
+                    <button class="btn btn-primary btn-sm" type="button" disabled>
+                      <svg class="i" aria-hidden="true"><use href="#i-cloud" /></svg>运行
+                    </button>
+                    <p class="prov" id="p-17">按难度：<b>高</b></p>
+                  </div>
+                </div>
+              </div>
+              <div class="so" data-testid="start-send">
+                <p class="so-title">
+                  <svg class="i sm" aria-hidden="true"><use href="#i-term" /></svg>发送到我的智能体
+                </p>
+                <p class="so-lead">由你自己的一个智能体处理它，使用它的编码智能体和你的登录。</p>
+                <div class="so-row">
+                  <button class="btn btn-secondary btn-sm" type="button">发送到我的智能体</button>
+                </div>
+              </div>
+            </div>
+            <div class="notice" role="status" data-testid="hosted-models-all-held">
+              <svg class="i" aria-hidden="true"><use href="#i-alert" /></svg>
+              <div class="nb">
+                <p>目前没有模型有智能体运行容量。请稍后再试；本地运行不受影响。</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="panel-label">
+        Panel N6 &middot; <b>Run was refused for no capacity</b> &mdash; the No-capacity refusal
+      </div>
+      <p class="panel-note">
+        The picker was stale: <span class="mono">claude-opus-5-5</span> read available, the person
+        pressed Run, and the launch was refused because it had no agent-run capacity by then. The
+        <b>No-capacity refusal</b> is a sibling of the shipped refusals (<i>Not started &mdash;</i>
+        &hellip; <i>Nothing was booted and nothing was charged.</i>), in the same
+        <code class="k">Notice</code> under the start bar. Like <i>is no longer offered</i>, the
+        answer refreshes the picker in place, so the option now reads held and Run is off; the Held
+        Run line is <b>not</b> drawn while the refusal stands, so the model is named once. Picking
+        another model clears the refusal. No numbers, ever.
+      </p>
+      <div class="panel">
+        <p class="ctx">
+          <span class="key">ACME-21</span><span>Task &middot; Throttle the export worker</span
+          ><span aria-hidden="true">&middot;</span><span>Difficulty <b>High</b></span>
+        </p>
+        <div lang="en">
+          <div class="sb" data-testid="start-bar" lang="en">
+            <p class="sb-cap">Start this work item</p>
+            <div class="sb-grid" role="group" aria-label="Start this work item">
+              <div class="so">
+                <p class="so-title">
+                  <svg class="i sm" aria-hidden="true"><use href="#i-cloud" /></svg>Run
+                </p>
+                <p class="so-lead">
+                  Motir works it on a fresh machine, with the model you pick. Billed in credits.
+                </p>
+                <div class="so-row">
+                  <div class="door" data-testid="run-hosted-door">
+                    <div class="hmp" data-testid="hosted-model-picker">
+                      <button
+                        class="cbx"
+                        type="button"
+                        role="combobox"
+                        aria-haspopup="listbox"
+                        aria-expanded="false"
+                        aria-label="Model"
+                        aria-describedby="p-19"
+                      >
+                        <span class="val">claude-opus-5-5</span
+                        ><svg class="i" aria-hidden="true"><use href="#i-chevrons-up-down" /></svg>
+                      </button>
+                    </div>
+                    <button class="btn btn-primary btn-sm" type="button" disabled>
+                      <svg class="i" aria-hidden="true"><use href="#i-cloud" /></svg>Run
+                    </button>
+                    <p class="prov" id="p-19">From difficulty: <b>High</b></p>
+                  </div>
+                </div>
+              </div>
+              <div class="so" data-testid="start-send">
+                <p class="so-title">
+                  <svg class="i sm" aria-hidden="true"><use href="#i-term" /></svg>Send to my agent
+                </p>
+                <p class="so-lead">
+                  One of your own agents works it, with its coding agent and your sign-in.
+                </p>
+                <div class="so-row">
+                  <button class="btn btn-secondary btn-sm" type="button">Send to my agent</button>
+                </div>
+              </div>
+            </div>
+            <div class="notice" role="status" data-testid="hosted-refused-noCapacity">
+              <svg class="i" aria-hidden="true"><use href="#i-alert" /></svg>
+              <div class="nb">
+                <p class="nt">Not started — claude-opus-5-5 has no agent-run capacity right now.</p>
+                <p>
+                  Nothing was booted and nothing was charged. Pick another model, or try again
+                  shortly.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="panel-label">
+        Panel N6-zh &middot; <b>Run was refused for no capacity — 中文</b> &mdash; the No-capacity
+        refusal
+      </div>
+      <p class="panel-note">The refusal in Simplified Chinese.</p>
+      <div class="panel">
+        <p class="ctx">
+          <span class="key">ACME-21</span><span>Task &middot; Throttle the export worker</span
+          ><span aria-hidden="true">&middot;</span><span>Difficulty <b>High</b></span>
+        </p>
+        <div lang="zh">
+          <div class="sb" data-testid="start-bar" lang="zh">
+            <p class="sb-cap">开始此工作项</p>
+            <div class="sb-grid" role="group" aria-label="开始此工作项">
+              <div class="so">
+                <p class="so-title">
+                  <svg class="i sm" aria-hidden="true"><use href="#i-cloud" /></svg>运行
+                </p>
+                <p class="so-lead">Motir 在一台全新的机器上用你选择的模型处理它。以积分计费。</p>
+                <div class="so-row">
+                  <div class="door" data-testid="run-hosted-door">
+                    <div class="hmp" data-testid="hosted-model-picker">
+                      <button
+                        class="cbx"
+                        type="button"
+                        role="combobox"
+                        aria-haspopup="listbox"
+                        aria-expanded="false"
+                        aria-label="模型"
+                        aria-describedby="p-21"
+                      >
+                        <span class="val">claude-opus-5-5</span
+                        ><svg class="i" aria-hidden="true"><use href="#i-chevrons-up-down" /></svg>
+                      </button>
+                    </div>
+                    <button class="btn btn-primary btn-sm" type="button" disabled>
+                      <svg class="i" aria-hidden="true"><use href="#i-cloud" /></svg>运行
+                    </button>
+                    <p class="prov" id="p-21">按难度：<b>高</b></p>
+                  </div>
+                </div>
+              </div>
+              <div class="so" data-testid="start-send">
+                <p class="so-title">
+                  <svg class="i sm" aria-hidden="true"><use href="#i-term" /></svg>发送到我的智能体
+                </p>
+                <p class="so-lead">由你自己的一个智能体处理它，使用它的编码智能体和你的登录。</p>
+                <div class="so-row">
+                  <button class="btn btn-secondary btn-sm" type="button">发送到我的智能体</button>
+                </div>
+              </div>
+            </div>
+            <div class="notice" role="status" data-testid="hosted-refused-noCapacity">
+              <svg class="i" aria-hidden="true"><use href="#i-alert" /></svg>
+              <div class="nb">
+                <p class="nt">未启动——claude-opus-5-5 目前没有智能体运行容量。</p>
+                <p>没有启动任何机器，也没有产生任何费用。请选择其他模型，或稍后再试。</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="panel-label">
+        Panel N7 &middot; <b>The Continue hosted door</b> &mdash; the same picker, the same hold,
+        the same refusal
+      </div>
+      <p class="panel-note">
+        Continue renders the shared <code class="k">HostedModelPicker</code>, so its open menu is
+        Panel N1&rsquo;s exactly and is not redrawn. Left: the preselected model is held, so
+        <i>Continue</i> is disabled with the same Held Run line &mdash; worded without naming a
+        button, so one string serves Run, Continue and Fix. Right: a press that raced the verdict
+        meets the same No-capacity refusal, in the door&rsquo;s own <code class="k">Notice</code>,
+        and the line under the button gives way to it.
+      </p>
+      <div class="panel">
+        <p class="ctx">
+          <span class="key">ACME-21</span><span>Task &middot; Throttle the export worker</span
+          ><span aria-hidden="true">&middot;</span><span>Difficulty <b>High</b></span>
+        </p>
+        <div class="pair">
+          <div>
+            <p class="pair-cap">Held</p>
+            <div class="dev">
+              <p class="dev-lead">Continue it here, in a hosted container — no terminal needed:</p>
+              <div class="dev-row">
+                <div class="hmp" data-testid="hosted-model-picker">
+                  <button
+                    class="cbx"
+                    type="button"
+                    role="combobox"
+                    aria-haspopup="listbox"
+                    aria-expanded="false"
+                    aria-label="Model"
+                  >
+                    <span class="val">claude-opus-5-5</span
+                    ><svg class="i" aria-hidden="true"><use href="#i-chevrons-up-down" /></svg>
+                  </button>
+                </div>
+                <button
+                  class="btn btn-primary btn-sm"
+                  type="button"
+                  disabled
+                  aria-describedby="h-23"
+                >
+                  <svg class="i" aria-hidden="true"><use href="#i-cloud" /></svg>Continue
+                </button>
+                <p class="held" id="h-23">
+                  <b>claude-opus-5-5</b> has no agent-run capacity right now. Pick another model, or
+                  wait until it has.
+                </p>
+              </div>
+            </div>
+          </div>
+          <div>
+            <p class="pair-cap">Refused</p>
+            <div class="dev">
+              <p class="dev-lead">Continue it here, in a hosted container — no terminal needed:</p>
+              <div class="dev-row">
+                <div class="hmp" data-testid="hosted-model-picker">
+                  <button
+                    class="cbx"
+                    type="button"
+                    role="combobox"
+                    aria-haspopup="listbox"
+                    aria-expanded="false"
+                    aria-label="Model"
+                  >
+                    <span class="val">claude-opus-5-5</span
+                    ><svg class="i" aria-hidden="true"><use href="#i-chevrons-up-down" /></svg>
+                  </button>
+                </div>
+                <button class="btn btn-primary btn-sm" type="button" disabled>
+                  <svg class="i" aria-hidden="true"><use href="#i-cloud" /></svg>Continue
+                </button>
+              </div>
+              <div class="notice" role="status" data-testid="continue-hosted-refused-noCapacity">
+                <svg class="i" aria-hidden="true"><use href="#i-alert" /></svg>
+                <div class="nb">
+                  <p class="nt">
+                    Not started — claude-opus-5-5 has no agent-run capacity right now.
+                  </p>
+                  <p>
+                    Nothing was booted and nothing was charged. Pick another model, or try again
+                    shortly.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="panel-label">
+        Panel N8 &middot; <b>The Fix hosted door</b> &mdash; the same picker, the same hold, the
+        same refusal
+      </div>
+      <p class="panel-note">
+        Fix renders the shared <code class="k">HostedModelPicker</code>, so its open menu is Panel
+        N1&rsquo;s exactly and is not redrawn. Left: the preselected model is held, so
+        <i>Fix on the hosted agent</i> is disabled with the same Held Run line &mdash; worded
+        without naming a button, so one string serves Run, Continue and Fix. Right: a press that
+        raced the verdict meets the same No-capacity refusal, in the door&rsquo;s own
+        <code class="k">Notice</code>, and the line under the button gives way to it.
+      </p>
+      <div class="panel">
+        <p class="ctx">
+          <span class="key">ACME-21</span><span>Task &middot; Throttle the export worker</span
+          ><span aria-hidden="true">&middot;</span><span>Difficulty <b>High</b></span>
+        </p>
+        <div class="pair">
+          <div>
+            <p class="pair-cap">Held</p>
+            <div class="dev">
+              <p class="dev-lead">Fix it here, on the hosted agent — no terminal needed:</p>
+              <div class="dev-row">
+                <div class="hmp" data-testid="hosted-model-picker">
+                  <button
+                    class="cbx"
+                    type="button"
+                    role="combobox"
+                    aria-haspopup="listbox"
+                    aria-expanded="false"
+                    aria-label="Model"
+                  >
+                    <span class="val">claude-opus-5-5</span
+                    ><svg class="i" aria-hidden="true"><use href="#i-chevrons-up-down" /></svg>
+                  </button>
+                </div>
+                <button
+                  class="btn btn-primary btn-sm"
+                  type="button"
+                  disabled
+                  aria-describedby="h-25"
+                >
+                  <svg class="i" aria-hidden="true"><use href="#i-cloud" /></svg>Fix on the hosted
+                  agent
+                </button>
+                <p class="held" id="h-25">
+                  <b>claude-opus-5-5</b> has no agent-run capacity right now. Pick another model, or
+                  wait until it has.
+                </p>
+              </div>
+            </div>
+          </div>
+          <div>
+            <p class="pair-cap">Refused</p>
+            <div class="dev">
+              <p class="dev-lead">Fix it here, on the hosted agent — no terminal needed:</p>
+              <div class="dev-row">
+                <div class="hmp" data-testid="hosted-model-picker">
+                  <button
+                    class="cbx"
+                    type="button"
+                    role="combobox"
+                    aria-haspopup="listbox"
+                    aria-expanded="false"
+                    aria-label="Model"
+                  >
+                    <span class="val">claude-opus-5-5</span
+                    ><svg class="i" aria-hidden="true"><use href="#i-chevrons-up-down" /></svg>
+                  </button>
+                </div>
+                <button class="btn btn-primary btn-sm" type="button" disabled>
+                  <svg class="i" aria-hidden="true"><use href="#i-cloud" /></svg>Fix on the hosted
+                  agent
+                </button>
+              </div>
+              <div class="notice" role="status" data-testid="fix-hosted-refused-noCapacity">
+                <svg class="i" aria-hidden="true"><use href="#i-alert" /></svg>
+                <div class="nb">
+                  <p class="nt">
+                    Not started — claude-opus-5-5 has no agent-run capacity right now.
+                  </p>
+                  <p>
+                    Nothing was booted and nothing was charged. Pick another model, or try again
+                    shortly.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="panel-label">
+        Panel N9 &middot; <b>Fail-open</b> &mdash; identical to today&rsquo;s picker
+      </div>
+      <p class="panel-note">
+        The capacity read failed, is not configured, or is degraded, so every model reads
+        <i>available</i>. There is <b>no &ldquo;unknown capacity&rdquo; state</b>: no tag, no held
+        option, no line, no notice. This panel is today&rsquo;s shipped picker, and that is the
+        point &mdash; a launch is still checked at start, and Panel N6 is what a person meets if it
+        is refused.
+      </p>
+      <div class="panel">
+        <p class="ctx">
+          <span class="key">ACME-21</span><span>Task &middot; Throttle the export worker</span
+          ><span aria-hidden="true">&middot;</span><span>Difficulty <b>High</b></span>
+        </p>
+        <div class="sb" data-testid="start-bar" lang="en">
+          <p class="sb-cap">Start this work item</p>
+          <div class="sb-grid" role="group" aria-label="Start this work item">
+            <div class="so">
+              <p class="so-title">
+                <svg class="i sm" aria-hidden="true"><use href="#i-cloud" /></svg>Run
+              </p>
+              <p class="so-lead">
+                Motir works it on a fresh machine, with the model you pick. Billed in credits.
+              </p>
+              <div class="so-row">
+                <div class="door" data-testid="run-hosted-door">
+                  <div class="hmp" data-testid="hosted-model-picker">
+                    <button
+                      class="cbx"
+                      type="button"
+                      role="combobox"
+                      aria-haspopup="listbox"
+                      aria-expanded="true"
+                      aria-label="Model"
+                      aria-describedby="p-27"
+                    >
+                      <span class="val">claude-opus-5-5</span
+                      ><span class="sec">Default · anthropic</span
+                      ><svg class="i" aria-hidden="true"><use href="#i-chevrons-up-down" /></svg>
+                    </button>
+                    <div class="menu" role="listbox" aria-label="Model">
+                      <div class="opt" role="option" aria-selected="false">
+                        <span>claude-sonnet-5-5</span><span class="sec">anthropic</span>
+                      </div>
+                      <div class="opt active" role="option" aria-selected="true">
+                        <span class="col"
+                          ><span>claude-opus-5-5</span
+                          ><span class="desc">From difficulty: High</span></span
+                        ><span class="sec">Default · anthropic</span
+                        ><svg class="i ck" aria-hidden="true"><use href="#i-check" /></svg>
+                      </div>
+                      <div class="opt" role="option" aria-selected="false">
+                        <span>claude-opus-5</span><span class="sec">anthropic</span>
+                      </div>
+                      <div class="opt" role="option" aria-selected="false">
+                        <span>claude-fable-5-1</span><span class="sec">anthropic</span>
+                      </div>
+                      <p class="foot">
+                        The models Motir can run this work item with. The run is billed to your
+                        organization in credits.
+                      </p>
+                    </div>
+                  </div>
+                  <button class="btn btn-primary btn-sm" type="button">
+                    <svg class="i" aria-hidden="true"><use href="#i-cloud" /></svg>Run
+                  </button>
+                  <p class="prov" id="p-27">From difficulty: <b>High</b></p>
+                </div>
+              </div>
+            </div>
+            <div class="so" data-testid="start-send">
+              <p class="so-title">
+                <svg class="i sm" aria-hidden="true"><use href="#i-term" /></svg>Send to my agent
+              </p>
+              <p class="so-lead">
+                One of your own agents works it, with its coding agent and your sign-in.
+              </p>
+              <div class="so-row">
+                <button class="btn btn-secondary btn-sm" type="button">Send to my agent</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

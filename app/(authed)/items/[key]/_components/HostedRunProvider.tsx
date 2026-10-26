@@ -5,11 +5,16 @@ import type { ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import type { DispatchRunOrigin, DispatchRunStatus } from '@/lib/dto/dispatchRuns';
 import type { WorkItemContinueViewDto } from '@/lib/dto/workItemContinue';
-import { HostedModelsProvider, useHostedModels } from '@/components/hosted/HostedModelsProvider';
+import {
+  HostedModelsProvider,
+  reReadAfter,
+  useHostedModels,
+} from '@/components/hosted/HostedModelsProvider';
 import { useContinueHosted } from '@/components/hosted/useContinueHosted';
 import { useRunsChangedSignal } from '@/components/hosted/runsChangedSignal';
 import {
   refusalOf,
+  standingRefusal,
   type ContinueHostedRefusal,
   type HostedModelsState,
   type HostedRunRefusal,
@@ -158,7 +163,9 @@ export function HostedRunProvider({
   // `HostedModelsProvider` fetches, so the state below is mounted INSIDE it. It
   // reads THIS card's resolved model too (MOTIR-6996), which Run hosted opens on.
   return (
-    <HostedModelsProvider workItemKey={itemKey}>
+    // It polls the capacity verdict while the page is visible (MOTIR-9630), so a held
+    // model's label appears and clears without a reload.
+    <HostedModelsProvider workItemKey={itemKey} pollCapacity>
       <HostedRunState
         itemKey={itemKey}
         ready={ready}
@@ -228,9 +235,9 @@ function HostedRunState({
       const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
       const refused = refusalOf(res.status, body, selectedModel);
       setRefusal(refused);
-      // The model was withdrawn between page load and click: re-read the list in
-      // place, so the person chooses again without a reload.
-      if (refused.kind === 'modelNotOffered') reloadModels();
+      // The model was withdrawn, or lost its capacity, between page load and click:
+      // re-read the list in place, so the person chooses again without a reload.
+      reReadAfter(refused, hosted);
       // A boot failure OPENED a run and ended it: the history now holds it.
       if (refused.kind === 'bootFailed') notifyRunsChanged();
     } catch {
@@ -238,7 +245,7 @@ function HostedRunState({
     } finally {
       setStarting(false);
     }
-  }, [itemKey, notifyRunsChanged, reloadModels, selectedModel, starting]);
+  }, [hosted, itemKey, notifyRunsChanged, selectedModel, starting]);
 
   // The continue press is the shared control's (`useContinueHosted`). A start
   // changes a SERVER read (the part) and a client island (the run history), so
@@ -266,7 +273,8 @@ function HostedRunState({
       selectedModel,
       selectModel: setChosen,
       reloadModels,
-      refusal,
+      // A no-capacity refusal clears when the person picks another model.
+      refusal: standingRefusal(refusal, selectedModel),
       starting,
       start,
       currentRun,

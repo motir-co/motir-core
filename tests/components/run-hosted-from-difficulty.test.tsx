@@ -377,7 +377,8 @@ describe('readModels — the wire', () => {
     serve(resolved({ fromLeaves: true }));
     expect(await readModels('PROD-42')).toEqual({
       state: 'ok',
-      models: LIST,
+      // A wire model with no `capacity` reads available (MOTIR-9630).
+      models: LIST.map((m) => ({ ...m, capacity: { verdict: 'available' } })),
       default: DEFAULT,
       resolved: resolved({ fromLeaves: true }),
     });

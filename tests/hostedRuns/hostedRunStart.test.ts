@@ -7,6 +7,7 @@ import {
   HostedModelNotOfferedError,
   HostedModelsUnavailableError,
   HostedRunCardNotReadyError,
+  HostedRunNoCapacityError,
   HostedRunOutOfCreditsError,
   HostedRunRepositoryNotWritableError,
 } from '@/lib/hostedRuns/errors';
@@ -14,6 +15,7 @@ import { HOSTED_RUN_SETTLE_MARGIN_MS, HOSTED_RUN_TIMEOUT_MS } from '@/lib/hosted
 import { _resetRunGitBotAuthors } from '@/lib/github/runGitCredential';
 import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
 import { HOSTED_AGENT_MAX_TIMEOUT_MS } from '@/lib/services/hostedAgentContainerService';
+import { agentRunCapacityService } from '@/lib/services/agentRunCapacityService';
 import { hostedRunService } from '@/lib/services/hostedRunService';
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
@@ -1242,5 +1244,120 @@ describe('a DeepSeek model offered (MOTIR-7208) — OpenCode is named by the ent
       MOTIR_RUN_MODE: 'continue',
     });
     expect(mintCalls().at(-1)!.body!['models']).toEqual([DEEPSEEK]);
+  });
+});
+
+// ── NO AGENT-RUN CAPACITY (Story MOTIR-9541 · MOTIR-9628) ───────────────────
+// The pre-flight's capacity step, on Run hosted and Continue hosted: the verdict
+// is read for the RESOLVED model, and a `no_capacity` refuses before the credit
+// read — so nothing is opened, claimed, minted, admitted or booted.
+
+/** Answer `no_capacity` for exactly the ids named, `available` for the rest. */
+function heldModels(ids: string[], reason: 'agent_share_exhausted' | 'provider_rate_limited') {
+  return vi
+    .spyOn(agentRunCapacityService, 'verdictFor')
+    .mockImplementation(async (model) =>
+      ids.includes(model.id) ? { verdict: 'no_capacity', reason } : { verdict: 'available' },
+    );
+}
+
+async function expectNothingSpent(): Promise<void> {
+  await expectNothingStarted();
+  expect(creditCalls()).toEqual([]);
+  expect(await adminDb.fleetInFlightSlot.count()).toBe(0);
+}
+
+describe('no agent-run capacity — Run hosted is refused before any spend', () => {
+  it('a leaf on a held model: HostedRunNoCapacityError naming it, the card unclaimed', async () => {
+    await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+    const card = await newCard({ kind: 'task', title: 'a card' });
+    const before = await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id } });
+    const verdict = heldModels([MODEL], 'agent_share_exhausted');
+
+    const refused = await start(card.identifier).catch((err: unknown) => err);
+    expect(refused).toBeInstanceOf(HostedRunNoCapacityError);
+    expect(refused).toMatchObject({
+      code: 'hosted_run_no_capacity',
+      model: MODEL,
+      reason: 'agent_share_exhausted',
+    });
+    expect(verdict).toHaveBeenCalledWith({ id: MODEL, provider: 'anthropic' });
+    await expectNothingSpent();
+    const after = await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id } });
+    expect(after).toMatchObject({
+      status: before.status,
+      assigneeId: before.assigneeId,
+      implementationSource: null,
+      implementationModel: null,
+    });
+  });
+
+  it('a parent on a held model is refused the same way, no leg claimed', async () => {
+    await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+    const story = await newCard({ kind: 'story', title: 'a story' });
+    const child = await newCard({ kind: 'task', title: 'a child', parentId: story.id });
+    heldModels([MODEL], 'provider_rate_limited');
+
+    await expect(start(story.identifier)).rejects.toMatchObject({
+      code: 'hosted_run_no_capacity',
+      reason: 'provider_rate_limited',
+    });
+    await expectNothingSpent();
+    const leaf = await adminDb.workItem.findUniqueOrThrow({ where: { id: child.id } });
+    expect(leaf.implementationSource).toBeNull();
+  });
+
+  it('no model sent: the check reads the model the difficulty resolves to', async () => {
+    const SONNET = 'claude-sonnet-5-5';
+    const LEVELS = { trivial: SONNET, low: SONNET, medium: MODEL, high: MODEL };
+    stub({ models: { ids: [MODEL, SONNET], defaultsByDifficulty: LEVELS } });
+    await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+    const card = await newCard({ kind: 'task', title: 'an easy card' });
+    await setDifficulty(card.id, 'low');
+
+    heldModels([SONNET], 'agent_share_exhausted');
+    await expect(startResolved(card.identifier)).rejects.toMatchObject({ model: SONNET });
+    await expectNothingSpent();
+
+    // Only a DIFFERENT model held: the resolved one starts.
+    vi.restoreAllMocks();
+    heldModels([MODEL], 'agent_share_exhausted');
+    const started = await startResolved(card.identifier);
+    expect((await runRows())[0]).toMatchObject({ id: started.dispatchRunId, model: SONNET });
+  });
+
+  it('an available verdict starts exactly as before', async () => {
+    await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+    const card = await newCard({ kind: 'task', title: 'a card' });
+    heldModels([], 'agent_share_exhausted');
+
+    const started = await start(card.identifier);
+    expect(started.created).toBe(true);
+    expect(mintCalls()).toHaveLength(1);
+  });
+});
+
+describe('no agent-run capacity — Continue hosted is refused before the claim', () => {
+  it('refused on the held model, no continue run, the dead run left open to continue', async () => {
+    await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+    const { card, deadRunId } = await deadCard();
+    heldModels([MODEL], 'agent_share_exhausted');
+
+    await expect(startContinue(card.identifier)).rejects.toBeInstanceOf(HostedRunNoCapacityError);
+    expect(await continueRuns()).toEqual([]);
+    // `runRows` holds the dead run itself, so the absences are asserted one by one.
+    expect(mintCalls()).toEqual([]);
+    expect(fakeOrchestrator.provisioned).toEqual([]);
+    expect(creditCalls()).toEqual([]);
+    expect(await adminDb.fleetInFlightSlot.count()).toBe(0);
+    const dead = await adminDb.dispatchRun.findUniqueOrThrow({ where: { id: deadRunId } });
+    expect(dead.stopReason).toBeNull();
+    const after = await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id } });
+    expect(after).toMatchObject({ assigneeId: fx.ownerId, implementationSource: null });
+
+    // The cause gone, the same card continues: nothing was left holding the claim.
+    vi.restoreAllMocks();
+    const started = await startContinue(card.identifier);
+    expect(started.created).toBe(true);
   });
 });

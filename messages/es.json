@@ -9722,7 +9722,8 @@
         "dispatcher_gone": "<b>{name}</b>, quien la inició, ya no está en este espacio de trabajo",
         "dispatcher_goneAnon": "la persona que la inició ya no está en este espacio de trabajo",
         "repository_not_writable": "Motir ya no puede subir cambios a {repo}",
-        "card_not_ready": "{key} no está listo para ejecutarse: está bloqueado o ya no está en curso"
+        "card_not_ready": "{key} no está listo para ejecutarse: está bloqueado o ya no está en curso",
+        "no_capacity": "el modelo con el que se ejecutó, {model}, no tiene capacidad para ejecuciones de agente ahora mismo"
       },
       "repair": {
         "out_of_credits": "Añade créditos en facturación y pulsa Continuar, o continúa desde tu terminal.",
@@ -9733,7 +9734,8 @@
         "no_project_access": "Continúala tú: se ejecuta en tu nombre, con los créditos de tu organización.",
         "dispatcher_gone": "Continúala tú: se ejecuta en tu nombre, con los créditos de tu organización.",
         "repository_not_writable": "Vuelve a conectar el repositorio en la configuración del proyecto y pulsa Continuar.",
-        "card_not_ready": "Resuelve lo que bloquea {key} o devuélvelo a En curso, y pulsa Continuar."
+        "card_not_ready": "Resuelve lo que bloquea {key} o devuélvelo a En curso, y pulsa Continuar.",
+        "no_capacity": "Elige otro modelo y pulsa Continuar, o vuelve a intentarlo en breve."
       },
       "copyAria": "Copiar el comando de reanudación de {key}",
       "member": {
@@ -13049,7 +13051,8 @@
       "door": {
         "run": "Ejecutar",
         "runAgain": "Volver a ejecutar",
-        "starting": "Iniciando…"
+        "starting": "Iniciando…",
+        "heldModel": "<b>{model}</b> no tiene capacidad para ejecuciones de agente ahora mismo. Elige otro modelo o espera a que la tenga."
       },
       "picker": {
         "label": "Modelo",
@@ -13066,7 +13069,10 @@
         "fromDifficulty": "Según la dificultad: <b>{difficulty}</b>",
         "override": "Valor del proyecto para <b>{difficulty}</b>",
         "fromLeaves": "Mayor dificultad entre sus hojas: <b>{difficulty}</b>",
-        "overrideFromLeaves": "Valor del proyecto para <b>{difficulty}</b>, la mayor dificultad entre sus hojas"
+        "overrideFromLeaves": "Valor del proyecto para <b>{difficulty}</b>, la mayor dificultad entre sus hojas",
+        "noCapacityTag": "Sin capacidad",
+        "noCapacityReason": "Sin capacidad para ejecuciones de agente ahora mismo. Vuelve a intentarlo en breve.",
+        "allHeldBody": "Ningún modelo tiene capacidad para ejecuciones de agente ahora mismo. Vuelve a intentarlo en breve; las ejecuciones locales no se ven afectadas."
       },
       "notReady": "Ejecutar está disponible cuando este elemento de trabajo esté listo: tiene {count, plural, one {# bloqueador abierto} other {# bloqueadores abiertos}}.",
       "refused": {
@@ -13099,6 +13105,10 @@
         "failed": {
           "title": "No se inició: Motir no pudo iniciar la Ejecución.",
           "body": "No se arrancó nada. Vuelve a intentarlo en breve."
+        },
+        "noCapacity": {
+          "title": "No se inició: {model} no tiene capacidad para ejecuciones de agente ahora mismo.",
+          "body": "No se arrancó nada y no se cobró nada. Elige otro modelo o vuelve a intentarlo en breve."
         }
       },
       "phase": {
@@ -14277,7 +14287,8 @@
           "no_verdictNoRun": "la Ejecución de revisión terminó sin veredicto.",
           "boot_failed": "no se pudo iniciar la máquina alojada para la revisión.",
           "no_actor": "nadie puede ejecutarla: el elemento de trabajo no tiene Responsable ni Creador, y el espacio de trabajo no tiene un gestor suplente.",
-          "unknown": "no se pudo iniciar la Ejecución de revisión."
+          "unknown": "no se pudo iniciar la Ejecución de revisión.",
+          "noCapacity": "el modelo de la revisión no tiene capacidad para ejecuciones de agente ahora mismo. Vuelve a intentarlo en breve."
         },
         "why": "No se fusiona nada hasta que se ejecute la revisión o alguien continúe sin ella.",
         "whyNotYours": "Esperando a {name}. No se fusiona nada hasta que se ejecute la revisión o esa persona continúe sin ella."
@@ -14314,7 +14325,8 @@
         "out_of_credits": "la organización se quedó sin créditos.",
         "credits_unavailable": "no se pudo leer el saldo de créditos.",
         "repository_not_writable": "Motir no puede escribir en {detail}.",
-        "card_not_ready": "alguien tomó primero el elemento de trabajo."
+        "card_not_ready": "alguien tomó primero el elemento de trabajo.",
+        "no_capacity": "{detail}, el modelo con el que se ejecutó por última vez, no tiene capacidad para ejecuciones de agente ahora mismo."
       },
       "next": {
         "cap_reached": "Ejecutar en el Agente alojado",
@@ -14325,7 +14337,8 @@
         "models_unavailable": "Ejecutar en el Agente alojado",
         "out_of_credits": "Comprar créditos",
         "credits_unavailable": "Ejecutar en el Agente alojado",
-        "repository_not_writable": "Repositorios"
+        "repository_not_writable": "Repositorios",
+        "no_capacity": "Elegir otro modelo y ejecutar"
       }
     },
     "manualWork": {

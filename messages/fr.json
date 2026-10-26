@@ -9722,7 +9722,8 @@
         "dispatcher_gone": "<b>{name}</b>, qui l'a lancée, ne fait plus partie de cet espace de travail",
         "dispatcher_goneAnon": "la personne qui l'a lancée ne fait plus partie de cet espace de travail",
         "repository_not_writable": "Motir ne peut plus pousser vers {repo}",
-        "card_not_ready": "{key} n'est pas prêt à être exécuté — il est bloqué ou n'est plus en cours"
+        "card_not_ready": "{key} n'est pas prêt à être exécuté — il est bloqué ou n'est plus en cours",
+        "no_capacity": "le modèle avec lequel elle s'est exécutée, {model}, n'a pas de capacité d'exécution d'agent pour le moment"
       },
       "repair": {
         "out_of_credits": "Ajoutez des crédits dans la facturation, puis appuyez sur Poursuivre — ou poursuivez depuis votre terminal.",
@@ -9733,7 +9734,8 @@
         "no_project_access": "Poursuivez-la vous-même — elle s'exécute en votre nom, sur les crédits de votre organisation.",
         "dispatcher_gone": "Poursuivez-la vous-même — elle s'exécute en votre nom, sur les crédits de votre organisation.",
         "repository_not_writable": "Reconnectez le dépôt dans les paramètres du projet, puis appuyez sur Poursuivre.",
-        "card_not_ready": "Levez ce qui bloque {key} ou repassez-le à En cours, puis appuyez sur Poursuivre."
+        "card_not_ready": "Levez ce qui bloque {key} ou repassez-le à En cours, puis appuyez sur Poursuivre.",
+        "no_capacity": "Choisissez un autre modèle et appuyez sur Poursuivre, ou réessayez dans un instant."
       },
       "copyAria": "Copier la commande de reprise de {key}",
       "member": {
@@ -13049,7 +13051,8 @@
       "door": {
         "run": "Exécuter",
         "runAgain": "Exécuter à nouveau",
-        "starting": "Démarrage…"
+        "starting": "Démarrage…",
+        "heldModel": "<b>{model}</b> n'a pas de capacité d'exécution d'agent pour le moment. Choisissez un autre modèle, ou attendez qu'il en ait."
       },
       "picker": {
         "label": "Modèle",
@@ -13066,7 +13069,10 @@
         "fromDifficulty": "D'après la difficulté : <b>{difficulty}</b>",
         "override": "Remplacement du projet pour <b>{difficulty}</b>",
         "fromLeaves": "Difficulté la plus élevée parmi ses feuilles : <b>{difficulty}</b>",
-        "overrideFromLeaves": "Remplacement du projet pour <b>{difficulty}</b>, la difficulté la plus élevée parmi ses feuilles"
+        "overrideFromLeaves": "Remplacement du projet pour <b>{difficulty}</b>, la difficulté la plus élevée parmi ses feuilles",
+        "noCapacityTag": "Aucune capacité",
+        "noCapacityReason": "Aucune capacité d'exécution d'agent pour le moment. Réessayez dans un instant.",
+        "allHeldBody": "Aucun modèle n'a de capacité d'exécution d'agent pour le moment. Réessayez dans un instant ; les exécutions locales ne sont pas affectées."
       },
       "notReady": "Exécuter sera disponible dès que cet élément de travail sera prêt — il a {count, plural, one {# bloqueur ouvert} other {# bloqueurs ouverts}}.",
       "refused": {
@@ -13099,6 +13105,10 @@
         "failed": {
           "title": "Non démarré — Motir n'a pas pu démarrer l'exécution.",
           "body": "Rien n'a été démarré. Réessayez dans un instant."
+        },
+        "noCapacity": {
+          "title": "Non démarré — {model} n'a pas de capacité d'exécution d'agent pour le moment.",
+          "body": "Rien n'a été démarré et rien n'a été facturé. Choisissez un autre modèle, ou réessayez dans un instant."
         }
       },
       "phase": {
@@ -14277,7 +14287,8 @@
           "no_verdictNoRun": "l'exécution de la relecture s'est terminée sans verdict.",
           "boot_failed": "la machine hébergée de la relecture n'a pas pu démarrer.",
           "no_actor": "personne ne peut la lancer — l'élément de travail n'a ni responsable ni créateur, et l'espace de travail n'a pas de gestionnaire suppléant.",
-          "unknown": "l'exécution de la relecture n'a pas pu démarrer."
+          "unknown": "l'exécution de la relecture n'a pas pu démarrer.",
+          "noCapacity": "le modèle de la revue n'a pas de capacité d'exécution d'agent pour le moment. Réessayez dans un instant."
         },
         "why": "Rien n'est fusionné tant que la relecture ne s'est pas exécutée, ou que quelqu'un ne continue pas sans elle.",
         "whyNotYours": "En attente de {name}. Rien n'est fusionné tant que la relecture ne s'est pas exécutée, ou que cette personne ne continue pas sans elle."
@@ -14314,7 +14325,8 @@
         "out_of_credits": "l'organisation n'a plus de crédits.",
         "credits_unavailable": "le solde de crédits n'a pas pu être lu.",
         "repository_not_writable": "Motir ne peut pas écrire dans {detail}.",
-        "card_not_ready": "quelqu'un a pris l'élément de travail en premier."
+        "card_not_ready": "quelqu'un a pris l'élément de travail en premier.",
+        "no_capacity": "{detail}, le modèle utilisé lors de la dernière exécution, n'a pas de capacité d'exécution d'agent pour le moment."
       },
       "next": {
         "cap_reached": "Exécuter sur l'agent hébergé",
@@ -14325,7 +14337,8 @@
         "models_unavailable": "Exécuter sur l'agent hébergé",
         "out_of_credits": "Acheter des crédits",
         "credits_unavailable": "Exécuter sur l'agent hébergé",
-        "repository_not_writable": "Dépôts"
+        "repository_not_writable": "Dépôts",
+        "no_capacity": "Choisir un autre modèle et exécuter"
       }
     },
     "manualWork": {

@@ -19,7 +19,7 @@ const { hostedRunService } = await import('@/lib/services/hostedRunService');
 const { designAutoRerunService, DESIGN_AUTO_RERUN_CAP } =
   await import('@/lib/services/designAutoRerunService');
 const { workItemsService } = await import('@/lib/services/workItemsService');
-const { HostedRunOutOfCreditsError, HostedModelNotOfferedError } =
+const { HostedRunOutOfCreditsError, HostedModelNotOfferedError, HostedRunNoCapacityError } =
   await import('@/lib/hostedRuns/errors');
 
 let fx: WorkItemFixture;
@@ -233,6 +233,23 @@ describe('when the dispatcher can no longer run hosted, nothing starts and the c
     const row = await adminDb.designAutoRerun.findUniqueOrThrow({ where: { gateId } });
     expect(row.outcome).toBe('skipped');
     expect(row.skipReason).toBe('out_of_credits');
+    expect(row.dispatchRunId).toBeNull();
+  });
+
+  it('the model has no agent-run capacity — recorded with the model, never retried (MOTIR-9633)', async () => {
+    await aRun('hosted', { model: 'busy-model' });
+    startSpy.mockRejectedValueOnce(
+      new HostedRunNoCapacityError('busy-model', 'agent_share_exhausted'),
+    );
+    const gateId = await aRefusal();
+
+    // It does not throw, so the job does not retry it.
+    await expect(attempt(gateId)).resolves.toMatchObject({ outcome: 'recorded' });
+
+    const row = await adminDb.designAutoRerun.findUniqueOrThrow({ where: { gateId } });
+    expect(row.outcome).toBe('skipped');
+    expect(row.skipReason).toBe('no_capacity');
+    expect(row.detail).toBe('busy-model');
     expect(row.dispatchRunId).toBeNull();
   });
 

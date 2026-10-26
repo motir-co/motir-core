@@ -13,6 +13,7 @@ import {
   HostedRunCardNotReadyError,
   HostedRunCreditsUnavailableError,
   HostedRunKeyNotMintedError,
+  HostedRunNoCapacityError,
   HostedRunOutOfCreditsError,
   HostedRunRepositoryNotWritableError,
   RunGitCredentialUnavailableError,
@@ -31,6 +32,9 @@ import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 // MOTIR-6928) repairs a card a review sent back — Fix on the hosted agent — and adds the
 // repair claim's refusals, each a 409 `hosted_fix_*` (`taken` naming its holder,
 // `not_repairable` the claim's own reason).
+// A model with no agent-run capacity right now (Story MOTIR-9541 · MOTIR-9628) is a
+// 409 `hosted_run_no_capacity` carrying only `model` and `reason`, on every mode —
+// refused in the pre-flight, so nothing was opened and nothing is queued.
 // The route MOTIR-691's Run hosted control calls; `hostedRunService.start` is the
 // whole behaviour.
 //
@@ -96,6 +100,9 @@ export async function POST(
     if (switchedOff) return switchedOff;
     if (err instanceof HostedModelNotOfferedError) return problem(err.code, err.message, 422);
     if (err instanceof HostedModelsUnavailableError) return problem(err.code, err.message, 503);
+    if (err instanceof HostedRunNoCapacityError) {
+      return problem(err.code, err.message, 409, { model: err.model, reason: err.reason });
+    }
     if (err instanceof HostedRunOutOfCreditsError) {
       return problem(err.code, err.message, 402, { balanceCredits: err.balanceCredits });
     }

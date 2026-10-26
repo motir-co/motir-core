@@ -1,11 +1,12 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import { useHostedModels } from './HostedModelsProvider';
+import { reReadAfter, useHostedModels } from './HostedModelsProvider';
 import {
   continueRefusalOf,
   continueStateMoved,
   pressKey,
+  standingRefusal,
   type ContinueHostedRefusal,
 } from './hostedModels';
 
@@ -39,7 +40,6 @@ export function useContinueHosted(
   const hostedModels = useHostedModels();
   // The preselect Continue hosted always had — not the card's resolution (MOTIR-6996).
   const selectedModel = hostedModels?.continueModel ?? null;
-  const reloadModels = hostedModels?.reloadModels;
   const { onStarted, onStateMoved } = opts;
   const [refusal, setRefusal] = useState<ContinueHostedRefusal | null>(null);
   const [starting, setStarting] = useState(false);
@@ -65,14 +65,16 @@ export function useContinueHosted(
       const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
       const refused = continueRefusalOf(res.status, body, selectedModel);
       setRefusal(refused);
-      if (refused.kind === 'modelNotOffered') reloadModels?.();
+      // A no-capacity refusal is not stale: the door stays (MOTIR-9630).
+      reReadAfter(refused, hostedModels);
       if (continueStateMoved(refused)) onStateMoved?.();
     } catch {
       setRefusal({ kind: 'failed' });
     } finally {
       setStarting(false);
     }
-  }, [continueTarget, onStarted, onStateMoved, reloadModels, selectedModel, starting]);
+  }, [continueTarget, hostedModels, onStarted, onStateMoved, selectedModel, starting]);
 
-  return { start, starting, refusal };
+  // A no-capacity refusal clears when the person picks another model.
+  return { start, starting, refusal: standingRefusal(refusal, selectedModel) };
 }

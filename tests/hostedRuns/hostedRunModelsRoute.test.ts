@@ -54,7 +54,12 @@ describe('GET /api/hosted-runs/models', () => {
     );
     const res = await GET(new Request('http://localhost/api/hosted-runs/models'));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual(LIST);
+    // Each model carries its agent-run capacity (MOTIR-9629); the capacity read is
+    // not configured here, so every model reads available.
+    expect(await res.json()).toEqual({
+      ...LIST,
+      models: LIST.models.map((m) => ({ ...m, capacity: { verdict: 'available' } })),
+    });
   });
 
   it('answers 401 for a signed-out caller and never asks motir-ai', async () => {

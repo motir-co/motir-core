@@ -170,6 +170,8 @@ describe('Review could not run (Panels 4a, 4b, 4d)', () => {
     ['hosted_repository_not_readable', ar.couldNotRun.reason.repository_unreadable],
     ['hosted_run_boot_failed', ar.couldNotRun.reason.boot_failed],
     ['review_no_actor', ar.couldNotRun.reason.no_actor],
+    // The review's model has no agent-run capacity right now (MOTIR-9633).
+    ['hosted_run_no_capacity', ar.couldNotRun.reason.noCapacity],
     ['review_start_failed', ar.couldNotRun.reason.unknown],
   ];
   it.each(cases)('code %s reads its own line', (code, line) => {
@@ -447,6 +449,7 @@ describe('zh', () => {
       view(reviewGate()),
       view(reviewGate(), { reviewUnavailableReason: 'no_verdict' }),
       view(reviewGate(), { reviewUnavailableReason: 'weird_code' }),
+      view(reviewGate(), { reviewUnavailableReason: 'hosted_run_no_capacity' }),
       view(reviewGate({ state: 'changes_requested', noteMd: FINDINGS })),
     ];
     for (const s of states) {
@@ -465,6 +468,15 @@ describe('the helpers', () => {
   it('maps every code MOTIR-6820 writes, and a generic line for anything else', () => {
     expect(couldNotRunCopyOf('hosted_run_out_of_credits')).toBe('no_credits');
     expect(couldNotRunCopyOf('something_new')).toBe('unknown');
+    expect(couldNotRunCopyOf('hosted_run_no_capacity')).toBe('noCapacity');
+  });
+
+  it('the no-capacity line reads in zh, never the unknown fallback (MOTIR-9633)', () => {
+    renderLeading(view(reviewGate(), { reviewUnavailableReason: 'hosted_run_no_capacity' }), {
+      messages: zh,
+    });
+    expect(band().textContent).toContain(zh.approvalGate.agentReview.couldNotRun.reason.noCapacity);
+    expect(band().getAttribute('data-reason')).toBe('noCapacity');
   });
   it('takes the findings first paragraph, skipping headings and fences', () => {
     expect(firstParagraph('## Head\n\nFirst para\nline two.\n\nSecond.')).toBe(

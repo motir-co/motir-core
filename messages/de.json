@@ -9722,7 +9722,8 @@
         "dispatcher_gone": "<b>{name}</b>, der ihn gestartet hat, ist nicht mehr in diesem Arbeitsbereich",
         "dispatcher_goneAnon": "die Person, die ihn gestartet hat, ist nicht mehr in diesem Arbeitsbereich",
         "repository_not_writable": "Motir kann nicht mehr nach {repo} pushen",
-        "card_not_ready": "{key} ist nicht bereit zur Ausführung – es ist blockiert oder nicht mehr in Arbeit"
+        "card_not_ready": "{key} ist nicht bereit zur Ausführung – es ist blockiert oder nicht mehr in Arbeit",
+        "no_capacity": "das Modell, mit dem er lief, {model}, hat derzeit keine Kapazität für Agentenläufe"
       },
       "repair": {
         "out_of_credits": "Fügen Sie in der Abrechnung Credits hinzu und klicken Sie dann auf „Fortsetzen“ – oder setzen Sie über Ihr Terminal fort.",
@@ -9733,7 +9734,8 @@
         "no_project_access": "Setzen Sie ihn selbst fort – er läuft dann als Sie, mit den Credits Ihrer Organisation.",
         "dispatcher_gone": "Setzen Sie ihn selbst fort – er läuft dann als Sie, mit den Credits Ihrer Organisation.",
         "repository_not_writable": "Verbinden Sie das Repository in den Projekteinstellungen erneut und klicken Sie dann auf „Fortsetzen“.",
-        "card_not_ready": "Beseitigen Sie, was {key} blockiert, oder setzen Sie es zurück auf „In Arbeit“, und klicken Sie dann auf „Fortsetzen“."
+        "card_not_ready": "Beseitigen Sie, was {key} blockiert, oder setzen Sie es zurück auf „In Arbeit“, und klicken Sie dann auf „Fortsetzen“.",
+        "no_capacity": "Wählen Sie ein anderes Modell und klicken Sie auf „Fortsetzen“, oder versuchen Sie es in Kürze erneut."
       },
       "copyAria": "Fortsetzungsbefehl für {key} kopieren",
       "member": {
@@ -13049,7 +13051,8 @@
       "door": {
         "run": "Ausführen",
         "runAgain": "Erneut ausführen",
-        "starting": "Wird gestartet…"
+        "starting": "Wird gestartet…",
+        "heldModel": "<b>{model}</b> hat derzeit keine Kapazität für Agentenläufe. Wählen Sie ein anderes Modell oder warten Sie, bis es wieder Kapazität hat."
       },
       "picker": {
         "label": "Modell",
@@ -13066,7 +13069,10 @@
         "fromDifficulty": "Aus Schwierigkeitsgrad: <b>{difficulty}</b>",
         "override": "Projektvorgabe für <b>{difficulty}</b>",
         "fromLeaves": "Höchster Schwierigkeitsgrad unter seinen Blattelementen: <b>{difficulty}</b>",
-        "overrideFromLeaves": "Projektvorgabe für <b>{difficulty}</b>, den höchsten Schwierigkeitsgrad unter seinen Blattelementen"
+        "overrideFromLeaves": "Projektvorgabe für <b>{difficulty}</b>, den höchsten Schwierigkeitsgrad unter seinen Blattelementen",
+        "noCapacityTag": "Keine Kapazität",
+        "noCapacityReason": "Derzeit keine Kapazität für Agentenläufe. Versuchen Sie es in Kürze erneut.",
+        "allHeldBody": "Derzeit hat kein Modell Kapazität für Agentenläufe. Versuchen Sie es in Kürze erneut; lokale Läufe sind nicht betroffen."
       },
       "notReady": "„Ausführen“ ist verfügbar, sobald dieses Arbeitselement bereit ist — es hat {count, plural, one {# offenen Blocker} other {# offene Blocker}}.",
       "refused": {
@@ -13099,6 +13105,10 @@
         "failed": {
           "title": "Nicht gestartet — Motir konnte den Lauf nicht starten.",
           "body": "Es wurde nichts gestartet. Versuchen Sie es in Kürze erneut."
+        },
+        "noCapacity": {
+          "title": "Nicht gestartet — {model} hat derzeit keine Kapazität für Agentenläufe.",
+          "body": "Es wurde nichts gestartet und nichts berechnet. Wählen Sie ein anderes Modell oder versuchen Sie es in Kürze erneut."
         }
       },
       "phase": {
@@ -14277,7 +14287,8 @@
           "no_verdictNoRun": "der Prüflauf endete ohne Urteil.",
           "boot_failed": "die gehostete Maschine für die Prüfung konnte nicht starten.",
           "no_actor": "niemand kann sie ausführen — das Arbeitselement hat weder Verantwortlichen noch Ersteller, und der Arbeitsbereich hat keinen vertretenden Manager.",
-          "unknown": "der Prüflauf konnte nicht starten."
+          "unknown": "der Prüflauf konnte nicht starten.",
+          "noCapacity": "das Modell für die Prüfung hat derzeit keine Kapazität für Agentenläufe. Versuchen Sie es in Kürze erneut."
         },
         "why": "Bis die Prüfung läuft oder jemand ohne sie fortfährt, wird nichts gemergt.",
         "whyNotYours": "Wartet auf {name}. Bis die Prüfung läuft oder diese Person ohne sie fortfährt, wird nichts gemergt."
@@ -14314,7 +14325,8 @@
         "out_of_credits": "der Organisation sind die Credits ausgegangen.",
         "credits_unavailable": "das Credit-Guthaben konnte nicht gelesen werden.",
         "repository_not_writable": "Motir kann nicht in {detail} schreiben.",
-        "card_not_ready": "jemand hat das Arbeitselement zuerst übernommen."
+        "card_not_ready": "jemand hat das Arbeitselement zuerst übernommen.",
+        "no_capacity": "{detail}, das Modell des letzten Laufs, hat derzeit keine Kapazität für Agentenläufe."
       },
       "next": {
         "cap_reached": "Auf dem gehosteten Agenten ausführen",
@@ -14325,7 +14337,8 @@
         "models_unavailable": "Auf dem gehosteten Agenten ausführen",
         "out_of_credits": "Credits kaufen",
         "credits_unavailable": "Auf dem gehosteten Agenten ausführen",
-        "repository_not_writable": "Repositorys"
+        "repository_not_writable": "Repositorys",
+        "no_capacity": "Anderes Modell wählen und ausführen"
       }
     },
     "manualWork": {
