@@ -2,19 +2,23 @@ import 'server-only';
 
 import { isE2EProdHarness } from '@/lib/e2eProdHarness';
 import {
-  CAPACITY_LIMIT_UNITS,
   CAPACITY_PROVIDERS,
   type CapacityEntry,
-  type CapacityLimit,
   type CapacityLimitUnit,
   type CapacityLimitsEdit,
-  type CapacityProvider,
   type CapacityRead,
   type StoredCapacityRow,
   readGatewayCapacity,
   writeGatewayCapacityLimits,
 } from './capacityClient';
-import { GatewayCapacityRefusedError } from './capacityErrors';
+import { GatewayCapacityRefusedError, GatewayCapacityUnavailableError } from './capacityErrors';
+import {
+  CAPACITY_FAKE_STATE_PATH_ENV_VAR,
+  type CapacityFakeState,
+  readCapacityFakeStateFile,
+  seedCapacityEntries,
+  writeCapacityFakeStateFile,
+} from './capacityFakeState';
 
 // THE GATEWAY CAPACITY BINDING (MOTIR-9608) — the same shape as `./statusProvider.ts`:
 // one place chooses between the real HTTP client and an in-memory fake, so the
@@ -28,6 +32,13 @@ import { GatewayCapacityRefusedError } from './capacityErrors';
 //
 //   MOTIR_E2E_FAKE_GATEWAY_CAPACITY=1            → the fake, counters live
 //   MOTIR_E2E_FAKE_GATEWAY_CAPACITY=unavailable  → the fake, counter store down
+//
+// ⚠️ WITH `MOTIR_E2E_FAKE_GATEWAY_CAPACITY_STATE_PATH` SET BESIDE THE FLAG
+// (MOTIR-9617), the fake's whole state — mode, limits, lanes — lives in that JSON
+// file instead, re-read on every call and replaced whole on an accepted edit. The
+// acceptance lane needs it: its route bundles, its job worker and its spec are
+// separate module copies and processes, and the file is all they share. Without
+// the path the fake is the in-memory one below, unchanged.
 
 const FAKE_FLAG = 'MOTIR_E2E_FAKE_GATEWAY_CAPACITY';
 
@@ -50,63 +61,11 @@ export const httpGatewayCapacityClient: GatewayCapacityClient = {
 
 // ── the fake ────────────────────────────────────────────────────────────────
 
-/** Each provider's enforced units, from the contract's §3 table. */
-const ENFORCED: Record<CapacityProvider, readonly CapacityLimitUnit[]> = {
-  claude: ['rpm', 'input_tpm', 'output_tpm'],
-  qwen: ['rpm', 'tpm'],
-  deepseek: ['max_concurrency'],
-};
-
-function seedLimits(
-  provider: CapacityProvider,
-  values: Partial<Record<CapacityLimitUnit, number>>,
-): Record<CapacityLimitUnit, CapacityLimit> {
-  const limits = {} as Record<CapacityLimitUnit, CapacityLimit>;
-  for (const unit of CAPACITY_LIMIT_UNITS) {
-    const value = values[unit];
-    if (value !== undefined) limits[unit] = { status: 'set', value };
-    else
-      limits[unit] = ENFORCED[provider].includes(unit)
-        ? { status: 'unknown' }
-        : { status: 'not_applicable' };
-  }
-  return limits;
-}
-
-function seed(): CapacityEntry[] {
-  const lane = (n: number) => ({
-    inFlight: n,
-    requestsPerMinute: n * 10,
-    tokensPerMinute: n * 10_000,
-    tokensPerDay: n * 200_000,
-    rateLimited429: { minute: 0, day: n },
-  });
-  const entry = (
-    provider: CapacityProvider,
-    model: string,
-    values: Partial<Record<CapacityLimitUnit, number>>,
-  ): CapacityEntry => ({
-    provider,
-    model,
-    tierNote: 'Example tier (E2E fake)',
-    unknownNote: '',
-    planningSharePercent: 50,
-    limits: seedLimits(provider, values),
-    lanes: { planning: lane(2), agent: lane(5) },
-    providerHint: null,
-  });
-  return [
-    entry('claude', 'claude-example-1', { rpm: 1000, input_tpm: 200_000, output_tpm: 40_000 }),
-    entry('deepseek', 'deepseek-example-1', { max_concurrency: 500 }),
-    entry('qwen', 'qwen-example-1', { rpm: 600, tpm: 800_000 }),
-  ];
-}
-
-let fakeEntries: CapacityEntry[] = seed();
+let fakeEntries: CapacityEntry[] = seedCapacityEntries();
 
 /** Tests only: put the fake back to its seed. */
 export function resetFakeGatewayCapacity(): void {
-  fakeEntries = seed();
+  fakeEntries = seedCapacityEntries();
 }
 
 const LIMIT_EDITS: ReadonlyArray<[keyof CapacityLimitsEdit, CapacityLimitUnit]> = [
@@ -161,32 +120,72 @@ function applyFakeEdit(entry: CapacityEntry, edit: CapacityLimitsEdit): Capacity
 }
 
 const fakeGatewayCapacityClient: GatewayCapacityClient = {
-  read: async () => {
-    const down = process.env[FAKE_FLAG] === 'unavailable';
-    return {
-      outcome: 'answered',
-      readAt: new Date(),
-      counterStore: { state: down ? 'unavailable' : 'live', scope: 'shared' },
-      entries: fakeEntries.map((e) =>
-        down ? { ...e, lanes: { planning: null, agent: null }, providerHint: null } : e,
-      ),
-    };
-  },
+  read: async () =>
+    fakeRead({
+      mode: process.env[FAKE_FLAG] === 'unavailable' ? 'unavailable' : 'live',
+      scope: 'shared',
+      entries: fakeEntries,
+    }),
   write: async (provider, model, edit) => {
-    if (!(CAPACITY_PROVIDERS as readonly string[]).includes(provider)) {
-      throw new GatewayCapacityRefusedError(400, 'capacity_unknown_provider', null);
-    }
-    const index = fakeEntries.findIndex((e) => e.provider === provider && e.model === model);
-    if (index < 0) throw new GatewayCapacityRefusedError(404, 'capacity_unknown_model', null);
-    validateFakeEdit(edit);
-    const next = applyFakeEdit(fakeEntries[index]!, edit);
-    fakeEntries = fakeEntries.map((e, i) => (i === index ? next : e));
-    const { lanes: _lanes, providerHint: _hint, ...row } = next;
-    return { ...row, updatedAt: new Date() };
+    const { entries, row } = applyFakeWrite(fakeEntries, provider, model, edit);
+    fakeEntries = entries;
+    return row;
   },
 };
 
+/** The gateway's §4 write against a list of entries: refused, or the new list and row. */
+function applyFakeWrite(
+  entries: CapacityEntry[],
+  provider: string,
+  model: string,
+  edit: CapacityLimitsEdit,
+): { entries: CapacityEntry[]; row: StoredCapacityRow } {
+  if (!(CAPACITY_PROVIDERS as readonly string[]).includes(provider)) {
+    throw new GatewayCapacityRefusedError(400, 'capacity_unknown_provider', null);
+  }
+  const index = entries.findIndex((e) => e.provider === provider && e.model === model);
+  if (index < 0) throw new GatewayCapacityRefusedError(404, 'capacity_unknown_model', null);
+  validateFakeEdit(edit);
+  const next = applyFakeEdit(entries[index]!, edit);
+  const { lanes: _lanes, providerHint: _hint, ...row } = next;
+  return {
+    entries: entries.map((e, i) => (i === index ? next : e)),
+    row: { ...row, updatedAt: new Date() },
+  };
+}
+
+function fakeRead(state: CapacityFakeState): CapacityRead {
+  if (state.mode === 'unreachable') return { outcome: 'unavailable', reason: 'network' };
+  const down = state.mode === 'unavailable';
+  return {
+    outcome: 'answered',
+    readAt: new Date(),
+    counterStore: { state: down ? 'unavailable' : 'live', scope: state.scope },
+    entries: state.entries.map((e) =>
+      down ? { ...e, lanes: { planning: null, agent: null }, providerHint: null } : e,
+    ),
+  };
+}
+
+/** The file-backed fake: every call reads the file; an accepted edit replaces it. */
+function fileGatewayCapacityClient(path: string): GatewayCapacityClient {
+  return {
+    read: async () => fakeRead(readCapacityFakeStateFile(path)),
+    write: async (provider, model, edit) => {
+      const state = readCapacityFakeStateFile(path);
+      if (state.mode === 'unreachable') {
+        throw new GatewayCapacityUnavailableError('the gateway could not be reached');
+      }
+      const { entries, row } = applyFakeWrite(state.entries, provider, model, edit);
+      writeCapacityFakeStateFile(path, { ...state, entries });
+      return row;
+    },
+  };
+}
+
 /** The client this deployment should use. */
 export function gatewayCapacityClient(): GatewayCapacityClient {
-  return usingFakeGatewayCapacity() ? fakeGatewayCapacityClient : httpGatewayCapacityClient;
+  if (!usingFakeGatewayCapacity()) return httpGatewayCapacityClient;
+  const path = process.env[CAPACITY_FAKE_STATE_PATH_ENV_VAR]?.trim();
+  return path ? fileGatewayCapacityClient(path) : fakeGatewayCapacityClient;
 }
