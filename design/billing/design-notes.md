@@ -2072,7 +2072,7 @@ meter is `BillingClient.tsx`'s own `Meter` recipe. The dark panel is an `[data-a
    agents per person, CI jobs in flight. The two hosted-agent rows say "hosted" in their labels, so
    neither reads as a count of every agent a person uses (Yue, 2026-10-26). Each reads in use against the figure ("3 of 3"), a meter that is
    never the only signal (it repeats the words), and one line explaining the figure. The
-   hosted-agents-per-person row reads the figure and how many members are at it ("2 members at 5 of 5"),
+   hosted-agents-per-person row reads the figure and how many members are at it ("2 members at 2 of 2"),
    with no meter, no table and no name. The two agent-instance rows say a start beyond the figure is
    refused, not queued, and draw no waiting count at all.
 4. **Indexing line.** "Code-graph indexing: N running · counted against no plan limit."
@@ -2087,9 +2087,9 @@ meter is `BillingClient.tsx`'s own `Meter` recipe. The dark panel is an `[data-a
    (`tone="neutral"`), Quota requested (`tone="awaiting"`), Granted (`severity="info"`), Live
    (`severity="success"`), and a denied raise as Quota denied (`severity="danger"`) — with the
    time it entered that state, vCPU asked and vCPU granted, and the **shared-floor note** while the
-   kind is on it ("Still on the shared floor at Max's limits: CI at 50 runners"). The merged
+   kind is on it ("Still on the shared floor: CI at 20 runners"). The merged
    account says 10 machine spots are always kept for indexing and agent instances run on the rest.
-   On Host, the agent-runs and CI figure rows carry a source line: Max's limit and the shared-floor
+   On Host, the agent-runs and CI figure rows carry a source line: the shared-floor figure and the shared-floor
    words before the account is live, then "16 — 32 vCPU granted ÷ 2" (CI "100 — 200 vCPU granted ÷
    2") once it is. A staff override reads "Set by Motir for your organisation".
 8. **Request more capacity dialog.** A secondary button on each account row with a raise, for owner
@@ -2129,6 +2129,9 @@ namespace in every locale with the section's code.
 
 ### The numbers are illustrative
 
-Plan figures are `lib/billing/planCaps.ts`'s (Standard 1 / 1 / 5 / 5, Pro 3 / 5 / 30 / 10, Max ×2
-5 / 10 / 50 / 25, Host 5 / 10 / 50 / 50 on the floor), and Host's raises are the creation targets
-(200 / 32 / 120 vCPU). Use, waits, dates and requests are illustrative.
+Plan figures are the fleet-capacity decision's, as corrected at its gate (MOTIR-9357, owner,
+2026-10-23), in the order agent runs / hosted agents per person / per organisation / CI: Standard
+1 / 1 / 2 / 2, Pro 3 / 2 / 10 / 3, Max ×2 5 / 3 / 20 / 5, Host 5 / 5 / 20 / 20 on the shared floor
+and 10 / 50 for hosted agents on its own accounts. `lib/billing/planCaps.ts` still carries the
+figures from before that correction (Pro 3 / 5 / 30 / 10); the mock draws the decision's, and the
+code is corrected separately. Host's raises are the creation targets (200 / 32 / 120 vCPU). Use, waits, dates and requests are illustrative.
