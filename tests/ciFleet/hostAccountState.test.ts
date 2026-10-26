@@ -4,6 +4,7 @@ import type { AwsSessionCredentials, Ec2Api, FleetWorkloadKind } from '@motir/or
 import { db } from '@/lib/db';
 import { MOTIR_SYSTEM_USER_EMAIL } from '@/lib/ai/systemPrincipal';
 import { capsForPlanKey, HOST_PLAN_KEY } from '@/lib/billing/planCaps';
+import { hostMonthlyPlanCredits } from '@/lib/billing/catalog';
 import { hostAccountPlan } from '@/lib/ciFleet/hostAccounts';
 import { deriveAccountState, LIVE_MIN_VCPU } from '@/lib/ciFleet/hostAccountState';
 import { AWS_MEMBER_EMAIL_TEMPLATE_ENV } from '@/lib/fleetShards/awsMemberAccountPlan';
@@ -124,7 +125,7 @@ const rowOf = (
   slot: 'ci_runner' | 'agent_runner' | 'merged',
   shared = false,
 ) => {
-  const plan = hostAccountPlan(organizationId, slot);
+  const plan = hostAccountPlan(organizationId, slot, hostMonthlyPlanCredits());
   const name = shared ? plan.sharedRow!.name : plan.account.name;
   return adminDb.fleetShard.findUniqueOrThrow({ where: { name } });
 };

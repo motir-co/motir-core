@@ -14,6 +14,7 @@ import { MOTIR_SYSTEM_USER_EMAIL } from '@/lib/ai/systemPrincipal';
 import { capsForPlanKey, HOST_PLAN_KEY } from '@/lib/billing/planCaps';
 import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
 import type { HostAccountRefusedError } from '@/lib/ciFleet/headroomErrors';
+import { hostMonthlyPlanCredits } from '@/lib/billing/catalog';
 import { hostAccountPlan } from '@/lib/ciFleet/hostAccounts';
 import { wireFleetKindSwitch } from '@/lib/ciFleet/shardTargets';
 import { AWS_MEMBER_EMAIL_TEMPLATE_ENV } from '@/lib/fleetShards/awsMemberAccountPlan';
@@ -755,7 +756,7 @@ describe('the Host own-accounts recipe, step by step', () => {
     await setPlan(second.organizationId, HOST_PLAN_KEY);
     const taken = TEMPLATE.replace(
       '{name}',
-      hostAccountPlan(second.organizationId, 'ci_runner').account.name,
+      hostAccountPlan(second.organizationId, 'ci_runner', hostMonthlyPlanCredits()).account.name,
     );
     organization.usedEmails.add(taken);
     const alertsBefore = alerts.length;

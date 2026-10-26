@@ -7,6 +7,7 @@ import type {
 import type { FleetWorkloadKind } from '@motir/orchestrator';
 import { FleetShardProvisioningRefusedError } from '@/lib/ciFleet/errors';
 import { hostAccountPlan, type HostAccountSlot } from '@/lib/ciFleet/hostAccounts';
+import { ownAccountPoolCredits } from '@/lib/billing/ownAccountPlans';
 import {
   GITHUB_INSTALLATION_API_PER_HOUR,
   poolAccountRaiseTargetVcpu,
@@ -114,10 +115,13 @@ export interface AddSpareShardDeps {
   env?: Readonly<Record<string, string | undefined>>;
 }
 
-/** What a Host organisation's account creation is handed (MOTIR-9582). */
+/** What an own-accounts organisation's account creation is handed (MOTIR-9582;
+ *  the plan, MOTIR-9651 — it sizes the slot's raise target). */
 export interface AddOrgOwnedShardInput {
   organizationId: string;
   slot: HostAccountSlot;
+  /** The org's plan key; it must carry own accounts (`planCarriesOwnAccounts`). */
+  planKey: string;
 }
 
 /** How one walk differs between the person-run command and the unattended ones. */
@@ -342,16 +346,23 @@ export const fleetShardProvisioningService = {
    * `agent_instance` row is then written from that row's AWS location and
    * credential reference — never a second `CreateAccount`, never a second raise.
    *
-   * @throws FleetShardProvisioningRefusedError before any external call (a kind
-   *   with no primary account to take the GitHub org from, a missing template);
+   * @throws FleetShardProvisioningRefusedError before any external call (a plan
+   *   that carries no own accounts, a kind with no primary account to take the
+   *   GitHub org from, a missing template);
    *   FleetShardAccountRefusedError when AWS refuses `CreateAccount`.
    */
   async addOrgOwnedShard(
     input: AddOrgOwnedShardInput,
     deps: AddSpareShardDeps = {},
   ): Promise<ShardProvisioningResult> {
+    const poolCredits = ownAccountPoolCredits(input.planKey);
+    if (poolCredits === null) {
+      throw new FleetShardProvisioningRefusedError([
+        `plan ${input.planKey} carries no AWS accounts of its own`,
+      ]);
+    }
     const env = deps.env ?? process.env;
-    const plan = hostAccountPlan(input.organizationId, input.slot);
+    const plan = hostAccountPlan(input.organizationId, input.slot, poolCredits);
     const kind = plan.account.fleetKind;
     const operator = await fleetAutomationPrincipal();
     const template = env[AWS_MEMBER_EMAIL_TEMPLATE_ENV];
