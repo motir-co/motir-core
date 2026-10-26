@@ -9,6 +9,7 @@ import { databaseHealthRepository } from '@/lib/repositories/databaseHealthRepos
 import { flyDeploymentStatusProvider } from '@/lib/deployment/adapters/fly/flyMachinesStatus';
 import { deploymentStatusProvider, usingFakeDeploymentStatus } from '@/lib/deployment/providers';
 import { httpGatewayStatusReader } from '@/lib/gateway/statusClient';
+import { GatewayStatusMalformedError } from '@/lib/gateway/statusErrors';
 import { gatewayStatusReader, usingFakeGatewayStatus } from '@/lib/gateway/statusProvider';
 import { httpErrorCountReader } from '@/lib/monitoring/sentryErrorCount';
 import { errorCountReader, usingFakeErrorCount } from '@/lib/monitoring/errorCountProvider';
@@ -224,6 +225,13 @@ describe('⚠️ never a zero, over every unreachable reason', () => {
         configureAll();
         for (const breakIt of Object.values(PROVIDERS)) breakIt();
       },
+      // The gateway answered, and the answer was rejected (MOTIR-9641).
+      () => {
+        configureAll();
+        vi.spyOn(httpGatewayStatusReader, 'read').mockRejectedValue(
+          new GatewayStatusMalformedError('httpStatus', 'gateway status answered 503', 503),
+        );
+      },
       // The database itself unreachable.
       () => {
         configureAll();
@@ -252,6 +260,7 @@ describe('⚠️ never a zero, over every unreachable reason', () => {
       'errors:readFailed',
       'gateway:notConfigured',
       'gateway:noAnswer',
+      'gateway:badAnswer',
       'database:unreachable',
     ]) {
       expect(reasonsSeen, reason).toContain(reason);
@@ -322,6 +331,45 @@ describe('the service-to-page seam', () => {
     expect(text).not.toContain('errors · 24h');
     expect(text).not.toMatch(/app \d+\/\d+/);
     expect(text).not.toContain('Reachable · 87 ms');
+  });
+});
+
+describe('the Gateway card names a rejected answer (MOTIR-9641)', () => {
+  async function renderPage(): Promise<string> {
+    const html = await renderToHtml(
+      await AdminMonitoringPage({ searchParams: Promise.resolve({}) }),
+    );
+    return html
+      .replace(/<!-- -->/g, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&#x27;/g, "'")
+      .replace(/&amp;/g, '&')
+      .replace(/\s+/g, ' ');
+  }
+
+  it('an empty version says the gateway answered and why it was rejected', async () => {
+    configureAll();
+    vi.spyOn(httpGatewayStatusReader, 'read').mockRejectedValue(
+      new GatewayStatusMalformedError('noVersion', 'gateway status carried no version'),
+    );
+    const text = await renderPage();
+    expect(text).toContain('Unreadable answer from the gateway');
+    expect(text).toContain(
+      'The gateway answered, but its status could not be read: it carried no version.',
+    );
+    expect(text).not.toContain('No answer from the gateway');
+    expect(text).not.toContain('got no answer within');
+  });
+
+  it('a 503 names the status it answered with', async () => {
+    configureAll();
+    vi.spyOn(httpGatewayStatusReader, 'read').mockRejectedValue(
+      new GatewayStatusMalformedError('httpStatus', 'gateway status answered 503', 503),
+    );
+    const text = await renderPage();
+    expect(text).toContain(
+      'The gateway answered, but its status could not be read: it answered HTTP 503.',
+    );
   });
 });
 

@@ -10168,10 +10168,12 @@
           "degradedValue": "Traag · {ms} ms",
           "degradedDetail": "Antwoordt, maar boven de drempel van {threshold} ms. motir-gateway {version} · actief sinds {since}.",
           "unreachable": {
+            "badAnswer": "Onleesbaar antwoord van de gateway",
             "noAnswer": "Geen antwoord van de gateway",
             "notConfigured": "Gateway niet geconfigureerd"
           },
           "unreachableDetail": {
+            "badAnswer": "De gateway antwoordde, maar de status kon niet worden gelezen: {why, select, httpStatus {hij antwoordde met HTTP {status}} notJson {de inhoud was geen JSON} noSuccess {hij meldde geen succes} noData {hij bevatte geen gegevens} noVersion {hij bevatte geen versie} noStartTime {hij bevatte geen starttijd} other {het antwoord werd afgewezen}}. AI-verzoeken die via de gateway lopen, mislukken mogelijk. Er is niets gemeten, dus er wordt geen latentie getoond.",
             "noAnswer": "De statuscontrole kreeg binnen {timeout} s geen antwoord. AI-verzoeken die via de gateway lopen, mislukken mogelijk. Er is niets gemeten, dus er wordt geen latentie getoond.",
             "notConfigured": "MOTIR_GATEWAY_URL is niet ingesteld, dus er valt niets te controleren. Verwacht bij een installatie zonder gateway."
           },

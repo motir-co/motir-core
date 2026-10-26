@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import type { PlatformSignalDTO, PlatformSignalId } from '@/lib/dto/platformHealth';
 import type { PlatformPrincipal } from '@/lib/platform/auth';
@@ -550,6 +550,90 @@ describe('the gateway signal (MOTIR-742)', () => {
     expect(gateway.state).toBe('unreachable');
     expect(gateway.values['reason']).toBe('noAnswer');
     expect(gateway.linkOut).toBeNull();
+  });
+
+  // MOTIR-9641: a gateway that ANSWERED is never reported as "no answer". These
+  // run the REAL client under the service, with `fetch` as the seam, because the
+  // property is the hand-off between the two — which error the client throws and
+  // which reason the service reads from it.
+  describe('an answer that was rejected is badAnswer, not noAnswer (MOTIR-9641)', () => {
+    const replying = (body: string, status = 200) =>
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => new Response(body, { status })),
+      );
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it('a deadline that passes stays noAnswer, with the timeout the copy names', async () => {
+      vi.spyOn(httpGatewayStatusReader, 'read').mockRejectedValue(
+        new Error('gateway status did not answer within 3000ms'),
+      );
+      const gateway = signal(
+        (await platformHealthService.read(currentPrincipal)).signals,
+        'gateway',
+      );
+      expect(gateway).toEqual({
+        id: 'gateway',
+        state: 'unreachable',
+        values: { reason: 'noAnswer', timeout: '3' },
+        linkOut: 'https://gateway.example.test/api/status',
+      });
+    });
+
+    it('a 200 carrying an empty version — production, 2026-10-26 — is badAnswer: noVersion', async () => {
+      replying(JSON.stringify({ success: true, data: { version: '', start_time: 1 } }));
+      const gateway = signal(
+        (await platformHealthService.read(currentPrincipal)).signals,
+        'gateway',
+      );
+      expect(gateway).toEqual({
+        id: 'gateway',
+        state: 'unreachable',
+        values: { reason: 'badAnswer', why: 'noVersion' },
+        linkOut: 'https://gateway.example.test/api/status',
+      });
+    });
+
+    it('a 503 is badAnswer: httpStatus, with the status as text and no number', async () => {
+      replying(JSON.stringify({ error: 'unavailable' }), 503);
+      const gateway = signal(
+        (await platformHealthService.read(currentPrincipal)).signals,
+        'gateway',
+      );
+      expect(gateway.state).toBe('unreachable');
+      expect(gateway.values).toEqual({ reason: 'badAnswer', why: 'httpStatus', status: '503' });
+    });
+
+    it.each([
+      ['a body that is not JSON', '<html>oops</html>', 'notJson'],
+      ['success:false', JSON.stringify({ success: false, data: null }), 'noSuccess'],
+      ['no data', JSON.stringify({ success: true }), 'noData'],
+      ['no start time', JSON.stringify({ success: true, data: { version: 'v1' } }), 'noStartTime'],
+    ])('%s is badAnswer with its own why', async (_label, body, why) => {
+      replying(body);
+      const gateway = signal(
+        (await platformHealthService.read(currentPrincipal)).signals,
+        'gateway',
+      );
+      expect(gateway.values).toEqual({ reason: 'badAnswer', why });
+    });
+
+    it('a connection that fails outright is still noAnswer — nothing answered', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => {
+          throw new TypeError('fetch failed');
+        }),
+      );
+      const gateway = signal(
+        (await platformHealthService.read(currentPrincipal)).signals,
+        'gateway',
+      );
+      expect(gateway.values).toEqual({ reason: 'noAnswer', timeout: '3' });
+    });
   });
 
   it('no MOTIR_GATEWAY_URL is notConfigured — a different sentence from noAnswer', async () => {

@@ -10168,10 +10168,12 @@
           "degradedValue": "Langsam · {ms} ms",
           "degradedDetail": "Antwortet, aber über dem Schwellenwert von {threshold} ms. motir-gateway {version} · läuft seit {since}.",
           "unreachable": {
+            "badAnswer": "Unlesbare Antwort vom Gateway",
             "noAnswer": "Keine Antwort vom Gateway",
             "notConfigured": "Gateway nicht konfiguriert"
           },
           "unreachableDetail": {
+            "badAnswer": "Das Gateway hat geantwortet, aber sein Status konnte nicht gelesen werden: {why, select, httpStatus {es antwortete mit HTTP {status}} notJson {der Inhalt war kein JSON} noSuccess {es meldete keinen Erfolg} noData {es lieferte keine Daten} noVersion {es lieferte keine Version} noStartTime {es lieferte keine Startzeit} other {die Antwort wurde abgelehnt}}. AI-Anfragen über das Gateway schlagen möglicherweise fehl. Es wurde nichts gemessen, daher wird keine Latenz angezeigt.",
             "noAnswer": "Die Statusprüfung hat innerhalb von {timeout} s keine Antwort erhalten. AI-Anfragen über das Gateway schlagen möglicherweise fehl. Es wurde nichts gemessen, daher wird keine Latenz angezeigt.",
             "notConfigured": "MOTIR_GATEWAY_URL ist nicht gesetzt, daher gibt es nichts zu prüfen. Bei einer Instanz ohne Gateway zu erwarten."
           },

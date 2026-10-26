@@ -10168,10 +10168,12 @@
           "degradedValue": "Wolna · {ms} ms",
           "degradedDetail": "Odpowiada, ale powyżej progu {threshold} ms. motir-gateway {version} · działa od {since}.",
           "unreachable": {
+            "badAnswer": "Nieczytelna odpowiedź z bramy",
             "noAnswer": "Brak odpowiedzi z bramy",
             "notConfigured": "Brama nie jest skonfigurowana"
           },
           "unreachableDetail": {
+            "badAnswer": "Brama odpowiedziała, ale nie udało się odczytać jej statusu: {why, select, httpStatus {odpowiedziała kodem HTTP {status}} notJson {treść nie była w formacie JSON} noSuccess {nie zgłosiła powodzenia} noData {nie zawierała danych} noVersion {nie zawierała wersji} noStartTime {nie zawierała czasu uruchomienia} other {odpowiedź została odrzucona}}. Żądania AI przechodzące przez bramę mogą kończyć się niepowodzeniem. Nic nie zostało zmierzone, więc opóźnienie nie jest pokazywane.",
             "noAnswer": "Sprawdzenie statusu nie otrzymało odpowiedzi w ciągu {timeout} s. Żądania AI przechodzące przez bramę mogą kończyć się niepowodzeniem. Nic nie zostało zmierzone, więc opóźnienie nie jest pokazywane.",
             "notConfigured": "Zmienna MOTIR_GATEWAY_URL nie jest ustawiona, więc nie ma czego sprawdzać. Oczekiwane w instancji bez bramy."
           },

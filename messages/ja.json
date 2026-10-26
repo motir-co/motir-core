@@ -10165,10 +10165,12 @@
           "degradedValue": "低速 · {ms} ms",
           "degradedDetail": "応答していますが、しきい値の {threshold} ms を超えています。motir-gateway {version} · {since} から稼働中。",
           "unreachable": {
+            "badAnswer": "ゲートウェイの応答を読み取れません",
             "noAnswer": "ゲートウェイから応答なし",
             "notConfigured": "ゲートウェイ未設定"
           },
           "unreachableDetail": {
+            "badAnswer": "ゲートウェイは応答しましたが、ステータスを読み取れませんでした: {why, select, httpStatus {HTTP {status} が返されました} notJson {本文が JSON ではありませんでした} noSuccess {成功が報告されませんでした} noData {データが含まれていませんでした} noVersion {バージョンが含まれていませんでした} noStartTime {起動時刻が含まれていませんでした} other {応答が拒否されました}}。ゲートウェイを経由する AI リクエストが失敗している可能性があります。何も測定されていないため、レイテンシは表示されません。",
             "noAnswer": "ステータスチェックは {timeout} 秒以内に応答を得られませんでした。ゲートウェイを経由する AI リクエストが失敗している可能性があります。何も測定されていないため、レイテンシは表示されません。",
             "notConfigured": "MOTIR_GATEWAY_URL が設定されていないため、確認するものはありません。ゲートウェイを実行しないインスタンスでは想定どおりです。"
           },
