@@ -446,7 +446,10 @@ test('a plan waiting on the model provider says so and carries on; refused for g
         await waited;
         await expect(retrying(page)).toBeVisible();
 
-        // Every retry refused: motir-ai ends the walk `rate_limited`, the relay settles it.
+        // Every retry refused: motir-ai's reporter clears the wait from its `finally` as the
+        // exhausted 429 propagates (`src/llm/providerRetryReport.ts`), then the walk ends
+        // `rate_limited` and the relay settles it.
+        await hostedReport(second.asker, second.planId, jobId(1), 'author-1', CLEARED);
         setPlanOutcome(1, stoppedOn('rate_limited'));
         expect(await failureRecorded(sessionId)).toBe('rate_limited');
         await expect(failedWaiting(page)).toBeVisible({ timeout: FIRST_PAINT_MS });
@@ -532,6 +535,8 @@ test('in Chinese, the retrying banner and the stopped wording render from the zh
   await expect(retrying(page)).not.toContainText(enLimit.retryingTitle);
   await expect(retrying(page)).not.toContainText(enLimit.retryingBody);
 
+  // The wait is left STORED here (a job that died without its reporter's clear), so the stopped
+  // face below also proves, in the browser, that a recorded failure wins over a wait.
   setPlanOutcome(0, stoppedOn('rate_limited'));
   expect(await failureRecorded(sessionId)).toBe('rate_limited');
   await expect(failedWaiting(page)).toBeVisible({ timeout: FIRST_PAINT_MS });
