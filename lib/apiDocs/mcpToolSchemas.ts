@@ -496,7 +496,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
             baseRevision: {
               type: 'string',
               description:
-                '`modify` / `remove` only: the target revision the change was computed against.',
+                '`modify` / `remove` only: the target revision the change was computed against — the `revision` id `skeleton` returns for the target. Never a timestamp or a work-item id: a value that is not a revision of the target is refused INVALID_PROPOSAL. Omit it when you did not read one.',
             },
             reason: {
               type: 'string',
