@@ -154,7 +154,11 @@ async function searchFor(page: Page, q: string) {
 }
 
 const box = (page: Page) => page.getByRole('searchbox', { name: S.label });
-const hit = (page: Page, title: string) => page.getByRole('link', { name: title, exact: true });
+// A hit is a link inside the result list: the tree's own page rows carry links
+// with the same names, so an unscoped link locator would find a tree row.
+const results = (page: Page) => page.getByRole('list', { name: S.results });
+const hit = (page: Page, title: string) =>
+  results(page).getByRole('link', { name: title, exact: true });
 const treeRow = (page: Page, title: string) => page.getByRole('treeitem', { name: title });
 
 test.beforeEach(async () => {
@@ -255,6 +259,7 @@ test('A member searches pages from the Pages tree: the recipe, steps 1 to 6', as
     await expect(treeRow(page, ROTA_TITLE)).toBeVisible();
     await box(page).fill('   ');
     await expect(treeRow(page, ROTA_TITLE)).toBeVisible();
+    await expect(results(page)).toHaveCount(0);
     await expect(hit(page, ROTA_TITLE)).toHaveCount(0);
     // The empty hint describes the focused blank box: the box has settled.
     await expect(box(page)).toHaveAccessibleDescription(S.emptyHint);
