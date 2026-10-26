@@ -12304,7 +12304,8 @@
       "alerts": {
         "title": "{count, plural, one {1 limit is over the alert share} other {# limits are over the alert share}}",
         "line": "{provider} · {model} · {limit} — {share} %",
-        "since": "raised since {time} UTC"
+        "since": "raised since {time} UTC",
+        "saturationLine": "motir-gateway · connections — {share} % of created machines × hard limit"
       },
       "alertShare": {
         "title": "Alert share",
@@ -12407,6 +12408,16 @@
         "unreachable": "The gateway did not answer. Nothing was saved; try again.",
         "notPermitted": "Your role cannot edit limits, so nothing was saved.",
         "failed": "The limits could not be saved. Nothing was changed; try again."
+      },
+      "saturation": {
+        "title": "Gateway saturation",
+        "hsub": "motir-gateway connections in use against created machines × hard limit. Alerts at {percent} %.",
+        "connections": "Connections in use",
+        "machines": "Created machines",
+        "hardLimit": "Hard limit per machine",
+        "share": "{value} % of {capacity}",
+        "notConfigured": "No source for these numbers is connected yet, so the row is unavailable. Nothing is raised or cleared from it.",
+        "readFailed": "These numbers could not be read. Nothing is raised or cleared until a read succeeds."
       }
     }
   },
