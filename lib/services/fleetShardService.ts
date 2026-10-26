@@ -50,6 +50,9 @@ export interface CreateFleetShardInput {
   fleetKind: string;
   provider: FleetShardProviderDTO;
   role?: FleetShardRoleDTO;
+  /** The Host organisation an `org_owned` account belongs to — required on that
+   *  role, refused on every other (MOTIR-9581). */
+  ownerOrganizationId?: string | null;
   state?: FleetShardStateDTO;
   githubOrg: string;
   githubInstallationId: string;
@@ -144,6 +147,19 @@ function validateProvider(input: CreateFleetShardInput, limits: FleetShardLimits
   }
 }
 
+/** An owner exactly on an `org_owned` account (MOTIR-9581) — the CHECK the
+ *  database also holds. */
+function validateOwner(input: CreateFleetShardInput): void {
+  const owned = input.role === 'org_owned';
+  const hasOwner = present(input.ownerOrganizationId);
+  if (owned && !hasOwner) {
+    throw new FleetShardInvalidError('owner', 'an org_owned account names its organisation');
+  }
+  if (!owned && input.ownerOrganizationId != null) {
+    throw new FleetShardInvalidError('owner', 'only an org_owned account has an owner');
+  }
+}
+
 async function requireShard(id: string, tx: Prisma.TransactionClient) {
   const row = await fleetShardRepository.findById(id, tx);
   if (!row) throw new FleetShardNotFoundError(id);
@@ -159,6 +175,7 @@ export const fleetShardService = {
     const limits = validLimits(input.limits);
     const limitsSource = validLimitsSource(input.limitsSource);
     validateProvider(input, limits);
+    validateOwner(input);
     try {
       const row = await withSystemContext((tx) =>
         fleetShardRepository.create(
@@ -167,6 +184,7 @@ export const fleetShardService = {
             fleetKind: input.fleetKind,
             provider: input.provider,
             role: input.role ?? 'primary',
+            ownerOrganizationId: input.ownerOrganizationId ?? null,
             state: input.state ?? 'provisioning',
             githubOrg: input.githubOrg,
             githubInstallationId: input.githubInstallationId,

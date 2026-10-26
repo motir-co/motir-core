@@ -203,6 +203,22 @@ export default defineConfig({
         // `workItemContinue-transport.test.ts`): 100 / 90.62 / 100 / 100. Its
         // service, `workItemContinueService.ts`, is already gated.
         'lib/mcp/tools/workItemContinue.ts',
+        // Story MOTIR-9491 · MOTIR-9639 — page search on `/pages`: the session route, the
+        // client function and hook, and the search box with its result list. Pinned at the
+        // project floor in `thresholds` below after being MEASURED on this branch against
+        // the story's own specs (`tests/integration/pages/pageSearchStoryGate.test.ts`,
+        // `tests/api/pagesSearchRoute.test.ts`, `tests/components/use-page-search.test.tsx`,
+        // `tests/components/pages-search.test.tsx`): all seven files 100 / 100 / 100 / 100
+        // on lines / statements / functions / branches. The route group is spanned by
+        // `app/**`. The two branches the route card added to the shared
+        // `lib/pages/routeErrors.ts` are measured in the PR body; it is not newly pinned.
+        'app/api/pages/search/route.ts',
+        'components/pages/search/pageSearchClient.ts',
+        'components/pages/search/usePageSearch.ts',
+        'app/**/pages/_components/PagesSearch.tsx',
+        'app/**/pages/_components/PageSearchResults.tsx',
+        'app/**/pages/_components/PageSearchHitRow.tsx',
+        'app/**/pages/_components/snippetEmphasis.ts',
         // Story MOTIR-9487 · MOTIR-9559 — the three page tools an agent moves, archives and
         // links pages with. Pinned at the project floor in `thresholds` below after being
         // MEASURED on this branch against the story's own specs
@@ -412,6 +428,12 @@ export default defineConfig({
         'app/api/v1/projects/\\[projectKey\\]/pages/route.ts',
         'app/api/v1/pages/\\[pageId\\]/route.ts',
         'app/api/v1/pages/\\[pageId\\]/placement/route.ts',
+        // Story MOTIR-9488 · MOTIR-9568 — its archive, restore, link and unlink
+        // route files, held to the same floor.
+        'app/api/v1/pages/\\[pageId\\]/archive/route.ts',
+        'app/api/v1/pages/\\[pageId\\]/restore/route.ts',
+        'app/api/v1/pages/\\[pageId\\]/work-items/route.ts',
+        'app/api/v1/pages/\\[pageId\\]/work-items/\\[workItemId\\]/route.ts',
         'lib/plans/applySectionsInput.ts',
         'lib/services/sectionSchemaService.ts',
         // Story MOTIR-6016 · MOTIR-6102 — the three modules the DIFFICULTY story
@@ -3462,6 +3484,65 @@ export default defineConfig({
         'lib/services/requirementPageService.ts',
         'lib/ai/requirementMarkdown.ts',
         'lib/planning/requirementPane.ts',
+        // Story MOTIR-9539 · MOTIR-9615 — the provider-capacity story's new modules (the
+        // gateway capacity client, its fake and provider, the threshold function, the
+        // raised-alert store, the alert evaluation and its minutely job, the staff
+        // service, the poll route, the screen's page, actions and components). MEASURED
+        // on this branch against the story's own specs (`tests/capacity/**`,
+        // `tests/gateway/capacity*`, `tests/platform/{platformCapacityService,
+        // capacityActions}`, `tests/api/platformCapacityRoute`, `tests/jobs/
+        // capacityAlertEvaluation`, `tests/components/admin/{capacity*,
+        // editCapacityLimitsDialog,alertShareCard,adminShellCapacityNav}` and the story
+        // gate `tests/integration/capacity/capacityScreenStoryGate`). 25 files reach 90 on
+        // all four metrics and are pinned at 90 in `thresholds`. These ten do not, and are
+        // REPORT-ONLY (in `include`, not in `thresholds`) rather than pinned below the
+        // floor (statements / branches / functions / lines):
+        // NotEnforcedFold.tsx 83.33 / 50 / 100 / 100;
+        // RaisedAlertsBanner.tsx 100 / 75 / 100 / 100;
+        // actions.ts 87.5 / 85.18 / 100 / 84.84;
+        // route.ts 85.71 / 50 / 100 / 85.71;
+        // errors.ts 100 / 71.42 / 100 / 100;
+        // capacityClient.ts 92.56 / 88.63 / 100 / 95.32;
+        // capacityFakeState.ts 86.48 / 63.15 / 100 / 90.9;
+        // capacityAlertMappers.ts 77.77 / 75 / 100 / 85.71;
+        // capacityLimitAlert.ts 100 / 50 / 100 / 100;
+        // platformCapacityService.ts 96.15 / 75 / 100 / 96.15;
+        // the same ten are named in the story's pull request.
+        'app/**/admin/capacity/_components/AlertShareCard.tsx',
+        'app/**/admin/capacity/_components/CapacityEntryCard.tsx',
+        'app/**/admin/capacity/_components/CapacityErrorPanel.tsx',
+        'app/**/admin/capacity/_components/CapacityLimitRow.tsx',
+        'app/**/admin/capacity/_components/CapacityScreen.tsx',
+        'app/**/admin/capacity/_components/CapacitySkeleton.tsx',
+        'app/**/admin/capacity/_components/EditCapacityLimitsDialog.tsx',
+        'app/**/admin/capacity/_components/NotEnforcedFold.tsx',
+        'app/**/admin/capacity/_components/RaisedAlertsBanner.tsx',
+        'app/**/admin/capacity/_components/capacityDisplay.ts',
+        'app/**/admin/capacity/actions.ts',
+        'app/**/admin/capacity/page.tsx',
+        'app/api/platform/capacity/route.ts',
+        'lib/capacity/alertKeys.ts',
+        'lib/capacity/errors.ts',
+        'lib/capacity/limitEditValidation.ts',
+        'lib/capacity/screenRefresh.ts',
+        'lib/capacity/threshold.ts',
+        'lib/dto/capacityAlerts.ts',
+        'lib/dto/platformCapacity.ts',
+        'lib/gateway/capacityClient.ts',
+        'lib/gateway/capacityErrors.ts',
+        'lib/gateway/capacityFakeState.ts',
+        'lib/gateway/capacityProvider.ts',
+        'lib/jobs/definitions/capacityAlertEvaluation.ts',
+        'lib/mappers/capacityAlertMappers.ts',
+        'lib/mappers/platformCapacityMappers.ts',
+        'lib/monitoring/capacityAlertJobAlert.ts',
+        'lib/monitoring/capacityLimitAlert.ts',
+        'lib/repositories/capacityAlertSettingRepository.ts',
+        'lib/repositories/capacityRaisedAlertRepository.ts',
+        'lib/services/capacityAlertEvaluationService.ts',
+        'lib/services/capacityAlertJobService.ts',
+        'lib/services/capacityAlertStateService.ts',
+        'lib/services/platformCapacityService.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -3472,6 +3553,157 @@ export default defineConfig({
       // fails SILENTLY when it matches nothing — see the route-group note on
       // `include`. Write a route-group path as `app/**/…`.
       thresholds: {
+        // Story MOTIR-9539 · MOTIR-9615 — the provider-capacity modules, measured above.
+        'app/**/admin/capacity/_components/AlertShareCard.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/admin/capacity/_components/CapacityEntryCard.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/admin/capacity/_components/CapacityErrorPanel.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/admin/capacity/_components/CapacityLimitRow.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/admin/capacity/_components/CapacityScreen.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/admin/capacity/_components/CapacitySkeleton.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/admin/capacity/_components/EditCapacityLimitsDialog.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/admin/capacity/_components/capacityDisplay.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/admin/capacity/page.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/capacity/alertKeys.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/capacity/limitEditValidation.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/capacity/screenRefresh.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/capacity/threshold.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/dto/capacityAlerts.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/dto/platformCapacity.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/gateway/capacityErrors.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/gateway/capacityProvider.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/jobs/definitions/capacityAlertEvaluation.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/mappers/platformCapacityMappers.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/monitoring/capacityAlertJobAlert.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/repositories/capacityAlertSettingRepository.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/repositories/capacityRaisedAlertRepository.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/capacityAlertEvaluationService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/capacityAlertJobService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/capacityAlertStateService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
         // Story MOTIR-9362 · MOTIR-9464 — the pool-growth modules, measured above.
         'lib/ciFleet/poolGrowthPolicy.ts': {
           lines: 90,
@@ -3931,6 +4163,49 @@ export default defineConfig({
           statements: 90,
         },
         'lib/mcp/tools/workItemContinue.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // Story MOTIR-9491 · MOTIR-9639 — page search on `/pages`; measured above, pinned at the floor.
+        'app/api/pages/search/route.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/pages/search/pageSearchClient.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/pages/search/usePageSearch.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/pages/_components/PagesSearch.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/pages/_components/PageSearchResults.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/pages/_components/PageSearchHitRow.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/pages/_components/snippetEmphasis.ts': {
           lines: 90,
           functions: 90,
           branches: 90,
@@ -4408,6 +4683,30 @@ export default defineConfig({
           statements: 90,
         },
         'app/api/v1/pages/\\[pageId\\]/placement/route.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/api/v1/pages/\\[pageId\\]/archive/route.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/api/v1/pages/\\[pageId\\]/restore/route.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/api/v1/pages/\\[pageId\\]/work-items/route.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/api/v1/pages/\\[pageId\\]/work-items/\\[workItemId\\]/route.ts': {
           lines: 90,
           functions: 90,
           branches: 90,

@@ -1,6 +1,7 @@
 import * as Sentry from '@sentry/nextjs';
 import type {
   GithubOrgHeadroomExceededError,
+  HostAccountRefusedError,
   PoolGrowthRefusedError,
   QuotaRequestDeniedError,
   QuotaRequestSlowError,
@@ -16,7 +17,9 @@ export type FleetHeadroomAlert =
   // quota request for a slow or refused raise.
   | PoolGrowthRefusedError
   | QuotaRequestSlowError
-  | QuotaRequestDeniedError;
+  | QuotaRequestDeniedError
+  // The Host account reconcile's (MOTIR-9582): one issue per (organisation, slot).
+  | HostAccountRefusedError;
 
 /**
  * Tell the platform admin a fleet account, GitHub org or fleet kind is near its
@@ -41,7 +44,7 @@ export function alertFleetShardHeadroom(error: FleetHeadroomAlert): void {
 }
 
 function describe(error: FleetHeadroomAlert): {
-  subjectTag: 'fleet_shard' | 'github_org' | 'fleet_kind' | 'fleet_quota_request';
+  subjectTag: 'fleet_shard' | 'github_org' | 'fleet_kind' | 'fleet_quota_request' | 'host_account';
   subject: string;
   limit: string;
 } {
@@ -68,6 +71,14 @@ function describe(error: FleetHeadroomAlert): {
         subjectTag: 'fleet_quota_request',
         subject: e.requestId,
         limit: 'quota_raise_refused',
+      };
+    }
+    case 'HostAccountRefusedError': {
+      const e = error as HostAccountRefusedError;
+      return {
+        subjectTag: 'host_account',
+        subject: `${e.organizationId}:${e.slot}`,
+        limit: 'host_account_refused',
       };
     }
     default: {

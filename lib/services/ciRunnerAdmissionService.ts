@@ -8,10 +8,7 @@ import {
 import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
 import { resolveAdmissionCoverage } from '@/lib/ciMetering/allowance';
 import { fleetKillSwitchEngaged } from '@/lib/ciFleet/limits';
-import {
-  fleetShardAdmissionService,
-  SHARD_CAPACITY_DETAIL,
-} from '@/lib/services/fleetShardAdmissionService';
+import { fleetShardAdmissionService } from '@/lib/services/fleetShardAdmissionService';
 import {
   ciBurstDetail,
   fleetCeilingService,
@@ -239,7 +236,8 @@ export const ciRunnerAdmissionService = {
           return {
             outcome: 'deferred' as const,
             reason: 'shard_capacity' as const,
-            detail: SHARD_CAPACITY_DETAIL,
+            // The org's own account's words when that is what is full (MOTIR-9586).
+            detail: placement.detail,
           };
         }
 

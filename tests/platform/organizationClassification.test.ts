@@ -141,7 +141,13 @@ describe('the `organization` platform-staff policy arms (MOTIR-4565)', () => {
     // anyone and written solely from this tier (`20261007100000_idea_store`);
     // the three `*_translation` tables hold the same content per locale
     // (MOTIR-7773, `20261009200000_idea_translations`) under the same posture.
+    // `capacity_alert_setting` and `capacity_raised_alert` are MOTIR-9609's
+    // provider-capacity alert state (`20261025230000_capacity_alert_state`):
+    // platform-only, written by the alert job under `app.system_admin`, the
+    // share set and both read from this tier.
     expect(rows.map((r) => r.tablename)).toEqual([
+      'capacity_alert_setting',
+      'capacity_raised_alert',
       'enterprise_request',
       'idea',
       'idea_evidence',

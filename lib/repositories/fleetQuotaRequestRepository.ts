@@ -58,6 +58,20 @@ export const fleetQuotaRequestRepository = {
     });
   },
 
+  /** The largest granted value among every quota request of one AWS ACCOUNT —
+   *  across all its rows, so the merged account's two rows read one figure
+   *  (MOTIR-9586). Null while none reads a granted value. */
+  async maxGrantedForAwsAccountInTx(
+    awsAccountId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number | null> {
+    const { _max } = await tx.fleetQuotaRequest.aggregate({
+      _max: { grantedValue: true },
+      where: { shard: { awsAccountId } },
+    });
+    return _max.grantedValue;
+  },
+
   /** Every request of one account, open or closed — newest first. */
   async listByShard(shardId: string, tx: Prisma.TransactionClient): Promise<FleetQuotaRequest[]> {
     return tx.fleetQuotaRequest.findMany({
@@ -101,8 +115,25 @@ export const fleetQuotaRequestRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<Array<FleetQuotaRequest & { shard: { name: string } }>> {
     return tx.fleetQuotaRequest.findMany({
-      where: { fleetKind, OR: [{ closedAt: null }, { closedAt: { gte: closedSince } }] },
+      where: {
+        fleetKind,
+        // A Host org's own account is in no shared pool (MOTIR-9588).
+        shard: { role: { not: 'org_owned' } },
+        OR: [{ closedAt: null }, { closedAt: { gte: closedSince } }],
+      },
       include: { shard: { select: { name: true } } },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    });
+  },
+
+  /** Every raise filed against any of these accounts, newest first — an own AWS
+   *  account's requests across both rows of the merged pair (MOTIR-9588). */
+  async listByShardIdsInTx(
+    shardIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<FleetQuotaRequest[]> {
+    return tx.fleetQuotaRequest.findMany({
+      where: { shardId: { in: [...shardIds] } },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
   },

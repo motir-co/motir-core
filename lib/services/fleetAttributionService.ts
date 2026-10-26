@@ -73,6 +73,15 @@ import { alertFleetAttribution } from '@/lib/monitoring/fleetAttributionAlert';
 // admission's job and the zero-stop's; two killers for one reason would race.
 // `org_stopped` is read off the record the stop already wrote — a CI intent
 // settled `credits_exhausted` or `admin_stop` — never re-derived here.
+//
+// A HOST ORGANISATION'S OWN ACCOUNT (MOTIR-9584) is walked like any other, with
+// one rule more: everything on it belongs to its OWNER — taken from the account
+// row it was listed in, never from machine metadata. A machine no record names is
+// killed on the owner's behalf (the kill row carries the owner), and a record of
+// ANOTHER organisation never attributes a machine there, since no other org's job
+// may run on an own account: it is killed past the grace as `foreign_org`, the
+// alert naming both. The merged account (indexer + hoster, two rows, one AWS
+// account) is listed and judged ONCE per pass.
 
 /** How long a machine may exist before its record names it — or run on after its
  *  record ended — before it is killed (§5: three times the longest legitimate
@@ -124,7 +133,7 @@ export const HOSTER_VOLUME_KILL_NAME = 'ebs-volume';
 
 /** What the matcher concluded about one machine. */
 type Verdict =
-  | { kind: 'attributed'; workload: FleetWorkloadKind }
+  | { kind: 'attributed'; workload: FleetWorkloadKind; recordRef: string; organizationId: string }
   | {
       kind: 'kill';
       reason: AttributionKillReason;
@@ -134,6 +143,9 @@ type Verdict =
       workload: FleetWorkloadKind | null;
       recordRef: string | null;
       organizationId: string | null;
+      /** The organisation the RECORD names, when it is not the own account's
+       *  owner (`foreign_org`, MOTIR-9584); null otherwise. */
+      recordOrganizationId: string | null;
       action: 'destroyed' | 'stopped';
       /** The record still has a container to settle — tear it down through the
        *  port so the usage row is written and the run or intent ends. */
@@ -230,23 +242,55 @@ export interface AccountInventory {
   /** An agent-hoster account (MOTIR-9476): its machines are judged against the
    *  instance records BY ACCOUNT, and its disks are swept after them. */
   fleetKind?: FleetWorkloadKind;
+  /** The Host organisation an `org_owned` account belongs to (MOTIR-9584) — every
+   *  machine on it is that organisation's; null or absent for a shared account. */
+  ownerOrganizationId?: string | null;
 }
 
 /** Every account that can still have machines billing — all but `provisioning`,
  *  except a hoster account, which can hold disks in any state (MOTIR-9476). The
- *  agent-hoster switch is not read here: a pass covers every account it lists. */
+ *  agent-hoster switch is not read here: a pass covers every account it lists.
+ *  A Host organisation's own accounts are named explicitly (`listShards` defaults
+ *  to `primary`), and stay walked after the org leaves Host (MOTIR-9584). */
 async function liveAccounts(): Promise<FleetShardDTO[]> {
-  const accounts = await fleetShardService.listShards();
+  const accounts = [
+    ...(await fleetShardService.listShards({ role: 'primary' })),
+    ...(await fleetShardService.listShards({ role: 'org_owned' })),
+  ];
   return accounts.filter(
     (account) => account.state !== 'provisioning' || account.fleetKind === AGENT_INSTANCE,
   );
 }
 
-/** The listings of the accounts whose provider the Fly walk does not cover. An
- *  account whose adapter cannot be built is alerted and skipped. */
+/** Where an account's machines live: the AWS account itself, which two rows may
+ *  name (the Host merged account, MOTIR-9584), else the row. `shardLocationKey`
+ *  is per row for AWS, so it would list the merged account twice. */
+function listingPlace(account: FleetShardDTO): string {
+  return account.provider === 'aws' && account.aws
+    ? `aws:${account.aws.accountId}`
+    : `row:${account.id}`;
+}
+
+/** One row per place. Of two rows naming one AWS account the hoster row is kept:
+ *  its instances are found by that row's id, and its disks are swept through it;
+ *  an indexer's machines are matched by their checkpoint, which names no row. */
+function onePerPlace(accounts: readonly FleetShardDTO[]): FleetShardDTO[] {
+  const kept = new Map<string, FleetShardDTO>();
+  for (const account of accounts) {
+    const place = listingPlace(account);
+    const prior = kept.get(place);
+    if (!prior || (prior.fleetKind !== AGENT_INSTANCE && account.fleetKind === AGENT_INSTANCE)) {
+      kept.set(place, account);
+    }
+  }
+  return [...kept.values()];
+}
+
+/** The listings of the accounts whose provider the Fly walk does not cover, one
+ *  per AWS account. An account whose adapter cannot be built is alerted and skipped. */
 function accountInventories(accounts: readonly FleetShardDTO[]): AccountInventory[] {
   const out: AccountInventory[] = [];
-  for (const account of accounts) {
+  for (const account of onePerPlace(accounts)) {
     try {
       const inventory = inventoryForShard(account);
       if (inventory) {
@@ -255,6 +299,7 @@ function accountInventories(accounts: readonly FleetShardDTO[]): AccountInventor
           name: account.name,
           inventory,
           fleetKind: account.fleetKind,
+          ownerOrganizationId: account.ownerOrganizationId,
         });
       }
     } catch (err) {
@@ -280,9 +325,36 @@ function kill(
     workload: rest.workload ?? null,
     recordRef: rest.recordRef ?? null,
     organizationId: rest.organizationId ?? null,
+    recordOrganizationId: rest.recordOrganizationId ?? null,
     action: rest.action ?? 'destroyed',
     settle: rest.settle ?? false,
   };
+}
+
+/**
+ * The own-account rule (MOTIR-9584) over a record verdict. The owner's own live
+ * record attributes, as anywhere; the owner's ended record is killed as it would
+ * be anywhere. A machine no record names is killed ON THE OWNER'S BEHALF. A record
+ * of any OTHER organisation — live or ended — is `foreign_org`: aged from the
+ * machine's own creation (no foreign record ever legitimised it), destroyed, and
+ * its container settled through the port as the record's own end would be.
+ */
+function onOwnAccount(verdict: Verdict, owner: string): Verdict {
+  const recordOrg = verdict.organizationId;
+  if (recordOrg === owner) return verdict;
+  if (verdict.kind === 'kill' && recordOrg === null) {
+    return { ...verdict, organizationId: owner };
+  }
+  return kill('foreign_org', null, {
+    workload: verdict.workload,
+    recordRef: verdict.recordRef,
+    organizationId: owner,
+    recordOrganizationId: recordOrg,
+    settle:
+      verdict.kind === 'kill'
+        ? verdict.settle
+        : verdict.workload === CI_RUNNER || verdict.workload === HOSTED_AGENT,
+  });
 }
 
 export const fleetAttributionService = {
@@ -344,6 +416,7 @@ export const fleetAttributionService = {
       sourceApps: readonly string[],
       shardId: string | null | undefined,
       hosterShardId?: string,
+      ownerOrganizationId?: string | null,
     ): Promise<void> => {
       for (const app of sourceApps) {
         let machines: InventoryMachine[];
@@ -371,7 +444,13 @@ export const fleetAttributionService = {
 
           let verdict: Verdict;
           try {
-            verdict = await this.judge(source.provider, machine, now(), hosterShardId);
+            verdict = await this.judge(
+              source.provider,
+              machine,
+              now(),
+              hosterShardId,
+              ownerOrganizationId,
+            );
           } catch (err) {
             // Could not read the records: never a reason to destroy.
             result.failures += 1;
@@ -396,7 +475,14 @@ export const fleetAttributionService = {
           }
 
           const dated = { ...machine, createdAt: machine.createdAt };
-          const done = await this.killMachine(source, dated, verdict, now, shardId);
+          const done = await this.killMachine(
+            source,
+            dated,
+            verdict,
+            now,
+            shardId,
+            ownerOrganizationId,
+          );
           if (done) {
             result.killed.push({
               app,
@@ -432,7 +518,13 @@ export const fleetAttributionService = {
       const disks = hoster
         ? await this.listHosterVolumes(account, accountApps, retryDelayMs, result)
         : [];
-      await walk(account.inventory, accountApps, account.shardId, hoster);
+      await walk(
+        account.inventory,
+        accountApps,
+        account.shardId,
+        hoster,
+        account.ownerOrganizationId,
+      );
       if (hoster) await this.sweepHosterVolumes(account, disks, hoster, now, result);
     }
     result.orphanedVolumesDestroyed += await sweepOrphanedVolumes(now, accounts);
@@ -564,6 +656,19 @@ export const fleetAttributionService = {
     /** The agent-hoster account the machine was listed in (MOTIR-9476): its
      *  instance is found by machine id AND account, never by the Fly app. */
     hosterShardId?: string,
+    /** The owner of the `org_owned` account the machine was listed in (MOTIR-9584). */
+    ownerOrganizationId?: string | null,
+  ): Promise<Verdict> {
+    const verdict = await this.judgeRecords(provider, machine, now, hosterShardId);
+    return ownerOrganizationId ? onOwnAccount(verdict, ownerOrganizationId) : verdict;
+  },
+
+  /** The record match alone, wherever the machine was listed. */
+  async judgeRecords(
+    provider: string,
+    machine: InventoryMachine,
+    now: Date,
+    hosterShardId?: string,
   ): Promise<Verdict> {
     // ── CI runner: an intent names it as its container ──────────────────────
     const intent = await withSystemContext((tx) =>
@@ -575,7 +680,12 @@ export const fleetAttributionService = {
         ? new Date(intent.bootedAt.getTime() + CI_INTENT_END_AFTER_BOOT_MS)
         : null;
       if (inFlight && (!end || now.getTime() < end.getTime())) {
-        return { kind: 'attributed', workload: CI_RUNNER };
+        return {
+          kind: 'attributed',
+          workload: CI_RUNNER,
+          recordRef: intent.id,
+          organizationId: intent.organizationId,
+        };
       }
       const stopped = intent.teardownReason !== null && ORG_STOP_REASONS.has(intent.teardownReason);
       return kill(
@@ -617,7 +727,7 @@ export const fleetAttributionService = {
         ? await withSystemContext((tx) => fleetInFlightSlotRepository.findByRef(workload, ref, tx))
         : null;
       if (slot && slot.expiresAt.getTime() > now.getTime()) {
-        return { kind: 'attributed', workload };
+        return { kind: 'attributed', workload, recordRef, organizationId: usage.organizationId };
       }
       // The slot expired (its backstop) or is gone: the record has ended. With no
       // slot left to date it by, the checkpoint's own creation is the floor.
@@ -650,7 +760,12 @@ export const fleetAttributionService = {
       if (resting && running) {
         return kill('record_ended', instance.stateChangedAt, { ...common, action: 'stopped' });
       }
-      return { kind: 'attributed', workload: AGENT_INSTANCE };
+      return {
+        kind: 'attributed',
+        workload: AGENT_INSTANCE,
+        recordRef: instance.id,
+        organizationId: instance.organizationId,
+      };
     }
 
     return kill('no_record', null);
@@ -669,6 +784,8 @@ export const fleetAttributionService = {
     /** The account the machine was LISTED in; absent = the organisation walk,
      *  where the intent's own recorded account decides (MOTIR-8964). */
     shardId?: string | null,
+    /** That account's owner, for the alert — an own account's (MOTIR-9584). */
+    ownerOrganizationId?: string | null,
   ): Promise<boolean> {
     const decidedAt = now();
     const ageMs = decidedAt.getTime() - machine.createdAt.getTime();
@@ -743,6 +860,8 @@ export const fleetAttributionService = {
         verdict.reason,
         verdict.action,
         inventory.provider,
+        ownerOrganizationId ?? null,
+        verdict.recordOrganizationId,
       ),
     );
     return true;

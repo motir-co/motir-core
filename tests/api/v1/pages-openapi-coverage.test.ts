@@ -67,7 +67,7 @@ describe('page routes and page operations agree', () => {
 
   it('FAILS on a page route method no operation declares', () => {
     const sources = pageRouteSources();
-    const file = syntheticRouteFile('pages', '[pageId]', 'archive');
+    const file = syntheticRouteFile('pages', '[pageId]', 'duplicate');
     sources.set(
       file,
       "export const POST = withV1Route({ permission: 'page:edit' }, async () => null);",
@@ -75,7 +75,7 @@ describe('page routes and page operations agree', () => {
     expect(findSpecDrift(shippedRouteMethods(sources), PAGE_OPERATIONS)).toEqual([
       expect.objectContaining({
         rule: 'route-without-operation',
-        subject: 'POST /api/v1/pages/{pageId}/archive',
+        subject: 'POST /api/v1/pages/{pageId}/duplicate',
       }),
     ]);
   });

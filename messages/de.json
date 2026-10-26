@@ -9891,7 +9891,8 @@
       "navPlanningLessons": "Planungslektionen",
       "navIdeas": "Ideen",
       "navRunModels": "Modelle für gehostete Läufe",
-      "navFleetSettings": "Flotteneinstellungen"
+      "navFleetSettings": "Flotteneinstellungen",
+      "navCapacity": "Anbieterkapazität"
     },
     "nav": {
       "overview": "Übersicht",
@@ -10090,6 +10091,11 @@
             },
             "pool": {
               "grow": "Flottenpool erweitert"
+            },
+            "capacity_request": {
+              "list": "Kapazitätsanfragen der Flotte aufgelistet",
+              "link": "Kapazitätsanfrage mit einer Kontingenterhöhung verknüpft",
+              "close": "Kapazitätsanfrage der Flotte geschlossen"
             }
           },
           "idea": {
@@ -10100,6 +10106,14 @@
             "tag_add": "Ideen-Tag hinzugefügt",
             "tag_translate": "Ideen-Tag übersetzt",
             "research_run": "Recherchelauf für Ideen erfasst"
+          },
+          "capacity": {
+            "alert_share": {
+              "set": "Kapazitäts-Warnanteil geändert"
+            },
+            "limits": {
+              "edit": "Kapazitätslimits eines Anbietermodells bearbeitet"
+            }
           }
         }
       }
@@ -12263,6 +12277,135 @@
           "body": "Wo neue Agenten erstellt werden, konnte nicht gelesen werden, daher wird kein Zustand angezeigt und kein Schalter angeboten. Dies ist ein Lesefehler – nichts hat sich geändert, und kein Wert wird geraten.",
           "retry": "Erneut versuchen"
         }
+      }
+    },
+    "capacity": {
+      "nav": "Anbieterkapazität",
+      "title": "Anbieterkapazität",
+      "subtitle": "Wie nah jedes Anbietermodell an seinen veröffentlichten Limits ist, für Planung und Agentenläufe zusammen. Bearbeiten Sie die Limits eines Modells, wenn sich seine Anbieterstufe ändert.",
+      "loading": "Kapazität wird geladen",
+      "percent": "{value} %",
+      "fresh": {
+        "readAt": "Gelesen um {time} UTC",
+        "every": "wird alle {seconds} s aktualisiert",
+        "refresh": "Aktualisieren",
+        "failed": "Aktualisierung fehlgeschlagen"
+      },
+      "scope": {
+        "instance": "Die Zahlen stammen von einer einzelnen Gateway-Instanz und können unvollständig sein."
+      },
+      "unavailable": {
+        "notice": "Live-Zahlen sind nicht verfügbar: Das Gateway konnte seine Zähler nicht lesen. Limits, Stufenhinweise und Planungsanteile werden wie gespeichert angezeigt."
+      },
+      "slow": {
+        "notice": "Die Live-Zahlen für dieses Modell wurden nicht rechtzeitig gelesen. Alle anderen Modelle sind live."
+      },
+      "alerts": {
+        "title": "{count, plural, one {1 Limit liegt über dem Warnanteil} other {# Limits liegen über dem Warnanteil}}",
+        "line": "{provider} · {model} · {limit} — {share} %",
+        "since": "gemeldet seit {time} UTC"
+      },
+      "alertShare": {
+        "title": "Warnanteil",
+        "hsub": "Ein Anteil für jedes Limit jedes Modells",
+        "label": "Warnen, wenn ein beliebiges Limit folgenden Anteil erreicht",
+        "note": "Wird einmal pro Minute geprüft und bei jedem Laden dieser Seite.",
+        "saved": "Gespeichert. Die nächste Prüfung verwendet {share} %.",
+        "range": "Geben Sie eine ganze Zahl von 1 bis 100 ein.",
+        "failed": "Der Warnanteil konnte nicht gespeichert werden. Es wurde nichts geändert; versuchen Sie es erneut.",
+        "edit": "Bearbeiten",
+        "isDefault": "Standard",
+        "unchanged": "Das ist bereits der Warnanteil. Es wurde nichts geändert.",
+        "notPermitted": "Ihre Rolle darf den Warnanteil nicht ändern, daher wurde nichts gespeichert."
+      },
+      "entry": {
+        "tierNote": "Stufenhinweis: {note}",
+        "noTierNote": "Kein Stufenhinweis",
+        "planningShare": "Planungsanteil {share} %",
+        "unknownNote": "Unbekannt: {note}",
+        "edit": "Limits bearbeiten"
+      },
+      "col": {
+        "limit": "Limit",
+        "usage": "Nutzung / Limit",
+        "share": "Genutzter Anteil",
+        "state": "Zustand"
+      },
+      "lanes": "Planung {planning} · Agent {agent}",
+      "unit": {
+        "max_concurrency": "Parallelität",
+        "rpm": "Anfragen / Min.",
+        "input_tpm": "Eingabe-Tokens / Min.",
+        "output_tpm": "Ausgabe-Tokens / Min.",
+        "tpm": "Tokens / Min.",
+        "tpd": "Tokens / Tag"
+      },
+      "state": {
+        "normal": "Normal",
+        "near": "Nahe am Limit",
+        "over": "Über dem Warnanteil",
+        "unavailable": "Nicht verfügbar",
+        "unknown": "Limit unbekannt",
+        "na": "Nicht zutreffend",
+        "unreported": "Nutzung nicht gemeldet"
+      },
+      "limitZero": "Limit 0",
+      "limitUnknown": "Limit nicht bekannt",
+      "r429": {
+        "label": "429-Antworten",
+        "minute": "Diese Minute",
+        "day": "Heute (UTC)",
+        "note": "Kein Limit — nur gezählt"
+      },
+      "fold": "Einheiten, die dieser Anbieter nicht begrenzt ({count})",
+      "provider": {
+        "claude": "Claude",
+        "deepseek": "DeepSeek",
+        "qwen": "Qwen"
+      },
+      "error": {
+        "unreachable": {
+          "title": "Die Kapazität konnte nicht gelesen werden",
+          "body": "Das Gateway hat nicht geantwortet oder konnte seine Limit-Tabelle nicht lesen. Bis ein Lesevorgang gelingt, wird nichts angezeigt."
+        },
+        "auth": {
+          "title": "Die Gateway-Zugangsdaten werden nicht akzeptiert",
+          "missing": "Auf dem Motir-Server sind keine Gateway-Zugangsdaten konfiguriert. Bis sie festgelegt sind, kann keine Nutzung gelesen werden.",
+          "invalid": "Das Gateway erkennt die Server-Zugangsdaten von Motir nicht. Bis sie ersetzt sind, kann keine Nutzung gelesen werden.",
+          "forbidden": "Die Gateway-Zugangsdaten gehören einem Benutzer, der kein Gateway-Administrator ist. Bis sie ersetzt sind, kann keine Nutzung gelesen werden.",
+          "body": "Auf dem Motir-Server sind keine Gateway-Zugangsdaten konfiguriert, oder das Gateway akzeptiert sie nicht. Bis das behoben ist, kann keine Nutzung gelesen werden."
+        },
+        "retry": "Erneut versuchen"
+      },
+      "empty": {
+        "title": "Keine Anbietermodelle konfiguriert",
+        "body": "Die Limit-Tabelle des Gateways hat keine Zeilen, daher gibt es nichts anzuzeigen. Modelle werden im Gateway hinzugefügt, nicht hier."
+      },
+      "edit": {
+        "title": "Limits bearbeiten · {model}",
+        "intro": "Nur die Werte, die Sie ändern, werden gesendet. Ein als „Unbekannt“ markiertes Limit wird als nicht bekannt gespeichert, nie als 0.",
+        "unknown": "Unbekannt",
+        "planningShare": "Planungsanteil %",
+        "tierNote": "Stufenhinweis",
+        "count": "{count} / 1000",
+        "save": "Speichern",
+        "saving": "Wird gespeichert…",
+        "cancel": "Abbrechen",
+        "saved": "Limits für {model} gespeichert."
+      },
+      "editError": {
+        "wholeNumber": "{limit} muss eine ganze Zahl von 0 oder mehr sein.",
+        "tooLarge": "{limit} ist größer, als das Gateway speichern kann.",
+        "planningShare": "Der Planungsanteil muss eine ganze Zahl von 0 bis 100 sein.",
+        "tierNote": "Der Stufenhinweis darf höchstens 1000 Zeichen lang sein.",
+        "invalidBody": "Das Gateway konnte diese Änderung nicht lesen. Es wurde nichts geändert.",
+        "unknownModel": "Dieses Modell ist nicht mehr in der Limit-Tabelle des Gateways. Es wurde nichts geändert; schließen und aktualisieren Sie.",
+        "unknownProvider": "Das Gateway kennt diesen Anbieter nicht. Es wurde nichts geändert.",
+        "storeError": "Das Gateway konnte die Änderung nicht speichern. Es wurde nichts geändert; versuchen Sie es erneut.",
+        "auth": "Die Gateway-Zugangsdaten werden nicht akzeptiert, daher wurde nichts gespeichert.",
+        "unreachable": "Das Gateway hat nicht geantwortet. Es wurde nichts gespeichert; versuchen Sie es erneut.",
+        "notPermitted": "Ihre Rolle darf keine Limits bearbeiten, daher wurde nichts gespeichert.",
+        "failed": "Die Limits konnten nicht gespeichert werden. Es wurde nichts geändert; versuchen Sie es erneut."
       }
     }
   },
@@ -15117,6 +15260,23 @@
       "refused": "Sie können die Verknüpfungen dieser Seite nicht ändern.",
       "gone": "Dieses Arbeitselement existiert nicht mehr.",
       "unlinkFailed": "Die Verknüpfung mit dem Arbeitselement konnte nicht gelöst werden. Versuchen Sie es erneut."
+    },
+    "search": {
+      "label": "Seiten durchsuchen",
+      "placeholder": "Seiten nach einem Wort oder nach Bedeutung durchsuchen",
+      "clear": "Suche löschen",
+      "pending": "Suche läuft…",
+      "emptyHint": "Gib ein Wort oder eine Wortgruppe ein, um Titel und Seitentext zu durchsuchen.",
+      "tooLong": "Suchen sind auf {limit} Zeichen begrenzt – kürze sie, um zu suchen.",
+      "mode": {
+        "fullText": "Nur Wortübereinstimmungen – die Bedeutungssuche lief diesmal nicht.",
+        "notIndexed": "Nur Wortübereinstimmungen – die Seiten sind noch nicht für die Bedeutungssuche indexiert."
+      },
+      "noResults": "Keine Seiten passen zu „{query}“.",
+      "failed": "Die Seiten konnten nicht durchsucht werden.",
+      "results": "Suchergebnisse",
+      "loading": "Wird geladen…",
+      "updated": "Suchergebnisse aktualisiert."
     }
   },
   "sharpen": {

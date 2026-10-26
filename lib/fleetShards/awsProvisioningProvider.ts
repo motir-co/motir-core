@@ -53,6 +53,14 @@ function runnerRoleMode(ctx: ProviderStepContext): boolean {
   return ctx.options[AWS_RUNTIME_CREDENTIAL_OPTION] === 'role';
 }
 
+/**
+ * The INTERNAL option a Host organisation's own account is added with (MOTIR-9584):
+ * `true` lets its runner role terminate an UNTAGGED instance anywhere in the
+ * account, because the attribution pass reaps every machine on an account that
+ * belongs to one organisation — not only the ones carrying the shard tag.
+ */
+export const AWS_REAP_UNTAGGED_OPTION = 'reap-untagged';
+
 /** Where a fleet account boots when `--region` is not given. */
 export const AWS_DEFAULT_REGION = 'us-east-1';
 
@@ -228,7 +236,11 @@ export function createAwsShardProvisioningProvider(
         // orchestrator assumes it (MOTIR-9460). Confirmed by assuming it once.
         const { created } = await api().ensureRunnerRole(
           credentials,
-          policy({ shardTag: ctx.name, regionId: region }),
+          policy({
+            shardTag: ctx.name,
+            regionId: region,
+            reapUntagged: ctx.options[AWS_REAP_UNTAGGED_OPTION] === 'true',
+          }),
         );
         const accountId = accountIdOf(ctx);
         if (!accountId) return { created, confirmed: false };

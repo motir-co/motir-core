@@ -9891,7 +9891,8 @@
       "navPlanningLessons": "Lezioni di pianificazione",
       "navIdeas": "Idee",
       "navRunModels": "Modelli delle esecuzioni ospitate",
-      "navFleetSettings": "Impostazioni della flotta"
+      "navFleetSettings": "Impostazioni della flotta",
+      "navCapacity": "Capacità dei fornitori"
     },
     "nav": {
       "overview": "Panoramica",
@@ -10090,6 +10091,11 @@
             },
             "pool": {
               "grow": "Ampliato un pool della flotta"
+            },
+            "capacity_request": {
+              "list": "Elencate le richieste di capacità della flotta",
+              "link": "Collegata una richiesta di capacità a un aumento di quota",
+              "close": "Chiusa una richiesta di capacità della flotta"
             }
           },
           "idea": {
@@ -10100,6 +10106,14 @@
             "tag_add": "Aggiunto un tag a un’idea",
             "tag_translate": "Tradotto un tag di un’idea",
             "research_run": "Registrata una ricerca di idee"
+          },
+          "capacity": {
+            "alert_share": {
+              "set": "Ha modificato la quota di avviso della capacità"
+            },
+            "limits": {
+              "edit": "Ha modificato i limiti di capacità di un modello di fornitore"
+            }
           }
         }
       }
@@ -12263,6 +12277,135 @@
           "body": "Non è stato possibile leggere dove vengono creati i nuovi agenti, quindi non viene mostrato alcuno stato né offerto alcun interruttore. È un errore di lettura: non è cambiato nulla e nessun valore viene indovinato.",
           "retry": "Riprova"
         }
+      }
+    },
+    "capacity": {
+      "nav": "Capacità dei fornitori",
+      "title": "Capacità dei fornitori",
+      "subtitle": "Quanto ogni modello di fornitore è vicino ai suoi limiti pubblicati, per pianificazione ed esecuzioni degli agenti insieme. Modifica i limiti di un modello quando cambia il suo livello presso il fornitore.",
+      "loading": "Caricamento della capacità",
+      "percent": "{value} %",
+      "fresh": {
+        "readAt": "Letto alle {time} UTC",
+        "every": "si aggiorna ogni {seconds} s",
+        "refresh": "Aggiorna",
+        "failed": "Impossibile aggiornare"
+      },
+      "scope": {
+        "instance": "I numeri provengono da una sola istanza del gateway e possono essere parziali."
+      },
+      "unavailable": {
+        "notice": "I numeri in tempo reale non sono disponibili: il gateway non è riuscito a leggere i suoi contatori. Limiti, note di livello e quote di pianificazione sono mostrati come salvati."
+      },
+      "slow": {
+        "notice": "I numeri in tempo reale di questo modello non sono stati letti in tempo. Tutti gli altri modelli sono in tempo reale."
+      },
+      "alerts": {
+        "title": "{count, plural, one {1 limite supera la quota di avviso} other {# limiti superano la quota di avviso}}",
+        "line": "{provider} · {model} · {limit} — {share} %",
+        "since": "attivo dalle {time} UTC"
+      },
+      "alertShare": {
+        "title": "Quota di avviso",
+        "hsub": "Una sola quota per ogni limite di ogni modello",
+        "label": "Avvisa quando un qualsiasi limite raggiunge",
+        "note": "Controllata una volta al minuto e ogni volta che questa pagina viene caricata.",
+        "saved": "Salvato. La prossima valutazione usa {share} %.",
+        "range": "Inserisci un numero intero da 1 a 100.",
+        "failed": "Non è stato possibile salvare la quota di avviso. Non è stato modificato nulla; riprova.",
+        "edit": "Modifica",
+        "isDefault": "predefinita",
+        "unchanged": "Questa è già la quota di avviso. Non è stato modificato nulla.",
+        "notPermitted": "Il tuo ruolo non può modificare la quota di avviso, quindi non è stato salvato nulla."
+      },
+      "entry": {
+        "tierNote": "Nota sul livello: {note}",
+        "noTierNote": "Nessuna nota sul livello",
+        "planningShare": "Quota di pianificazione {share} %",
+        "unknownNote": "Sconosciuto: {note}",
+        "edit": "Modifica limiti"
+      },
+      "col": {
+        "limit": "Limite",
+        "usage": "Utilizzo / limite",
+        "share": "Quota usata",
+        "state": "Stato"
+      },
+      "lanes": "Pianificazione {planning} · Agente {agent}",
+      "unit": {
+        "max_concurrency": "Concorrenza",
+        "rpm": "Richieste / min",
+        "input_tpm": "Token in ingresso / min",
+        "output_tpm": "Token in uscita / min",
+        "tpm": "Token / min",
+        "tpd": "Token / giorno"
+      },
+      "state": {
+        "normal": "Normale",
+        "near": "Vicino al limite",
+        "over": "Sopra la quota di avviso",
+        "unavailable": "Non disponibile",
+        "unknown": "Limite sconosciuto",
+        "na": "Non applicabile",
+        "unreported": "Utilizzo non segnalato"
+      },
+      "limitZero": "Limite 0",
+      "limitUnknown": "limite non noto",
+      "r429": {
+        "label": "Risposte 429",
+        "minute": "Questo minuto",
+        "day": "Oggi (UTC)",
+        "note": "Nessun limite — solo conteggiate"
+      },
+      "fold": "Unità che questo fornitore non limita ({count})",
+      "provider": {
+        "claude": "Claude",
+        "deepseek": "DeepSeek",
+        "qwen": "Qwen"
+      },
+      "error": {
+        "unreachable": {
+          "title": "Impossibile leggere la capacità",
+          "body": "Il gateway non ha risposto, oppure non è riuscito a leggere la sua tabella dei limiti. Non viene mostrato nulla finché una lettura non riesce."
+        },
+        "auth": {
+          "title": "La credenziale del gateway non è accettata",
+          "missing": "Il server di Motir non ha alcuna credenziale del gateway configurata. Nessun utilizzo può essere letto finché non viene impostata.",
+          "invalid": "Il gateway non riconosce la credenziale del server di Motir. Nessun utilizzo può essere letto finché non viene sostituita.",
+          "forbidden": "La credenziale del gateway appartiene a un utente che non è amministratore del gateway. Nessun utilizzo può essere letto finché non viene sostituita.",
+          "body": "Il server di Motir non ha alcuna credenziale del gateway configurata, oppure il gateway non la accetta. Nessun utilizzo può essere letto finché non viene corretto."
+        },
+        "retry": "Riprova"
+      },
+      "empty": {
+        "title": "Nessun modello di fornitore configurato",
+        "body": "La tabella dei limiti del gateway non ha righe, quindi non c’è nulla da mostrare. I modelli si aggiungono nel gateway, non qui."
+      },
+      "edit": {
+        "title": "Modifica limiti · {model}",
+        "intro": "Vengono inviati solo i valori che modifichi. Un limite segnato come Sconosciuto viene salvato come non noto, mai come 0.",
+        "unknown": "Sconosciuto",
+        "planningShare": "Quota di pianificazione %",
+        "tierNote": "Nota sul livello",
+        "count": "{count} / 1000",
+        "save": "Salva",
+        "saving": "Salvataggio…",
+        "cancel": "Annulla",
+        "saved": "Limiti salvati per {model}."
+      },
+      "editError": {
+        "wholeNumber": "{limit} deve essere un numero intero pari o superiore a 0.",
+        "tooLarge": "{limit} è più grande di quanto il gateway possa salvare.",
+        "planningShare": "La quota di pianificazione deve essere un numero intero da 0 a 100.",
+        "tierNote": "La nota sul livello può contenere al massimo 1000 caratteri.",
+        "invalidBody": "Il gateway non è riuscito a leggere questa modifica. Non è stato modificato nulla.",
+        "unknownModel": "Questo modello non è più nella tabella dei limiti del gateway. Non è stato modificato nulla; chiudi e aggiorna.",
+        "unknownProvider": "Il gateway non conosce questo fornitore. Non è stato modificato nulla.",
+        "storeError": "Il gateway non è riuscito a salvare la modifica. Non è stato modificato nulla; riprova.",
+        "auth": "La credenziale del gateway non è accettata, quindi non è stato salvato nulla.",
+        "unreachable": "Il gateway non ha risposto. Non è stato salvato nulla; riprova.",
+        "notPermitted": "Il tuo ruolo non può modificare i limiti, quindi non è stato salvato nulla.",
+        "failed": "Non è stato possibile salvare i limiti. Non è stato modificato nulla; riprova."
       }
     }
   },
@@ -15117,6 +15260,23 @@
       "refused": "Non puoi modificare i collegamenti di questa pagina.",
       "gone": "Quell’elemento di lavoro non esiste più.",
       "unlinkFailed": "Impossibile scollegare quell’elemento di lavoro. Riprova."
+    },
+    "search": {
+      "label": "Cerca pagine",
+      "placeholder": "Cerca le pagine per parola o per significato",
+      "clear": "Cancella ricerca",
+      "pending": "Ricerca in corso…",
+      "emptyHint": "Digita una parola o una frase per cercare nei titoli e nel testo delle pagine.",
+      "tooLong": "Le ricerche sono limitate a {limit} caratteri: accorciala per cercare.",
+      "mode": {
+        "fullText": "Solo corrispondenze di parole: questa volta la ricerca per significato non è stata eseguita.",
+        "notIndexed": "Solo corrispondenze di parole: le pagine non sono ancora indicizzate per la ricerca per significato."
+      },
+      "noResults": "Nessuna pagina corrisponde a «{query}».",
+      "failed": "Impossibile cercare nelle pagine.",
+      "results": "Risultati della ricerca",
+      "loading": "Caricamento…",
+      "updated": "Risultati della ricerca aggiornati."
     }
   },
   "sharpen": {

@@ -12,6 +12,7 @@ import {
   orgIndexInFlightCap,
 } from '@/lib/ciFleet/limits';
 import { wireFleetKindSwitch } from '@/lib/ciFleet/shardTargets';
+import { fleetShardRepository } from '@/lib/repositories/fleetShardRepository';
 import { fleetShardAdmissionService } from '@/lib/services/fleetShardAdmissionService';
 import {
   fleetCeilingService,
@@ -394,13 +395,28 @@ export const codeGraphIndexAdmissionService = {
         // share, and the rest is the admitted verdict's breakdown.
         const census = await fleetCeilingService.orgCensus(request.organizationId, now, tx);
         const orgIndexInFlight = census.byWorkload[CODE_GRAPH_INDEX_WORKLOAD];
-        const indexInFlight = await slots.countLiveForWorkload(CODE_GRAPH_INDEX_WORKLOAD, now, tx);
+        // A Host org's own indexer account (MOTIR-9589) is bounded by its own
+        // split (`mergedAccountSplit`, applied in step 3), not by the two shared
+        // caps below — and its containers draw nothing from the global one.
+        const ownAccount = await fleetShardAdmissionService.ownAccountTakesInTx(
+          { fleetKind: CODE_GRAPH_INDEX_WORKLOAD, organizationId: request.organizationId },
+          tx,
+        );
+        const ownIndexAccounts = (
+          await fleetShardRepository.listOrgOwned({ fleetKind: CODE_GRAPH_INDEX_WORKLOAD }, tx)
+        ).map((shard) => shard.id);
+        const indexInFlight = await slots.countLiveForWorkload(
+          CODE_GRAPH_INDEX_WORKLOAD,
+          now,
+          tx,
+          ownIndexAccounts,
+        );
 
         // ── 1 · THE PER-ORGANISATION INDEX SHARE — fairness, checked first ─────
         // Most specific reason first: "your organisation is pacing its own
         // burst" is a materially different operator answer from "indexing is
         // full", and the caller's log is the only place the difference survives.
-        if (orgIndexInFlight >= orgCap) {
+        if (!ownAccount && orgIndexInFlight >= orgCap) {
           return {
             outcome: 'deferred' as const,
             reason: 'org_index_cap' as const,
@@ -409,7 +425,7 @@ export const codeGraphIndexAdmissionService = {
         }
 
         // ── 2 · THE GLOBAL INDEX CAP — throughput, across every tenant ────────
-        if (indexInFlight >= globalCap) {
+        if (!ownAccount && indexInFlight >= globalCap) {
           return {
             outcome: 'deferred' as const,
             reason: 'index_cap' as const,
@@ -435,7 +451,8 @@ export const codeGraphIndexAdmissionService = {
           return {
             outcome: 'deferred' as const,
             reason: 'pool_full' as const,
-            detail: INDEX_POOL_FULL_DETAIL,
+            // A Host org's own indexer account is full (MOTIR-9586): its words.
+            detail: placement.own ? placement.detail : INDEX_POOL_FULL_DETAIL,
           };
         }
 

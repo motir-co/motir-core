@@ -454,11 +454,29 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ accounts: number; alerted: number; failures: number; kinds: number; moves: { [key: string]: { capacity_refused?: number | undefined; provider_unavailable?: number | undefined } }; orgs: number; readings: Array<{ capacity: number; fraction: number; limit: string; subject: { fleetKind: string } | { githubOrg: string } | { shardId: string }; used: number }> }',
   },
+  // Story MOTIR-9539 · MOTIR-9612 — the capacity alert pass.
+  'capacity-alert-evaluation': {
+    file: 'lib/jobs/definitions/capacityAlertEvaluation.ts',
+    shape:
+      '{ outcome: "evaluated"; overShareCount: number; raisedCount: number; readAt: string } | { outcome: "failed" } | { outcome: "unavailable"; raisedCount: number; reason: string }',
+  },
   // Story MOTIR-9362 · MOTIR-9462 — the pool-growth pass.
   'fleet-pool-growth': {
     file: 'lib/jobs/definitions/fleetPoolGrowth.ts',
     shape:
       '{ failures: number; kinds: { agent_instance?: "backing_off" | "below_threshold" | "failed" | "grown" | "in_flight" | "not_aws" | "on_fly" | "refused" | undefined; ci_runner?: "backing_off" | "below_threshold" | "failed" | "grown" | "in_flight" | "not_aws" | "on_fly" | "refused" | undefined; code_graph_index?: "backing_off" | "below_threshold" | "failed" | "grown" | "in_flight" | "not_aws" | "on_fly" | "refused" | undefined; hosted_agent?: "backing_off" | "below_threshold" | "failed" | "grown" | "in_flight" | "not_aws" | "on_fly" | "refused" | undefined }; ran: boolean; requestAlerts: number }',
+  },
+  // Story MOTIR-9365 · MOTIR-9582 — the Host account reconcile.
+  'host-account-reconcile': {
+    file: 'lib/jobs/definitions/hostAccountReconcile.ts',
+    shape:
+      '{ failures: number; organizations: Array<{ host: boolean; organizationId: string; slots: { agent_runner?: "already" | "backing_off" | "created" | "failed" | "no_primary" | "raise_failed" | "refused" | undefined; ci_runner?: "already" | "backing_off" | "created" | "failed" | "no_primary" | "raise_failed" | "refused" | undefined; merged?: "already" | "backing_off" | "created" | "failed" | "no_primary" | "raise_failed" | "refused" | undefined } }>; ran: boolean }',
+  },
+  // Story MOTIR-9365 · MOTIR-9585 — the Host account state pass.
+  'host-account-state': {
+    file: 'lib/jobs/definitions/hostAccountState.ts',
+    shape:
+      '{ failures: number; ran: boolean; settled: number; states: { created?: number | undefined; granted?: number | undefined; live?: number | undefined; quota_requested?: number | undefined } }',
   },
   'fleet-debit-monitor': {
     file: 'lib/jobs/definitions/fleetDebitMonitor.ts',
@@ -468,11 +486,13 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
   // only returned as the job's output — nothing branches on it — and a pass
   // re-decides from the inventory rather than replaying, so a memo written
   // before the field existed is read by no one who needs it. MOTIR-9476 added
-  // `accounts` (the fleet accounts the pass walked) on the same terms.
+  // `accounts` (the fleet accounts the pass walked) on the same terms, and
+  // MOTIR-9584 the `foreign_org` kill reason: a member ADDED to a union, so every
+  // memo written before it is still a valid value of the new shape.
   'reconcile-fleet-attribution': {
     file: 'lib/jobs/definitions/fleetAttribution.ts',
     shape:
-      '{ accounts: number; apps: number; failures: number; killed: Array<{ action: "destroyed" | "stopped"; app: string; machineId: string; reason: "no_record" | "org_stopped" | "record_ended"; workload: "agent_instance" | "ci_runner" | "code_graph_index" | "hosted_agent" | null }>; listed: number; matched: number; orphanedVolumesDestroyed: number; outcome: "reconciled"; spared: number; unavailableApps: Array<string>; undated: number } | { detail: string; outcome: "inventory_unavailable" } | { outcome: "disabled" }',
+      '{ accounts: number; apps: number; failures: number; killed: Array<{ action: "destroyed" | "stopped"; app: string; machineId: string; reason: "foreign_org" | "no_record" | "org_stopped" | "record_ended"; workload: "agent_instance" | "ci_runner" | "code_graph_index" | "hosted_agent" | null }>; listed: number; matched: number; orphanedVolumesDestroyed: number; outcome: "reconciled"; spared: number; unavailableApps: Array<string>; undated: number } | { detail: string; outcome: "inventory_unavailable" } | { outcome: "disabled" }',
   },
   'recompute-code-graph-drift': {
     file: 'lib/jobs/definitions/codeGraphDriftSweep.ts',

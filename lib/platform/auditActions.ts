@@ -347,6 +347,17 @@ export const PLATFORM_AUDIT_ACTIONS = {
    */
   'fleet.shard.quota_request': { kind: 'write', reason: 'required' },
   /**
+   * A Host organisation's CAPACITY REQUESTS (Story MOTIR-9365 · MOTIR-9583), as
+   * `fleet-admin` works them: `list` (the open and filed requests were read),
+   * `link` (a request linked to the quota raise the platform admin filed) and
+   * `close` (closed with the operator's note). Target is `platform` with the
+   * request's id; `metadata` is `{ organizationId, awsAccountId, fleetKind,
+   * desiredVcpu, quotaRequestId? }`, never a credential.
+   */
+  'fleet.capacity_request.list': { kind: 'read', reason: 'never' },
+  'fleet.capacity_request.link': { kind: 'write', reason: 'required' },
+  'fleet.capacity_request.close': { kind: 'write', reason: 'required' },
+  /**
    * The IDEA STORE's writes (Story MOTIR-7662 · MOTIR-7671), `targetKind:
    * 'idea'`, written by `ideasAdminService` inside `withPlatformWrite`. Reached
    * from the console session OR — on `/api/platform/ideas/**` alone — a staff
@@ -367,6 +378,25 @@ export const PLATFORM_AUDIT_ACTIONS = {
   // Story MOTIR-7772 · MOTIR-7774 — label translations merged into an existing tag.
   'idea.tag_translate': { kind: 'write', reason: 'inherited' },
   'idea.research_run': { kind: 'write', reason: 'inherited' },
+  /**
+   * The capacity ALERT SHARE was changed (Story MOTIR-9539 · MOTIR-9609): the
+   * percentage of any one provider limit at which platform admins are alerted.
+   * `targetKind: 'platform'`, `targetId: 'capacity.alert_share'`, `metadata`
+   * `{ fromPercent, toPercent }` (`fromPercent` is the default 80 when no value
+   * was stored). `inherited`: the service writes a default reason when the
+   * screen supplies none.
+   */
+  'capacity.alert_share.set': { kind: 'write', reason: 'inherited' },
+  /**
+   * A provider/model's capacity LIMITS were edited on the gateway (Story
+   * MOTIR-9539 · MOTIR-9613): a limit, the planning share or the tier note.
+   * `targetKind: 'platform'`, `targetId: '<provider>/<model>'`, `metadata`
+   * `{ provider, model, keys }` where `keys` maps each edited wire key to its new
+   * value (`null` is "unknown"). The gateway write runs inside the audited
+   * transaction, so a refused edit leaves no row. `inherited`: the service
+   * writes a default reason when the screen supplies none.
+   */
+  'capacity.limits.edit': { kind: 'write', reason: 'inherited' },
 } as const satisfies Record<
   string,
   { kind: PlatformAuditActionKind; reason: PlatformAuditReasonPolicy }

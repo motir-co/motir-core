@@ -45,7 +45,10 @@ import { ciRunnerProvisionSweep, ciRunnerBoot } from './definitions/ciRunnerFlee
 import { fleetAttribution } from './definitions/fleetAttribution';
 import { fleetDebitMonitor } from './definitions/fleetDebitMonitor';
 import { fleetShardHeadroom } from './definitions/fleetShardHeadroom';
+import { capacityAlertEvaluation } from './definitions/capacityAlertEvaluation';
 import { fleetPoolGrowth } from './definitions/fleetPoolGrowth';
+import { hostAccountReconcile } from './definitions/hostAccountReconcile';
+import { hostAccountState } from './definitions/hostAccountState';
 import { hostedRunAdmit } from './definitions/hostedRunAdmit';
 import { hostedRunSupervise } from './definitions/hostedRunSupervise';
 import {
@@ -153,7 +156,10 @@ export const jobDefinitions = [
   fleetAttribution,
   fleetDebitMonitor,
   fleetShardHeadroom,
+  capacityAlertEvaluation,
   fleetPoolGrowth,
+  hostAccountReconcile,
+  hostAccountState,
   hostedRunAdmit,
   hostedRunSupervise,
   planDriftOnTransitioned,

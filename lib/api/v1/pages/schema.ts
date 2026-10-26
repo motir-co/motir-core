@@ -1,10 +1,13 @@
 import { z } from 'zod/v4';
 import { InvalidRequestError } from '@/lib/api/v1/errors';
+import type { PageLinkPairDto } from '@/lib/dto/pageLinks';
 import type {
+  ArchivePageResultDto,
   PageMarkdownDto,
   PageMoveResultDto,
   PageParentInput,
   PageSearchResultDto,
+  RestorePageResultDto,
 } from '@/lib/dto/pages';
 import { parseParentBody } from '@/lib/pages/parentInput';
 
@@ -52,6 +55,8 @@ export const pageSchema = z.object({
     .nullable(),
   markdown: z.string(),
   updatedAt: isoDateTimeSchema,
+  /** When the page was archived; `null` on a live page (MOTIR-9566). */
+  archivedAt: isoDateTimeSchema.nullable(),
 });
 export type V1Page = z.infer<typeof pageSchema>;
 
@@ -75,6 +80,7 @@ export function presentPage(page: PageMarkdownDto): V1Page {
       : null,
     markdown: page.markdown,
     updatedAt: page.updatedAt,
+    archivedAt: page.archivedAt,
   };
 }
 
@@ -288,4 +294,98 @@ export function presentPageSearch(result: PageSearchResultDto): V1PageSearchResu
     mode: result.mode,
     message: result.message,
   };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ARCHIVE and RESTORE (Story MOTIR-9488 · MOTIR-9566)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Neither takes a body or a revision: `pagesService.archivePage` /
+// `restorePage` take `{ projectId, pageId }` only, and an archive moves a page's
+// set without writing content. A stale request is refused by the page's STATE
+// (`PAGE_ARCHIVED`, `PAGE_NOT_ARCHIVED`, `PAGE_ARCHIVE_ROOT_REQUIRED`).
+
+/** What an archive took: the set that left, root first. */
+export const pageArchiveResultSchema = z.object({
+  /** Every page archived, the root first. */
+  archivedIds: z.array(z.string()),
+  /** The page the archive was asked of — the set's root, the one to restore. */
+  rootId: z.string(),
+  /** The live sub-pages that left with it — the set minus the root. */
+  subPageCount: z.number().int(),
+});
+export type V1PageArchive = z.infer<typeof pageArchiveResultSchema>;
+
+/** Map an archive's result to the wire — field by field. */
+export function presentPageArchive(result: ArchivePageResultDto): V1PageArchive {
+  return {
+    archivedIds: [...result.archivedIds],
+    rootId: result.rootId,
+    subPageCount: result.subPageCount,
+  };
+}
+
+/** Where a restored page landed — the first rung of the landing ladder that still held. */
+export const pageRestoreLandingSchema = z.object({
+  kind: z.enum(['original', 'ancestorPage', 'folder', 'root']),
+  parentPageId: z.string().nullable(),
+  folderId: z.string().nullable(),
+  /** The landing PARENT's name (a page title or a folder name); `null` at the project root. */
+  title: z.string().nullable(),
+});
+
+/** What a restore brought back, and where. */
+export const pageRestoreResultSchema = z.object({
+  /** Every page restored — the archive root and exactly its set. */
+  restoredIds: z.array(z.string()),
+  landing: pageRestoreLandingSchema,
+});
+export type V1PageRestore = z.infer<typeof pageRestoreResultSchema>;
+
+/** Map a restore's result to the wire — field by field. */
+export function presentPageRestore(result: RestorePageResultDto): V1PageRestore {
+  return {
+    restoredIds: [...result.restoredIds],
+    landing: {
+      kind: result.landing.kind,
+      parentPageId: result.landing.parentPageId,
+      folderId: result.landing.folderId,
+      title: result.landing.title,
+    },
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LINK and UNLINK a work item (Story MOTIR-9488 · MOTIR-9567)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// The page ↔ work-item HAND link (`page_work_item_link`, source `manual`) — the
+// row the app's Link page action writes, through `pageLinksService`. A mention
+// or embed in the page's body is a DERIVED link and is never written here.
+
+/** `POST /api/v1/pages/{pageId}/work-items`. */
+export const linkPageBodySchema = z
+  .object({
+    workItemId: z
+      .string()
+      .min(1)
+      .describe(
+        'The work item’s id — the `id` a work item read returns. It must be in the page’s project.',
+      ),
+  })
+  .strict();
+export type LinkPageBody = z.infer<typeof linkPageBodySchema>;
+
+/** The pair a link or unlink answers. */
+export const pageLinkPairSchema = z.object({
+  pageId: z.string(),
+  workItemId: z.string(),
+  /** Always `manual`: the hand link, never a mention or embed. */
+  source: z.literal('manual'),
+});
+export type V1PageLinkPair = z.infer<typeof pageLinkPairSchema>;
+
+/** Map a link pair to the wire — field by field. */
+export function presentPageLinkPair(pair: PageLinkPairDto): V1PageLinkPair {
+  return { pageId: pair.pageId, workItemId: pair.workItemId, source: pair.source };
 }

@@ -58,6 +58,9 @@ export const PLAN_CAPS: Readonly<Record<string, PlanCaps>> = Object.freeze({
   pro: caps(3, 5, 30, 10),
   max: caps(5, 10, 50, 25),
   max_x2: caps(5, 10, 50, 25),
+  // THE SHARED FLOOR (MOTIR-9587): a Host org runs at these figures until its
+  // own account of a kind is live; then `planCapsService` replaces that kind's
+  // figure (agent runs, CI burst) with the account's granted vCPU ÷ 2.
   [HOST_PLAN_KEY]: caps(5, 10, 50, 50),
 });
 

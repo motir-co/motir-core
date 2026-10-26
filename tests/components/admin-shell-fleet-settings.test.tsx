@@ -27,6 +27,7 @@ const LABELS = {
   navUsers: 'Users',
   navMonitoring: 'Monitoring',
   navFleetSettings: en.platformAdmin.shell.navFleetSettings,
+  navCapacity: en.platformAdmin.shell.navCapacity,
   navAiPlanning: 'AI planning',
   navPlanningLessons: 'Planning lessons',
   navIdeas: en.platformAdmin.shell.navIdeas,
@@ -65,7 +66,7 @@ describe('the Fleet settings row', () => {
       .getAllByRole('link')
       .map((link) => link.textContent?.trim());
     expect(names[names.indexOf(LABELS.navMonitoring) + 1]).toBe(LABELS.navFleetSettings);
-    expect(names[names.indexOf(LABELS.navFleetSettings) + 1]).toBe(LABELS.navAiPlanning);
+    expect(names[names.indexOf(LABELS.navFleetSettings) + 1]).toBe(LABELS.navCapacity);
   });
 
   it.each(['support', 'operator'] as const)('is absent for %s', (role) => {

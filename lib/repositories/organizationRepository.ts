@@ -190,6 +190,22 @@ export const organizationRepository = {
     return rows.map((row) => row.id);
   },
 
+  /**
+   * The organisations that can be on the Host plan (MOTIR-9582): those holding a
+   * PAID AI plan (`aiIncludedSeat`, the local mirror of motir-ai's plan tier),
+   * not Motir's own (`isMeta` / `internalBilling` are never on Host) and not
+   * closing. A candidate list only — the reconcile confirms each with the plan
+   * read. Takes `tx`: a cross-org read admitted only by the system context.
+   */
+  async listHostCandidateIdsInTx(tx: Prisma.TransactionClient): Promise<string[]> {
+    const rows = await tx.organization.findMany({
+      where: { aiIncludedSeat: true, isMeta: false, internalBilling: false, closingSince: null },
+      select: { id: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    return rows.map((row) => row.id);
+  },
+
   async create(
     data: {
       name: string;

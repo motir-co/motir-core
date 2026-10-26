@@ -11,6 +11,7 @@ loading and not found.
 | The page at its address     | `page.mock.html`                    | 6–12   | MOTIR-7275 (editor, toolbar, indicator), MOTIR-7280   |
 | A page’s history            | `page--history.mock.html`           | 1–14   | MOTIR-5754 (History control, panel, compare, restore) |
 | The Linked work items strip | `page--linked-work-items.mock.html` | 1–12   | MOTIR-9200 (the strip), MOTIR-9202 (E2E + clip)       |
+| Search from the page tree   | `pages--tree--search.mock.html`     | 1–10   | the page-search build (box, hit list, states)         |
 
 ## ⚠️ This is a REDRAW, and it follows a refusal
 
@@ -1278,3 +1279,114 @@ sibling cards: the Pages-section design (MOTIR-9195), the page-side read (MOTIR-
 
 The work item's Pages section and its picker; the read's order beyond "newest hand link first"; the write
 path's error names; embedded cards; and the page tree and breadcrumb (MOTIR-7367's, unchanged).
+
+## Search from the page tree
+
+One **Search box** above the `/pages` tree finds a
+page by a word in its title or text, or by what it is about. While a query is active a result list
+replaces the tree; clearing the box brings the tree back. This section **amends** § `/pages` — the tree
+(`pages--tree.mock.html`) by delta mock; that mock is not edited:
+
+| Amends                                                | By                              | Panels |
+| ----------------------------------------------------- | ------------------------------- | ------ |
+| § `/pages` — the tree, `pages--tree.mock.html` (1–12) | `pages--tree--search.mock.html` | 1–10   |
+
+### Design system — what was read, and the verdict
+
+- **Read:** `package.json` (depends on `@motir/design-system`), `app/globals.css` (imports
+  `@motir/design-system/theme.css`), `packages/design-system/theme.css`, and the shipped surface:
+  `app/(authed)/pages/page.tsx` (the header with Archived pages, New folder and New page, then the body
+  in an in-page `<Suspense>`), `app/(authed)/pages/_components/PagesIndex.tsx`,
+  `components/pages/tree/PageTree.tsx` (the failed-read row with Try again, Load more),
+  `app/(authed)/items/[key]/_components/PagePlace.tsx` (the place breadcrumb) and `lib/dto/pages.ts`.
+- **Verdict: ON MOTIR DESIGN (branch a)**, as § The page tree recorded. The mock is built the way its
+  base is: the base's token block copied in, plus `--color-tint-yellow` / `--el-tint-yellow` and three
+  density steps (`--spacing-control-x-12`, `--spacing-control-y-8`, `--spacing-card-padding-12`) copied
+  from `theme.css`. The header is drawn as `/pages` ships it today, with Archived pages, which the tree
+  mock predates.
+- **Parts:** the input, `Button` and the alert row are the package's or the tree's own; the Hit row and
+  the result list are **product-local components** (they know pages); the Hit place is the shipped
+  `Place`. Nothing is proposed for the package.
+
+### Access path (drawn, panel 1)
+
+The shipped **Pages** rail row → `/pages` → the **Search box**, the first thing in the page body: under
+the header, above the tree. A reader without `page:view` never reaches it: `/pages` answers its existing
+404 (`notFound()` before the tree renders), and the search route refuses with no page data. So there is
+**no in-page no-access state**, and none is drawn.
+
+### Elements
+
+| Element            | What it is                                                                                                                                                 | Colour / shape                                                                                                                                         |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Search box         | A search input, max 520px, with a leading `Search` glyph and the placeholder; `role="search"`, name `pages.search.label`                                   | `--el-input-border`, `--el-page-bg`, `--radius-input`, `--height-input`, `--spacing-input-x`; focus `--focus-ring-color` ring; glyph `--el-icon-muted` |
+| Clear control      | `X` icon button at the trailing end, shown once the box holds any character (spaces included)                                                              | `--el-text-secondary`, `--height-btn-sm` square, `--radius-control`, `--spacing-icon-btn`                                                              |
+| Pending indicator  | A spinner in the box before Clear, `role="status"`, announced once as `pages.search.pending`                                                               | `--el-text-secondary`                                                                                                                                  |
+| Empty hint         | A helper line under the box while it holds focus and its query is empty or only spaces; info glyph                                                         | 12.5px `--el-text-secondary`; glyph `--el-icon-muted`                                                                                                  |
+| Too-long hint      | The same helper line, naming the 200-character limit                                                                                                       | as the Empty hint: informational, never the danger tone                                                                                                |
+| Hit row            | One link to `/pages/{id}`: the page glyph, then the Hit title, the Hit place and the Hit snippet; min 40px, the tree's row rhythm                          | `--spacing-control-y-8` × `--spacing-control-x-12`; hover `--el-surface`; focus inset `--focus-ring-color` ring; rules `--el-border-soft`              |
+| Hit title          | The page title as written (never translated)                                                                                                               | 14px/500 `--el-text`, one line, ellipsis                                                                                                               |
+| Hit place          | The shipped `Place`: the root crumb, each folder with its folder glyph, the parent page; the root crumb alone at the root; folds past five segments to "…" | 12px `--el-text-secondary`, separators `--el-icon-muted`                                                                                               |
+| Hit snippet        | The service's plain text, two lines at most; absent when the snippet is `''`                                                                               | 13px `--el-text-secondary`; emphasis `--el-tint-yellow` fill + `--el-text-strong` + weight 600, `--radius-kbd`                                         |
+| Result list        | A list in the tree's card frame, name `pages.search.results`                                                                                               | `--el-card`, `--el-border`, `--radius-card`                                                                                                            |
+| Load more control  | The list's last band, a link-styled button with `ChevronDown`, as the tree's Load more; in flight it reads `pages.search.loading` with the spinner         | `--el-link`; band text `--el-text-secondary`                                                                                                           |
+| Degraded note      | One line above the hits, info glyph, `role="note"`                                                                                                         | `--el-tint-sky` fill, `--el-text-strong` ink, `--radius-control`; never an error colour, icon, toast or modal                                          |
+| No-results message | In the list's place: the sentence naming the query, and a secondary small `Button` with `X`, its clear control                                             | `--el-card` frame; text `--el-text`                                                                                                                    |
+| Error state        | The tree's failed-read row: `AlertCircle`, one sentence, a secondary small Try again, its Retry control                                                    | glyph `--el-danger`, text `--el-text`, in the tree's card frame                                                                                        |
+
+### Behaviour drawn
+
+- **Idle (1):** the empty box above the unchanged tree. There is **no mode toggle**: the member never
+  chooses full-text or meaning search.
+- **Focused, empty or whitespace query (2):** the Empty hint shows; nothing is requested, no Pending
+  indicator, and the tree stays. A blank query never lists every page.
+- **Loading (3):** the first search shows the Pending indicator and three row-shaped blocks where the
+  list will be. A later search keeps the previous hits visible and clickable until the new answer
+  replaces them; an older answer never overwrites a newer one.
+- **Results (4):** the three snippet cases. **Word match:** each query word found in the snippet is
+  emphasised in the browser (the service's `ts_headline` carries no markers), by weight and tint, never
+  colour alone. **Meaning only:** the body's opening words, nothing emphasised. **Empty body:** title
+  and place only. `rank` is never shown; the list keeps the service's order.
+- **Load more (5):** in flight it reads Loading… while the hits above stay put; a failed next page
+  shows the Error state's sentence and Retry in that band, retrying the same page. The last page has no
+  band, and no count is shown: the search knows no total.
+- **Too long (6):** a query over 200 characters after trimming (`PAGE_SEARCH_QUERY_MAX_LENGTH`) shows
+  the Too-long hint; the tree or the previous list stays. It is a hint, not an error screen.
+- **No results (7):** the message names the query as typed; Clear search empties the box and brings the
+  tree back. Distinct from Loading and from Error.
+- **Degraded (8):** `full-text-only` and `not-indexed` each show the Degraded note above the hits; a
+  `not-indexed` answer with no hits shows the No-results message under the note. The copy is the app's,
+  keyed by `mode`; the service's English `message` is not shown.
+- **Error (9):** any failure other than a named refusal. Retry repeats the same query; the header and the
+  box stay usable, and editing the query searches again.
+- **Keyboard (10):** the Search box → each hit, top to bottom → Load more, each with its focus ring.
+  Down from the box moves to the first hit; Up and Down move between hits; Up from the first hit returns
+  to the box; Enter opens the focused hit; Escape in the box, or Clear, empties it and brings the tree
+  back; Escape on a hit returns focus to the box.
+
+### Copy (new keys; page titles and snippets are never translated)
+
+| Key                            | en                                                                       | zh                                           |
+| ------------------------------ | ------------------------------------------------------------------------ | -------------------------------------------- |
+| `pages.search.label`           | Search pages                                                             | 搜索页面                                     |
+| `pages.search.placeholder`     | Search pages by a word or by meaning                                     | 按关键词或含义搜索页面                       |
+| `pages.search.clear`           | Clear search                                                             | 清除搜索                                     |
+| `pages.search.pending`         | Searching…                                                               | 正在搜索…                                    |
+| `pages.search.emptyHint`       | Type a word or a phrase to search titles and page text.                  | 输入关键词或短语，搜索标题和页面正文。       |
+| `pages.search.tooLong`         | Searches are limited to {limit} characters — shorten it to search.       | 搜索最多 {limit} 个字符，请缩短后再搜索。    |
+| `pages.search.mode.fullText`   | Showing word matches only — meaning search didn’t run this time.         | 仅显示关键词匹配——本次未进行语义搜索。       |
+| `pages.search.mode.notIndexed` | Showing word matches only — pages aren’t indexed for meaning search yet. | 仅显示关键词匹配——页面尚未建立语义搜索索引。 |
+| `pages.search.noResults`       | No pages match “{query}”.                                                | 没有页面匹配“{query}”。                      |
+| `pages.search.failed`          | Couldn’t search the pages.                                               | 无法搜索页面。                               |
+| `pages.search.results`         | Search results                                                           | 搜索结果                                     |
+| `pages.search.loading`         | Loading…                                                                 | 正在加载…                                    |
+
+Reused: `common.retry` (Try again / 重试), `pages.tree.loadMore` (Load more / 加载更多),
+`pages.tree.breadcrumb.*` through `Place`.
+
+### Not drawn here
+
+- An in-page no-access state, or a mode toggle.
+- App-wide or command-palette search; filters, sort, saved searches or a similarity threshold;
+  searching archived pages.
+- The tree rows, the header and the rail, which are the approved mocks' and the shipped page's.

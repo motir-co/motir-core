@@ -443,6 +443,7 @@ export function toPageMarkdownDto(
       : null,
     markdown: record.bodyMarkdown,
     updatedAt: record.updatedAt.toISOString(),
+    archivedAt: record.archivedAt?.toISOString() ?? null,
   };
 }
 

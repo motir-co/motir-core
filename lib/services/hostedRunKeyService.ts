@@ -5,11 +5,7 @@ import {
   GatewayRunKeyRefusedError,
   GatewayRunKeyUnavailableError,
 } from '@/lib/gateway/errors';
-import {
-  gatewayBaseUrl,
-  mintGatewayRunKey,
-  revokeGatewayRunKeys,
-} from '@/lib/gateway/runKeyClient';
+import { gatewayRunUrl, mintGatewayRunKey, revokeGatewayRunKeys } from '@/lib/gateway/runKeyClient';
 import { HostedRunKeyNotMintedError } from '@/lib/hostedRuns/errors';
 import { hostedRunDeadline } from '@/lib/hostedRuns/limits';
 
@@ -117,6 +113,10 @@ export const hostedRunKeyService = {
       );
     }
     try {
+      // motir(MOTIR-7656): the PUBLIC run-lane edge, never motir-core's own private
+      // origin — the container boots outside `moooon`. Read BEFORE the mint, so a
+      // misconfigured origin mints no key that nothing will ever use.
+      const containerGatewayUrl = gatewayRunUrl();
       const minted = await mintGatewayRunKey({
         runRef: run.id,
         coreOrganizationId: run.organizationId,
@@ -128,7 +128,7 @@ export const hostedRunKeyService = {
         model,
         expiresAt,
         containerEnv: {
-          MOTIR_GATEWAY_URL: gatewayBaseUrl(),
+          MOTIR_GATEWAY_URL: containerGatewayUrl,
           MOTIR_RUN_KEY: minted.key,
         },
       };

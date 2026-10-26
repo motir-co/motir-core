@@ -469,6 +469,9 @@ model User {
   // reconciler reads the null binder and records a named failure telling someone
   // to re-bind, rather than inventing another identity.
   boundMonitorConnections          MonitorConnection[]                 @relation("MonitorConnectionBinder")
+  // The capacity alert share this person last set (Story MOTIR-9539 ·
+  // MOTIR-9609). SetNull: removing the person keeps the setting.
+  capacityAlertSettingsUpdated     CapacityAlertSetting[]              @relation("CapacityAlertSettingUpdater")
 
   @@index([lastActiveProjectId])
   @@map("user")
@@ -1554,6 +1557,12 @@ model Organization {
   agentInstanceStorageCharges AgentInstanceStorageCharge[]
   /// An agent's boot attempts (`agent-instances.md` AMENDMENT 6, MOTIR-7397). Cascade.
   agentInstanceBootAttempts   AgentInstanceBootAttempt[]
+  /// The fleet accounts that belong to this organisation alone — a Host org's
+  /// three (MOTIR-9581). Restrict on the account's side.
+  ownedFleetShards            FleetShard[]                 @relation("FleetShardOwner")
+  hostAccountAttempts         HostAccountAttempt[]
+  /// Its asks for more capacity on its own accounts (MOTIR-9583).
+  fleetCapacityRequests       FleetCapacityRequest[]
 
   // ── Content language (Story MOTIR-7731 · MOTIR-8092) ──────────────────────
   /// The language Motir's planner and agents write this organisation's NEW work
@@ -11558,6 +11567,11 @@ enum FleetShardRole {
   /// `fleet_shard_one_ready_spare_per_kind` in the migration, which the DSL
   /// cannot express.
   spare
+  /// An account that belongs to ONE Host organisation (MOTIR-9581, Story
+  /// MOTIR-9365): `ownerOrganizationId` names it (CHECK: set exactly on this
+  /// role). No shared reader names this role, so shared admission, the spare and
+  /// the 70% growth job never see it.
+  org_owned
 
   @@map("fleet_shard_role")
 }
@@ -11665,6 +11679,18 @@ model FleetShard {
   admissionPausedUntil     DateTime?              @map("admission_paused_until")
   admissionPausedReason    FleetShardPauseReason? @map("admission_paused_reason")
 
+  /// The Host organisation an `org_owned` account belongs to (MOTIR-9581); NULL on
+  /// every other role (CHECK). Restrict: an org with accounts of its own is never
+  /// deleted from under them — closing an AWS account is a person's decision.
+  ownerOrganizationId String?       @map("owner_organization_id")
+  ownerOrganization   Organization? @relation("FleetShardOwner", fields: [ownerOrganizationId], references: [id], onDelete: Restrict)
+  /// When an own account entered each state after `createdAt` (created): its
+  /// quota raise filed, granted, and live (MOTIR-9581 stores them; the state card
+  /// MOTIR-9585 writes them). NULL until entered.
+  quotaRequestedAt    DateTime?     @map("quota_requested_at")
+  grantedAt           DateTime?     @map("granted_at")
+  liveAt              DateTime?     @map("live_at")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -11679,14 +11705,21 @@ model FleetShard {
 
   /// The quota raises filed for this account (MOTIR-9457).
   quotaRequests     FleetQuotaRequest[]
+  /// A Host organisation's asks for more capacity on this account (MOTIR-9583).
+  capacityRequests  FleetCapacityRequest[]
   /// The growths this account triggered, the spare it promoted, the account it
   /// created (MOTIR-9457).
-  growthsTriggered  FleetGrowthEvent[]  @relation("FleetGrowthTrigger")
-  growthsAsSpare    FleetGrowthEvent[]  @relation("FleetGrowthSpare")
-  growthsAsNewShard FleetGrowthEvent[]  @relation("FleetGrowthNewShard")
+  growthsTriggered  FleetGrowthEvent[]     @relation("FleetGrowthTrigger")
+  growthsAsSpare    FleetGrowthEvent[]     @relation("FleetGrowthSpare")
+  growthsAsNewShard FleetGrowthEvent[]     @relation("FleetGrowthNewShard")
 
   /// One Fly location is one account.
   @@unique([provider, flyOrg, flyApp])
+  /// One AWS account serves a fleet kind once (MOTIR-9581). The merged indexer +
+  /// agent hoster account is ONE AWS account written as two rows, one per kind.
+  @@unique([awsAccountId, fleetKind])
+  /// An org's own accounts (MOTIR-9581).
+  @@index([ownerOrganizationId])
   /// Admission and the headroom reading list one kind's accounts by role and state.
   @@index([fleetKind, role, state])
   @@map("fleet_shard")
@@ -11738,9 +11771,11 @@ model FleetQuotaRequest {
   alertedAt  DateTime? @map("alerted_at")
   updatedAt  DateTime  @updatedAt @map("updated_at")
 
-  shard        FleetShard         @relation(fields: [shardId], references: [id], onDelete: Cascade)
+  shard            FleetShard             @relation(fields: [shardId], references: [id], onDelete: Cascade)
   /// The growths waiting on this request.
-  growthEvents FleetGrowthEvent[]
+  growthEvents     FleetGrowthEvent[]
+  /// The capacity requests this raise answers (MOTIR-9583).
+  capacityRequests FleetCapacityRequest[]
 
   @@index([fleetKind, status])
   @@index([fleetKind, createdAt])
@@ -11811,6 +11846,79 @@ model FleetGrowthPassLease {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("fleet_growth_pass_lease")
+}
+
+/// A Host organisation's refused account creations (Story MOTIR-9365 ·
+/// MOTIR-9582), one row per (organisation, slot): how many `CreateAccount`
+/// refusals in a row, and when the last one was. The reconcile backs a slot off
+/// `refusalBackoffMs(refusedCount)` from `lastRefusedAt` — stored, so a restart
+/// changes nothing — and zeroes the count on the pass that creates the account.
+/// Counts and times only: never a credential, an email or AWS's message.
+/// Platform-only, as `fleet_shard`.
+model HostAccountAttempt {
+  id             String       @id @default(cuid())
+  organizationId String       @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  /// `ci_runner` | `agent_runner` | `merged` (`lib/ciFleet/hostAccounts.ts`).
+  slot           String
+  refusedCount   Int          @default(0) @map("refused_count")
+  lastRefusedAt  DateTime?    @map("last_refused_at")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  @@unique([organizationId, slot])
+  @@map("host_account_attempt")
+}
+
+/// Where a Host organisation's ask for more capacity stands (MOTIR-9583). Whether
+/// AWS granted is NOT stored here: it is the linked quota request's.
+enum FleetCapacityRequestStatus {
+  /// Asked; nothing filed yet.
+  open
+  /// The platform admin filed a quota raise and linked it.
+  filed
+  /// The platform admin closed it with a note (declined, withdrawn, …).
+  closed
+
+  @@map("fleet_capacity_request_status")
+}
+
+/// A Host organisation's ask for more capacity on one of its OWN accounts
+/// (Story MOTIR-9365 · MOTIR-9583): the account, the kind the org named, the vCPU
+/// figure asked for `L-1216C47A`, a reason and a status. Creating one alerts the
+/// platform admin, who files the raise through `fleet_quota_request` and LINKS it
+/// here; the org's figure follows that request's granted value (the caps card).
+///
+/// It names an AWS ACCOUNT, not a row: the merged indexer + agent hoster account
+/// is two rows with one quota, so at most one `open` / `filed` request exists per
+/// `aws_account_id` (a partial unique index), whichever kind the org named.
+/// `requested_by_user_id` is a plain id, not a foreign key, so a user's erasure
+/// is never blocked by a capacity ask. Platform-only, as `fleet_shard`.
+model FleetCapacityRequest {
+  id                String                     @id @default(cuid())
+  organizationId    String                     @map("organization_id")
+  organization      Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  shardId           String                     @map("shard_id")
+  shard             FleetShard                 @relation(fields: [shardId], references: [id], onDelete: Restrict)
+  awsAccountId      String                     @map("aws_account_id")
+  /// The kind the org named — kept as it said it, for the admin view's wording.
+  fleetKind         String                     @map("fleet_kind")
+  quotaCode         String                     @default("L-1216C47A") @map("quota_code")
+  desiredVcpu       Int                        @map("desired_vcpu")
+  reasonMd          String                     @map("reason_md")
+  status            FleetCapacityRequestStatus @default(open)
+  quotaRequestId    String?                    @map("quota_request_id")
+  quotaRequest      FleetQuotaRequest?         @relation(fields: [quotaRequestId], references: [id], onDelete: Restrict)
+  closedNote        String?                    @map("closed_note")
+  requestedByUserId String                     @map("requested_by_user_id")
+  createdAt         DateTime                   @default(now()) @map("created_at")
+  filedAt           DateTime?                  @map("filed_at")
+  closedAt          DateTime?                  @map("closed_at")
+  updatedAt         DateTime                   @updatedAt @map("updated_at")
+
+  @@index([organizationId, createdAt])
+  @@index([status, createdAt])
+  @@map("fleet_capacity_request")
 }
 
 /// The repo-role vocabulary (`docs/decisions/project-repository-set.md` §1.1).
@@ -15023,4 +15131,45 @@ model GithubRunnerCallEvent {
   @@index([githubOrg, at])
   @@index([at])
   @@map("github_runner_call_event")
+}
+
+/// The capacity ALERT SHARE (Story MOTIR-9539 · MOTIR-9609): the percentage of
+/// any one provider limit at which platform admins are alerted. A singleton
+/// (`id` is always `'platform'`); no row means the default, 80, so nothing seeds
+/// it. RLS: `app.system_admin` (the alert job reads it) OR `app.platform_staff`
+/// (the audited console write).
+model CapacityAlertSetting {
+  id                String   @id @default("platform")
+  /// An integer 1–100, held by a CHECK.
+  alertSharePercent Int      @map("alert_share_percent")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  updatedByUserId   String?  @map("updated_by_user_id")
+
+  updatedBy User? @relation("CapacityAlertSettingUpdater", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([updatedByUserId])
+  @@map("capacity_alert_setting")
+}
+
+/// One RAISED capacity alert (Story MOTIR-9539 · MOTIR-9609): a provider model's
+/// limit unit at or over the alert share. A row present means raised; clearing
+/// deletes it. The snapshot is what raised it. No tenant, user or organisation
+/// column, by design. RLS: every operation under `app.system_admin`; SELECT also
+/// under `app.platform_staff`.
+model CapacityRaisedAlert {
+  id                String   @id @default(cuid())
+  /// `claude` | `qwen` | `deepseek` (`lib/capacity/alertKeys.ts`), held by a CHECK.
+  provider          String
+  model             String
+  /// One of the gateway contract's six limit units, held by a CHECK.
+  limitUnit         String   @map("limit_unit")
+  raisedAt          DateTime @default(now()) @map("raised_at")
+  /// BigInt: a `tpd` usage or limit can pass 2^31.
+  observedValue     BigInt   @map("observed_value")
+  limitValue        BigInt   @map("limit_value")
+  /// The share in force when the alert was raised.
+  alertSharePercent Int      @map("alert_share_percent")
+
+  @@unique([provider, model, limitUnit])
+  @@map("capacity_raised_alert")
 }

@@ -4330,6 +4330,14 @@ Each proposal is `{ op, proposedFields?, workItemId?, patch?, parentRef?, blocke
   ```
 
 - **`workItemId`** / **`patch`** / **`baseRevision`** — for a `modify` / `remove`.
+  `baseRevision` is the target's `revision` as `skeleton` returns it. A value that
+  is not a revision of the target — a timestamp such as the card's `updatedAt`, a
+  work-item id, another card's revision — is refused `INVALID_PROPOSAL` at the
+  append, because it could never match and would flag the proposal "may be out of
+  date" from the moment it was written (MOTIR-9603). An id taken from the card's
+  history that names a pure status move is accepted and stored as the newest
+  revision at or before it that is not one, which is what the staleness check
+  compares against.
 - **`parentRef`** / **`blockedByRefs`** — a work-item **key** (`ACME-7`, resolved
   to its id at the append — keys are accepted, not refused), a real
   `work_item.id`, **or** an intra-plan temp-ref `planItem:<id>`.
