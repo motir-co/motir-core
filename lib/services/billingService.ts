@@ -32,12 +32,12 @@ import { isPaidAiSubscriptionStatus } from '@/lib/services/aiPlanGateService';
 import {
   BILLING_CATALOG,
   DEFAULT_CHECKOUT_QUANTITY,
+  hostMonthlyPlanCredits,
   INCLUDED_TRACKER_SEATS_PER_AI_PLAN,
   isAllowedCheckoutQuantity,
   isKnownCheckoutPrice,
   isPlanChangeKey,
   largerPoolCreditsForPrice,
-  maxMonthlyPlanCredits,
   type BillingCadence,
 } from '@/lib/billing/catalog';
 import {
@@ -367,15 +367,13 @@ export const billingService = {
   ): Promise<BillingCheckoutDTO> {
     await this.assertBillingManagerForMutation(input);
 
-    // A larger pool at a size the ladder already covers earns its own refusal
-    // (MOTIR-8990), before the generic unknown-price one would swallow it.
+    // A larger pool at or below Host's pool — a size Host or the ladder already
+    // covers, or a retired rung — earns its own refusal (MOTIR-8990, floored at Host
+    // by MOTIR-9366), before the generic unknown-price one would swallow it.
     const requestedPool = largerPoolCreditsForPrice(input.priceLookupKey);
-    if (requestedPool !== null && requestedPool <= maxMonthlyPlanCredits()) {
-      throw new LargerPoolAtOrBelowCeilingError(
-        input.priceLookupKey,
-        requestedPool,
-        maxMonthlyPlanCredits(),
-      );
+    const floor = hostMonthlyPlanCredits();
+    if (requestedPool !== null && requestedPool <= floor) {
+      throw new LargerPoolAtOrBelowCeilingError(input.priceLookupKey, requestedPool, floor);
     }
 
     if (!isKnownCheckoutPrice(input.priceLookupKey)) {

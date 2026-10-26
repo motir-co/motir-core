@@ -95,16 +95,28 @@ function larger(planKey = SMALLEST.key, planName = SMALLEST.name): CalculatorEst
   });
 }
 
+/** The high end of the `largest()` answer: 12,000 credits past the largest pool sold. */
+const LARGEST_HIGH = LARGEST.allotment!.credits + 12_000;
+
 /** Above every pool: the largest one, and the rest in top-ups. */
 function largest(): CalculatorEstimateDTO {
   return estimate({
-    credits: { low: 200_000, high: 262_000 },
-    recommendation: { planKey: LARGEST.key, planName: LARGEST.name, monthlyPriceUsd: 1_155 },
+    credits: { low: LARGEST.allotment!.credits - 62_000, high: LARGEST_HIGH },
+    recommendation: {
+      planKey: LARGEST.key,
+      planName: LARGEST.name,
+      monthlyPriceUsd: LARGEST.prices!.monthly.amountUsd,
+    },
     topUp: {
       low: { units: 0, credits: 0, priceUsd: 0 },
       high: { units: 12, credits: 12_000, priceUsd: 60 },
     },
-    ceiling: { credits: 60_000, exceeded: true, excessCredits: 202_000, outcome: 'largest_pool' },
+    ceiling: {
+      credits: 60_000,
+      exceeded: true,
+      excessCredits: LARGEST_HIGH - 60_000,
+      outcome: 'largest_pool',
+    },
   });
 }
 
@@ -758,7 +770,7 @@ describe('above every pool — the largest pool plus top-ups', () => {
     expect(block.textContent).toContain(
       `Your estimate is above our largest pool, so the answer is that pool — ${LARGEST.name} — with top-ups for the rest.`,
     );
-    const excess = (262_000 - LARGEST.allotment!.credits).toLocaleString('en-US');
+    const excess = (LARGEST_HIGH - LARGEST.allotment!.credits).toLocaleString('en-US');
     expect(within(block).getByTestId('calculator-largest-topup').textContent).toBe(
       `The other ${excess} credits or so a month are covered by top-ups: 12 × 1,000 credits, about $60 a month.`,
     );

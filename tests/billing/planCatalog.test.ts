@@ -9,6 +9,7 @@ import {
   isKnownCheckoutPrice,
   isLargerPoolPlanKey,
   isPlanChangeKey,
+  hostMonthlyPlanCredits,
   largerPoolCreditsForPrice,
   largerPoolPlans,
   maxMonthlyPlanCredits,
@@ -275,36 +276,91 @@ describe('the catalog gate (MOTIR-8392)', () => {
   });
 });
 
-// MOTIR-8990 — the larger pools above Max ×2, as the approved record MOTIR-8987 fixes
-// them: six rungs, monthly = Max ×2's price + $4.50 per 1,000 credits above its pool,
-// annual = the ladder's own annual rate. The rule is restated here from the ladder's
-// own entries, so a rung priced off the wrong basis fails in one place.
-describe('the larger-pool band (MOTIR-8990)', () => {
-  const RUNGS = ['pool_80k', 'pool_100k', 'pool_120k', 'pool_150k', 'pool_200k', 'pool_250k'];
-  const top = () => plan('max_x2');
+// MOTIR-8990, re-anchored by MOTIR-9366 — the larger pools above Host, as the approved
+// record MOTIR-8987 fixes them with its anchor moved from Max ×2 to Host: five rungs,
+// monthly = Host's price + $4.50 per 1,000 credits above its pool, annual = Host's own
+// annual rate. The rule is restated here from Host's own entry, so a rung priced off
+// the wrong basis fails in one place. The six first rungs, at or below Host, are
+// retired: kept in the catalog for a holder, off the rung table and both allow-lists.
+describe('the larger-pool band (MOTIR-8990 · MOTIR-9366)', () => {
+  const RUNGS = ['pool_600k', 'pool_900k', 'pool_1200k', 'pool_1800k', 'pool_2400k'];
+  const RETIRED = ['pool_80k', 'pool_100k', 'pool_120k', 'pool_150k', 'pool_200k', 'pool_250k'];
+  const top = () => plan('host');
   const topUpRate = () =>
     BILLING_CATALOG.creditTopup.unitAmountUsd / BILLING_CATALOG.creditTopup.unitCredits;
   const annualRate = () => top().prices!.annual.amountUsd / (12 * top().allotment!.credits);
 
-  it('lists the six rungs in ascending pool order, every one strictly above the ceiling', () => {
+  it('lists the five rungs in ascending pool order, every one strictly above Host', () => {
     const rungs = largerPoolPlans();
     expect(rungs.map((p) => p.key)).toEqual(RUNGS);
     const pools = rungs.map((p) => p.allotment!.credits);
     expect(pools).toEqual([...pools].sort((a, b) => a - b));
-    for (const pool of pools) expect(pool).toBeGreaterThan(maxMonthlyPlanCredits());
+    expect(hostMonthlyPlanCredits()).toBe(300000);
+    for (const pool of pools) expect(pool).toBeGreaterThan(hostMonthlyPlanCredits());
+    expect(pools[0]).toBeGreaterThanOrEqual(2 * hostMonthlyPlanCredits());
   });
 
-  it('keeps the ceiling at the ladder top: 60,000, not the top rung', () => {
+  it('reads the floor from the host entry, not a typed figure', () => {
+    const host = plan('host');
+    const original = host.allotment;
+    host.allotment = { credits: 900000, cadence: 'monthly' };
+    try {
+      expect(hostMonthlyPlanCredits()).toBe(900000);
+      expect(largerPoolPlans().map((p) => p.key)).toEqual([
+        'pool_1200k',
+        'pool_1800k',
+        'pool_2400k',
+      ]);
+    } finally {
+      host.allotment = original;
+    }
+    expect(hostMonthlyPlanCredits()).toBe(300000);
+  });
+
+  it.each(RETIRED)(
+    'keeps the retired %s in the catalog, off the rung table and both lists',
+    (key) => {
+      const rung = plan(key);
+      expect(rung.band).toBe('larger_pool');
+      expect(rung.allotment!.credits).toBeLessThanOrEqual(hostMonthlyPlanCredits());
+      expect(largerPoolPlans().map((p) => p.key)).not.toContain(key);
+      expect(isPlanChangeKey(key)).toBe(false);
+      for (const price of Object.values(rung.prices!)) {
+        expect(price.priceLookupKey.startsWith(`${key}_pool_`)).toBe(true);
+        expect(CHECKOUT_PRICE_LOOKUP_KEYS.has(price.priceLookupKey)).toBe(false);
+        expect(isLargerPoolPlanKey(price.priceLookupKey)).toBe(false);
+      }
+    },
+  );
+
+  it('keeps the retired rungs at their recorded figures', () => {
+    expect(
+      RETIRED.map((k) => [
+        plan(k).allotment!.credits,
+        plan(k).prices!.monthly.amountUsd,
+        plan(k).prices!.annual.amountUsd,
+      ]),
+    ).toEqual([
+      [80000, 390, 3200],
+      [100000, 480, 4000],
+      [120000, 570, 4800],
+      [150000, 705, 6000],
+      [200000, 930, 8000],
+      [250000, 1155, 10000],
+    ]);
+  });
+
+  it('keeps the ceiling at the ladder top: 60,000, not Host or the top rung', () => {
     expect(maxMonthlyPlanCredits()).toBe(60000);
-    // Widened over every entry, the "ceiling" would be Host's own pool (MOTIR-9364)
+    // Widened over every entry, the "ceiling" would be the top rung's pool (MOTIR-9366)
     // — the meaning the band filter exists to keep out.
     const widened = Math.max(
       ...BILLING_CATALOG.aiPlans.flatMap((p) =>
         p.allotment?.cadence === 'monthly' ? [p.allotment.credits] : [],
       ),
     );
-    expect(widened).toBe(300000);
-    const rung = plan('pool_250k');
+    expect(widened).toBe(2400000);
+    const rung = plan('pool_600k');
     const original = rung.allotment;
     rung.allotment = { credits: 300000, cadence: 'monthly' };
     try {
@@ -312,7 +368,7 @@ describe('the larger-pool band (MOTIR-8990)', () => {
     } finally {
       rung.allotment = original;
     }
-    const max = top();
+    const max = plan('max_x2');
     const maxPool = max.allotment;
     max.allotment = { credits: 50000, cadence: 'monthly' };
     try {
@@ -339,9 +395,9 @@ describe('the larger-pool band (MOTIR-8990)', () => {
     expect(rung.prices!.monthly.amountUsd).toBeCloseTo(monthly, 6);
     expect(Number.isInteger(rung.prices!.monthly.amountUsd)).toBe(true);
     expect(rung.prices!.annual.amountUsd).toBeCloseTo(12 * pool * annualRate(), 6);
-    // Annual is the ladder's annual rate, so it is NOT 8 × monthly on a rung.
+    // Annual is Host's annual rate, so it is NOT 8 × monthly on a rung.
     expect(rung.prices!.annual.amountUsd).not.toBe(8 * rung.prices!.monthly.amountUsd);
-    // A monthly rung always undercuts Max ×2 plus top-ups for the same pool.
+    // A monthly rung always undercuts Host plus top-ups for the same pool.
     expect(rung.prices!.monthly.amountUsd).toBeLessThan(
       top().prices!.monthly.amountUsd + extra * topUpRate(),
     );
@@ -355,12 +411,11 @@ describe('the larger-pool band (MOTIR-8990)', () => {
         p.prices!.annual.amountUsd,
       ]),
     ).toEqual([
-      [80000, 390, 3200],
-      [100000, 480, 4000],
-      [120000, 570, 4800],
-      [150000, 705, 6000],
-      [200000, 930, 8000],
-      [250000, 1155, 10000],
+      [600000, 2850, 24000],
+      [900000, 4200, 36000],
+      [1200000, 5550, 48000],
+      [1800000, 8250, 72000],
+      [2400000, 10950, 96000],
     ]);
   });
 
@@ -404,27 +459,27 @@ describe('the larger-pool band (MOTIR-8990)', () => {
         BILLING_CATALOG.creditTopup.priceLookupKey,
       ]),
     );
-    expect(PLAN_CHANGE_KEYS).toEqual(['standard', 'pro', 'max', 'max_x2', ...RUNGS, 'host']);
+    expect(PLAN_CHANGE_KEYS).toEqual(['standard', 'pro', 'max', 'max_x2', 'host', ...RUNGS]);
     for (const absent of ['free', 'tracker_monthly', 'tracker_annual', 'credit_topup']) {
       expect(isPlanChangeKey(absent)).toBe(false);
     }
   });
 
-  it('drops a rung configured at the ceiling from the table', () => {
+  it('drops a rung configured at the Host floor from the table', () => {
     // The allow-list constants are built once at module load, so this mutation cannot
     // change them retroactively; the derivation is proved by the set equality above.
-    const rung = plan('pool_80k');
+    const rung = plan('pool_600k');
     const original = rung.allotment;
-    rung.allotment = { credits: maxMonthlyPlanCredits(), cadence: 'monthly' };
+    rung.allotment = { credits: hostMonthlyPlanCredits(), cadence: 'monthly' };
     try {
-      expect(largerPoolPlans().map((p) => p.key)).not.toContain('pool_80k');
-      expect(isLargerPoolPlanKey('pool_80k_pool_monthly')).toBe(false);
-      expect(isLargerPoolPlanKey('pool_80k_pool_annual')).toBe(false);
+      expect(largerPoolPlans().map((p) => p.key)).not.toContain('pool_600k');
+      expect(isLargerPoolPlanKey('pool_600k_pool_monthly')).toBe(false);
+      expect(isLargerPoolPlanKey('pool_600k_pool_annual')).toBe(false);
       expect(largerPoolPlans()).toHaveLength(RUNGS.length - 1);
     } finally {
       rung.allotment = original;
     }
-    expect(isLargerPoolPlanKey('pool_80k_pool_monthly')).toBe(true);
+    expect(isLargerPoolPlanKey('pool_600k_pool_monthly')).toBe(true);
   });
 
   it.each(RUNGS.flatMap((k) => [`${k}_pool_monthly`, `${k}_pool_annual`]))(
@@ -464,33 +519,39 @@ describe('a rung-shaped request (MOTIR-8990)', () => {
     expect(largerPoolCreditsForPrice(key)).toBeNull();
   });
 
-  it('never classifies a sellable key as at or below the ceiling', () => {
+  it('never classifies a sellable key as at or below the Host floor', () => {
     for (const key of CHECKOUT_PRICE_LOOKUP_KEYS) {
       const pool = largerPoolCreditsForPrice(key);
-      if (pool !== null) expect(pool).toBeGreaterThan(maxMonthlyPlanCredits());
+      if (pool !== null) expect(pool).toBeGreaterThan(hostMonthlyPlanCredits());
     }
   });
 
-  it.each(['pool_30k_pool_monthly', 'pool_60k_pool_annual'])(
-    'treats %s as at or below the ceiling, not a price',
-    (key) => {
-      expect(isKnownCheckoutPrice(key)).toBe(false);
-      expect(largerPoolCreditsForPrice(key)! <= maxMonthlyPlanCredits()).toBe(true);
-    },
-  );
+  it.each([
+    'pool_30k_pool_monthly',
+    'pool_60k_pool_annual',
+    'pool_250k_pool_monthly',
+    'pool_300k_pool_annual',
+  ])('treats %s as at or below the Host floor, not a price', (key) => {
+    expect(isKnownCheckoutPrice(key)).toBe(false);
+    expect(largerPoolCreditsForPrice(key)! <= hostMonthlyPlanCredits()).toBe(true);
+  });
 
-  it('treats a rung-shaped key above the ceiling that no rung carries as unknown only', () => {
-    expect(isKnownCheckoutPrice('pool_90k_pool_monthly')).toBe(false);
-    expect(largerPoolCreditsForPrice('pool_90k_pool_monthly')! > maxMonthlyPlanCredits()).toBe(
+  it('treats a rung-shaped key above the floor that no rung carries as unknown only', () => {
+    expect(isKnownCheckoutPrice('pool_700k_pool_monthly')).toBe(false);
+    expect(largerPoolCreditsForPrice('pool_700k_pool_monthly')! > hostMonthlyPlanCredits()).toBe(
       true,
     );
   });
 });
 
 describe('the operator bill for a larger pool (MOTIR-8990)', () => {
-  it('bills a rung from its own entry, with orgBill.ts unchanged', () => {
-    const rung = plan('pool_150k');
-    const tier = { key: rung.key, name: rung.name, monthlyCreditAllotment: 150000 };
+  it.each(['pool_150k', 'pool_900k'])('bills %s from its own entry, retired or on sale', (key) => {
+    const rung = plan(key);
+    const tier = {
+      key: rung.key,
+      name: rung.name,
+      monthlyCreditAllotment: rung.allotment!.credits,
+    };
     const status = {
       organizationId: 'org_1',
       isMeta: false,
@@ -523,7 +584,7 @@ describe('the operator bill for a larger pool (MOTIR-8990)', () => {
 
 describe('the Host band (MOTIR-9398)', () => {
   const HOST_KEYS = ['host_pool_monthly', 'host_pool_annual'];
-  const RUNGS = ['pool_80k', 'pool_100k', 'pool_120k', 'pool_150k', 'pool_200k', 'pool_250k'];
+  const RUNGS = ['pool_600k', 'pool_900k', 'pool_1200k', 'pool_1800k', 'pool_2400k'];
 
   it('carries exactly one Host entry, with its figures', () => {
     const hosts = BILLING_CATALOG.aiPlans.filter((p) => p.key === 'host');
@@ -556,8 +617,9 @@ describe('the Host band (MOTIR-9398)', () => {
     expect(host.prices!.annual.amountUsd).toBe(8 * host.prices!.monthly.amountUsd);
   });
 
-  it('moves neither the ladder ceiling nor the rung table', () => {
+  it('leaves the ladder ceiling alone and floors the rung table at its pool', () => {
     expect(maxMonthlyPlanCredits()).toBe(60000);
+    expect(hostMonthlyPlanCredits()).toBe(plan('host').allotment!.credits);
     expect(largerPoolPlans().map((p) => p.key)).toEqual(RUNGS);
     expect(ladder().map((p) => p.key)).not.toContain('host');
   });
@@ -571,24 +633,24 @@ describe('the Host band (MOTIR-9398)', () => {
     expect(largerPoolCreditsForPrice(key)).toBeNull();
   });
 
-  it('is a plan-change target, last in ascending pool order', () => {
+  it('is a plan-change target, after the ladder and before the rungs, in pool order', () => {
     expect(isPlanChangeKey('host')).toBe(true);
-    expect(PLAN_CHANGE_KEYS[PLAN_CHANGE_KEYS.length - 1]).toBe('host');
+    expect(PLAN_CHANGE_KEYS.slice(PLAN_CHANGE_KEYS.indexOf('host'))).toEqual(['host', ...RUNGS]);
     const pools = PLAN_CHANGE_KEYS.map((k) => plan(k).allotment!.credits);
     expect(pools).toEqual([...pools].sort((a, b) => a - b));
   });
 
-  it('orders plan-change keys by pool, so a rung moved above Host sorts after it', () => {
+  it('orders plan-change keys by pool, so a rung moved below Host sorts before it', () => {
     const copy = BILLING_CATALOG.aiPlans.map((p) =>
-      p.key === 'pool_250k'
-        ? { ...p, allotment: { credits: 400000, cadence: 'monthly' as const } }
+      p.key === 'pool_600k'
+        ? { ...p, allotment: { credits: 200000, cadence: 'monthly' as const } }
         : p,
     );
     const keys = planChangeKeysOf(copy);
-    expect(keys.indexOf('pool_250k')).toBeGreaterThan(keys.indexOf('host'));
+    expect(keys.indexOf('pool_600k')).toBeLessThan(keys.indexOf('host'));
     expect(keys).not.toContain('free');
     // The builder reads its argument only; the catalog and the constant are untouched.
-    expect(plan('pool_250k').allotment!.credits).toBe(250000);
-    expect(PLAN_CHANGE_KEYS[PLAN_CHANGE_KEYS.length - 1]).toBe('host');
+    expect(plan('pool_600k').allotment!.credits).toBe(600000);
+    expect(PLAN_CHANGE_KEYS[PLAN_CHANGE_KEYS.length - 1]).toBe('pool_2400k');
   });
 });

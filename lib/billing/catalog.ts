@@ -47,8 +47,9 @@ export interface CatalogPrice {
 /**
  * Which part of the AI catalog an entry belongs to (MOTIR-8990). `ladder` is a
  * standing rung every owner can pick from the plan row (Free, Standard, Pro, Max,
- * Max ×2). `larger_pool` is a rung ABOVE the ladder's top, sold only to an org whose
- * own estimate passes it (MOTIR-8987). `host` is a standing plan sold from the plan
+ * Max ×2). `larger_pool` is a rung ABOVE Host's pool, sold only to an org whose own
+ * estimate passes it (MOTIR-9366; entries at or below Host are retired rungs, kept
+ * only so a holder still resolves). `host` is a standing plan sold from the plan
  * row (MOTIR-9364): it is never counted by the ladder ceiling, the rung table or the
  * calculator, and only the two allow-lists name it. The ceiling, the rung table and
  * both allow-lists are derived against this field, so neither a larger pool nor Host
@@ -92,7 +93,7 @@ export interface AiPlanCatalogEntry {
    * live. Read `INCLUDED_TRACKER_SEATS_PER_AI_PLAN` rather than typing a 1.
    */
   includedTrackerSeats: number;
-  /** A standing ladder rung, a larger pool above the ladder's top, or Host (`AiPlanBand`). */
+  /** A standing ladder rung, a larger pool above Host's pool, or Host (`AiPlanBand`). */
   band: AiPlanBand;
 }
 
@@ -200,12 +201,13 @@ export const BILLING_CATALOG: BillingCatalog = {
       includedTrackerSeats: 1,
       band: 'ladder',
     },
-    // The larger pools above Max ×2 (MOTIR-8990), the rung table the approved record
-    // MOTIR-8987 fixes: six pools strictly above the ladder's top. Monthly is Max ×2's
-    // $300 plus $4.50 per 1,000 credits above 60,000 (10% off the top-up); annual is
-    // the ladder's own annual rate, pool ÷ 1,000 × $40 — so annual is NOT 8 × monthly
-    // here. `includedTrackerSeats` must equal `INCLUDED_TRACKER_SEATS_PER_AI_PLAN`,
-    // which is declared after this literal and so cannot be read inside it.
+    // RETIRED rungs (MOTIR-8990, retired by MOTIR-9366): the six pools the first rung
+    // table sold between the ladder's top and Host. They are no longer sold — the
+    // rung table is floored at Host's pool, so they leave both allow-lists — but they
+    // stay here, unchanged, because the holder-time readers look a HELD key up across
+    // this whole array: `buildOrgBill` bills the held entry's price, `aiCadence` scans
+    // its lookup keys, and `capsForPlanKey` resolves any `pool_<N>k`. An org already on
+    // one keeps its bill line, cadence and caps until it changes plan.
     {
       key: 'pool_80k',
       name: 'Pool 80,000',
@@ -274,6 +276,72 @@ export const BILLING_CATALOG: BillingCatalog = {
       prices: {
         monthly: { amountUsd: 1155, priceLookupKey: 'pool_250k_pool_monthly' },
         annual: { amountUsd: 10000, priceLookupKey: 'pool_250k_pool_annual' },
+      },
+      includedTrackerSeats: 1,
+      band: 'larger_pool',
+    },
+    // The larger pools above Host (MOTIR-9366), the rung table on sale: MOTIR-8987's
+    // rule with its anchor moved from Max ×2 to Host. Monthly is Host's $1,500 plus
+    // $4.50 per 1,000 credits above 300,000 (10% off the top-up); annual is Host's
+    // annual rate, pool ÷ 1,000 × $40 — so annual is NOT 8 × monthly here.
+    // `includedTrackerSeats` must equal `INCLUDED_TRACKER_SEATS_PER_AI_PLAN`, which is
+    // declared after this literal and so cannot be read inside it.
+    {
+      key: 'pool_600k',
+      name: 'Pool 600,000',
+      allotment: { credits: 600000, cadence: 'monthly' },
+      recommended: false,
+      prices: {
+        monthly: { amountUsd: 2850, priceLookupKey: 'pool_600k_pool_monthly' },
+        annual: { amountUsd: 24000, priceLookupKey: 'pool_600k_pool_annual' },
+      },
+      includedTrackerSeats: 1,
+      band: 'larger_pool',
+    },
+    {
+      key: 'pool_900k',
+      name: 'Pool 900,000',
+      allotment: { credits: 900000, cadence: 'monthly' },
+      recommended: false,
+      prices: {
+        monthly: { amountUsd: 4200, priceLookupKey: 'pool_900k_pool_monthly' },
+        annual: { amountUsd: 36000, priceLookupKey: 'pool_900k_pool_annual' },
+      },
+      includedTrackerSeats: 1,
+      band: 'larger_pool',
+    },
+    {
+      key: 'pool_1200k',
+      name: 'Pool 1,200,000',
+      allotment: { credits: 1200000, cadence: 'monthly' },
+      recommended: false,
+      prices: {
+        monthly: { amountUsd: 5550, priceLookupKey: 'pool_1200k_pool_monthly' },
+        annual: { amountUsd: 48000, priceLookupKey: 'pool_1200k_pool_annual' },
+      },
+      includedTrackerSeats: 1,
+      band: 'larger_pool',
+    },
+    {
+      key: 'pool_1800k',
+      name: 'Pool 1,800,000',
+      allotment: { credits: 1800000, cadence: 'monthly' },
+      recommended: false,
+      prices: {
+        monthly: { amountUsd: 8250, priceLookupKey: 'pool_1800k_pool_monthly' },
+        annual: { amountUsd: 72000, priceLookupKey: 'pool_1800k_pool_annual' },
+      },
+      includedTrackerSeats: 1,
+      band: 'larger_pool',
+    },
+    {
+      key: 'pool_2400k',
+      name: 'Pool 2,400,000',
+      allotment: { credits: 2400000, cadence: 'monthly' },
+      recommended: false,
+      prices: {
+        monthly: { amountUsd: 10950, priceLookupKey: 'pool_2400k_pool_monthly' },
+        annual: { amountUsd: 96000, priceLookupKey: 'pool_2400k_pool_annual' },
       },
       includedTrackerSeats: 1,
       band: 'larger_pool',
@@ -348,13 +416,24 @@ export function maxMonthlyPlanCredits(): number {
 }
 
 /**
- * The larger-pool rung table (MOTIR-8990): every `larger_pool` entry with a monthly
- * allotment strictly above `maxMonthlyPlanCredits()`, ascending by pool. A FRESH array
- * per call; it mutates nothing. A hoisted declaration on purpose — the allow-lists
- * below call it while the module initialises.
+ * Host's pool (300,000 today) — the floor of the larger-pool rung table and of the
+ * checkout's at-or-below refusal (MOTIR-9366). Read from the `host` band, the way
+ * `maxMonthlyPlanCredits()` reads the ladder, so it moves with Host's entry.
+ */
+export function hostMonthlyPlanCredits(): number {
+  return Math.max(...hostPlans().flatMap((p) => (p.allotment ? [p.allotment.credits] : [])));
+}
+
+/**
+ * The larger-pool rung table on sale (MOTIR-9366): every `larger_pool` entry with a
+ * monthly allotment strictly above `hostMonthlyPlanCredits()`, ascending by pool. The
+ * floor is what retires the rungs at or below Host: their entries stay in the catalog
+ * for a holder, and this list — the source of both allow-lists — leaves them out. A
+ * FRESH array per call; it mutates nothing. A hoisted declaration on purpose — the
+ * allow-lists below call it while the module initialises.
  */
 export function largerPoolPlans(): AiPlanCatalogEntry[] {
-  const ceiling = maxMonthlyPlanCredits();
+  const ceiling = hostMonthlyPlanCredits();
   return BILLING_CATALOG.aiPlans
     .filter(
       (p) =>
@@ -381,7 +460,7 @@ const LARGER_POOL_KEY = /^pool_(\d+)k_pool_(monthly|annual)$/;
 /**
  * How big a pool a rung-shaped lookup key NAMES, in credits a month — or `null` for
  * any other key. It says nothing about whether the catalog sells that pool; the
- * checkout path uses it to tell a request for a pool at or below the ladder's top
+ * checkout path uses it to tell a request for a pool at or below Host's pool
  * from a price that simply is not on sale.
  */
 export function largerPoolCreditsForPrice(priceLookupKey: string): number | null {
@@ -392,7 +471,7 @@ export function largerPoolCreditsForPrice(priceLookupKey: string): number | null
 // Every lookup key a Checkout may legitimately start — the allow-list
 // `startCheckout` validates against, so the boundary never forwards an arbitrary
 // (or stale) price the UI didn't get from this catalog. The ladder's keys, the
-// floored rung table's (so a rung at or below the ladder's top is never admitted)
+// floored rung table's (so a rung at or below Host's pool is never admitted)
 // and Host's.
 export const CHECKOUT_PRICE_LOOKUP_KEYS: ReadonlySet<string> = new Set<string>([
   ...[...ladderPlans(), ...largerPoolPlans(), ...hostPlans()].flatMap((p) =>
@@ -437,8 +516,8 @@ export function isAllowedCheckoutQuantity(key: string, quantity: number): boolea
 /**
  * The plan-change keys of `entries`: every paid plan with a monthly allotment,
  * ascending by that allotment. Sorted rather than concatenated, so the order holds
- * however the bands sit relative to each other (the larger pools move above Host
- * later, MOTIR-9366). A FRESH array; it mutates nothing.
+ * however the bands sit relative to each other: the ladder, then Host, then the rungs
+ * above it (MOTIR-9366). A FRESH array; it mutates nothing.
  */
 export function planChangeKeysOf(entries: readonly AiPlanCatalogEntry[]): string[] {
   return entries
