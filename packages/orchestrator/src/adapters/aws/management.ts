@@ -785,6 +785,8 @@ export function awsRunnerPolicyDocument(input: {
 export function awsAgentHosterPolicyDocument(input: {
   shardTag: string;
   regionId: string;
+  /** The runner statements' untagged terminate — a Host org's own account (MOTIR-9584). */
+  reapUntagged?: boolean;
 }): AwsPolicyDocument {
   const runner = awsRunnerPolicyDocument(input);
   const arn = (resource: string) => `arn:aws:ec2:${input.regionId}:*:${resource}`;

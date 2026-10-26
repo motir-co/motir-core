@@ -197,9 +197,19 @@ export const fleetInFlightSlotRepository = {
     workload: string,
     now: Date,
     tx: Prisma.TransactionClient,
+    /** Accounts whose slots are not counted — a Host org's own indexer accounts,
+     *  which the global index cap does not cover (MOTIR-9589). A slot on no
+     *  account (the Fly fleet) is always counted. */
+    excludedShardIds: readonly string[] = [],
   ): Promise<number> {
     return tx.fleetInFlightSlot.count({
-      where: { workload, expiresAt: { gt: now } },
+      where: {
+        workload,
+        expiresAt: { gt: now },
+        ...(excludedShardIds.length > 0
+          ? { OR: [{ fleetShardId: null }, { fleetShardId: { notIn: [...excludedShardIds] } }] }
+          : {}),
+      },
     });
   },
 

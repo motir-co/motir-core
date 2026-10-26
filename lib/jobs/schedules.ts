@@ -81,6 +81,11 @@ export const SUB_HOURLY_CADENCE_EXCEPTIONS: Readonly<Record<string, string>> = {
     'a 5-minute registration window must be read inside its own window',
   // MOTIR-9462 · the growth pass acts on that reading, so it runs at its cadence.
   'system.fleet-pool-growth': 'pool growth acts on the every-minute headroom reading',
+  // MOTIR-9582 · a Host purchase starts a days-long quota wait at account
+  // creation, so the reconcile runs at the growth pass's cadence.
+  'system.host-account-reconcile': 'a Host purchase starts its quota wait at account creation',
+  // MOTIR-9585 · the state pass follows the every-minute quota reads it derives from.
+  'system.host-account-state': 'an own account follows the every-minute quota reads',
   // MOTIR-9612 · the gateway capacity contract §3 *Lanes*.
   'system.capacity-alert-evaluation':
     'the gateway counts rpm/tpm per fixed clock minute, so one late read per minute is one reading per window',

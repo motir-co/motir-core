@@ -10081,6 +10081,11 @@
             },
             "pool": {
               "grow": "Rozszerzono pulę floty"
+            },
+            "capacity_request": {
+              "list": "Wyświetlono prośby o pojemność floty",
+              "link": "Powiązano prośbę o pojemność z podniesieniem limitu",
+              "close": "Zamknięto prośbę o pojemność floty"
             }
           },
           "idea": {

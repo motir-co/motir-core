@@ -87,6 +87,26 @@ export class PoolGrowthRefusedError extends Error {
   }
 }
 
+/** AWS refused to create one of a Host organisation's own accounts (MOTIR-9582).
+ *  No row is written; the reconcile backs the slot off before trying again. */
+export class HostAccountRefusedError extends Error {
+  constructor(
+    readonly organizationId: string,
+    readonly slot: string,
+    readonly accountName: string,
+    /** AWS's reason, as its code. */
+    readonly reason: string,
+    readonly consecutiveRefusals: number,
+  ) {
+    super(
+      `Creating the Host account ${accountName} (organisation ${organizationId}, ${slot}) ` +
+        `was refused: ${reason}. Refusal ${consecutiveRefusals} in a row; the reconcile backs ` +
+        'off before the next attempt, and the organisation stays on the shared pools.',
+    );
+    this.name = 'HostAccountRefusedError';
+  }
+}
+
 /** A quota raise still open after a day — AWS is slow, or wants a case answered. */
 export class QuotaRequestSlowError extends Error {
   constructor(

@@ -6,6 +6,7 @@ import type {
 } from '@/lib/dto/fleetShard';
 import type { FleetWorkloadKind } from '@motir/orchestrator';
 import { FleetShardProvisioningRefusedError } from '@/lib/ciFleet/errors';
+import { hostAccountPlan, type HostAccountSlot } from '@/lib/ciFleet/hostAccounts';
 import {
   GITHUB_INSTALLATION_API_PER_HOUR,
   poolAccountRaiseTargetVcpu,
@@ -14,6 +15,7 @@ import {
 import { FLEET_WORKLOAD_KINDS } from '@/lib/ciFleet/workloads';
 import {
   AWS_DEFAULT_REGION,
+  AWS_REAP_UNTAGGED_OPTION,
   AWS_RUNTIME_CREDENTIAL_OPTION,
 } from '@/lib/fleetShards/awsProvisioningProvider';
 import {
@@ -112,9 +114,17 @@ export interface AddSpareShardDeps {
   env?: Readonly<Record<string, string | undefined>>;
 }
 
-/** How one walk differs between the person-run command and the unattended one. */
+/** What a Host organisation's account creation is handed (MOTIR-9582). */
+export interface AddOrgOwnedShardInput {
+  organizationId: string;
+  slot: HostAccountSlot;
+}
+
+/** How one walk differs between the person-run command and the unattended ones. */
 interface WalkMode {
-  role: 'primary' | 'spare';
+  role: 'primary' | 'spare' | 'org_owned';
+  /** The owning organisation — set exactly when `role` is `org_owned`. */
+  ownerOrganizationId?: string;
   /** The raise filed after the row, or null for none (the person-run command,
    *  whose quota step words the raise as a person's step instead). */
   raiseTargetVcpu: number | null;
@@ -291,9 +301,7 @@ export const fleetShardProvisioningService = {
     const template = env[AWS_MEMBER_EMAIL_TEMPLATE_ENV];
     problems.push(...memberEmailTemplateProblems(template));
 
-    const primary = (await fleetShardService.listShards({ fleetKind: kind, role: 'primary' }))
-      .filter((shard) => shard.state !== 'disabled')
-      .sort((a, b) => Number(b.state === 'active') - Number(a.state === 'active'))[0];
+    const primary = await primaryOf(kind);
     if (!primary) {
       throw new FleetShardProvisioningRefusedError([
         `${kind} has no primary account to take its GitHub org from`,
@@ -323,6 +331,69 @@ export const fleetShardProvisioningService = {
   },
 
   /**
+   * A HOST ORGANISATION'S OWN ACCOUNT (Story MOTIR-9365 · MOTIR-9582): create —
+   * or resume creating — one slot of `organizationId`'s three AWS accounts as an
+   * `org_owned` row. The unattended add-shard's walk, with the slot's derived
+   * name (so the member email, and with it the AWS account, is found on replay),
+   * the owner, and the slot's raise target. The row stays `provisioning`.
+   *
+   * The merged slot is ONE AWS account recorded as two rows: the walk creates it
+   * as the `code_graph_index` row, which carries its one raise; the
+   * `agent_instance` row is then written from that row's AWS location and
+   * credential reference — never a second `CreateAccount`, never a second raise.
+   *
+   * @throws FleetShardProvisioningRefusedError before any external call (a kind
+   *   with no primary account to take the GitHub org from, a missing template);
+   *   FleetShardAccountRefusedError when AWS refuses `CreateAccount`.
+   */
+  async addOrgOwnedShard(
+    input: AddOrgOwnedShardInput,
+    deps: AddSpareShardDeps = {},
+  ): Promise<ShardProvisioningResult> {
+    const env = deps.env ?? process.env;
+    const plan = hostAccountPlan(input.organizationId, input.slot);
+    const kind = plan.account.fleetKind;
+    const operator = await fleetAutomationPrincipal();
+    const template = env[AWS_MEMBER_EMAIL_TEMPLATE_ENV];
+    const problems = memberEmailTemplateProblems(template);
+
+    const primary = await primaryOf(kind);
+    if (!primary) {
+      throw new FleetShardProvisioningRefusedError([
+        `${kind} has no primary account to take its GitHub org from`,
+      ]);
+    }
+
+    const name = plan.account.name;
+    const addInput: AddShardInput = {
+      provider: 'aws',
+      fleetKind: kind,
+      name,
+      region: primary.aws?.region ?? AWS_DEFAULT_REGION,
+      githubOrg: primary.github.org,
+      orgMode: 'existing',
+      operatorEmail: operator.email,
+      providerOptions: {
+        'account-email': template ? memberAccountEmail(template, name) : '',
+        [AWS_RUNTIME_CREDENTIAL_OPTION]: 'role',
+        // The attribution pass reaps every machine on an own account (MOTIR-9584).
+        [AWS_REAP_UNTAGGED_OPTION]: 'true',
+      },
+    };
+    const result = await walk(await preflight(addInput, operator, problems), addInput, {
+      role: 'org_owned',
+      ownerOrganizationId: input.organizationId,
+      raiseTargetVcpu: plan.raiseTargetVcpu,
+      raiseDeps: deps.raise,
+    });
+    if (!plan.sharedRow) return result;
+    return {
+      ...result,
+      steps: [...result.steps, await writeSharedRow(result.shard, plan.sharedRow)],
+    };
+  },
+
+  /**
    * Re-read an account's vCPU quota through its provider after a raise, and write
    * it (`provider_read`). No other limit is touched.
    *
@@ -332,6 +403,51 @@ export const fleetShardProvisioningService = {
     return refreshLimits(name, operatorEmail);
   },
 };
+
+/** The kind's primary account to take the GitHub org and region from — an active
+ *  one first, never a disabled one. */
+async function primaryOf(kind: FleetWorkloadKind): Promise<FleetShardDTO | undefined> {
+  return (await fleetShardService.listShards({ fleetKind: kind, role: 'primary' }))
+    .filter((shard) => shard.state !== 'disabled')
+    .sort((a, b) => Number(b.state === 'active') - Number(a.state === 'active'))[0];
+}
+
+/** The merged Host account's second row: the same AWS account as `account`
+ *  under another fleet kind — looked for first, so a replay writes nothing. */
+async function writeSharedRow(
+  account: FleetShardDTO,
+  row: { name: string; fleetKind: FleetWorkloadKind },
+): Promise<ShardStepReport> {
+  const existing = await fleetShardService.findShardByName(row.name);
+  if (existing) {
+    return {
+      step: 'account_row',
+      outcome: 'already',
+      detail: `${existing.name} is recorded (${existing.state})`,
+    };
+  }
+  const shard = await fleetShardService.createShard({
+    name: row.name,
+    fleetKind: row.fleetKind,
+    provider: account.provider,
+    role: 'org_owned',
+    ownerOrganizationId: account.ownerOrganizationId,
+    state: 'provisioning',
+    githubOrg: account.github.org,
+    githubInstallationId: account.github.installationId,
+    githubAppRole: account.github.appRole,
+    awsAccountId: account.aws?.accountId ?? null,
+    awsRegion: account.aws?.region ?? null,
+    credentialRef: account.credentialRef,
+    limits: account.limits,
+    limitsSource: account.limitsSource,
+  });
+  return {
+    step: 'account_row',
+    outcome: 'done',
+    detail: `wrote ${shard.name} (provisioning) on ${account.name}'s AWS account`,
+  };
+}
 
 /** A spare of `kind` a previous unattended run left before its raise was filed:
  *  still `provisioning`, below the kind's target, with no raise ever recorded. */
@@ -363,7 +479,15 @@ function failureReason(err: unknown): string {
   return err instanceof Error ? err.name : 'UnknownError';
 }
 
-/** The walk both commands share — every step looks before it acts. */
+function auditReason(mode: WalkMode, shard: FleetShardDTO, providerName: string): string {
+  const what = `${shard.name} (${shard.fleetKind} on ${providerName})`;
+  if (mode.role === 'spare') return `pool growth: add spare ${what}`;
+  if (mode.role === 'org_owned')
+    return `host accounts: add ${what} for ${mode.ownerOrganizationId}`;
+  return `fleet-admin add-shard ${what}`;
+}
+
+/** The walk every add-shard shares — every step looks before it acts. */
 async function walk(
   prepared: Awaited<ReturnType<typeof preflight>>,
   input: AddShardInput,
@@ -480,6 +604,7 @@ async function walk(
       fleetKind: input.fleetKind,
       ...provider.location(ctx),
       role: mode.role,
+      ownerOrganizationId: mode.ownerOrganizationId ?? null,
       state: 'provisioning',
       githubOrg: input.githubOrg,
       githubInstallationId: installationId,
@@ -512,7 +637,8 @@ async function walk(
     }
   }
   // A spare stays `provisioning` until its quota is granted: the growth pass
-  // settles it (MOTIR-9461), as at most one spare per kind may be ready.
+  // settles it (MOTIR-9461), as at most one spare per kind may be ready. An
+  // org-owned account stays `provisioning` too — its state card settles it.
   if (mode.role === 'primary' && pending.length === 0 && shard.state === 'provisioning') {
     shard = await fleetShardService.setState(shard.id, 'active');
     steps[steps.length - 1]!.detail += '; now active';
@@ -548,10 +674,7 @@ async function walk(
     targetKind: 'platform',
     targetId: shard.id,
     targetLabel: shard.name,
-    reason:
-      mode.role === 'spare'
-        ? `pool growth: add spare ${shard.name} (${shard.fleetKind} on ${provider.name})`
-        : `fleet-admin add-shard ${shard.name} (${shard.fleetKind} on ${provider.name})`,
+    reason: auditReason(mode, shard, provider.name),
     metadata: {
       fleetKind: shard.fleetKind,
       provider: provider.name,

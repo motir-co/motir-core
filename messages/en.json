@@ -10078,6 +10078,11 @@
             },
             "pool": {
               "grow": "Grew a fleet pool"
+            },
+            "capacity_request": {
+              "list": "Listed fleet capacity requests",
+              "link": "Linked a capacity request to a quota raise",
+              "close": "Closed a fleet capacity request"
             }
           },
           "idea": {

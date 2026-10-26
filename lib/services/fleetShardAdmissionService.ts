@@ -22,7 +22,12 @@ import { isUnlimitedAgentOrg } from '@/lib/agentInstances/config';
 import { agentInstanceRepository } from '@/lib/repositories/agentInstanceRepository';
 import { ciRunnerProvisioningIntentRepository as intents } from '@/lib/repositories/ciRunnerProvisioningIntentRepository';
 import { fleetInFlightSlotRepository as slots } from '@/lib/repositories/fleetInFlightSlotRepository';
+import { HOST_PLAN_KEY } from '@/lib/billing/planCaps';
+import { mergedAccountSplit } from '@/lib/ciFleet/hostMergedAccountSplit';
+import { planCapsService } from '@/lib/services/planCapsService';
+import { fleetQuotaRequestRepository } from '@/lib/repositories/fleetQuotaRequestRepository';
 import { fleetShardRepository } from '@/lib/repositories/fleetShardRepository';
+import { withSystemContext } from '@/lib/workspaces/context';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
 
 // WHICH ACCOUNT A JOB'S MACHINE BOOTS ON (Story MOTIR-8953 · MOTIR-8968) — the
@@ -43,6 +48,14 @@ import { organizationRepository } from '@/lib/repositories/organizationRepositor
 // `selectionSetInTx`, so the pool-growth story (a Motir spare only for Motir's
 // orgs) and the Host-accounts story (a Host org's own account) change the set,
 // never the choice.
+//
+// A HOST ORGANISATION'S OWN ACCOUNT (Story MOTIR-9365 · MOTIR-9586), per kind:
+// once the job's org has a LIVE own account of the job's kind, that account is
+// the whole set — the job waits for it when it is full, paused or already tried,
+// and never spills to the shared pool or to Fly. Until then the org is on the
+// shared floor, the set as before. The Fly switch is still read first. The owner
+// is the account row's against the job's own org id, never a caller flag, and the
+// shared set never holds an `org_owned` row (it lists `primary` and `spare` only).
 
 /** The job admission places. */
 export interface ShardPlacementJob {
@@ -55,8 +68,9 @@ export type ShardPlacement =
   | { shardId: string }
   /** The kind's switch is Fly: boot on the process-wide fleet, as today. */
   | { shardId: null }
-  /** Every account of the kind is full, paused or excluded. */
-  | { deferred: 'shard_capacity'; detail: string };
+  /** Every account of the kind is full, paused or excluded. `own`: the account
+   *  was the org's own (MOTIR-9586), and `detail` says so. */
+  | { deferred: 'shard_capacity'; detail: string; own?: true };
 
 /** How a provision error is read for the in-boot move. */
 export type ProvisionRefusal = FleetShardMoveReason | 'job_fault';
@@ -72,6 +86,19 @@ export const HOSTED_AGENT_SHARD_CAPACITY_DETAIL =
 /** Each kind's `shard_capacity` words; a kind with none uses CI's. */
 const SHARD_CAPACITY_DETAIL_BY_KIND: Partial<Record<FleetWorkloadKind, string>> = {
   hosted_agent: HOSTED_AGENT_SHARD_CAPACITY_DETAIL,
+};
+
+/** The words for a Host org's job whose OWN account of the kind is full
+ *  (MOTIR-9586) — it waits for that account, never the shared pool. */
+export const OWN_ACCOUNT_CAPACITY_DETAIL_BY_KIND: Record<FleetWorkloadKind, string> = {
+  ci_runner:
+    "Your organization's own CI capacity is full right now. This job starts when one of your runners finishes.",
+  hosted_agent:
+    "Your organization's own agent-run capacity is full right now. This run starts when another of your runs finishes.",
+  code_graph_index:
+    "Your organization's own indexing capacity is full right now. This index starts when another of yours finishes.",
+  agent_instance:
+    "Your organization's own agent-hosting capacity is full right now. This agent starts when one of yours stops.",
 };
 
 /** Counts one kind's containers in flight on one account. */
@@ -135,7 +162,8 @@ export const fleetShardAdmissionService = {
   },
 
   /**
-   * The accounts a job may use: the active shared accounts of its fleet kind —
+   * The accounts a job may use: its org's own LIVE account of the kind alone,
+   * when it has one (MOTIR-9586) — else the active shared accounts of the kind —
    * and, for a job of one of Motir's own exempt orgs (meta or internal, the
    * {@link isUnlimitedAgentOrg} predicate), that kind's active spare too
    * (MOTIR-9456). Exemption is read here, per job, from the job's own org row in
@@ -147,6 +175,42 @@ export const fleetShardAdmissionService = {
     job: ShardPlacementJob,
     tx: Prisma.TransactionClient,
   ): Promise<FleetShard[]> {
+    // The org's own LIVE account of the kind is the whole set (MOTIR-9586) —
+    // while the org is on Host now (MOTIR-9590). Unreadable ⇒ an empty set, so
+    // the job defers rather than landing on either side.
+    const own = await this.ownAccountInTx(job, tx);
+    if (own === 'plan_unknown') return [];
+    if (own) return [own];
+    return this.sharedSetInTx(job, tx);
+  },
+
+  /**
+   * The org's live own account of the kind, if it may take a NEW job
+   * (MOTIR-9590): only while the org's plan reads Host now. The plan is read
+   * through `planCapsService.capsFor`, which follows a downgrade's effective
+   * date, so an org that left Host gets null (its new jobs take the shared set)
+   * and its accounts take no new job. `plan_unknown` for an org that has one: it
+   * is placed on neither side. Nothing is written, and running jobs and agent
+   * instances keep their recorded account. The plan is read only for an org
+   * that has a live own account.
+   */
+  async ownAccountInTx(
+    job: ShardPlacementJob,
+    tx: Prisma.TransactionClient,
+  ): Promise<FleetShard | null | 'plan_unknown'> {
+    const own = await fleetShardRepository.findLiveOrgOwnedInTx(
+      job.organizationId,
+      job.fleetKind,
+      tx,
+    );
+    if (!own) return null;
+    const answer = await planCapsService.capsFor(job.organizationId);
+    if (answer.kind === 'plan_unknown') return 'plan_unknown';
+    return answer.kind === 'capped' && answer.planKey === HOST_PLAN_KEY ? own : null;
+  },
+
+  /** The shared accounts a job may use — `primary`, and `spare` for an exempt org. */
+  async sharedSetInTx(job: ShardPlacementJob, tx: Prisma.TransactionClient): Promise<FleetShard[]> {
     const org = await organizationRepository.findByIdInTx(job.organizationId, tx);
     const roles: FleetShardRole[] =
       org && isUnlimitedAgentOrg(org) ? ['primary', 'spare'] : ['primary'];
@@ -177,10 +241,14 @@ export const fleetShardAdmissionService = {
     }
 
     let best: { shardId: string; headroom: number } | null = null;
-    for (const shard of await this.selectionSetInTx(job, tx)) {
+    const shards = await this.selectionSetInTx(job, tx);
+    // The set is the org's own account or shared accounts, never a mix.
+    const own = shards.some((shard) => shard.role === 'org_owned');
+    for (const shard of shards) {
       if (options.exclude?.has(shard.id)) continue;
       if (shard.admissionPausedUntil && shard.admissionPausedUntil > now) continue;
-      const headroom = this.effectiveCeiling(shard) - (await countInFlight(shard.id, now, tx));
+      const ceiling = own ? await this.ownCeilingInTx(shard, tx) : this.effectiveCeiling(shard);
+      const headroom = ceiling - (await countInFlight(shard.id, now, tx));
       if (headroom <= 0) continue;
       if (
         best === null ||
@@ -190,12 +258,70 @@ export const fleetShardAdmissionService = {
         best = { shardId: shard.id, headroom };
       }
     }
-    return best
-      ? { shardId: best.shardId }
-      : {
-          deferred: 'shard_capacity',
-          detail: SHARD_CAPACITY_DETAIL_BY_KIND[job.fleetKind] ?? SHARD_CAPACITY_DETAIL,
-        };
+    if (best) return { shardId: best.shardId };
+    if (own) {
+      return {
+        deferred: 'shard_capacity',
+        detail: OWN_ACCOUNT_CAPACITY_DETAIL_BY_KIND[job.fleetKind],
+        own: true,
+      };
+    }
+    return {
+      deferred: 'shard_capacity',
+      detail: SHARD_CAPACITY_DETAIL_BY_KIND[job.fleetKind] ?? SHARD_CAPACITY_DETAIL,
+    };
+  },
+
+  /**
+   * An own account's ceiling (MOTIR-9586): the platform admin's override, else
+   * its AWS ACCOUNT's largest granted vCPU ÷ 2 (one job is 2 vCPU), rounded down.
+   * The granted value is read across every row of the account, because the
+   * tracker records it on the row the raise was filed on — the merged account's
+   * indexer row — and the hoster row's own `vcpuQuota` stays null. No known
+   * grant ⇒ no job.
+   *
+   * The merged indexer + agent hoster account (MOTIR-9589) shares that one grant
+   * between its two rows: its indexer row takes the split's index cap and its
+   * hoster row the agent cap (`mergedAccountSplit`), so the two kinds together
+   * never exceed the one quota.
+   */
+  async ownCeilingInTx(
+    shard: Pick<FleetShard, 'admissionCeilingOverride' | 'awsAccountId' | 'fleetKind'>,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    if (shard.admissionCeilingOverride !== null) return shard.admissionCeilingOverride;
+    if (!shard.awsAccountId) return 0;
+    const granted = await fleetQuotaRequestRepository.maxGrantedForAwsAccountInTx(
+      shard.awsAccountId,
+      tx,
+    );
+    if (shard.fleetKind === 'code_graph_index') return mergedAccountSplit(granted).indexCap;
+    if (shard.fleetKind === 'agent_instance') return mergedAccountSplit(granted).agentCap;
+    return shardAdmissionCeiling({ vcpuQuota: granted, machineLimit: null }) ?? 0;
+  },
+
+  /**
+   * Does the org's own account take this kind's jobs (MOTIR-9589) — the kind is
+   * on its pool and the org has a live own account of it. The same switch and
+   * live-own read `chooseInTx` places by, so a caller exempting the org from a
+   * shared bound can never disagree with where the job lands.
+   */
+  async ownAccountTakesInTx(
+    job: ShardPlacementJob,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    if (!(await fleetKindOnPool(job.fleetKind))) return false;
+    const own = await this.ownAccountInTx(job, tx);
+    return own !== null && own !== 'plan_unknown';
+  },
+
+  /** The `shard_capacity` words for a job no account could take — its own
+   *  account's when its org has a live one of the kind (MOTIR-9586). For a boot
+   *  whose in-boot move found no account left, outside the admission's lock. */
+  async capacityDetail(job: ShardPlacementJob): Promise<string> {
+    const own = await withSystemContext((tx) => this.ownAccountInTx(job, tx));
+    if (own && own !== 'plan_unknown') return OWN_ACCOUNT_CAPACITY_DETAIL_BY_KIND[job.fleetKind];
+    return SHARD_CAPACITY_DETAIL_BY_KIND[job.fleetKind] ?? SHARD_CAPACITY_DETAIL;
   },
 
   /**
