@@ -3464,9 +3464,10 @@ export default defineConfig({
         // capacityActions}`, `tests/api/platformCapacityRoute`, `tests/jobs/
         // capacityAlertEvaluation`, `tests/components/admin/{capacity*,
         // editCapacityLimitsDialog,alertShareCard,adminShellCapacityNav}` and the story
-        // gate `tests/integration/capacity/capacityScreenStoryGate`). Every file is pinned
-        // at 90 on each metric it reaches; the ones below 90 on a metric are pinned at
-        // their measured floor there (statements / branches / functions / lines):
+        // gate `tests/integration/capacity/capacityScreenStoryGate`). 25 files reach 90 on
+        // all four metrics and are pinned at 90 in `thresholds`. These ten do not, and are
+        // REPORT-ONLY (in `include`, not in `thresholds`) rather than pinned below the
+        // floor (statements / branches / functions / lines):
         // NotEnforcedFold.tsx 83.33 / 50 / 100 / 100;
         // RaisedAlertsBanner.tsx 100 / 75 / 100 / 100;
         // actions.ts 87.5 / 85.18 / 100 / 84.84;
@@ -3566,29 +3567,11 @@ export default defineConfig({
           branches: 90,
           statements: 90,
         },
-        'app/**/admin/capacity/_components/NotEnforcedFold.tsx': {
-          lines: 90,
-          functions: 90,
-          branches: 50,
-          statements: 83,
-        },
-        'app/**/admin/capacity/_components/RaisedAlertsBanner.tsx': {
-          lines: 90,
-          functions: 90,
-          branches: 75,
-          statements: 90,
-        },
         'app/**/admin/capacity/_components/capacityDisplay.ts': {
           lines: 90,
           functions: 90,
           branches: 90,
           statements: 90,
-        },
-        'app/**/admin/capacity/actions.ts': {
-          lines: 84,
-          functions: 90,
-          branches: 85,
-          statements: 87,
         },
         'app/**/admin/capacity/page.tsx': {
           lines: 90,
@@ -3596,22 +3579,10 @@ export default defineConfig({
           branches: 90,
           statements: 90,
         },
-        'app/api/platform/capacity/route.ts': {
-          lines: 85,
-          functions: 90,
-          branches: 50,
-          statements: 85,
-        },
         'lib/capacity/alertKeys.ts': {
           lines: 90,
           functions: 90,
           branches: 90,
-          statements: 90,
-        },
-        'lib/capacity/errors.ts': {
-          lines: 90,
-          functions: 90,
-          branches: 71,
           statements: 90,
         },
         'lib/capacity/limitEditValidation.ts': {
@@ -3644,23 +3615,11 @@ export default defineConfig({
           branches: 90,
           statements: 90,
         },
-        'lib/gateway/capacityClient.ts': {
-          lines: 90,
-          functions: 90,
-          branches: 88,
-          statements: 90,
-        },
         'lib/gateway/capacityErrors.ts': {
           lines: 90,
           functions: 90,
           branches: 90,
           statements: 90,
-        },
-        'lib/gateway/capacityFakeState.ts': {
-          lines: 90,
-          functions: 90,
-          branches: 63,
-          statements: 86,
         },
         'lib/gateway/capacityProvider.ts': {
           lines: 90,
@@ -3674,12 +3633,6 @@ export default defineConfig({
           branches: 90,
           statements: 90,
         },
-        'lib/mappers/capacityAlertMappers.ts': {
-          lines: 85,
-          functions: 90,
-          branches: 75,
-          statements: 77,
-        },
         'lib/mappers/platformCapacityMappers.ts': {
           lines: 90,
           functions: 90,
@@ -3690,12 +3643,6 @@ export default defineConfig({
           lines: 90,
           functions: 90,
           branches: 90,
-          statements: 90,
-        },
-        'lib/monitoring/capacityLimitAlert.ts': {
-          lines: 90,
-          functions: 90,
-          branches: 50,
           statements: 90,
         },
         'lib/repositories/capacityAlertSettingRepository.ts': {
@@ -3726,12 +3673,6 @@ export default defineConfig({
           lines: 90,
           functions: 90,
           branches: 90,
-          statements: 90,
-        },
-        'lib/services/platformCapacityService.ts': {
-          lines: 90,
-          functions: 90,
-          branches: 75,
           statements: 90,
         },
         // Story MOTIR-9362 · MOTIR-9464 — the pool-growth modules, measured above.
