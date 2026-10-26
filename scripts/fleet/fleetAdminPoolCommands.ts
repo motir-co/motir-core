@@ -6,6 +6,7 @@
  *     [--code L-1216C47A] --operator <email>
  *   pool-status [--kind <fleet kind>]
  *   growth-events --kind <fleet kind> [--limit <n>]
+ *   org-accounts [--org <organisation id>] [--kind <fleet kind>]  (MOTIR-9588)
  *
  * A printer over the services: `request-quota` files through
  * `fleetQuotaRaiseService.fileRaises`, the other two read
@@ -17,6 +18,7 @@ import { parseArgs } from 'node:util';
 import { FleetShardProvisioningRefusedError } from '@/lib/ciFleet/errors';
 import type {
   FleetGrowthEventViewDTO,
+  FleetOrgAccountDTO,
   FleetPoolKindStatusDTO,
   FleetQuotaRaiseOutcomeDTO,
 } from '@/lib/dto/fleetPools';
@@ -114,6 +116,15 @@ export function formatGrowthEvent(e: FleetGrowthEventViewDTO): string {
   );
 }
 
+/** One own account row: owner, kind, name, state, requested and granted vCPU. */
+export function formatOrgAccount(a: FleetOrgAccountDTO): string {
+  return (
+    `${a.organizationId}  ${a.fleetKind}  ${a.name}  ${a.state}` +
+    `  requested ${dash(a.requestedVcpu)}  granted ${dash(a.grantedVcpu)}` +
+    `${a.quotaRequestStatus ? `  (${a.quotaRequestStatus})` : ''}`
+  );
+}
+
 // ── Handlers ─────────────────────────────────────────────────────────────────
 
 export async function requestQuota(
@@ -176,5 +187,22 @@ export async function growthEvents(args: string[], rawIo: PoolCommandIo): Promis
   const events = await fleetPoolStatusService.listGrowthEvents(values.kind, limit);
   if (events.length === 0) io.out(`${values.kind}: no growth events`);
   for (const event of events) io.out(formatGrowthEvent(event));
+  return EXIT_OK;
+}
+
+export async function orgAccounts(args: string[], rawIo: PoolCommandIo): Promise<number> {
+  const io = scrubbed(rawIo);
+  const { values } = parseArgs({
+    args,
+    options: { org: { type: 'string' }, kind: { type: 'string' } },
+    strict: true,
+    allowPositionals: false,
+  });
+  const accounts = await fleetPoolStatusService.listOrgAccounts({
+    ...(values.org !== undefined ? { organizationId: values.org } : {}),
+    ...(values.kind !== undefined ? { fleetKind: values.kind } : {}),
+  });
+  if (accounts.length === 0) io.out('none');
+  for (const account of accounts) io.out(formatOrgAccount(account));
   return EXIT_OK;
 }

@@ -115,8 +115,26 @@ export const fleetQuotaRequestRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<Array<FleetQuotaRequest & { shard: { name: string } }>> {
     return tx.fleetQuotaRequest.findMany({
-      where: { fleetKind, OR: [{ closedAt: null }, { closedAt: { gte: closedSince } }] },
+      where: {
+        fleetKind,
+        // A Host org's own account is in no shared pool (MOTIR-9588).
+        shard: { role: { not: 'org_owned' } },
+        OR: [{ closedAt: null }, { closedAt: { gte: closedSince } }],
+      },
       include: { shard: { select: { name: true } } },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    });
+  },
+
+  /** Every raise filed against any of these accounts, newest first — an own AWS
+   *  account's requests across both rows of the merged pair (MOTIR-9588). */
+  async listByShardIdsInTx(
+    shardIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<FleetQuotaRequest[]> {
+    if (shardIds.length === 0) return [];
+    return tx.fleetQuotaRequest.findMany({
+      where: { shardId: { in: [...shardIds] } },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
   },

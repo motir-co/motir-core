@@ -16,7 +16,7 @@
  * `enable --name <account>`, each with `--operator <email>`.
  *
  * and the pool commands (MOTIR-9463, `fleetAdminPoolCommands.ts`):
- * `request-quota`, `pool-status` and `growth-events`; and the capacity request
+ * `request-quota`, `pool-status`, `growth-events` and `org-accounts` (MOTIR-9588); and the capacity request
  * commands (MOTIR-9583, `fleetAdminCapacityRequestCommands.ts`):
  * `capacity-requests`, `capacity-request-link` and `capacity-request-close`.
  *
@@ -55,6 +55,7 @@ import {
 } from '@/lib/services/fleetShardProvisioningService';
 import {
   growthEvents,
+  orgAccounts,
   poolStatus,
   requestQuota,
   type FleetAdminPoolDeps,
@@ -86,6 +87,7 @@ const USAGE = [
   '    [--code L-1216C47A] --operator <email>',
   '  fleet-admin pool-status [--kind <fleet kind>]',
   '  fleet-admin growth-events --kind <fleet kind> [--limit <n>]',
+  '  fleet-admin org-accounts [--org <organisation id>] [--kind <fleet kind>]',
   '  fleet-admin capacity-requests --operator <email>',
   '  fleet-admin capacity-request-link <request> <quota request> --operator <email>',
   '  fleet-admin capacity-request-close <request> <note> --operator <email>',
@@ -259,6 +261,7 @@ export async function runFleetAdmin(
     if (command === 'request-quota') return await requestQuota(args, io, pool);
     if (command === 'pool-status') return await poolStatus(args, io, pool);
     if (command === 'growth-events') return await growthEvents(args, io);
+    if (command === 'org-accounts') return await orgAccounts(args, io);
     if (command === 'capacity-requests') return await capacityRequests(args, io);
     if (command === 'capacity-request-link') return await capacityRequestLink(args, io);
     if (command === 'capacity-request-close') return await capacityRequestClose(args, io);

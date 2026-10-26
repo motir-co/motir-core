@@ -1,15 +1,18 @@
-import type { FleetShard } from '@/generated/prisma/client';
+import type { FleetQuotaRequest, FleetShard } from '@/generated/prisma/client';
+import { HOST_ACCOUNT_STATES, stateFromTimes } from '@/lib/ciFleet/hostAccountState';
 import { HEADROOM_ALERT_FRACTION, fleetKindOnPool } from '@/lib/ciFleet/shardTargets';
 import { FLEET_WORKLOAD_KINDS, type FleetWorkloadKind } from '@/lib/ciFleet/workloads';
 import { FleetPoolValueInvalidError } from '@/lib/ciFleet/errors';
 import type {
   FleetGrowthEventViewDTO,
   FleetGrowthOutcomeDTO,
+  FleetOrgAccountDTO,
   FleetPoolAccountDTO,
   FleetPoolKindStatusDTO,
   FleetPoolRequestDTO,
   FleetQuotaRequestStatusDTO,
 } from '@/lib/dto/fleetPools';
+import { DEFAULT_FLEET_QUOTA_CODE } from '@/lib/mappers/fleetPoolMappers';
 import { fleetGrowthEventRepository } from '@/lib/repositories/fleetGrowthEventRepository';
 import { fleetQuotaRequestRepository } from '@/lib/repositories/fleetQuotaRequestRepository';
 import { fleetShardRepository } from '@/lib/repositories/fleetShardRepository';
@@ -111,7 +114,83 @@ async function kindStatus(
   };
 }
 
+/** One own AWS account's rows (the merged pair is two), printed alike: the most
+ *  advanced state either row records, the latest vCPU raise's ask and status,
+ *  and the largest granted value read for the account. */
+function orgAccountViews(
+  rows: readonly FleetShard[],
+  requests: readonly FleetQuotaRequest[],
+): FleetOrgAccountDTO[] {
+  const vcpu = requests.filter((r) => r.quotaCode === DEFAULT_FLEET_QUOTA_CODE);
+  const latest = vcpu[0] ?? null;
+  const granted = vcpu
+    .map((r) => r.grantedValue)
+    .filter((value): value is number => value !== null);
+  const state = rows
+    .map((row) => stateFromTimes(row))
+    .reduce((a, b) => (HOST_ACCOUNT_STATES.indexOf(b) > HOST_ACCOUNT_STATES.indexOf(a) ? b : a));
+  const earliest = (column: 'quotaRequestedAt' | 'grantedAt' | 'liveAt') => {
+    const times = rows.map((row) => row[column]?.getTime()).filter((t) => t !== undefined);
+    return times.length > 0 ? new Date(Math.min(...times)).toISOString() : null;
+  };
+  return rows.map((row) => ({
+    organizationId: row.ownerOrganizationId ?? '',
+    fleetKind: row.fleetKind as FleetWorkloadKind,
+    name: row.name,
+    awsAccountId: row.awsAccountId,
+    state,
+    requestedVcpu: latest?.desiredValue ?? null,
+    grantedVcpu: granted.length > 0 ? Math.max(...granted) : null,
+    quotaRequestStatus: (latest?.status as FleetQuotaRequestStatusDTO | undefined) ?? null,
+    quotaRequestedAt: earliest('quotaRequestedAt'),
+    grantedAt: earliest('grantedAt'),
+    liveAt: earliest('liveAt'),
+  }));
+}
+
 export const fleetPoolStatusService = {
+  /**
+   * Every Host organisation's own account rows (MOTIR-9588), optionally of one
+   * organisation or one kind, from stored records only — never AWS.
+   *
+   * @throws FleetPoolValueInvalidError on an unknown fleet kind.
+   */
+  async listOrgAccounts(
+    filter: { organizationId?: string; fleetKind?: string } = {},
+  ): Promise<FleetOrgAccountDTO[]> {
+    const fleetKind = filter.fleetKind === undefined ? undefined : validKind(filter.fleetKind);
+    return withSystemContext(async (tx) => {
+      const listed = await fleetShardRepository.listOrgOwned(
+        {
+          ...(filter.organizationId !== undefined ? { organizationId: filter.organizationId } : {}),
+          ...(fleetKind !== undefined ? { fleetKind } : {}),
+        },
+        tx,
+      );
+      const out: FleetOrgAccountDTO[] = [];
+      const seen = new Set<string>();
+      for (const row of listed) {
+        const account = row.awsAccountId ?? `row:${row.id}`;
+        if (seen.has(account)) continue;
+        seen.add(account);
+        // Both rows of the AWS account decide its figures, even when a filter
+        // lists only one of them.
+        const rows = row.awsAccountId
+          ? (await fleetShardRepository.listByAwsAccountInTx(row.awsAccountId, tx)).filter(
+              (r) => r.role === 'org_owned',
+            )
+          : [row];
+        const requests = await fleetQuotaRequestRepository.listByShardIdsInTx(
+          rows.map((r) => r.id),
+          tx,
+        );
+        const listedIds = new Set(listed.map((r) => r.id));
+        out.push(...orgAccountViews(rows, requests).filter((_, i) => listedIds.has(rows[i]!.id)));
+      }
+      return out;
+    });
+  },
+
   /** One kind's pool, or every kind's; a kind on Fly says so and no more. */
   async getPoolStatus(
     kind?: string,

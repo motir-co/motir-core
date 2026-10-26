@@ -119,3 +119,25 @@ export interface FleetGrowthEventViewDTO {
   newAccount: string | null;
   reason: string | null;
 }
+
+// ── `fleet-admin org-accounts` (Story MOTIR-9365 · MOTIR-9588) ───────────────
+
+/** One row of a Host organisation's own account. The merged indexer + agent
+ *  hoster account is two of these, with the same state and figures. Ids, names
+ *  and numbers only — no credential reference, no email. */
+export interface FleetOrgAccountDTO {
+  organizationId: string;
+  fleetKind: FleetWorkloadKind;
+  name: string;
+  awsAccountId: string | null;
+  state: 'created' | 'quota_requested' | 'granted' | 'live';
+  /** The latest vCPU raise's desired value; null before one is filed. */
+  requestedVcpu: number | null;
+  /** The largest granted value read for the AWS account; null while none. */
+  grantedVcpu: number | null;
+  /** The latest vCPU raise's status; null before one is filed. */
+  quotaRequestStatus: FleetQuotaRequestStatusDTO | null;
+  quotaRequestedAt: string | null;
+  grantedAt: string | null;
+  liveAt: string | null;
+}
