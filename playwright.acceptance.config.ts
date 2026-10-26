@@ -242,6 +242,8 @@ process.env['E2E_GITHUB_FLEET_ORG_CI_JOURNAL'] ??= E2E_GITHUB_FLEET_ORG_CI_JOURN
 // how the spec — a separate process — proves each stub actually answered.
 process.env['MOTIR_FLEET_ORCHESTRATOR'] ??= 'fake';
 process.env['MOTIR_GATEWAY_URL'] ??= 'http://motir-gateway.e2e.local';
+// The container-facing origin (MOTIR-7656); the fake orchestrator boots nothing.
+process.env['MOTIR_GATEWAY_RUN_URL'] ??= 'http://gateway-run.e2e.local';
 process.env['MOTIR_RUN_KEY_MINT_SECRET'] ??= 'e2e-acceptance-run-key-secret';
 const MOTIR_HOSTED_RUN_FIXTURE_PATH = path.resolve('/tmp/motir-acceptance-hosted-run-fixture.json');
 const MOTIR_HOSTED_RUN_JOURNAL_PATH = path.resolve(
@@ -630,6 +632,7 @@ export default defineConfig({
         MOTIR_FLEET_ORCHESTRATOR: process.env['MOTIR_FLEET_ORCHESTRATOR']!,
         E2E_TEST_HOSTED_RUN: '1',
         MOTIR_GATEWAY_URL: process.env['MOTIR_GATEWAY_URL']!,
+        MOTIR_GATEWAY_RUN_URL: process.env['MOTIR_GATEWAY_RUN_URL']!,
         MOTIR_RUN_KEY_MINT_SECRET: process.env['MOTIR_RUN_KEY_MINT_SECRET']!,
         MOTIR_HOSTED_RUN_FIXTURE_PATH,
         MOTIR_HOSTED_RUN_JOURNAL_PATH,
