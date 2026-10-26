@@ -10465,6 +10465,157 @@
         "prev": "上一页",
         "next": "下一页",
         "pageOf": "第 {page} 页，共 {pages} 页"
+      },
+      "pools": {
+        "title": "资源池",
+        "subtitle": "每种集群类型的 AWS 账户池：容量、对照 70% 的用量、Motir 备用账户、向 AWS 申请的配额提升，以及扩容是否在正常工作。数据取自扩容流程最近一次的记录——加载本页不会向 AWS 发起任何请求。",
+        "kind": {
+          "ci_runner": "CI 运行器",
+          "hosted_agent": "智能体运行器",
+          "code_graph_index": "索引器",
+          "agent_instance": "智能体托管"
+        },
+        "block": {
+          "title": "资源池 · {kind}",
+          "subtitle": {
+            "aws": "其共享账户、Motir 备用账户、向 AWS 申请的配额提升和扩容事件——以扩容流程最近一次读取为准。",
+            "fly": "该类型已切换到 Fly，因此没有 AWS 资源池。",
+            "other": "其共享账户、Motir 备用账户、配额提升和扩容事件。"
+          }
+        },
+        "provider": {
+          "aws": "运行在 AWS",
+          "fly": "运行在 Fly"
+        },
+        "overCount": "{count, plural, other {# 个账户超过 70%}}",
+        "growthInFlight": "正在扩容",
+        "fly": {
+          "title": "{kind}运行在 Fly",
+          "body": "它的开关设为 Fly，因此没有可显示的 AWS 容量、配额或扩容。它正在运行的容器按组织统计在上方的容器集群部分。"
+        },
+        "error": {
+          "title": "无法读取{kind}资源池",
+          "body": "该资源池的读取没有响应，因此这里没有加载任何内容——其中没有任何值为零，也未声明任何提供方。其他资源池和本页其余部分不受影响。请重新加载以重试。"
+        },
+        "sectionError": {
+          "title": "无法读取资源池",
+          "body": "资源池的读取没有响应，因此没有加载任何资源池——其中没有任何值为零，也未声明任何提供方。本页其余部分不受影响。请重新加载以重试。"
+        },
+        "total": {
+          "capacity": "容量 · {count, plural, other {# 个共享账户}}的已批配额 · 不计备用账户",
+          "used": "它们正在使用的 vCPU",
+          "percent": "容量使用率 · 任一账户超过 70% 时开始扩容",
+          "percentShort": "容量使用率",
+          "capacityShort": "容量 · 已批 vCPU 配额",
+          "usedShort": "使用中的 vCPU",
+          "incomplete": "{count, plural, other {# 个账户的配额未读取}}，因此总量未知",
+          "noAccount": "尚无账户",
+          "noAccountBody": "该资源池还没有 AWS 账户，因此没有可读取的容量。第一个账户通过 <cmd>{command}</cmd> 添加。"
+        },
+        "vcpu": "{n} vCPU",
+        "percent": "{n}%",
+        "notAvailable": "不可用",
+        "accounts": {
+          "title": "共享账户",
+          "count": "{count, plural, other {# 个账户}}",
+          "col": {
+            "account": "账户",
+            "role": "角色",
+            "state": "状态",
+            "granted": "已批配额",
+            "used": "使用中",
+            "percent": "百分比",
+            "toThreshold": "距 70%"
+          }
+        },
+        "role": {
+          "shared": "共享"
+        },
+        "state": {
+          "active": "活跃",
+          "provisioning": "开通中",
+          "disabled": "已停用"
+        },
+        "readAgo": "{age}读取",
+        "notRead": "未读取",
+        "notReadLabel": "配额未从 AWS 读取",
+        "lastRead": "上次读取于{age}",
+        "neverRead": "从未读取",
+        "toGo": "还差 {n} vCPU",
+        "over": "超过 70%",
+        "overBy": "超出 {n} vCPU",
+        "atThreshold": "恰好 70%",
+        "spare": {
+          "title": "Motir 备用账户",
+          "none": "该类型还没有 Motir 备用账户。",
+          "ready": "可加入",
+          "waiting": "等待配额",
+          "granted": "已批 · {age}读取",
+          "notRead": "配额未读取 · {when}",
+          "readyBody": "不计入容量。下次有账户超过 70% 时，它会加入共享池，并在其后创建一个新的备用账户。",
+          "raisingBody": "{age}申请了提升到 {n} vCPU，目前仍未结束。AWS 批准后，该备用账户会加入共享池。",
+          "notReadBody": "它的配额未读取，因此不算作可加入。只有读取到已批配额后，扩容才会提升它。",
+          "belowBody": "它的已批配额低于共享账户所需，因此不算作可加入。只有 AWS 批准提升后，扩容才会提升它。"
+        },
+        "requests": {
+          "title": "向 AWS 申请的配额提升",
+          "count": "{count, plural, other {# 个申请}} · {open} 个未结束",
+          "none": "无",
+          "empty": "尚未为该类型向 AWS 申请任何配额提升。",
+          "col": {
+            "account": "账户",
+            "asked": "申请值",
+            "status": "状态",
+            "granted": "已批",
+            "when": "申请时间",
+            "lastRead": "上次从 AWS 读取"
+          },
+          "status": {
+            "pending": "未结束 · 待处理",
+            "case_opened": "未结束 · 已开工单",
+            "approved": "已批准",
+            "denied": "已拒绝",
+            "not_approved": "未批准",
+            "case_closed": "工单已关闭",
+            "invalid_request": "无效申请"
+          },
+          "notYet": "尚未",
+          "notGranted": "未批",
+          "quotaStays": "配额仍为 {n} vCPU",
+          "quotaUnchanged": "配额不变",
+          "notReadYet": "尚未读取",
+          "foot": "显示第 {from}–{to} 条，共 {total} 条 · 未结束的在前，其余按时间从新到旧",
+          "pagerLabel": "{kind}配额提升分页"
+        },
+        "events": {
+          "title": "扩容事件 · 达到 70%",
+          "count": "{count, plural, other {# 个事件}}",
+          "empty": "尚无扩容事件——该类型还没有账户达到 70%。",
+          "col": {
+            "when": "时间",
+            "account": "触发账户",
+            "use": "其用量",
+            "outcome": "结果"
+          },
+          "use": "<b>{used}</b> / {granted} vCPU",
+          "usePercent": "占其已批配额的 {p}%",
+          "accountRemoved": "账户已移除",
+          "outcome": {
+            "spare_promoted": "备用账户已提升",
+            "account_created": "已创建账户",
+            "waiting_for_quota": "等待配额",
+            "refused": "被拒绝"
+          },
+          "promoted": "{spare} 已加入共享池",
+          "promotedNew": "{spare} 已加入共享池；正在创建新的备用账户 {created}",
+          "created": "已添加 {created}，没有可提升的备用账户",
+          "waiting": "备用账户的提升申请仍未结束，因此尚无账户加入",
+          "awsSaid": "AWS 的答复：“{reason}”",
+          "refusedNote": "未添加任何账户；下一轮会在退避后重试",
+          "foot": "显示第 {from}–{to} 条，共 {total} 条 · 从新到旧",
+          "pagerLabel": "{kind}扩容事件分页"
+        },
+        "readOnly": "只读。如需向 AWS 申请更多配额，请在终端运行 <cmd>{command}</cmd>。"
       }
     },
     "orgs": {

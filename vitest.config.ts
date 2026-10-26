@@ -1725,6 +1725,13 @@ export default defineConfig({
         'lib/services/fleetQuotaRequestService.ts',
         'lib/services/fleetShardQuotaService.ts',
         'scripts/fleet/fleetAdminPoolCommands.ts',
+        // Story MOTIR-9367 · MOTIR-9564 — the platform Pools read and its section on
+        // /admin/monitoring. MEASURED on this branch against `poolsStoryIntegration`,
+        // `poolsSection` and `platformFleetPoolsService`: the service 100 on all four,
+        // the section 97.17 / 95.16 / 100 / 97+ (the arms left are defensive: a null
+        // use, an unknown account state). Pinned at the fleet's 90 floor below.
+        'lib/services/platformFleetPoolsService.ts',
+        'app/**/admin/monitoring/_components/PoolsSection.tsx',
         // Story MOTIR-1775 · MOTIR-1782 — the establish STEP at plan approval.
         // Gated for a different reason than the primitive above: the whole card
         // is a claim about what must NOT be on screen (no repository name, count,
@@ -3755,6 +3762,19 @@ export default defineConfig({
           statements: 90,
         },
         'lib/services/fleetPoolStatusService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // Story MOTIR-9367 · MOTIR-9564 — the platform Pools read and section, measured above.
+        'lib/services/platformFleetPoolsService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/admin/monitoring/_components/PoolsSection.tsx': {
           lines: 90,
           functions: 90,
           branches: 90,

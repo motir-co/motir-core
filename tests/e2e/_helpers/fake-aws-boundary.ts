@@ -72,6 +72,14 @@ export function writeAgentRunnerSwitch(provider: 'aws' | 'fly'): void {
   replaceFile(switchPath(), JSON.stringify({ hostedAgent: provider } satisfies FleetSwitchFixture));
 }
 
+/** Put the CI runner on AWS or Fly, with the agent runner on Fly (MOTIR-9565). */
+export function writeCiRunnerSwitch(provider: 'aws' | 'fly'): void {
+  replaceFile(
+    switchPath(),
+    JSON.stringify({ ciRunner: provider, hostedAgent: 'fly' } satisfies FleetSwitchFixture),
+  );
+}
+
 /** Remove the switch fixture, so the server's env var decides again. */
 export function clearAgentRunnerSwitch(): void {
   replaceFile(switchPath(), JSON.stringify({} satisfies FleetSwitchFixture));

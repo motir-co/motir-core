@@ -58,6 +58,7 @@ import {
 import { planDriftOnTransitioned } from './definitions/planDrift';
 import { migrateOnboardingSweep } from './definitions/migrateOnboardingSweep';
 import { workItemEmbeddingRequested } from './definitions/workItemEmbedding';
+import { pageEmbeddingRequested } from './definitions/pageEmbedding';
 import { planTargetLockSweep } from './definitions/planTargetLockSweep';
 import { impersonationExpirySweep } from './definitions/impersonationExpirySweep';
 import { supervisionSweep } from './definitions/supervisionSweep';
@@ -164,6 +165,7 @@ export const jobDefinitions = [
   statusDerivationOnRequested,
   migrateOnboardingSweep,
   workItemEmbeddingRequested,
+  pageEmbeddingRequested,
   planTargetLockSweep,
   impersonationExpirySweep,
   supervisionSweep,

@@ -14,12 +14,13 @@ import type { PlatformHealthDTO } from '@/lib/dto/platformHealth';
 //   · each fleet card owns its own failure;
 //   · the reads are paged by their OWN params, and the kills read is the last 24 h.
 
-const { gate, healthRead, indexRead, listRunningOrgs, listKills } = vi.hoisted(() => ({
+const { gate, healthRead, indexRead, listRunningOrgs, listKills, listPools } = vi.hoisted(() => ({
   gate: vi.fn(),
   healthRead: vi.fn(),
   indexRead: vi.fn(),
   listRunningOrgs: vi.fn(),
   listKills: vi.fn(),
+  listPools: vi.fn(),
 }));
 
 vi.mock('@/lib/platform/auth', async (importOriginal) => ({
@@ -34,6 +35,9 @@ vi.mock('@/lib/services/platformIndexAllowanceService', () => ({
 }));
 vi.mock('@/lib/services/platformFleetMonitorService', () => ({
   platformFleetMonitorService: { listRunningOrgs, listKills },
+}));
+vi.mock('@/lib/services/platformFleetPoolsService', () => ({
+  platformFleetPoolsService: { listPools },
 }));
 vi.mock('next-intl/server', async () => {
   const { createTranslator, createFormatter } = await import('next-intl');
@@ -55,6 +59,14 @@ const HEALTH: PlatformHealthDTO = {
 } as unknown as PlatformHealthDTO;
 
 const m = en.platformAdmin.monitoring;
+
+/** The Pools section's four kinds, all on Fly — the smallest well-formed read. */
+const POOL_BLOCKS = [
+  { fleetKind: 'ci_runner', provider: 'fly' },
+  { fleetKind: 'hosted_agent', provider: 'fly' },
+  { fleetKind: 'code_graph_index', provider: 'fly' },
+  { fleetKind: 'agent_instance', provider: 'fly' },
+];
 
 async function renderPage(searchParams: Record<string, string> = {}): Promise<HTMLElement> {
   const mod = await import('@/app/(admin)/admin/monitoring/page');
@@ -93,6 +105,7 @@ beforeEach(() => {
     pageSize: 25,
     pageCount: 1,
   });
+  listPools.mockResolvedValue({ blocks: POOL_BLOCKS });
   errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
 });
 
@@ -108,6 +121,7 @@ beforeAll(async () => {
   indexRead.mockResolvedValue({ meter: 'disabled' });
   listRunningOrgs.mockResolvedValue({ meter: 'disabled' });
   listKills.mockResolvedValue({ meter: 'disabled' });
+  listPools.mockResolvedValue({ blocks: POOL_BLOCKS });
   await renderPage();
 }, 120_000);
 
@@ -238,5 +252,65 @@ describe('/admin/monitoring — the Fleet section', () => {
     expect(errorLog).toHaveBeenCalledWith('[admin/monitoring] the fleet kills read failed', {
       detail: 'unknown',
     });
+  });
+});
+
+// ── Monitoring · Pools (MOTIR-9563 · design MOTIR-9561) ─────────────────────
+
+describe('/admin/monitoring — the Pools section', () => {
+  it('renders last, after the Fleet section, one block per kind', async () => {
+    const root = await renderPage();
+    const text = root.textContent ?? '';
+    expect(text.indexOf(m.fleet.kills.title)).toBeLessThan(text.indexOf(m.pools.subtitle));
+    expect(root.querySelectorAll('[data-testid^="pool-"]')).toHaveLength(4);
+    expect(listPools).toHaveBeenCalledWith(PRINCIPAL, expect.any(Date));
+  });
+
+  it('a rejected pools read renders one error in its section; the rest of the page still renders', async () => {
+    listPools.mockRejectedValue(new Error('pool read timed out'));
+    const root = await renderPage();
+    const text = root.textContent ?? '';
+    expect(text).toContain(m.overdue.title);
+    expect(text).toContain(m.indexAllowance.disabled.title);
+    expect(root.querySelector('[data-testid="fleet-orgs"]')!.getAttribute('data-state')).toBe(
+      'empty',
+    );
+    expect(root.querySelector('[data-testid="pools-failed"]')!.textContent).toContain(
+      m.pools.sectionError.title,
+    );
+    expect(text).not.toContain('pool read timed out');
+    expect(errorLog).toHaveBeenCalledWith('[admin/monitoring] the fleet pools read failed', {
+      detail: 'pool read timed out',
+    });
+  });
+
+  it('carries the Pools pagers through every pager link, and drops a junk one', async () => {
+    listRunningOrgs.mockResolvedValue({
+      meter: 'enabled',
+      window: { windowMinutes: 10, periodMinutes: 5, judgedAt: HEALTH.checkedAt },
+      rows: [],
+      total: 60,
+      mismatched: 0,
+      ciRunners: 0,
+      hostedAgents: 0,
+      agentInstances: 0,
+      page: 1,
+      pageSize: 25,
+      pageCount: 3,
+    });
+    const root = await renderPage({
+      poolRequests_ci_runner: '2',
+      poolEvents_hosted_agent: 'abc',
+    });
+    const next = root.querySelector('[data-testid="fleet-orgs"] nav a')!.getAttribute('href')!;
+    const params = new URLSearchParams(next.slice(1));
+    expect(params.get('poolRequests_ci_runner')).toBe('2');
+    expect(params.has('poolEvents_hosted_agent')).toBe(false);
+  });
+
+  it('adds no client island and no form', async () => {
+    const root = await renderPage();
+    const section = root.querySelector('[data-testid="pools-section"]')!;
+    expect(section.querySelectorAll('button, form, input, select')).toHaveLength(0);
   });
 });

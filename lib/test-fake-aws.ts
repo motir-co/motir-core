@@ -93,9 +93,12 @@ export interface FakeAwsState {
   accounts: Record<string, FakeAwsAccountState>;
 }
 
-/** The agent-runner switch fixture. Absent or unset ⇒ the env var decides. */
+/** The lane's switch fixture. Absent or unset ⇒ the env var decides (the agent
+ *  runner), or Fly (the CI runner, whose real switch is not wired yet). */
 export interface FleetSwitchFixture {
   hostedAgent?: 'aws' | 'fly';
+  /** MOTIR-9565: puts the CI runner on AWS for the Pools walk. */
+  ciRunner?: 'aws' | 'fly';
 }
 
 /** The HTTP status EC2 answers each code with; anything else is a 400. */
@@ -407,23 +410,33 @@ export function createFileBackedEc2(
   };
 }
 
-/** The agent-runner switch as the fixture says it, or null when it says nothing. */
-export function readFleetSwitchFixture(): boolean | null {
+/** One kind's switch as the fixture says it, or null when it says nothing. */
+function readSwitchEntry(key: keyof FleetSwitchFixture): boolean | null {
   const path = pathFrom(FAKE_FLEET_SWITCH_PATH_ENV_VAR);
   if (!path) return null;
   try {
     const fixture = JSON.parse(readFixtureFileSync(path)) as FleetSwitchFixture;
-    if (fixture.hostedAgent === 'aws') return true;
-    if (fixture.hostedAgent === 'fly') return false;
+    if (fixture[key] === 'aws') return true;
+    if (fixture[key] === 'fly') return false;
     return null;
   } catch {
     return null;
   }
 }
 
+/** The agent-runner switch as the fixture says it, or null when it says nothing. */
+export function readFleetSwitchFixture(): boolean | null {
+  return readSwitchEntry('hostedAgent');
+}
+
+/** The CI runner's switch as the fixture says it, or null when it says nothing. */
+export function readCiRunnerSwitchFixture(): boolean | null {
+  return readSwitchEntry('ciRunner');
+}
+
 /**
  * Install the fake AWS in THIS process: every `aws` account's EC2 becomes the
- * state file, and the agent-runner switch reads the fixture first. Answers
+ * state file, and the agent-runner and CI-runner switches read the fixture first. Answers
  * whether it installed — false, and nothing touched, with the path unset.
  */
 export async function installFakeAwsSeam(): Promise<boolean> {
@@ -431,7 +444,9 @@ export async function installFakeAwsSeam(): Promise<boolean> {
   if (!path) return false;
   const { setAwsEc2OverrideForTests } = await import('@/lib/orchestrator');
   setAwsEc2OverrideForTests((shard, errors) => createFileBackedEc2(path, shard, errors));
-  const { setAgentRunnerSwitchForTests } = await import('@/lib/ciFleet/fleetKindSwitches');
+  const { setAgentRunnerSwitchForTests, setCiRunnerSwitchForTests } =
+    await import('@/lib/ciFleet/fleetKindSwitches');
   setAgentRunnerSwitchForTests(readFleetSwitchFixture);
+  setCiRunnerSwitchForTests(readCiRunnerSwitchFixture);
   return true;
 }
