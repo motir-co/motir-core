@@ -27,7 +27,7 @@ import { organizationRepository } from '@/lib/repositories/organizationRepositor
 import { platformOrganizationRepository } from '@/lib/repositories/platformOrganizationRepository';
 import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
 import { fleetCeilingService } from '@/lib/services/fleetCeilingService';
-import { planCapsService } from '@/lib/services/planCapsService';
+import { orgPlanFiguresService } from '@/lib/services/orgPlanFiguresService';
 import { platformAuditService } from '@/lib/services/platformAuditService';
 import { withSystemContext } from '@/lib/workspaces/context';
 
@@ -51,8 +51,10 @@ import { withSystemContext } from '@/lib/workspaces/context';
 //
 // ⚠️ CAPACITY FOLLOWS THE PLAN (MOTIR-9377; the fleet-capacity decision
 // MOTIR-9357). Each workload is shown against its own plan figure, read through
-// the same `planCapsService.capsFor` and `fleetCeilingService.resolveCiBurstCap`
-// the admissions read, so the monitor never names a number no gate applies.
+// `orgPlanFiguresService.figuresFor` (MOTIR-9659) — `planCapsService.capsFor` and
+// `fleetCeilingService.resolveCiBurstCap`, as the admissions read them, and the
+// same function the org's own Fleet use section reads — so the monitor never
+// names a number no gate applies.
 //
 // ⚠️ READS ONLY. It computes no charge and changes no meter; a wrong debit found
 // here is a bug or a ledger adjustment (MOTIR-745), never a write from this file.
@@ -235,43 +237,6 @@ async function readBalance(
   }
 }
 
-/**
- * The org's plan figures, read where the admissions read them: the three agent
- * figures from `capsFor`, the CI figure (and whether staff overrode it) from the
- * CI gate's own `resolveCiBurstCap`. A throw from either reads as an unknown
- * plan with no key — the row is still shown with its counts and verdicts.
- */
-async function readPlan(organizationId: string): Promise<FleetOrgPlanDTO> {
-  try {
-    const caps = await planCapsService.capsFor(organizationId);
-    if (caps.kind === 'plan_unknown') return { kind: 'plan_unknown', planKey: caps.planKey };
-    const ci = await fleetCeilingService.resolveCiBurstCap(organizationId);
-    const ciCapped = ci.kind === 'capped' ? ci : null;
-    if (caps.kind === 'exempt') {
-      return {
-        kind: 'exempt',
-        ciBurstOverride: ciCapped?.source === 'override' ? ciCapped.figure : null,
-      };
-    }
-    return {
-      kind: 'capped',
-      planKey: caps.planKey,
-      planName: caps.planName,
-      agentRunsInParallel: caps.caps.agentRunsInParallel,
-      agentsPerUser: caps.caps.agentsPerUser,
-      agentsRunningPerOrg: caps.caps.agentsRunningPerOrg,
-      ciBurstCap: ciCapped?.figure ?? null,
-      ciBurstSource: ciCapped?.source ?? 'unreadable',
-    };
-  } catch (err) {
-    console.error("[platformFleetMonitorService] could not read the organization's plan", {
-      organizationId,
-      detail: detailOf(err),
-    });
-    return { kind: 'plan_unknown', planKey: null };
-  }
-}
-
 async function mapConcurrent<T, R>(items: T[], fn: (item: T) => Promise<R>): Promise<R[]> {
   const out: R[] = [];
   for (let i = 0; i < items.length; i += GATHER_CONCURRENCY) {
@@ -416,7 +381,7 @@ export const platformFleetMonitorService = {
         ),
       };
     });
-    const plan = await readPlan(organizationId);
+    const plan = await orgPlanFiguresService.figuresFor(organizationId);
 
     const oldestCiJobStartedAt = earliest(...fleet.inFlight.map((intent) => intent.startedAt));
     const oldestCiInFlightAt = earliest(
