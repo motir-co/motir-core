@@ -343,6 +343,11 @@ export default defineConfig({
         'lib/repositories/platformRunModelRepository.ts',
         'lib/mappers/platformRunModelMappers.ts',
         'lib/services/hostedRunModelService.ts',
+        // Story MOTIR-9541 (MOTIR-9631): the agent-run capacity verdict — its reasons,
+        // its pure rule and the service the picker read and the launch check share.
+        'lib/hostedRuns/capacityReasons.ts',
+        'lib/hostedRuns/agentCapacityVerdict.ts',
+        'lib/services/agentRunCapacityService.ts',
         'app/**/admin/run-models/actions.ts',
         'app/**/admin/run-models/_components/RunModelList.tsx',
         'app/**/admin/run-models/_components/RunModelListUnavailable.tsx',
@@ -4548,6 +4553,24 @@ export default defineConfig({
           statements: 90,
         },
         'lib/services/hostedRunModelService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/hostedRuns/capacityReasons.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/hostedRuns/agentCapacityVerdict.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/agentRunCapacityService.ts': {
           lines: 90,
           functions: 90,
           branches: 90,
