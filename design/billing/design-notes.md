@@ -2068,10 +2068,11 @@ meter is `BillingClient.tsx`'s own `Meter` recipe. The dark panel is an `[data-a
    lines and the payment card, reached by opening Billing & plans as today. No new nav entry.
 2. **Fleet use header.** The section title, one line saying what it shows, and the plan named in
    words ("Your plan: Pro"), at the right of the card header.
-3. **Figure rows.** Four rows: agent runs in parallel, agents running in the organisation, agents
-   per person, CI jobs in flight. Each reads in use against the figure ("3 of 3"), a meter that is
+3. **Figure rows.** Four rows: agent runs in parallel, hosted agents per organisation, hosted
+   agents per person, CI jobs in flight. The two hosted-agent rows say "hosted" in their labels, so
+   neither reads as a count of every agent a person uses (Yue, 2026-10-26). Each reads in use against the figure ("3 of 3"), a meter that is
    never the only signal (it repeats the words), and one line explaining the figure. The
-   agents-per-person row reads the figure and how many members are at it ("2 members at 5 of 5"),
+   hosted-agents-per-person row reads the figure and how many members are at it ("2 members at 5 of 5"),
    with no meter, no table and no name. The two agent-instance rows say a start beyond the figure is
    refused, not queued, and draw no waiting count at all.
 4. **Indexing line.** "Code-graph indexing: N running · counted against no plan limit."
