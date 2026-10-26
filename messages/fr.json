@@ -15245,6 +15245,23 @@
       "refused": "Vous ne pouvez pas modifier les liens de cette page.",
       "gone": "Cet élément de travail n’existe plus.",
       "unlinkFailed": "Impossible de délier cet élément de travail. Réessayez."
+    },
+    "search": {
+      "label": "Rechercher des pages",
+      "placeholder": "Rechercher des pages par mot ou par sens",
+      "clear": "Effacer la recherche",
+      "pending": "Recherche…",
+      "emptyHint": "Saisissez un mot ou une expression pour chercher dans les titres et le texte des pages.",
+      "tooLong": "Les recherches sont limitées à {limit} caractères — raccourcissez-la pour lancer la recherche.",
+      "mode": {
+        "fullText": "Correspondances de mots uniquement — la recherche par sens n’a pas été lancée cette fois.",
+        "notIndexed": "Correspondances de mots uniquement — les pages ne sont pas encore indexées pour la recherche par sens."
+      },
+      "noResults": "Aucune page ne correspond à « {query} ».",
+      "failed": "Impossible de rechercher dans les pages.",
+      "results": "Résultats de recherche",
+      "loading": "Chargement…",
+      "updated": "Résultats de recherche mis à jour."
     }
   },
   "sharpen": {

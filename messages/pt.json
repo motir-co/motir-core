@@ -15245,6 +15245,23 @@
       "refused": "Você não pode alterar os vínculos desta página.",
       "gone": "Esse item de trabalho não existe mais.",
       "unlinkFailed": "Não foi possível desvincular esse item de trabalho. Tente novamente."
+    },
+    "search": {
+      "label": "Pesquisar páginas",
+      "placeholder": "Pesquise páginas por uma palavra ou pelo significado",
+      "clear": "Limpar pesquisa",
+      "pending": "Pesquisando…",
+      "emptyHint": "Digite uma palavra ou frase para pesquisar nos títulos e no texto das páginas.",
+      "tooLong": "As pesquisas são limitadas a {limit} caracteres — encurte-a para pesquisar.",
+      "mode": {
+        "fullText": "Mostrando apenas correspondências de palavras — a pesquisa por significado não foi executada desta vez.",
+        "notIndexed": "Mostrando apenas correspondências de palavras — as páginas ainda não foram indexadas para a pesquisa por significado."
+      },
+      "noResults": "Nenhuma página corresponde a “{query}”.",
+      "failed": "Não foi possível pesquisar as páginas.",
+      "results": "Resultados da pesquisa",
+      "loading": "Carregando…",
+      "updated": "Resultados da pesquisa atualizados."
     }
   },
   "sharpen": {

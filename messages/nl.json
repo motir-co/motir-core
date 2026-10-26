@@ -15245,6 +15245,23 @@
       "refused": "Je kunt de koppelingen van deze pagina niet wijzigen.",
       "gone": "Dat werkitem bestaat niet meer.",
       "unlinkFailed": "Dat werkitem kon niet worden ontkoppeld. Probeer het opnieuw."
+    },
+    "search": {
+      "label": "Pagina's zoeken",
+      "placeholder": "Zoek pagina's op een woord of op betekenis",
+      "clear": "Zoekopdracht wissen",
+      "pending": "Zoeken…",
+      "emptyHint": "Typ een woord of zin om in titels en paginatekst te zoeken.",
+      "tooLong": "Zoekopdrachten zijn beperkt tot {limit} tekens — maak hem korter om te zoeken.",
+      "mode": {
+        "fullText": "Alleen woordovereenkomsten — zoeken op betekenis is deze keer niet uitgevoerd.",
+        "notIndexed": "Alleen woordovereenkomsten — pagina's zijn nog niet geïndexeerd voor zoeken op betekenis."
+      },
+      "noResults": "Geen pagina's komen overeen met ‘{query}’.",
+      "failed": "Kan de pagina's niet doorzoeken.",
+      "results": "Zoekresultaten",
+      "loading": "Laden…",
+      "updated": "Zoekresultaten bijgewerkt."
     }
   },
   "sharpen": {
