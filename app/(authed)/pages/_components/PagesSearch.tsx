@@ -173,9 +173,9 @@ export function PagesSearch({ projectId, children, fetchImpl, debounceMs }: Page
         </div>
         {hint}
       </div>
-      <p aria-live="polite" className="sr-only" data-testid="page-search-live">
+      <div aria-live="polite" className="sr-only" data-testid="page-search-live">
         {announcement}
-      </p>
+      </div>
       {showTree ? null : (
         <PageSearchResults
           state={state.kind === 'tooLong' ? { kind: 'loading', query: '', previous: null } : state}
