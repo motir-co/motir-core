@@ -18,6 +18,7 @@ import {
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
 import { planItemRepository } from '@/lib/repositories/planItemRepository';
 import { planRepository } from '@/lib/repositories/planRepository';
+import { planStepRepository } from '@/lib/repositories/planStepRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { aiPlanEditsService } from '@/lib/services/aiPlanEditsService';
 import { planChangeSessionsService } from '@/lib/services/planChangeSessionsService';
@@ -135,9 +136,16 @@ async function precheck(pctx: ProjectContext, sessionId: string): Promise<Resume
 }
 
 /**
- * BIND the new job: re-point the plan, record the attempt on the session, clear the failure and
- * heartbeat the targets — inside the caller's transaction, plan lock then session lock. Shared by
- * the manual Resume and the automatic one (MOTIR-8307), so the two binds cannot drift.
+ * BIND the new job: re-point the plan, record the attempt on the session, clear the failure,
+ * clear the dead job's provider-retry waits and heartbeat the targets — inside the caller's
+ * transaction, plan lock then session lock. Shared by the manual Resume and the automatic one
+ * (MOTIR-8307), so the two binds cannot drift.
+ *
+ * The waits are cleared here because a job that died mid-wait never sent the reporter's clear,
+ * and its `plan_step` row would otherwise draw the retrying banner beside the new job's progress
+ * for up to `retryAt` + `PLAN_PROVIDER_WAIT_GRACE_MS` (MOTIR-9642). The new job cannot
+ * have reported a wait of its own yet: until this bind re-points `sourceJobId`, its reports
+ * resolve no plan.
  */
 async function bindWithin(
   tx: Prisma.TransactionClient,
@@ -172,6 +180,7 @@ async function bindWithin(
     throw new PlanSessionEndedError(fresh.id);
   }
   await planChangeSessionRepository.clearFailure(fresh.id, tx);
+  await planStepRepository.clearProviderWaitsForPlan(target.planId, tx);
   await planTargetLockService.refreshForSessionWithin(fresh.id, now, tx);
 }
 
