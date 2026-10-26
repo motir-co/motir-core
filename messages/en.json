@@ -15247,6 +15247,23 @@
       "refused": "You can’t change this page’s links.",
       "gone": "That work item no longer exists.",
       "unlinkFailed": "Couldn’t unlink that work item. Try again."
+    },
+    "search": {
+      "label": "Search pages",
+      "placeholder": "Search pages by a word or by meaning",
+      "clear": "Clear search",
+      "pending": "Searching…",
+      "emptyHint": "Type a word or a phrase to search titles and page text.",
+      "tooLong": "Searches are limited to {limit} characters — shorten it to search.",
+      "mode": {
+        "fullText": "Showing word matches only — meaning search didn’t run this time.",
+        "notIndexed": "Showing word matches only — pages aren’t indexed for meaning search yet."
+      },
+      "noResults": "No pages match “{query}”.",
+      "failed": "Couldn’t search the pages.",
+      "results": "Search results",
+      "loading": "Loading…",
+      "updated": "Search results updated."
     }
   },
   "sharpen": {

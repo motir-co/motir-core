@@ -15250,6 +15250,23 @@
       "refused": "No puedes cambiar los vínculos de esta página.",
       "gone": "Ese elemento de trabajo ya no existe.",
       "unlinkFailed": "No se pudo desvincular ese elemento de trabajo. Inténtalo de nuevo."
+    },
+    "search": {
+      "label": "Buscar páginas",
+      "placeholder": "Busca páginas por una palabra o por su significado",
+      "clear": "Borrar búsqueda",
+      "pending": "Buscando…",
+      "emptyHint": "Escribe una palabra o una frase para buscar en los títulos y el texto de las páginas.",
+      "tooLong": "Las búsquedas tienen un límite de {limit} caracteres: acórtala para buscar.",
+      "mode": {
+        "fullText": "Solo coincidencias de palabras: esta vez no se ejecutó la búsqueda por significado.",
+        "notIndexed": "Solo coincidencias de palabras: las páginas aún no están indexadas para la búsqueda por significado."
+      },
+      "noResults": "Ninguna página coincide con «{query}».",
+      "failed": "No se pudieron buscar las páginas.",
+      "results": "Resultados de búsqueda",
+      "loading": "Cargando…",
+      "updated": "Resultados de búsqueda actualizados."
     }
   },
   "sharpen": {

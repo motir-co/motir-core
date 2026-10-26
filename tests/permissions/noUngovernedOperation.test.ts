@@ -65,8 +65,12 @@ const DOC = join(ROOT, 'docs', 'decisions', 'permission-inventory.md');
 // first of the two dispositions the CLAIMED_BUT_UNVERIFIED bucket asks for; the
 // other five rows in its half of the bucket turned out to be the second, and got
 // gates.
+//
+// ⚠️ AND `authorizePageSearch(` (MOTIR-9636). `pagesService.searchPages` takes
+// its access in `lib/pages/pageSearchAccess.ts`, outside `lib/services`, so the
+// walk cannot hop into it; its body is one `assertCanViewPages` call.
 const GATE =
-  /assertCan[A-Za-z]+|assertPermission\(|get[A-Za-z]*Capabilities|hasPermission\(|canManageProject\(|canBrowse\(|canEdit\(|is(?:Legacy)?OwnerRole\(|isWorkspaceManager\(|filterBrowsable\(/;
+  /assertCan[A-Za-z]+|assertPermission\(|get[A-Za-z]*Capabilities|hasPermission\(|canManageProject\(|canBrowse\(|canEdit\(|is(?:Legacy)?OwnerRole\(|isWorkspaceManager\(|filterBrowsable\(|authorizePageSearch\(/;
 /**
  * Every `someService.someMethod(` call in `source`.
  *

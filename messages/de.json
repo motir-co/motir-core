@@ -15250,6 +15250,23 @@
       "refused": "Sie können die Verknüpfungen dieser Seite nicht ändern.",
       "gone": "Dieses Arbeitselement existiert nicht mehr.",
       "unlinkFailed": "Die Verknüpfung mit dem Arbeitselement konnte nicht gelöst werden. Versuchen Sie es erneut."
+    },
+    "search": {
+      "label": "Seiten durchsuchen",
+      "placeholder": "Seiten nach einem Wort oder nach Bedeutung durchsuchen",
+      "clear": "Suche löschen",
+      "pending": "Suche läuft…",
+      "emptyHint": "Gib ein Wort oder eine Wortgruppe ein, um Titel und Seitentext zu durchsuchen.",
+      "tooLong": "Suchen sind auf {limit} Zeichen begrenzt – kürze sie, um zu suchen.",
+      "mode": {
+        "fullText": "Nur Wortübereinstimmungen – die Bedeutungssuche lief diesmal nicht.",
+        "notIndexed": "Nur Wortübereinstimmungen – die Seiten sind noch nicht für die Bedeutungssuche indexiert."
+      },
+      "noResults": "Keine Seiten passen zu „{query}“.",
+      "failed": "Die Seiten konnten nicht durchsucht werden.",
+      "results": "Suchergebnisse",
+      "loading": "Wird geladen…",
+      "updated": "Suchergebnisse aktualisiert."
     }
   },
   "sharpen": {
