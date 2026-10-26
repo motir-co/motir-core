@@ -242,6 +242,8 @@ process.env['E2E_GITHUB_FLEET_ORG_CI_JOURNAL'] ??= E2E_GITHUB_FLEET_ORG_CI_JOURN
 // how the spec — a separate process — proves each stub actually answered.
 process.env['MOTIR_FLEET_ORCHESTRATOR'] ??= 'fake';
 process.env['MOTIR_GATEWAY_URL'] ??= 'http://motir-gateway.e2e.local';
+// The container-facing origin (MOTIR-7656); the fake orchestrator boots nothing.
+process.env['MOTIR_GATEWAY_RUN_URL'] ??= 'http://gateway-run.e2e.local';
 process.env['MOTIR_RUN_KEY_MINT_SECRET'] ??= 'e2e-acceptance-run-key-secret';
 const MOTIR_HOSTED_RUN_FIXTURE_PATH = path.resolve('/tmp/motir-acceptance-hosted-run-fixture.json');
 const MOTIR_HOSTED_RUN_JOURNAL_PATH = path.resolve(
@@ -272,6 +274,18 @@ process.env['MOTIR_FAKE_AWS_STATE_PATH'] ??= path.resolve(
 );
 process.env['MOTIR_FAKE_FLEET_SWITCH_PATH'] ??= path.resolve(
   'out/playwright-output-acceptance/.fake-fleet-switch.json',
+);
+// Story MOTIR-9539 · MOTIR-9617 — the CAPACITY FAKE: the gateway capacity API's
+// limits, lane usage and mode (live, counter store down, unreachable) in one file
+// (`lib/gateway/capacityFakeState.ts`). THREE processes read it on every call:
+// the webServer (the capacity screen and its poll route, each bundle its own
+// module copy), the job worker (`system.capacity-alert-evaluation`, every minute,
+// inheriting it through `startJobWorker`'s `...process.env`), and the runner (the
+// spec writes it through `tests/e2e/_helpers/capacity-fake.ts`). The lane holds
+// no gateway token; the fake answers without one.
+process.env['MOTIR_E2E_FAKE_GATEWAY_CAPACITY'] ??= '1';
+process.env['MOTIR_E2E_FAKE_GATEWAY_CAPACITY_STATE_PATH'] ??= path.resolve(
+  'out/playwright-output-acceptance/.fake-gateway-capacity.json',
 );
 process.env['MOTIR_HOSTED_AGENT_IMAGE'] ??=
   'ghcr.io/motir-co/motir-hosted-agent@sha256:e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0';
@@ -630,6 +644,7 @@ export default defineConfig({
         MOTIR_FLEET_ORCHESTRATOR: process.env['MOTIR_FLEET_ORCHESTRATOR']!,
         E2E_TEST_HOSTED_RUN: '1',
         MOTIR_GATEWAY_URL: process.env['MOTIR_GATEWAY_URL']!,
+        MOTIR_GATEWAY_RUN_URL: process.env['MOTIR_GATEWAY_RUN_URL']!,
         MOTIR_RUN_KEY_MINT_SECRET: process.env['MOTIR_RUN_KEY_MINT_SECRET']!,
         MOTIR_HOSTED_RUN_FIXTURE_PATH,
         MOTIR_HOSTED_RUN_JOURNAL_PATH,
@@ -638,6 +653,10 @@ export default defineConfig({
         // The fake AWS (MOTIR-9429) — see its block above this config.
         MOTIR_FAKE_AWS_STATE_PATH: process.env['MOTIR_FAKE_AWS_STATE_PATH']!,
         MOTIR_FAKE_FLEET_SWITCH_PATH: process.env['MOTIR_FAKE_FLEET_SWITCH_PATH']!,
+        // The capacity fake (MOTIR-9617) — see its block above this config.
+        MOTIR_E2E_FAKE_GATEWAY_CAPACITY: process.env['MOTIR_E2E_FAKE_GATEWAY_CAPACITY']!,
+        MOTIR_E2E_FAKE_GATEWAY_CAPACITY_STATE_PATH:
+          process.env['MOTIR_E2E_FAKE_GATEWAY_CAPACITY_STATE_PATH']!,
         MOTIR_HOSTED_AGENT_IMAGE: process.env['MOTIR_HOSTED_AGENT_IMAGE']!,
         E2E_HOSTED_RUN_STALL_WINDOW_MS: process.env['E2E_HOSTED_RUN_STALL_WINDOW_MS']!,
         // Story MOTIR-4928 · MOTIR-5264 — the MONITORING room's connect walk.

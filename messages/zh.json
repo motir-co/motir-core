@@ -9872,7 +9872,8 @@
       "navPlanningLessons": "规划经验",
       "navIdeas": "创意",
       "navRunModels": "托管运行模型",
-      "navFleetSettings": "集群设置"
+      "navFleetSettings": "集群设置",
+      "navCapacity": "服务商容量"
     },
     "nav": {
       "overview": "总览",
@@ -10081,6 +10082,14 @@
             "tag_add": "添加了一个创意标签",
             "tag_translate": "翻译了一个创意标签",
             "research_run": "记录了一次创意调研"
+          },
+          "capacity": {
+            "alert_share": {
+              "set": "更改了容量告警比例"
+            },
+            "limits": {
+              "edit": "编辑了服务商模型的容量限额"
+            }
           }
         }
       }
@@ -12244,6 +12253,135 @@
           "body": "无法读取新智能体的创建位置，因此不显示任何状态，也不提供开关。这是读取错误 —— 没有任何更改，也不会猜测任何值。",
           "retry": "重试"
         }
+      }
+    },
+    "capacity": {
+      "nav": "服务商容量",
+      "title": "服务商容量",
+      "subtitle": "每个服务商模型距离其公布限额还有多少余量，规划与智能体运行合并计算。服务商档位变化时，在这里修改模型的限额。",
+      "loading": "正在加载容量",
+      "percent": "{value} %",
+      "fresh": {
+        "readAt": "读取于 UTC {time}",
+        "every": "每 {seconds} 秒刷新",
+        "refresh": "刷新",
+        "failed": "无法刷新"
+      },
+      "scope": {
+        "instance": "数据来自单个网关实例，可能不完整。"
+      },
+      "unavailable": {
+        "notice": "实时数据不可用：网关无法读取其计数器。限额、档位说明和规划占比按已保存的值显示。"
+      },
+      "slow": {
+        "notice": "该模型的实时数据未能及时读取。其他模型均为实时数据。"
+      },
+      "alerts": {
+        "title": "{count, plural, other {# 项限额已超过告警比例}}",
+        "line": "{provider} · {model} · {limit} — {share} %",
+        "since": "自 UTC {time} 起告警"
+      },
+      "alertShare": {
+        "title": "告警比例",
+        "hsub": "所有模型的所有限额共用一个比例",
+        "label": "任一限额达到以下比例时告警",
+        "note": "每分钟检查一次，每次打开本页时也会检查。",
+        "saved": "已保存。下次检查将使用 {share} %。",
+        "range": "请输入 1 到 100 之间的整数。",
+        "failed": "告警比例未能保存，没有任何更改，请重试。",
+        "edit": "编辑",
+        "isDefault": "默认",
+        "unchanged": "这已经是当前的告警比例，没有任何更改。",
+        "notPermitted": "你的角色无法修改告警比例，因此没有保存任何内容。"
+      },
+      "entry": {
+        "tierNote": "档位说明：{note}",
+        "noTierNote": "无档位说明",
+        "planningShare": "规划占比 {share} %",
+        "unknownNote": "未知：{note}",
+        "edit": "编辑限额"
+      },
+      "col": {
+        "limit": "限额",
+        "usage": "用量 / 限额",
+        "share": "已用比例",
+        "state": "状态"
+      },
+      "lanes": "规划 {planning} · 智能体 {agent}",
+      "unit": {
+        "max_concurrency": "并发数",
+        "rpm": "每分钟请求数",
+        "input_tpm": "每分钟输入词元",
+        "output_tpm": "每分钟输出词元",
+        "tpm": "每分钟词元",
+        "tpd": "每日词元"
+      },
+      "state": {
+        "normal": "正常",
+        "near": "接近限额",
+        "over": "超过告警比例",
+        "unavailable": "不可用",
+        "unknown": "限额未知",
+        "na": "不适用",
+        "unreported": "未上报用量"
+      },
+      "limitZero": "限额 0",
+      "limitUnknown": "限额未知",
+      "r429": {
+        "label": "429 响应",
+        "minute": "本分钟",
+        "day": "今日（UTC）",
+        "note": "无限额 — 仅计数"
+      },
+      "fold": "该服务商不限制的单位（{count}）",
+      "provider": {
+        "claude": "Claude",
+        "deepseek": "DeepSeek",
+        "qwen": "Qwen"
+      },
+      "error": {
+        "unreachable": {
+          "title": "无法读取容量",
+          "body": "网关没有响应，或无法读取其限额表。读取成功前不显示任何内容。"
+        },
+        "auth": {
+          "title": "网关凭据未被接受",
+          "missing": "Motir 服务器未配置网关凭据。设置之前无法读取用量。",
+          "invalid": "网关无法识别 Motir 服务器的凭据。替换之前无法读取用量。",
+          "forbidden": "该网关凭据所属用户不是网关管理员。替换之前无法读取用量。",
+          "body": "Motir 服务器未配置网关凭据，或网关不接受该凭据。修复之前无法读取用量。"
+        },
+        "retry": "重试"
+      },
+      "empty": {
+        "title": "尚未配置服务商模型",
+        "body": "网关的限额表没有任何记录，因此没有可显示的内容。模型需在网关中添加，而不是在这里。"
+      },
+      "edit": {
+        "title": "编辑限额 · {model}",
+        "intro": "只发送你修改过的值。标记为“未知”的限额会保存为未知，而不是 0。",
+        "unknown": "未知",
+        "planningShare": "规划占比 %",
+        "tierNote": "档位说明",
+        "count": "{count} / 1000",
+        "save": "保存",
+        "saving": "正在保存…",
+        "cancel": "取消",
+        "saved": "已保存 {model} 的限额。"
+      },
+      "editError": {
+        "wholeNumber": "{limit}必须是大于或等于 0 的整数。",
+        "tooLarge": "{limit}超出了网关可保存的范围。",
+        "planningShare": "规划占比必须是 0 到 100 之间的整数。",
+        "tierNote": "档位说明最多 1000 个字符。",
+        "invalidBody": "网关无法读取此次修改，没有任何更改。",
+        "unknownModel": "该模型已不在网关的限额表中，没有任何更改。请关闭后刷新。",
+        "unknownProvider": "网关无法识别该服务商，没有任何更改。",
+        "storeError": "网关未能保存修改，没有任何更改，请重试。",
+        "auth": "网关凭据未被接受，因此没有保存任何内容。",
+        "unreachable": "网关没有响应，没有保存任何内容，请重试。",
+        "notPermitted": "你的角色无法编辑限额，因此没有保存任何内容。",
+        "failed": "限额未能保存，没有任何更改，请重试。"
       }
     }
   },

@@ -2,6 +2,10 @@ import type { WorkspaceRole } from '@/generated/prisma/client';
 import { POST as CREATE_PAGE } from '@/app/api/v1/projects/[projectKey]/pages/route';
 import { GET as GET_PAGE, PATCH as PATCH_PAGE } from '@/app/api/v1/pages/[pageId]/route';
 import { PATCH as MOVE_PAGE } from '@/app/api/v1/pages/[pageId]/placement/route';
+import { POST as ARCHIVE_PAGE } from '@/app/api/v1/pages/[pageId]/archive/route';
+import { POST as RESTORE_PAGE } from '@/app/api/v1/pages/[pageId]/restore/route';
+import { POST as LINK_PAGE } from '@/app/api/v1/pages/[pageId]/work-items/route';
+import { DELETE as UNLINK_PAGE } from '@/app/api/v1/pages/[pageId]/work-items/[workItemId]/route';
 import { GET as SEARCH_PAGES } from '@/app/api/v1/projects/[projectKey]/pages/search/route';
 import { workspacesService } from '@/lib/services/workspacesService';
 import type { TokenGrant } from '@/lib/tokens/grant';
@@ -67,6 +71,49 @@ export function movePageV1(caller: Headers, pageId: string, body: unknown): Prom
       body: typeof body === 'string' ? body : JSON.stringify(body),
     }),
     { params: Promise.resolve({ pageId }) },
+  );
+}
+
+/** `POST /api/v1/pages/{pageId}/archive` — no body. */
+export function archivePageV1(caller: Headers, pageId: string): Promise<Response> {
+  return ARCHIVE_PAGE(
+    new Request(`${V1_BASE}/pages/${pageId}/archive`, { method: 'POST', headers: caller.headers }),
+    { params: Promise.resolve({ pageId }) },
+  );
+}
+
+/** `POST /api/v1/pages/{pageId}/restore` — no body. */
+export function restorePageV1(caller: Headers, pageId: string): Promise<Response> {
+  return RESTORE_PAGE(
+    new Request(`${V1_BASE}/pages/${pageId}/restore`, { method: 'POST', headers: caller.headers }),
+    { params: Promise.resolve({ pageId }) },
+  );
+}
+
+/** `POST /api/v1/pages/{pageId}/work-items` — the body sent verbatim when a string. */
+export function linkPageV1(caller: Headers, pageId: string, body: unknown): Promise<Response> {
+  return LINK_PAGE(
+    new Request(`${V1_BASE}/pages/${pageId}/work-items`, {
+      method: 'POST',
+      headers: json(caller.headers),
+      body: typeof body === 'string' ? body : JSON.stringify(body),
+    }),
+    { params: Promise.resolve({ pageId }) },
+  );
+}
+
+/** `DELETE /api/v1/pages/{pageId}/work-items/{workItemId}`. */
+export function unlinkPageV1(
+  caller: Headers,
+  pageId: string,
+  workItemId: string,
+): Promise<Response> {
+  return UNLINK_PAGE(
+    new Request(`${V1_BASE}/pages/${pageId}/work-items/${workItemId}`, {
+      method: 'DELETE',
+      headers: caller.headers,
+    }),
+    { params: Promise.resolve({ pageId, workItemId }) },
   );
 }
 

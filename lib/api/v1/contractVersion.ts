@@ -1125,5 +1125,22 @@
  *
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.76.0` after MOTIR-9493's
  *   `1.75.0`. If a sibling has taken it since, RENUMBER this entry.
+ *
+ * - `1.77.0` — MOTIR-9566 (Story MOTIR-9488) adds `archivePage`
+ *   (`POST /api/v1/pages/{pageId}/archive`, `page:edit`, `200` with `PageArchive`) and
+ *   `restorePage` (`POST /api/v1/pages/{pageId}/restore`, `page:edit`, `200` with
+ *   `PageRestore`), over the same `pagesService.archivePage` / `restorePage` doors as the MCP
+ *   `archive_page` tool; and MOTIR-9567 adds `linkPageWorkItem`
+ *   (`POST /api/v1/pages/{pageId}/work-items`, `page:edit`, `200` with `PageLinkPair`, an
+ *   idempotent repeat) and `unlinkPageWorkItem`
+ *   (`DELETE /api/v1/pages/{pageId}/work-items/{workItemId}`, `page:edit`), over the same
+ *   `pageLinksService` doors as the MCP `link_page` tool. New codes `PAGE_ARCHIVED`,
+ *   `PAGE_NOT_ARCHIVED`, `PAGE_ARCHIVE_ROOT_REQUIRED` (409) and `PAGE_LINK_NOT_FOUND` (404).
+ *
+ *   Additive: four new operations, three new components and new codes for new conditions
+ *   (§8's allowed list).
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.77.0` after MOTIR-9552's
+ *   `1.76.0`. If a sibling has taken it since, RENUMBER this entry.
  */
-export const V1_CONTRACT_VERSION = '1.76.0';
+export const V1_CONTRACT_VERSION = '1.77.0';

@@ -378,6 +378,7 @@ beforeEach(async () => {
   repoSeeded = false;
   onPlan(TIERS.standard);
   vi.stubEnv('MOTIR_GATEWAY_URL', GATEWAY);
+  vi.stubEnv('MOTIR_GATEWAY_RUN_URL', GATEWAY);
   vi.stubEnv('MOTIR_RUN_KEY_MINT_SECRET', 'mint-secret');
   vi.stubEnv('MOTIR_BASE_URL', 'https://app.test/');
   vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '');

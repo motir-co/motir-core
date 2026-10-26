@@ -54,7 +54,7 @@ export const API_MAJOR = 1;
  * compatible by construction and only a server BELOW it can be missing
  * something this client was generated to expect.
  */
-export const GENERATED_AGAINST = "1.76.0";
+export const GENERATED_AGAINST = "1.77.0";
 
 /** Every declared operation, keyed by `operationId`. */
 export const V1_OPERATIONS = {
@@ -78,6 +78,13 @@ export const V1_OPERATIONS = {
     permission: "ai:decide_plan",
     successStatus: 200,
     responseComponent: "Plan",
+  },
+  "archivePage": {
+    method: "POST",
+    path: "/api/v1/pages/{pageId}/archive",
+    permission: "page:edit",
+    successStatus: 200,
+    responseComponent: "PageArchive",
   },
   "archiveWorkItem": {
     method: "POST",
@@ -366,6 +373,13 @@ export const V1_OPERATIONS = {
     successStatus: 200,
     responseComponent: undefined,
   },
+  "linkPageWorkItem": {
+    method: "POST",
+    path: "/api/v1/pages/{pageId}/work-items",
+    permission: "page:edit",
+    successStatus: 200,
+    responseComponent: "PageLinkPair",
+  },
   "linkWorkItemPullRequest": {
     method: "POST",
     path: "/api/v1/work-items/{key}/pull-requests",
@@ -527,6 +541,13 @@ export const V1_OPERATIONS = {
     successStatus: 200,
     responseComponent: undefined,
   },
+  "restorePage": {
+    method: "POST",
+    path: "/api/v1/pages/{pageId}/restore",
+    permission: "page:edit",
+    successStatus: 200,
+    responseComponent: "PageRestore",
+  },
   "restoreWorkItem": {
     method: "POST",
     path: "/api/v1/work-items/{key}/restore",
@@ -575,6 +596,13 @@ export const V1_OPERATIONS = {
     permission: "work_item:edit",
     successStatus: 200,
     responseComponent: "WorkItemDetail",
+  },
+  "unlinkPageWorkItem": {
+    method: "DELETE",
+    path: "/api/v1/pages/{pageId}/work-items/{workItemId}",
+    permission: "page:edit",
+    successStatus: 200,
+    responseComponent: "PageLinkPair",
   },
   "updateFolder": {
     method: "PATCH",

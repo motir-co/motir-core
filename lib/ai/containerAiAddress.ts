@@ -78,6 +78,8 @@ export type ContainerAiAddressVerdict =
 const PRIVATE_HOST_SUFFIXES = [
   // Fly 6PN — the form MOTIR-4518 was actually handed.
   '.internal',
+  // Fly Flycast — org-scoped like 6PN; the gateway's only address (MOTIR-7656).
+  '.flycast',
   // Kubernetes' in-cluster DNS, for the deployment shape that would replace it.
   '.svc.cluster.local',
   '.cluster.local',

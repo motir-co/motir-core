@@ -11,6 +11,9 @@ import { hostedRunKeyService } from '@/lib/services/hostedRunKeyService';
 // motir-ai client test stubs it.
 
 const GATEWAY = 'https://gateway.test';
+// The container's origin is a DIFFERENT value on purpose (MOTIR-7656): a fallback,
+// a shared read or a copy-pasted variable name all fail the assertions below.
+const RUN_GATEWAY = 'https://gateway-run.test';
 const SECRET = 'mint-secret-value';
 const STARTED = new Date('2026-09-26T12:00:00.000Z');
 const NOW = new Date('2026-09-26T12:01:00.000Z');
@@ -39,6 +42,7 @@ function minted(overrides: Record<string, unknown> = {}): Response {
 
 beforeEach(() => {
   vi.stubEnv('MOTIR_GATEWAY_URL', `${GATEWAY}/`);
+  vi.stubEnv('MOTIR_GATEWAY_RUN_URL', `${RUN_GATEWAY}/`);
   vi.stubEnv('MOTIR_RUN_KEY_MINT_SECRET', SECRET);
   vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fake');
   fakeOrchestrator.reset();
@@ -76,7 +80,7 @@ describe('mintRunKey', () => {
       runRef: 'run_abc',
       model: 'claude-opus-5-5',
       expiresAt: new Date(STARTED.getTime() + HOSTED_RUN_TIMEOUT_MS),
-      containerEnv: { MOTIR_GATEWAY_URL: GATEWAY, MOTIR_RUN_KEY: 'sk-run-key-1' },
+      containerEnv: { MOTIR_GATEWAY_URL: RUN_GATEWAY, MOTIR_RUN_KEY: 'sk-run-key-1' },
     });
   });
 
@@ -178,6 +182,7 @@ describe('mintRunKey', () => {
 
   it.each([
     ['MOTIR_GATEWAY_URL', ''],
+    ['MOTIR_GATEWAY_RUN_URL', ''],
     ['MOTIR_RUN_KEY_MINT_SECRET', ''],
   ])('refuses as not_configured when %s is unset, and sends nothing', async (name, value) => {
     vi.stubEnv(name, value);
@@ -186,6 +191,42 @@ describe('mintRunKey', () => {
     const err = await hostedRunKeyService.mintRunKey(RUN, 'claude-opus-5-5', NOW).catch((e) => e);
     expect((err as HostedRunKeyNotMintedError).reason).toBe('not_configured');
     expect(err.message).toContain(name);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  // motir(MOTIR-7656): the container origin is its OWN variable, with no fallback.
+  it("mints against motir-core's own origin and hands the container the run-lane origin", async () => {
+    const fetchMock = vi.fn(async () => minted());
+    vi.stubGlobal('fetch', fetchMock);
+    const config = await hostedRunKeyService.mintRunKey(RUN, 'claude-opus-5-5', NOW);
+    const [url] = fetchMock.mock.calls[0] as unknown as [string];
+    expect(url).toBe(`${GATEWAY}/api/motir/run-keys`);
+    expect(config.containerEnv.MOTIR_GATEWAY_URL).toBe(RUN_GATEWAY);
+  });
+
+  it('never falls back to MOTIR_GATEWAY_URL when MOTIR_GATEWAY_RUN_URL is unset', async () => {
+    vi.stubEnv('MOTIR_GATEWAY_RUN_URL', '');
+    const fetchMock = vi.fn(async () => minted());
+    vi.stubGlobal('fetch', fetchMock);
+    const err = await hostedRunKeyService.mintRunKey(RUN, 'claude-opus-5-5', NOW).catch((e) => e);
+    expect(err).toBeInstanceOf(HostedRunKeyNotMintedError);
+    expect((err as HostedRunKeyNotMintedError).reason).toBe('not_configured');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['the Flycast origin (the MOTIR-7656 defect)', 'http://motir-gateway.flycast'],
+    ['a 6PN name', 'http://motir-gateway.internal:3000'],
+    ['a 6PN literal', 'http://[fdaa:ab:2cdf:0:1::3]'],
+    ['localhost', 'http://localhost:3000'],
+    ['a bare authority', 'motir-gateway:3000'],
+  ])('refuses %s as the container origin before minting anything', async (_name, value) => {
+    vi.stubEnv('MOTIR_GATEWAY_RUN_URL', value);
+    const fetchMock = vi.fn(async () => minted());
+    vi.stubGlobal('fetch', fetchMock);
+    const err = await hostedRunKeyService.mintRunKey(RUN, 'claude-opus-5-5', NOW).catch((e) => e);
+    expect((err as HostedRunKeyNotMintedError).reason).toBe('not_configured');
+    expect(err.message).toContain('MOTIR_GATEWAY_RUN_URL');
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

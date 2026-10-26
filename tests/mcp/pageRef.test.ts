@@ -24,6 +24,7 @@ function page(overrides: Partial<PageMarkdownDto> = {}): PageMarkdownDto {
     },
     markdown: '# Runbook',
     updatedAt: '2026-10-03T00:00:00.000Z',
+    archivedAt: null,
     ...overrides,
   };
 }
@@ -126,6 +127,7 @@ describe('toPageMarkdownDto', () => {
       },
       markdown: 'Body',
       updatedAt: '2026-10-03T00:00:00.000Z',
+      archivedAt: null,
     });
   });
 

@@ -9878,7 +9878,8 @@
       "navPlanningLessons": "Planning lessons",
       "navIdeas": "Ideas",
       "navRunModels": "Hosted-run models",
-      "navFleetSettings": "Fleet settings"
+      "navFleetSettings": "Fleet settings",
+      "navCapacity": "Provider capacity"
     },
     "nav": {
       "overview": "Overview",
@@ -10087,6 +10088,14 @@
             "tag_add": "Added an idea tag",
             "tag_translate": "Translated an idea tag",
             "research_run": "Recorded an idea research run"
+          },
+          "capacity": {
+            "alert_share": {
+              "set": "Changed the capacity alert share"
+            },
+            "limits": {
+              "edit": "Edited a provider model's capacity limits"
+            }
           }
         }
       }
@@ -12250,6 +12259,135 @@
           "body": "Where new agents are created could not be read, so no state is shown and no switch is offered. This is a read error — nothing has changed, and no value is guessed.",
           "retry": "Retry"
         }
+      }
+    },
+    "capacity": {
+      "nav": "Provider capacity",
+      "title": "Provider capacity",
+      "subtitle": "How close each provider model is to its published limits, for planning and agent runs together. Edit a model’s limits when its provider tier changes.",
+      "loading": "Loading capacity",
+      "percent": "{value} %",
+      "fresh": {
+        "readAt": "Read at {time} UTC",
+        "every": "refreshes every {seconds} s",
+        "refresh": "Refresh",
+        "failed": "Could not refresh"
+      },
+      "scope": {
+        "instance": "Numbers are from one gateway instance and may be partial."
+      },
+      "unavailable": {
+        "notice": "Live numbers are unavailable: the gateway could not read its counters. Limits, tier notes and planning shares are shown as stored."
+      },
+      "slow": {
+        "notice": "Live numbers for this model were not read in time. Every other model is live."
+      },
+      "alerts": {
+        "title": "{count, plural, one {1 limit is over the alert share} other {# limits are over the alert share}}",
+        "line": "{provider} · {model} · {limit} — {share} %",
+        "since": "raised since {time} UTC"
+      },
+      "alertShare": {
+        "title": "Alert share",
+        "hsub": "One share for every limit of every model",
+        "label": "Alert when any one limit reaches",
+        "note": "Checked once a minute, and each time this page loads.",
+        "saved": "Saved. The next evaluation uses {share} %.",
+        "range": "Enter a whole number from 1 to 100.",
+        "failed": "The alert share could not be saved. Nothing was changed; try again.",
+        "edit": "Edit",
+        "isDefault": "default",
+        "unchanged": "That is already the alert share. Nothing was changed.",
+        "notPermitted": "Your role cannot change the alert share, so nothing was saved."
+      },
+      "entry": {
+        "tierNote": "Tier note: {note}",
+        "noTierNote": "No tier note",
+        "planningShare": "Planning share {share} %",
+        "unknownNote": "Unknown: {note}",
+        "edit": "Edit limits"
+      },
+      "col": {
+        "limit": "Limit",
+        "usage": "Usage / limit",
+        "share": "Share used",
+        "state": "State"
+      },
+      "lanes": "Planning {planning} · Agent {agent}",
+      "unit": {
+        "max_concurrency": "Concurrency",
+        "rpm": "Requests / min",
+        "input_tpm": "Input tokens / min",
+        "output_tpm": "Output tokens / min",
+        "tpm": "Tokens / min",
+        "tpd": "Tokens / day"
+      },
+      "state": {
+        "normal": "Normal",
+        "near": "Near limit",
+        "over": "Over alert share",
+        "unavailable": "Unavailable",
+        "unknown": "Unknown limit",
+        "na": "Not applicable",
+        "unreported": "Usage not reported"
+      },
+      "limitZero": "Limit 0",
+      "limitUnknown": "limit not known",
+      "r429": {
+        "label": "429 answers",
+        "minute": "This minute",
+        "day": "Today (UTC)",
+        "note": "No limit — counted only"
+      },
+      "fold": "Units this provider does not enforce ({count})",
+      "provider": {
+        "claude": "Claude",
+        "deepseek": "DeepSeek",
+        "qwen": "Qwen"
+      },
+      "error": {
+        "unreachable": {
+          "title": "Capacity could not be read",
+          "body": "The gateway did not answer, or it could not read its limits table. Nothing is shown until a read succeeds."
+        },
+        "auth": {
+          "title": "The gateway credential is not accepted",
+          "missing": "Motir’s server has no gateway credential configured. No usage can be read until it is set.",
+          "invalid": "The gateway does not recognise Motir’s server credential. No usage can be read until it is replaced.",
+          "forbidden": "The gateway credential belongs to a user who is not a gateway admin. No usage can be read until it is replaced.",
+          "body": "Motir’s server has no gateway credential configured, or the gateway does not accept it. No usage can be read until it is fixed."
+        },
+        "retry": "Retry"
+      },
+      "empty": {
+        "title": "No provider models configured",
+        "body": "The gateway’s limits table has no rows, so there is nothing to show. Models are added in the gateway, not here."
+      },
+      "edit": {
+        "title": "Edit limits · {model}",
+        "intro": "Only the values you change are sent. A limit marked Unknown is stored as not known, never as 0.",
+        "unknown": "Unknown",
+        "planningShare": "Planning share %",
+        "tierNote": "Tier note",
+        "count": "{count} / 1000",
+        "save": "Save",
+        "saving": "Saving…",
+        "cancel": "Cancel",
+        "saved": "Limits saved for {model}."
+      },
+      "editError": {
+        "wholeNumber": "{limit} must be a whole number of 0 or more.",
+        "tooLarge": "{limit} is larger than the gateway can store.",
+        "planningShare": "Planning share must be a whole number from 0 to 100.",
+        "tierNote": "The tier note can be at most 1000 characters.",
+        "invalidBody": "The gateway could not read this edit. Nothing was changed.",
+        "unknownModel": "This model is no longer in the gateway’s limits table. Nothing was changed; close and refresh.",
+        "unknownProvider": "The gateway does not know this provider. Nothing was changed.",
+        "storeError": "The gateway could not save the change. Nothing was changed; try again.",
+        "auth": "The gateway credential is not accepted, so nothing was saved.",
+        "unreachable": "The gateway did not answer. Nothing was saved; try again.",
+        "notPermitted": "Your role cannot edit limits, so nothing was saved.",
+        "failed": "The limits could not be saved. Nothing was changed; try again."
       }
     }
   },

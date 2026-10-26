@@ -9,6 +9,7 @@ import {
   Bot,
   Building2,
   Coins,
+  Gauge,
   Lightbulb,
   LogOut,
   ScrollText,
@@ -57,6 +58,8 @@ export interface AdminShellLabels {
   navMonitoring: string;
   /** Operations → Fleet settings (MOTIR-8715), superadmin only. */
   navFleetSettings: string;
+  /** Operations → Provider capacity (MOTIR-9614), visible to every staff role. */
+  navCapacity: string;
   /** Operations → AI planning (MOTIR-7231), visible to every staff role. */
   navAiPlanning: string;
   navPlanningLessons: string;
@@ -171,6 +174,16 @@ export function AdminShell({ operator, labels, children }: AdminShellProps) {
               },
             ]
           : []),
+        // Each provider model's usage against its limits (MOTIR-9614, design
+        // `platform-admin` AMENDMENT 2026-10-25 § Provider capacity): after
+        // Monitoring and after the superadmin's Fleet settings row. Every staff
+        // role reads it; only the edits are gated.
+        {
+          icon: <Gauge />,
+          label: labels.navCapacity,
+          href: '/admin/capacity',
+          active: pathname === '/admin/capacity',
+        },
         {
           icon: <Sparkles />,
           label: labels.navAiPlanning,
