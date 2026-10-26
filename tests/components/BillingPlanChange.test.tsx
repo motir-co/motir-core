@@ -244,6 +244,19 @@ describe('the upgrade dialog', () => {
     );
   });
 
+  it('cancelled before confirming, it closes and changes nothing', async () => {
+    const fetchMock = stubFetch([onPro()], { 'upgrade/preview': ok(UPGRADE) });
+    await openPlans();
+    fireEvent.click(await screen.findByRole('button', { name: 'Upgrade to Max' }));
+    const dialog = await screen.findByRole('dialog');
+    await within(dialog).findByText('$42.50');
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(posts(fetchMock, 'upgrade')).toEqual([]);
+    expect(screen.getByRole('button', { name: 'Upgrade to Max' })).toBeTruthy();
+  });
+
   it('on an annual plan, says the credits follow the monthly credit window', async () => {
     stubFetch([onPro()], {
       'upgrade/preview': ok({
