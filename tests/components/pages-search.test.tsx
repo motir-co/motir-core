@@ -117,8 +117,9 @@ describe('emphasise', () => {
     expect(emphasise('abc', '.*').some((s) => s.match)).toBe(false);
   });
 
-  it('returns nothing for an empty snippet', () => {
+  it('returns nothing for an empty snippet, and the whole snippet unmarked for a blank query', () => {
     expect(emphasise('', 'x')).toEqual([]);
+    expect(emphasise('plain text', '   ')).toEqual([{ text: 'plain text', match: false }]);
   });
 });
 
@@ -350,6 +351,33 @@ describe('PagesSearch', () => {
     });
     expect(input.value).toBe('');
     expect(document.activeElement).toBe(input);
+    expect(treeShown(tree)).toBe(true);
+  });
+
+  it('ignores keys that move nowhere: ArrowDown with no hits, other keys on a hit', async () => {
+    const { calls, input } = mount();
+    input.focus();
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    fireEvent.keyDown(input, { key: 'a' });
+    expect(document.activeElement).toBe(input);
+    await type(input, 'keys');
+    await answer(await nth(calls, 1), 200, result([hit('k1')]));
+    const [only] = hitLinks();
+    only!.focus();
+    fireEvent.keyDown(only!, { key: 'Home' });
+    expect(document.activeElement).toBe(only);
+    const list = screen.getByRole('list', { name: 'Search results' });
+    fireEvent.keyDown(list, { key: 'ArrowDown' });
+    expect(document.activeElement).toBe(only);
+  });
+
+  it('falls back to the documented limit when a too-long refusal carries none', async () => {
+    const { calls, input, tree } = mount();
+    await type(input, 'y'.repeat(201));
+    await answer(await nth(calls, 1), 422, { code: 'PAGE_SEARCH_QUERY_TOO_LONG', status: 422 });
+    expect(
+      screen.getByText('Searches are limited to 200 characters — shorten it to search.'),
+    ).toBeTruthy();
     expect(treeShown(tree)).toBe(true);
   });
 

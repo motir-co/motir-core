@@ -374,6 +374,52 @@ describe('load more', () => {
   });
 });
 
+describe('the edges', () => {
+  it('reads a too-long refusal with no limit as tooLong with a null limit', async () => {
+    const { calls, view } = mount();
+    await settle(view, 'x'.repeat(201));
+    await answer(calls[0]!, 422, { code: 'PAGE_SEARCH_QUERY_TOO_LONG', status: 422 });
+    expect(view.result.current.state).toEqual({ kind: 'tooLong', limit: null });
+  });
+
+  it('retry() with nothing searched sends nothing', async () => {
+    const { calls, view } = mount();
+    act(() => view.result.current.retry());
+    expect(calls).toHaveLength(0);
+  });
+
+  it('does not search again when the settled query only gains spaces', async () => {
+    const { calls, view } = mount();
+    await settle(view, 'zephyr');
+    await answer(calls[0]!, 200, page(['p1']));
+    await settle(view, 'zephyr  ');
+    expect(calls).toHaveLength(1);
+    expect(ids(view.result.current.state)).toEqual(['p1']);
+  });
+
+  it('drops a first page that resolved just before a clear', async () => {
+    const { calls, view } = mount();
+    await settle(view, 'zephyr');
+    await act(async () => {
+      calls[0]!.answer(200, page(['p1']));
+      view.result.current.clear();
+    });
+    expect(view.result.current.state).toEqual({ kind: 'idle' });
+  });
+
+  it('drops a next page that resolved just before a clear', async () => {
+    const { calls, view } = mount();
+    await settle(view, 'zephyr');
+    await answer(calls[0]!, 200, page(['p1'], 'c1'));
+    act(() => view.result.current.loadMore());
+    await act(async () => {
+      calls[1]!.answer(200, page(['p2']));
+      view.result.current.clear();
+    });
+    expect(view.result.current.state).toEqual({ kind: 'idle' });
+  });
+});
+
 describe('unmount', () => {
   it('aborts the request in flight, and no update follows', async () => {
     const { calls, view } = mount();
