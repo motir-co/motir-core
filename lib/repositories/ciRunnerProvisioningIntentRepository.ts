@@ -265,6 +265,10 @@ export const ciRunnerProvisioningIntentRepository = {
         status: CI_RUNNER_INTENT_PROVISIONING,
         fleetShardId: placement.fleetShardId ?? null,
         fleetShardMoveReason: null,
+        // A booted job is not waiting (MOTIR-9666): cleared in the same
+        // compare-and-set, so no reader ever sees a claimed intent with a reason.
+        waitingReason: null,
+        waitingSince: null,
       },
     });
     return result.count === 1;
@@ -307,6 +311,29 @@ export const ciRunnerProvisioningIntentRepository = {
       where: { id, shardCapacityDeferredAt: null },
       data: { shardCapacityDeferredAt: at },
     });
+  },
+
+  /** Record why a PENDING intent waits now (MOTIR-9666) — the reason the
+   *  admission gate gave it on its latest pass. CURRENT, unlike
+   *  {@link markShardCapacityDeferredInTx}: written only when the reason CHANGED,
+   *  so a job waiting an hour under one reason is one write and `waitingSince`
+   *  keeps the instant that reason was first given. Guarded on `pending`, so a
+   *  claim that won the race is never marked waiting. */
+  async recordWaitingReasonInTx(
+    id: string,
+    reason: string,
+    at: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const result = await tx.ciRunnerProvisioningIntent.updateMany({
+      where: {
+        id,
+        status: CI_RUNNER_INTENT_PENDING,
+        OR: [{ waitingReason: null }, { waitingReason: { not: reason } }],
+      },
+      data: { waitingReason: reason, waitingSince: at },
+    });
+    return result.count === 1;
   },
 
   /**
