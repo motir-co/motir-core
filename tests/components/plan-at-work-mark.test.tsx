@@ -26,6 +26,7 @@ const AUTHOR: PlanProgressStep = {
   targetNodeId: 'pi_1',
   targetTitle: 'Invoice export',
   startedAt: iso(T0 - MIN),
+  providerWait: null,
 };
 const SETTLE: PlanProgressStep = {
   sessionKey: 's1',
@@ -35,6 +36,7 @@ const SETTLE: PlanProgressStep = {
   targetNodeId: null,
   targetTitle: null,
   startedAt: iso(T0 - 10_000),
+  providerWait: null,
 };
 
 function snap(over: Partial<PlanProgressSnapshot> = {}): PlanProgressSnapshot {

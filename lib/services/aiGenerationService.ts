@@ -20,7 +20,7 @@ import type { ProjectContext } from '@/lib/projects';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
 import { planRepository } from '@/lib/repositories/planRepository';
-import { plansService } from '@/lib/services/plansService';
+import { plansService, type PlanProviderRetryInput } from '@/lib/services/plansService';
 import { NoPlanForJobError } from '@/lib/plans/errors';
 import { resolveCorrectionKeyRefs, resolveKeyRefs } from '@/lib/plans/keyRefs';
 import { NATIVE_PLANNER_HARNESS } from '@/lib/ai/plannerTenantBug';
@@ -30,6 +30,7 @@ import type {
   PlanItemDto,
   PlanNarrationDto,
   PlanStepDto,
+  PlanStepProviderWaitDto,
   PlanStepKindDto,
   PlanWithItemsDto,
   ProposalInput,
@@ -501,11 +502,14 @@ export const aiGenerationService = {
       targetRef: string | null;
       /** The session's own sentences (MOTIR-8062) — sent INSTEAD of `step`. */
       narration?: string[];
+      /** The session's provider-retry wait (MOTIR-9619) — sent INSTEAD of `step`. */
+      providerRetry?: PlanProviderRetryInput;
     },
     auth: { ctx: ServiceContext; projectId: string },
   ): Promise<
     | { planId: string; step: PlanStepKindDto | 'end'; inFlight: PlanStepDto | null }
     | { planId: string; narration: PlanNarrationDto[] }
+    | { planId: string; providerWait: PlanStepProviderWaitDto | null }
   > {
     const { ctx, projectId } = auth;
     const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
@@ -521,10 +525,14 @@ export const aiGenerationService = {
         targetRef: input.targetRef,
         ...(input.step !== undefined ? { step: input.step } : {}),
         ...(input.narration !== undefined ? { narration: input.narration } : {}),
+        ...(input.providerRetry !== undefined ? { providerRetry: input.providerRetry } : {}),
       },
       ctx,
     );
     if (result.kind === 'narration') return { planId: plan.id, narration: result.narration };
+    if (result.kind === 'providerRetry') {
+      return { planId: plan.id, providerWait: result.providerWait };
+    }
     return {
       planId: plan.id,
       step: input.step!,

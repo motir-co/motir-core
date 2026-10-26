@@ -809,6 +809,20 @@ export interface PlanStepDto {
   kind: PlanStepKindDto;
   targetRef: string | null;
   startedAt: string;
+  /** The session's provider-retry wait (MOTIR-9619), `null` when it is not waiting. */
+  providerWait: PlanStepProviderWaitDto | null;
+}
+
+/**
+ * A planner session waiting out a model-provider limit (Story MOTIR-9540 ·
+ * MOTIR-9619): retry `attempt` of `maxAttempts` goes out at `retryAt`; `since`
+ * is when core heard the wait began. Both times are the server's, ISO-8601.
+ */
+export interface PlanStepProviderWaitDto {
+  attempt: number;
+  maxAttempts: number;
+  since: string;
+  retryAt: string;
 }
 
 /**

@@ -90,7 +90,13 @@ describe('usePlanChangeConversation — state.narration', () => {
 
   it('a generating plan: live sessions from its in-flight steps; earlier pages survive the next poll', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
-    const step = { sessionKey: 's-lay', kind: 'lay' as const, targetRef: 'r', startedAt: 'x' };
+    const step = {
+      sessionKey: 's-lay',
+      kind: 'lay' as const,
+      targetRef: 'r',
+      startedAt: 'x',
+      providerWait: null,
+    };
     const first = narrationRead([LAY], [narrationEntry(3, 's-lay', 'three')]);
     const later = narrationRead(
       [LAY],

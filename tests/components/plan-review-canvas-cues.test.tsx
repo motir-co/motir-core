@@ -207,6 +207,7 @@ function step(
     targetNodeId,
     targetTitle: targetNodeId ? `title ${targetNodeId}` : null,
     startedAt: '2026-10-08T14:00:00.000Z',
+    providerWait: null,
   };
 }
 
