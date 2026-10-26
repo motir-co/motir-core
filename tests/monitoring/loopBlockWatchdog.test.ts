@@ -58,9 +58,15 @@ function spinUntilStage(stage: number, capMs = 5000): void {
   }
 }
 
-/** The block itself: past the threshold, and on until the worker's probe was answered. */
+/**
+ * The block itself: it holds the loop until the worker's probe was answered,
+ * which happens only once the heartbeat is stale past the threshold. It is ONE
+ * spin with no separate fixed-length spin first (MOTIR-9580): a fixed spin can
+ * still be running when the probe is answered, and then both pauses land inside
+ * it, a real block, and the tag correctly names it. Ending on the probe is what
+ * puts every pause after the block.
+ */
 function blockUntilProbedForTest(): void {
-  blockLoopForTest(BLOCK_THRESHOLD_MS);
   spinUntilStage(1);
 }
 
