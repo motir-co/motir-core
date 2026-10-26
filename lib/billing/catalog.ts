@@ -384,9 +384,12 @@ function ladderPlans(): AiPlanCatalogEntry[] {
 }
 
 /** The Host band (`band: 'host'`) — sold from the plan row, outside the ladder ceiling. */
-function hostPlans(): AiPlanCatalogEntry[] {
+function hostPlans(): (AiPlanCatalogEntry & {
+  allotment: NonNullable<AiPlanCatalogEntry['allotment']>;
+})[] {
   return BILLING_CATALOG.aiPlans.filter(
-    (p) => p.band === 'host' && p.prices !== null && p.allotment?.cadence === 'monthly',
+    (p): p is AiPlanCatalogEntry & { allotment: NonNullable<AiPlanCatalogEntry['allotment']> } =>
+      p.band === 'host' && p.prices !== null && p.allotment?.cadence === 'monthly',
   );
 }
 
@@ -421,7 +424,7 @@ export function maxMonthlyPlanCredits(): number {
  * `maxMonthlyPlanCredits()` reads the ladder, so it moves with Host's entry.
  */
 export function hostMonthlyPlanCredits(): number {
-  return Math.max(...hostPlans().flatMap((p) => (p.allotment ? [p.allotment.credits] : [])));
+  return Math.max(...hostPlans().map((p) => p.allotment.credits));
 }
 
 /**
