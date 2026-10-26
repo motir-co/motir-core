@@ -63,8 +63,12 @@ const GATEWAY_PROVIDER: Record<string, CapacityProvider> = {
   deepseek: 'deepseek',
 };
 
-/** Distinctive figures that hold no verdict, so a leak into a payload is unmistakable. */
-const SENTINELS = { rpm: 86_421, agentRpm: 46_813, tpm: 97_531, agentTokens: 75_319 };
+/**
+ * Distinctive figures that hold no verdict, so a leak into a payload is unmistakable.
+ * Each agent figure sits under its agent share (the limit less the 25% planning share:
+ * rpm 64,815, tpm 73,148), so only `max_concurrency` ever decides a verdict here.
+ */
+const SENTINELS = { rpm: 86_421, agentRpm: 46_813, tpm: 97_531, agentTokens: 35_319 };
 /** The quiet re-read, the cache and the 429 window, with room to spare. */
 const LABEL_CHANGE_MS = 30_000;
 
