@@ -3,7 +3,7 @@
 - **Status:** Accepted (2026-06-21, locked with Yue; **catalog provisioned in
   Stripe sandbox 2026-06-22** per the §3 + §6 reconciliations below). This is the
   rung-1 pricing decision Story 8.1 implements — no billing code ships until it
-  is locked. **Amended 2026-06-23 + 2026-06-24 + 2026-09-04 + 2026-09-25 + 2026-09-26 + 2026-10-21 + 2026-10-23 — see below.**
+  is locked. **Amended 2026-06-23 + 2026-06-24 + 2026-09-04 + 2026-09-25 + 2026-09-26 + 2026-10-21 + 2026-10-23 + 2026-10-26 — see below.**
 - **Credit model:** the rates, the token→credit conversion and the ledger this ADR
   builds on are specified in `motir-ai/docs/credit-model.md`, owned by the closed
   side (where the ledger lives). Every citation of it below is repo-qualified for
@@ -533,6 +533,65 @@ only vs the PM tools above, not vs Cursor).
 >   shared pools until they are live) is owned by the Host accounts story, MOTIR-9365, not by this
 >   record. The six `pool_<n>k` rungs stay on sale between Max ×2 and Host until the larger-pool
 >   story, MOTIR-9366, re-anchors them above it.
+
+> **Amendment (2026-10-26, MOTIR-9366) — the larger pool plans start above Host.** The larger
+> credit pool plans are re-anchored on Host: the rule's shape and its 10% discount are
+> MOTIR-8987's, and only the anchor moves, from Max ×2 to Host. MOTIR-8987's decision page is
+> outdated by this story, so the rule lives here again.
+>
+> **What it supersedes**, quoted from this file:
+>
+> - The 2026-10-21 amendment's paragraph: "**Where the band's rule lives.** The step, the
+>   rounding, the rung table, the tier-key and lookup-key form and the Stripe carriage are
+>   recorded on MOTIR-8987's decision page and are deliberately not restated here, so this file
+>   stays right if that record changes."
+> - The 2026-10-21 amendment's part (b), where it ties the larger plan to the ladder ceiling:
+>   "Above the ceiling, the product answers an estimate with a **larger credit pool plan** derived
+>   from the estimate's high end, instead of stacked top-ups."
+> - The 2026-10-23 amendment's last sentence: "The six `pool_<n>k` rungs stay on sale between
+>   Max ×2 and Host until the larger-pool story, MOTIR-9366, re-anchors them above it."
+>
+> **The anchor is Host.** A rung's monthly price is Host's monthly price plus every credit above
+> Host's pool at the top-up rate less 10%; its annual price is Host's annual per-credit rate ×
+> its pool. Every input is read, never typed: Host's pool from its catalog row, Host's and the
+> top-up's prices from Stripe. Host's own price stays on the ladder's per-credit basis (the
+> 2026-10-23 amendment's first bullet stands). The ladder ceiling, `maxMonthlyPlanCredits()`, is
+> still Max ×2's 60,000; the rung table is floored at Host's pool (`hostMonthlyPlanCredits()`).
+>
+> **The rungs on sale** (pre-launch targets; the smallest is 2× Host's pool). $4.50 is the
+> top-up's $5 per 1,000 credits less 10%, and $40 is Host's $12,000 ÷ 300:
+>
+> | Rung         | Credits a month | Monthly                        | Annual               |
+> | ------------ | --------------- | ------------------------------ | -------------------- |
+> | `pool_600k`  | 600,000         | 1,500 + 300 × 4.50 = $2,850    | 600 × 40 = $24,000   |
+> | `pool_900k`  | 900,000         | 1,500 + 600 × 4.50 = $4,200    | 900 × 40 = $36,000   |
+> | `pool_1200k` | 1,200,000       | 1,500 + 900 × 4.50 = $5,550    | 1,200 × 40 = $48,000 |
+> | `pool_1800k` | 1,800,000       | 1,500 + 1,500 × 4.50 = $8,250  | 1,800 × 40 = $72,000 |
+> | `pool_2400k` | 2,400,000       | 1,500 + 2,100 × 4.50 = $10,950 | 2,400 × 40 = $96,000 |
+>
+> Each is sold under `<tierKey>_pool_monthly` / `<tierKey>_pool_annual`, the form §3 already uses,
+> at quantity 1 with one included tracker seat.
+>
+> **The retired rungs.** `pool_80k`, `pool_100k`, `pool_120k`, `pool_150k`, `pool_200k` and
+> `pool_250k` are off sale: no Checkout and no change of plan to them. An org that holds one keeps
+> it, with its grant, until it changes plan. No migration is planned, because none are expected
+> before launch.
+>
+> **The calculator** recommends a rung only for an estimate above Host's pool. Between Max ×2 and
+> Host it answers Max ×2 with top-ups. It never recommends Host.
+>
+> **What each rung brings beyond credits.** Each rung brings the same three AWS accounts of the
+> org's own as Host: a CI runner account, an agent runner account, and one merged indexer + agent
+> hoster account. Their quota raises are filed at CI 200 × (pool ÷ 300,000), agent runner 32 ×
+> (pool ÷ 300,000), and 120 vCPU for the merged account, so 600k asks 400 / 64 / 120 and 2,400k
+> asks 1,600 / 256 / 120. Until an account of a kind is live, the org runs on the shared floor at
+> Max's figures (CI at 50). The mechanisms belong to the Host accounts story, MOTIR-9365; this
+> record states only the figures.
+>
+> **What stands.** The ladder's pools and prices, the top-up path and its price, the included
+> seat, per-org pricing at quantity 1, no contact-sales path, and the two-lane margin decision's
+> substance. No COGS or margin figure is added here; those stay in
+> `motir-meta/margin-analysis.md`.
 
 ### 3. The Stripe Price catalog (binding on 8.1.2 / MOTIR-1141)
 
