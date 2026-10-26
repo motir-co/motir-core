@@ -51,7 +51,7 @@ the same primitives — no design→code gap.
 | **The larger credit pool plan** (AMENDMENT)                 | **`billing--larger-pool.mock.html`** (HTML mockup)                 | One more card at the end of the plans row, offered only from an estimate, 12 panels (with a 2b neighbour): no estimate · offered (the arrival, annual) · upgrade · current · the ladder covers it (absent, no notice) · above the top band (absent, one notice) · read-only · cadence switched · purchase refused · loading · read fails · narrow + dark. Amends panel 5's plan row only. See § "Amendment 2026-10-21 — the larger credit pool plan" at the end of this file.                                                                                                                                                                                                                                                                                                                                                                                                   |
 | **The Calculator — planned and run ranges** (AMENDMENT)     | **`billing--calculator--planned-and-run.mock.html`** (HTML mockup) | The Calculator's one items range becomes two (items planned in Motir · items run on Motir's runner, with the own-agent help), 3 panels: the inputs · the priced-range line in the answer · both ranges at 0 refused. Amends the Calculator view's inputs only. See § "Amendment 2026-10-21 — the Calculator's planned and run ranges" at the end of this file.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | **The Host plan** (AMENDMENT)                               | **`billing--host.mock.html`** (HTML mockup)                        | A fifth paid card after Max ×2 and every state it brings, 13 panels: the row monthly · annual · Choose Host redirecting · member disabled · org on Max ×2 · the upgrade to Host (ready, loading, error) · its success and Host Current · Host in the unfolded regular plans (and Pool 250,000 → Host) · org on Host · the downgrade from Host and its success · the pending downgrade from Host · `zh` · narrow. Amends panel 5's plan row and the larger-pool amendment's unfolded regular plans. See § "Amendment 2026-10-23 — the Host plan" at the end of this file.                                                                                                                                                                                                                                                                                                        |
-| **The larger pools above Host** (AMENDMENT)                 | **`billing--larger-pool--above-host.mock.html`** (HTML mockup)     | What moving the larger pools above Host changes, 13 panels: the Max ×2 with top-ups answer at 100,000 · the offer card at the Host-anchored rungs (Pool 900,000) monthly · annual · Choose pressed · Largest credit pool at Pool 2,400,000 · member disabled · the re-worded Need more credits? callout · the upgrade from Host to a rung (ready, loading, error) · its success and the held rung card · the held rung card (Pool 600,000) with the regular plans unfolded · the held retired rung card (Pool 250,000) · `zh` · narrow. Amends the larger-pool and Host amendments. See § "Amendment 2026-10-26 — the larger pools above Host" at the end of this file.                                                                                                                                                                                                         |
+| **The larger pools above Host** (AMENDMENT)                 | **`billing--larger-pool--above-host.mock.html`** (HTML mockup)     | What moving the larger pools above Host changes, 13 panels: the Max ×2 with top-ups answer · the offer card at the Host-anchored rungs (Pool 900,000) monthly · annual · Choose pressed · Largest credit pool at Pool 2,400,000 · member disabled · the re-worded Need more credits? callout · the upgrade from Host to a rung (ready, loading, error) · its success and the held rung card · the held rung card (Pool 600,000) with the regular plans unfolded · the held retired rung card (Pool 250,000) · `zh` · narrow. Amends the larger-pool and Host amendments. See § "Amendment 2026-10-26 — the larger pools above Host" at the end of this file.                                                                                                                                                                                                                    |
 
 ## What this area is
 
@@ -2076,8 +2076,8 @@ component is added. The mono lines are board chrome, not product copy.
    600,000, Pool 900,000, Pool 1,200,000, Pool 1,800,000 and Pool 2,400,000. The card keeps the
    shipped anatomy (label, name, `largerPlan` sentence, price block on the page's cadence, pool,
    `largerPlanEstimate` caveat, seat line, buy control) and gains **the rung entitlement lines**
-   under the seat line: two check lines in the Host card's feature-list style. At 600,000–700,000
-   the answer is Pool 900,000, the smallest rung covering the high end: $4,200 a month on monthly;
+   under the seat line: two check lines in the Host card's feature-list style. At 266,073–886,909
+   (150–250 items planned and 30–50 run a month, Balanced and Flagship) the answer is Pool 900,000, the smallest rung covering the high end: $4,200 a month on monthly;
    $3,000 a month equivalent, $36,000 a year and the savings pill on annual. Choose Pool 900,000
    pressed shows the shipped `Button` loading state.
 2. **The rung entitlement lines are a promise, not a status.** They are static copy on every
@@ -2085,18 +2085,19 @@ component is added. The mono lines are board chrome, not product copy.
    status, readiness or progress appears anywhere; the org admin's account view owns that state
    and the billing card has no read of it. They never appear on a retired rung's card.
 3. **The Max ×2 with top-ups answer (panel 1).** An estimate between Max ×2's pool and Host's (here
-   85,000–100,000) gets the shipped regular arm for Max ×2 with Go to this plan, one new lead
-   sentence under the plan's name, and the shipped top-up box saying the roughly 40,000 credits
-   over Max ×2's pool are covered by top-ups at the shipped top-up rate. Neither Host nor a rung
+   28,794–86,382, from 20–30 items planned and 4–6 run on Balanced) gets the shipped regular arm
+   for Max ×2 with Go to this plan, one new lead sentence under the plan's name, and the shipped
+   top-up box saying the roughly 26,382 credits (27 × 1,000, about $135 a month) over Max ×2's pool are covered by top-ups at the shipped top-up rate. Neither Host nor a rung
    appears. This is the answer the Calculator gave before larger pools existed.
-4. **Above the largest rung (panel 5).** Past Pool 2,400,000 (here 2,600,000–3,000,000) the
-   shipped Largest credit pool card offers Pool 2,400,000 with its shipped top-up box (600,000
-   credits, 600 × 1,000, about $3,000 a month), and carries the rung entitlement lines.
+4. **Above the largest rung (panel 5).** Past Pool 2,400,000 (here 938,955–2,503,880, from 600–800
+   items planned and 120–160 run across all three categories) the shipped Largest credit pool card
+   offers Pool 2,400,000 with its shipped top-up box (103,880 credits, 104 × 1,000, about $520 a
+   month), and carries the rung entitlement lines.
 5. **The re-worded Need more credits? callout (panel 7).** Its sentence names Host's 300,000
    credits, the pool the larger offer starts above, and says the pool comes with AWS accounts of
    the organization's own. Its place, `--el-tint-sky` fill and Open the Calculator button are
    unchanged. The holder's variant (`bodyHeld`) is unchanged.
-6. **The upgrade from Host to a rung (panels 8–9).** An org on Host at 700,000 sees Upgrade to Pool
+6. **The upgrade from Host to a rung (panels 8–9).** An org on Host at 266,073–886,909 sees Upgrade to Pool
    900,000 and the shipped upgrade note; the button opens the shipped `PlanChangeDialog` for Host →
    Pool 900,000 (ready, loading skeleton, preview error). The success toast reads You're on Pool
    900,000 with the credits for the days left, then Your plan shows the held rung card.
@@ -2108,8 +2109,8 @@ component is added. The mono lines are board chrome, not product copy.
    regular plans show Upgrade to Host on Host. No retired rung (Pool 80,000 … Pool 250,000) is
    offered as a choice anywhere.
 9. **Roles, `zh` and narrow (panels 6, 12, 13).** A member without `manageBilling` sees the offer's
-   control disabled with the shipped `plans.upgrade.disabledReason`. The `zh` panel renders the 700k
-   offer card with the entitlement lines, the 100k answer and the re-worded callout. At 375px the
+   control disabled with the shipped `plans.upgrade.disabledReason`. The `zh` panel renders the Pool
+   900,000 offer card with the entitlement lines, the Max ×2 with top-ups answer and the re-worded callout. At 375px the
    Calculator stacks (form above answer), the offer card and its lines take the full width, and the
    dialog is the shipped full-width sheet.
 
@@ -2154,9 +2155,24 @@ No new colour or shape role. The rung entitlement lines reuse the Host card's fe
 (`--el-text-secondary` text, `--el-success` check); every other element is a shipped component in
 its shipped state, so the base tables and the larger-pool amendment's roles govern.
 
-### The numbers are illustrative
+### The numbers
 
-The estimates, the inputs, the period end (Nov 1, 2026), the days left and every figure in the
+**The Calculator's inputs and answers are the engine's real output** (review, 2026-10-26: the first
+draft's 4,000–6,000 items planned a month were not realistic). Each estimate is
+`estimateCalculator` over the shipped profiles (`2026-10-12.1`), the live credit rates of each
+category's models, the lane multipliers (planning 0.261, agent 0.1566) and the planner on
+claude-opus-5-5: about 1,024 credits per item planned, and per item run about 2,077 on Balanced,
+3,748 on Balanced + Flagship and 2,703 across all three. The high end is doubled, as the engine
+does, and the answer is priced on it.
+
+| Panel             | Planned / run a month | Categories         | Credits a month     | Answer                              |
+| ----------------- | --------------------- | ------------------ | ------------------- | ----------------------------------- |
+| 1                 | 20–30 / 4–6           | Balanced           | 28,794 – 86,382     | Max ×2 + 27 top-ups ($135)          |
+| 2–4, 6, 8, 12, 13 | 150–250 / 30–50       | Balanced, Flagship | 266,073 – 886,909   | Pool 900,000                        |
+| 5                 | 600–800 / 120–160     | all three          | 938,955 – 2,503,880 | Pool 2,400,000 + 104 top-ups ($520) |
+| 10 (held caption) | 100–150 / 20–35       | Balanced, Flagship | 177,382 – 569,623   | Pool 600,000                        |
+
+The period end (Nov 1, 2026), the days left and every figure in the
 dialog and the success toast ($1,306.45 due, +290,323 credits, +29,032 index allowance) are
 illustrative. The rungs and prices are read from the catalog and Stripe ($2,850 / $24,000 for Pool
 600,000; $4,200 / $36,000 for Pool 900,000; $10,950 / $96,000 for Pool 2,400,000), the
