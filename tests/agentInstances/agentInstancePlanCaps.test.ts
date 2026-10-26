@@ -22,6 +22,7 @@ const TIERS = {
   standard: { key: 'standard', name: 'Standard', monthlyCreditAllotment: 3_000 },
   pro: { key: 'pro', name: 'Pro', monthlyCreditAllotment: 15_000 },
   legacy: { key: 'legacy_tier', name: 'Legacy', monthlyCreditAllotment: 0 },
+  pool2400k: { key: 'pool_2400k', name: 'Pool 2,400,000', monthlyCreditAllotment: 2_400_000 },
 };
 
 function onPlan(tier: (typeof TIERS)[keyof typeof TIERS] | null): void {
@@ -98,6 +99,18 @@ describe('per person, at create — the plan’s agentsPerUser', () => {
       message: expect.stringContaining('Pro plan allows 5 agents per person'),
     });
     expect(await slots()).toHaveLength(5);
+  });
+
+  it('a larger pool plan (10, MOTIR-9653): the tenth create succeeds and the eleventh is refused, naming the plan', async () => {
+    onPlan(TIERS.pool2400k);
+    for (let i = 1; i <= 10; i++) expect((await create(`p-${i}`)).state).toBe('running');
+    await expect(create('p-11')).rejects.toMatchObject({
+      reason: 'user_cap',
+      limit: 10,
+      planName: 'Pool 2,400,000',
+      message: expect.stringContaining('Pool 2,400,000'),
+    });
+    expect(await slots()).toHaveLength(10);
   });
 });
 

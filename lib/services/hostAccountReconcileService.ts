@@ -6,7 +6,7 @@ import {
   hostAccountPlan,
   type HostAccountSlot,
 } from '@/lib/ciFleet/hostAccounts';
-import { HOST_PLAN_KEY } from '@/lib/billing/planCaps';
+import { ownAccountPoolCredits } from '@/lib/billing/ownAccountPlans';
 import { refusalBackoffMs } from '@/lib/ciFleet/poolGrowthPolicy';
 import {
   alertFleetShardHeadroom,
@@ -24,15 +24,19 @@ import { fleetShardService } from '@/lib/services/fleetShardService';
 import { planCapsService, type PlanCapsAnswer } from '@/lib/services/planCapsService';
 import { withSystemContext } from '@/lib/workspaces/context';
 
-// THE HOST ACCOUNT RECONCILE (Story MOTIR-9365 · MOTIR-9582) — every minute, for
-// every organisation whose plan reads `host`, make sure its three AWS accounts
-// exist (`lib/ciFleet/hostAccounts.ts`), each created by the unattended add-shard
-// with its quota raise filed at creation.
+// THE OWN-ACCOUNTS RECONCILE (Story MOTIR-9365 · MOTIR-9582; widened to the larger
+// pools by MOTIR-9366 · MOTIR-9651) — every minute, for every organisation whose
+// plan carries its own accounts (`host` or a larger pool on sale,
+// `planCarriesOwnAccounts`), make sure its three AWS accounts exist
+// (`lib/ciFleet/hostAccounts.ts`), each created by the unattended add-shard with
+// its quota raise filed at creation, sized to the plan's pool. A change between
+// Host and a rung keeps the same accounts (their names carry no plan); only the raise target moves, and the walk files the new
+// one once no request of another value is open.
 //
 // A RECONCILE, NOT A PURCHASE EVENT: a replayed paid invoice selects the same org
 // and finds everything already there, and an org that leaves Host is simply no
-// longer selected — its rows are left as they are. "Host" is the plan-caps
-// read's (`planCapsService.capsFor` answering `capped` with the `host` key), so
+// longer selected — its rows are left as they are. The plan is the plan-caps
+// read's (`planCapsService.capsFor` answering `capped` with the plan's key), so
 // `plan_unknown` and `exempt` never create an account.
 //
 // Every step of the walk looks before it acts, so a pass interrupted anywhere —
@@ -70,7 +74,8 @@ export type HostSlotOutcome =
 
 export interface HostOrgReconcile {
   organizationId: string;
-  /** False when the org's plan does not read `host` — nothing was touched. */
+  /** False when the org's plan carries no own accounts (`planCarriesOwnAccounts`)
+   *  — nothing was touched. */
   host: boolean;
   slots: Partial<Record<HostAccountSlot, HostSlotOutcome>>;
 }
@@ -96,9 +101,11 @@ function errorName(err: unknown): string {
   return err instanceof Error ? err.name : 'UnknownError';
 }
 
-/** Does this plan answer say Host? */
-function readsHost(answer: PlanCapsAnswer): boolean {
-  return answer.kind === 'capped' && answer.planKey === HOST_PLAN_KEY;
+/** The plan key when this plan answer names a plan that carries its own accounts
+ *  (Host or a larger pool on sale), else null. */
+function ownAccountsPlanKey(answer: PlanCapsAnswer): string | null {
+  if (answer.kind !== 'capped') return null;
+  return ownAccountPoolCredits(answer.planKey) === null ? null : answer.planKey;
 }
 
 async function hasPrimary(fleetKind: string): Promise<boolean> {
@@ -130,18 +137,19 @@ function outcomeOf(result: ShardProvisioningResult): HostSlotOutcome {
 
 async function reconcileSlot(
   organizationId: string,
+  planKey: string,
   slot: HostAccountSlot,
   now: Date,
   deps: Required<Pick<HostReconcileDeps, 'alert'>> & HostReconcileDeps,
 ): Promise<HostSlotOutcome> {
-  const plan = hostAccountPlan(organizationId, slot);
+  const plan = hostAccountPlan(organizationId, slot, ownAccountPoolCredits(planKey)!);
   if (!(await hasPrimary(plan.account.fleetKind))) return 'no_primary';
   if (!(await clearOfBackoff(organizationId, slot, now))) return 'backing_off';
 
   let result: ShardProvisioningResult;
   try {
     result = await fleetShardProvisioningService.addOrgOwnedShard(
-      { organizationId, slot },
+      { organizationId, slot, planKey },
       deps.provisioning,
     );
   } catch (err) {
@@ -189,8 +197,8 @@ async function withReconcileLease<T>(now: Date, fn: () => Promise<T>): Promise<T
 }
 
 export const hostAccountReconcileService = {
-  /** Make sure one organisation's Host accounts exist — when its plan reads
-   *  `host`. Never throws for one slot. */
+  /** Make sure one organisation's own accounts exist — when its plan carries
+   *  them (`host` or a larger pool on sale). Never throws for one slot. */
   async reconcileOrganization(
     organizationId: string,
     deps: HostReconcileDeps = {},
@@ -199,12 +207,16 @@ export const hostAccountReconcileService = {
     const alert = deps.alert ?? alertFleetShardHeadroom;
     const capsFor = deps.capsFor ?? planCapsService.capsFor;
     const outcome: HostOrgReconcile = { organizationId, host: false, slots: {} };
-    if (!readsHost(await capsFor(organizationId))) return outcome;
+    const planKey = ownAccountsPlanKey(await capsFor(organizationId));
+    if (planKey === null) return outcome;
     outcome.host = true;
 
     for (const slot of HOST_ACCOUNT_SLOTS) {
       try {
-        outcome.slots[slot] = await reconcileSlot(organizationId, slot, now, { ...deps, alert });
+        outcome.slots[slot] = await reconcileSlot(organizationId, planKey, slot, now, {
+          ...deps,
+          alert,
+        });
       } catch (err) {
         outcome.slots[slot] = 'failed';
         console.error(`${LOG} a Host account slot failed`, {

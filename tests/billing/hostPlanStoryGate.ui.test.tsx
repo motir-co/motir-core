@@ -322,7 +322,7 @@ describe('the plans view, in every shipped locale', () => {
     .map((p) => p.name);
 
   for (const locale of Object.keys(LOCALES) as Locale[]) {
-    it(`${locale}: five paid cards, Host last in its own words, the callout on Max ×2`, async () => {
+    it(`${locale}: five paid cards, Host last in its own words, the callout on Host`, async () => {
       await openPlans(locale);
       expect(cards().map(nameOf)).toEqual(PAID);
       expect(PAID).toHaveLength(5);
@@ -350,16 +350,12 @@ describe('the plans view, in every shipped locale', () => {
       const top = TOP.allotment!.credits;
       const fmt = (n: number) => new Intl.NumberFormat(locale).format(n);
       expect(page).toContain(fmt(top));
-      // The callout names the ladder's top: the one sentence that quotes Max ×2's pool.
-      const callout = LOCALES[locale].billing.plans.needMore.body;
-      const lead = callout.slice(0, callout.indexOf('{')).trim();
-      if (lead) {
-        const node = screen.getByText(
-          (_, el) => (el?.textContent ?? '').startsWith(lead) && el?.children.length === 0,
-        );
-        expect(node.textContent).toContain(fmt(top));
-        expect(node.textContent).not.toContain(fmt(HOST.allotment!.credits));
-      }
+      // The callout names Host, the floor of the larger offer (MOTIR-9654): it quotes
+      // Host's pool, never Max ×2's.
+      const node = screen.getByTestId('plans-need-more');
+      expect(node.textContent).toContain(HOST.name);
+      expect(node.textContent).toContain(fmt(HOST.allotment!.credits));
+      expect(node.textContent).not.toContain(fmt(top));
     });
   }
 

@@ -6501,7 +6501,7 @@
       "yourPlanTitle": "Votre forfait",
       "needMore": {
         "title": "Besoin de plus de crédits ?",
-        "body": "Si votre organisation utilise plus que les {credits} crédits par mois de {plan}, estimez votre utilisation et le calculateur vous proposera une réserve de crédits plus grande, dimensionnée sur mesure.",
+        "body": "Si votre organisation utilise plus que les {credits} crédits par mois de {plan}, estimez votre utilisation et le calculateur vous proposera une réserve de crédits plus grande, dimensionnée sur mesure, avec vos propres comptes AWS.",
         "bodyHeld": "Si votre organisation dépasse ses {credits} crédits par mois, estimez votre utilisation et le calculateur vous proposera une réserve plus grande, dimensionnée sur mesure.",
         "action": "Ouvrir le calculateur"
       },
@@ -6636,6 +6636,8 @@
         "caption": "Votre estimation va de {low} à {high} crédits par mois. Ce pool est calé sur le haut de cette fourchette, pour ne pas être juste. C’est une estimation, qui évolue avec la vôtre.",
         "captionCurrent": "C’est le pool que vous avez acheté, calculé à partir d’une estimation de {low} à {high} crédits par mois. Une estimation plus basse par la suite ne change pas le prix d’un plan que vous détenez déjà.",
         "priceEstimate": "Calculé à partir de votre estimation",
+        "ownAccounts": "Trois comptes AWS propres à votre organisation : un pour les runners CI, un pour les exécutions d’agents et un partagé par l’indexeur et les agents hébergés, chacun dimensionné pour ce pool",
+        "sharedUntilGranted": "Tant que les quotas de chaque compte ne sont pas accordés, le plan fonctionne avec les limites de Max sur les pools partagés de Motir",
         "basis": {
           "monthly": "Calculé à partir du prix mensuel de {plan}, chaque crédit au-delà de son pool étant moins cher qu’en recharge.",
           "annual": "Calculé au même prix par crédit que {plan} en facturation annuelle. La facturation est annuelle, et le pool arrive toujours mois par mois."
@@ -6708,6 +6710,7 @@
         "largestPoolLabel": "Plus grande réserve de crédits",
         "largestPool": "Votre estimation dépasse notre plus grande réserve : la réponse est donc cette réserve — {plan} — avec des recharges pour le reste.",
         "largestPoolTopUp": "Les quelque {excess} crédits restants par mois sont couverts par des recharges : {units} × {unitCredits} crédits, environ {price} $ par mois.",
+        "regularWithTopUps": "Votre estimation dépasse les {credits} crédits par mois de {plan} : la réponse est donc {plan}, avec des recharges pour le reste.",
         "aboveTopRung": "Cela dépasse les {ceiling} crédits par mois du plus grand forfait standard, et aucune réserve plus grande n'est disponible pour le moment : l'excédent est donc couvert par des recharges de crédits.",
         "upgradeNote": "Une mise à niveau en cours de période est facturée selon les jours restants. Le montant s'affiche avant tout paiement.",
         "goToPlan": "Aller à ce forfait"

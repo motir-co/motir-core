@@ -4,15 +4,18 @@ import type { BillingStatusDTO } from '@/lib/dto/billing';
 import {
   BILLING_CATALOG,
   CHECKOUT_PRICE_LOOKUP_KEYS,
+  hostMonthlyPlanCredits,
   isAllowedCheckoutQuantity,
   isKnownCheckoutPrice,
   isLargerPoolPlanKey,
   isPlanChangeKey,
+  PLAN_CHANGE_KEYS,
   largerPoolCreditsForPrice,
   largerPoolPlans,
   maxMonthlyPlanCredits,
   type AiPlanCatalogEntry,
 } from '@/lib/billing/catalog';
+import { capsForPlanKey } from '@/lib/billing/planCaps';
 import { buildOrgBill } from '@/lib/platform/orgBill';
 import { db } from '@/lib/db';
 import { adminDb } from '../helpers/adminDb';
@@ -23,12 +26,14 @@ import { adminDb } from '../helpers/adminDb';
 // operator bill read it again. Each has its own suite with its own fixture. This one
 // feeds the SHIPPED catalogue through all of them and asserts they agree on the band.
 //
-// Every expected pool and price is derived here from the ladder entries and the
-// top-up, by the rule the approved record MOTIR-8987 fixes: monthly is the ladder
-// top's monthly price plus every credit above its pool at the top-up rate less the
-// discount; annual is the ladder top's own annual per-credit rate. No band figure is
-// typed. The motir-ai client is the one external leaf, so it is mocked; the org is
-// seeded through the real services against the real Postgres.
+// Every expected pool and price is derived here from the Host entry and the top-up,
+// by the rule the approved record MOTIR-8987 fixes with its anchor moved to Host
+// (MOTIR-9366): monthly is Host's monthly price plus every credit above its pool at
+// the top-up rate less the discount; annual is Host's own annual per-credit rate. No
+// band figure is typed. The six first rungs, at or below Host, are removed from the
+// catalogue outright; a stale key for one is refused at Checkout. The motir-ai client
+// is the one external leaf, so it is mocked; the org is seeded through the real
+// services against the real Postgres.
 
 const createCheckoutSessionMock = vi.fn<(i: unknown) => Promise<CheckoutSessionOutcome>>();
 vi.mock('@/lib/ai/motirAiClient', () => ({
@@ -42,7 +47,7 @@ const { createTestUser } = await import('../fixtures/userFixtures');
 const { truncateAuthTables } = await import('../helpers/db');
 const { LargerPoolAtOrBelowCeilingError } = await import('@/lib/billing/errors');
 
-/** The record's discount on the top-up rate for every credit above the ladder (MOTIR-8987). */
+/** The record's discount on the top-up rate for every credit above the anchor (MOTIR-8987). */
 const LARGER_POOL_DISCOUNT = 0.9;
 
 type Cadence = 'monthly' | 'annual';
@@ -55,15 +60,21 @@ const LADDER = BILLING_CATALOG.aiPlans
   .filter((p) => p.band === 'ladder' && p.prices && p.allotment?.cadence === 'monthly')
   .sort((a, b) => poolOf(a) - poolOf(b));
 const TOP = LADDER[LADDER.length - 1]!;
+const HOST = BILLING_CATALOG.aiPlans.find((p) => p.band === 'host')!;
 const BAND = largerPoolPlans();
+/** The six first rungs, removed from the catalogue (owner, 2026-10-26). */
+const REMOVED_KEYS = ['pool_80k', 'pool_100k', 'pool_120k', 'pool_150k', 'pool_200k', 'pool_250k'];
+const REMOVED_PRICE_KEYS = REMOVED_KEYS.flatMap((k) => CADENCES.map((c) => `${k}_pool_${c}`));
 const TOPUP = BILLING_CATALOG.creditTopup;
 
-/** What the rule says a rung of `pool` credits costs, in cents. */
-function ruleCents(pool: number, cadence: Cadence): number {
-  if (cadence === 'annual') return Math.round((pool * priceCents(TOP, 'annual')) / poolOf(TOP));
+/** What the rule says a rung of `pool` credits costs, in cents, anchored on `anchor`. */
+function ruleCents(pool: number, cadence: Cadence, anchor: AiPlanCatalogEntry = HOST): number {
+  if (cadence === 'annual') {
+    return Math.round((pool * priceCents(anchor, 'annual')) / poolOf(anchor));
+  }
   const topupRate = cents(TOPUP.unitAmountUsd) / TOPUP.unitCredits;
   return Math.round(
-    priceCents(TOP, 'monthly') + (pool - poolOf(TOP)) * topupRate * LARGER_POOL_DISCOUNT,
+    priceCents(anchor, 'monthly') + (pool - poolOf(anchor)) * topupRate * LARGER_POOL_DISCOUNT,
   );
 }
 
@@ -125,13 +136,34 @@ afterAll(async () => {
   await adminDb.$disconnect();
 });
 
-describe('the band and the ceiling', () => {
-  it('the band is real, ascending, and strictly above a ceiling that did not follow it', () => {
+describe('the band, the Host floor and the ceiling', () => {
+  it('the band is real, ascending, and strictly above a Host floor read from its entry', () => {
     expect(BAND.length).toBeGreaterThan(0);
-    expect(maxMonthlyPlanCredits()).toBe(poolOf(TOP));
-    for (const rung of BAND) expect(poolOf(rung)).toBeGreaterThan(maxMonthlyPlanCredits());
+    expect(hostMonthlyPlanCredits()).toBe(poolOf(HOST));
+    for (const rung of BAND) expect(poolOf(rung)).toBeGreaterThan(hostMonthlyPlanCredits());
+    expect(poolOf(BAND[0]!)).toBeGreaterThanOrEqual(2 * hostMonthlyPlanCredits());
     const pools = BAND.map(poolOf);
     expect(pools).toEqual([...new Set(pools)].sort((a, b) => a - b));
+  });
+
+  it('the ladder ceiling did not follow the floor: it is still the ladder top', () => {
+    expect(maxMonthlyPlanCredits()).toBe(poolOf(TOP));
+    expect(maxMonthlyPlanCredits()).toBeLessThan(hostMonthlyPlanCredits());
+  });
+
+  it('the band is exactly the five Host-anchored rungs, and the plan-change list is in pool order', () => {
+    expect(BAND.map((p) => p.key)).toEqual([
+      'pool_600k',
+      'pool_900k',
+      'pool_1200k',
+      'pool_1800k',
+      'pool_2400k',
+    ]);
+    expect(PLAN_CHANGE_KEYS).toEqual([
+      ...LADDER.map((p) => p.key),
+      HOST.key,
+      ...BAND.map((p) => p.key),
+    ]);
   });
 
   it('every rung is a whole step of the ladder’s own grain, and its keys name its pool', () => {
@@ -168,13 +200,16 @@ describe('the prices — derived, never typed', () => {
     }
   });
 
-  it('a rung costs less per credit than the ladder top on both cadences', () => {
+  it('a rung costs more than Host, and no more per credit, on both cadences', () => {
     for (const rung of BAND) {
       for (const cadence of CADENCES) {
+        expect(priceCents(rung, cadence), `${rung.key} ${cadence}`).toBeGreaterThan(
+          priceCents(HOST, cadence),
+        );
         expect(
           priceCents(rung, cadence) / poolOf(rung),
           `${rung.key} ${cadence}`,
-        ).toBeLessThanOrEqual(priceCents(TOP, cadence) / poolOf(TOP));
+        ).toBeLessThanOrEqual(priceCents(HOST, cadence) / poolOf(HOST));
       }
     }
   });
@@ -213,12 +248,15 @@ describe('the service gates read the catalogue, not a second list', () => {
     }
   });
 
-  it('refuses a pool key at the ceiling as at-or-below it, and calls nothing', async () => {
+  it('refuses a pool key naming exactly Host’s pool as at-or-below the floor, and calls nothing', async () => {
     const actor = await makeOwnerOrg();
-    const atCeiling = `pool_${maxMonthlyPlanCredits() / 1000}k_pool_monthly`;
-    await expect(
-      billingService.startCheckout({ ...actor, priceLookupKey: atCeiling }),
-    ).rejects.toBeInstanceOf(LargerPoolAtOrBelowCeilingError);
+    const atFloor = `pool_${hostMonthlyPlanCredits() / 1000}k_pool_monthly`;
+    const refusal = billingService.startCheckout({ ...actor, priceLookupKey: atFloor });
+    await expect(refusal).rejects.toBeInstanceOf(LargerPoolAtOrBelowCeilingError);
+    await expect(refusal).rejects.toMatchObject({
+      requestedCredits: hostMonthlyPlanCredits(),
+      ceilingCredits: hostMonthlyPlanCredits(),
+    });
     expect(createCheckoutSessionMock).not.toHaveBeenCalled();
   });
 
@@ -253,8 +291,8 @@ describe('the operator bill quotes the catalogue', () => {
 });
 
 describe('the band moved nothing below it', () => {
-  it('the ladder still sells, changes and bills as its own entries say', () => {
-    for (const plan of LADDER) {
+  it('the ladder and Host still sell, change and bill as their own entries say', () => {
+    for (const plan of [...LADDER, HOST]) {
       expect(isPlanChangeKey(plan.key), plan.key).toBe(true);
       for (const cadence of CADENCES) {
         expect(isKnownCheckoutPrice(plan.prices![cadence].priceLookupKey), plan.key).toBe(true);
@@ -271,5 +309,40 @@ describe('the band moved nothing below it', () => {
     }
     expect(isAllowedCheckoutQuantity(TOPUP.priceLookupKey, 2)).toBe(false);
     expect(isPlanChangeKey(TOPUP.priceLookupKey)).toBe(false);
+  });
+});
+
+describe('the removed first rungs: gone from the catalogue, refused at Checkout', () => {
+  it('none of the six is in the catalogue, has a caps row or carries accounts', () => {
+    const keys = BILLING_CATALOG.aiPlans.map((p) => p.key as string);
+    for (const key of REMOVED_KEYS) {
+      expect(keys, key).not.toContain(key);
+      expect(capsForPlanKey(key), key).toBeNull();
+      expect(isPlanChangeKey(key), key).toBe(false);
+    }
+    expect(
+      BILLING_CATALOG.aiPlans.filter((p) => p.band === 'larger_pool' && poolOf(p) <= poolOf(HOST)),
+    ).toEqual([]);
+  });
+
+  it('none of their twelve keys is on either allow-list', () => {
+    expect(REMOVED_PRICE_KEYS).toHaveLength(12);
+    for (const key of REMOVED_PRICE_KEYS) {
+      expect(CHECKOUT_PRICE_LOOKUP_KEYS.has(key), key).toBe(false);
+      expect(isKnownCheckoutPrice(key), key).toBe(false);
+      expect(isLargerPoolPlanKey(key), key).toBe(false);
+    }
+  });
+
+  it('Checkout refuses every stale key with the at-or-below error, floored at Host', async () => {
+    const actor = await makeOwnerOrg();
+    for (const key of REMOVED_PRICE_KEYS) {
+      const refusal = billingService.startCheckout({ ...actor, priceLookupKey: key });
+      await expect(refusal, key).rejects.toBeInstanceOf(LargerPoolAtOrBelowCeilingError);
+      await expect(refusal, key).rejects.toMatchObject({
+        ceilingCredits: hostMonthlyPlanCredits(),
+      });
+    }
+    expect(createCheckoutSessionMock).not.toHaveBeenCalled();
   });
 });

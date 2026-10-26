@@ -95,16 +95,28 @@ function larger(planKey = SMALLEST.key, planName = SMALLEST.name): CalculatorEst
   });
 }
 
+/** The high end of the `largest()` answer: 12,000 credits past the largest pool sold. */
+const LARGEST_HIGH = LARGEST.allotment!.credits + 12_000;
+
 /** Above every pool: the largest one, and the rest in top-ups. */
 function largest(): CalculatorEstimateDTO {
   return estimate({
-    credits: { low: 200_000, high: 262_000 },
-    recommendation: { planKey: LARGEST.key, planName: LARGEST.name, monthlyPriceUsd: 1_155 },
+    credits: { low: LARGEST.allotment!.credits - 62_000, high: LARGEST_HIGH },
+    recommendation: {
+      planKey: LARGEST.key,
+      planName: LARGEST.name,
+      monthlyPriceUsd: LARGEST.prices!.monthly.amountUsd,
+    },
     topUp: {
       low: { units: 0, credits: 0, priceUsd: 0 },
       high: { units: 12, credits: 12_000, priceUsd: 60 },
     },
-    ceiling: { credits: 60_000, exceeded: true, excessCredits: 202_000, outcome: 'largest_pool' },
+    ceiling: {
+      credits: 60_000,
+      exceeded: true,
+      excessCredits: LARGEST_HIGH - 60_000,
+      outcome: 'largest_pool',
+    },
   });
 }
 
@@ -179,6 +191,7 @@ function renderView(
       reload={async () => {}}
       redirecting={false}
     />,
+    opts.messages ? { locale: 'zh', messages: opts.messages } : undefined,
   );
   return handles;
 }
@@ -758,7 +771,7 @@ describe('above every pool — the largest pool plus top-ups', () => {
     expect(block.textContent).toContain(
       `Your estimate is above our largest pool, so the answer is that pool — ${LARGEST.name} — with top-ups for the rest.`,
     );
-    const excess = (262_000 - LARGEST.allotment!.credits).toLocaleString('en-US');
+    const excess = (LARGEST_HIGH - LARGEST.allotment!.credits).toLocaleString('en-US');
     expect(within(block).getByTestId('calculator-largest-topup').textContent).toBe(
       `The other ${excess} credits or so a month are covered by top-ups: 12 × 1,000 credits, about $60 a month.`,
     );
@@ -769,19 +782,14 @@ describe('above every pool — the largest pool plus top-ups', () => {
 });
 
 describe('above the ladder with no larger pool', () => {
-  it('says so with the answer’s ceiling and shows the top-up range, in words the larger arm lacks', async () => {
+  it('answers the regular plan with top-ups, in its own pool, and names no Host or rung (MOTIR-9654)', async () => {
     client.fetchCalculatorEstimate.mockResolvedValue(answer(above()));
     renderView();
     await ask();
-    expect(
-      await screen.findByText(
-        "That is more than the largest regular plan's 60,000 credits a month, and no larger pool is available right now, so the excess is met with credit top-ups.",
-      ),
-    ).toBeTruthy();
-    expect((await screen.findByTestId('calculator-plan')).textContent).toContain('Max ×2');
-    expect(screen.getByTestId('calculator-topup').textContent).toContain(
-      '1,000 credits – 101,000 credits',
-    );
+    const plan = await screen.findByTestId('calculator-plan');
+    expect(plan.textContent).toContain('Max ×2');
+    expect(screen.queryByText(/That is more than the largest regular plan/)).toBeNull();
+    expect(screen.queryByTestId('calculator-topup')).toBeNull();
     expect(screen.queryByTestId('calculator-larger')).toBeNull();
   });
 
@@ -798,6 +806,203 @@ describe('above the ladder with no larger pool', () => {
     await ask();
     await screen.findByTestId('calculator-plan');
     expect(screen.queryByText(m.result.upgradeNote)).toBeNull();
+  });
+});
+
+// The larger pools above Host (MOTIR-9654; design/billing § "Amendment 2026-10-26 —
+// the larger pools above Host"). Every figure is read from the catalog entry or the
+// answer, never typed here.
+const MAX_X2 = BILLING_CATALOG.aiPlans.find((p) => p.key === 'max_x2')!;
+const HOST = BILLING_CATALOG.aiPlans.find((p) => p.band === 'host')!;
+const RUNG_900K = POOLS.find((p) => p.key === 'pool_900k')!;
+const LINES = [
+  enMessages.billing.plans.larger.ownAccounts,
+  enMessages.billing.plans.larger.sharedUntilGranted,
+];
+const usd = (n: number) => `$${n.toLocaleString('en-US')}`;
+
+/** An estimate whose high end is 100,000: above Max ×2's pool, below Host's. */
+function hundredK(): CalculatorEstimateDTO {
+  const excess = 100_000 - MAX_X2.allotment!.credits;
+  return estimate({
+    credits: { low: 40_000, high: 100_000 },
+    recommendation: {
+      planKey: MAX_X2.key,
+      planName: MAX_X2.name,
+      monthlyPriceUsd: MAX_X2.prices!.monthly.amountUsd,
+    },
+    topUp: {
+      low: { units: 0, credits: 0, priceUsd: 0 },
+      high: { units: excess / 1_000, credits: excess, priceUsd: (excess / 1_000) * 5 },
+    },
+    ceiling: {
+      credits: MAX_X2.allotment!.credits,
+      exceeded: true,
+      excessCredits: excess,
+      outcome: 'top_ups_only',
+    },
+  });
+}
+
+/** An estimate whose high end is 700,000: the smallest covering rung is Pool 900,000. */
+function sevenHundredK(): CalculatorEstimateDTO {
+  return estimate({
+    credits: { low: 300_000, high: 700_000 },
+    recommendation: {
+      planKey: RUNG_900K.key,
+      planName: RUNG_900K.name,
+      monthlyPriceUsd: RUNG_900K.prices!.monthly.amountUsd,
+    },
+    ceiling: {
+      credits: HOST.allotment!.credits,
+      exceeded: true,
+      excessCredits: 700_000 - HOST.allotment!.credits,
+      outcome: 'larger_pool',
+    },
+  });
+}
+
+describe('the larger pools above Host (MOTIR-9654)', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('at 100,000: Max ×2 at its price, the lead sentence, the top-up box, the seat line and Go to this plan', async () => {
+    client.fetchCalculatorEstimate.mockResolvedValue(answer(hundredK()));
+    renderView({ cadence: 'monthly' });
+    await ask();
+    const plan = await screen.findByTestId('calculator-plan');
+    expect(plan.textContent).toContain(MAX_X2.name);
+    expect(screen.getByTestId('calculator-price').textContent).toContain(
+      usd(MAX_X2.prices!.monthly.amountUsd),
+    );
+    expect(screen.getByTestId('calculator-regular-topups').textContent).toBe(
+      `Your estimate is above ${MAX_X2.name}'s ${MAX_X2.allotment!.credits.toLocaleString('en-US')} credits a month, so the answer is ${MAX_X2.name} with top-ups for the rest.`,
+    );
+    const excess = 100_000 - MAX_X2.allotment!.credits;
+    expect(excess).toBe(40_000);
+    expect(screen.getByTestId('calculator-above-topup').textContent).toBe(
+      `The other 40,000 credits or so a month are covered by top-ups: 40 × 1,000 credits, about $200 a month.`,
+    );
+    expect(screen.getByTestId('calculator-seat')).toBeTruthy();
+    expect(screen.getByRole('button', { name: m.result.goToPlan })).toBeTruthy();
+    const panel = document.body.textContent ?? '';
+    expect(panel).not.toContain(HOST.name);
+    for (const rung of POOLS) expect(panel).not.toContain(rung.name);
+    expect(screen.queryByTestId('calculator-larger')).toBeNull();
+    expect(panel).not.toContain(m.result.aboveTopRung.slice(0, 30));
+  });
+
+  it('at 700,000 on monthly: Pool 900,000 at its catalog price, Choose, and both entitlement lines under the seat line', async () => {
+    client.fetchCalculatorEstimate.mockResolvedValue(answer(sevenHundredK()));
+    renderView({ cadence: 'monthly' });
+    await ask();
+    const block = await screen.findByTestId('calculator-larger');
+    expect(block.textContent).toContain(RUNG_900K.name);
+    expect(within(block).getByTestId('calculator-larger-price').textContent).toContain(
+      usd(RUNG_900K.prices!.monthly.amountUsd),
+    );
+    expect(within(block).getByRole('button', { name: `Choose ${RUNG_900K.name}` })).toBeTruthy();
+    const lines = within(block).getByTestId('calculator-rung-entitlements');
+    expect([...lines.querySelectorAll('li')].map((li) => li.textContent)).toEqual(LINES);
+    // under the seat line: the per-org line comes before the list in document order
+    const seat = within(block).getByText(m.result.perOrg);
+    expect(seat.compareDocumentPosition(lines) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('at 700,000 on annual: the monthly equivalent, the year and the savings pill, from the entry', async () => {
+    client.fetchCalculatorEstimate.mockResolvedValue(answer(sevenHundredK()));
+    renderView({ cadence: 'annual' });
+    await ask();
+    const price = within(await screen.findByTestId('calculator-larger')).getByTestId(
+      'calculator-larger-price',
+    );
+    const yearly = RUNG_900K.prices!.annual.amountUsd;
+    expect(price.textContent).toContain(usd(yearly / 12));
+    expect(price.textContent).toContain(usd(yearly));
+  });
+
+  it('the largest pool also carries both lines, and a member sees the buy disabled with the reason', async () => {
+    client.fetchCalculatorEstimate.mockResolvedValue(answer(largest()));
+    renderView({ data: status({ canManage: false }) });
+    await ask();
+    const block = await screen.findByTestId('calculator-larger');
+    const lines = within(block).getByTestId('calculator-rung-entitlements');
+    expect([...lines.querySelectorAll('li')].map((li) => li.textContent)).toEqual(LINES);
+    const button = within(block).getByRole('button', { name: `Choose ${LARGEST.name}` });
+    expect((button as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText(enMessages.billing.plans.upgrade.disabledReason)).toBeTruthy();
+  });
+
+  it('an org on Host gets Upgrade to Pool 900,000, which opens the change-of-plan dialog, never Checkout', async () => {
+    const fetchMock = vi.fn(() => new Promise<Response>(() => {}));
+    vi.stubGlobal('fetch', fetchMock);
+    client.fetchCalculatorEstimate.mockResolvedValue(answer(sevenHundredK()));
+    const handles = renderView({ data: status({ tierKey: HOST.key, active: true }) });
+    await ask();
+    fireEvent.click(await screen.findByRole('button', { name: `Upgrade to ${RUNG_900K.name}` }));
+    await screen.findByRole('dialog');
+    const call = (fetchMock.mock.calls as unknown as [string, RequestInit][]).find(([url]) =>
+      String(url).includes('upgrade/preview'),
+    );
+    expect(call).toBeTruthy();
+    expect(JSON.parse(String(call![1].body))).toEqual({ toPlanKey: RUNG_900K.key });
+    expect(handles.checkout).not.toHaveBeenCalled();
+  });
+
+  it('offers no rung the catalog does not sell: no offer card and no buy control', async () => {
+    // Every `larger_pool` entry outside `largerPoolPlans()` — none ship today, so the
+    // case also checks one held over from an older catalog.
+    const sold = new Set(POOLS.map((p) => p.key));
+    const retired = BILLING_CATALOG.aiPlans.filter(
+      (p) => p.band === 'larger_pool' && !sold.has(p.key),
+    );
+    const held = {
+      ...SMALLEST,
+      key: `${SMALLEST.key}_held` as (typeof SMALLEST)['key'],
+      name: `${SMALLEST.name} (held)`,
+      allotment: { ...SMALLEST.allotment!, credits: HOST.allotment!.credits - 50_000 },
+    };
+    for (const rung of [...retired, held]) {
+      cleanup();
+      client.fetchCalculatorEstimate.mockResolvedValue(answer(larger(rung.key, rung.name)));
+      const data = status();
+      renderView({
+        data: { ...data, catalog: { ...data.catalog, aiPlans: [...data.catalog.aiPlans, held] } },
+      });
+      await ask();
+      await screen.findByTestId('calculator-plan');
+      expect(screen.queryByTestId('calculator-larger')).toBeNull();
+      expect(
+        screen.queryByRole('button', { name: new RegExp(`(Choose|Upgrade to) ${rung.name}`) }),
+      ).toBeNull();
+      expect(screen.queryByTestId('calculator-rung-entitlements')).toBeNull();
+    }
+  });
+
+  it('renders the zh lines and the zh lead sentence, with no en fallback', async () => {
+    const zh = (await import('@/messages/zh.json')).default as {
+      billing: typeof enMessages.billing;
+    };
+    for (const [estimateAnswer, expected] of [
+      [
+        sevenHundredK(),
+        [zh.billing.plans.larger.ownAccounts, zh.billing.plans.larger.sharedUntilGranted],
+      ],
+      [hundredK(), [zh.billing.calculator.result.regularWithTopUps.split('{')[0]!]],
+    ] as const) {
+      cleanup();
+      client.fetchCalculatorEstimate.mockResolvedValue(answer(estimateAnswer));
+      renderView({ messages: zh as unknown as Record<string, unknown> });
+      const planned = await screen.findByTestId('calculator-planned');
+      fireEvent.change(within(planned).getByLabelText('下限'), { target: { value: '40' } });
+      fireEvent.change(within(planned).getByLabelText('上限'), { target: { value: '60' } });
+      fireEvent.click(await screen.findByRole('button', { name: /Balanced/ }));
+      fireEvent.click(screen.getByRole('button', { name: '估算积分' }));
+      await screen.findByTestId('calculator-credits');
+      const page = document.body.textContent ?? '';
+      for (const text of expected) expect(page).toContain(text);
+      expect(page).not.toContain(LINES[0]!);
+      expect(page).not.toContain('so the answer is');
+    }
   });
 });
 

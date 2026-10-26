@@ -72,6 +72,8 @@ const LARGEST = BAND[BAND.length - 1]!;
 const CEILING = maxMonthlyPlanCredits();
 const LADDER = BILLING_CATALOG.aiPlans.filter((p) => p.band === 'ladder' && p.prices);
 const TOP = LADDER.reduce((a, b) => (b.allotment!.credits > a.allotment!.credits ? b : a));
+// The callout names Host, the floor of the larger offer (MOTIR-9654).
+const HOST = BILLING_CATALOG.aiPlans.find((p) => p.band === 'host')!;
 const TOPUP = BILLING_CATALOG.creditTopup;
 const CATEGORY = PINNED_CATEGORIES_ANSWER.categories[0]!.key;
 const PERIOD_END = '2026-11-01T00:00:00.000Z';
@@ -330,7 +332,7 @@ test.describe('The larger credit pool, sold from the Calculator', () => {
       const entry = live(page).getByTestId('plans-need-more');
       await expect(entry).toContainText(copy.plans.needMore.title);
       await expect(entry).toContainText(
-        format(copy.plans.needMore.body, { plan: TOP.name, credits: n(poolOf(TOP)) }),
+        format(copy.plans.needMore.body, { plan: HOST.name, credits: n(poolOf(HOST)) }),
       );
     });
 

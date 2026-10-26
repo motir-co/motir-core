@@ -6501,7 +6501,7 @@
       "yourPlanTitle": "Your plan",
       "needMore": {
         "title": "Need more credits?",
-        "body": "If your organization uses more than {plan}'s {credits} credits a month, estimate your usage and the Calculator offers a larger credit pool sized to it.",
+        "body": "If your organization uses more than {plan}'s {credits} credits a month, estimate your usage and the Calculator offers a larger credit pool sized to it, with AWS accounts of your own.",
         "bodyHeld": "If your organization outgrows its {credits} credits a month, estimate your usage and the Calculator offers a larger pool sized to it.",
         "action": "Open the Calculator"
       },
@@ -6633,6 +6633,8 @@
         "caption": "Your estimate runs from {low} to {high} credits a month. This pool is sized to the top of that range, so it won't come up short. It's an estimate, and it moves when your estimate does.",
         "captionCurrent": "This is the pool you bought, sized from an estimate of {low} to {high} credits a month. A later, lower estimate doesn't re-price a plan you already hold.",
         "priceEstimate": "Worked out from your estimate",
+        "ownAccounts": "Three AWS accounts of your organization's own: one for CI runners, one for agent runs, and one shared by the indexer and the hosted agents, each sized for this pool",
+        "sharedUntilGranted": "Until each account's quotas are granted, the plan runs at Max's limits on Motir's shared pools",
         "basis": {
           "monthly": "Priced from {plan}'s monthly price, with every credit above its pool at a discount on the top-up rate.",
           "annual": "Priced at the same per-credit rate as {plan} on annual billing. It's billed once a year, and the pool still arrives a month at a time."
@@ -6705,6 +6707,7 @@
         "largestPoolLabel": "Largest credit pool",
         "largestPool": "Your estimate is above our largest pool, so the answer is that pool — {plan} — with top-ups for the rest.",
         "largestPoolTopUp": "The other {excess} credits or so a month are covered by top-ups: {units} × {unitCredits} credits, about ${price} a month.",
+        "regularWithTopUps": "Your estimate is above {plan}'s {credits} credits a month, so the answer is {plan} with top-ups for the rest.",
         "aboveTopRung": "That is more than the largest regular plan's {ceiling} credits a month, and no larger pool is available right now, so the excess is met with credit top-ups.",
         "upgradeNote": "Upgrading mid-period is priced for the days left in your period. The amount is shown before anything is charged.",
         "goToPlan": "Go to this plan"

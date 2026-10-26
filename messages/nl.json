@@ -6501,7 +6501,7 @@
       "yourPlanTitle": "Je abonnement",
       "needMore": {
         "title": "Meer credits nodig?",
-        "body": "Gebruikt je organisatie meer dan de {credits} credits per maand van {plan}? Schat je gebruik en de rekenhulp biedt je een grotere creditpool op maat aan.",
+        "body": "Gebruikt je organisatie meer dan de {credits} credits per maand van {plan}? Schat je gebruik en de rekenhulp biedt je een grotere creditpool op maat aan, met AWS-accounts van jezelf.",
         "bodyHeld": "Groeit je organisatie boven haar {credits} credits per maand uit? Schat je gebruik en de rekenhulp biedt je een grotere pool op maat aan.",
         "action": "Rekenhulp openen"
       },
@@ -6636,6 +6636,8 @@
         "caption": "Je schatting loopt van {low} tot {high} credits per maand. Deze pool is afgestemd op de bovenkant van dat bereik, zodat je niet tekortkomt. Het is een schatting en verandert mee met jouw schatting.",
         "captionCurrent": "Dit is de pool die je hebt gekocht, berekend op basis van een schatting van {low} tot {high} credits per maand. Een latere, lagere schatting verandert de prijs van een plan dat je al hebt niet.",
         "priceEstimate": "Berekend uit je schatting",
+        "ownAccounts": "Drie AWS-accounts van je organisatie zelf: één voor CI-runners, één voor agentruns en één die de indexer en de gehoste agents delen, elk afgestemd op deze pool",
+        "sharedUntilGranted": "Tot de quota van elk account zijn toegekend, draait het plan op de limieten van Max op de gedeelde pools van Motir",
         "basis": {
           "monthly": "Berekend op basis van de maandprijs van {plan}; elke credit boven die pool is goedkoper dan bij opwaarderen.",
           "annual": "Berekend tegen dezelfde prijs per credit als {plan} bij jaarlijkse facturering. Je betaalt één keer per jaar en de pool komt nog steeds per maand binnen."
@@ -6708,6 +6710,7 @@
         "largestPoolLabel": "Grootste creditpool",
         "largestPool": "Je schatting ligt boven onze grootste pool, dus het antwoord is die pool — {plan} — met bijkopen voor de rest.",
         "largestPoolTopUp": "De overige ongeveer {excess} credits per maand dek je met bijkopen: {units} × {unitCredits} credits, ongeveer ${price} per maand.",
+        "regularWithTopUps": "Je schatting ligt boven de {credits} credits per maand van {plan}, dus het antwoord is {plan} met bijkopen voor de rest.",
         "aboveTopRung": "Dat is meer dan de {ceiling} credits per maand van het grootste gewone abonnement en er is nu geen grotere pool beschikbaar, dus het teveel wordt gedekt met bijgekochte credits.",
         "upgradeNote": "Halverwege de periode upgraden wordt berekend over de resterende dagen. Het bedrag wordt getoond voordat er iets in rekening wordt gebracht.",
         "goToPlan": "Naar dit abonnement"

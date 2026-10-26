@@ -1,3 +1,5 @@
+import { HOST_PLAN_KEY, planCarriesOwnAccounts } from '@/lib/billing/ownAccountPlans';
+
 // THE PLAN CAPS (Story MOTIR-9363 · MOTIR-9372) — what an organisation's AI plan
 // lets it run on Motir's fleets at once. Pure: no `db`, no `process.env`. The read
 // that turns an organisation into one of these rows is `planCapsService.capsFor`.
@@ -25,7 +27,14 @@
 // `PlanTier` rows, so the key set is data. `capsForPlanKey` answers `null` for a
 // key with no row, and the service turns that into `plan_unknown` — refused, the
 // key kept — rather than a plausible neighbour's figures. Keys resolve EXACTLY
-// first; `max` must never swallow `max_x2` by prefix.
+// first; `max` must never swallow `max_x2` by prefix. A larger pool resolves
+// through the catalog (`planCarriesOwnAccounts`), never by its key's shape, so a
+// `pool_<N>k` no catalog entry sells has no row.
+//
+// A plan that carries its own AWS accounts (Host and the larger pools on sale,
+// `lib/billing/ownAccountPlans.ts`) reads its SHARED FLOOR here — Host's row,
+// `HOST_FLOOR_CAPS`, or the larger pools' `LARGER_POOL_FLOOR_CAPS`. Once its own account of a kind is live, `planCapsService`
+// replaces that kind's figure with the account's own (`hostOwnAccountCaps.ts`).
 
 export interface PlanCaps {
   agentRunsInParallel: number;
@@ -34,12 +43,9 @@ export interface PlanCaps {
   ciBurstCap: number;
 }
 
-/**
- * The Host plan's key. Host is not in `BILLING_CATALOG` yet (its own card adds
- * it); the row is here first so a Host org is never uncapped and never refused,
- * whichever lands first. The totality test covers the catalog AND this key.
- */
-export const HOST_PLAN_KEY = 'host';
+/** The Host plan's key (declared beside `planCarriesOwnAccounts`). The totality
+ *  test covers the catalog AND this key. */
+export { HOST_PLAN_KEY };
 
 function caps(
   agentRunsInParallel: number,
@@ -50,6 +56,23 @@ function caps(
   return Object.freeze({ agentRunsInParallel, agentsPerUser, agentsRunningPerOrg, ciBurstCap });
 }
 
+/**
+ * HOST'S SHARED FLOOR (MOTIR-9587): Max ×2's agent figures with a CI burst of 50. A
+ * Host org runs at these until its own account of a kind is live; then
+ * `planCapsService` replaces that kind's figure (agent runs, CI burst) with the
+ * account's granted vCPU ÷ 2. Not the larger pools' floor: the two differ.
+ */
+export const HOST_FLOOR_CAPS: PlanCaps = caps(5, 10, 50, 50);
+
+/**
+ * THE LARGER POOLS' SHARED FLOOR (MOTIR-9366 · MOTIR-9653): every rung on sale runs
+ * at these until its own account of a kind is live — 5 runs, agents 10 per user and
+ * 50 running per org, and a CI burst of 20 (owner, 2026-10-26). Its own accounts
+ * then replace the runs and CI figures exactly as Host's do; the agent figures are
+ * already the rungs' 10 / 50 and stay.
+ */
+export const LARGER_POOL_FLOOR_CAPS: PlanCaps = caps(5, 10, 50, 20);
+
 /** The exactly-keyed rows. `free` is all zeros: it pays for no fleet, and the
  *  paid-plan gate refuses it before any figure is read. */
 export const PLAN_CAPS: Readonly<Record<string, PlanCaps>> = Object.freeze({
@@ -58,24 +81,14 @@ export const PLAN_CAPS: Readonly<Record<string, PlanCaps>> = Object.freeze({
   pro: caps(3, 5, 30, 10),
   max: caps(5, 10, 50, 25),
   max_x2: caps(5, 10, 50, 25),
-  // THE SHARED FLOOR (MOTIR-9587): a Host org runs at these figures until its
-  // own account of a kind is live; then `planCapsService` replaces that kind's
-  // figure (agent runs, CI burst) with the account's granted vCPU ÷ 2.
-  [HOST_PLAN_KEY]: caps(5, 10, 50, 50),
+  [HOST_PLAN_KEY]: HOST_FLOOR_CAPS,
 });
 
-/**
- * Every larger pool (`pool_<N>k`, the catalog's own key shape), until those plans
- * get accounts of their own: Max ×2's agent figures, the top of the ladder they
- * sit above, and Host's shared-floor CI burst of 50.
- */
-export const LARGER_POOL_CAPS: PlanCaps = caps(5, 10, 50, 50);
-
-const LARGER_POOL_KEY = /^pool_\d+k$/;
-
-/** The plan's four figures, or `null` when the key has no row. Never a default. */
+/** The plan's four figures, or `null` when the key has no row. Never a default:
+ *  a key is resolved exactly, or — for an on-sale larger pool, named through the
+ *  catalog by `planCarriesOwnAccounts`, never by its key's shape — to the larger
+ *  pools' floor. */
 export function capsForPlanKey(key: string): PlanCaps | null {
   if (Object.prototype.hasOwnProperty.call(PLAN_CAPS, key)) return PLAN_CAPS[key]!;
-  if (LARGER_POOL_KEY.test(key)) return LARGER_POOL_CAPS;
-  return null;
+  return planCarriesOwnAccounts(key) ? LARGER_POOL_FLOOR_CAPS : null;
 }
