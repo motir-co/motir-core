@@ -1705,6 +1705,9 @@ model Workspace {
   // Plan-tree embeddings (Story MOTIR-2694 · MOTIR-2696) — the RLS axis of the
   // semantic-search sidecar. Derived tenant data; cascade with the workspace.
   workItemEmbeddings          WorkItemEmbedding[]
+  // Page embeddings (Story MOTIR-9490 · MOTIR-9570) — the RLS axis of the page
+  // semantic index. Derived tenant data; cascade with the workspace.
+  pageEmbeddings              PageEmbedding[]
   // Workspace-scoped API tokens (Story 7.8 · bug 7.21) — a PAT belongs to ONE
   // workspace (the Linear mirror). Cascade with the workspace.
   apiTokens                   ApiToken[]
@@ -2179,6 +2182,9 @@ model Project {
   // Plan-tree embeddings for this project's items (Story MOTIR-2694 ·
   // MOTIR-2696) — the ranking pre-filter's axis. Cascade with the project.
   workItemEmbeddings          WorkItemEmbedding[]
+  // Page embeddings (Story MOTIR-9490 · MOTIR-9570) — the page ranking
+  // pre-filter's axis. Cascade with the project.
+  pageEmbeddings              PageEmbedding[]
   workflowStatuses            WorkflowStatus[]
   workflowTransitions         WorkflowTransition[]
   boards                      Board[]
@@ -13537,12 +13543,54 @@ model Page {
   decisionPublications DecisionPagePublication[]
   // The work items this page links (Story MOTIR-7565 · MOTIR-7571). Cascade.
   workItemLinks        PageWorkItemLink[]
+  // The page's meaning vector (Story MOTIR-9490 · MOTIR-9570). Absent = not a
+  // semantic candidate yet; the page is still found by full-text. Cascade.
+  embedding            PageEmbedding?
 
   @@index([projectId, parentPageId, position, id])
   @@index([projectId, folderId, position, id])
   @@index([workspaceId])
   @@map("page")
 }
+
+/// A page's meaning vector — the page semantic index (Story MOTIR-9490 ·
+/// MOTIR-9570). The page twin of `WorkItemEmbedding`, and the same contract
+/// (`docs/decisions/plan-tree-embeddings.md`): one row per page, derived from
+/// the page's title + `body_text`, re-derived exactly when `contentHash`
+/// changes. A page with no row is simply not a semantic candidate; it is still
+/// found by full-text. Pages are not work items, so the work-item rows cannot
+/// hold them.
+model PageEmbedding {
+  /// PK *and* FK — one embedding per page, by construction.
+  pageId      String @id @map("page_id")
+  workspaceId String @map("workspace_id")
+  projectId   String @map("project_id")
+  /// The model that produced this vector, as REPORTED by `POST /v1/embeddings`.
+  /// A hard ranking filter: rows of another model are not comparable.
+  model       String
+  /// The vector's length, asserted against the column type at write time.
+  dimensions  Int
+  /// SHA-256 of the page document (title + "\n\n" + body text). THE RE-EMBED
+  /// TRIGGER: an unchanged save skips the provider call.
+  contentHash String @map("content_hash")
+  embeddedAt  DateTime @map("embedded_at") @db.Timestamptz(3)
+
+  embedding Unsupported("vector(1536)")?
+
+  page      Page      @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  /// Tenant teardown + the workspace RLS predicate.
+  @@index([workspaceId])
+  /// The ranking pre-filter and the counts, which narrow on (project, model).
+  @@index([projectId, model])
+  /// The HNSW index, declared only so the drift gate pairs it by column list
+  /// (see `WorkItemEmbedding`'s note on the same line).
+  @@index([embedding], map: "page_embedding_embedding_idx")
+  @@map("page_embedding")
+}
+
 
 // PAGE VERSIONS — a page's history (Story MOTIR-5754 · MOTIR-7382).
 //

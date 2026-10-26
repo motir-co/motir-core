@@ -12,6 +12,7 @@ import {
   pagePlacementResultSchema,
   pageSchema,
   pageSearchHitSchema,
+  pageSearchResultSchema,
   updatePageBodySchema,
 } from '@/lib/api/v1/pages/schema';
 
@@ -125,7 +126,7 @@ export const PAGE_OPERATIONS: readonly V1Operation[] = [
     operationId: 'searchPages',
     summary: 'Search a project’s pages',
     description:
-      'Find the project’s LIVE pages by a word in the title or the body — Postgres full-text search, words matched as typed in any language (no stemming). Hits are ranked best match first and keyset-paged by an opaque `cursor`: pass back the `nextCursor` you were given, `null` when there is no further hit; no total is returned. A hit is the page’s id, title, place, a short `snippet` of the body around the match, and its `rank` — never the body itself: read a page with `GET /api/v1/pages/{pageId}`. Archived pages and other projects’ pages never appear. ⚠️ An empty or whitespace-only `q` is REFUSED by name, 422 `PAGE_SEARCH_QUERY_EMPTY` — it never returns every page. A `q` over ' +
+      'Find the project’s LIVE pages by meaning and by words. The query is matched two ways — Postgres full-text search on the title and body (words matched as typed in any language, no stemming), and similarity of meaning against each page’s embedded text — and the two rankings are merged by reciprocal-rank fusion, so a page found both ways ranks above a page found one way, and appears once. There is no similarity threshold: ranking, not filtering, is the answer. Hits are best match first and keyset-paged by an opaque `cursor`: pass back the `nextCursor` you were given, `null` when there is no further hit; no total is returned. A hit is the page’s id, title, place, a short `snippet` of the body, and its `rank` (the fused score) — never the body itself: read a page with `GET /api/v1/pages/{pageId}`. `mode` says how the hits were ranked: `merged` (words and meaning), `full-text-only` (the embedding service did not answer, so semantic search did not run) or `not-indexed` (no page of the project is indexed for meaning yet). `full-text-only` and `not-indexed` carry a `message`, and neither is evidence that no similar page exists. Archived pages and other projects’ pages never appear. ⚠️ An empty or whitespace-only `q` is REFUSED by name, 422 `PAGE_SEARCH_QUERY_EMPTY` — it never returns every page. A `q` over ' +
       PAGE_SEARCH_QUERY_MAX_LENGTH +
       ' characters is 422 `PAGE_SEARCH_QUERY_TOO_LONG`, and a cursor this API did not issue 422 `PAGE_CURSOR_INVALID`. A caller who can browse the project but may not view its pages is 403 `PROJECT_ACCESS_DENIED`, whatever the query or cursor; a project the caller cannot browse is 404 `PAGE_NOT_FOUND`. Neither refusal names a page or a count. The MCP `search_pages` tool is the same search with the same codes.',
     permission: 'page:view',
@@ -148,8 +149,8 @@ export const PAGE_OPERATIONS: readonly V1Operation[] = [
     ],
     response: {
       status: 200,
-      body: { kind: 'page', item: pageSearchHitSchema },
-      description: 'A page of hits, best match first.',
+      body: { kind: 'object', schema: pageSearchResultSchema },
+      description: 'A page of hits, best match first, and the mode they were ranked in.',
     },
     errorStatuses: [403, 404, 422],
   }),
@@ -159,4 +160,5 @@ export const PAGE_COMPONENTS: Readonly<Record<string, ZodType>> = {
   Page: pageSchema,
   PagePlacement: pagePlacementResultSchema,
   PageSearchHit: pageSearchHitSchema,
+  PageSearchResult: pageSearchResultSchema,
 };

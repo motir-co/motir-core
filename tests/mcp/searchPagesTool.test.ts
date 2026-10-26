@@ -1,9 +1,17 @@
 import { readFileSync } from 'node:fs';
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { pageSearchHitSchema } from '@/lib/api/v1/pages/schema';
+import { pageSearchHitSchema, type V1PageSearchResult } from '@/lib/api/v1/pages/schema';
+import { renderHits } from '@/lib/mcp/tools/searchPages';
+import { pageEmbeddingRepository } from '@/lib/repositories/pageEmbeddingRepository';
+import { workItemEmbeddingsService } from '@/lib/services/workItemEmbeddingsService';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import {
+  MCP_TOOL_SCHEMAS_FILE,
+  generateMcpToolSchemas,
+} from '../../scripts/generateMcpToolSchemas';
 import { db } from '@/lib/db';
 import { buildMcpServer } from '@/lib/mcp/registry';
 import { PERMISSION_NOT_GRANTED_CODE } from '@/lib/mcp/permissionGate';
@@ -37,6 +45,10 @@ beforeEach(async () => {
   fx = await makeWorkItemFixture();
 });
 
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 afterAll(async () => {
   await db.$disconnect();
   await adminDb.$disconnect();
@@ -67,6 +79,8 @@ const seed = (title: string, markdown?: string, projectId = fx.projectId) =>
 interface SearchResult {
   items: Array<{ id: string; title: string; snippet: string; rank: number }>;
   nextCursor: string | null;
+  mode: 'merged' | 'full-text-only' | 'not-indexed';
+  message: string | null;
 }
 
 async function search(client: Client, args: Record<string, unknown>) {
@@ -101,7 +115,8 @@ describe('search_pages', () => {
     const res = await search(client, { q: 'zephyr' });
     expect(res.isError).toBeFalsy();
     const result = (res as CallToolResult).structuredContent as unknown as SearchResult;
-    expect(Object.keys(result).sort()).toEqual(['items', 'nextCursor']);
+    expect(Object.keys(result).sort()).toEqual(['items', 'message', 'mode', 'nextCursor']);
+    expect(result.mode).toBe('full-text-only');
     expect(result.nextCursor).toBeNull();
     expect(result.items).toHaveLength(1);
     expect(pageSearchHitSchema.strict().safeParse(result.items[0]).success).toBe(true);
@@ -168,13 +183,20 @@ describe('search_pages', () => {
     await client.close();
   });
 
-  it('answers an empty list, not an error, when nothing matches', async () => {
+  it('answers an empty list, not an error, and does not call a degraded miss a verdict', async () => {
     await seed('Roadmap', 'zephyr');
     const client = await connectClient(fx.ctx);
     const res = await search(client, { q: 'mistral' });
     expect(res.isError).toBeFalsy();
-    expect((res as CallToolResult).structuredContent).toEqual({ items: [], nextCursor: null });
-    expect(textOf(res)).toContain('No live page in PROD matches "mistral"');
+    expect((res as CallToolResult).structuredContent).toMatchObject({
+      items: [],
+      nextCursor: null,
+      mode: 'full-text-only',
+    });
+    const text = textOf(res);
+    expect(text).not.toContain('No live page in PROD matches');
+    expect(text).toContain('No word match for "mistral" in PROD');
+    expect(text).toContain('semantic search did not run');
     await client.close();
   });
 });
@@ -260,5 +282,247 @@ describe('search_pages refusals — the same codes the REST route returns', () =
     expect(source).toMatch(/pagesService\.searchPages\(/);
     expect(source).not.toMatch(/@\/lib\/(db|repositories)/);
     expect(source).not.toMatch(/\$queryRaw|Prisma\.sql|assertCan|PAGE_SEARCH_QUERY_MAX_LENGTH/);
+  });
+});
+
+const MODEL = 'text-embedding-3-small';
+
+function axis(n: number): number[] {
+  return Array.from({ length: 1536 }, (_, i) => (i === n ? 1 : 0));
+}
+
+function blend(a: number, b: number, w: number): number[] {
+  const v = Array.from({ length: 1536 }, () => 0);
+  v[a] = w;
+  v[b] = Math.sqrt(1 - w * w);
+  return v;
+}
+
+async function seedVector(page: { id: string; projectId: string }, embedding: number[]) {
+  await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+    pageEmbeddingRepository.upsert(
+      {
+        pageId: page.id,
+        workspaceId: fx.workspaceId,
+        projectId: page.projectId,
+        model: MODEL,
+        dimensions: embedding.length,
+        contentHash: `hash-${page.id}`,
+        embeddedAt: new Date(),
+        embedding,
+      },
+      tx,
+    ),
+  );
+}
+
+const answer = (embedding: number[]) =>
+  vi.spyOn(workItemEmbeddingsService, 'embedQuery').mockResolvedValue({ embedding, model: MODEL });
+
+const structured = (res: unknown) =>
+  (res as CallToolResult).structuredContent as unknown as SearchResult;
+
+describe('search_pages by meaning (MOTIR-9575)', () => {
+  it('returns a meaning-only match in merged mode, the same page pagesService returns', async () => {
+    const rota = await seed('On-call rota', 'Pager schedule.');
+    await seedVector(rota, axis(1));
+    answer(axis(1));
+    const client = await connectClient(fx.ctx);
+
+    const res = await search(client, { q: 'who gets woken up at night' });
+    const result = structured(res);
+    expect(Object.keys(result).sort()).toEqual(['items', 'message', 'mode', 'nextCursor']);
+    expect(result).toMatchObject({ mode: 'merged', message: null });
+    expect(result.items.map((h) => h.id)).toEqual([rota.id]);
+    const service = await pagesService.searchPages(fx.ctx, {
+      projectId: fx.projectId,
+      q: 'who gets woken up at night',
+    });
+    expect(service.items.map((h) => h.id)).toEqual([rota.id]);
+    const text = textOf(res);
+    expect(text).toContain('Mode: merged — results combine meaning and words.');
+    expect(text).toMatch(/score \d\.\d{4}/);
+    await client.close();
+  });
+
+  it('a word-only match is found, and a page matching both ways appears once, first', async () => {
+    const both = await seed('Zephyr runbook', 'zephyr');
+    const wordOnly = await seed('Zephyr retro', 'zephyr zephyr zephyr');
+    const meaningOnly = await seed('Unrelated', 'nothing in common');
+    await seedVector(meaningOnly, axis(3));
+    await seedVector(both, blend(3, 4, 0.9));
+    answer(axis(3));
+    const client = await connectClient(fx.ctx);
+
+    const result = structured(await search(client, { q: 'zephyr' }));
+    expect(result.items[0]!.id).toBe(both.id);
+    expect(result.items.filter((h) => h.id === both.id)).toHaveLength(1);
+    expect(new Set(result.items.map((h) => h.id))).toEqual(
+      new Set([both.id, wordOnly.id, meaningOnly.id]),
+    );
+    await client.close();
+  });
+
+  it('archived pages, other projects and members-only projects stay out of a meaning-only search', async () => {
+    const live = await seed('Live', 'body');
+    const gone = await seed('Gone', 'body');
+    const other = await projectsService.createProject({
+      workspaceId: fx.workspaceId,
+      actorUserId: fx.ownerId,
+      name: 'Hidden',
+      identifier: 'HID',
+    });
+    await adminDb.project.update({ where: { id: other.id }, data: { accessMode: 'members' } });
+    const hidden = await seed(SECRET_TITLE, 'secret body words', other.id);
+    await seedVector(live, blend(5, 6, 0.5));
+    await seedVector(gone, axis(5));
+    await seedVector(hidden, axis(5));
+    await adminDb.page.update({
+      where: { id: gone.id },
+      data: { archivedAt: new Date(), archiveRootId: gone.id },
+    });
+    answer(axis(5));
+    const client = await connectClient(fx.ctx);
+
+    const res = await search(client, { q: 'meaning only' });
+    expect(structured(res).items.map((h) => h.id)).toEqual([live.id]);
+    const text = textOf(res);
+    expect(text).not.toContain(SECRET_TITLE);
+    expect(text).not.toContain('secret body words');
+    expect(text).not.toContain('Gone');
+    await client.close();
+  });
+
+  it('is a successful full-text-only result, with the word hits, when the seam does not answer', async () => {
+    const page = await seed('Roadmap', 'zephyr');
+    vi.spyOn(workItemEmbeddingsService, 'embedQuery').mockResolvedValue(null);
+    const client = await connectClient(fx.ctx);
+
+    const res = await search(client, { q: 'zephyr' });
+    expect(res.isError).toBeFalsy();
+    const result = structured(res);
+    expect(result.mode).toBe('full-text-only');
+    expect(result.items.map((h) => h.id)).toEqual([page.id]);
+    expect(textOf(res)).toContain(result.message!);
+    expect(textOf(res)).toMatch(/did not run/);
+    expect(textOf(res)).toMatch(/not evidence/);
+    await client.close();
+  });
+
+  it('is not-indexed when the seam answers and no page is embedded', async () => {
+    const page = await seed('Roadmap', 'zephyr');
+    answer(axis(9));
+    const client = await connectClient(fx.ctx);
+
+    const res = await search(client, { q: 'zephyr' });
+    const result = structured(res);
+    expect(result.mode).toBe('not-indexed');
+    expect(result.items.map((h) => h.id)).toEqual([page.id]);
+    expect(textOf(res)).toContain(result.message!);
+    expect(textOf(res)).toMatch(/indexed/);
+    await client.close();
+  });
+
+  it('every refusal lands before the seam: no access, an empty query, a bad cursor', async () => {
+    await seed(SECRET_TITLE, 'zephyr');
+    const embed = answer(axis(1));
+    const denied = await connectClient(await browseOnlyMember());
+    expect(textOf(await search(denied, { q: 'zephyr' }))).toMatch(/^PROJECT_ACCESS_DENIED: /);
+    await denied.close();
+    const client = await connectClient(fx.ctx);
+    expect(textOf(await search(client, { q: '' }))).toMatch(/^PAGE_SEARCH_QUERY_EMPTY: /);
+    expect(textOf(await search(client, { q: 'zephyr', cursor: 'garbage' }))).toMatch(
+      /^PAGE_CURSOR_INVALID: /,
+    );
+    expect(embed).not.toHaveBeenCalled();
+    await client.close();
+  });
+
+  it('pages a merged result by its cursor, with no page twice', async () => {
+    const total = PAGE_SEARCH_LIMIT + 3;
+    for (let i = 0; i < total; i++) {
+      const page = await seed(`Spec ${i}`, i % 2 === 0 ? 'zephyr' : 'other');
+      await seedVector(page, blend(10, 11, 0.2 + (0.7 * i) / total));
+    }
+    answer(axis(10));
+    const client = await connectClient(fx.ctx);
+
+    const one = structured(await search(client, { q: 'zephyr' }));
+    expect(one.mode).toBe('merged');
+    expect(one.items).toHaveLength(PAGE_SEARCH_LIMIT);
+    const two = structured(await search(client, { q: 'zephyr', cursor: one.nextCursor }));
+    expect(two.items).toHaveLength(3);
+    expect(new Set([...one.items, ...two.items].map((h) => h.id)).size).toBe(total);
+    await client.close();
+  });
+});
+
+describe('renderHits', () => {
+  const hit = {
+    id: 'p1',
+    title: 'Rota',
+    place: { folderPath: [], parentPageTitle: null },
+    snippet: 'Pager schedule',
+    rank: 0.0325,
+  };
+  const result = (over: Partial<V1PageSearchResult>): V1PageSearchResult => ({
+    items: [hit],
+    nextCursor: null,
+    mode: 'merged',
+    message: null,
+    ...over,
+  });
+
+  it('names the mode first and prints a score', () => {
+    const text = renderHits('PROD', 'night', result({}));
+    expect(text.split('\n')[0]).toBe('Mode: merged — results combine meaning and words.');
+    expect(text).toContain('score 0.0325');
+    expect(text).toContain('No more hits.');
+  });
+
+  it('uses the service message verbatim in a degraded mode', () => {
+    const message =
+      'Semantic search did not run. This is not evidence that no similar page exists.';
+    const text = renderHits('PROD', 'night', result({ mode: 'full-text-only', message }));
+    expect(text.split('\n')[0]).toBe(`Mode: full-text-only — ${message}`);
+  });
+
+  it('never words an empty degraded result as a final no-match', () => {
+    for (const mode of ['full-text-only', 'not-indexed'] as const) {
+      const text = renderHits('PROD', 'night', result({ items: [], mode, message: 'm' }));
+      expect(text).not.toContain('No live page in PROD matches');
+      expect(text).toContain('No word match for "night" in PROD');
+      expect(text).toContain('not evidence');
+    }
+    expect(renderHits('PROD', 'night', result({ items: [] }))).toContain(
+      'No live page in PROD matches "night".',
+    );
+  });
+});
+
+describe('search_pages documentation', () => {
+  it('describes meaning, the merge and the three modes, and keeps the refusals', async () => {
+    const client = await connectClient(fx.ctx);
+    const { tools } = await client.listTools();
+    const tool = tools.find((t) => t.name === 'search_pages')!;
+    for (const phrase of [
+      'by what they mean',
+      'merged',
+      '`full-text-only`',
+      '`not-indexed`',
+      'not proof',
+      'PAGE_SEARCH_QUERY_EMPTY',
+      'PAGE_SEARCH_QUERY_TOO_LONG',
+      'Archived',
+    ]) {
+      expect(tool.description).toContain(phrase);
+    }
+    const q = (tool.inputSchema.properties as Record<string, { description?: string }>)['q'];
+    expect(q?.description).toContain('meaning-only phrase');
+    await client.close();
+  });
+
+  it('the generated tool schema file is current', async () => {
+    expect(readFileSync(MCP_TOOL_SCHEMAS_FILE, 'utf8')).toBe(await generateMcpToolSchemas());
   });
 });
