@@ -1316,7 +1316,11 @@ describe('BillingClient — the Agents line', () => {
     const pool = BILLING_CATALOG.aiPlans.find((p) => p.band === 'larger_pool')!;
     function poolOrg(): BillingStatusDTO {
       const base = activeStandard();
-      const tier = { key: pool.key, name: pool.name, monthlyCreditAllotment: 80_000 };
+      const tier = {
+        key: pool.key,
+        name: pool.name,
+        monthlyCreditAllotment: pool.allotment!.credits,
+      };
       return {
         ...base,
         motirAi: {
@@ -1366,7 +1370,7 @@ describe('BillingClient — the Agents line', () => {
       fireEvent.click(hide);
       expect(screen.queryByText('Max ×2')).toBeNull();
       expect(screen.getByTestId('plans-need-more').textContent).toContain(
-        'If your organization outgrows its 80,000 credits a month',
+        `If your organization outgrows its ${pool.allotment!.credits.toLocaleString('en-US')} credits a month`,
       );
     });
   });
