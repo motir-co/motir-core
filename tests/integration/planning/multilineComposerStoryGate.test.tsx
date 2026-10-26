@@ -353,6 +353,9 @@ describe('(5b) every `Textarea` caller in the tree is pinned by name', () => {
    * `autoGrow`, so each is a field whose height a user still drags.
    */
   const FIXED = [
+    // The capacity edit dialog's tier note (MOTIR-9614): a fixed editor, per
+    // design platform-admin § Provider capacity.
+    'app/(admin)/admin/capacity/_components/EditCapacityLimitsDialog.tsx',
     // The console Ideas edit form and its retire / delete reason fields
     // (MOTIR-7681): fixed editors, per design platform-admin § Ideas.
     'app/(admin)/admin/ideas/[slug]/_components/DeleteIdeaDialog.tsx',

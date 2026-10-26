@@ -39,6 +39,7 @@ import { ciMinutesReconciliationService } from '@/lib/services/ciMinutesReconcil
 import { fleetAttributionService } from '@/lib/services/fleetAttributionService';
 import { fleetDebitMonitorService } from '@/lib/services/fleetDebitMonitorService';
 import { fleetShardHeadroomService } from '@/lib/services/fleetShardHeadroomService';
+import { capacityAlertJobService } from '@/lib/services/capacityAlertJobService';
 import { fleetPoolGrowthPassService } from '@/lib/services/fleetPoolGrowthPassService';
 import { ciLiveChargeService } from '@/lib/services/ciLiveChargeService';
 import { ciActionsGateService } from '@/lib/services/ciActionsGateService';
@@ -127,6 +128,8 @@ export const jobServices = {
   // The fleet debit monitor (Story MOTIR-6905 · MOTIR-7318).
   fleetDebitMonitor: fleetDebitMonitorService,
   fleetShardHeadroom: fleetShardHeadroomService,
+  // The capacity alert pass (Story MOTIR-9539 · MOTIR-9612).
+  capacityAlertJob: capacityAlertJobService,
   // The pool growth pass (Story MOTIR-9362 · MOTIR-9462).
   fleetPoolGrowthPass: fleetPoolGrowthPassService,
   ciActionsGate: ciActionsGateService,

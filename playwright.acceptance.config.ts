@@ -275,6 +275,18 @@ process.env['MOTIR_FAKE_AWS_STATE_PATH'] ??= path.resolve(
 process.env['MOTIR_FAKE_FLEET_SWITCH_PATH'] ??= path.resolve(
   'out/playwright-output-acceptance/.fake-fleet-switch.json',
 );
+// Story MOTIR-9539 · MOTIR-9617 — the CAPACITY FAKE: the gateway capacity API's
+// limits, lane usage and mode (live, counter store down, unreachable) in one file
+// (`lib/gateway/capacityFakeState.ts`). THREE processes read it on every call:
+// the webServer (the capacity screen and its poll route, each bundle its own
+// module copy), the job worker (`system.capacity-alert-evaluation`, every minute,
+// inheriting it through `startJobWorker`'s `...process.env`), and the runner (the
+// spec writes it through `tests/e2e/_helpers/capacity-fake.ts`). The lane holds
+// no gateway token; the fake answers without one.
+process.env['MOTIR_E2E_FAKE_GATEWAY_CAPACITY'] ??= '1';
+process.env['MOTIR_E2E_FAKE_GATEWAY_CAPACITY_STATE_PATH'] ??= path.resolve(
+  'out/playwright-output-acceptance/.fake-gateway-capacity.json',
+);
 process.env['MOTIR_HOSTED_AGENT_IMAGE'] ??=
   'ghcr.io/motir-co/motir-hosted-agent@sha256:e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0';
 // Story MOTIR-6860 · MOTIR-6877 — the agent instances' PERSISTENT fake fleet, on
@@ -641,6 +653,10 @@ export default defineConfig({
         // The fake AWS (MOTIR-9429) — see its block above this config.
         MOTIR_FAKE_AWS_STATE_PATH: process.env['MOTIR_FAKE_AWS_STATE_PATH']!,
         MOTIR_FAKE_FLEET_SWITCH_PATH: process.env['MOTIR_FAKE_FLEET_SWITCH_PATH']!,
+        // The capacity fake (MOTIR-9617) — see its block above this config.
+        MOTIR_E2E_FAKE_GATEWAY_CAPACITY: process.env['MOTIR_E2E_FAKE_GATEWAY_CAPACITY']!,
+        MOTIR_E2E_FAKE_GATEWAY_CAPACITY_STATE_PATH:
+          process.env['MOTIR_E2E_FAKE_GATEWAY_CAPACITY_STATE_PATH']!,
         MOTIR_HOSTED_AGENT_IMAGE: process.env['MOTIR_HOSTED_AGENT_IMAGE']!,
         E2E_HOSTED_RUN_STALL_WINDOW_MS: process.env['E2E_HOSTED_RUN_STALL_WINDOW_MS']!,
         // Story MOTIR-4928 · MOTIR-5264 — the MONITORING room's connect walk.
