@@ -336,6 +336,20 @@ export const ciRunnerProvisioningIntentRepository = {
     return result.count === 1;
   },
 
+  /** The org's PENDING intents, grouped by why each waits now (MOTIR-9660) — the
+   *  tenant's Fleet use reading. `waitingReason` null = not judged yet. */
+  async countPendingForOrganizationByWaitingReason(
+    organizationId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ waitingReason: string | null; count: number }>> {
+    const rows = await tx.ciRunnerProvisioningIntent.groupBy({
+      by: ['waitingReason'],
+      where: { organizationId, status: CI_RUNNER_INTENT_PENDING },
+      _count: { _all: true },
+    });
+    return rows.map((row) => ({ waitingReason: row.waitingReason, count: row._count._all }));
+  },
+
   /**
    * The inverse of {@link claimPending} — hand a claimed slot back to the pending
    * pool, for a refusal about the ENVIRONMENT (unconfigured, rate-limited) or one
