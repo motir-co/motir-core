@@ -207,7 +207,7 @@ describe('the SDK client leaves its SSE-stream GET running after connect (MOTIR-
     // would end while the second is opening — the `BEGIN` / counter `INSERT`
     // leftover CI reported.
     expect(gets).toHaveLength(1);
-    expect((await gets[0]).status).toBe(405);
+    expect((await gets[0]!).status).toBe(405);
     expect(await inFlightBackends()).toEqual([]);
   });
 
