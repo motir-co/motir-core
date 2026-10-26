@@ -123,6 +123,8 @@ export default defineConfig({
       'tests/components/planProgressLine.resuming.test.tsx',
       // MOTIR-8581 — the tab's rows read from the Workbench's one window read.
       'tests/components/workbench-planning-live.test.tsx',
+      // The provider-limit story gate (MOTIR-9624): the plan-step route's `providerRetry` arm.
+      'tests/integration/plans/providerLimitStoryGate.test.ts',
     ],
     coverage: {
       provider: 'v8',

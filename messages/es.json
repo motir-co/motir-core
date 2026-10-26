@@ -8478,6 +8478,16 @@
       "failureLinePlanAgain": "No se pudo continuar este intento · {when}. Tu próximo mensaje lo vuelve a planificar.",
       "failureLinePlanAgainAgain": "Este intento no se pudo continuar de nuevo · {when}. Tu próximo mensaje lo vuelve a planificar."
     },
+    "providerLimit": {
+      "retryingTitle": "Esperando al proveedor del modelo",
+      "retryingBody": "Ahora mismo está saturado. La planificación volverá a intentarlo sola; no se pierde nada.",
+      "walkBecause": "porque el proveedor del modelo alcanzó su límite",
+      "walkKept": "No se perdió nada. Pulsa Reanudar cuando quieras volver a intentarlo; continúa desde donde se detuvo.",
+      "failureLine": "No se pudo hacer tu último cambio en este plan: el proveedor del modelo alcanzó su límite · {when}. Envíalo de nuevo cuando quieras.",
+      "failureLineAgain": "Tu último cambio no se pudo hacer otra vez: el proveedor del modelo alcanzó su límite · {when}. Envíalo de nuevo cuando quieras.",
+      "failureLinePlanAgain": "No se pudo continuar este intento: el proveedor del modelo alcanzó su límite · {when}. Tu próximo mensaje lo vuelve a planificar.",
+      "failureLinePlanAgainAgain": "No se pudo continuar este intento otra vez: el proveedor del modelo alcanzó su límite · {when}. Tu próximo mensaje lo vuelve a planificar."
+    },
     "grill": {
       "control": {
         "label": "Interrógame",
@@ -10158,10 +10168,12 @@
           "degradedValue": "Lento · {ms} ms",
           "degradedDetail": "Responde, pero por encima del umbral de {threshold} ms. motir-gateway {version} · activo desde {since}.",
           "unreachable": {
+            "badAnswer": "Respuesta ilegible del gateway",
             "noAnswer": "Sin respuesta del gateway",
             "notConfigured": "Gateway no configurado"
           },
           "unreachableDetail": {
+            "badAnswer": "El gateway respondió, pero no se pudo leer su estado: {why, select, httpStatus {respondió HTTP {status}} notJson {el cuerpo no era JSON} noSuccess {no informó de éxito} noData {no traía datos} noVersion {no traía versión} noStartTime {no traía hora de inicio} other {la respuesta fue rechazada}}. Puede que las solicitudes de IA que pasan por el gateway estén fallando. No se midió nada, así que no se muestra latencia.",
             "noAnswer": "La comprobación de estado no obtuvo respuesta en {timeout} s. Puede que las solicitudes de IA que pasan por el gateway estén fallando. No se midió nada, así que no se muestra latencia.",
             "notConfigured": "MOTIR_GATEWAY_URL no está definida, así que no hay nada que comprobar. Es lo esperado en una instancia que no ejecuta gateway."
           },

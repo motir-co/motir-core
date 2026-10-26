@@ -53,7 +53,7 @@
 // neither make a live plan read stalled nor a stalled one read live.
 
 import { TEMP_REF_PREFIX } from '@/lib/plans/refs';
-import type { PlanStepDto, PlanStepKindDto } from '@/lib/dto/plans';
+import type { PlanStepDto, PlanStepKindDto, PlanStepProviderWaitDto } from '@/lib/dto/plans';
 
 /**
  * THE stalled threshold — design Part XXVI §26.9: **15 minutes**, measured (the
@@ -72,6 +72,14 @@ import type { PlanStepDto, PlanStepKindDto } from '@/lib/dto/plans';
  * Re-measure and change THIS constant; never a surface.
  */
 export const PLAN_STALLED_AFTER_MS = 900_000;
+
+/**
+ * How long past its `retryAt` a session's provider-retry wait still reads
+ * (Story MOTIR-9540 · MOTIR-9619). The walk clears a wait on every way out of
+ * it, so this only bounds a job that DIED mid-wait — the case the step's own
+ * quiet drop takes {@link PLAN_STALLED_AFTER_MS} to catch.
+ */
+export const PLAN_PROVIDER_WAIT_GRACE_MS = 300_000;
 
 /**
  * WHICH words a step reads as. A derivation, not a string — it depends on the
@@ -120,6 +128,8 @@ export interface PlanProgressStep {
   targetTitle: string | null;
   /** Server instant (ISO). */
   startedAt: string;
+  /** The session's provider-retry wait (MOTIR-9619), `null` when it is not waiting. */
+  providerWait: PlanStepProviderWaitDto | null;
 }
 
 /** The time-independent half — built once, on the server. */
@@ -164,6 +174,13 @@ export interface PlanProgressReading {
   lastActivityAt: string;
   /** The snapshot's {@link PlanProgressSnapshot.autoResume}, passed through for the popover. */
   autoResume: PlanAutoResume | null;
+  /**
+   * The provider-retry wait the overlay's banner reads (MOTIR-9619): the one
+   * with the LATEST `retryAt` across the snapshot's steps — all of them, not only
+   * the live ones — among waits no more than {@link PLAN_PROVIDER_WAIT_GRACE_MS}
+   * past their `retryAt`. `null` when no step waits, and when `stalled`.
+   */
+  providerWait: PlanStepProviderWaitDto | null;
 }
 
 /**
@@ -339,6 +356,7 @@ export function buildPlanProgressSnapshot(args: {
       kind: step.kind,
       targetRef: step.targetRef,
       startedAt: iso(step.startedAt),
+      providerWait: step.providerWait ?? null,
     };
     if (step.kind === 'settle' || step.targetRef === null) {
       const phrase: PlanStepPhrase =
@@ -413,7 +431,7 @@ export function readPlanProgress(
     autoResume: snapshot.autoResume,
   };
   if (sinceActivityMs > PLAN_STALLED_AFTER_MS) {
-    return { ...common, state: 'stalled', liveSteps: [] };
+    return { ...common, state: 'stalled', liveSteps: [], providerWait: null };
   }
   // The QUIET drop — a session that died without clearing stops naming an item.
   const liveSteps = snapshot.steps.filter(
@@ -430,7 +448,28 @@ export function readPlanProgress(
       : snapshot.proposed === 0
         ? 'starting'
         : 'writing';
-  return { ...common, state, liveSteps };
+  return { ...common, state, liveSteps, providerWait: providerWaitAt(snapshot.steps, nowMs) };
+}
+
+/**
+ * The wait a reading carries (MOTIR-9619). Read from ALL the snapshot's steps:
+ * a wait report never re-stamps `startedAt`, so a session whose step began more
+ * than {@link PLAN_STALLED_AFTER_MS} before its 429 is out of `liveSteps` while
+ * still waiting. The grace bounds a dead job's wait instead.
+ */
+function providerWaitAt(
+  steps: readonly PlanProgressStep[],
+  nowMs: number,
+): PlanStepProviderWaitDto | null {
+  let latest: PlanStepProviderWaitDto | null = null;
+  for (const step of steps) {
+    const wait = step.providerWait;
+    if (!wait) continue;
+    const retryAtMs = Date.parse(wait.retryAt);
+    if (nowMs - retryAtMs > PLAN_PROVIDER_WAIT_GRACE_MS) continue;
+    if (latest === null || retryAtMs > Date.parse(latest.retryAt)) latest = wait;
+  }
+  return latest;
 }
 
 /**

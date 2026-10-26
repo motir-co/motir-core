@@ -8469,6 +8469,16 @@
       "failureLinePlanAgain": "这次尝试无法继续 · {when}。你的下一条消息会重新规划。",
       "failureLinePlanAgainAgain": "这次尝试再次无法继续 · {when}。你的下一条消息会重新规划。"
     },
+    "providerLimit": {
+      "retryingTitle": "正在等待模型服务",
+      "retryingBody": "模型服务暂时繁忙。规划会自动重试，不会丢失任何内容。",
+      "walkBecause": "原因：模型服务已达到使用上限",
+      "walkKept": "没有丢失任何内容。准备好后点击继续即可再试，它会从停下的地方接着进行。",
+      "failureLine": "你上一次对这个计划的修改没能完成：模型服务已达到使用上限 · {when}。准备好后再发送一次即可。",
+      "failureLineAgain": "你上一次的修改再次没能完成：模型服务已达到使用上限 · {when}。准备好后再发送一次即可。",
+      "failureLinePlanAgain": "这次尝试无法继续：模型服务已达到使用上限 · {when}。你的下一条消息会重新规划。",
+      "failureLinePlanAgainAgain": "这次尝试再次无法继续：模型服务已达到使用上限 · {when}。你的下一条消息会重新规划。"
+    },
     "grill": {
       "control": {
         "label": "追问我",
@@ -10149,10 +10159,12 @@
           "degradedValue": "响应慢 · {ms} 毫秒",
           "degradedDetail": "有响应，但超过了 {threshold} 毫秒的阈值。motir-gateway {version} · 自 {since} 起运行。",
           "unreachable": {
+            "badAnswer": "无法读取网关的响应",
             "noAnswer": "网关没有响应",
             "notConfigured": "未配置网关"
           },
           "unreachableDetail": {
+            "badAnswer": "网关已响应，但无法读取其状态：{why, select, httpStatus {它返回了 HTTP {status}} notJson {响应体不是 JSON} noSuccess {它没有报告成功} noData {它没有携带数据} noVersion {它没有携带版本} noStartTime {它没有携带启动时间} other {响应被拒绝}}。经过网关的 AI 请求可能正在失败。没有测到任何数据，因此不显示延迟。",
             "noAnswer": "状态检查在 {timeout} 秒内没有得到响应。经过网关的 AI 请求可能正在失败。没有测到任何数据，因此不显示延迟。",
             "notConfigured": "未设置 MOTIR_GATEWAY_URL，因此没有可检查的对象。不运行网关的实例出现这种情况是正常的。"
           },

@@ -279,4 +279,32 @@ describe('GET /api/plans/[id] carries progress', () => {
     const closed = await read();
     expect(closed.progress).toBeNull();
   });
+
+  it('carries a waiting session’s provider wait in its progress snapshot (MOTIR-9619)', async () => {
+    const fx = await makeWorkItemFixture();
+    session.current = { user: { id: fx.ownerId, email: 'owner@example.com', name: 'Owner' } };
+    wsCtx.current = { userId: fx.ownerId, workspaceId: fx.workspaceId };
+    const committed = await createTestWorkItem(fx, { title: 'Committed parent', kind: 'story' });
+    const { planId } = await generatingPlan(fx, committed.id);
+    const retryAt = new Date(Date.now() + 6_000).toISOString();
+    const stored = await plansService.reportPlanStep(
+      planId,
+      {
+        sessionKey: 'relay',
+        targetRef: null,
+        providerRetry: { state: 'waiting', attempt: 2, maxAttempts: 3, retryAt },
+      },
+      fx.ctx,
+    );
+    expect(stored).toMatchObject({ kind: 'providerRetry', providerWait: { attempt: 2, retryAt } });
+
+    const res = await planRoute(new Request(`http://localhost/api/plans/${planId}`), {
+      params: Promise.resolve({ id: planId }),
+    });
+    expect(res.status).toBe(200);
+    const live = (await res.json()) as PlanReviewDto;
+    expect(live.progress!.steps.map((s) => [s.sessionKey, s.providerWait])).toEqual([
+      ['relay', { attempt: 2, maxAttempts: 3, since: expect.any(String), retryAt }],
+    ]);
+  });
 });

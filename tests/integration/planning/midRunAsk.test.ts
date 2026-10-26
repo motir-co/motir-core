@@ -83,6 +83,7 @@ function reviewFor(projectId: string) {
             targetNodeId: 'pi_2',
             targetTitle: 'Checkout story',
             startedAt: '2026-10-09T10:05:00.000Z',
+            providerWait: null,
           },
         ],
       },

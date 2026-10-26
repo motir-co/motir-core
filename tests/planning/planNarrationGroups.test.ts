@@ -92,7 +92,13 @@ describe('the window and the kept earlier pages', () => {
   });
 
   it('live sessions are the in-flight steps of a generating snapshot only', () => {
-    const step = { sessionKey: 's-a', kind: 'author' as const, targetRef: 'r', startedAt: 'x' };
+    const step = {
+      sessionKey: 's-a',
+      kind: 'author' as const,
+      targetRef: 'r',
+      startedAt: 'x',
+      providerWait: null,
+    };
     expect(
       liveNarrationSessions(planReview([], { status: 'generating', inFlightSteps: [step] })),
     ).toEqual(['s-a']);

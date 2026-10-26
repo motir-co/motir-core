@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { MOTIR_GATEWAY_URL_ENV_VAR, gatewayBaseUrl } from './runKeyClient';
+import { GatewayStatusMalformedError } from './statusErrors';
 
 // THE MOTIR-CORE → MOTIR-GATEWAY STATUS CLIENT (MOTIR-742) — a SERVER-ONLY leaf
 // primitive beside `runKeyClient.ts`, and the one read the operator console's
@@ -20,6 +21,12 @@ import { MOTIR_GATEWAY_URL_ENV_VAR, gatewayBaseUrl } from './runKeyClient';
 // is not JSON, `success !== true`, a missing version, a timeout. The service's
 // `probe()` is the single place a throw becomes `unreachable`, so a half-read here
 // cannot turn into a card that shows a latency for a gateway that said no.
+//
+// ⚠️ AND IT SAYS WHICH KIND OF NO (MOTIR-9641). An answer that arrived and was
+// rejected — a non-2xx, a body that is not JSON, a body `parseStatus` refuses —
+// throws `GatewayStatusMalformedError` carrying WHY; a deadline or a network
+// failure throws a plain error. The card tells "did not answer" apart from
+// "answered, but wrongly", because the two send an operator to different places.
 //
 // ⚠️ GET ONLY, NO CREDENTIAL. The mint secret is `runKeyClient.ts`'s and stays
 // there (`tests/hostedRuns/hostedRunKeyBoundary.test.ts` pins one reader); this
@@ -87,8 +94,14 @@ export async function readGatewayStatus(): Promise<GatewayStatus> {
       cache: 'no-store',
       signal: controller.signal,
     });
-    if (!res.ok) throw new Error(`gateway status answered ${res.status}`);
-    const body = parseStatus(await res.json());
+    if (!res.ok) {
+      throw new GatewayStatusMalformedError(
+        'httpStatus',
+        `gateway status answered ${res.status}`,
+        res.status,
+      );
+    }
+    const body = parseStatus(await readJson(res));
     return { latencyMs: Date.now() - startedAt, ...body };
   } catch (err) {
     if (controller.signal.aborted) {
@@ -107,19 +120,38 @@ export const httpGatewayStatusReader: GatewayStatusReader = {
   statusUrl: () => (gatewayStatusConfigured() ? gatewayStatusUrl() : null),
 };
 
+/**
+ * The body as JSON. Reading the body is still part of the answer arriving, so a
+ * deadline that fires mid-body rethrows as itself and the caller's abort check
+ * reports it as no answer; only a body that arrived and is not JSON is rejected.
+ */
+async function readJson(res: Response): Promise<unknown> {
+  const text = await res.text();
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    throw new GatewayStatusMalformedError(
+      'notJson',
+      'gateway status answered a body that is not JSON',
+    );
+  }
+}
+
 function parseStatus(json: unknown): Omit<GatewayStatus, 'latencyMs'> {
   if (!isRecord(json) || json['success'] !== true) {
-    throw new Error('gateway status did not report success');
+    throw new GatewayStatusMalformedError('noSuccess', 'gateway status did not report success');
   }
   const data = json['data'];
-  if (!isRecord(data)) throw new Error('gateway status carried no data');
+  if (!isRecord(data)) {
+    throw new GatewayStatusMalformedError('noData', 'gateway status carried no data');
+  }
   const version = data['version'];
   const startSeconds = data['start_time'];
   if (typeof version !== 'string' || version.length === 0) {
-    throw new Error('gateway status carried no version');
+    throw new GatewayStatusMalformedError('noVersion', 'gateway status carried no version');
   }
   if (typeof startSeconds !== 'number' || !Number.isFinite(startSeconds) || startSeconds <= 0) {
-    throw new Error('gateway status carried no start time');
+    throw new GatewayStatusMalformedError('noStartTime', 'gateway status carried no start time');
   }
   return { version, startTime: new Date(startSeconds * 1000).toISOString() };
 }

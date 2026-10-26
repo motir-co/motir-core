@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   PLAN_AT_WORK_MOVES,
+  PLAN_PROVIDER_WAIT_GRACE_MS,
   PLAN_STALLED_AFTER_MS,
   PLAN_STEP_PHRASE_MESSAGE_KEY,
   buildPlanProgressSnapshot,
@@ -40,7 +41,7 @@ function row(over: Partial<PlanProgressAddRow> & { id: string }): PlanProgressAd
 }
 
 function step(over: Partial<PlanStepDto> & { sessionKey: string }): PlanStepDto {
-  return { kind: 'author', targetRef: null, startedAt: at(0), ...over };
+  return { kind: 'author', targetRef: null, startedAt: at(0), providerWait: null, ...over };
 }
 
 function snap(over: Partial<PlanProgressSnapshot> = {}): PlanProgressSnapshot {
@@ -521,5 +522,85 @@ describe('readPlanAtWork — whether Motir is at work, and which cards may move'
       'working',
       'writing',
     ]);
+  });
+});
+
+describe('the provider-retry wait (Story MOTIR-9540 · MOTIR-9619)', () => {
+  const wait = (retryAtMs: number, attempt = 1) => ({
+    attempt,
+    maxAttempts: 3,
+    since: at(retryAtMs - 2_000),
+    retryAt: at(retryAtMs),
+  });
+
+  it('the grace is 5 minutes', () => {
+    expect(PLAN_PROVIDER_WAIT_GRACE_MS).toBe(300_000);
+  });
+
+  it('the snapshot passes each step’s wait through, null when it has none', () => {
+    const w = wait(10_000);
+    const s = build({
+      steps: [
+        step({ sessionKey: 'a', kind: 'settle', providerWait: w }),
+        step({ sessionKey: 'b' }),
+      ],
+    });
+    expect(s.steps.map((x) => [x.sessionKey, x.providerWait])).toEqual([
+      ['a', w],
+      ['b', null],
+    ]);
+  });
+
+  it('reads the wait with the latest retryAt, and none when no step waits', () => {
+    const early = wait(5_000, 1);
+    const late = wait(9_000, 2);
+    const s = snap({
+      lastActivityAt: at(1_000),
+      steps: build({
+        steps: [
+          step({ sessionKey: 'a', providerWait: late }),
+          step({ sessionKey: 'b', providerWait: early }),
+          step({ sessionKey: 'c' }),
+        ],
+      }).steps,
+    });
+    expect(readPlanProgress(s, T0 + 2_000).providerWait).toEqual(late);
+    expect(
+      readPlanProgress(snap({ steps: build({ steps: [step({ sessionKey: 'c' })] }).steps }), T0)
+        .providerWait,
+    ).toBeNull();
+  });
+
+  it('reads a wait whose step started more than PLAN_STALLED_AFTER_MS ago', () => {
+    const now = T0 + PLAN_STALLED_AFTER_MS + 60_000;
+    const w = wait(now - T0 + 4_000);
+    const s = snap({
+      lastActivityAt: at(now - T0 - 1_000),
+      steps: build({ steps: [step({ sessionKey: 'old', startedAt: at(0), providerWait: w })] })
+        .steps,
+    });
+    const reading = readPlanProgress(s, now);
+    expect(reading.liveSteps).toEqual([]);
+    expect(reading.providerWait).toEqual(w);
+  });
+
+  it('drops a wait more than the grace past its retryAt — the grace edge itself still reads', () => {
+    const w = wait(10_000);
+    const s = snap({
+      lastActivityAt: at(10_000),
+      steps: build({ steps: [step({ sessionKey: 'a', providerWait: w })] }).steps,
+    });
+    expect(readPlanProgress(s, T0 + 10_000 + PLAN_PROVIDER_WAIT_GRACE_MS).providerWait).toEqual(w);
+    expect(
+      readPlanProgress(s, T0 + 10_000 + PLAN_PROVIDER_WAIT_GRACE_MS + 1).providerWait,
+    ).toBeNull();
+  });
+
+  it('is null when the reading is stalled', () => {
+    const w = wait(PLAN_STALLED_AFTER_MS + 10_000);
+    const s = snap({ steps: build({ steps: [step({ sessionKey: 'a', providerWait: w })] }).steps });
+    const reading = readPlanProgress(s, T0 + PLAN_STALLED_AFTER_MS + 1);
+    expect(reading.state).toBe('stalled');
+    expect(reading.providerWait).toBeNull();
   });
 });
