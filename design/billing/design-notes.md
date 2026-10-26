@@ -2117,6 +2117,11 @@ component is added. The mono lines are board chrome, not product copy.
    Calculator stacks (form above answer), the offer card and its lines take the full width, and the
    dialog is the shipped full-width sheet.
 
+10. **Widths as shipped (review, 2026-10-26).** The board is not capped: the plans-view panels
+    (7, 9, 10, 11) run the full page width, as `BillingClient` renders the plans view since Host
+    (MOTIR-9364), so the five regular cards stretch across the row. The Calculator panels stay in
+    the shipped `max-w-[64rem]` column. No card gains a width of its own.
+
 **Note for review.** The Host card's own entitlement lines were revised in its review (2026-10-23)
 to drop the "Max's limits until the quotas are granted" line. The rung entitlement lines carry
 that sentence as their second line, because this delta's brief asks for it. If the reviewer wants
