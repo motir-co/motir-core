@@ -568,5 +568,5 @@ it, and leaves no machine to be starved.
   customer data, and the privacy policy covers `app.motir.co`. The rows
   `subprocessors.md` publishes are for the hosted service, which stays on Fly.
 - **Two build models** — the cost Q1 named. Accepted: the site is not the product.
-- **§3's apex** points at Vercel (`A 76.76.21.21`, `www` → `cname.vercel-dns.com`);
+- **§3's apex** points at Vercel (`A 216.198.79.1` and `A 64.29.17.1`, `www` → `98ddd21bbcbedce4.vercel-dns-017.com`, as Vercel recommended on 2026-10-27);
   the `MX`, `TXT`, DKIM and `_dmarc` records §3 protects are untouched.
