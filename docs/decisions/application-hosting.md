@@ -2617,3 +2617,116 @@ hosted multi-tenant gateway — must not re-allocate public IPs while
 | The deployed value                                | `fly ssh console -a motir-core -C 'printenv MOTIR_AI_URL'`, machine `8576143c4ee538`, 2026-10-03 |
 | Index containers need a public motir-ai address   | `code-graph-index-fleet.md` §3.2; `lib/ai/motirAiClient.ts` `motirAiContainerBaseUrl`            |
 | motir-ai's public Stripe webhook route            | `motir-ai/src/app.ts` `POST /v1/stripe/webhook` on `origin/main`                                 |
+
+## Amendment 10 (2026-10-27) — production moves to AWS under `motir-infra`; the CDK becomes the source of size and deploy
+
+> **Written by Subtask [MOTIR-9719](motir:cmvprl5cg01cvhmu1xfdrhdav)**, under
+> Story [MOTIR-9706](motir:cmvprl4a201bwhmu1noqu2bac) (the CDK foundation) of
+> Epic [MOTIR-9699](motir:cmvprl3vo01blhmu1of10bhko).
+> **Decided by Yue**: the move itself in the requirements page
+> [_Motir on AWS and self-host — requirements_](/pages/cmvpk4tpk01bihnr9thk2ftd9),
+> and the region in the requirements-Q1 decision
+> ([MOTIR-9701](motir:cmvprl40b01brhmu1545xvikl)), approved 2026-10-27.
+>
+> **Numbered 10.** Amendment 9 was the highest heading on `origin/main` when
+> this was written, and no remote branch carrying this file has a tenth.
+
+> **A note on numbering.** The requirements page numbers its own open
+> questions Q1–Q8. They are NOT this record's Q1–Q8 (§1), and not Amendment 6's
+> Q10. Every question taken from that page is written **requirements Q<n>**
+> below; a bare **Q<n>** is this record's own.
+
+**Amends:** §2 (Q1, where motir-core runs), §3 (Q2, the blob store), Amendment 8
+§23 (Q20, the transport for each service seam) and Amendment 9 (Q21, the core→ai
+leg on the public origin). **None of them is superseded by this amendment.**
+Each is retired by the later story in Epic MOTIR-9699 named in the table below,
+when that story lands, and that story adds the SUPERSEDED pointer at the old
+text. Until then they still describe what production runs on.
+
+### Q22 — where Motir production runs next, and what defines it
+
+#### The decision
+
+**Motir production moves to AWS, in one VPC, in the `us-east-1` (US East, N.
+Virginia) region**, the region the requirements-Q1 decision
+([MOTIR-9701](motir:cmvprl40b01brhmu1545xvikl)) named: _"Motir production on
+AWS deploys into us-east-1 only."_ That covers motir-core (web, worker and
+relay), motir-ai, motir-codegraph, motir-gateway, the databases and the blob
+store.
+
+**It is defined by one parameterised CDK app, in TypeScript, in the
+`motir-co/motir-infra` repository.** The same app defines the services and the
+fleet pool accounts. Every value that differs between installs (accounts,
+region, zones, domain, which fleets and image repositories exist) is a
+parameter, and Motir production is one parameter file. Changes reach AWS by a
+pull request to `motir-infra` and a CI deploy from its `main`, through the
+foundation [MOTIR-9706](motir:cmvprl4a201bwhmu1noqu2bac) builds.
+
+The source of the move is the requirements page, §2 goal 1 and §3. Its §7 lists
+this record's Q1, Q2 and Amendments 8–9 as the parts the move supersedes.
+
+#### The source of size and deploy
+
+**For each service, once it serves from AWS, the CDK is the single source of its
+size, its floor and its deploy strategy** (rolling or blue-green, with health
+checks). Those values live in `motir-infra`'s stacks and parameter files, not in
+a `fly.toml`.
+
+**Until that service's cutover story lands, its `fly.toml` stays the source for
+that service**, and the tests that pin it (for example
+`tests/fly-runtime-config.test.ts`) stay in force. Amendment 7's scaling posture
+(Q11–Q19) describes the Fly services for as long as they run. The decommission
+story ([MOTIR-9716](motir:cmvprl54901clhmu143y6z3l2)) retires the Fly-pinned
+configuration and its tests.
+
+#### Which story retires each superseded part
+
+| Part                       | What it decides today                                                                          | Retired by                                                                                                                                                                                                                        | Stops being true when                                                                                      |
+| -------------------------- | ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| **Q1** (§2)                | motir-core runs on Fly.io as one process, org `moooon`, region `iad`                           | [MOTIR-9712](motir:cmvprl4qg01c2hmu1kyfvucjx), the data and core cutover. The Fly apps themselves go in [MOTIR-9716](motir:cmvprl54901clhmu143y6z3l2), the decommission                                                           | `app.motir.co` serves from Fargate                                                                         |
+| **Q2** (§3)                | The blob store is Tigris, two buckets (public assets, private content), with S3 presigned URLs | [MOTIR-9712](motir:cmvprl4qg01c2hmu1kyfvucjx), the data and core cutover, onto the S3 buckets [MOTIR-9707](motir:cmvprl4cl01bxhmu1s2n07ia3) (the data stack) builds. Tigris goes in [MOTIR-9716](motir:cmvprl54901clhmu143y6z3l2) | core's blob store points at the S3 buckets. **The two-bucket public/private split stays**                  |
+| **Amendment 8** (§23, Q20) | The transport per leg: Flycast for core → ai and ai → gateway                                  | [MOTIR-9713](motir:cmvprl4ts01c3hmu1vpyeflw3), the ai, codegraph and gateway cutover                                                                                                                                              | core reaches motir-ai and the gateway, and motir-ai reaches the gateway, over private addresses in the VPC |
+| **Amendment 9** (Q21)      | core → ai goes over motir-ai's public origin, `MOTIR_AI_URL = https://motir-ai.fly.dev`        | [MOTIR-9713](motir:cmvprl4ts01c3hmu1vpyeflw3), the ai, codegraph and gateway cutover                                                                                                                                              | core reaches motir-ai over a private address in the VPC                                                    |
+
+**One caller Amendment 9 names is not retired by that story.** The fleet → motir-ai
+path (`MOTIR_AI_CONTAINER_URL`, the index containers in Amendment 9's table of
+public callers) is decided by the requirements-Q8 decision
+([MOTIR-9705](motir:cmvprl47x01bvhmu1ibq4gxw4)), not by this amendment and not by
+MOTIR-9713's choice of a private core → ai address.
+
+#### How each retiring story closes its part
+
+The retiring story edits the old text when it lands, the way Amendment 9 did
+for Q20: a **SUPERSEDED** pointer where the old value is stated, naming the
+story and the section that replaces it. This amendment adds no such pointer,
+because on the day it is written every part in the table still describes
+production. Marking them early would make the record wrong the other way.
+
+### What this amendment does NOT decide
+
+- **Marking Q1, Q2 or Amendments 8–9 superseded.** Each retiring story does that
+  when it lands (above).
+- **The fleet → motir-ai path.** Requirements Q8, decided in
+  [MOTIR-9705](motir:cmvprl47x01bvhmu1ibq4gxw4).
+- **The database engine.** Requirements Q3, decided in
+  [MOTIR-9702](motir:cmvprl41l01bshmu1szum55xp). This record's own Q8 (§9)
+  still describes the Neon databases production uses today.
+- **Email.** Requirements Q5, decided in
+  [MOTIR-9703](motir:cmvprl44201bthmu1z30v3gns).
+- **Service-to-service authentication.** `MOTIR_AI_SERVICE_TOKEN` keeps gating
+  every core → ai call, exactly as Amendment 1's last row and Amendment 9 say.
+  A private address changes the transport, not the credential.
+- **Sizes, floors and deploy strategies for any service.** Each service's
+  cutover story writes them into the CDK; until then `fly.toml` holds them.
+- **Commercial self-host.** The same CDK app installs it later, but its shape
+  (requirements §4) is not decided here.
+
+### Sources — additions
+
+| Claim                                                                                             | Source                                                                                                                                                                                                                                         |
+| ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Production deploys into `us-east-1` only                                                          | The requirements-Q1 decision, [MOTIR-9701](motir:cmvprl40b01brhmu1545xvikl), page _Decision — Motir production on AWS deploys into us-east-1 only; no EU region now_, version 1, approved 2026-10-27                                           |
+| Production moves to AWS under one parameterised CDK app; Q1, Q2 and Amendments 8–9 are superseded | Page [_Motir on AWS and self-host — requirements_](/pages/cmvpk4tpk01bihnr9thk2ftd9), §2 goals 1–3, §3 and §7                                                                                                                                  |
+| The CDK becomes the single source of size, as `fly.toml` is today                                 | The same page, §3 _Compute (services)_                                                                                                                                                                                                         |
+| `MOTIR_AI_URL` is the public origin and `MOTIR_AI_CONTAINER_URL` a public caller                  | Amendment 9 (Q21) above, on `origin/main` 2026-10-27                                                                                                                                                                                           |
+| The stories that retire each part                                                                 | Epic [MOTIR-9699](motir:cmvprl3vo01blhmu1of10bhko): [MOTIR-9712](motir:cmvprl4qg01c2hmu1kyfvucjx), [MOTIR-9713](motir:cmvprl4ts01c3hmu1vpyeflw3), [MOTIR-9716](motir:cmvprl54901clhmu143y6z3l2), [MOTIR-9707](motir:cmvprl4cl01bxhmu1s2n07ia3) |
