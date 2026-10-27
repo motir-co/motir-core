@@ -6509,10 +6509,6 @@
       "recommended": "おすすめ",
       "creditsAllotment": "月 {n} クレジット",
       "creditsAllotmentOneTime": "{n} クレジット · 1 回限り",
-      "ladder": {
-        "first": "どのプランもクレジット単価は同じ",
-        "multiple": "{plan} の {multiple} 倍のクレジット · クレジット単価は同じ"
-      },
       "perMoEquiv": "月額 ${n}",
       "annualSub": "年払い · 年額 ${yr}",
       "annualSave": "年 ${n} お得",

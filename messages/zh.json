@@ -6509,10 +6509,6 @@
       "recommended": "推荐",
       "creditsAllotment": "{n} 额度 / 月",
       "creditsAllotmentOneTime": "{n} 额度 · 一次性",
-      "ladder": {
-        "first": "每个套餐的额度单价相同",
-        "multiple": "{plan} 的 {multiple} 倍额度 · 额度单价相同"
-      },
       "perMoEquiv": "${n} / 月",
       "annualSub": "按年计费 · ${yr} / 年",
       "annualSave": "每年省 ${n}",
