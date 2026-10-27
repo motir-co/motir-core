@@ -6677,9 +6677,12 @@
         "lowLabel": "Dolna",
         "highLabel": "Górna",
         "runCategoriesLabel": "Modele, których używa runner",
-        "runCategoriesHelp": "Wybierz od jednej do trzech. Uruchomienia są dzielone po równo między wybrane kategorie: jedna dostaje 100%, dwie po 50%, wszystkie trzy po 33%. Modelu nigdy nie wybierasz — każda kategoria pokazuje obsługiwane modele jako przykłady.",
+        "runCategoriesHelp": "Wybierz od jednej do trzech. Przy dwóch lub trzech przeciągnij poniżej udział każdej w wykonaniu — na początku są równe. Nigdy nie wybierasz modelu — każda kategoria podaje jako przykłady modele, które obsługuje.",
         "categoryShare": "{share} uruchomień",
         "categoryExamples": "Na przykład: {models}",
+        "sharesLabel": "Udział każdej kategorii w wykonaniu",
+        "sharesHelp": "Przeciągnij udział, a pozostałe oddadzą lub przejmą różnicę po równo, więc zawsze sumują się do 100%. Dodanie lub usunięcie kategorii znów wyrównuje udziały.",
+        "shareValue": "{category}: {share}% wykonania",
         "submit": "Oszacuj kredyty"
       },
       "categories": {
@@ -6688,7 +6691,7 @@
       },
       "split": {
         "one": "Jedna kategoria, więc wszystkie uruchomienia przypadają na {category}.",
-        "even": "Uruchomienia są podzielone po równo między {categories} — po {shares}."
+        "shares": "Wykonanie jest podzielone tak: {shares}."
       },
       "result": {
         "idle": "Nic nie jest szacowane, dopóki o to nie poprosisz: wpisz przedział, wybierz od jednej do trzech kategorii, a potem wybierz „Oszacuj kredyty”.",
