@@ -5494,22 +5494,30 @@ the planner's tool, so both planners read the same evidence in the same shape.
 **Output** — `structuredContent.outcome` names what happened, and every outcome is
 a **non-error** result with its own summary sentence:
 
-| `outcome`              | Meaning                                                                                | Extra fields                                                    |
-| ---------------------- | -------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| `found`                | The file's text (ranged, then capped).                                                 | `repoRef`, `path`, `ref`, `bytes`, `lines`, `truncated`, `text` |
-| `not_found`            | The ref resolved and the path is not there. A fact about the PATH, not the repository. | `repoRef`, `path`, `ref`                                        |
-| `ref_not_found`        | The ref does not exist. Says nothing about the path.                                   | `repoRef`, `path`, `ref`                                        |
-| `too_large`            | The file exists and is over what the host serves inline.                               | `repoRef`, `path`, `ref`, `limitBytes`                          |
-| `binary`               | The file exists and holds a NUL character, so no text is returned.                     | `repoRef`, `path`, `ref`, `bytes`                               |
-| `unauthorized`         | The host refused the stored credential. The file's existence is unknown.               | `repoRef`, `path`, `ref`                                        |
-| `invalid_path`         | The path was refused before any request.                                               | `repoRef`, `path`, `reason`                                     |
-| `unreachable`          | The host did not answer — a failure to ASK, not an answer.                             | `repoRef`, `path`, `ref`, `failure`                             |
-| `repo_not_connected`   | The repository is in the set but not connected to the organisation.                    | `repoRef`                                                       |
-| `provider_unavailable` | The repository's git provider cannot be used on this deployment.                       | `repoRef`, `detail`                                             |
-| `repo_not_in_project`  | `repo` matches no repository in the project's set. Answered **before** any host call.  | `repo`, `repoSet`                                               |
+| `outcome`              | Meaning                                                                                                                    | Extra fields                                                    |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `found`                | The file's text (ranged, then capped).                                                                                     | `repoRef`, `path`, `ref`, `bytes`, `lines`, `truncated`, `text` |
+| `directory`            | The path is a directory: its immediate entries (`name`, `type` file/dir/symlink/submodule), sorted by name, at most 1,000. | `repoRef`, `path`, `ref`, `entries`, `truncated`                |
+| `not_found`            | The ref resolved and the path is not there. A fact about the PATH, not the repository.                                     | `repoRef`, `path`, `ref`                                        |
+| `ref_not_found`        | The ref does not exist. Says nothing about the path.                                                                       | `repoRef`, `path`, `ref`                                        |
+| `too_large`            | The file exists and is over what the host serves inline.                                                                   | `repoRef`, `path`, `ref`, `limitBytes`                          |
+| `binary`               | The file exists and holds a NUL character, so no text is returned.                                                         | `repoRef`, `path`, `ref`, `bytes`                               |
+| `unauthorized`         | The host refused the stored credential. The file's existence is unknown.                                                   | `repoRef`, `path`, `ref`                                        |
+| `invalid_path`         | The path was refused before any request.                                                                                   | `repoRef`, `path`, `reason`                                     |
+| `unreachable`          | The host did not answer — a failure to ASK, not an answer.                                                                 | `repoRef`, `path`, `ref`, `failure`                             |
+| `repo_not_connected`   | The repository is in the set but not connected to the organisation.                                                        | `repoRef`                                                       |
+| `provider_unavailable` | The repository's git provider cannot be used on this deployment.                                                           | `repoRef`, `detail`                                             |
+| `repo_not_in_project`  | `repo` matches no repository in the project's set. Answered **before** any host call.                                      | `repo`, `repoSet`                                               |
 
 None of them means the project has no code, and none carries a provider
 credential or a download URL.
+
+**Listing a directory (MOTIR-9868).** A `path` naming a directory is LISTED, not
+read: the outcome is `directory`, never the host's own listing JSON as `found`
+text (which is what GitHub's contents endpoint used to hand back). GitLab answers
+the same path the same way, from its repository tree. It is how a file that is not
+code — a CI workflow, a Dockerfile, a config — is found when its exact path is not
+known and `code_search` on its name did not return it.
 
 **Permission: `ai:plan`, at the door and in the service** — the same gate as
 `get_code_health`, on the same argument: the hosted planner already shows this

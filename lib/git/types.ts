@@ -494,6 +494,12 @@ export type RepoFileReadOutcome =
  *  (`lib/git/errors.ts`), thrown only for a status no arm below names. */
 export type RepoFileReadTransportFailure = 'timeout' | 'unreachable';
 
+/** One child of a directory `readFileAtRef` was pointed at (MOTIR-9868). */
+export interface RepoDirectoryEntry {
+  name: string;
+  type: 'file' | 'dir' | 'symlink' | 'submodule';
+}
+
 /**
  * The result of {@link GitProvider.readFileAtRef}.
  *
@@ -508,6 +514,16 @@ export type RepoFileReadTransportFailure = 'timeout' | 'unreachable';
  */
 export type RepoFileReadResult =
   | { outcome: 'found'; path: string; ref: string; text: string; bytes: number }
+  /** The path names a DIRECTORY (MOTIR-9868): its immediate children, sorted by
+   *  name, and `truncated` when the host's listing stopped at
+   *  `REPO_DIRECTORY_MAX_ENTRIES`. Never text — a directory is listed, not read. */
+  | {
+      outcome: 'directory';
+      path: string;
+      ref: string;
+      entries: RepoDirectoryEntry[];
+      truncated: boolean;
+    }
   | { outcome: 'binary'; path: string; ref: string; bytes: number }
   | { outcome: 'not_found'; path: string; ref: string }
   | { outcome: 'ref_not_found'; path: string; ref: string }

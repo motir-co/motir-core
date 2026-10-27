@@ -9,7 +9,14 @@ import {
   REPO_FILE_READ_TIMEOUT_MS,
   type GitProvider,
 } from '../provider';
-import { classifyRepoBlob, describeBody, normalizeRepoFilePath } from '../fileRead';
+import {
+  classifyRepoBlob,
+  describeBody,
+  gitlabTreeEntry,
+  normalizeRepoFilePath,
+  REPO_DIRECTORY_MAX_ENTRIES,
+  sortEntries,
+} from '../fileRead';
 import { RepoFileReadError } from '../errors';
 import {
   GitlabConnectionNotFoundError,
@@ -25,6 +32,7 @@ import type {
   NormalizedPushEvent,
   NormalizedRepo,
   NormalizedStatusEvent,
+  RepoDirectoryEntry,
   RepoFileReadResult,
   CommitComparison,
   ChangedFile,
@@ -483,8 +491,15 @@ export const gitlabProvider: GitProvider = {
     // a different fact about the same repository because of where it is hosted.
     if (res.status === 404) {
       const body = await res.text().catch(() => '');
-      return /reference|revision|branch|commit/i.test(body) && !/file/i.test(body)
-        ? { outcome: 'ref_not_found', path: guarded.path, ref }
+      if (/reference|revision|branch|commit/i.test(body) && !/file/i.test(body)) {
+        return { outcome: 'ref_not_found', path: guarded.path, ref };
+      }
+      // The files endpoint answers 404 for a DIRECTORY, so a miss is asked of
+      // the tree before it is called one (MOTIR-9868) — GitHub lists a directory
+      // in the same read, and a session must learn the same fact on either host.
+      const listing = await listGitlabDirectory(token, project, guarded.path, ref);
+      return listing
+        ? { outcome: 'directory', path: guarded.path, ref, ...listing }
         : { outcome: 'not_found', path: guarded.path, ref };
     }
     if (res.status === 401 || res.status === 403) {
@@ -703,4 +718,56 @@ export const gitlabProvider: GitProvider = {
 // Register the GitLab provider on import. `lib/git/index.ts` imports this module
 // for exactly this side-effect, so any consumer that imports `@/lib/git` gets
 // GitLab registered before it resolves a provider.
+
+/**
+ * A GitLab directory's immediate children (MOTIR-9868), paged up to
+ * {@link REPO_DIRECTORY_MAX_ENTRIES}, or `null` when the path is not a
+ * directory there. Every failure is `null` too: the caller then keeps the
+ * files endpoint's own `not_found`, which is what it answered before this read
+ * existed.
+ */
+async function listGitlabDirectory(
+  token: string,
+  project: string,
+  dirPath: string,
+  ref: string,
+): Promise<{ entries: RepoDirectoryEntry[]; truncated: boolean } | null> {
+  const entries: RepoDirectoryEntry[] = [];
+  let hasNext = false;
+  for (let page = 1; entries.length < REPO_DIRECTORY_MAX_ENTRIES; page += 1) {
+    const url =
+      `${gitlabBaseUrl()}/api/v4/projects/${project}/repository/tree` +
+      `?path=${encodeURIComponent(dirPath)}&ref=${encodeURIComponent(ref)}` +
+      `&per_page=100&page=${page}`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REPO_FILE_READ_TIMEOUT_MS);
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: 'GET',
+        headers: { authorization: `Bearer ${token}`, 'user-agent': 'motir' },
+        signal: controller.signal,
+      });
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+    if (!res.ok) return null;
+    const body: unknown = await res.json().catch(() => null);
+    if (!Array.isArray(body)) return null;
+    for (const item of body) {
+      const entry = gitlabTreeEntry(item);
+      if (entry) entries.push(entry);
+    }
+    hasNext = Boolean(res.headers.get('x-next-page'));
+    if (!hasNext) break;
+  }
+  if (entries.length === 0) return null;
+  return {
+    entries: sortEntries(entries.slice(0, REPO_DIRECTORY_MAX_ENTRIES)),
+    truncated: hasNext || entries.length > REPO_DIRECTORY_MAX_ENTRIES,
+  };
+}
+
 registerGitProvider(gitlabProvider);
