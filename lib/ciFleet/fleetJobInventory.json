@@ -675,11 +675,11 @@
     "motir-co/motir-ai": {
       "repoRef": "motir-co/motir-ai",
       "ref": "main",
-      "sha": "30508ba106e8867535226c98176afd3d388a7acd",
+      "sha": "fe39e5195ad827731f53989fd0ba095837d64247",
       "visibility": "private",
-      "measuredAt": "2026-10-24T01:50:00Z",
+      "measuredAt": "2026-10-27T20:00:00Z",
       "imageDockerfileSha": "406424306b766f625d3d8c1c6f2880662c8a4377",
-      "structureFingerprint": "b8beb453692b09bc35a56c43bd2f2adb5f557cfe5631d517b2f8528fa149c1f2",
+      "structureFingerprint": "d641b47921344893fc5e946687a939f43df2f3754a0a840a452b35bdf83d43b4",
       "workflows": [
         {
           "path": ".github/workflows/ci.yml",
@@ -738,7 +738,7 @@
               "triggers": ["pull_request", "merge_group", "push"],
               "verdict": "runnable",
               "missing": [],
-              "evidence": ".github/workflows/ci.yml:346"
+              "evidence": ".github/workflows/ci.yml:354"
             },
             {
               "jobId": "coverage-c",
@@ -746,7 +746,7 @@
               "triggers": ["pull_request", "merge_group", "push"],
               "verdict": "runnable",
               "missing": [],
-              "evidence": ".github/workflows/ci.yml:418"
+              "evidence": ".github/workflows/ci.yml:426"
             },
             {
               "jobId": "coverage-db-a",
@@ -754,7 +754,7 @@
               "triggers": ["pull_request", "merge_group", "push"],
               "verdict": "runnable",
               "missing": [],
-              "evidence": ".github/workflows/ci.yml:481"
+              "evidence": ".github/workflows/ci.yml:489"
             },
             {
               "jobId": "coverage-db-b",
@@ -762,7 +762,7 @@
               "triggers": ["pull_request", "merge_group", "push"],
               "verdict": "runnable",
               "missing": [],
-              "evidence": ".github/workflows/ci.yml:545"
+              "evidence": ".github/workflows/ci.yml:553"
             },
             {
               "jobId": "coverage-db-c",
@@ -770,7 +770,7 @@
               "triggers": ["pull_request", "merge_group", "push"],
               "verdict": "runnable",
               "missing": [],
-              "evidence": ".github/workflows/ci.yml:612"
+              "evidence": ".github/workflows/ci.yml:620"
             },
             {
               "jobId": "coverage-db-d",
@@ -778,7 +778,7 @@
               "triggers": ["pull_request", "merge_group", "push"],
               "verdict": "runnable",
               "missing": [],
-              "evidence": ".github/workflows/ci.yml:681"
+              "evidence": ".github/workflows/ci.yml:689"
             },
             {
               "jobId": "indexer-image",
@@ -786,7 +786,7 @@
               "triggers": ["pull_request", "merge_group", "push"],
               "verdict": "runnable",
               "missing": [],
-              "evidence": ".github/workflows/ci.yml:749",
+              "evidence": ".github/workflows/ci.yml:765",
               "calls": "./.github/workflows/indexer-image.yml"
             },
             {
@@ -795,7 +795,7 @@
               "triggers": ["pull_request", "merge_group", "push"],
               "verdict": "runnable",
               "missing": [],
-              "evidence": ".github/workflows/ci.yml:761"
+              "evidence": ".github/workflows/ci.yml:777"
             },
             {
               "jobId": "deploy-codegraph",
@@ -803,7 +803,7 @@
               "triggers": ["pull_request", "merge_group", "push"],
               "verdict": "runnable",
               "missing": [],
-              "evidence": ".github/workflows/ci.yml:859"
+              "evidence": ".github/workflows/ci.yml:891"
             },
             {
               "jobId": "ci-complete",
@@ -811,7 +811,7 @@
               "triggers": ["pull_request", "merge_group", "push"],
               "verdict": "runnable",
               "missing": [],
-              "evidence": ".github/workflows/ci.yml:956"
+              "evidence": ".github/workflows/ci.yml:988"
             }
           ]
         },
@@ -838,6 +838,19 @@
               "verdict": "runnable",
               "missing": [],
               "evidence": ".github/workflows/indexer-image.yml:69"
+            }
+          ]
+        },
+        {
+          "path": ".github/workflows/loadtest-e2e.yml",
+          "jobs": [
+            {
+              "jobId": "loadtest-e2e",
+              "runsOn": "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
+              "triggers": ["pull_request", "workflow_dispatch"],
+              "verdict": "runnable",
+              "missing": [],
+              "evidence": ".github/workflows/loadtest-e2e.yml:25"
             }
           ]
         },
@@ -927,7 +940,7 @@
           ]
         }
       ],
-      "jobCount": 26
+      "jobCount": 27
     },
     "motir-co/motir-gateway": {
       "repoRef": "motir-co/motir-gateway",

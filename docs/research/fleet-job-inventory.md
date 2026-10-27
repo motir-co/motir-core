@@ -67,6 +67,13 @@ seam expression and needs only checkout, pnpm's setup action, setup-node at Node
 action; `diff` and `deploy` add `aws-actions/configure-aws-credentials` and
 `actions/github-script`, which are JavaScript actions.
 
+**motir-ai re-measured (2026-10-27):** at `fe39e5195`. Since `30508ba10`, #805
+added `loadtest-e2e.yml`, a label- or dispatch-triggered job on the seam that runs
+pnpm, bash and `superfly/flyctl-actions/setup-flyctl` (the same action
+motir-gateway's `fly-deploy.yml` runs on the image), so it is `runnable`. #864, #867
+and #869 only added `pnpm coverage:*` steps to existing `ci.yml` jobs, whose
+evidence lines move with the insertions. 27 jobs, every one `runnable`.
+
 **Image under test:** `infra/ci-runner/Dockerfile` on `motir-core` `main` at
 `4064243068` (last commit touching the file, 2026-10-12). Every "absent from the
 image" below is read from that file: it installs Ubuntu 24.04 (by digest), the
