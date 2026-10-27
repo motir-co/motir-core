@@ -43,7 +43,11 @@ import { parseApprovalOverlay, withoutApprovalOverlay } from '@/lib/approvals/ov
 import { fetchApprovalGateOverlay } from '@/lib/approvals/approvalOverlayClient';
 import { useLiveSignal, type LiveTopic } from '@/lib/live/liveSignal';
 import type { StampComponent } from '@/lib/approvalGates/stamp';
-import { announceGateDecided } from '@/lib/approvals/decidedGates';
+import {
+  announceGateDecided,
+  clearGatePressPending,
+  markGatePressPending,
+} from '@/lib/approvals/decidedGates';
 import type {
   ApprovalGateDTO,
   ApprovalGateKindDTO,
@@ -882,21 +886,33 @@ export function ApprovalOverlay() {
         // ⚠️ THE STAMP THIS READ HANDED OVER, never one fetched at press time (MOTIR-5235).
         // A stamp asked for when the reader presses always matches, so the check would pass
         // every time and protect nothing: it has to be the record of what is on screen.
-        const result = await decideApprovalGateAction({
-          gateId: gate.id,
-          decision,
-          // A CHOICE names its option (MOTIR-5896); no other verb carries one.
-          ...(optionId ? { optionId } : {}),
-          // An OVERTURN carries its required note (MOTIR-5960); no other verb here does.
-          ...(noteMd ? { noteMd } : {}),
-          // A DESIGN refusal carries its REQUIRED verdict (MOTIR-6427); no other verb does.
-          ...(refusalVerdict ? { refusalVerdict } : {}),
-          identifier,
-          stamp: read.stamp ?? '',
-        });
+        // The row underneath may be dropped by a list read before this answer arrives;
+        // the mark keeps it from drawing *Decided elsewhere* for this press (MOTIR-9696).
+        markGatePressPending(gate.id);
+        let result: Awaited<ReturnType<typeof decideApprovalGateAction>>;
+        try {
+          result = await decideApprovalGateAction({
+            gateId: gate.id,
+            decision,
+            // A CHOICE names its option (MOTIR-5896); no other verb carries one.
+            ...(optionId ? { optionId } : {}),
+            // An OVERTURN carries its required note (MOTIR-5960); no other verb here does.
+            ...(noteMd ? { noteMd } : {}),
+            // A DESIGN refusal carries its REQUIRED verdict (MOTIR-6427); no other verb does.
+            ...(refusalVerdict ? { refusalVerdict } : {}),
+            identifier,
+            stamp: read.stamp ?? '',
+          });
+        } catch (error) {
+          clearGatePressPending(gate.id);
+          throw error;
+        }
         // A refusal applies nothing; the frame draws it IN PLACE and the overlay
         // stays open over it.
-        if (!result.ok) return result.refusal;
+        if (!result.ok) {
+          clearGatePressPending(gate.id);
+          return result.refusal;
+        }
         setDecided({ token: token!, gate: result.gate, filesKept: result.filesKept });
         // The exit row's chip, from what the decision WROTE (panel 5b). ⚠️ NEVER for an
         // acceptance sent back (MOTIR-6506; `acceptance-refusal-verdict.md` §2): no
@@ -917,6 +933,7 @@ export function ApprovalOverlay() {
           // this, never `outcomeRef`, which is a CHOICE's option id (MOTIR-5893).
           statusWritten: result.statusWritten,
         });
+        clearGatePressPending(gate.id);
         // A refusal that offers the seeded planner ASKS first (§10h; the design gate's
         // amendment of 2026-09-25), and so does an option CHOSEN (MOTIR-6436) — nothing
         // opens until the reader says yes.
