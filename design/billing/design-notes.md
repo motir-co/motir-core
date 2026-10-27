@@ -53,7 +53,7 @@ the same primitives — no design→code gap.
 | **The Host plan** (AMENDMENT)                                     | **`billing--host.mock.html`** (HTML mockup)                        | A fifth paid card after Max ×2 and every state it brings, 13 panels: the row monthly · annual · Choose Host redirecting · member disabled · org on Max ×2 · the upgrade to Host (ready, loading, error) · its success and Host Current · Host in the unfolded regular plans (and Pool 250,000 → Host) · org on Host · the downgrade from Host and its success · the pending downgrade from Host · `zh` · narrow. Amends panel 5's plan row and the larger-pool amendment's unfolded regular plans. See § "Amendment 2026-10-23 — the Host plan" at the end of this file.                                                                                                                                                                                                                                                                                                        |
 | **The Fleet use section** (AMENDMENT)                             | **`billing--fleet-use.mock.html`** (HTML mockup)                   | A new section at the end of the settings view, 21 panels (11 in 11a–i): access path · Pro below every figure · Pro at 3 of 3 with a plan-limit wait · CI at 10 of 10 with plan-limit and full-pool waits apart · Standard · Max ×2 with a kind on Fly · Host after purchase · each own-account state and a denied quota · Host agent runner live · Host fully live · the Request more capacity dialog (empty, filled, validation, reason invalid, sending, sent, refused open, refused no account, refused not allowed, network error) · request statuses · loading · not read · staff override and CI alone not read · own accounts not read · Motir-owned · Free · member · dark · `zh` narrow. Amends the settings view only. See § "Amendment 2026-10-26 — the Fleet use section" at the end of this file.                                                                  |
 | **The larger pools above Host** (AMENDMENT)                       | **`billing--larger-pool--above-host.mock.html`** (HTML mockup)     | What moving the larger pools above Host changes, 13 panels: the Max ×2 with top-ups answer · the offer card at the Host-anchored rungs (Pool 900,000) monthly · annual · Choose pressed · Largest credit pool at Pool 2,400,000 · member disabled · the re-worded Need more credits? callout · the upgrade from Host to a rung (ready, loading, error) · its success and the held rung card · the held rung card (Pool 600,000) with the regular plans unfolded · the held retired rung card (Pool 250,000) · `zh` · narrow. Amends the larger-pool and Host amendments. See § "Amendment 2026-10-26 — the larger pools above Host" at the end of this file.                                                                                                                                                                                                                    |
-| **The Calculator — each category's share of the run** (AMENDMENT) | **`billing--calculator--tier-shares.mock.html`** (HTML mockup)     | With two or three model categories picked, a whole-number % field per category (prefilled even), the total check that disables Estimate credits, and the answer's split line stating the shares, 7 panels. See § "Amendment 2026-10-27 — each category's share of the run" at the end of this file.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| **The Calculator — each category's share of the run** (AMENDMENT) | **`billing--calculator--tier-shares.mock.html`** (HTML mockup)     | With two or three model categories picked, a share slider per category (starting even; dragging one takes the difference from the others equally, so they always total 100%), and the answer's split line stating the shares, 8 panels. See § "Amendment 2026-10-27 — each category's share of the run" at the end of this file.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 
 ## What this area is
 
@@ -2291,15 +2291,23 @@ amends § "Amendment 2026-10-21 — the Calculator's planned and run ranges" (it
 copy table's `runCategoriesHelp` and `categoryShare`, and `calculator.split.even`) and that
 section's mock `billing--calculator--planned-and-run.mock.html`, which is a record and is not
 edited. Only the panels that change are drawn: the form card's category group and the new share
-fields, and the answer's split line. The two ranges, the rest of the answer and the access path
+sliders, and the answer's split line. The two ranges, the rest of the answer and the access path
 (the Calculator link on Billing & plans, drawn in `billing--calculator.mock.html`) ship unchanged.
+
+**Revision 2 (2026-10-27).** The first version drew a typed `%` field per category with a total
+check that disabled Estimate credits. Review asked instead for the percentages to be **draggable,
+with a drag on one taking the difference from the rest equally**. This version draws that: a
+slider per category, kept at a total of 100% by the rule below, so there is no off-total state, no
+error line and no disabled button.
 
 **Design system.** Read `package.json` (depends on `@motir/design-system`, `workspace:*`) and
 `app/globals.css` (imports `@motir/design-system/theme.css`): the project is on Motir Design, at the
 workspace package in this repository. The mock is rendered with `renderMock` from
 `@motir/design-system/mock` at the root layout's axes (`warm-editorial` · `motir` · `motir`), from
-the package's `Card`, `Input`, `Button` and `Pill`, composed as `CalculatorView.tsx` composes them
-(the category tiles are its own buttons, copied). No new part is needed.
+the package's `Card`, `Button` and `Pill`, composed as `CalculatorView.tsx` composes them (the
+category tiles are its own buttons, copied). **The package has no slider part**, so each share is a
+native `<input type="range">` coloured through `accent-color: var(--el-accent)`. That is a local
+composition in `CalculatorView.tsx`, not a new design-system part: one surface uses it.
 
 Rendered against what `main` ships: `CalculatorView.tsx`'s `CategoryGroup` (one to three tiles,
 each picked tile showing `calculator.inputs.categoryShare` at the equal split) and the answer's
@@ -2307,62 +2315,68 @@ each picked tile showing `calculator.inputs.categoryShare` at the equal split) a
 
 ### What changes
 
-- **One category picked (panel 1): nothing changes.** No share field; the picked tile says
-  "100% of the run" as it ships, and the request sends no `shares`.
-- **Two or three picked (panels 2–3): a share field per picked category.** Under the tiles' help
-  line, a fieldset **Each category's share of the run** holds one `Input` per picked category,
-  labelled with the category's name, `inputMode="numeric"`, with a `%` end addon, in the tiles'
-  order, two or three to a row. Each takes a whole number 1–99. The picked tiles no longer show
-  `categoryShare`: the field is where the share is read and set.
-- **The fields start even and reset to even.** Prefilled with the even split — 50 / 50, or 34 / 33
-  / 33 with the remainder on the first in the tiles' order. Picking or unpicking a category resets
-  every field to the even split for the new set (panel 3 is panel 2 after Economy is added).
-- **The total is checked before anything is sent (panels 4–5).** Under the fields, a quiet
-  `role="status"` line reads "Shares total 100%." while they do. When they do not, it becomes a
-  `role="alert"` line saying by how much — "Shares total 90% — add 10%." or "Shares total 110% —
-  take away 10%." — and **Estimate credits is disabled** until the total is 100 again. A field that
-  is empty, not a whole number or outside 1–99 counts as not totalling 100 and shows the same
-  line, with `calculator.errors.shareInvalid` in its place when a field cannot be read as a share.
-- **The answer states the shares (panel 6).** With two or three categories the split sentence
+- **One category picked (panel 1): nothing changes.** No slider; the picked tile says "100% of
+  the run" as it ships, and the request sends no `shares`.
+- **Two or three picked (panels 2–6): a share slider per picked category.** Under the tiles' help
+  line, a fieldset **Each category's share of the run** holds one row per picked category, in the
+  tiles' order: the category's name, a range input (`min` 1, step 1, `max` 100 minus 1 for each
+  other picked category) and the share read out as "70%". Under the rows, a thin bar shows the
+  split, one segment per category, decorative (`aria-hidden`): the read-outs carry the numbers. The
+  picked tiles no longer show `categoryShare`: the sliders are where the share is read and set.
+- **They start even and reset to even.** 50 / 50, or 34 / 33 / 33 with the remainder on the
+  first in the tiles' order. Picking or unpicking a category resets every slider to the even split
+  for the new set (panel 4 is panel 2 after Economy is added).
+- **Dragging one takes the difference from the others equally (panels 3, 5, 6).** Moving one
+  share by d moves each other share by −d split into equal whole parts. A part that does not
+  divide goes to the others in the tiles' order, first first (34 / 33 / 33 with Balanced dragged
+  to 52 is 24 / 52 / 24). No share goes below 1%: what a share at 1% cannot give is taken from the
+  rest (30 / 69 / 1 with Balanced dragged to 79 is 20 / 79 / 1). With two categories the other is
+  simply 100 minus the dragged one. The rule runs at every step of a drag, keyboard arrows
+  included, so **the shares always total 100%** and Estimate credits is never disabled by them.
+- **Keyboard and screen reader.** Each range input is a native slider: arrow keys move it by 1%,
+  Page Up / Page Down by 10%, Home / End to its min / max. Its accessible name is the category's
+  name (the row is a `<label>`), and its `aria-valuetext` is "Balanced: 70% of the run"
+  (`calculator.inputs.shareValue`). The focus ring is the shipped `--focus-ring-color` outline.
+- **The answer states the shares (panel 7).** With two or three categories the split sentence
   becomes "The run is split Balanced 70% · Flagship 30%." (`calculator.split.shares`), read from
-  the answer's `split.categories[].weight` in the categories read's order — never from the fields,
-  which may have changed since. It replaces "The run is split evenly across …". The pills under it
-  ship unchanged and carry the same weights. One category keeps `calculator.split.one` (panel 7).
+  the answer's `split.categories[].weight` in the categories read's order, never from the
+  sliders, which may have moved since. It replaces "The run is split evenly across …". The pills
+  under it ship unchanged and carry the same weights. One category keeps `calculator.split.one`
+  (panel 8).
 - **The help text stops promising an even split.** `runCategoriesHelp` is reworded (below).
 
 The engine side is MOTIR-9830 (motir-ai): an optional `shares` on the estimate request, keyed by
-the picked categories, totalling 100, and `split.categories[].weight = share / 100`. The build is
-MOTIR-9832.
+the picked categories, whole numbers totalling 100, and `split.categories[].weight = share / 100`.
+The sliders only ever produce such shares. The build is MOTIR-9832.
 
 ### Copy (en) — `billing` namespace
 
-| Key                                   | en                                                                                                                                                                                                  | State   |
-| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
-| `calculator.inputs.runCategoriesHelp` | Pick one to three. With two or three, set each one's share of the run below — they start even and must total 100%. You never choose a model — each category lists the models it serves as examples. | CHANGED |
-| `calculator.inputs.sharesLabel`       | Each category's share of the run                                                                                                                                                                    | NEW     |
-| `calculator.inputs.sharesHelp`        | Whole percentages from 1 to 99. Adding or removing a category starts them even again.                                                                                                               | NEW     |
-| `calculator.inputs.sharesTotal`       | Shares total 100%.                                                                                                                                                                                  | NEW     |
-| `calculator.errors.sharesUnder`       | Shares total {total}% — add {gap}%.                                                                                                                                                                 | NEW     |
-| `calculator.errors.sharesOver`        | Shares total {total}% — take away {gap}%.                                                                                                                                                           | NEW     |
-| `calculator.errors.shareInvalid`      | Enter a whole number from 1 to 99 for each share.                                                                                                                                                   | NEW     |
-| `calculator.split.shares`             | The run is split {shares}.                                                                                                                                                                          | NEW     |
+| Key                                   | en                                                                                                                                                                               | State   |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| `calculator.inputs.runCategoriesHelp` | Pick one to three. With two or three, drag each one's share of the run below — they start even. You never choose a model — each category lists the models it serves as examples. | CHANGED |
+| `calculator.inputs.sharesLabel`       | Each category's share of the run                                                                                                                                                 | NEW     |
+| `calculator.inputs.sharesHelp`        | Drag a share and the others give or take the difference equally, so they always total 100%. Adding or removing a category starts them even again.                                | NEW     |
+| `calculator.inputs.shareValue`        | {category}: {share}% of the run                                                                                                                                                  | NEW     |
+| `calculator.split.shares`             | The run is split {shares}.                                                                                                                                                       | NEW     |
 
 `{shares}` in `calculator.split.shares` is each category as "{name} {percent}" joined with " · ",
 the percent formatted as the shipped pills format it. `calculator.split.even` is retired;
 `calculator.split.one` and `calculator.inputs.categoryShare` (now shown for one pick only) stay.
-Each field's label is the category's name, as the tiles show it, so it needs no key. Every new or
-changed string is the translation pass's to land in every locale.
+Each row's label is the category's name, as the tiles show it, so it needs no key; the read-out is
+the number and `%`. Every new or changed string is the translation pass's to land in every locale.
 
 ### Colour + shape roles (additions only)
 
-| Element               | Role                                                                                               |
-| --------------------- | -------------------------------------------------------------------------------------------------- |
-| Share fieldset legend | `--el-text`, the shipped range legend's weight (`text-sm font-medium`)                             |
-| Share `Input`s        | the shipped `Input`: `--radius-input`, `--spacing-input-x/y`, `--el-border`; `%` addon as shipped  |
-| Shares help, total    | `--el-text-secondary` (clears AA on every surface)                                                 |
-| Shares off by n       | `--el-danger-on-surface`, `role="alert"`, the shipped error line                                   |
-| Estimate credits      | the shipped primary `Button`, `disabled` while the shares are off                                  |
-| Split sentence        | `--el-text`, as shipped; the pills keep `--el-border-strong` · `--el-surface` · `--el-text-strong` |
+| Element               | Role                                                                                                                                                                         |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Share fieldset legend | `--el-text`, the shipped range legend's weight (`text-sm font-medium`)                                                                                                       |
+| Row label             | `--el-text`, `text-sm`                                                                                                                                                       |
+| Range input           | native; `accent-color: var(--el-accent)` for the thumb and filled track; `--focus-ring-color` focus ring                                                                     |
+| Share read-out        | `--el-text-strong`, `text-sm font-medium`, tabular numbers                                                                                                                   |
+| Split bar             | `aria-hidden`; track `--el-muted`; segments `--el-tint-sky` · `--el-tint-mint` · `--el-tint-lavender` in the tiles' order, split by a 2px `--el-surface` gap; `rounded-full` |
+| Shares help           | `--el-text-secondary` (clears AA on every surface)                                                                                                                           |
+| Estimate credits      | the shipped primary `Button`, unchanged (never disabled by the shares)                                                                                                       |
+| Split sentence        | `--el-text`, as shipped; the pills keep `--el-border-strong` · `--el-surface` · `--el-text-strong`                                                                           |
 
 ### The numbers are illustrative
 

@@ -78,7 +78,6 @@
           --color-link-pressed: #005bab;
           --radius-btn: 8px;
           --radius-card: 12px;
-          --radius-input: 8px;
           --radius-badge: 9999px;
           --radius-control: 6px;
           --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
@@ -86,14 +85,12 @@
           --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
           --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
           --spacing-btn-x: 18px;
-          --spacing-input-x: 16px;
           --spacing-card-padding: 24px;
           --spacing-control-x: 10px;
           --spacing-control-y: 6px;
           --spacing-chip-x: 10px;
           --spacing-chip-y: 2px;
           --height-btn-md: 40px;
-          --height-input: 44px;
           --height-control: 36px;
           --spacing-rail-inset: 0px;
           --transition-duration: 150ms;
@@ -328,14 +325,17 @@
         .h-\(--height-btn-md\) {
           height: var(--height-btn-md);
         }
-        .h-\(--height-input\) {
-          height: var(--height-input);
+        .h-2 {
+          height: calc(var(--spacing) * 2);
         }
         .h-3\.5 {
           height: calc(var(--spacing) * 3.5);
         }
         .h-4 {
           height: calc(var(--spacing) * 4);
+        }
+        .h-6 {
+          height: calc(var(--spacing) * 6);
         }
         .w-3\.5 {
           width: calc(var(--spacing) * 3.5);
@@ -352,14 +352,11 @@
         .min-w-0 {
           min-width: calc(var(--spacing) * 0);
         }
-        .flex-1 {
-          flex: 1;
+        .cursor-grab {
+          cursor: grab;
         }
-        .grid-cols-2 {
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-        .grid-cols-3 {
-          grid-template-columns: repeat(3, minmax(0, 1fr));
+        .grid-cols-\[6rem_1fr_3rem\] {
+          grid-template-columns: 6rem 1fr 3rem;
         }
         .flex-col {
           flex-direction: column;
@@ -397,6 +394,9 @@
         .gap-8 {
           gap: calc(var(--spacing) * 8);
         }
+        .overflow-hidden {
+          overflow: hidden;
+        }
         .rounded-\(--radius-badge\) {
           border-radius: var(--radius-badge);
         }
@@ -409,8 +409,8 @@
         .rounded-\(--radius-control\) {
           border-radius: var(--radius-control);
         }
-        .rounded-\(--radius-input\) {
-          border-radius: var(--radius-input);
+        .rounded-full {
+          border-radius: calc(infinity * 1px);
         }
         .border {
           border-style: var(--tw-border-style);
@@ -425,14 +425,14 @@
         .border-\(--el-border-strong\) {
           border-color: var(--el-border-strong);
         }
-        .border-\(--el-input-border\) {
-          border-color: var(--el-input-border);
-        }
         .bg-\(--el-accent\) {
           background-color: var(--el-accent);
         }
         .bg-\(--el-card\) {
           background-color: var(--el-card);
+        }
+        .bg-\(--el-muted\) {
+          background-color: var(--el-muted);
         }
         .bg-\(--el-page-bg\) {
           background-color: var(--el-page-bg);
@@ -442,9 +442,6 @@
         }
         .bg-\(--el-surface-soft\) {
           background-color: var(--el-surface-soft);
-        }
-        .bg-transparent {
-          background-color: transparent;
         }
         .p-\(--spacing-card-padding\) {
           padding: var(--spacing-card-padding);
@@ -461,9 +458,6 @@
         .px-\(--spacing-control-x-12\) {
           padding-inline: var(--spacing-control-x-12);
         }
-        .px-\(--spacing-input-x\) {
-          padding-inline: var(--spacing-input-x);
-        }
         .py-\(--spacing-chip-y\) {
           padding-block: var(--spacing-chip-y);
         }
@@ -472,6 +466,9 @@
         }
         .text-left {
           text-align: left;
+        }
+        .text-right {
+          text-align: right;
         }
         .font-mono {
           font-family: var(--font-mono);
@@ -522,12 +519,6 @@
         .text-\(--el-accent-text\) {
           color: var(--el-accent-text);
         }
-        .text-\(--el-danger-on-surface\) {
-          color: var(--el-danger-on-surface);
-        }
-        .text-\(--el-icon-field\) {
-          color: var(--el-icon-field);
-        }
         .text-\(--el-text\) {
           color: var(--el-text);
         }
@@ -540,19 +531,17 @@
         .uppercase {
           text-transform: uppercase;
         }
+        .tabular-nums {
+          --tw-numeric-spacing: tabular-nums;
+          font-variant-numeric: var(--tw-ordinal,) var(--tw-slashed-zero,) var(--tw-numeric-figure,)
+            var(--tw-numeric-spacing,) var(--tw-numeric-fraction,);
+        }
         .antialiased {
           -webkit-font-smoothing: antialiased;
           -moz-osx-font-smoothing: grayscale;
         }
         .transition-\[transform\,background-color\,border-color\,color\] {
           transition-property: transform, background-color, border-color, color;
-          transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));
-          transition-duration: var(--tw-duration, var(--default-transition-duration));
-        }
-        .transition-colors {
-          transition-property:
-            color, background-color, border-color, outline-color, text-decoration-color, fill,
-            stroke, --tw-gradient-from, --tw-gradient-via, --tw-gradient-to;
           transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));
           transition-duration: var(--tw-duration, var(--default-transition-duration));
         }
@@ -564,41 +553,6 @@
         .duration-\(--transition-duration\) {
           --tw-duration: var(--transition-duration);
           transition-duration: var(--transition-duration);
-        }
-        .outline-none {
-          --tw-outline-style: none;
-          outline-style: none;
-        }
-        .placeholder\:text-\(--el-text-muted\) {
-          &::placeholder {
-            color: var(--el-text-muted);
-          }
-        }
-        .focus-within\:ring-2 {
-          &:focus-within {
-            --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0 calc(2px + var(--tw-ring-offset-width))
-              var(--tw-ring-color, currentcolor);
-            box-shadow:
-              var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow),
-              var(--tw-ring-shadow), var(--tw-shadow);
-          }
-        }
-        .focus-within\:ring-\(--focus-ring-color\) {
-          &:focus-within {
-            --tw-ring-color: var(--focus-ring-color);
-          }
-        }
-        .focus-within\:ring-offset-2 {
-          &:focus-within {
-            --tw-ring-offset-width: 2px;
-            --tw-ring-offset-shadow: var(--tw-ring-inset,) 0 0 0 var(--tw-ring-offset-width)
-              var(--tw-ring-offset-color);
-          }
-        }
-        .focus-within\:ring-offset-background {
-          &:focus-within {
-            --tw-ring-offset-color: var(--color-background);
-          }
         }
         .hover\:opacity-90 {
           &:hover {
@@ -647,11 +601,6 @@
         .disabled\:pointer-events-none {
           &:disabled {
             pointer-events: none;
-          }
-        }
-        .disabled\:cursor-not-allowed {
-          &:disabled {
-            cursor: not-allowed;
           }
         }
         .disabled\:opacity-50 {
@@ -4324,6 +4273,26 @@
         syntax: '*';
         inherits: false;
       }
+      @property --tw-ordinal {
+        syntax: '*';
+        inherits: false;
+      }
+      @property --tw-slashed-zero {
+        syntax: '*';
+        inherits: false;
+      }
+      @property --tw-numeric-figure {
+        syntax: '*';
+        inherits: false;
+      }
+      @property --tw-numeric-spacing {
+        syntax: '*';
+        inherits: false;
+      }
+      @property --tw-numeric-fraction {
+        syntax: '*';
+        inherits: false;
+      }
       @property --tw-duration {
         syntax: '*';
         inherits: false;
@@ -4404,6 +4373,11 @@
             --tw-leading: initial;
             --tw-font-weight: initial;
             --tw-tracking: initial;
+            --tw-ordinal: initial;
+            --tw-slashed-zero: initial;
+            --tw-numeric-figure: initial;
+            --tw-numeric-spacing: initial;
+            --tw-numeric-fraction: initial;
             --tw-duration: initial;
             --tw-shadow: 0 0 #0000;
             --tw-shadow-color: initial;
@@ -4431,10 +4405,10 @@
       </h1>
       <section
         class="flex flex-col gap-3"
-        aria-label="1 · One category picked — no share field; the tile says it carries 100% of the run (unchanged)."
+        aria-label="1 · One category picked — no share slider; the tile says it carries 100% of the run (unchanged)."
       >
         <h2 class="font-mono text-xs uppercase tracking-wide text-(--el-text-secondary)">
-          1 · One category picked — no share field; the tile says it carries 100% of the run
+          1 · One category picked — no share slider; the tile says it carries 100% of the run
           (unchanged).
         </h2>
         <div
@@ -4514,49 +4488,47 @@
                     </button>
                   </div>
                   <p class="font-sans text-xs text-(--el-text-secondary)">
-                    Pick one to three. With two or three, set each one’s share of the run below —
-                    they start even and must total 100%. You never choose a model — each category
-                    lists the models it serves as examples.
+                    Pick one to three. With two or three, drag each one’s share of the run below —
+                    they start even. You never choose a model — each category lists the models it
+                    serves as examples.
                   </p>
                   <span class="block font-mono text-[11px] text-(--el-text-secondary)"
                     >calculator.inputs.runCategoriesHelp (CHANGED) · calculator.inputs.categoryShare
                     (shipped, one pick only)</span
                   >
                 </div>
-                <div class="flex flex-col gap-1">
-                  <div>
-                    <button
-                      type="submit"
-                      data-variant="primary"
-                      class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-md) px-(--spacing-btn-x)"
-                    >
-                      <span aria-hidden="true" class="inline-flex"
-                        ><svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="24"
-                          height="24"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          class="lucide lucide-calculator h-4 w-4"
-                          aria-hidden="true"
-                        >
-                          <rect width="16" height="20" x="4" y="2" rx="2"></rect>
-                          <line x1="8" x2="16" y1="6" y2="6"></line>
-                          <line x1="16" x2="16" y1="14" y2="18"></line>
-                          <path d="M16 10h.01"></path>
-                          <path d="M12 10h.01"></path>
-                          <path d="M8 10h.01"></path>
-                          <path d="M12 14h.01"></path>
-                          <path d="M8 14h.01"></path>
-                          <path d="M12 18h.01"></path>
-                          <path d="M8 18h.01"></path></svg></span
-                      ><span>Estimate credits</span>
-                    </button>
-                  </div>
+                <div>
+                  <button
+                    type="submit"
+                    data-variant="primary"
+                    class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-md) px-(--spacing-btn-x)"
+                  >
+                    <span aria-hidden="true" class="inline-flex"
+                      ><svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-calculator h-4 w-4"
+                        aria-hidden="true"
+                      >
+                        <rect width="16" height="20" x="4" y="2" rx="2"></rect>
+                        <line x1="8" x2="16" y1="6" y2="6"></line>
+                        <line x1="16" x2="16" y1="14" y2="18"></line>
+                        <path d="M16 10h.01"></path>
+                        <path d="M12 10h.01"></path>
+                        <path d="M8 10h.01"></path>
+                        <path d="M12 14h.01"></path>
+                        <path d="M8 14h.01"></path>
+                        <path d="M12 18h.01"></path>
+                        <path d="M8 18h.01"></path></svg></span
+                    ><span>Estimate credits</span>
+                  </button>
                 </div>
               </div>
             </div>
@@ -4565,11 +4537,11 @@
       </section>
       <section
         class="flex flex-col gap-3"
-        aria-label="2 · Two categories picked — a whole-number % field per picked category, prefilled with the even split 50 / 50."
+        aria-label="2 · Two categories picked — a share slider per picked category, starting even at 50 / 50, with a bar showing the split."
       >
         <h2 class="font-mono text-xs uppercase tracking-wide text-(--el-text-secondary)">
-          2 · Two categories picked — a whole-number % field per picked category, prefilled with the
-          even split 50 / 50.
+          2 · Two categories picked — a share slider per picked category, starting even at 50 / 50,
+          with a bar showing the split.
         </h2>
         <div
           class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding)"
@@ -4660,81 +4632,163 @@
                     </button>
                   </div>
                   <p class="font-sans text-xs text-(--el-text-secondary)">
-                    Pick one to three. With two or three, set each one’s share of the run below —
-                    they start even and must total 100%. You never choose a model — each category
-                    lists the models it serves as examples.
+                    Pick one to three. With two or three, drag each one’s share of the run below —
+                    they start even. You never choose a model — each category lists the models it
+                    serves as examples.
                   </p>
                   <span class="block font-mono text-[11px] text-(--el-text-secondary)"
                     >calculator.inputs.runCategoriesHelp (CHANGED) · calculator.inputs.categoryShare
                     (shipped, one pick only)</span
                   >
                 </div>
-                <fieldset class="flex flex-col gap-2" aria-describedby="shares-help">
+                <fieldset class="flex flex-col gap-3" aria-describedby="shares-help">
                   <legend class="font-sans text-sm font-medium text-(--el-text)">
                     Each category’s share of the run
                   </legend>
-                  <div class="grid items-start gap-3 grid-cols-2">
-                    <div class="flex flex-col gap-1.5">
-                      <label for="_R_19qa_" class="font-sans text-sm font-medium text-(--el-text)"
-                        >Balanced</label
-                      >
-                      <div
-                        data-surface="input"
-                        class="flex h-(--height-input) w-full items-center gap-2 rounded-(--radius-input) border px-(--spacing-input-x) transition-colors focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:ring-offset-2 focus-within:ring-offset-background bg-(--el-page-bg) border-(--el-input-border)"
-                      >
-                        <input
-                          id="_R_19qa_"
-                          aria-invalid="false"
-                          class="flex-1 bg-transparent font-sans text-sm outline-none text-(--el-text) placeholder:text-(--el-text-muted) disabled:cursor-not-allowed"
-                          inputmode="numeric"
-                          autocomplete="off"
-                          value="50"
-                        /><span aria-hidden="true" class="inline-flex text-(--el-icon-field)"
-                          >%</span
-                        >
-                      </div>
-                    </div>
-                    <div class="flex flex-col gap-1.5">
-                      <label for="_R_29qa_" class="font-sans text-sm font-medium text-(--el-text)"
-                        >Flagship</label
-                      >
-                      <div
-                        data-surface="input"
-                        class="flex h-(--height-input) w-full items-center gap-2 rounded-(--radius-input) border px-(--spacing-input-x) transition-colors focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:ring-offset-2 focus-within:ring-offset-background bg-(--el-page-bg) border-(--el-input-border)"
-                      >
-                        <input
-                          id="_R_29qa_"
-                          aria-invalid="false"
-                          class="flex-1 bg-transparent font-sans text-sm outline-none text-(--el-text) placeholder:text-(--el-text-muted) disabled:cursor-not-allowed"
-                          inputmode="numeric"
-                          autocomplete="off"
-                          value="50"
-                        /><span aria-hidden="true" class="inline-flex text-(--el-icon-field)"
-                          >%</span
-                        >
-                      </div>
-                    </div>
+                  <div class="flex flex-col gap-3">
+                    <label class="grid grid-cols-[6rem_1fr_3rem] items-center gap-3"
+                      ><span class="font-sans text-sm text-(--el-text)">Balanced</span
+                      ><input
+                        type="range"
+                        min="1"
+                        max="99"
+                        step="1"
+                        aria-valuetext="Balanced: 50% of the run"
+                        class="h-6 w-full cursor-grab"
+                        style="accent-color: var(--el-accent)"
+                        value="50"
+                      /><span
+                        class="text-right font-sans text-sm font-medium text-(--el-text-strong) tabular-nums"
+                        >50%</span
+                      ></label
+                    ><label class="grid grid-cols-[6rem_1fr_3rem] items-center gap-3"
+                      ><span class="font-sans text-sm text-(--el-text)">Flagship</span
+                      ><input
+                        type="range"
+                        min="1"
+                        max="99"
+                        step="1"
+                        aria-valuetext="Flagship: 50% of the run"
+                        class="h-6 w-full cursor-grab"
+                        style="accent-color: var(--el-accent)"
+                        value="50"
+                      /><span
+                        class="text-right font-sans text-sm font-medium text-(--el-text-strong) tabular-nums"
+                        >50%</span
+                      ></label
+                    >
+                  </div>
+                  <div
+                    class="flex h-2 w-full overflow-hidden rounded-full bg-(--el-muted)"
+                    aria-hidden="true"
+                  >
+                    <span
+                      style="
+                        width: 50%;
+                        background-color: var(--el-tint-sky);
+                        border-right: 2px solid var(--el-surface);
+                      "
+                    ></span
+                    ><span style="width: 50%; background-color: var(--el-tint-mint)"></span>
                   </div>
                   <p id="shares-help" class="font-sans text-xs text-(--el-text-secondary)">
-                    Whole percentages from 1 to 99. Adding or removing a category starts them even
-                    again.
-                  </p>
-                  <p role="status" class="font-sans text-xs text-(--el-text-secondary)">
-                    Shares total 100%.
+                    Drag a share and the others give or take the difference equally, so they always
+                    total 100%. Adding or removing a category starts them even again.
                   </p>
                   <span class="block font-mono text-[11px] text-(--el-text-secondary)"
-                    >calculator.inputs.sharesLabel · sharesHelp · sharesTotal (NEW) · at 100%, a
-                    quiet role=status line</span
+                    >calculator.inputs.sharesLabel · sharesHelp (NEW) · calculator.inputs.shareValue
+                    (NEW, the slider’s aria-valuetext) · a native range input per category, step 1,
+                    min 1</span
                   >
                 </fieldset>
-                <div class="flex flex-col gap-1">
-                  <div>
+                <div>
+                  <button
+                    type="submit"
+                    data-variant="primary"
+                    class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-md) px-(--spacing-btn-x)"
+                  >
+                    <span aria-hidden="true" class="inline-flex"
+                      ><svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-calculator h-4 w-4"
+                        aria-hidden="true"
+                      >
+                        <rect width="16" height="20" x="4" y="2" rx="2"></rect>
+                        <line x1="8" x2="16" y1="6" y2="6"></line>
+                        <line x1="16" x2="16" y1="14" y2="18"></line>
+                        <path d="M16 10h.01"></path>
+                        <path d="M12 10h.01"></path>
+                        <path d="M8 10h.01"></path>
+                        <path d="M12 14h.01"></path>
+                        <path d="M8 14h.01"></path>
+                        <path d="M12 18h.01"></path>
+                        <path d="M8 18h.01"></path></svg></span
+                    ><span>Estimate credits</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section
+        class="flex flex-col gap-3"
+        aria-label="3 · Two categories, Balanced dragged to 70 — Flagship gives the 20 and reads 30. With two, the other is always 100 minus the dragged one."
+      >
+        <h2 class="font-mono text-xs uppercase tracking-wide text-(--el-text-secondary)">
+          3 · Two categories, Balanced dragged to 70 — Flagship gives the 20 and reads 30. With two,
+          the other is always 100 minus the dragged one.
+        </h2>
+        <div
+          class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding)"
+        >
+          <div
+            class="rounded-(--radius-card) border border-(--el-border) p-(--spacing-card-padding) transition-shadow duration-(--transition-duration) bg-(--el-card)"
+            data-tilt=""
+            data-surface="card"
+          >
+            <div>
+              <div class="flex flex-col gap-4">
+                <p class="font-sans text-xs text-(--el-text-secondary)">
+                  … the two ranges, as shipped …
+                </p>
+                <div class="flex flex-col gap-2">
+                  <span class="font-sans text-sm font-medium text-(--el-text)"
+                    >Models the runner uses</span
+                  >
+                  <div
+                    class="grid gap-2 sm:grid-cols-3"
+                    role="group"
+                    aria-label="Models the runner uses"
+                  >
                     <button
-                      type="submit"
-                      data-variant="primary"
-                      class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-md) px-(--spacing-btn-x)"
+                      type="button"
+                      aria-pressed="false"
+                      class="flex min-w-0 flex-col items-start gap-0.5 rounded-(--radius-control) border px-(--spacing-control-x-12) py-(--spacing-control-y-8) text-left"
+                      style="border-color: var(--el-border); background-color: transparent"
                     >
-                      <span aria-hidden="true" class="inline-flex"
+                      <span
+                        class="flex items-center gap-1 font-sans text-sm font-medium text-(--el-text)"
+                        >Economy</span
+                      ><span class="font-sans text-xs break-words text-(--el-text-secondary)"
+                        >For example: claude-haiku-5-5, deepseek-v4-flash, gpt-5-nano</span
+                      ></button
+                    ><button
+                      type="button"
+                      aria-pressed="true"
+                      class="flex min-w-0 flex-col items-start gap-0.5 rounded-(--radius-control) border px-(--spacing-control-x-12) py-(--spacing-control-y-8) text-left"
+                      style="border-color: var(--el-accent); background-color: var(--el-surface)"
+                    >
+                      <span
+                        class="flex items-center gap-1 font-sans text-sm font-medium text-(--el-text)"
                         ><svg
                           xmlns="http://www.w3.org/2000/svg"
                           width="24"
@@ -4745,22 +4799,148 @@
                           stroke-width="2"
                           stroke-linecap="round"
                           stroke-linejoin="round"
-                          class="lucide lucide-calculator h-4 w-4"
+                          class="lucide lucide-check h-3.5 w-3.5 text-(--el-accent-on-surface)"
                           aria-hidden="true"
                         >
-                          <rect width="16" height="20" x="4" y="2" rx="2"></rect>
-                          <line x1="8" x2="16" y1="6" y2="6"></line>
-                          <line x1="16" x2="16" y1="14" y2="18"></line>
-                          <path d="M16 10h.01"></path>
-                          <path d="M12 10h.01"></path>
-                          <path d="M8 10h.01"></path>
-                          <path d="M12 14h.01"></path>
-                          <path d="M8 14h.01"></path>
-                          <path d="M12 18h.01"></path>
-                          <path d="M8 18h.01"></path></svg></span
-                      ><span>Estimate credits</span>
+                          <path d="M20 6 9 17l-5-5"></path></svg
+                        >Balanced</span
+                      ><span class="font-sans text-xs break-words text-(--el-text-secondary)"
+                        >For example: claude-sonnet-5-5, gpt-5-mini, glm-5</span
+                      ></button
+                    ><button
+                      type="button"
+                      aria-pressed="true"
+                      class="flex min-w-0 flex-col items-start gap-0.5 rounded-(--radius-control) border px-(--spacing-control-x-12) py-(--spacing-control-y-8) text-left"
+                      style="border-color: var(--el-accent); background-color: var(--el-surface)"
+                    >
+                      <span
+                        class="flex items-center gap-1 font-sans text-sm font-medium text-(--el-text)"
+                        ><svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="24"
+                          height="24"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          class="lucide lucide-check h-3.5 w-3.5 text-(--el-accent-on-surface)"
+                          aria-hidden="true"
+                        >
+                          <path d="M20 6 9 17l-5-5"></path></svg
+                        >Flagship</span
+                      ><span class="font-sans text-xs break-words text-(--el-text-secondary)"
+                        >For example: claude-fable-5-1, claude-opus-5-5, gpt-5.6-sol</span
+                      >
                     </button>
                   </div>
+                  <p class="font-sans text-xs text-(--el-text-secondary)">
+                    Pick one to three. With two or three, drag each one’s share of the run below —
+                    they start even. You never choose a model — each category lists the models it
+                    serves as examples.
+                  </p>
+                  <span class="block font-mono text-[11px] text-(--el-text-secondary)"
+                    >calculator.inputs.runCategoriesHelp (CHANGED) · calculator.inputs.categoryShare
+                    (shipped, one pick only)</span
+                  >
+                </div>
+                <fieldset class="flex flex-col gap-3" aria-describedby="shares-help">
+                  <legend class="font-sans text-sm font-medium text-(--el-text)">
+                    Each category’s share of the run
+                  </legend>
+                  <div class="flex flex-col gap-3">
+                    <label class="grid grid-cols-[6rem_1fr_3rem] items-center gap-3"
+                      ><span class="font-sans text-sm text-(--el-text)">Balanced</span
+                      ><input
+                        type="range"
+                        min="1"
+                        max="99"
+                        step="1"
+                        aria-valuetext="Balanced: 70% of the run"
+                        class="h-6 w-full cursor-grab"
+                        style="
+                          accent-color: var(--el-accent);
+                          outline: 2px solid var(--focus-ring-color);
+                          outline-offset: 2px;
+                        "
+                        value="70"
+                      /><span
+                        class="text-right font-sans text-sm font-medium text-(--el-text-strong) tabular-nums"
+                        >70%</span
+                      ></label
+                    ><label class="grid grid-cols-[6rem_1fr_3rem] items-center gap-3"
+                      ><span class="font-sans text-sm text-(--el-text)">Flagship</span
+                      ><input
+                        type="range"
+                        min="1"
+                        max="99"
+                        step="1"
+                        aria-valuetext="Flagship: 30% of the run"
+                        class="h-6 w-full cursor-grab"
+                        style="accent-color: var(--el-accent)"
+                        value="30"
+                      /><span
+                        class="text-right font-sans text-sm font-medium text-(--el-text-strong) tabular-nums"
+                        >30%</span
+                      ></label
+                    >
+                  </div>
+                  <div
+                    class="flex h-2 w-full overflow-hidden rounded-full bg-(--el-muted)"
+                    aria-hidden="true"
+                  >
+                    <span
+                      style="
+                        width: 70%;
+                        background-color: var(--el-tint-sky);
+                        border-right: 2px solid var(--el-surface);
+                      "
+                    ></span
+                    ><span style="width: 30%; background-color: var(--el-tint-mint)"></span>
+                  </div>
+                  <p id="shares-help" class="font-sans text-xs text-(--el-text-secondary)">
+                    Drag a share and the others give or take the difference equally, so they always
+                    total 100%. Adding or removing a category starts them even again.
+                  </p>
+                  <span class="block font-mono text-[11px] text-(--el-text-secondary)"
+                    >calculator.inputs.sharesLabel · sharesHelp (NEW) · calculator.inputs.shareValue
+                    (NEW, the slider’s aria-valuetext) · a native range input per category, step 1,
+                    min 1</span
+                  >
+                </fieldset>
+                <div>
+                  <button
+                    type="submit"
+                    data-variant="primary"
+                    class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-md) px-(--spacing-btn-x)"
+                  >
+                    <span aria-hidden="true" class="inline-flex"
+                      ><svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-calculator h-4 w-4"
+                        aria-hidden="true"
+                      >
+                        <rect width="16" height="20" x="4" y="2" rx="2"></rect>
+                        <line x1="8" x2="16" y1="6" y2="6"></line>
+                        <line x1="16" x2="16" y1="14" y2="18"></line>
+                        <path d="M16 10h.01"></path>
+                        <path d="M12 10h.01"></path>
+                        <path d="M8 10h.01"></path>
+                        <path d="M12 14h.01"></path>
+                        <path d="M8 14h.01"></path>
+                        <path d="M12 18h.01"></path>
+                        <path d="M8 18h.01"></path></svg></span
+                    ><span>Estimate credits</span>
+                  </button>
                 </div>
               </div>
             </div>
@@ -4769,10 +4949,10 @@
       </section>
       <section
         class="flex flex-col gap-3"
-        aria-label="3 · Economy added as a third — the shares start even again: 34 / 33 / 33, the remainder on the first in the tiles’ order."
+        aria-label="4 · Economy added as a third — the shares start even again: 34 / 33 / 33, the remainder on the first in the tiles’ order."
       >
         <h2 class="font-mono text-xs uppercase tracking-wide text-(--el-text-secondary)">
-          3 · Economy added as a third — the shares start even again: 34 / 33 / 33, the remainder on
+          4 · Economy added as a third — the shares start even again: 34 / 33 / 33, the remainder on
           the first in the tiles’ order.
         </h2>
         <div
@@ -4878,127 +5058,129 @@
                     </button>
                   </div>
                   <p class="font-sans text-xs text-(--el-text-secondary)">
-                    Pick one to three. With two or three, set each one’s share of the run below —
-                    they start even and must total 100%. You never choose a model — each category
-                    lists the models it serves as examples.
+                    Pick one to three. With two or three, drag each one’s share of the run below —
+                    they start even. You never choose a model — each category lists the models it
+                    serves as examples.
                   </p>
                   <span class="block font-mono text-[11px] text-(--el-text-secondary)"
                     >calculator.inputs.runCategoriesHelp (CHANGED) · calculator.inputs.categoryShare
                     (shipped, one pick only)</span
                   >
                 </div>
-                <fieldset class="flex flex-col gap-2" aria-describedby="shares-help">
+                <fieldset class="flex flex-col gap-3" aria-describedby="shares-help">
                   <legend class="font-sans text-sm font-medium text-(--el-text)">
                     Each category’s share of the run
                   </legend>
-                  <div class="grid items-start gap-3 grid-cols-3">
-                    <div class="flex flex-col gap-1.5">
-                      <label for="_R_19qe_" class="font-sans text-sm font-medium text-(--el-text)"
-                        >Economy</label
-                      >
-                      <div
-                        data-surface="input"
-                        class="flex h-(--height-input) w-full items-center gap-2 rounded-(--radius-input) border px-(--spacing-input-x) transition-colors focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:ring-offset-2 focus-within:ring-offset-background bg-(--el-page-bg) border-(--el-input-border)"
-                      >
-                        <input
-                          id="_R_19qe_"
-                          aria-invalid="false"
-                          class="flex-1 bg-transparent font-sans text-sm outline-none text-(--el-text) placeholder:text-(--el-text-muted) disabled:cursor-not-allowed"
-                          inputmode="numeric"
-                          autocomplete="off"
-                          value="34"
-                        /><span aria-hidden="true" class="inline-flex text-(--el-icon-field)"
-                          >%</span
-                        >
-                      </div>
-                    </div>
-                    <div class="flex flex-col gap-1.5">
-                      <label for="_R_29qe_" class="font-sans text-sm font-medium text-(--el-text)"
-                        >Balanced</label
-                      >
-                      <div
-                        data-surface="input"
-                        class="flex h-(--height-input) w-full items-center gap-2 rounded-(--radius-input) border px-(--spacing-input-x) transition-colors focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:ring-offset-2 focus-within:ring-offset-background bg-(--el-page-bg) border-(--el-input-border)"
-                      >
-                        <input
-                          id="_R_29qe_"
-                          aria-invalid="false"
-                          class="flex-1 bg-transparent font-sans text-sm outline-none text-(--el-text) placeholder:text-(--el-text-muted) disabled:cursor-not-allowed"
-                          inputmode="numeric"
-                          autocomplete="off"
-                          value="33"
-                        /><span aria-hidden="true" class="inline-flex text-(--el-icon-field)"
-                          >%</span
-                        >
-                      </div>
-                    </div>
-                    <div class="flex flex-col gap-1.5">
-                      <label for="_R_39qe_" class="font-sans text-sm font-medium text-(--el-text)"
-                        >Flagship</label
-                      >
-                      <div
-                        data-surface="input"
-                        class="flex h-(--height-input) w-full items-center gap-2 rounded-(--radius-input) border px-(--spacing-input-x) transition-colors focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:ring-offset-2 focus-within:ring-offset-background bg-(--el-page-bg) border-(--el-input-border)"
-                      >
-                        <input
-                          id="_R_39qe_"
-                          aria-invalid="false"
-                          class="flex-1 bg-transparent font-sans text-sm outline-none text-(--el-text) placeholder:text-(--el-text-muted) disabled:cursor-not-allowed"
-                          inputmode="numeric"
-                          autocomplete="off"
-                          value="33"
-                        /><span aria-hidden="true" class="inline-flex text-(--el-icon-field)"
-                          >%</span
-                        >
-                      </div>
-                    </div>
+                  <div class="flex flex-col gap-3">
+                    <label class="grid grid-cols-[6rem_1fr_3rem] items-center gap-3"
+                      ><span class="font-sans text-sm text-(--el-text)">Economy</span
+                      ><input
+                        type="range"
+                        min="1"
+                        max="98"
+                        step="1"
+                        aria-valuetext="Economy: 34% of the run"
+                        class="h-6 w-full cursor-grab"
+                        style="accent-color: var(--el-accent)"
+                        value="34"
+                      /><span
+                        class="text-right font-sans text-sm font-medium text-(--el-text-strong) tabular-nums"
+                        >34%</span
+                      ></label
+                    ><label class="grid grid-cols-[6rem_1fr_3rem] items-center gap-3"
+                      ><span class="font-sans text-sm text-(--el-text)">Balanced</span
+                      ><input
+                        type="range"
+                        min="1"
+                        max="98"
+                        step="1"
+                        aria-valuetext="Balanced: 33% of the run"
+                        class="h-6 w-full cursor-grab"
+                        style="accent-color: var(--el-accent)"
+                        value="33"
+                      /><span
+                        class="text-right font-sans text-sm font-medium text-(--el-text-strong) tabular-nums"
+                        >33%</span
+                      ></label
+                    ><label class="grid grid-cols-[6rem_1fr_3rem] items-center gap-3"
+                      ><span class="font-sans text-sm text-(--el-text)">Flagship</span
+                      ><input
+                        type="range"
+                        min="1"
+                        max="98"
+                        step="1"
+                        aria-valuetext="Flagship: 33% of the run"
+                        class="h-6 w-full cursor-grab"
+                        style="accent-color: var(--el-accent)"
+                        value="33"
+                      /><span
+                        class="text-right font-sans text-sm font-medium text-(--el-text-strong) tabular-nums"
+                        >33%</span
+                      ></label
+                    >
+                  </div>
+                  <div
+                    class="flex h-2 w-full overflow-hidden rounded-full bg-(--el-muted)"
+                    aria-hidden="true"
+                  >
+                    <span
+                      style="
+                        width: 34%;
+                        background-color: var(--el-tint-sky);
+                        border-right: 2px solid var(--el-surface);
+                      "
+                    ></span
+                    ><span
+                      style="
+                        width: 33%;
+                        background-color: var(--el-tint-mint);
+                        border-right: 2px solid var(--el-surface);
+                      "
+                    ></span
+                    ><span style="width: 33%; background-color: var(--el-tint-lavender)"></span>
                   </div>
                   <p id="shares-help" class="font-sans text-xs text-(--el-text-secondary)">
-                    Whole percentages from 1 to 99. Adding or removing a category starts them even
-                    again.
-                  </p>
-                  <p role="status" class="font-sans text-xs text-(--el-text-secondary)">
-                    Shares total 100%.
+                    Drag a share and the others give or take the difference equally, so they always
+                    total 100%. Adding or removing a category starts them even again.
                   </p>
                   <span class="block font-mono text-[11px] text-(--el-text-secondary)"
-                    >calculator.inputs.sharesLabel · sharesHelp · sharesTotal (NEW) · at 100%, a
-                    quiet role=status line</span
+                    >calculator.inputs.sharesLabel · sharesHelp (NEW) · calculator.inputs.shareValue
+                    (NEW, the slider’s aria-valuetext) · a native range input per category, step 1,
+                    min 1</span
                   >
                 </fieldset>
-                <div class="flex flex-col gap-1">
-                  <div>
-                    <button
-                      type="submit"
-                      data-variant="primary"
-                      class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-md) px-(--spacing-btn-x)"
-                    >
-                      <span aria-hidden="true" class="inline-flex"
-                        ><svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="24"
-                          height="24"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          class="lucide lucide-calculator h-4 w-4"
-                          aria-hidden="true"
-                        >
-                          <rect width="16" height="20" x="4" y="2" rx="2"></rect>
-                          <line x1="8" x2="16" y1="6" y2="6"></line>
-                          <line x1="16" x2="16" y1="14" y2="18"></line>
-                          <path d="M16 10h.01"></path>
-                          <path d="M12 10h.01"></path>
-                          <path d="M8 10h.01"></path>
-                          <path d="M12 14h.01"></path>
-                          <path d="M8 14h.01"></path>
-                          <path d="M12 18h.01"></path>
-                          <path d="M8 18h.01"></path></svg></span
-                      ><span>Estimate credits</span>
-                    </button>
-                  </div>
+                <div>
+                  <button
+                    type="submit"
+                    data-variant="primary"
+                    class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-md) px-(--spacing-btn-x)"
+                  >
+                    <span aria-hidden="true" class="inline-flex"
+                      ><svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-calculator h-4 w-4"
+                        aria-hidden="true"
+                      >
+                        <rect width="16" height="20" x="4" y="2" rx="2"></rect>
+                        <line x1="8" x2="16" y1="6" y2="6"></line>
+                        <line x1="16" x2="16" y1="14" y2="18"></line>
+                        <path d="M16 10h.01"></path>
+                        <path d="M12 10h.01"></path>
+                        <path d="M8 10h.01"></path>
+                        <path d="M12 14h.01"></path>
+                        <path d="M8 14h.01"></path>
+                        <path d="M12 18h.01"></path>
+                        <path d="M8 18h.01"></path></svg></span
+                    ><span>Estimate credits</span>
+                  </button>
                 </div>
               </div>
             </div>
@@ -5007,11 +5189,12 @@
       </section>
       <section
         class="flex flex-col gap-3"
-        aria-label="4 · The owner set 70 / 20 — the shares total 90%: the line says by how much, and Estimate credits is disabled."
+        aria-label="5 · Balanced dragged from 33 to 52 — the other two give the 19 equally, the odd 1 from the first in the tiles’ order: 24 / 52 / 24. The total stays 100%, so Estimate credits is never disabled."
       >
         <h2 class="font-mono text-xs uppercase tracking-wide text-(--el-text-secondary)">
-          4 · The owner set 70 / 20 — the shares total 90%: the line says by how much, and Estimate
-          credits is disabled.
+          5 · Balanced dragged from 33 to 52 — the other two give the 19 equally, the odd 1 from the
+          first in the tiles’ order: 24 / 52 / 24. The total stays 100%, so Estimate credits is
+          never disabled.
         </h2>
         <div
           class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding)"
@@ -5037,12 +5220,26 @@
                   >
                     <button
                       type="button"
-                      aria-pressed="false"
+                      aria-pressed="true"
                       class="flex min-w-0 flex-col items-start gap-0.5 rounded-(--radius-control) border px-(--spacing-control-x-12) py-(--spacing-control-y-8) text-left"
-                      style="border-color: var(--el-border); background-color: transparent"
+                      style="border-color: var(--el-accent); background-color: var(--el-surface)"
                     >
                       <span
                         class="flex items-center gap-1 font-sans text-sm font-medium text-(--el-text)"
+                        ><svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="24"
+                          height="24"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          class="lucide lucide-check h-3.5 w-3.5 text-(--el-accent-on-surface)"
+                          aria-hidden="true"
+                        >
+                          <path d="M20 6 9 17l-5-5"></path></svg
                         >Economy</span
                       ><span class="font-sans text-xs break-words text-(--el-text-secondary)"
                         >For example: claude-haiku-5-5, deepseek-v4-flash, gpt-5-nano</span
@@ -5102,111 +5299,133 @@
                     </button>
                   </div>
                   <p class="font-sans text-xs text-(--el-text-secondary)">
-                    Pick one to three. With two or three, set each one’s share of the run below —
-                    they start even and must total 100%. You never choose a model — each category
-                    lists the models it serves as examples.
+                    Pick one to three. With two or three, drag each one’s share of the run below —
+                    they start even. You never choose a model — each category lists the models it
+                    serves as examples.
                   </p>
                   <span class="block font-mono text-[11px] text-(--el-text-secondary)"
                     >calculator.inputs.runCategoriesHelp (CHANGED) · calculator.inputs.categoryShare
                     (shipped, one pick only)</span
                   >
                 </div>
-                <fieldset class="flex flex-col gap-2" aria-describedby="shares-help">
+                <fieldset class="flex flex-col gap-3" aria-describedby="shares-help">
                   <legend class="font-sans text-sm font-medium text-(--el-text)">
                     Each category’s share of the run
                   </legend>
-                  <div class="grid items-start gap-3 grid-cols-2">
-                    <div class="flex flex-col gap-1.5">
-                      <label for="_R_19qi_" class="font-sans text-sm font-medium text-(--el-text)"
-                        >Balanced</label
-                      >
-                      <div
-                        data-surface="input"
-                        class="flex h-(--height-input) w-full items-center gap-2 rounded-(--radius-input) border px-(--spacing-input-x) transition-colors focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:ring-offset-2 focus-within:ring-offset-background bg-(--el-page-bg) border-(--el-input-border)"
-                      >
-                        <input
-                          id="_R_19qi_"
-                          aria-invalid="true"
-                          class="flex-1 bg-transparent font-sans text-sm outline-none text-(--el-text) placeholder:text-(--el-text-muted) disabled:cursor-not-allowed"
-                          inputmode="numeric"
-                          autocomplete="off"
-                          value="70"
-                        /><span aria-hidden="true" class="inline-flex text-(--el-icon-field)"
-                          >%</span
-                        >
-                      </div>
-                    </div>
-                    <div class="flex flex-col gap-1.5">
-                      <label for="_R_29qi_" class="font-sans text-sm font-medium text-(--el-text)"
-                        >Flagship</label
-                      >
-                      <div
-                        data-surface="input"
-                        class="flex h-(--height-input) w-full items-center gap-2 rounded-(--radius-input) border px-(--spacing-input-x) transition-colors focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:ring-offset-2 focus-within:ring-offset-background bg-(--el-page-bg) border-(--el-input-border)"
-                      >
-                        <input
-                          id="_R_29qi_"
-                          aria-invalid="true"
-                          class="flex-1 bg-transparent font-sans text-sm outline-none text-(--el-text) placeholder:text-(--el-text-muted) disabled:cursor-not-allowed"
-                          inputmode="numeric"
-                          autocomplete="off"
-                          value="20"
-                        /><span aria-hidden="true" class="inline-flex text-(--el-icon-field)"
-                          >%</span
-                        >
-                      </div>
-                    </div>
+                  <div class="flex flex-col gap-3">
+                    <label class="grid grid-cols-[6rem_1fr_3rem] items-center gap-3"
+                      ><span class="font-sans text-sm text-(--el-text)">Economy</span
+                      ><input
+                        type="range"
+                        min="1"
+                        max="98"
+                        step="1"
+                        aria-valuetext="Economy: 24% of the run"
+                        class="h-6 w-full cursor-grab"
+                        style="accent-color: var(--el-accent)"
+                        value="24"
+                      /><span
+                        class="text-right font-sans text-sm font-medium text-(--el-text-strong) tabular-nums"
+                        >24%</span
+                      ></label
+                    ><label class="grid grid-cols-[6rem_1fr_3rem] items-center gap-3"
+                      ><span class="font-sans text-sm text-(--el-text)">Balanced</span
+                      ><input
+                        type="range"
+                        min="1"
+                        max="98"
+                        step="1"
+                        aria-valuetext="Balanced: 52% of the run"
+                        class="h-6 w-full cursor-grab"
+                        style="
+                          accent-color: var(--el-accent);
+                          outline: 2px solid var(--focus-ring-color);
+                          outline-offset: 2px;
+                        "
+                        value="52"
+                      /><span
+                        class="text-right font-sans text-sm font-medium text-(--el-text-strong) tabular-nums"
+                        >52%</span
+                      ></label
+                    ><label class="grid grid-cols-[6rem_1fr_3rem] items-center gap-3"
+                      ><span class="font-sans text-sm text-(--el-text)">Flagship</span
+                      ><input
+                        type="range"
+                        min="1"
+                        max="98"
+                        step="1"
+                        aria-valuetext="Flagship: 24% of the run"
+                        class="h-6 w-full cursor-grab"
+                        style="accent-color: var(--el-accent)"
+                        value="24"
+                      /><span
+                        class="text-right font-sans text-sm font-medium text-(--el-text-strong) tabular-nums"
+                        >24%</span
+                      ></label
+                    >
+                  </div>
+                  <div
+                    class="flex h-2 w-full overflow-hidden rounded-full bg-(--el-muted)"
+                    aria-hidden="true"
+                  >
+                    <span
+                      style="
+                        width: 24%;
+                        background-color: var(--el-tint-sky);
+                        border-right: 2px solid var(--el-surface);
+                      "
+                    ></span
+                    ><span
+                      style="
+                        width: 52%;
+                        background-color: var(--el-tint-mint);
+                        border-right: 2px solid var(--el-surface);
+                      "
+                    ></span
+                    ><span style="width: 24%; background-color: var(--el-tint-lavender)"></span>
                   </div>
                   <p id="shares-help" class="font-sans text-xs text-(--el-text-secondary)">
-                    Whole percentages from 1 to 99. Adding or removing a category starts them even
-                    again.
-                  </p>
-                  <p role="alert" class="font-sans text-xs text-(--el-danger-on-surface)">
-                    Shares total 90% — add 10%.
+                    Drag a share and the others give or take the difference equally, so they always
+                    total 100%. Adding or removing a category starts them even again.
                   </p>
                   <span class="block font-mono text-[11px] text-(--el-text-secondary)"
-                    >calculator.inputs.sharesLabel · sharesHelp · sharesTotal (NEW) ·
-                    calculator.errors.sharesUnder (NEW)</span
+                    >calculator.inputs.sharesLabel · sharesHelp (NEW) · calculator.inputs.shareValue
+                    (NEW, the slider’s aria-valuetext) · a native range input per category, step 1,
+                    min 1</span
                   >
                 </fieldset>
-                <div class="flex flex-col gap-1">
-                  <div>
-                    <button
-                      type="submit"
-                      data-variant="primary"
-                      class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-md) px-(--spacing-btn-x)"
-                      disabled=""
-                    >
-                      <span aria-hidden="true" class="inline-flex"
-                        ><svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="24"
-                          height="24"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          class="lucide lucide-calculator h-4 w-4"
-                          aria-hidden="true"
-                        >
-                          <rect width="16" height="20" x="4" y="2" rx="2"></rect>
-                          <line x1="8" x2="16" y1="6" y2="6"></line>
-                          <line x1="16" x2="16" y1="14" y2="18"></line>
-                          <path d="M16 10h.01"></path>
-                          <path d="M12 10h.01"></path>
-                          <path d="M8 10h.01"></path>
-                          <path d="M12 14h.01"></path>
-                          <path d="M8 14h.01"></path>
-                          <path d="M12 18h.01"></path>
-                          <path d="M8 18h.01"></path></svg></span
-                      ><span>Estimate credits</span>
-                    </button>
-                  </div>
-                  <span class="block font-mono text-[11px] text-(--el-text-secondary)"
-                    >disabled while the shares do not total 100% — nothing is sent</span
+                <div>
+                  <button
+                    type="submit"
+                    data-variant="primary"
+                    class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-md) px-(--spacing-btn-x)"
                   >
+                    <span aria-hidden="true" class="inline-flex"
+                      ><svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-calculator h-4 w-4"
+                        aria-hidden="true"
+                      >
+                        <rect width="16" height="20" x="4" y="2" rx="2"></rect>
+                        <line x1="8" x2="16" y1="6" y2="6"></line>
+                        <line x1="16" x2="16" y1="14" y2="18"></line>
+                        <path d="M16 10h.01"></path>
+                        <path d="M12 10h.01"></path>
+                        <path d="M8 10h.01"></path>
+                        <path d="M12 14h.01"></path>
+                        <path d="M8 14h.01"></path>
+                        <path d="M12 18h.01"></path>
+                        <path d="M8 18h.01"></path></svg></span
+                    ><span>Estimate credits</span>
+                  </button>
                 </div>
               </div>
             </div>
@@ -5215,10 +5434,12 @@
       </section>
       <section
         class="flex flex-col gap-3"
-        aria-label="5 · 70 / 40 — the shares total 110%: the same line, saying how much to take away."
+        aria-label="6 · A share at the floor — from 30 / 69 / 1, Balanced dragged to 79: Flagship cannot go below 1%, so Economy gives all 10: 20 / 79 / 1. A slider stops at 100 minus 1% for each other category."
       >
         <h2 class="font-mono text-xs uppercase tracking-wide text-(--el-text-secondary)">
-          5 · 70 / 40 — the shares total 110%: the same line, saying how much to take away.
+          6 · A share at the floor — from 30 / 69 / 1, Balanced dragged to 79: Flagship cannot go
+          below 1%, so Economy gives all 10: 20 / 79 / 1. A slider stops at 100 minus 1% for each
+          other category.
         </h2>
         <div
           class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding)"
@@ -5244,12 +5465,26 @@
                   >
                     <button
                       type="button"
-                      aria-pressed="false"
+                      aria-pressed="true"
                       class="flex min-w-0 flex-col items-start gap-0.5 rounded-(--radius-control) border px-(--spacing-control-x-12) py-(--spacing-control-y-8) text-left"
-                      style="border-color: var(--el-border); background-color: transparent"
+                      style="border-color: var(--el-accent); background-color: var(--el-surface)"
                     >
                       <span
                         class="flex items-center gap-1 font-sans text-sm font-medium text-(--el-text)"
+                        ><svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="24"
+                          height="24"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          class="lucide lucide-check h-3.5 w-3.5 text-(--el-accent-on-surface)"
+                          aria-hidden="true"
+                        >
+                          <path d="M20 6 9 17l-5-5"></path></svg
                         >Economy</span
                       ><span class="font-sans text-xs break-words text-(--el-text-secondary)"
                         >For example: claude-haiku-5-5, deepseek-v4-flash, gpt-5-nano</span
@@ -5309,111 +5544,133 @@
                     </button>
                   </div>
                   <p class="font-sans text-xs text-(--el-text-secondary)">
-                    Pick one to three. With two or three, set each one’s share of the run below —
-                    they start even and must total 100%. You never choose a model — each category
-                    lists the models it serves as examples.
+                    Pick one to three. With two or three, drag each one’s share of the run below —
+                    they start even. You never choose a model — each category lists the models it
+                    serves as examples.
                   </p>
                   <span class="block font-mono text-[11px] text-(--el-text-secondary)"
                     >calculator.inputs.runCategoriesHelp (CHANGED) · calculator.inputs.categoryShare
                     (shipped, one pick only)</span
                   >
                 </div>
-                <fieldset class="flex flex-col gap-2" aria-describedby="shares-help">
+                <fieldset class="flex flex-col gap-3" aria-describedby="shares-help">
                   <legend class="font-sans text-sm font-medium text-(--el-text)">
                     Each category’s share of the run
                   </legend>
-                  <div class="grid items-start gap-3 grid-cols-2">
-                    <div class="flex flex-col gap-1.5">
-                      <label for="_R_19qm_" class="font-sans text-sm font-medium text-(--el-text)"
-                        >Balanced</label
-                      >
-                      <div
-                        data-surface="input"
-                        class="flex h-(--height-input) w-full items-center gap-2 rounded-(--radius-input) border px-(--spacing-input-x) transition-colors focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:ring-offset-2 focus-within:ring-offset-background bg-(--el-page-bg) border-(--el-input-border)"
-                      >
-                        <input
-                          id="_R_19qm_"
-                          aria-invalid="true"
-                          class="flex-1 bg-transparent font-sans text-sm outline-none text-(--el-text) placeholder:text-(--el-text-muted) disabled:cursor-not-allowed"
-                          inputmode="numeric"
-                          autocomplete="off"
-                          value="70"
-                        /><span aria-hidden="true" class="inline-flex text-(--el-icon-field)"
-                          >%</span
-                        >
-                      </div>
-                    </div>
-                    <div class="flex flex-col gap-1.5">
-                      <label for="_R_29qm_" class="font-sans text-sm font-medium text-(--el-text)"
-                        >Flagship</label
-                      >
-                      <div
-                        data-surface="input"
-                        class="flex h-(--height-input) w-full items-center gap-2 rounded-(--radius-input) border px-(--spacing-input-x) transition-colors focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:ring-offset-2 focus-within:ring-offset-background bg-(--el-page-bg) border-(--el-input-border)"
-                      >
-                        <input
-                          id="_R_29qm_"
-                          aria-invalid="true"
-                          class="flex-1 bg-transparent font-sans text-sm outline-none text-(--el-text) placeholder:text-(--el-text-muted) disabled:cursor-not-allowed"
-                          inputmode="numeric"
-                          autocomplete="off"
-                          value="40"
-                        /><span aria-hidden="true" class="inline-flex text-(--el-icon-field)"
-                          >%</span
-                        >
-                      </div>
-                    </div>
+                  <div class="flex flex-col gap-3">
+                    <label class="grid grid-cols-[6rem_1fr_3rem] items-center gap-3"
+                      ><span class="font-sans text-sm text-(--el-text)">Economy</span
+                      ><input
+                        type="range"
+                        min="1"
+                        max="98"
+                        step="1"
+                        aria-valuetext="Economy: 20% of the run"
+                        class="h-6 w-full cursor-grab"
+                        style="accent-color: var(--el-accent)"
+                        value="20"
+                      /><span
+                        class="text-right font-sans text-sm font-medium text-(--el-text-strong) tabular-nums"
+                        >20%</span
+                      ></label
+                    ><label class="grid grid-cols-[6rem_1fr_3rem] items-center gap-3"
+                      ><span class="font-sans text-sm text-(--el-text)">Balanced</span
+                      ><input
+                        type="range"
+                        min="1"
+                        max="98"
+                        step="1"
+                        aria-valuetext="Balanced: 79% of the run"
+                        class="h-6 w-full cursor-grab"
+                        style="
+                          accent-color: var(--el-accent);
+                          outline: 2px solid var(--focus-ring-color);
+                          outline-offset: 2px;
+                        "
+                        value="79"
+                      /><span
+                        class="text-right font-sans text-sm font-medium text-(--el-text-strong) tabular-nums"
+                        >79%</span
+                      ></label
+                    ><label class="grid grid-cols-[6rem_1fr_3rem] items-center gap-3"
+                      ><span class="font-sans text-sm text-(--el-text)">Flagship</span
+                      ><input
+                        type="range"
+                        min="1"
+                        max="98"
+                        step="1"
+                        aria-valuetext="Flagship: 1% of the run"
+                        class="h-6 w-full cursor-grab"
+                        style="accent-color: var(--el-accent)"
+                        value="1"
+                      /><span
+                        class="text-right font-sans text-sm font-medium text-(--el-text-strong) tabular-nums"
+                        >1%</span
+                      ></label
+                    >
+                  </div>
+                  <div
+                    class="flex h-2 w-full overflow-hidden rounded-full bg-(--el-muted)"
+                    aria-hidden="true"
+                  >
+                    <span
+                      style="
+                        width: 20%;
+                        background-color: var(--el-tint-sky);
+                        border-right: 2px solid var(--el-surface);
+                      "
+                    ></span
+                    ><span
+                      style="
+                        width: 79%;
+                        background-color: var(--el-tint-mint);
+                        border-right: 2px solid var(--el-surface);
+                      "
+                    ></span
+                    ><span style="width: 1%; background-color: var(--el-tint-lavender)"></span>
                   </div>
                   <p id="shares-help" class="font-sans text-xs text-(--el-text-secondary)">
-                    Whole percentages from 1 to 99. Adding or removing a category starts them even
-                    again.
-                  </p>
-                  <p role="alert" class="font-sans text-xs text-(--el-danger-on-surface)">
-                    Shares total 110% — take away 10%.
+                    Drag a share and the others give or take the difference equally, so they always
+                    total 100%. Adding or removing a category starts them even again.
                   </p>
                   <span class="block font-mono text-[11px] text-(--el-text-secondary)"
-                    >calculator.inputs.sharesLabel · sharesHelp · sharesTotal (NEW) ·
-                    calculator.errors.sharesOver (NEW)</span
+                    >calculator.inputs.sharesLabel · sharesHelp (NEW) · calculator.inputs.shareValue
+                    (NEW, the slider’s aria-valuetext) · a native range input per category, step 1,
+                    min 1</span
                   >
                 </fieldset>
-                <div class="flex flex-col gap-1">
-                  <div>
-                    <button
-                      type="submit"
-                      data-variant="primary"
-                      class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-md) px-(--spacing-btn-x)"
-                      disabled=""
-                    >
-                      <span aria-hidden="true" class="inline-flex"
-                        ><svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="24"
-                          height="24"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          class="lucide lucide-calculator h-4 w-4"
-                          aria-hidden="true"
-                        >
-                          <rect width="16" height="20" x="4" y="2" rx="2"></rect>
-                          <line x1="8" x2="16" y1="6" y2="6"></line>
-                          <line x1="16" x2="16" y1="14" y2="18"></line>
-                          <path d="M16 10h.01"></path>
-                          <path d="M12 10h.01"></path>
-                          <path d="M8 10h.01"></path>
-                          <path d="M12 14h.01"></path>
-                          <path d="M8 14h.01"></path>
-                          <path d="M12 18h.01"></path>
-                          <path d="M8 18h.01"></path></svg></span
-                      ><span>Estimate credits</span>
-                    </button>
-                  </div>
-                  <span class="block font-mono text-[11px] text-(--el-text-secondary)"
-                    >disabled while the shares do not total 100% — nothing is sent</span
+                <div>
+                  <button
+                    type="submit"
+                    data-variant="primary"
+                    class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-md) px-(--spacing-btn-x)"
                   >
+                    <span aria-hidden="true" class="inline-flex"
+                      ><svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-calculator h-4 w-4"
+                        aria-hidden="true"
+                      >
+                        <rect width="16" height="20" x="4" y="2" rx="2"></rect>
+                        <line x1="8" x2="16" y1="6" y2="6"></line>
+                        <line x1="16" x2="16" y1="14" y2="18"></line>
+                        <path d="M16 10h.01"></path>
+                        <path d="M12 10h.01"></path>
+                        <path d="M8 10h.01"></path>
+                        <path d="M12 14h.01"></path>
+                        <path d="M8 14h.01"></path>
+                        <path d="M12 18h.01"></path>
+                        <path d="M8 18h.01"></path></svg></span
+                    ><span>Estimate credits</span>
+                  </button>
                 </div>
               </div>
             </div>
@@ -5422,10 +5679,10 @@
       </section>
       <section
         class="flex flex-col gap-3"
-        aria-label='6 · The answer to 70 / 30 — the split line states the shares the owner set, in place of the "split evenly" sentence.'
+        aria-label='7 · The answer to 70 / 30 — the split line states the shares the owner set, in place of the "split evenly" sentence.'
       >
         <h2 class="font-mono text-xs uppercase tracking-wide text-(--el-text-secondary)">
-          6 · The answer to 70 / 30 — the split line states the shares the owner set, in place of
+          7 · The answer to 70 / 30 — the split line states the shares the owner set, in place of
           the &quot;split evenly&quot; sentence.
         </h2>
         <div
@@ -5471,10 +5728,10 @@
       </section>
       <section
         class="flex flex-col gap-3"
-        aria-label="7 · The answer with one category — unchanged: calculator.split.one."
+        aria-label="8 · The answer with one category — unchanged: calculator.split.one."
       >
         <h2 class="font-mono text-xs uppercase tracking-wide text-(--el-text-secondary)">
-          7 · The answer with one category — unchanged: calculator.split.one.
+          8 · The answer with one category — unchanged: calculator.split.one.
         </h2>
         <div
           class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding)"
