@@ -3,13 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { ToastProvider } from '@/components/ui/Toast';
-import { BILLING_CATALOG, type AiPlanCatalogEntry } from '@/lib/billing/catalog';
+import { BILLING_CATALOG } from '@/lib/billing/catalog';
 import type { BillingStatusDTO } from '@/lib/dto/billing';
 import type { CiEntitlementStateDTO } from '@/lib/dto/ciAllowance';
-import {
-  BillingClient,
-  ladderLine,
-} from '@/app/(authed)/settings/organization/billing/_components/BillingClient';
+import { BillingClient } from '@/app/(authed)/settings/organization/billing/_components/BillingClient';
 import en from '@/messages/en.json';
 import zh from '@/messages/zh.json';
 import de from '@/messages/de.json';
@@ -33,11 +30,8 @@ import pt from '@/messages/pt.json';
  *     this file makes someone restate, never a drift;
  *   - the row is the four paid plans: no Free card (Free is the trial strip), no
  *     Enterprise card, no Contact sales anywhere in the DOM;
- *   - every card carries the included-seat line and the ladder line, at both
- *     cadences and in zh;
+ *   - every card carries the included-seat line, at both cadences and in zh;
  *   - the free-trial strip, its spent form, and its absence for a paid org;
- *   - `ladderLine` on every arm, including the ones the shipped catalog cannot
- *     reach (a fractional multiple, a missing pool);
  *   - every `billing.plans` key en ships is present in all eleven locales, with
  *     the same placeholders, and none of the strings the story removed survives.
  *
@@ -158,50 +152,15 @@ describe('the catalog figures, pinned', () => {
   });
 });
 
-describe('the ladder line', () => {
-  const t = ((key: string, values?: Record<string, unknown>) =>
-    key === 'plans.ladder.first'
-      ? 'FIRST'
-      : `${String(values?.multiple)}× ${String(values?.plan)}`) as unknown as Parameters<
-    typeof ladderLine
-  >[2];
-  const plan = (credits: number | null, name = 'P'): AiPlanCatalogEntry =>
-    ({
-      ...entry('pro'),
-      name,
-      allotment: credits === null ? null : { credits, cadence: 'monthly' },
-    }) as AiPlanCatalogEntry;
-
-  it('says the price per credit on the first rung, and the whole multiple of the rung below after', () => {
-    expect(ladderLine(plan(5000), null, t)).toBe('FIRST');
-    expect(ladderLine(plan(15000), plan(5000, 'Standard'), t)).toBe('3× Standard');
-    expect(ladderLine(plan(60000), plan(30000, 'Max'), t)).toBe('2× Max');
-  });
-
-  it('says nothing for a fractional multiple or a missing pool — never a rounded figure', () => {
-    expect(ladderLine(plan(25000), plan(10000), t)).toBeNull();
-    expect(ladderLine(plan(null), plan(10000), t)).toBeNull();
-    expect(ladderLine(plan(10000), plan(null), t)).toBeNull();
-  });
-});
-
 describe('the assembled row', () => {
   for (const cadence of ['Annual', 'Monthly'] as const) {
-    it(`${cadence}: five paid cards with pools, ladder and seat lines; no Free, no Enterprise`, async () => {
+    it(`${cadence}: five paid cards with pools and seat lines; no Free, no Enterprise`, async () => {
       await openPlans(status());
       fireEvent.click(screen.getByRole('button', { name: cadence, exact: true } as never));
 
       expect(cards().map((c) => c.querySelector('span.font-semibold')?.textContent)).toEqual(
         PAID.map((p) => p.name),
       );
-      const ladders = cards().map((c) => within(c).getByTestId('plan-ladder').textContent ?? '');
-      expect(ladders).toEqual([
-        'Same price per credit on every plan',
-        '3× Standard’s credits · same price per credit',
-        '2× Pro’s credits · same price per credit',
-        '2× Max’s credits · same price per credit',
-        '5× Max ×2’s credits · same price per credit',
-      ]);
       for (const plan of PAID) {
         const c = within(cardNamed(plan.name));
         expect(c.getByText(`${n(plan.allotment!.credits)} credits / mo`)).toBeTruthy();
@@ -230,12 +189,9 @@ describe('the assembled row', () => {
     });
   }
 
-  it('renders the same row in zh, with the zh ladder and seat lines', async () => {
+  it('renders the same row in zh, with the zh seat lines', async () => {
     await openPlans(status(), 'zh');
     expect(cards()).toHaveLength(5);
-    expect(within(cardNamed('Pro')).getByTestId('plan-ladder').textContent).toBe(
-      'Standard 的 3 倍额度 · 额度单价相同',
-    );
     for (const c of cards()) {
       expect(within(c).getByTestId('plan-included-seat').textContent).not.toMatch(/[{}]/);
     }
@@ -299,8 +255,6 @@ describe('the strings, in every shipped locale', () => {
 
   it('the new keys are there, and none of the removed ones survives in any locale', () => {
     for (const key of [
-      'billing.plans.ladder.first',
-      'billing.plans.ladder.multiple',
       'billing.plans.trial.pill',
       'billing.plans.trial.pillUsed',
       'billing.plans.trial.left',
@@ -313,7 +267,14 @@ describe('the strings, in every shipped locale', () => {
       const billing = messages.billing as Record<string, unknown>;
       const plans = billing.plans as Record<string, unknown>;
       expect(billing.contactSales).toBeUndefined();
-      for (const gone of ['freePrice', 'customPrice', 'customPool', 'seatNone', 'seatCustom']) {
+      for (const gone of [
+        'freePrice',
+        'customPrice',
+        'customPool',
+        'seatNone',
+        'seatCustom',
+        'ladder',
+      ]) {
         expect(plans[gone], gone).toBeUndefined();
       }
       const tiers = plans.tiers as Record<string, unknown>;

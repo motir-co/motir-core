@@ -1991,8 +1991,7 @@ full page width (point 7).**
 
 1. **The Host card (panels 1–2).** Host is a fifth paid card, last in the row after Max ×2, drawn by
    the shipped `PlanCard` with no new element. Its name, monthly and annual price, credit pool and
-   included seat are the catalog entry's. Its ladder line is the shipped `plans.ladder.multiple`
-   ("5× Max ×2's credits · same price per credit"). Recommended stays on Pro; Host is never
+   included seat are the catalog entry's. Recommended stays on Pro; Host is never
    Recommended and never carries the Calculator's mark. The Need more credits? callout is unchanged
    and still names Max ×2's pool.
 2. **The Host entitlement lines (panels 1–2).** Under the shipped "Everything in Max ×2, plus",
@@ -2275,3 +2274,11 @@ illustrative. The rungs and prices are read from the catalog and Stripe ($2,850 
 600,000; $4,200 / $36,000 for Pool 900,000; $10,950 / $96,000 for Pool 2,400,000), the
 Calculator's answers from the engine, and every dialog figure and date from the plan-change preview
 response.
+
+## Amendment 2026-10-27 — the ladder line is removed
+
+The plan card no longer carries the ladder line ("Same price per credit on every plan" on the
+first card, "{multiple}× {plan}'s credits · same price per credit" on the rest). The owner judged
+it unneeded. Each card goes straight from "{n} credits / mo" to the included-seat line. The
+`plans.ladder` strings are gone from every locale, and the line is gone from the Host and
+larger-pool mocks. Older sections that describe it record what was drawn then.

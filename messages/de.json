@@ -6509,10 +6509,6 @@
       "recommended": "Empfohlen",
       "creditsAllotment": "{n} Credits / Monat",
       "creditsAllotmentOneTime": "{n} Credits · einmalig",
-      "ladder": {
-        "first": "Gleicher Preis pro Credit in jedem Plan",
-        "multiple": "{multiple}× die Credits von {plan} · gleicher Preis pro Credit"
-      },
       "perMoEquiv": "${n} / Monat",
       "annualSub": "jährliche Abrechnung · ${yr} / Jahr",
       "annualSave": "${n}/Jahr sparen",

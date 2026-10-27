@@ -6509,10 +6509,6 @@
       "recommended": "Aanbevolen",
       "creditsAllotment": "{n} credits per maand",
       "creditsAllotmentOneTime": "{n} credits · eenmalig",
-      "ladder": {
-        "first": "Dezelfde prijs per credit in elk abonnement",
-        "multiple": "{multiple}× de credits van {plan} · dezelfde prijs per credit"
-      },
       "perMoEquiv": "${n} per maand",
       "annualSub": "jaarlijks gefactureerd · ${yr} per jaar",
       "annualSave": "Bespaar ${n} per jaar",

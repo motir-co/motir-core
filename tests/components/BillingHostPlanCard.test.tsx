@@ -10,8 +10,8 @@ import type { CiEntitlementStateDTO } from '@/lib/dto/ciAllowance';
 import { BillingClient } from '@/app/(authed)/settings/organization/billing/_components/BillingClient';
 
 // MOTIR-9403 (story MOTIR-9364): Host is the last card of the plan row, after
-// Max ×2. It is sold on both cadences from the catalog, carries its own copy and
-// ladder line, and is never the recommended or the estimate-marked plan.
+// Max ×2. It is sold on both cadences from the catalog, carries its own copy, and is
+// never the recommended or the estimate-marked plan.
 
 const hrefSetter = vi.fn();
 
@@ -152,7 +152,7 @@ describe('the Host plan card', () => {
     expect(checkoutBody(fetchMock)).toEqual({ priceLookupKey: 'host_pool_monthly' });
   });
 
-  it('carries its use case, the cumulative lead, both features, the ladder line and the seat line', async () => {
+  it('carries its use case, the cumulative lead, both features and the seat line', async () => {
     await openPlans(status());
     await screen.findByText('Motir AI — plans & subscription');
     const el = card('Host');
@@ -163,9 +163,6 @@ describe('the Host plan card', () => {
     expect(
       host.getByText('Dedicated pools for CI runners, agent runs, the indexer and hosted agents'),
     ).toBeTruthy();
-    expect(host.getByTestId('plan-ladder').textContent).toBe(
-      '5× Max ×2’s credits · same price per credit',
-    );
     expect(host.getByTestId('plan-included-seat').textContent).toContain('1 Motir seat');
   });
 

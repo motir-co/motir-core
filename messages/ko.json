@@ -6509,10 +6509,6 @@
       "recommended": "권장",
       "creditsAllotment": "월 {n} 크레딧",
       "creditsAllotmentOneTime": "{n} 크레딧 · 1회성",
-      "ladder": {
-        "first": "모든 플랜의 크레딧당 가격은 동일",
-        "multiple": "{plan} 크레딧의 {multiple}배 · 크레딧당 가격 동일"
-      },
       "perMoEquiv": "월 ${n}",
       "annualSub": "연간 청구 · 연 ${yr}",
       "annualSave": "연 ${n} 절약",

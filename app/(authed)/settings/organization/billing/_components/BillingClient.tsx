@@ -1632,15 +1632,10 @@ function PlansView({
   // larger pool only above Host's pool (MOTIR-9654; design/billing § "Amendment
   // 2026-10-26 — the larger pools above Host", panel 7).
   const hostPlan = paidPlans.find((p) => p.band === 'host') ?? null;
-  const renderCard = (
-    plan: AiPlanCatalogEntry,
-    previous: AiPlanCatalogEntry | null,
-    solo: boolean,
-  ) => (
+  const renderCard = (plan: AiPlanCatalogEntry, solo: boolean) => (
     <PlanCard
       key={plan.key}
       plan={plan}
-      previous={previous}
       cadence={cadence}
       currentKey={tier?.key ?? null}
       status={subscription.status}
@@ -1764,7 +1759,7 @@ function PlansView({
       {heldPool ? (
         <>
           <div className="flex snap-x snap-proximity items-stretch gap-3 overflow-x-auto pb-1.5">
-            {renderCard(heldPool, null, true)}
+            {renderCard(heldPool, true)}
           </div>
           <div>
             <Button
@@ -1789,13 +1784,13 @@ function PlansView({
               id={regularId}
               className="flex snap-x snap-proximity items-stretch gap-3 overflow-x-auto pb-1.5"
             >
-              {paidPlans.map((plan, i) => renderCard(plan, paidPlans[i - 1] ?? null, false))}
+              {paidPlans.map((plan) => renderCard(plan, false))}
             </div>
           ) : null}
         </>
       ) : (
         <div className="flex snap-x snap-proximity items-stretch gap-3 overflow-x-auto pb-1.5">
-          {paidPlans.map((plan, i) => renderCard(plan, paidPlans[i - 1] ?? null, false))}
+          {paidPlans.map((plan) => renderCard(plan, false))}
         </div>
       )}
 
@@ -1839,7 +1834,6 @@ function PlansView({
 
 function PlanCard({
   plan,
-  previous,
   cadence,
   currentKey,
   status,
@@ -1857,8 +1851,6 @@ function PlanCard({
   t,
 }: {
   plan: AiPlanCatalogEntry;
-  /** The paid plan one rung below, or null for the first — the ladder line's base. */
-  previous: AiPlanCatalogEntry | null;
   cadence: BillingCadence;
   currentKey: string | null;
   status: AiStatus;
@@ -2012,7 +2004,6 @@ function PlanCard({
   // The bundled Motir seat (8.1.22): every paid plan includes its catalog count of
   // tracker seats at no charge (MOTIR-8394 reads it, never a typed 1).
   const seatIncluded = plan.includedTrackerSeats > 0;
-  const ladder = pool ? null : ladderLine(plan, previous, t);
 
   return (
     <div
@@ -2072,12 +2063,6 @@ function PlanCard({
               : 'plans.creditsAllotment',
             { n: fmt(plan.allotment.credits, locale) },
           )}
-        </p>
-      ) : null}
-      {/* the ladder line (MOTIR-7598): how this pool relates to the rung below */}
-      {ladder ? (
-        <p data-testid="plan-ladder" className="font-sans text-[11.5px] text-(--el-text-secondary)">
-          {ladder}
         </p>
       ) : null}
       {/* bundled Motir seat (8.1.22) */}
@@ -2156,25 +2141,6 @@ function NeedMoreCredits({
       </div>
     </Card>
   );
-}
-
-// The ladder line (MOTIR-7598; design billing § MOTIR-7596): the first paid rung
-// says every plan prices a credit the same; each later rung says how many times
-// the rung below's pool it holds. The multiple is computed from the catalog's
-// pools, never typed, and shown only when it is whole — a fractional "2.5×"
-// would read as a different price per credit, which it is not.
-export function ladderLine(
-  plan: AiPlanCatalogEntry,
-  previous: AiPlanCatalogEntry | null,
-  t: T,
-): string | null {
-  if (!previous) return t('plans.ladder.first');
-  const pool = plan.allotment?.credits;
-  const below = previous.allotment?.credits;
-  if (!pool || !below) return null;
-  const multiple = pool / below;
-  if (!Number.isInteger(multiple)) return null;
-  return t('plans.ladder.multiple', { multiple, plan: previous.name });
 }
 
 // The free-trial strip (MOTIR-7598; design billing § MOTIR-7596, revision 2).

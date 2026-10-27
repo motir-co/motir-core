@@ -5297,8 +5297,6 @@
   "billing.plans.recommended": "Recommended",
   "billing.plans.creditsAllotment": "{n} credits / mo",
   "billing.plans.creditsAllotmentOneTime": "{n} credits · one-time",
-  "billing.plans.ladder.first": "Same price per credit on every plan",
-  "billing.plans.ladder.multiple": "{multiple}× {plan}’s credits · same price per credit",
   "billing.plans.perMoEquiv": "${n} / mo",
   "billing.plans.annualSub": "billed annually · ${yr} / yr",
   "billing.plans.annualSave": "Save ${n}/yr",
