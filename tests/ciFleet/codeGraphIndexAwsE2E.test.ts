@@ -56,6 +56,8 @@ import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import {
   ADD_SHARD_ENTERPRISE_SLUG,
   FakeOrganization,
+  buildStacksInto,
+  stubPoolDefinitionEnv,
   installAddShardGithub,
   newGithubWorld,
 } from '../helpers/addShardFakes';
@@ -358,8 +360,10 @@ beforeEach(async () => {
   vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', 'AKIA_MANAGEMENT_E2E');
   vi.stubEnv('AWS_ORG_ADMIN_SECRET_ACCESS_KEY', 'MANAGEMENT_SECRET_E2E');
   vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', 'arn:aws:iam::576360162297:role/motir-add-shard');
+  stubPoolDefinitionEnv();
   installAddShardGithub(newGithubWorld(), 'ghs_INSTALL_E2E');
   organization = new FakeOrganization(SESSION);
+  buildStacksInto(organization, () => building);
   // The operator does the quota step before the second run.
   organization.quota = SHARD_VCPU_QUOTA_TARGET;
   unregister = registerShardProvisioningProvider(

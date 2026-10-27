@@ -30,6 +30,8 @@ import { truncateAuthTables } from '../helpers/db';
 import {
   ADD_SHARD_ENTERPRISE_SLUG as SLUG,
   FakeOrganization,
+  buildStacksInto,
+  stubPoolDefinitionEnv,
   installAddShardGithub,
   newGithubWorld,
   type GithubWorld,
@@ -38,7 +40,7 @@ import {
 // THE HOST ACCOUNT STATE PASS (Story MOTIR-9365 · MOTIR-9585), against a real
 // database. The accounts are created by the REAL reconcile over the add-shard's
 // own fakes (the in-memory AWS organization, GitHub stubbed at `fetch`, the REAL
-// `ensureAwsShardNetwork` over the in-memory EC2), the raises are moved on in the
+// `readAwsShardNetwork` over the stack-built network in the in-memory EC2), the raises are moved on in the
 // fake AWS and read by the REAL quota tracker, and the pass runs the registered
 // provider's own network step.
 
@@ -165,11 +167,13 @@ beforeEach(async () => {
   vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', SECRETS.managementKey);
   vi.stubEnv('AWS_ORG_ADMIN_SECRET_ACCESS_KEY', SECRETS.managementSecret);
   vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', 'arn:aws:iam::576360162297:role/motir-add-shard');
+  stubPoolDefinitionEnv();
   _resetInstallationTokenCache();
   _resetProvisioningInstallationCache();
   github = newGithubWorld();
   github.orgs.add(GITHUB_ORG);
   organization = new FakeOrganization(SESSION);
+  buildStacksInto(organization, () => ec2);
   organization.quota = 5;
   const ec2 = new AwsEc2Fake();
   installAddShardGithub(github, SECRETS.installation);

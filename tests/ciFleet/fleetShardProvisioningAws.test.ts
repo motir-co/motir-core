@@ -22,6 +22,9 @@ import { truncateAuthTables } from '../helpers/db';
 import {
   ADD_SHARD_ENTERPRISE_SLUG as SLUG,
   FakeOrganization,
+  POOL_DEFINITION,
+  buildStacksInto,
+  stubPoolDefinitionEnv,
   installAddShardGithub,
   newGithubWorld,
   type GithubWorld,
@@ -30,7 +33,8 @@ import {
 // `fleet-admin add-shard --provider aws` (Story MOTIR-9270 · MOTIR-9278), against
 // a real database for the row and the audit entry, GitHub stubbed at `fetch`, the
 // AWS management calls behind an in-memory organization, and the network built by
-// the REAL `ensureAwsShardNetwork` over the in-memory EC2 of the network card.
+// the pool-account definition's stack instance (MOTIR-9845), seeded into the
+// in-memory EC2 of the network card and read back by the REAL `readAwsShardNetwork`.
 
 const ec2FakePath = '../../packages/orchestrator/test/contract/awsEc2Fake';
 
@@ -145,12 +149,14 @@ beforeEach(async () => {
   vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', SECRETS.managementKey);
   vi.stubEnv('AWS_ORG_ADMIN_SECRET_ACCESS_KEY', SECRETS.managementSecret);
   vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', 'arn:aws:iam::576360162297:role/motir-add-shard');
+  stubPoolDefinitionEnv();
   vi.stubEnv(`${PREFIX}_ACCESS_KEY_ID`, '');
   vi.stubEnv(`${PREFIX}_SECRET_ACCESS_KEY`, '');
   _resetInstallationTokenCache();
   _resetProvisioningInstallationCache();
   github = newGithubWorld();
   organization = new FakeOrganization(SESSION);
+  buildStacksInto(organization, () => ec2);
   ec2 = new AwsEc2Fake();
   ec2Keys = [];
   installAddShardGithub(github, SECRETS.installation);
@@ -185,9 +191,17 @@ describe('add-shard --provider aws, first run', () => {
     expect(result.code).toBe(2);
     expect(organization.calls.filter((c) => c === 'createOrganizationAccount')).toHaveLength(1);
     const account = organization.accounts.get(NAME)!;
-    // The network: one VPC, built in the member account with its session.
-    expect(ec2.count('createVpc')).toBe(1);
-    expect(ec2Keys).toEqual([SECRETS.sessionKeyId]);
+    // The network: built by the definition — the account joins its kind's unit
+    // and gets one stack instance — and read back in the member account with its
+    // session. No EC2 create call is made.
+    expect(organization.accountUnits.get(account.accountId)).toBe(
+      POOL_DEFINITION.unitId('ci_runner'),
+    );
+    expect([...organization.stackInstances.keys()]).toEqual([
+      `${POOL_DEFINITION.stackSetName}/${account.accountId}/us-east-1`,
+    ]);
+    expect(ec2.mutations()).toEqual([]);
+    expect(new Set(ec2Keys)).toEqual(new Set([SECRETS.sessionKeyId]));
 
     const row = await shardRow();
     expect(row).toMatchObject({
@@ -209,7 +223,9 @@ describe('add-shard --provider aws, first run', () => {
     });
 
     expect(result.out).toMatch(/^provider_account\s+done — created AWS account/m);
-    expect(result.out).toMatch(/^network\s+done — created vpc:/m);
+    expect(result.out).toMatch(
+      /^network\s+done — created unit-membership:.*stack-instance:.*; vpc vpc-/m,
+    );
     expect(result.out).toContain('Pending manual steps:');
     expect(result.out).toContain(
       `raise the account's vCPU quota from ${SHARD_VCPU_QUOTA_TARGET - 1_000} to at least ` +

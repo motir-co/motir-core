@@ -195,7 +195,7 @@ interface AwsAccount {
 }
 
 /** One `aws` account of the CI pool: its row, its credential and its own EC2,
- *  with the tagged network `ensureAwsShardNetwork` would have left. */
+ *  with the tagged network the pool-account definition builds. */
 async function awsAccount(label: string, machineLimit: number): Promise<AwsAccount> {
   const credentialRef = `AWS_POOL_${label}_${randomToken(4).toUpperCase()}`;
   const accessKeyId = `AKIA${label}${randomToken(8).toUpperCase()}`;

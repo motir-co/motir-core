@@ -32,6 +32,8 @@ import { adminDb } from '../helpers/adminDb';
 import {
   ADD_SHARD_ENTERPRISE_SLUG,
   FakeOrganization,
+  buildStacksInto,
+  stubPoolDefinitionEnv,
   installAddShardGithub,
   newGithubWorld,
 } from '../helpers/addShardFakes';
@@ -307,6 +309,7 @@ beforeEach(async () => {
   vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', 'AKIA_E2E_MANAGEMENT');
   vi.stubEnv('AWS_ORG_ADMIN_SECRET_ACCESS_KEY', MARKERS.managementKey);
   vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', 'arn:aws:iam::576360162297:role/motir-add-shard');
+  stubPoolDefinitionEnv();
   // The deployment's own selection — Fly, configured — so the process-wide fleet
   // is the Fly fake and the account resolves through its real `aws` case.
   vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', '');
@@ -321,6 +324,7 @@ beforeEach(async () => {
   installAddShardGithub(newGithubWorld(), 'ghs_installation');
   world.ec2 = new AwsEc2Fake();
   organization = new FakeOrganization(SESSION);
+  buildStacksInto(organization, () => ec2());
   // The real provider; only its management API is the in-memory organization.
   unregister = registerShardProvisioningProvider(
     createAwsShardProvisioningProvider({
@@ -411,7 +415,8 @@ describe('add-shard for aws, from nothing', () => {
   });
 
   it('interrupted at the network, a re-run completes with one account, one of each resource and one row', async () => {
-    ec2().failNext('createSubnet');
+    // The run dies after the stack instance is filed, waiting for CURRENT (MOTIR-9845).
+    organization.stackInstanceFailure = new Error('the run died waiting for CURRENT');
     expect(await addShard()).toBe(EXIT_ERROR);
     expect(await shardRows()).toEqual([]);
     expect(organization.accounts.size).toBe(1);
@@ -422,6 +427,7 @@ describe('add-shard for aws, from nothing', () => {
 
     expect(organization.calls.filter((c) => c === 'createOrganizationAccount')).toHaveLength(1);
     expect(organization.accounts.size).toBe(1);
+    expect(organization.stackInstances.size).toBe(1);
     expect(ec2().vpcs.size).toBe(1);
     expect(ec2().internetGateways.size).toBe(1);
     expect(ec2().routeTables.size).toBe(1);

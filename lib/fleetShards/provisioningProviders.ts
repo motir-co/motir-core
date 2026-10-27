@@ -63,6 +63,9 @@ export interface ProviderAccountResult {
 export interface ProviderNetworkResult {
   /** What this run created — empty means everything was already there. */
   created: string[];
+  /** What the network is (its ids), for the step's audit line; the row models no
+   *  network column, so this is where a run records them. */
+  detail?: string;
 }
 
 export interface ProviderQuotaResult {

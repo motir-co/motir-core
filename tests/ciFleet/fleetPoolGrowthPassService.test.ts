@@ -30,6 +30,8 @@ import { truncateAuthTables } from '../helpers/db';
 import {
   ADD_SHARD_ENTERPRISE_SLUG as SLUG,
   FakeOrganization,
+  buildStacksInto,
+  stubPoolDefinitionEnv,
   installAddShardGithub,
   newGithubWorld,
   type GithubWorld,
@@ -147,11 +149,13 @@ beforeEach(async () => {
   vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', SECRETS.managementKey);
   vi.stubEnv('AWS_ORG_ADMIN_SECRET_ACCESS_KEY', SECRETS.managementSecret);
   vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', 'arn:aws:iam::576360162297:role/motir-add-shard');
+  stubPoolDefinitionEnv();
   _resetInstallationTokenCache();
   _resetProvisioningInstallationCache();
   github = newGithubWorld();
   github.orgs.add(ORG);
   organization = new FakeOrganization(SESSION);
+  buildStacksInto(organization, () => ec2);
   organization.quota = 5; // a new account's AWS default
   ec2 = new AwsEc2Fake();
   installAddShardGithub(github, SECRETS.installation);

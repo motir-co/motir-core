@@ -552,7 +552,12 @@ async function walk(
   report(
     'network',
     network.created.length > 0 ? 'done' : 'already',
-    network.created.length > 0 ? `created ${network.created.join(', ')}` : 'already in place',
+    [
+      network.created.length > 0 ? `created ${network.created.join(', ')}` : 'already in place',
+      network.detail,
+    ]
+      .filter(Boolean)
+      .join('; '),
   );
 
   const quota = await provider.readQuota(ctx);

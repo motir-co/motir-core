@@ -24,6 +24,8 @@ import { findSecrets } from '../helpers/secretScan';
 import {
   ADD_SHARD_ENTERPRISE_SLUG as SLUG,
   FakeOrganization,
+  buildStacksInto,
+  stubPoolDefinitionEnv,
   installAddShardGithub,
   newGithubWorld,
 } from '../helpers/addShardFakes';
@@ -150,12 +152,14 @@ beforeAll(async () => {
   vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', SECRETS.managementKey);
   vi.stubEnv('AWS_ORG_ADMIN_SECRET_ACCESS_KEY', SECRETS.managementSecret);
   vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', 'arn:aws:iam::576360162297:role/motir-add-shard');
+  stubPoolDefinitionEnv();
   _resetInstallationTokenCache();
   _resetProvisioningInstallationCache();
   const github = newGithubWorld();
   github.orgs.add(ORG);
   installAddShardGithub(github, SECRETS.installation);
   organization = new FakeOrganization(SESSION);
+  buildStacksInto(organization, () => ec2);
   organization.quota = 5; // a new account's AWS default
   const ec2 = new AwsEc2Fake();
   unregister = registerShardProvisioningProvider(

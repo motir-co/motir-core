@@ -24,6 +24,8 @@ import { truncateAuthTables } from '../helpers/db';
 import {
   ADD_SHARD_ENTERPRISE_SLUG,
   FakeOrganization,
+  buildStacksInto,
+  stubPoolDefinitionEnv,
   installAddShardGithub,
   newGithubWorld,
 } from '../helpers/addShardFakes';
@@ -175,6 +177,7 @@ beforeEach(async () => {
   vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', 'AKIA_MANAGEMENT');
   vi.stubEnv('AWS_ORG_ADMIN_SECRET_ACCESS_KEY', 'management-secret');
   vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', 'arn:aws:iam::576360162297:role/motir-add-shard');
+  stubPoolDefinitionEnv();
   // The deployment's own selection, so the row resolves through its `aws` case.
   vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', '');
   vi.stubEnv(`${PREFIX}_ACCESS_KEY_ID`, '');
@@ -186,6 +189,7 @@ beforeEach(async () => {
   world.ec2 = new AwsEc2Fake();
   world.keys = [];
   organization = new FakeOrganization(SESSION);
+  buildStacksInto(organization, () => ec2());
   // The real provider; only its management API is the in-memory organization.
   // Its EC2 goes through the package's `createEc2Api`, the same seam the adapter
   // resolves through.
@@ -227,13 +231,15 @@ describe('add-shard → account row → adapter', () => {
       credentialRef: PREFIX,
       aws: { region: REGION },
     });
-    expect(ec2().count('createSubnet')).toBeGreaterThan(0);
+    // Built by the pool-account definition's stack, not by add-shard (MOTIR-9845).
+    expect(ec2().count('createSubnet')).toBe(0);
     const subnets = await ec2().describeSubnets([{ name: 'tag:motir-shard', values: [NAME] }]);
+    expect(subnets.length).toBeGreaterThan(0);
     const groups = await ec2().describeSecurityGroups([
       { name: 'tag:motir-shard', values: [NAME] },
     ]);
     expect(groups).toHaveLength(1);
-    // The network was built with the member account's assumed-role session.
+    // The network was read back with the member account's assumed-role session.
     expect(world.keys).toEqual([SESSION.accessKeyId]);
 
     setRuntime();

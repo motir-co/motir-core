@@ -1,6 +1,9 @@
 import {
   AwsAccountCreationRefusedError,
   AwsManagementApiError,
+  AwsStackOutputsMissingError,
+  awsAgentHosterPolicyDocument,
+  awsRunnerPolicyDocument,
   type AwsManagementApi,
   type AwsOrganizationAccount,
   type AwsPolicyDocument,
@@ -8,6 +11,7 @@ import {
   type AwsStackInstanceTarget,
 } from '@motir/orchestrator';
 import { vi } from 'vitest';
+import { AWS_POOL_DEFINITION_ENV, awsPoolUnitEnvName } from '@/lib/fleetShards/awsPoolDefinition';
 import { SHARD_VCPU_QUOTA_TARGET } from '@/lib/ciFleet/shardTargets';
 
 // The fakes `fleet-admin add-shard --provider aws` runs against (MOTIR-9278),
@@ -132,6 +136,16 @@ export class FakeOrganization implements AwsManagementApi {
   >();
   /** The outputs a newly created instance answers. */
   stackOutputs: Record<string, string> = {};
+  /** What creating an instance builds, answering its outputs — `buildStacksInto`
+   *  seeds the tagged network in the in-memory EC2. Null: `stackOutputs`. */
+  stackBuilder:
+    | ((
+        input: AwsStackInstanceTarget & { parameterOverrides: Record<string, string> },
+      ) => Record<string, string>)
+    | null = null;
+  /** Thrown once by the next `ensureStackInstance` AFTER it records the
+   *  instance — a run that dies while waiting for CURRENT. */
+  stackInstanceFailure: Error | null = null;
   private seq = 0;
   private requestSeq = 0;
   /** Which member account each answered session is for. */
@@ -292,28 +306,112 @@ export class FakeOrganization implements AwsManagementApi {
     const existing = this.stackInstances.get(key);
     const overrides = { ...input.parameterOverrides };
     if (!existing) {
-      this.stackInstances.set(key, {
-        unitId: input.organizationalUnitId,
-        overrides,
-        outputs: { ...this.stackOutputs },
-      });
+      const outputs = this.stackBuilder
+        ? this.stackBuilder({ ...input, parameterOverrides: overrides })
+        : { ...this.stackOutputs };
+      this.stackInstances.set(key, { unitId: input.organizationalUnitId, overrides, outputs });
+      // The stack builds the runner role, with the policy its parameters pick.
+      this.runnerRoles.set(input.accountId, stackRunnerPolicy(input.region, overrides));
+      if (this.stackInstanceFailure) {
+        const failure = this.stackInstanceFailure;
+        this.stackInstanceFailure = null;
+        throw failure;
+      }
       return { action: 'created' as const };
     }
     if (JSON.stringify(existing.overrides) === JSON.stringify(overrides)) {
       return { action: 'none' as const };
     }
     existing.overrides = overrides;
+    this.runnerRoles.set(input.accountId, stackRunnerPolicy(input.region, overrides));
     return { action: 'updated' as const };
   }
 
   async readStackInstanceOutputs(target: AwsStackInstanceTarget) {
     this.calls.push(`readStackInstanceOutputs:${target.accountId}`);
     const instance = this.stackInstances.get(stackInstanceKey(target));
-    if (!instance) throw new Error(`no stack instance for ${stackInstanceKey(target)}`);
+    if (!instance) throw new AwsStackOutputsMissingError(target, 'stack instance');
     return { ...instance.outputs };
   }
 }
 
+/** The runner role's policy the stack applies, chosen by its parameters as the
+ *  template's condition chooses it (motir-infra `lib/pool-account/stack.ts`). */
+function stackRunnerPolicy(region: string, overrides: Record<string, string>): string {
+  const build =
+    overrides['RunnerPolicy'] === 'hoster' ? awsAgentHosterPolicyDocument : awsRunnerPolicyDocument;
+  return JSON.stringify(
+    build({
+      shardTag: overrides['ShardTag'] ?? '',
+      regionId: region,
+      reapUntagged: overrides['ReapUntagged'] === 'true',
+    }),
+  );
+}
+
 function stackInstanceKey(target: AwsStackInstanceTarget): string {
   return `${target.stackSetName}/${target.accountId}/${target.region}`;
+}
+
+// THE POOL-ACCOUNT DEFINITION IN THE FAKES (MOTIR-9845): add-shard builds a new
+// account by applying the pool StackSet's instance. `stubPoolDefinitionEnv` sets
+// the deployment configuration it reads; `buildStacksInto` makes a created
+// instance seed the tagged network in the in-memory EC2, as the stack would.
+
+/** The configured StackSet and units; never a real account's. */
+export const POOL_DEFINITION = {
+  stackSetName: 'motir-test-pool-account',
+  requestedVcpuQuota: '640',
+  unitId: (fleetKind: string) => `ou-test-${fleetKind.replaceAll('_', '-')}`,
+} as const;
+
+const FLEET_KINDS = ['ci_runner', 'code_graph_index', 'hosted_agent', 'agent_instance'];
+
+export function stubPoolDefinitionEnv(): void {
+  vi.stubEnv(AWS_POOL_DEFINITION_ENV.stackSetName, POOL_DEFINITION.stackSetName);
+  vi.stubEnv(AWS_POOL_DEFINITION_ENV.requestedVcpuQuota, POOL_DEFINITION.requestedVcpuQuota);
+  for (const kind of FLEET_KINDS)
+    vi.stubEnv(awsPoolUnitEnvName(kind), POOL_DEFINITION.unitId(kind));
+}
+
+/** The in-memory EC2's seeding surface (`packages/orchestrator/test/contract/awsEc2Fake.ts`). */
+interface SeedableEc2 {
+  zones?: readonly { zoneName: string }[] | readonly string[];
+  seedShardNetwork(
+    shardTag: string,
+    zones?: readonly string[],
+  ): {
+    vpcId: string;
+    internetGatewayId: string;
+    routeTableId: string;
+    groupId: string;
+    subnetIds: string[];
+  };
+}
+
+function zonesOf(ec2: SeedableEc2, region: string): string[] {
+  const listed = (ec2.zones ?? []).map((z) => (typeof z === 'string' ? z : z.zoneName));
+  const inRegion = listed.filter((zone) => zone.startsWith(region));
+  return (inRegion.length > 0 ? inRegion : [`${region}a`, `${region}b`]).sort().slice(0, 3);
+}
+
+/** A created instance seeds its network in `ec2Of()` and answers the template's outputs. */
+export function buildStacksInto(organization: FakeOrganization, ec2Of: () => unknown): void {
+  organization.stackBuilder = (input) => {
+    const ec2 = ec2Of() as SeedableEc2;
+    const shardTag = input.parameterOverrides['ShardTag'] ?? '';
+    const zones = zonesOf(ec2, input.region);
+    const built = ec2.seedShardNetwork(shardTag, zones);
+    return {
+      VpcId: built.vpcId,
+      InternetGatewayId: built.internetGatewayId,
+      RouteTableId: built.routeTableId,
+      SecurityGroupId: built.groupId,
+      ...Object.fromEntries(
+        zones.map((zone, i) => [`SubnetId${zone.slice(-1).toUpperCase()}`, built.subnetIds[i]]),
+      ),
+      RunnerRoleArn: `arn:aws:iam::${input.accountId}:role/motir-fleet-runner`,
+      TrailArn: `arn:aws:cloudtrail:${input.region}:${input.accountId}:trail/motir-pool`,
+    };
+  };
 }
