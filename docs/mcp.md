@@ -329,7 +329,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **105 tools**.
+`initialize` handshake and registers **106 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -5093,6 +5093,32 @@ the plan DECISIONS (approve / decline / append), and this one decides nothing.
 
 Errors: an unknown / other-tenant `planId` returns `PLAN_NOT_FOUND`
 (404-not-403, no existence leak).
+
+##### `get_plan_authoring_state` — WHICH SIBLINGS have not started (MOTIR-9821)
+
+An author session may hand not-done work in its `## Scope BOUNDARY` only to a card
+`blocked_by` its own, because only that card's author session reads the boundary.
+The one edge a session may wire onto a SIBLING to make such a hand-off legal is
+"that sibling `blocked_by` me" — and only while the sibling's own author session
+has NOT STARTED. The level view a session opened on is a snapshot that cannot tell
+"being written now" from "not started", so the session reads this, live, first.
+
+```jsonc
+get_plan_authoring_state({ planId })
+// → { planId: "cm…", status: "generating", proposals: [
+//      { ref: "planItem:ck_email", op: "add", title: "Send the invoice email", state: "authoring" },
+//      { ref: "planItem:ck_retry", op: "add", title: "Retry a bounced email",  state: "not_started" } ] }
+```
+
+`authoring` — an `author` step reported through `report_plan_step` targets the
+card and has not ended. `authored` — an author session that targeted it has
+ended, or it was appended COMPLETE and never needed one (a `modify` always is).
+`not_started` — no author session, live or ended, and the card is still
+incomplete: a missing body or explanation, a `validate_plan` section finding, or,
+on a childless leaf, a missing type, executor, size or difficulty. "Complete" is
+plan.py's own `author_gaps` test, so a card the surgical add appended complete
+reads `authored` rather than `not_started` for ever. `project:browse`, read
+through the same reader gate as `get_plan`; it writes nothing.
 
 ##### The PROJECTED mode on the existing validators
 

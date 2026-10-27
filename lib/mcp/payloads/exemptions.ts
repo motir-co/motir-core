@@ -70,6 +70,11 @@ export const EXEMPT_TOOLS = {
   validate_sprint:
     'The same verdict shape over a sprint’s membership. Same boundary, same reason — it ' +
     'describes whether a set of work can finish, which is not a thing v1 returns.',
+  get_plan_authoring_state:
+    'Returns each proposal’s AUTHORING STATE (`not_started` / `authoring` / `authored`), ' +
+    'derived from the plan’s live planner-session steps — a planning read for an author ' +
+    'session about to wire an edge, not a resource. No `/api/v1` operation returns plan ' +
+    'steps or sessions (MOTIR-9821).',
   validate_plan:
     'The same verdict shape again, over the PROJECTED forest of a plan being authored ' +
     '(`{ planId, valid, blockers }`). v1 returns plans, and a plan resource is not this — ' +

@@ -836,6 +836,12 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // advisory is another severity on the channel, outside the verdict.
     descriptionFingerprint: '94d73c229405',
   },
+  get_plan_authoring_state: {
+    // MOTIR-9821: the live read an author session makes before it wires an edge onto a sibling.
+    summary:
+      'Which proposals are being written, which are written, and which no author session has started — read before wiring an edge onto a sibling.',
+    descriptionFingerprint: '1dbc96fc1142',
+  },
   validate_plan: {
     // ⚠️ SUMMARY REWRITTEN, not merely re-pinned (MOTIR-3575). The old line —
     // *"Is the plan you are authoring finishable?"* — became FALSE rather than
