@@ -1,5 +1,4 @@
 import {
-  AWS_MANAGEMENT_ENV,
   AWS_MEMBER_ROLE_NAME,
   AWS_RUNNER_IAM_ROLE,
   AWS_RUNNER_IAM_USER,
@@ -8,6 +7,7 @@ import {
   awsCredentialsFromEnv,
   awsAgentHosterPolicyDocument,
   awsManagementCredentials,
+  awsManagementRequiredEnv,
   awsRunnerPolicyDocument,
   awsRuntimeKeyEnvNames,
   createAwsManagementApi,
@@ -133,7 +133,9 @@ export function createAwsShardProvisioningProvider(
       },
     ],
 
-    requiredEnv: () => Object.values(AWS_MANAGEMENT_ENV),
+    // The role ARN alone is a full management credential (the default chain
+    // supplies the rest); a key, once either half is set, must be whole.
+    requiredEnv: () => awsManagementRequiredEnv(deps.env()),
 
     validate(ctx) {
       const problems: string[] = [];

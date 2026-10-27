@@ -298,6 +298,24 @@ describe('refusals', () => {
     expect(organization.calls).toEqual([]);
   });
 
+  // MOTIR-9839: the role ARN alone is a whole management credential.
+  it('preflight passes with the role ARN alone, and names the missing half of a half-set key', async () => {
+    vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', '');
+    vi.stubEnv('AWS_ORG_ADMIN_SECRET_ACCESS_KEY', '');
+    const roleOnly = await run(args({ region: 'Mars' }));
+    expect(roleOnly.code).toBe(1);
+    expect(roleOnly.err).toContain('--region Mars is not an AWS region id');
+    expect(roleOnly.err).not.toContain('missing env');
+
+    vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', SECRETS.managementKey);
+    const halfKey = await run(args());
+    expect(halfKey.code).toBe(1);
+    expect(halfKey.err).toContain('missing env: AWS_ORG_ADMIN_SECRET_ACCESS_KEY');
+    expect(halfKey.err).not.toContain('AWS_ORG_ADMIN_ACCESS_KEY_ID');
+    expect(github.calls).toEqual([]);
+    expect(organization.calls).toEqual([]);
+  });
+
   it('a bad region or email is refused before any external call', async () => {
     const result = await run(args({ region: 'Mars', 'account-email': 'nope' }));
 

@@ -5,7 +5,9 @@ import { OrchestratorNotConfiguredError } from '../../errors';
 // composition root and `fleet-admin` pass the process environment, a test a record.
 
 /** The management credential's env names (MOTIR-9271): an IAM user's key in the
- *  management account and the role it assumes there to create accounts. */
+ *  management account and the role it assumes there to create accounts. The key
+ *  is optional (MOTIR-9839): without it the role is assumed from the AWS SDK's
+ *  default credential chain — the task role once core runs on AWS. */
 export const AWS_MANAGEMENT_ENV = {
   accessKeyId: 'AWS_ORG_ADMIN_ACCESS_KEY_ID',
   secretAccessKey: 'AWS_ORG_ADMIN_SECRET_ACCESS_KEY',
@@ -13,8 +15,9 @@ export const AWS_MANAGEMENT_ENV = {
 } as const;
 
 export interface AwsManagementCredentials {
-  readonly accessKeyId: string;
-  readonly secretAccessKey: string;
+  /** The management IAM user's key; both halves, or neither for the default chain. */
+  readonly accessKeyId?: string;
+  readonly secretAccessKey?: string;
   /** The management-account role add-shard assumes (`motir-add-shard`). */
   readonly roleArn: string;
 }
@@ -32,20 +35,28 @@ function read(env: Env, name: string): string {
 }
 
 /**
+ * The management variables that must be set for `env`: the role ARN always, and
+ * the key's two halves once either is — a half-set key is a mistake, not a
+ * request for the default chain.
+ */
+export function awsManagementRequiredEnv(env: Env): string[] {
+  const keyNames = [AWS_MANAGEMENT_ENV.accessKeyId, AWS_MANAGEMENT_ENV.secretAccessKey];
+  const keySet = keyNames.some((name) => read(env, name));
+  return [...(keySet ? keyNames : []), AWS_MANAGEMENT_ENV.roleArn];
+}
+
+/**
  * The management credential, or `OrchestratorNotConfiguredError` naming EVERY
- * missing variable at once.
+ * missing variable at once. With neither key variable set it carries the role
+ * ARN alone, and the role is assumed from the SDK's default credential chain.
  */
 export function awsManagementCredentials(env: Env): AwsManagementCredentials {
-  const values = {
-    accessKeyId: read(env, AWS_MANAGEMENT_ENV.accessKeyId),
-    secretAccessKey: read(env, AWS_MANAGEMENT_ENV.secretAccessKey),
-    roleArn: read(env, AWS_MANAGEMENT_ENV.roleArn),
-  };
-  const missing = (Object.keys(values) as Array<keyof typeof values>)
-    .filter((key) => !values[key])
-    .map((key) => AWS_MANAGEMENT_ENV[key]);
+  const missing = awsManagementRequiredEnv(env).filter((name) => !read(env, name));
   if (missing.length > 0) throw new OrchestratorNotConfiguredError(`set ${missing.join(', ')}`);
-  return values;
+  const roleArn = read(env, AWS_MANAGEMENT_ENV.roleArn);
+  const accessKeyId = read(env, AWS_MANAGEMENT_ENV.accessKeyId);
+  if (!accessKeyId) return { roleArn };
+  return { accessKeyId, secretAccessKey: read(env, AWS_MANAGEMENT_ENV.secretAccessKey), roleArn };
 }
 
 /** The two variables an account's runtime key lives in, under its `credentialRef`. */

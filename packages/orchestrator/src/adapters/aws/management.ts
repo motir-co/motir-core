@@ -151,7 +151,9 @@ export type AwsManagementClientFactory = (
   service: AwsManagementService,
   config: {
     region: string;
-    credentials: { accessKeyId: string; secretAccessKey: string; sessionToken?: string };
+    /** Absent: the SDK's default credential chain (the management role's first
+     *  AssumeRole when no management key is set — MOTIR-9839). */
+    credentials?: { accessKeyId: string; secretAccessKey: string; sessionToken?: string };
   },
 ) => AwsSdkClient;
 
@@ -339,9 +341,16 @@ export function createAwsManagementApi(
   async function managementRole(): Promise<AwsSessionCredentials> {
     const expiresAt = managementSession?.expiration?.getTime() ?? Infinity;
     if (managementSession && expiresAt - now() > 60_000) return managementSession;
+    const { accessKeyId, secretAccessKey } = management;
+    // No management key: an STS client with no `credentials`, so the SDK's
+    // default chain supplies them.
+    const sts =
+      accessKeyId && secretAccessKey
+        ? client('sts', { accessKeyId, secretAccessKey })
+        : factory('sts', { region: GLOBAL_REGION });
     const response = await call<Parameters<typeof sessionOf>[0]>(
       'sts',
-      client('sts', management),
+      sts,
       new AssumeRoleCommand({
         RoleArn: management.roleArn,
         RoleSessionName: SESSION_NAME,

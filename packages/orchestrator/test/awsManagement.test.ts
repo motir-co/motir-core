@@ -15,6 +15,7 @@ import {
   OrchestratorNotConfiguredError,
   awsCredentialsFromEnv,
   awsManagementCredentials,
+  awsManagementRequiredEnv,
   awsAgentHosterPolicyDocument,
   awsRunnerPolicyDocument,
   awsRunnerTrustPolicy,
@@ -22,6 +23,7 @@ import {
   createAwsManagementApi,
   createAwsManagementSdkClient,
   type AwsManagementClientFactory,
+  type AwsManagementCredentials,
   type AwsManagementService,
   type AwsSessionCredentials,
 } from '../src/index';
@@ -39,8 +41,10 @@ const MANAGEMENT = {
 interface SentCall {
   service: AwsManagementService;
   region: string;
-  accessKeyId: string;
+  accessKeyId: string | undefined;
   sessionToken: string | undefined;
+  /** Whether the client was built with a `credentials` property at all. */
+  hasCredentials: boolean;
   command: string;
   input: Record<string, unknown>;
 }
@@ -65,7 +69,11 @@ function session(id: string): Record<string, unknown> {
   };
 }
 
-function harness(handlers: Record<string, Handler>, clock = { t: 0 }) {
+function harness(
+  handlers: Record<string, Handler>,
+  clock = { t: 0 },
+  management: AwsManagementCredentials = MANAGEMENT,
+) {
   const calls: SentCall[] = [];
   const sleeps: number[] = [];
   const factory: AwsManagementClientFactory = (service, config) => ({
@@ -75,8 +83,9 @@ function harness(handlers: Record<string, Handler>, clock = { t: 0 }) {
       const call: SentCall = {
         service,
         region: config.region,
-        accessKeyId: config.credentials.accessKeyId,
-        sessionToken: config.credentials.sessionToken,
+        accessKeyId: config.credentials?.accessKeyId,
+        sessionToken: config.credentials?.sessionToken,
+        hasCredentials: 'credentials' in config,
         command: name,
         input,
       };
@@ -86,7 +95,7 @@ function harness(handlers: Record<string, Handler>, clock = { t: 0 }) {
       return handler(input, call);
     },
   });
-  const api = createAwsManagementApi(MANAGEMENT, {
+  const api = createAwsManagementApi(management, {
     clientFactory: factory,
     sleep: async (ms) => {
       sleeps.push(ms);
@@ -124,6 +133,115 @@ describe('awsManagementCredentials', () => {
         `set ${AWS_MANAGEMENT_ENV.accessKeyId}, ${AWS_MANAGEMENT_ENV.roleArn}`,
       ),
     );
+  });
+  // MOTIR-9839: no key at all is the default credential chain, not a gap.
+  it('reads the role ARN alone when neither key variable is set', () => {
+    expect(awsManagementCredentials({ AWS_ORG_ADMIN_ROLE_ARN: ' arn ' })).toEqual({
+      roleArn: 'arn',
+    });
+    expect(
+      awsManagementCredentials({
+        AWS_ORG_ADMIN_ACCESS_KEY_ID: ' ',
+        AWS_ORG_ADMIN_SECRET_ACCESS_KEY: '',
+        AWS_ORG_ADMIN_ROLE_ARN: 'arn',
+      }),
+    ).toEqual({ roleArn: 'arn' });
+  });
+
+  it.each([
+    [AWS_MANAGEMENT_ENV.accessKeyId, { AWS_ORG_ADMIN_SECRET_ACCESS_KEY: 's' }],
+    [AWS_MANAGEMENT_ENV.secretAccessKey, { AWS_ORG_ADMIN_ACCESS_KEY_ID: 'AKIA' }],
+  ])('names %s when only the other half of the key is set', (missing, half) => {
+    expect(() => awsManagementCredentials({ ...half, AWS_ORG_ADMIN_ROLE_ARN: 'arn' })).toThrow(
+      new OrchestratorNotConfiguredError(`set ${missing}`),
+    );
+  });
+
+  it('names the role ARN when it is unset, with the key and without it', () => {
+    const roleMissing = new OrchestratorNotConfiguredError(`set ${AWS_MANAGEMENT_ENV.roleArn}`);
+    expect(() => awsManagementCredentials({})).toThrow(roleMissing);
+    expect(() =>
+      awsManagementCredentials({
+        AWS_ORG_ADMIN_ACCESS_KEY_ID: 'AKIA',
+        AWS_ORG_ADMIN_SECRET_ACCESS_KEY: 's',
+      }),
+    ).toThrow(roleMissing);
+  });
+});
+
+describe('awsManagementRequiredEnv', () => {
+  it('is the role ARN alone with no key, and all three once either half is set', () => {
+    const all = Object.values(AWS_MANAGEMENT_ENV);
+    expect(awsManagementRequiredEnv({})).toEqual([AWS_MANAGEMENT_ENV.roleArn]);
+    expect(awsManagementRequiredEnv({ AWS_ORG_ADMIN_ROLE_ARN: 'arn' })).toEqual([
+      AWS_MANAGEMENT_ENV.roleArn,
+    ]);
+    expect(awsManagementRequiredEnv({ AWS_ORG_ADMIN_ACCESS_KEY_ID: 'AKIA' }).sort()).toEqual(
+      [...all].sort(),
+    );
+    expect(awsManagementRequiredEnv({ AWS_ORG_ADMIN_SECRET_ACCESS_KEY: 's' }).sort()).toEqual(
+      [...all].sort(),
+    );
+  });
+});
+
+describe('the management role, with the key and on the default chain (MOTIR-9839)', () => {
+  const handlers = {
+    AssumeRoleCommand: assume,
+    ListAccountsCommand: () => ({ Accounts: [] }),
+    ListCreateAccountStatusCommand: () => ({ CreateAccountStatuses: [] }),
+  };
+
+  it('builds the first STS client from the key, when the key is set', async () => {
+    const { api, calls } = harness(handlers);
+    await api.findOrganizationAccount('x');
+    expect(calls[0]).toMatchObject({
+      service: 'sts',
+      command: 'AssumeRoleCommand',
+      hasCredentials: true,
+      accessKeyId: MANAGEMENT.accessKeyId,
+      sessionToken: undefined,
+    });
+  });
+
+  it('builds it with no credentials, for the same AssumeRole, when there is no key', async () => {
+    const keyed = harness(handlers);
+    const chained = harness(
+      handlers,
+      {
+        t: 0,
+      },
+      { roleArn: MANAGEMENT.roleArn },
+    );
+    await keyed.api.findOrganizationAccount('x');
+    await chained.api.findOrganizationAccount('x');
+
+    expect(chained.calls[0]).toMatchObject({
+      service: 'sts',
+      command: 'AssumeRoleCommand',
+      hasCredentials: false,
+      accessKeyId: undefined,
+    });
+    expect(chained.calls[0]?.region).toBe(keyed.calls[0]?.region);
+    // Same role, session name and duration as the key path.
+    expect(chained.calls[0]?.input).toEqual(keyed.calls[0]?.input);
+    // Every later call runs on the assumed session, exactly as with the key.
+    expect(chained.calls.slice(1)).toEqual(keyed.calls.slice(1));
+  });
+
+  it('assumes member roles from the management session on the default chain too', async () => {
+    const { api, calls } = harness(
+      { AssumeRoleCommand: assume },
+      { t: 0 },
+      {
+        roleArn: MANAGEMENT.roleArn,
+      },
+    );
+    await api.assumeMemberRole('222222222222');
+    expect(calls.map((c) => [c.hasCredentials, c.accessKeyId, c.sessionToken])).toEqual([
+      [false, undefined, undefined],
+      [true, 'ASIAMGMT', 'token-MGMT'],
+    ]);
   });
 });
 
