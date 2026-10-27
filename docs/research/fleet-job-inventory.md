@@ -57,6 +57,16 @@ motir-marketing keep their 2026-10-15 shas: their workflows changed in structure
 since then, they are public, and the readiness check never reads them, so moving
 the sha without re-inventorying their jobs would record a measurement nobody made.
 
+**motir-infra added (2026-10-27):** project MOTIR's new private repository, measured
+at `b5221db3f` (motir-infra#1's head; its `main` has no workflow yet, so the
+readiness check reads no newer workflow commit until that pull request merges, and
+the merge carries the same fingerprint). Four jobs, all `runnable` on the image:
+`pr.yml · checks` and `diff`, `main.yml · checks` and `deploy`. Each runs on the
+seam expression and needs only checkout, pnpm's setup action, setup-node at Node 22
+(`.nvmrc`), bash, and curl for the `actionlint` download in the shared `checks`
+action; `diff` and `deploy` add `aws-actions/configure-aws-credentials` and
+`actions/github-script`, which are JavaScript actions.
+
 **Image under test:** `infra/ci-runner/Dockerfile` on `motir-core` `main` at
 `4064243068` (last commit touching the file, 2026-10-12). Every "absent from the
 image" below is read from that file: it installs Ubuntu 24.04 (by digest), the
