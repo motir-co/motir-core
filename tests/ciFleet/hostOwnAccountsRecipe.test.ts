@@ -593,7 +593,7 @@ describe('the Host own-accounts recipe, step by step', () => {
     expect(await ownRequests(first.organizationId)).toHaveLength(3);
   });
 
-  it("recipe 3 — before any grant: five runs on the shared runner, the sixth waits on the plan's figure; CI held to 50 on shared", async () => {
+  it("recipe 3 — before any grant: five runs on the shared runner, the sixth waits on the plan's figure; CI held to 20 on shared", async () => {
     const runs = [];
     for (let i = 0; i < 6; i++) runs.push(await hostedRun(first));
     expect(runs.slice(0, 5).map((r) => r.landed)).toEqual(Array(5).fill(on(shared.hosted_agent!)));
@@ -601,18 +601,18 @@ describe('the Host own-accounts recipe, step by step', () => {
     expect((runs[5]!.landed as { detail: string }).detail).toContain('runs 5');
 
     const jobs = [];
-    for (let i = 0; i < 51; i++) jobs.push(await ciJob(first));
+    for (let i = 0; i < 21; i++) jobs.push(await ciJob(first));
     expect(
       jobs
-        .slice(0, 50)
+        .slice(0, 20)
         .every((j) => 'shardId' in j.landed && j.landed.shardId === shared.ci_runner!.id),
     ).toBe(true);
-    expect(jobs[50]!.landed).toMatchObject({ deferred: 'plan_cap' });
-    expect((jobs[50]!.landed as { detail: string }).detail).toContain('50');
+    expect(jobs[20]!.landed).toMatchObject({ deferred: 'plan_cap' });
+    expect((jobs[20]!.landed as { detail: string }).detail).toContain('20');
     expect([
       (await caps(first.organizationId)).agentRunsInParallel,
       (await caps(first.organizationId)).ciBurstCap,
-    ]).toEqual([5, 50]);
+    ]).toEqual([5, 20]);
 
     // The runs and the push finish.
     await finishHosted(runs.map((r) => r.ref));
@@ -678,7 +678,7 @@ describe('the Host own-accounts recipe, step by step', () => {
     setNow(new Date(now.getTime() + 5 * MINUTE)); // past the refusal's pause
     const pending = await ciJob(first);
     expect(pending.landed).toEqual(on(shared.ci_runner!));
-    expect((await caps(first.organizationId)).ciBurstCap).toBe(50);
+    expect((await caps(first.organizationId)).ciBurstCap).toBe(20);
 
     await answer(first.organizationId, 'ci_runner', 'APPROVED', 200);
     await statePass();
