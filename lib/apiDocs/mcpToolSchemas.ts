@@ -1606,6 +1606,19 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  get_plan_authoring_state: {
+    type: 'object',
+    properties: {
+      planId: {
+        type: 'string',
+        minLength: 1,
+        description: 'The plan id `create_plan` returned (or the id shown on the plan in Motir).',
+      },
+    },
+    required: ['planId'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   get_plan_status: {
     type: 'object',
     properties: {
@@ -4228,6 +4241,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   get_design: 'Get design',
   get_page: 'Get page',
   get_plan: 'Read plan proposals',
+  get_plan_authoring_state: 'Read which proposals are authored',
   get_plan_status: 'Plan status',
   get_project_state: 'Get project state',
   get_section_sets: 'Get section sets',
@@ -4529,6 +4543,11 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
   get_design: { title: 'Get design', readOnlyHint: true, openWorldHint: false },
   get_page: { title: 'Get page', readOnlyHint: true, openWorldHint: false },
   get_plan: { title: 'Read plan proposals', readOnlyHint: true, openWorldHint: false },
+  get_plan_authoring_state: {
+    title: 'Read which proposals are authored',
+    readOnlyHint: true,
+    openWorldHint: false,
+  },
   get_plan_status: { title: 'Plan status', readOnlyHint: true, openWorldHint: false },
   get_project_state: { title: 'Get project state', readOnlyHint: true, openWorldHint: false },
   get_section_sets: { title: 'Get section sets', readOnlyHint: true, openWorldHint: false },
