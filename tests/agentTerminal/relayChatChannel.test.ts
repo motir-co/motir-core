@@ -46,6 +46,13 @@ const MASTER = 'm'.repeat(48);
 const ORIGIN = 'https://motir.test';
 const MARKER = 'PROMPT-7013-never-logged-c4e1';
 const RELAY_ID = 'relay-chat-test';
+/**
+ * How long any wait in this file — and the relay's own auth window — may take
+ * (MOTIR-9875). Sized for a loaded CI shard, where a ticket mint alone measured
+ * 437–519 ms on one throttled CPU, and kept under vitest's 15 s `testTimeout` so a
+ * wait that cannot be met still fails as a wait.
+ */
+const WAIT_MS = 10_000;
 
 // ── The fake machine ────────────────────────────────────────────────────────
 
@@ -150,7 +157,7 @@ async function startRelay(): Promise<void> {
     reportError: (err) => reported.push(err),
     now: () => nowMs,
     heartbeatIntervalMs: 60_000,
-    authTimeoutMs: 300,
+    authTimeoutMs: WAIT_MS,
     pingIntervalMs: 60_000,
     dialTimeoutMs: 2_000,
   });
@@ -186,6 +193,8 @@ interface Browser {
   ws: WebSocket;
   inbox: Buffer[];
   closed: Promise<number>;
+  /** The close code once the relay (or the test) has closed this browser. */
+  closeCode: number | null;
   opened: Promise<void>;
 }
 
@@ -194,7 +203,13 @@ function browser(path: '/v1/chat' | '/v1/terminal' = '/v1/chat'): Browser {
   const b: Browser = {
     ws,
     inbox: [],
-    closed: new Promise((resolve) => ws.on('close', (code) => resolve(code))),
+    closeCode: null,
+    closed: new Promise((resolve) =>
+      ws.on('close', (code) => {
+        b.closeCode = code;
+        resolve(code);
+      }),
+    ),
     opened: new Promise((resolve, reject) => {
       ws.on('open', () => resolve());
       ws.on('error', reject);
@@ -204,10 +219,25 @@ function browser(path: '/v1/chat' | '/v1/terminal' = '/v1/chat'): Browser {
   return b;
 }
 
-async function until(done: () => boolean | Promise<boolean>, ms = 4_000): Promise<void> {
+/** What the relay said, for a wait that failed: a refusal and a slow dial must not read alike. */
+const relayState = () =>
+  `relay log: ${JSON.stringify(logs)}; reported: ${JSON.stringify(reported.map((e) => e.message))}`;
+
+/**
+ * Poll until `done`. Given the browser the wait depends on, a close fails it AT
+ * ONCE with the close code (MOTIR-9875) — the relay refusing it is an answer,
+ * not a reason to run out the clock.
+ */
+async function until(
+  done: () => boolean | Promise<boolean>,
+  { ms = WAIT_MS, browser: b }: { ms?: number; browser?: Browser } = {},
+): Promise<void> {
   const deadline = Date.now() + ms;
   while (!(await done())) {
-    if (Date.now() > deadline) throw new Error('timed out waiting');
+    if (b?.closeCode != null) {
+      throw new Error(`browser closed ${b.closeCode} while waiting; ${relayState()}`);
+    }
+    if (Date.now() > deadline) throw new Error(`timed out waiting ${ms} ms; ${relayState()}`);
     await new Promise((r) => setTimeout(r, 10));
   }
 }
@@ -227,12 +257,26 @@ const runningAgent = async () => {
 const ticketFor = async (id: string, channel: AgentTerminalChannel = 'chat') =>
   (await agentTerminalService.issueTicket(fx.projectIdentifier, id, fx.ctx, channel)).ticket;
 
+/**
+ * A browser on `path` that has sent `ticket` as its first frame. The ticket is
+ * minted BEFORE this is called: the relay's auth window opens with the socket, so
+ * a mint inside it is a database write racing the window (MOTIR-9875).
+ */
+async function authed(ticket: string, path?: '/v1/chat' | '/v1/terminal'): Promise<Browser> {
+  const b = browser(path);
+  await b.opened;
+  b.ws.send(JSON.stringify({ t: 'auth', ticket }));
+  return b;
+}
+
+/** Wait until the relay has authorised `b` and dialled the machine. */
+const dialled = (b: Browser) =>
+  until(() => machine.upgrades.length === 1 && relay.liveConnections === 1, { browser: b });
+
 /** A browser on `/v1/chat` that has authenticated, once its dial is through. */
 async function openChat(id: string): Promise<Browser> {
-  const b = browser();
-  await b.opened;
-  b.ws.send(JSON.stringify({ t: 'auth', ticket: await ticketFor(id) }));
-  await until(() => machine.upgrades.length === 1 && relay.liveConnections === 1);
+  const b = await authed(await ticketFor(id));
+  await dialled(b);
   // The first frame the machine sees proves the upstream socket is open.
   b.ws.send('{"t":"list"}');
   await until(() => machine.received.length === 1);
@@ -338,10 +382,9 @@ describe('a ticket opens only its own channel (agent-chat.md Q4)', () => {
       ['chat', '/v1/terminal'],
       ['terminal', '/v1/chat'],
     ] as const) {
-      const b = browser(path);
-      await b.opened;
-      b.ws.send(JSON.stringify({ t: 'auth', ticket: await ticketFor(id, minted) }));
+      const b = await authed(await ticketFor(id, minted), path);
       expect(await b.closed).toBe(TERMINAL_CLOSE.badTicket);
+      expect(logs.at(-1)).toMatch(/refused code=4401 \(refused\)$/); // not the auth window
     }
     expect(machine.upgrades).toEqual([]);
     expect(await connections()).toEqual([]);
@@ -352,9 +395,7 @@ describe('an image with no chat server (agent-chat.md Q8)', () => {
   it('the machine’s 404 on /v1/chat closes the browser 4411, recorded, and reported nowhere', async () => {
     const id = await runningAgent();
     machine.refuse['/v1/chat'] = 404;
-    const b = browser();
-    await b.opened;
-    b.ws.send(JSON.stringify({ t: 'auth', ticket: await ticketFor(id) }));
+    const b = await authed(await ticketFor(id));
     expect(await b.closed).toBe(TERMINAL_CLOSE.noChatServer);
     expect(TERMINAL_CLOSE.noChatServer).toBe(4411);
     await until(async () => (await connections())[0]?.closedAt != null);
@@ -370,9 +411,7 @@ describe('an image with no chat server (agent-chat.md Q8)', () => {
   it('any other refusal on /v1/chat stays 4502', async () => {
     const id = await runningAgent();
     machine.refuse['/v1/chat'] = 500;
-    const b = browser();
-    await b.opened;
-    b.ws.send(JSON.stringify({ t: 'auth', ticket: await ticketFor(id) }));
+    const b = await authed(await ticketFor(id));
     expect(await b.closed).toBe(TERMINAL_CLOSE.unreachable);
     expect(reported.map((e) => e.message)).toContain(
       'relay: the chat server refused the upgrade (HTTP 500)',
@@ -382,9 +421,7 @@ describe('an image with no chat server (agent-chat.md Q8)', () => {
   it('a 404 on /v1/terminal is unchanged: the terminal channel closes 4502', async () => {
     const id = await runningAgent();
     machine.refuse['/v1/terminal'] = 404;
-    const b = browser('/v1/terminal');
-    await b.opened;
-    b.ws.send(JSON.stringify({ t: 'auth', ticket: await ticketFor(id, 'terminal') }));
+    const b = await authed(await ticketFor(id, 'terminal'), '/v1/terminal');
     expect(await b.closed).toBe(TERMINAL_CLOSE.unreachable);
     expect(reported.map((e) => e.message)).toContain(
       'relay: the terminal server refused the upgrade (HTTP 404)',
@@ -481,11 +518,9 @@ describe('nothing that flows is logged or reported (agent-chat.md Q10)', () => {
       });
     }
     const id = await runningAgent();
-    const b = browser();
-    await b.opened;
     const ticket = await ticketFor(id);
-    b.ws.send(JSON.stringify({ t: 'auth', ticket }));
-    await until(() => relay.liveConnections === 1 && machine.upgrades.length === 1);
+    const b = await authed(ticket);
+    await dialled(b);
     await sendAndSettle(b, JSON.stringify({ t: 'open' }));
 
     failTouch = true; // every bump from here on throws, with the prompt in its message
