@@ -189,8 +189,19 @@ describe('planCapsService.capsFor — a Host org', () => {
     expect(await caps(org)).toEqual(FLOOR);
   });
 
-  it('the merged indexer + agent hoster account moves neither figure', async () => {
-    await own(org, ['code_graph_index', 'agent_instance'], { granted: 128 });
+  it('the merged indexer + agent hoster account lifts the agents to 10 / 50 and moves neither run nor CI figure (MOTIR-9668)', async () => {
+    await own(org, ['code_graph_index', 'agent_instance'], { granted: 120 });
+    expect(await caps(org)).toEqual({ ...FLOOR, agentsPerUser: 10, agentsRunningPerOrg: 50 });
+  });
+
+  it('the merged account not yet live keeps the floor’s agents', async () => {
+    await own(org, ['code_graph_index', 'agent_instance'], { granted: 120, live: false });
+    expect(await caps(org)).toEqual(FLOOR);
+  });
+
+  it('the agent hoster’s switch reading Fly keeps the floor’s agents', async () => {
+    wireFleetKindSwitch('agent_instance', async () => false);
+    await own(org, ['code_graph_index', 'agent_instance'], { granted: 120 });
     expect(await caps(org)).toEqual(FLOOR);
   });
 

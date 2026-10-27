@@ -424,7 +424,7 @@ describe('a plan read once reaches every door, each with its own figure', () => 
     expect(await hostedSlots()).toBe(1);
   });
 
-  it('Pro: three runs boot and the fourth waits; the sixth create is user_cap 5 Pro; the eleventh CI job is plan_cap Pro 10', async () => {
+  it('Pro: three runs boot and the fourth waits; the third create is user_cap 2 Pro; the sixth CI job is plan_cap Pro 5', async () => {
     onPlan(TIERS.pro);
     const runs = [];
     for (let i = 0; i < 4; i++) runs.push(await startHostedRun());
@@ -433,36 +433,36 @@ describe('a plan read once reaches every door, each with its own figure', () => 
       '[motir] waiting for room: a Pro organization runs 3 agent runs at once, and 3 are already running\n',
     ]);
 
-    for (let i = 1; i <= 5; i++) expect((await create(`pro-${i}`)).state).toBe('running');
-    await expect(create('pro-6')).rejects.toMatchObject({
+    for (let i = 1; i <= 2; i++) expect((await create(`pro-${i}`)).state).toBe('running');
+    await expect(create('pro-3')).rejects.toMatchObject({
       reason: 'user_cap',
-      limit: 5,
+      limit: 2,
       planName: 'Pro',
     });
 
-    for (let i = 0; i < 10; i++) {
-      expect(await admitCi()).toMatchObject({ outcome: 'admitted', ciBurstCap: 10 });
+    for (let i = 0; i < 5; i++) {
+      expect(await admitCi()).toMatchObject({ outcome: 'admitted', ciBurstCap: 5 });
     }
-    const eleventh = await admitCi();
-    expect(eleventh).toMatchObject({ outcome: 'deferred', reason: 'plan_cap' });
-    expect((eleventh as { detail: string }).detail).toMatch(
-      /^a Pro organization runs 10 CI jobs at once, and 10 are already running/,
+    const sixth = await admitCi();
+    expect(sixth).toMatchObject({ outcome: 'deferred', reason: 'plan_cap' });
+    expect((sixth as { detail: string }).detail).toMatch(
+      /^a Pro organization runs 5 CI jobs at once, and 5 are already running/,
     );
 
     // Each workload sits at its own figure, and none borrowed from another.
     expect(await hostedSlots()).toBe(3);
-    expect(await agentSlots()).toHaveLength(5);
-    expect(await ciRunning()).toBe(10);
+    expect(await agentSlots()).toHaveLength(2);
+    expect(await ciRunning()).toBe(5);
   });
 });
 
 // ── 2 · workload independence ───────────────────────────────────────────────
 
 describe('each workload fills its own figure while the others still admit', () => {
-  it('Max with CI at 25: the 26th CI job waits, and a hosted run and an agent wake in the same org are admitted', async () => {
+  it('Max with CI at 10: the 11th CI job waits, and a hosted run and an agent wake in the same org are admitted', async () => {
     onPlan(TIERS.max);
     const sleeping = await sleepingAgent('sleeper');
-    await ciInFlight(25);
+    await ciInFlight(10);
 
     expect(await admitCi()).toMatchObject({ outcome: 'deferred', reason: 'plan_cap' });
 
@@ -471,18 +471,18 @@ describe('each workload fills its own figure while the others still admit', () =
     expect(await waitingLines(run)).toEqual([]);
 
     expect((await wake(sleeping)).state).toBe('running');
-    expect(await ciRunning()).toBe(25);
+    expect(await ciRunning()).toBe(10);
   });
 
-  it('Standard with its hosted run and five agents running: CI still admits its own five, and indexing answers only to the index caps', async () => {
+  it('Standard with its hosted run and two agents running: CI still admits its own two, and indexing answers only to the index caps', async () => {
     onPlan(TIERS.standard);
     await startHostedRun();
-    await agentsRunning(5);
-    // Both at their figures: a second run would wait, a sixth agent is refused.
+    await agentsRunning(2);
+    // Both at their figures: a second run would wait, a third agent is refused.
     await expect(create('one-too-many')).rejects.toMatchObject({ reason: 'org_running_cap' });
 
-    for (let i = 0; i < 5; i++) {
-      expect(await admitCi()).toMatchObject({ outcome: 'admitted', ciBurstCap: 5 });
+    for (let i = 0; i < 2; i++) {
+      expect(await admitCi()).toMatchObject({ outcome: 'admitted', ciBurstCap: 2 });
     }
     expect(await admitCi()).toMatchObject({ outcome: 'deferred', reason: 'plan_cap' });
 
@@ -493,11 +493,11 @@ describe('each workload fills its own figure while the others still admit', () =
   });
 
   // ⚠️ MUTATION-CHECK: delete the `lockScope` call in `ciRunnerAdmissionService.admit`
-  // and both CI racers read "24 in flight" and both claim — 26 against a figure of 25.
+  // and both CI racers read "9 in flight" and both claim — 11 against a figure of 10.
   it('one Max org racing CI (twice its room), a hosted run and a wake inside one admission window: no workload passes its figure', async () => {
     onPlan(TIERS.max);
     const sleeping = await sleepingAgent('racer');
-    await ciInFlight(24);
+    await ciInFlight(9);
     const [a, b] = [await seedIntent(), await seedIntent()];
     const lock = vi.spyOn(ciFleetAdmissionLockRepository, 'lockScope');
 
@@ -511,12 +511,12 @@ describe('each workload fills its own figure while the others still admit', () =
     const ci = [ciA, ciB];
     expect(ci.filter((v) => v.outcome === 'admitted')).toHaveLength(1);
     expect(ci.filter((v) => v.outcome === 'deferred' && v.reason === 'plan_cap')).toHaveLength(1);
-    expect(await ciRunning()).toBe(25);
+    expect(await ciRunning()).toBe(10);
     expect(await runRow(run)).toMatchObject({ status: 'running' });
     expect(await waitingLines(run)).toEqual([]);
     expect(await hostedSlots()).toBe(1);
     expect(woken.state).toBe('running');
-    expect(await runningAgents()).toBeLessThanOrEqual(50);
+    expect(await runningAgents()).toBeLessThanOrEqual(20);
     // Every one of the three gates took the one lock.
     expect(lock.mock.calls.length).toBeGreaterThanOrEqual(4);
   });
@@ -613,7 +613,7 @@ describe('a plan change reaches every door after the 30-second cache, and ends n
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date());
     onPlan(TIERS.pro);
-    await ciInFlight(5);
+    await ciInFlight(2);
     await create('first');
     const firstRun = await startHostedRun();
     expect(
@@ -626,11 +626,11 @@ describe('a plan change reaches every door after the 30-second cache, and ends n
     // The subscription moves; the cached read does not, yet.
     onPlan(TIERS.standard, { fresh: false });
     vi.setSystemTime(Date.now() + PLAN_CACHE_TTL_MS - 5_000);
-    expect(await admitCi()).toMatchObject({ outcome: 'admitted', ciBurstCap: 10 });
+    expect(await admitCi()).toMatchObject({ outcome: 'admitted', ciBurstCap: 5 });
     expect((await create('second')).state).toBe('running');
     const secondRun = await startHostedRun();
     expect(fakeOrchestrator.provisioned).toHaveLength(2);
-    expect(await monitorPlan()).toMatchObject({ planKey: 'pro', ciBurstCap: 10 });
+    expect(await monitorPlan()).toMatchObject({ planKey: 'pro', ciBurstCap: 5 });
 
     // Past the cache: every door, and the monitor, judge Standard.
     vi.setSystemTime(Date.now() + 10_000);
@@ -651,13 +651,13 @@ describe('a plan change reaches every door after the 30-second cache, and ends n
       planName: 'Standard',
       agentRunsInParallel: 1,
       agentsPerUser: 1,
-      agentsRunningPerOrg: 5,
-      ciBurstCap: 5,
+      agentsRunningPerOrg: 2,
+      ciBurstCap: 2,
       ciBurstSource: 'plan',
     });
 
     // Nothing already in flight was ended by the downgrade.
-    expect(await ciRunning()).toBe(6);
+    expect(await ciRunning()).toBe(3);
     expect(await agentSlots()).toHaveLength(2);
     expect(await runRow(firstRun)).toMatchObject({ status: 'running' });
     expect(await runRow(secondRun)).toMatchObject({ status: 'running' });
@@ -751,8 +751,8 @@ describe('the kill switch stops every workload; the retired variables decide not
     await startHostedRun();
     await startHostedRun();
     expect(fakeOrchestrator.provisioned).toHaveLength(2);
-    expect(await admitCi()).toMatchObject({ outcome: 'admitted', ciBurstCap: 10 });
-    expect(await admitCi()).toMatchObject({ outcome: 'admitted', ciBurstCap: 10 });
+    expect(await admitCi()).toMatchObject({ outcome: 'admitted', ciBurstCap: 5 });
+    expect(await admitCi()).toMatchObject({ outcome: 'admitted', ciBurstCap: 5 });
     expect((await create('one')).state).toBe('running');
     expect((await create('two')).state).toBe('running');
   });
@@ -804,8 +804,8 @@ describe('the platform monitor reports the figures the gates applied', () => {
       planKey: 'max',
       planName: 'Max',
       agentRunsInParallel: 5,
-      agentsPerUser: 10,
-      agentsRunningPerOrg: 50,
+      agentsPerUser: 3,
+      agentsRunningPerOrg: 20,
       ciBurstCap: 7,
       ciBurstSource: 'override',
     });
@@ -817,8 +817,8 @@ describe('the platform monitor reports the figures the gates applied', () => {
 describe('a real user_cap refusal reaches My agents with the plan’s figure', () => {
   it('create → mapAgentInstanceError: a 429 carrying reason, limit and planName, never 10 or 500', async () => {
     onPlan(TIERS.pro);
-    for (let i = 1; i <= 5; i++) await create(`a-${i}`);
-    const refused = await create('a-6').catch((e: unknown) => e);
+    for (let i = 1; i <= 2; i++) await create(`a-${i}`);
+    const refused = await create('a-3').catch((e: unknown) => e);
 
     const res = mapAgentInstanceError(refused)!;
     expect(res.status).toBe(429);
@@ -828,13 +828,13 @@ describe('a real user_cap refusal reaches My agents with the plan’s figure', (
       planName: string;
       error: string;
     };
-    expect(body).toMatchObject({ reason: 'user_cap', limit: 5, planName: 'Pro' });
+    expect(body).toMatchObject({ reason: 'user_cap', limit: 2, planName: 'Pro' });
     expect(refusalKey(body)).toBe('userCap');
-    expect(body.error).toContain('Pro plan allows 5 agents per person');
+    expect(body.error).toContain('Pro plan allows 2 agents per person');
     expect(body.error).not.toMatch(/\b10\b/);
     expect(body.error).not.toContain('500');
     // Nothing was taken for the refused create.
-    expect(await agentSlots()).toHaveLength(5);
-    expect(fleet.persistentSpecs).toHaveLength(5);
+    expect(await agentSlots()).toHaveLength(2);
+    expect(fleet.persistentSpecs).toHaveLength(2);
   });
 });

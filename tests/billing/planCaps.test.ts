@@ -9,7 +9,7 @@ import {
 } from '@/lib/billing/planCaps';
 
 // THE PLAN-CAPS TABLE (Story MOTIR-9363 · MOTIR-9372): the owner's figures per
-// plan key, and the totality that keeps the table in step with the catalog.
+// plan key (MOTIR-9357 as corrected at its gate, CI raised 2026-10-26 — MOTIR-9668), and the totality that keeps the table in step with the catalog.
 
 function figures(c: PlanCaps | null): [number, number, number, number] | null {
   return c ? [c.agentRunsInParallel, c.agentsPerUser, c.agentsRunningPerOrg, c.ciBurstCap] : null;
@@ -18,18 +18,18 @@ function figures(c: PlanCaps | null): [number, number, number, number] | null {
 describe('capsForPlanKey — the table', () => {
   it.each([
     ['free', [0, 0, 0, 0]],
-    ['standard', [1, 1, 5, 5]],
-    ['pro', [3, 5, 30, 10]],
-    ['max', [5, 10, 50, 25]],
-    ['max_x2', [5, 10, 50, 25]],
-    [HOST_PLAN_KEY, [5, 10, 50, 50]],
+    ['standard', [1, 1, 2, 2]],
+    ['pro', [3, 2, 10, 5]],
+    ['max', [5, 3, 20, 10]],
+    ['max_x2', [5, 3, 20, 15]],
+    [HOST_PLAN_KEY, [5, 5, 20, 20]],
   ] as const)('%s → %j', (key, expected) => {
     expect(figures(capsForPlanKey(key))).toEqual(expected);
   });
 
-  it('host takes its own floor (5/10/50/50), apart from the larger pools (MOTIR-9653)', () => {
+  it('host takes its own floor (5/5/20/20), apart from the larger pools (MOTIR-9668)', () => {
     expect(capsForPlanKey(HOST_PLAN_KEY)).toBe(HOST_FLOOR_CAPS);
-    expect(figures(HOST_FLOOR_CAPS)).toEqual([5, 10, 50, 50]);
+    expect(figures(HOST_FLOOR_CAPS)).toEqual([5, 5, 20, 20]);
   });
 
   it('every larger pool on sale takes the larger-pool floor (5/10/50/20) (MOTIR-9653)', () => {
@@ -76,7 +76,7 @@ describe('capsForPlanKey — totality, and never a default', () => {
   );
 
   it("max_x2 never resolves to max's row by prefix, nor max to max_x2's", () => {
-    expect(capsForPlanKey('max_x2')!.ciBurstCap).toBe(25);
+    expect(capsForPlanKey('max_x2')!.ciBurstCap).toBe(15);
     expect(capsForPlanKey('max_x2')).not.toBe(capsForPlanKey('max'));
   });
 
