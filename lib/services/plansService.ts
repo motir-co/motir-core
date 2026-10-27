@@ -71,6 +71,15 @@ import { workItemRevisionsService } from '@/lib/services/workItemRevisionsServic
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { NoInitialStatusError } from '@/lib/workItems/errors';
 import { foldAppend } from '@/lib/plans/mergeModifyPatch';
+import {
+  assertEdgeReasonsKeyed,
+  foldEdgeReasons,
+  normalizeCorrectionEdges,
+  normalizeProposalEdges,
+  pickEdgeReasons,
+  proposalEdgeRefs,
+  readEdgeReasons,
+} from '@/lib/plans/edgeReasons';
 import { assertKnownPatchKeys } from '@/lib/plans/validatePatchKeys';
 import {
   FOLDER_REF_PREFIX,
@@ -3037,13 +3046,18 @@ async function materialize(
   // per-row structural triggers are unaffected by batching (see
   // `createManyIfAbsent`), and `skipDuplicates` makes a plan that proposes the
   // same edge twice idempotent instead of aborting the approve.
+  //
+  // Each edge carries the REASON its proposal gave it (MOTIR-9827) onto the link,
+  // so the card shows why it waits once the plan is gone.
   const blockedByRows = adds.flatMap((item) => {
     const fromId = planItemToWorkItem.get(item.id)!;
+    const reasons = readEdgeReasons(item.edgeReasons);
     return item.blockedByRefs.map((ref) => ({
       workspaceId: ctx.workspaceId,
       fromId,
       toId: resolveRef(ref),
       kind: 'is_blocked_by' as const,
+      reason: reasons[ref] ?? null,
       createdById: ctx.userId,
     }));
   });
@@ -4005,6 +4019,7 @@ async function applyModify(
   // `implemented` card goes on claiming the OLD body is on the remote, and
   // readiness, the board, the parent rollup and dispatch all read that claim.
   const linkAdded: Array<{ toId: string; kind: string }> = [];
+  const edgeReasons = readEdgeReasons(item.edgeReasons);
   for (const ref of patch.blockedByAdd ?? []) {
     const toId = resolveRef(ref);
     // `createIfAbsent`, not `create` (MOTIR-8147): naming an edge the card already
@@ -4019,6 +4034,7 @@ async function applyModify(
         fromId: item.workItemId,
         toId,
         kind: 'is_blocked_by',
+        reason: edgeReasons[ref] ?? null,
         createdById: ctx.userId,
       },
       tx,
@@ -5436,8 +5452,16 @@ export const plansService = {
     // The sections INPUT is rendered into each `add`'s `descriptionMd` and stripped
     // BEFORE any gate below reads a proposal (MOTIR-9030), so every gate judges the
     // proposal as it will be stored and `proposals` never carries a `sections` key.
-    const proposals = incoming.map(resolveProposalSections);
+    //
+    // The edge lists are split first (MOTIR-9827): a `{ ref, reason }` entry in an
+    // `add`'s `blockedByRefs` or a `modify`'s `patch.blockedByAdd` becomes a bare
+    // ref plus an `edgeReasons` entry, so every gate below reads the `string[]` it
+    // always has.
+    const proposals = incoming.map(normalizeProposalEdges).map(resolveProposalSections);
     proposals.forEach(validateProposal);
+    proposals.forEach((p) =>
+      assertEdgeReasonsKeyed(p, proposalLabel({ op: p.op, workItemId: p.workItemId })),
+    );
 
     // ⚠️ THE CLOSE'S OWN GATE, FOR THE ONE APPEND THAT HAS NO CLOSE LEFT
     // (MOTIR-4153). Read the append's own gate comment below: it deliberately
@@ -5761,6 +5785,7 @@ export const plansService = {
           // still gets a real id (AMENDMENT 18 §2).
           const appendedItemIds: string[] = [];
           const inserted: ProposalInput[] = [];
+          const reasons = foldEdgeReasons(existing, proposals, fold);
           for (const [index, p] of proposals.entries()) {
             const disposition = fold.dispositions[index]!;
             if (disposition.kind === 'mergeExisting') {
@@ -5779,6 +5804,10 @@ export const plansService = {
               workItemId: p.op === 'add' ? null : (p.workItemId ?? null),
               parentRef: p.parentRef ?? null,
               blockedByRefs: p.blockedByRefs ?? [],
+              edgeReasons: pickEdgeReasons(
+                reasons.forInsert.get(index),
+                proposalEdgeRefs({ op: p.op, blockedByRefs: p.blockedByRefs, patch }),
+              ),
               supersedesRefs: p.op === 'add' ? (p.supersedesRefs ?? []) : [],
               baseRevision: baseRevisions.get(index) ?? p.baseRevision ?? null,
               reason: p.op === 'remove' && p.reason ? p.reason.trim() : null,
@@ -5805,7 +5834,13 @@ export const plansService = {
           for (const [rowId, merged] of fold.mergedExisting) {
             await planItemRepository.update(
               rowId,
-              { patch: merged as unknown as Prisma.InputJsonValue },
+              {
+                patch: merged as unknown as Prisma.InputJsonValue,
+                edgeReasons: pickEdgeReasons(
+                  reasons.forExisting.get(rowId),
+                  merged.blockedByAdd ?? [],
+                ),
+              },
               tx,
             );
           }
@@ -6697,6 +6732,7 @@ export const plansService = {
     ctx: ServiceContext,
     opts: { byReviewer?: boolean } = {},
   ): Promise<PlanWithItemsDto> {
+    input = normalizeCorrectionEdges(input);
     const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       planRepository.findById(planId, ctx.workspaceId, tx),
     );
@@ -6938,7 +6974,11 @@ export const plansService = {
           data.proposedFields = next as unknown as Prisma.InputJsonValue;
           touched.push(
             ...Object.keys(input).filter(
-              (k) => k !== 'parentRef' && k !== 'blockedByRefs' && k !== 'supersedesRefs',
+              (k) =>
+                k !== 'parentRef' &&
+                k !== 'blockedByRefs' &&
+                k !== 'edgeReasons' &&
+                k !== 'supersedesRefs',
             ),
           );
         } else {
@@ -6947,7 +6987,11 @@ export const plansService = {
           // `targetRepo` are meaningless on it rather than merely unsupported.
           const contentKeys = Object.keys(input).filter(
             (k) =>
-              k !== 'patch' && k !== 'blockedByRefs' && k !== 'parentRef' && k !== 'supersedesRefs',
+              k !== 'patch' &&
+              k !== 'blockedByRefs' &&
+              k !== 'edgeReasons' &&
+              k !== 'parentRef' &&
+              k !== 'supersedesRefs',
           );
           if (contentKeys.length > 0) {
             throw new InvalidProposalError(
@@ -7082,6 +7126,24 @@ export const plansService = {
         if (input.blockedByRefs !== undefined) {
           data.blockedByRefs = input.blockedByRefs;
           touched.push('blockedByRefs');
+        }
+        // The reasons REPLACE with the edges they explain (MOTIR-9827), held to the
+        // refs the corrected proposal draws.
+        if (input.edgeReasons !== undefined) {
+          const correctedEdges = {
+            op: item.op,
+            blockedByRefs: (data.blockedByRefs as string[] | undefined) ?? item.blockedByRefs,
+            patch: (input.patch !== undefined ? input.patch : item.patch) as {
+              blockedByAdd?: string[];
+            } | null,
+            edgeReasons: input.edgeReasons,
+          };
+          assertEdgeReasonsKeyed(
+            correctedEdges,
+            proposalLabel({ op: item.op, workItemId: item.workItemId }),
+          );
+          data.edgeReasons = input.edgeReasons;
+          touched.push('edgeReasons');
         }
         // REPLACES the `add`'s supersedes set (MOTIR-6630), as `blockedByRefs`
         // does; a `modify` corrects its edges through its `patch`.

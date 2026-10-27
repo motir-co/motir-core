@@ -40,6 +40,7 @@ import { WORK_ITEM_DIFFICULTIES } from '@/lib/issues/difficulty';
 import { WORK_ITEM_OBSOLESCENCES } from '@/lib/issues/obsolescence';
 import type { WorkItemDifficultyDto } from '@/lib/dto/workItems';
 import { isWorkItemKey, resolveCorrectionKeyRefs, resolveKeyRefs } from '@/lib/plans/keyRefs';
+import { EDGE_REASON_MAX } from '@/lib/plans/edgeReasons';
 import {
   REASON_CLASSIFIED_KIND,
   REVISION_REASON_BRANCHES,
@@ -516,6 +517,35 @@ const proposedFieldsSchema = z
  * approved card had no executor. The refusal lives in the SERVICE rather than as
  * a `.strict()` here so every door that appends a patch gets it, not only this one.
  */
+/**
+ * ONE entry of a `blocked_by` list (MOTIR-9827): a bare ref, or `{ ref, reason }`
+ * — the ref in any form the list takes, and the reason ONE short line saying what
+ * the waiting card consumes from that blocker. The cap and the one-line rule are
+ * enforced by the service (`lib/plans/edgeReasons.ts`), which names the edge.
+ */
+const edgeEntry = (ref: z.ZodTypeAny) =>
+  z.union([
+    ref,
+    z
+      .object({
+        ref,
+        reason: z
+          .string()
+          .describe(
+            `ONE short line (at most ${EDGE_REASON_MAX} characters) saying what the waiting card ` +
+              'CONSUMES from this blocker — and when it consumes an INTERFACE, the interface ' +
+              'itself: the secret names, the permissions, the endpoint, the file or the symbol ' +
+              'the two cards must agree on (e.g. "consumes: the `AWS_ORG_ADMIN_*` secrets").',
+          ),
+      })
+      .strict(),
+  ]);
+
+const EDGE_REASON_NOTE =
+  ' Each entry may be `{ ref, reason }` instead of a bare ref: the reason is one short line ' +
+  'saying what the waiting card consumes from that blocker. It is shown on the plan and ' +
+  'written onto the link at approve, so the card says why it waits.';
+
 const patchSchema = z
   .object({
     title: z.string().optional().describe('Re-title the target.'),
@@ -636,13 +666,14 @@ const patchSchema = z
           'or another project’s is refused at the append.',
       ),
     blockedByAdd: z
-      .array(z.string())
+      .array(edgeEntry(z.string()))
       .optional()
       .describe(
         'Dependency edges to ADD — work-item keys ("ACME-7"), real work-item ids, or ' +
           '`planItem:<id>` refs. Each joins the target to an item on the SAME LEVEL — the same ' +
           'depth below their nearest common ancestor — under any parent; a cross-level edge is ' +
-          'refused `cross_level`. An epic is blocked only by another epic.',
+          'refused `cross_level`. An epic is blocked only by another epic.' +
+          EDGE_REASON_NOTE,
       ),
     blockedByRemove: z
       .array(z.string())
@@ -702,7 +733,7 @@ const proposalSchema = z.object({
         'project’s is refused HERE.',
     ),
   blockedByRefs: z
-    .array(z.string())
+    .array(edgeEntry(z.string()))
     .optional()
     .describe(
       'Dependency edges, in the same three forms as `parentRef`: work-item keys ("ACME-7"), ' +
@@ -712,7 +743,8 @@ const proposalSchema = z.object({
         'none — and ' +
         'may cross parents; one between two levels is refused `INVALID_PLAN_REF_GRAPH` / ' +
         '`cross_level`. An epic is blocked only by another epic — an edge with an epic at ' +
-        'either end is cross-level unless both ends are epics.',
+        'either end is cross-level unless both ends are epics.' +
+        EDGE_REASON_NOTE,
     ),
   supersedesRefs: z.array(z.string()).optional().describe(SUPERSEDES_REFS_DESCRIPTION),
   baseRevision: z
@@ -978,11 +1010,13 @@ const updatePlanProposalInputSchema = {
         'refused here rather than at approve — and a ref to the proposal ITSELF is refused too.',
     ),
   blockedByRefs: z
-    .array(correctionRefField)
+    .array(edgeEntry(correctionRefField))
     .optional()
     .describe(
       'REPLACES the dependency edges wholesale — a list has no sparse edit, so send the set you ' +
-        'want and `[]` to clear it. Same ref rules and same re-validation as `parentRef`.',
+        'want and `[]` to clear it. Same ref rules and same re-validation as `parentRef`. The ' +
+        'edges’ reasons are replaced with them.' +
+        EDGE_REASON_NOTE,
     ),
   supersedesRefs: z
     .array(correctionRefField)
@@ -1663,20 +1697,25 @@ export async function runAddPlanItems(
   // cross-tenant id 404s rather than 403s).
   const existing = await plansService.getPlan(args.planId, ctx);
 
-  const proposals: ProposalInput[] = args.proposals.map((p) => ({
-    op: p.op,
-    workItemId: p.workItemId ?? null,
-    proposedFields:
-      p.op === 'add' && p.proposedFields
-        ? stampProvenance(p.proposedFields as ProposedFieldsInput, existing)
-        : null,
-    patch: (p.patch ?? null) as ProposalInput['patch'],
-    parentRef: p.parentRef ?? null,
-    blockedByRefs: p.blockedByRefs ?? [],
-    ...(p.supersedesRefs !== undefined ? { supersedesRefs: p.supersedesRefs } : {}),
-    baseRevision: p.baseRevision ?? null,
-    ...(p.reason !== undefined ? { reason: p.reason } : {}),
-  }));
+  // An edge entry may carry its REASON (MOTIR-9827); `resolveKeyRefs` below
+  // splits each `{ ref, reason }` into the bare ref and an `edgeReasons` entry.
+  const proposals: ProposalInput[] = args.proposals.map(
+    (p) =>
+      ({
+        op: p.op,
+        workItemId: p.workItemId ?? null,
+        proposedFields:
+          p.op === 'add' && p.proposedFields
+            ? stampProvenance(p.proposedFields as ProposedFieldsInput, existing)
+            : null,
+        patch: (p.patch ?? null) as ProposalInput['patch'],
+        parentRef: p.parentRef ?? null,
+        blockedByRefs: p.blockedByRefs ?? [],
+        ...(p.supersedesRefs !== undefined ? { supersedesRefs: p.supersedesRefs } : {}),
+        baseRevision: p.baseRevision ?? null,
+        ...(p.reason !== undefined ? { reason: p.reason } : {}),
+      }) as ProposalInput,
+  );
 
   // KEY → ID, before the service sees them (MOTIR-3576). The plan substrate's
   // contract is unchanged: what reaches `addProposals`, and what lands in the
