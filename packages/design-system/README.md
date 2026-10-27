@@ -124,6 +124,7 @@ renderMock({
   axes: { styleId: string; paletteId: string; typeId: string },
   theme?: 'light' | 'dark',   // data-theme, default 'light'
   fontCss?: string,           // inlined verbatim (e.g. @font-face with data: URLs)
+  boardWidth?: 'narrow' | 'full' | string, // default 'narrow' (64rem)
 }): Promise<string>
 ```
 
@@ -134,6 +135,12 @@ renderMock({
   missing id falls back to that axis's default (the type axis to the pairing
   the resolved style uses) and the fallback is named in an HTML comment at the
   top of the document. It never throws.
+- The board is a 64rem column by default (`boardWidth: 'narrow'`). A page that
+  ships wider is drawn at the width it ships: `'full'` gives the viewport's
+  width, and any other string is ONE max-width class (`'max-w-[1400px]'`),
+  compiled like the rest of the markup. A value that is not one class falls
+  back to `'narrow'` with a comment, as an unknown axis does. Do not widen the
+  board by editing the rendered HTML.
 - The CSS is **compiled**, not copied: Tailwind v4 (the `tailwindcss` peer's
   `compile()` API) runs over the rendered markup with this package's
   `theme.css` as input, and the result is inlined in one `<style>`.
