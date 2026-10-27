@@ -1,4 +1,4 @@
-import { replaceInProse } from '@/lib/markdown/proseRanges';
+import { markdownLinks, replaceInProse } from '@/lib/markdown/proseRanges';
 import { escapeRegExp } from '@/lib/utils/regexp';
 
 // Work-item reference parsing (Story 5.8 · Subtask 5.8.2). A reference to
@@ -31,15 +31,6 @@ import { escapeRegExp } from '@/lib/utils/regexp';
  */
 export const WORKITEM_TOKEN_RE = /\[[^\]\[]*\]\(motir:([A-Za-z0-9_-]+)\)/g;
 
-/**
- * {@link WORKITEM_TOKEN_RE} with the LABEL captured too (MOTIR-9007): group 1 =
- * the bracket label, group 2 = the work-item id. The same token, matched the
- * same way — the label class keeps the `[`-excluding shape for the MOTIR-4202
- * reason above. Read by the mislabelled-link advisory, which compares what a
- * link SAYS with what it OPENS.
- */
-export const WORKITEM_LINK_RE = /\[([^\]\[]*)\]\(motir:([A-Za-z0-9_-]+)\)/g;
-
 /** One `[label](motir:<id>)` link as written: the label a reader sees and the id it opens. */
 export interface WorkItemLink {
   label: string;
@@ -49,18 +40,29 @@ export interface WorkItemLink {
 /**
  * Extract every work-item link from a body — one per distinct (label, id) pair
  * in first-seen order. Unlike {@link parseWorkItemTokenIds} the label is kept, so
- * two links to one id under different labels are two entries.
+ * two links to one id under different labels are two entries. Read by the
+ * mislabelled-link advisory (MOTIR-9007), which compares what a link SAYS with
+ * what it OPENS.
+ *
+ * ⚠️ PARSED, NOT MATCHED (bug MOTIR-9825). A link is an mdast `link` node whose
+ * href is a well-formed `motir:` id ({@link WORKITEM_HREF_RE}) and its label is
+ * the node's text content — exactly what the render layer chips. Link syntax
+ * quoted inside an inline code span or a fenced / indented code block renders as
+ * literal text, so it is not a link and is never judged; the raw regex this
+ * replaced flagged it.
  */
 export function parseWorkItemLinks(text: string): WorkItemLink[] {
+  // No `motir:` anywhere ⇒ no link to find, and no parse to pay for.
+  if (!text.includes('motir:')) return [];
   const links: WorkItemLink[] = [];
   const seen = new Set<string>();
-  for (const match of text.matchAll(WORKITEM_LINK_RE)) {
-    const label = match[1] as string;
-    const id = match[2] as string;
-    const dedupeKey = `${id}\u0000${label}`;
+  for (const link of markdownLinks(text)) {
+    if (!WORKITEM_HREF_RE.test(link.url)) continue;
+    const id = link.url.slice('motir:'.length);
+    const dedupeKey = `${id}\u0000${link.label}`;
     if (!seen.has(dedupeKey)) {
       seen.add(dedupeKey);
-      links.push({ label, id });
+      links.push({ label: link.label, id });
     }
   }
   return links;
@@ -194,6 +196,32 @@ export function parseWorkItemRefs(text: string, projectIdentifier: string): Work
     ids: parseWorkItemTokenIds(text),
     keys: parseWorkItemKeys(withoutTokens, projectIdentifier),
   };
+}
+
+/**
+ * {@link parseWorkItemRefs} for a MARKDOWN body, judged by structure (bug
+ * MOTIR-9825) — the WRITE side's scan, whose result becomes `relates_to` edges.
+ * Ids come from the body's `motir:` LINKS ({@link parseWorkItemLinks}) and keys
+ * from its PROSE only — the ranges {@link normalizeWorkItemRefs} rewrites, which
+ * leave out inline code, code blocks, raw HTML and link labels and destinations.
+ * So a key or token quoted in code relates nothing, and a key relates exactly
+ * when it would render as a chip.
+ *
+ * The raw {@link parseWorkItemRefs} stays for the READ side, which resolves chip
+ * summaries and over-reads harmlessly.
+ */
+export function parseWorkItemProseRefs(markdown: string, projectIdentifier: string): WorkItemRefs {
+  // No `motir:` and no key anywhere ⇒ nothing to find, and no parse to pay for.
+  if (!markdown.includes('motir:') && parseWorkItemKeys(markdown, projectIdentifier).length === 0) {
+    return { ids: [], keys: [] };
+  }
+  const ids = [...new Set(parseWorkItemLinks(markdown).map((link) => link.id))];
+  const keys = new Set<string>();
+  replaceInProse(markdown, (prose) => {
+    for (const key of parseWorkItemKeys(prose, projectIdentifier)) keys.add(key);
+    return prose;
+  });
+  return { ids, keys: [...keys] };
 }
 
 // --- Intra-plan item-link tokens (Story 7.4 generation · MOTIR-1418) ---------

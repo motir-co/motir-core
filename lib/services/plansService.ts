@@ -3251,7 +3251,7 @@ async function materialize(
           projectId: plan.projectId,
           projectIdentifier: prefix,
         },
-        text: `${finalRow.descriptionMd ?? ''}\n${finalRow.explanationMd ?? ''}`,
+        bodies: [finalRow.descriptionMd, finalRow.explanationMd],
         ctx,
       },
       tx,
