@@ -2431,7 +2431,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         type: 'string',
         minLength: 1,
         description:
-          'The file path RELATIVE TO THE REPOSITORY ROOT, e.g. "lib/git/provider.ts". Not a URL, not an absolute path, and never containing "..".',
+          'The file path RELATIVE TO THE REPOSITORY ROOT, e.g. "lib/git/provider.ts" — or a directory path, e.g. ".github/workflows", to list it. Not a URL, not an absolute path, and never containing "..".',
       },
       ref: {
         type: 'string',
