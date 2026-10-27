@@ -41,6 +41,10 @@ vi.mock('@/app/(authed)/items/[key]/approvalGateActions', () => ({
 
 const { announceGateDecided } = vi.hoisted(() => ({ announceGateDecided: vi.fn() }));
 vi.mock('@/lib/approvals/decidedGates', () => ({
+  // The decide's pending-press mark (MOTIR-9696); no row reads it here.
+  markGatePressPending: vi.fn(),
+  clearGatePressPending: vi.fn(),
+  useGatePressPending: () => false,
   announceGateDecided,
   useDecidedGate: () => null,
   useDecidedGateState: () => null,

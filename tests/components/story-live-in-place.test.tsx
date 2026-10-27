@@ -64,6 +64,10 @@ vi.mock('@/app/(authed)/items/[key]/approvalGateActions', () => ({
   retryApproveAndMergeMemberAction: vi.fn(),
 }));
 vi.mock('@/lib/approvals/decidedGates', () => ({
+  // The decide's pending-press mark (MOTIR-9696); no row reads it here.
+  markGatePressPending: vi.fn(),
+  clearGatePressPending: vi.fn(),
+  useGatePressPending: () => false,
   announceGateDecided: vi.fn(),
   useDecidedGate: () => null,
 }));
