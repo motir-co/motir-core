@@ -33,6 +33,7 @@ export * from './indexUserData';
 export * from './capacityErrors';
 export * from './credentials';
 export * from './management';
+export * from './stackSet';
 export * from './inventory';
 
 // The AWS adapter (Story MOTIR-9270 · MOTIR-9276) — `ContainerOrchestrator` on

@@ -5,6 +5,7 @@ import {
   type AwsOrganizationAccount,
   type AwsPolicyDocument,
   type AwsSessionCredentials,
+  type AwsStackInstanceTarget,
 } from '@motir/orchestrator';
 import { vi } from 'vitest';
 import { SHARD_VCPU_QUOTA_TARGET } from '@/lib/ciFleet/shardTargets';
@@ -122,6 +123,15 @@ export class FakeOrganization implements AwsManagementApi {
   readonly runnerRoles = new Map<string, string>();
   /** Per member account: the error assuming its runner role throws. */
   readonly runnerAssumeFailures = new Map<string, Error>();
+  /** Each account's organisational unit (MOTIR-9844); absent means the root. */
+  readonly accountUnits = new Map<string, string>();
+  /** The pool StackSet's instances, keyed `<stack set>/<account>/<region>`. */
+  readonly stackInstances = new Map<
+    string,
+    { unitId: string; overrides: Record<string, string>; outputs: Record<string, string> }
+  >();
+  /** The outputs a newly created instance answers. */
+  stackOutputs: Record<string, string> = {};
   private seq = 0;
   private requestSeq = 0;
   /** Which member account each answered session is for. */
@@ -263,4 +273,47 @@ export class FakeOrganization implements AwsManagementApi {
     this.iamUsers.add(JSON.stringify(policy));
     return { created: ['iam-user:motir-fleet-runner', 'iam-policy:motir-fleet-runner-ec2'] };
   }
+
+  async moveAccountToOrganizationalUnit(accountId: string, organizationalUnitId: string) {
+    this.calls.push(`moveAccountToOrganizationalUnit:${accountId}:${organizationalUnitId}`);
+    if (this.accountUnits.get(accountId) === organizationalUnitId) return { moved: false };
+    this.accountUnits.set(accountId, organizationalUnitId);
+    return { moved: true };
+  }
+
+  async ensureStackInstance(
+    input: AwsStackInstanceTarget & {
+      organizationalUnitId: string;
+      parameterOverrides: Readonly<Record<string, string>>;
+    },
+  ) {
+    this.calls.push(`ensureStackInstance:${input.accountId}`);
+    const key = stackInstanceKey(input);
+    const existing = this.stackInstances.get(key);
+    const overrides = { ...input.parameterOverrides };
+    if (!existing) {
+      this.stackInstances.set(key, {
+        unitId: input.organizationalUnitId,
+        overrides,
+        outputs: { ...this.stackOutputs },
+      });
+      return { action: 'created' as const };
+    }
+    if (JSON.stringify(existing.overrides) === JSON.stringify(overrides)) {
+      return { action: 'none' as const };
+    }
+    existing.overrides = overrides;
+    return { action: 'updated' as const };
+  }
+
+  async readStackInstanceOutputs(target: AwsStackInstanceTarget) {
+    this.calls.push(`readStackInstanceOutputs:${target.accountId}`);
+    const instance = this.stackInstances.get(stackInstanceKey(target));
+    if (!instance) throw new Error(`no stack instance for ${stackInstanceKey(target)}`);
+    return { ...instance.outputs };
+  }
+}
+
+function stackInstanceKey(target: AwsStackInstanceTarget): string {
+  return `${target.stackSetName}/${target.accountId}/${target.region}`;
 }
