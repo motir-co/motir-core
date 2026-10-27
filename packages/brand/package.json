@@ -1,6 +1,6 @@
 {
   "name": "@motir/brand",
-  "version": "0.4.9",
+  "version": "0.4.10",
   "description": "Motir's own brand chrome — the wave-band glyph, the wordmark lockup, and their presentation CSS. Consumed by motir-core and motir-marketing; deliberately NOT part of @motir/design-system, which scaffolded third-party products install.",
   "license": "GPL-3.0-only",
   "repository": {
@@ -37,7 +37,7 @@
     "test:watch": "vitest"
   },
   "peerDependencies": {
-    "@motir/design-system": "^0.17.1",
+    "@motir/design-system": "^0.18.0",
     "react": "^19"
   },
   "devDependencies": {
