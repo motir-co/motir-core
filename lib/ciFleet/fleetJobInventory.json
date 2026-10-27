@@ -1,5 +1,5 @@
 {
-  "$comment": "Fleet job inventory (Story MOTIR-8699 \u00b7 MOTIR-8701). Every job in every workflow of the seven repositories project MOTIR links, measured at the recorded sha against infra/ci-runner/Dockerfile at imageDockerfileSha. Read by the readiness verdict (MOTIR-8713); the image card (MOTIR-8710) flips needs-image entries as tools land. Written by docs/research/fleet-job-inventory.md.",
+  "$comment": "Fleet job inventory (Story MOTIR-8699 \u00b7 MOTIR-8701). Every job in every workflow of the eight repositories project MOTIR links, measured at the recorded sha against infra/ci-runner/Dockerfile at imageDockerfileSha. Read by the readiness verdict (MOTIR-8713); the image card (MOTIR-8710) flips needs-image entries as tools land. Written by docs/research/fleet-job-inventory.md.",
   "schemaVersion": 1,
   "imageDockerfileBlob": "f2467dd3ee7b3bcaa80b2e1e23e55c9ac92743e1",
   "repos": {
@@ -1296,6 +1296,60 @@
         }
       ],
       "jobCount": 8
+    },
+    "motir-co/motir-infra": {
+      "repoRef": "motir-co/motir-infra",
+      "ref": "main",
+      "sha": "b5221db3f6974310391f14411bbd1b2854c9d63a",
+      "visibility": "private",
+      "measuredAt": "2026-10-27T19:40:00Z",
+      "imageDockerfileSha": "406424306b766f625d3d8c1c6f2880662c8a4377",
+      "structureFingerprint": "a82299d30db0e9e57d93674e9911ecfdad68fe4fbeb7e482d4ae0cff3b9a0df9",
+      "workflows": [
+        {
+          "path": ".github/workflows/main.yml",
+          "jobs": [
+            {
+              "jobId": "checks",
+              "runsOn": "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
+              "triggers": ["push", "workflow_dispatch"],
+              "verdict": "runnable",
+              "missing": [],
+              "evidence": ".github/workflows/main.yml:23"
+            },
+            {
+              "jobId": "deploy",
+              "runsOn": "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
+              "triggers": ["push", "workflow_dispatch"],
+              "verdict": "runnable",
+              "missing": [],
+              "evidence": ".github/workflows/main.yml:37"
+            }
+          ]
+        },
+        {
+          "path": ".github/workflows/pr.yml",
+          "jobs": [
+            {
+              "jobId": "checks",
+              "runsOn": "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
+              "triggers": ["pull_request"],
+              "verdict": "runnable",
+              "missing": [],
+              "evidence": ".github/workflows/pr.yml:21"
+            },
+            {
+              "jobId": "diff",
+              "runsOn": "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
+              "triggers": ["pull_request"],
+              "verdict": "runnable",
+              "missing": [],
+              "evidence": ".github/workflows/pr.yml:33"
+            }
+          ]
+        }
+      ],
+      "jobCount": 4
     }
   }
 }
