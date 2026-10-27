@@ -338,36 +338,132 @@ describe('picking categories', () => {
     );
   });
 
-  it('sends exactly the door body: both ranges, the picked keys and the shared cadence', async () => {
+  it('sends exactly the door body: both ranges, the picked keys, the even shares and the cadence', async () => {
     renderView({ cadence: 'monthly' });
     await ask('40', '60', [/Flagship/, /Balanced/]);
     await screen.findByTestId('calculator-credits');
+    // Picked in either order, the keys travel in the tiles' order.
     expect(client.fetchCalculatorEstimate).toHaveBeenCalledWith('org1', {
       plannedPerMonth: { low: 40, high: 60 },
       runPerMonth: { low: 40, high: 60 },
-      categories: ['flagship', 'balanced'],
+      categories: ['balanced', 'flagship'],
+      shares: { balanced: 50, flagship: 50 },
       cadence: 'monthly',
     });
   });
 
-  it('shows each picked category’s share of the run before anything is asked', async () => {
+  it('sends no shares for one category', async () => {
+    renderView();
+    await ask('40', '60', [/Balanced/]);
+    await screen.findByTestId('calculator-credits');
+    const body = client.fetchCalculatorEstimate.mock.calls[0]![1] as Record<string, unknown>;
+    expect(body).not.toHaveProperty('shares');
+  });
+
+  it('one pick: the tile says it carries the whole run and there is no slider', async () => {
     renderView();
     await ready();
     pick(/Balanced/);
     expect(screen.getAllByTestId('calculator-category-share').map((n) => n.textContent)).toEqual([
       '100% of the run',
     ]);
+    expect(screen.queryByTestId('calculator-shares')).toBeNull();
+    expect(screen.queryAllByRole('slider')).toHaveLength(0);
+  });
+});
+
+describe('the category shares (MOTIR-9832)', () => {
+  const sliders = () => screen.getAllByRole('slider') as HTMLInputElement[];
+  const values = () => sliders().map((s) => Number(s.value));
+  const drag = (name: string, to: number) =>
+    fireEvent.change(screen.getByRole('slider', { name }), { target: { value: String(to) } });
+
+  it('two or three picks get a slider each, in the tiles’ order, starting even', async () => {
+    renderView();
+    await ready();
     pick(/Flagship/);
-    expect(screen.getAllByTestId('calculator-category-share').map((n) => n.textContent)).toEqual([
-      '50% of the run',
-      '50% of the run',
+    pick(/Balanced/);
+    expect(screen.queryAllByTestId('calculator-category-share')).toHaveLength(0);
+    expect(
+      within(screen.getByTestId('calculator-shares')).getByText(m.inputs.sharesLabel),
+    ).toBeTruthy();
+    expect(screen.getByText(m.inputs.sharesHelp)).toBeTruthy();
+    expect(sliders().map((s) => s.labels?.[0]?.textContent)).toEqual(['Balanced', 'Flagship']);
+    expect(values()).toEqual([50, 50]);
+    expect(screen.getAllByTestId('calculator-share-value').map((n) => n.textContent)).toEqual([
+      '50%',
+      '50%',
     ]);
     pick(/Economy/);
-    expect(screen.getAllByTestId('calculator-category-share')).toHaveLength(3);
-    expect(screen.getAllByTestId('calculator-category-share')[0]!.textContent).toBe(
-      '33% of the run',
-    );
+    expect(sliders().map((s) => s.labels?.[0]?.textContent)).toEqual([
+      'Economy',
+      'Balanced',
+      'Flagship',
+    ]);
+    expect(values()).toEqual([34, 33, 33]);
+    expect(sliders().map((s) => s.max)).toEqual(['98', '98', '98']);
     expect(client.fetchCalculatorEstimate).not.toHaveBeenCalled();
+  });
+
+  it('a drag takes the difference from the others equally, so they always total 100', async () => {
+    renderView();
+    await ready();
+    pick(/Balanced/);
+    pick(/Flagship/);
+    drag('Balanced', 70);
+    expect(values()).toEqual([70, 30]);
+    pick(/Economy/);
+    expect(values()).toEqual([34, 33, 33]);
+    drag('Balanced', 52);
+    expect(values()).toEqual([24, 52, 24]);
+    expect(screen.getByRole('slider', { name: 'Balanced' }).getAttribute('aria-valuetext')).toBe(
+      'Balanced: 52% of the run',
+    );
+  });
+
+  it('a share at the floor gives nothing; the rest comes from the others', async () => {
+    renderView();
+    await ready();
+    pick(/Economy/);
+    pick(/Balanced/);
+    pick(/Flagship/);
+    drag('Flagship', 1);
+    expect(values()).toEqual([50, 49, 1]);
+    drag('Balanced', 79);
+    expect(values()).toEqual([20, 79, 1]);
+  });
+
+  it('changing the picked set starts the shares even again', async () => {
+    renderView();
+    await ready();
+    pick(/Balanced/);
+    pick(/Flagship/);
+    drag('Balanced', 80);
+    pick(/Economy/);
+    expect(values()).toEqual([34, 33, 33]);
+    pick(/Economy/);
+    expect(values()).toEqual([50, 50]);
+  });
+
+  it('a 70/30 ask sends those shares, and a drag returns the answer to not-yet-asked', async () => {
+    renderView();
+    await ready();
+    type(m.inputs.lowLabel, '40');
+    type(m.inputs.highLabel, '60');
+    pick(/Balanced/);
+    pick(/Flagship/);
+    drag('Balanced', 70);
+    fireEvent.click(screen.getByRole('button', { name: m.inputs.submit }));
+    await screen.findByTestId('calculator-credits');
+    expect(client.fetchCalculatorEstimate).toHaveBeenCalledWith('org1', {
+      plannedPerMonth: { low: 40, high: 60 },
+      runPerMonth: { low: 40, high: 60 },
+      categories: ['balanced', 'flagship'],
+      shares: { balanced: 70, flagship: 30 },
+      cadence: 'annual',
+    });
+    drag('Balanced', 60);
+    expect(screen.queryByTestId('calculator-credits')).toBeNull();
   });
 });
 
@@ -484,9 +580,7 @@ describe('the regular arm', () => {
     renderView();
     await ask();
     await screen.findByTestId('calculator-credits');
-    expect(
-      screen.getByText('The run is split evenly across Balanced and Flagship — 50% each.'),
-    ).toBeTruthy();
+    expect(screen.getByText('The run is split Balanced 50% · Flagship 50%.')).toBeTruthy();
     expect(screen.getByTestId('calculator-credits').textContent).toBe('11,000 – 44,000');
     expect(screen.getByText(m.result.estimateCaveat)).toBeTruthy();
     expect(screen.getByText(m.result.perOrg)).toBeTruthy();
@@ -523,10 +617,28 @@ describe('the regular arm', () => {
     renderView();
     await ask('1', '2', [/Economy/, /Balanced/, /Flagship/]);
     expect(
-      await screen.findByText(
-        'The run is split evenly across Economy, Balanced, and Flagship — 33% each.',
-      ),
+      await screen.findByText('The run is split Economy 33% · Balanced 33% · Flagship 33%.'),
     ).toBeTruthy();
+  });
+
+  it('states the shares the engine priced, from the answer’s weights', async () => {
+    client.fetchCalculatorEstimate.mockResolvedValue(
+      answer(
+        estimate({
+          split: {
+            count: 2,
+            categories: [
+              { key: 'balanced', weight: 0.7, models: [] },
+              { key: 'flagship', weight: 0.3, models: [] },
+            ],
+          },
+        }),
+      ),
+    );
+    renderView();
+    await ask();
+    expect(await screen.findByText('The run is split Balanced 70% · Flagship 30%.')).toBeTruthy();
+    expect(screen.getByText('Balanced · 70%')).toBeTruthy();
   });
 
   it('prints the seat line as its own row, from the catalog, with no total', async () => {

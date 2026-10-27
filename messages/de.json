@@ -6677,9 +6677,12 @@
         "lowLabel": "Von",
         "highLabel": "Bis",
         "runCategoriesLabel": "Modelle, die der Runner nutzt",
-        "runCategoriesHelp": "Wählen Sie eine bis drei. Die Ausführung wird gleichmäßig auf Ihre Auswahl verteilt: eine trägt 100 %, zwei je 50 %, alle drei je 33 %. Ein Modell wählen Sie nie selbst aus – jede Kategorie zeigt die Modelle, die sie abdeckt, als Beispiele.",
+        "runCategoriesHelp": "Wählen Sie eine bis drei. Bei zwei oder drei ziehen Sie unten den Anteil jeder Kategorie an der Ausführung – sie starten gleich verteilt. Sie wählen nie ein Modell – jede Kategorie nennt die Modelle, die sie bedient, als Beispiele.",
         "categoryShare": "{share} der Ausführung",
         "categoryExamples": "Zum Beispiel: {models}",
+        "sharesLabel": "Anteil jeder Kategorie an der Ausführung",
+        "sharesHelp": "Ziehen Sie einen Anteil, und die anderen geben oder nehmen die Differenz zu gleichen Teilen – so ergeben sie immer 100 %. Wenn Sie eine Kategorie hinzufügen oder entfernen, starten sie wieder gleich verteilt.",
+        "shareValue": "{category}: {share} % der Ausführung",
         "submit": "Credits schätzen"
       },
       "categories": {
@@ -6688,7 +6691,7 @@
       },
       "split": {
         "one": "Eine Kategorie, daher entfällt die gesamte Ausführung auf {category}.",
-        "even": "Die Ausführung wird gleichmäßig auf {categories} verteilt – je {shares}."
+        "shares": "Die Ausführung ist verteilt auf {shares}."
       },
       "result": {
         "idle": "Es wird erst geschätzt, wenn Sie es anfordern: Geben Sie den Bereich ein, wählen Sie eine bis drei Kategorien und wählen Sie dann „Credits schätzen“.",

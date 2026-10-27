@@ -314,6 +314,8 @@ export interface SeatSummaryDTO {
 export const CALCULATOR_REQUEST_LIMITS = {
   maxItemsPerMonth: 1_000_000,
   maxCategories: 3,
+  /** The whole a request's `shares` must total — each share is a whole percentage. */
+  sharesTotal: 100,
 } as const;
 
 export const CALCULATOR_CADENCES = ['annual', 'monthly'] as const;
@@ -355,27 +357,70 @@ const calculatorRange = (name: string) =>
       path: ['low'],
     });
 
+/** One category's share of the run: a whole percentage (MOTIR-9832). */
+const calculatorShare = z
+  .number()
+  .int({ message: 'must be a whole number' })
+  .min(1, { message: 'must be between 1 and 100' })
+  .max(CALCULATOR_REQUEST_LIMITS.sharesTotal, { message: 'must be between 1 and 100' });
+
 /**
  * Items are counted per lane (MOTIR-9224): items PLANNED in Motir a month and items
  * RUN on Motir's runner a month. Either range may be 0–0, never both; the old single
  * `itemsPerMonth` is refused by name as an unknown key.
+ *
+ * `shares` (MOTIR-9832) weights the picked categories in the run, keyed by exactly the
+ * `categories` keys and totalling 100 — the same rules the engine's parser holds
+ * (motir-ai `src/calculatorRequest.ts`), so a bad one is refused here naming the field
+ * rather than proxied. Absent, the engine splits the run evenly.
  */
 export const calculatorEstimateRequestSchema = z
   .object({
     plannedPerMonth: calculatorRange('plannedPerMonth'),
     runPerMonth: calculatorRange('runPerMonth'),
     categories: calculatorCategoriesSchema,
+    shares: z.record(z.string(), calculatorShare).optional(),
     cadence: z.enum(CALCULATOR_CADENCES).default('annual'),
   })
   .strict()
   .refine((r) => r.plannedPerMonth.high > 0 || r.runPerMonth.high > 0, {
     message: 'plannedPerMonth and runPerMonth must not both be 0',
     path: ['plannedPerMonth'],
+  })
+  .superRefine((r, ctx) => {
+    if (!r.shares) return;
+    const shares = r.shares;
+    const stray = Object.keys(shares).find((key) => !r.categories.includes(key));
+    if (stray !== undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'names no picked category; shares are keyed by categories',
+        path: ['shares', stray],
+      });
+      return;
+    }
+    const missing = r.categories.find((key) => !Object.hasOwn(shares, key));
+    if (missing !== undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'is required',
+        path: ['shares', missing],
+      });
+      return;
+    }
+    const total = Object.values(shares).reduce((sum, share) => sum + share, 0);
+    if (total !== CALCULATOR_REQUEST_LIMITS.sharesTotal) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `must total ${CALCULATOR_REQUEST_LIMITS.sharesTotal}, not ${total}`,
+        path: ['shares'],
+      });
+    }
   });
 
 /** What the browser may send (cadence optional). */
 export type CalculatorEstimateRequestInput = z.input<typeof calculatorEstimateRequestSchema>;
-/** What motir-core forwards to the engine — exactly these four keys. */
+/** What motir-core forwards to the engine — exactly these keys (`shares` only when sent). */
 export type CalculatorEstimateRequestDTO = z.output<typeof calculatorEstimateRequestSchema>;
 
 /** The categories the pickers offer — a band with an EMPTY `models` is listed on purpose. */
