@@ -6677,9 +6677,12 @@
         "lowLabel": "Mínimo",
         "highLabel": "Máximo",
         "runCategoriesLabel": "Modelos que o runner usa",
-        "runCategoriesHelp": "Escolha de uma a três. A execução é dividida igualmente entre as que você escolher: uma fica com 100%, duas com 50% cada, as três com 33% cada. Você nunca escolhe um modelo — cada categoria mostra, como exemplo, os modelos que oferece.",
+        "runCategoriesHelp": "Escolha de uma a três. Com duas ou três, arraste abaixo a parte da execução de cada uma — elas começam iguais. Você nunca escolhe um modelo — cada categoria lista como exemplo os modelos que atende.",
         "categoryShare": "{share} da execução",
         "categoryExamples": "Por exemplo: {models}",
+        "sharesLabel": "A parte da execução de cada categoria",
+        "sharesHelp": "Arraste uma parte e as outras cedem ou recebem a diferença por igual, então o total é sempre 100%. Adicionar ou remover uma categoria as iguala de novo.",
+        "shareValue": "{category}: {share}% da execução",
         "submit": "Estimar créditos"
       },
       "categories": {
@@ -6688,7 +6691,7 @@
       },
       "split": {
         "one": "Uma categoria só, então toda a execução fica em {category}.",
-        "even": "A execução é dividida igualmente entre {categories} — {shares} cada."
+        "shares": "A execução está dividida assim: {shares}."
       },
       "result": {
         "idle": "Nada é estimado até você pedir: informe o intervalo, escolha de uma a três categorias e depois selecione «Estimar créditos».",
