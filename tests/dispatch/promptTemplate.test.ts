@@ -607,6 +607,9 @@ describe('assembleDispatchPrompt — the per-type WHAT TO DO variant', () => {
         'never the',
         '@motir/design-system/mock, build the mock with renderMock',
         'actual markup with that version’s theme.css inlined',
+        'wider than 64rem is drawn at the width it ships: pass renderMock’s',
+        "boardWidth ('full', or the page’s own max-w-[…] class) where the",
+        'never post-process the rendered HTML',
         'package’s parts first, then the project’s own local components, then new',
         '"proposed addition to @motir/design-system" or "product-local component"',
       ]) {
