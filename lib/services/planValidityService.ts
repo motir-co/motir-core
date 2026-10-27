@@ -959,21 +959,24 @@ export const planValidityService = {
 
   /**
    * The MISLABELLED-LINK advisories (MOTIR-9007) over every body this plan
-   * PROPOSES — an `add`'s body and a `modify`'s patched one — for `validate_plan`.
+   * PROPOSES — an `add`'s body and a `modify`'s patched one — for `validate_plan`
+   * and the internal `validate-plan-forest` route (MOTIR-9873).
    *
-   * Deliberately NOT part of {@link validateProjectedPlan}'s verdict: that DTO is
-   * also the internal `validate-plan-forest` contract motir-ai reads, and the
+   * Deliberately NOT part of {@link validateProjectedPlan}'s verdict: the
    * forest's no-advisory rule exists because a body-vs-EDGES gap has no single
    * subject there. A mislabelled link has no such problem — it is a property of
    * one body, decided by what its id opens — so it is reported per proposed card,
-   * beside the verdict and never inside it. Untouched committed cards are not
-   * scanned: they are not the plan's finding (`validate_work_item` reports them).
+   * BESIDE the verdict and never inside it: both callers answer
+   * `{ ...verdict, advisories }`. Untouched committed cards are not scanned: they
+   * are not the plan's finding (`validate_work_item` reports them). `opts.caller`
+   * is passed to the projection exactly as {@link validateProjectedPlan} takes it.
    */
   async projectedLinkAdvisories(
     planId: string,
     ctx: ServiceContext,
+    opts: { caller?: 'actor' | 'system' } = {},
   ): Promise<WorkItemProseMislabelledLinkAdvisoryDto[]> {
-    const proj = await buildProjection(planId, ctx);
+    const proj = await buildProjection(planId, ctx, opts);
     const proposedBodies = new Set(
       [...proj.projectedDescription.keys()].filter(
         (id) => proj.nodes.get(id)?.projectId === proj.projectId,

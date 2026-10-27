@@ -5032,8 +5032,9 @@ PROPOSES — an `add`'s body, or a `modify` that rewrites one — as
 `{ kind: "shape", item, severity, label, targetId, targetKey }`: a
 `[label](motir:<id>)` link whose label names a work-item key the id does not
 open, or whose id opens no card at all (`targetKey: null`). Fix the id before
-sealing. Only the MCP tool carries it; the internal `validate-plan-forest`
-verdict is unchanged.
+sealing. The internal `validate-plan-forest` route answers the same
+`advisories` beside its verdict (MOTIR-9873), so motir-ai's forest close can
+re-open on one; its verdict is otherwise unchanged.
 
 **Both edge lists hold only the findings the PLAN introduces (MOTIR-7727).** The
 projection holds every edge anyone ever drew in the project, so judging all of

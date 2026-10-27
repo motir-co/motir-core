@@ -349,6 +349,8 @@ describe('POST /api/internal/ai/validate-plan-forest', () => {
       invalidEdges: [],
       crossLevelEdges: [],
       sectionFindings: expect.any(Array),
+      // The link advisories ride beside the verdict (MOTIR-9873); none here.
+      advisories: [],
     });
 
     // Invalid: a new root add gated by a not-done cross-project item.
@@ -404,6 +406,92 @@ describe('POST /api/internal/ai/validate-plan-forest', () => {
       invalidEdges: [],
       crossLevelEdges: [],
       sectionFindings: expect.any(Array),
+      // The link advisories ride beside the verdict (MOTIR-9873); none here.
+      advisories: [],
     });
+  });
+
+  it('answers a mislabelled link in a PROPOSED body in `advisories`, beside an unchanged verdict (MOTIR-9873)', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await mk(fx, 'Story', 'story');
+    // A second parent for the clean plan: an open plan holds the parent it adds under.
+    const otherStory = await mk(fx, 'Other story', 'story');
+    const opened = await mk(fx, 'Opened', 'subtask', story.id);
+    const link = (label: string, id: string) => `[${label}](motir:${id})`;
+
+    // A plan whose proposed body links an id that opens NO card.
+    const broken = await plansService.createPlan(fx.projectId, { title: 'Broken' }, fx.ctx);
+    const withAdd = await plansService.addProposals(
+      broken.id,
+      [
+        {
+          op: 'add',
+          proposedFields: {
+            title: 'New child',
+            kind: 'subtask',
+            type: 'code',
+            descriptionMd: `Reads ${link('PROD-404', 'cl_no_such_card')}.`,
+          },
+          parentRef: story.id,
+        },
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(broken.id, fx.ctx);
+    const addId = withAdd.items.find((i) => i.proposedFields?.title === 'New child')!.id;
+
+    // The same plan shape with a link whose label names the card its id opens.
+    const clean = await plansService.createPlan(fx.projectId, { title: 'Clean' }, fx.ctx);
+    await plansService.addProposals(
+      clean.id,
+      [
+        {
+          op: 'add',
+          proposedFields: {
+            title: 'Clean child',
+            kind: 'subtask',
+            type: 'code',
+            descriptionMd: `Reads ${link(opened.identifier, opened.id)}.`,
+          },
+          parentRef: otherStory.id,
+        },
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(clean.id, fx.ctx);
+
+    const post = (planId: string) =>
+      validatePlanForestPOST(
+        req('/api/internal/ai/validate-plan-forest', {
+          bearer: SERVICE_SECRET,
+          token: tokenFor(fx),
+          body: { planId },
+        }),
+      );
+
+    const brokenRes = await post(broken.id);
+    expect(brokenRes.status).toBe(200);
+    const brokenBody = await brokenRes.json();
+    expect(brokenBody.advisories).toEqual([
+      {
+        kind: 'shape',
+        item: `planItem:${addId}`,
+        severity: 'likely-mislabelled-link',
+        label: 'PROD-404',
+        targetId: 'cl_no_such_card',
+        targetKey: null,
+      },
+    ]);
+
+    const cleanRes = await post(clean.id);
+    expect(cleanRes.status).toBe(200);
+    const cleanBody = await cleanRes.json();
+    expect(cleanBody.advisories).toEqual([]);
+
+    // `valid` is the verdict's alone: the advisory never moves it.
+    expect(brokenBody.valid).toBe(true);
+    expect(cleanBody.valid).toBe(true);
+    expect(brokenBody.blockers).toEqual([]);
+    expect(brokenBody.rejections).toEqual([]);
   });
 });
