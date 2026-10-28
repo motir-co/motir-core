@@ -43,6 +43,32 @@ export const verificationRepository = {
     });
   },
 
+  /**
+   * Unexpired rows whose identifier starts with `identifierPrefix` and whose
+   * `value` contains `valueContains`, newest first, at most `limit` (MOTIR-9995).
+   * The invites service's pending list: the prefix narrows to invite tokens, the
+   * value substring to one workspace. The substring is only a NARROWING — the
+   * caller parses each payload and compares the workspace id before trusting a
+   * row. An accepted invite's row is deleted and a retired one is back-dated, so
+   * neither is returned.
+   */
+  async listPendingByIdentifierPrefixAndValue(args: {
+    identifierPrefix: string;
+    valueContains: string;
+    now: Date;
+    limit: number;
+  }): Promise<Verification[]> {
+    return db.verification.findMany({
+      where: {
+        identifier: { startsWith: args.identifierPrefix },
+        expiresAt: { gt: args.now },
+        value: { contains: args.valueContains },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: args.limit,
+    });
+  },
+
   async create(
     data: { identifier: string; value: string; expiresAt: Date },
     tx: Prisma.TransactionClient,

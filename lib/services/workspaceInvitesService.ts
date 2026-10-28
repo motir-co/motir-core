@@ -7,10 +7,17 @@ import { resolveRecipientLocale } from '@/lib/services/emailRecipientLocale';
 import type {
   AcceptInviteResultDTO,
   InspectInviteResultDTO,
+  PendingInviteDTO,
   SendInviteResultDTO,
   ValidateInviteResultDTO,
 } from '@/lib/dto/invites';
-import { toValidateInviteResultDTO } from '@/lib/mappers/inviteMappers';
+import {
+  toInviteDeliveryState,
+  toPendingInviteDTO,
+  toValidateInviteResultDTO,
+} from '@/lib/mappers/inviteMappers';
+import { emailDeliveryRepository } from '@/lib/repositories/emailDeliveryRepository';
+import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { verificationRepository } from '@/lib/repositories/verificationRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
@@ -61,6 +68,16 @@ export const INVITE_RATE_LIMIT = {
 } as const;
 
 const TOKEN_BYTES = 24;
+
+/** The job that sends an invite email; its runs are keyed on the token. */
+const EMAIL_SEND_FUNCTION_ID = 'email.send';
+
+/**
+ * The most pending invitations the list reads (MOTIR-9995). A safety cap, far
+ * above what a workspace holds at once: the rate limit allows three sends per
+ * address per hour and each lapses after `INVITE_EXPIRY_MS`.
+ */
+const PENDING_INVITES_LIMIT = 200;
 
 // The payload's role is `workspaceRole` — the role the membership is created
 // with. Until MOTIR-6569 a token also carried the legacy `role` (and one minted
@@ -303,6 +320,88 @@ export const workspaceInvitesService = {
     });
 
     return { ok: true };
+  },
+
+  /**
+   * The workspace's pending invitations, newest first, each with what became of
+   * its email (MOTIR-9995). Gated exactly like `sendInvite`'s inviter: a
+   * non-member gets `NotAMemberError` and a Limited member
+   * `InviteNotAllowedForScopeError`, so the list is shown to precisely the
+   * people who may invite — whoever may not invite must not see who was invited.
+   *
+   * The delivery and failed-send reads run under `withWorkspaceContext`:
+   * `email_delivery` is FORCE row-level security, and an unbound read returns a
+   * smaller, believable list that would show every invitation as `queued`.
+   *
+   * `canResend` is decided here so the page never re-derives the scope rules: a
+   * Manager may resend any invitation, a Full non-Manager only a Full one.
+   */
+  async listPendingInvites(args: {
+    userId: string;
+    workspaceId: string;
+  }): Promise<PendingInviteDTO[]> {
+    const membership = await readMembership(args.userId, args.workspaceId);
+    if (!membership) throw new NotAMemberError(args.userId, args.workspaceId);
+    const isManager = (await readReachRole(args.userId, args.workspaceId)) === 'manager';
+    if (!isManager && membership.accessScope === 'limited') {
+      throw new InviteNotAllowedForScopeError(args.userId, args.workspaceId);
+    }
+
+    const rows = await verificationRepository.listPendingByIdentifierPrefixAndValue({
+      identifierPrefix: INVITE_IDENTIFIER_PREFIX,
+      valueContains: args.workspaceId,
+      now: new Date(),
+      limit: PENDING_INVITES_LIMIT,
+    });
+    // The substring filter only narrows; the parsed payload is the proof.
+    const pending = rows.flatMap((row) => {
+      const payload = parsePayload(row.value);
+      if (!payload || payload.workspaceId !== args.workspaceId) return [];
+      return [{ row, payload, token: row.identifier.slice(INVITE_IDENTIFIER_PREFIX.length) }];
+    });
+    if (pending.length === 0) return [];
+
+    const tokens = pending.map((p) => p.token);
+    const { deliveries, failedKeys } = await withWorkspaceContext(
+      { userId: args.userId, workspaceId: args.workspaceId },
+      async (tx) => ({
+        deliveries: await emailDeliveryRepository.listByIdempotencyKeys(tokens, tx),
+        failedKeys: await jobRunRepository.listFailedKeysByFunctionAndIdempotencyKeys(
+          args.workspaceId,
+          EMAIL_SEND_FUNCTION_ID,
+          tokens,
+          tx,
+        ),
+      }),
+    );
+    const deliveryByKey = new Map(
+      deliveries
+        .filter((d) => d.idempotencyKey !== null)
+        .map((d) => [d.idempotencyKey as string, d]),
+    );
+    const failed = new Set(failedKeys);
+
+    const inviterIds = [...new Set(pending.map((p) => p.payload.inviterUserId))];
+    const inviters = await Promise.all(inviterIds.map((id) => userRepository.findById(id)));
+    const nameById = new Map(inviterIds.map((id, i) => [id, inviters[i]?.name ?? null]));
+
+    return pending.map(({ row, payload, token }) =>
+      toPendingInviteDTO({
+        id: row.id,
+        email: payload.email,
+        accessScope: payload.accessScope,
+        projectIds: payload.projectIds,
+        inviterUserId: payload.inviterUserId,
+        inviterName: nameById.get(payload.inviterUserId) ?? null,
+        createdAt: row.createdAt,
+        expiresAt: row.expiresAt,
+        deliveryState: toInviteDeliveryState({
+          delivery: deliveryByKey.get(token) ?? null,
+          sendFailed: failed.has(token),
+        }),
+        canResend: isManager || payload.accessScope === 'full',
+      }),
+    );
   },
 
   /**
