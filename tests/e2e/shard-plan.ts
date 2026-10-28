@@ -956,6 +956,10 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   // it.
   'style-material-isolation.spec.ts': 5.0,
   'supervision-pool-under-load.spec.ts': 4.7,
+  // MOTIR-10045 — ESTIMATED from `project-access-contractor.spec.ts` (the same
+  // tenant seed, reset per test) scaled to eight tests, one of which waits on the
+  // job worker's delivery row; rounded UP. Replace with its measured CI time.
+  'tenant-job-runs-retired.spec.ts': 30.0,
   'token-permissions.spec.ts': 4.4,
   'triage-flow.spec.ts': 13.1,
   'passkeys.spec.ts': 7.7,
