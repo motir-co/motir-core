@@ -333,6 +333,23 @@ test.describe('live updates reach an open page by server push', () => {
         timeout: 30_000,
       })
       .toEqual([expect.stringContaining(plan.id)]);
+    // ⚠️ THE SUBSCRIPTION READS THE PLAN ONCE, AND THE BASELINE FOLLOWS THAT READ
+    // (MOTIR-9874). The stream reads every watched plan at open and writes a `plan`
+    // frame for one whose version the URL did not carry; the poll answers it with a
+    // `?since=` read, which closes the gap between the overlay's first read and the
+    // subscription. That read is product behaviour, not a timer, and it can land a
+    // few ms either side of the poll above — so the mark waits for it to FINISH
+    // (its response, logged as `finished`), or it is counted as a read before the write.
+    const watching = log.openStreams()[0]!;
+    await expect
+      .poll(
+        () => {
+          const reads = log.planReads(plan.id, watching.seq);
+          return reads.length > 0 && reads.every((r) => r.ended === 'finished');
+        },
+        { message: 'the subscription’s own read of the plan settled', timeout: 30_000 },
+      )
+      .toBe(true);
     const opened = log.mark();
     await setLoadMarker(page, 'plan');
 
