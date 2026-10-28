@@ -842,9 +842,10 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   },
   get_plan_authoring_state: {
     // MOTIR-9821: the live read an author session makes before it wires an edge onto a sibling.
+    // SUMMARY REWRITTEN for MOTIR-10001: it now answers committed cards too, `not_in_walk` among them.
     summary:
-      'Which proposals are being written, which are written, and which no author session has started — read before wiring an edge onto a sibling.',
-    descriptionFingerprint: '1dbc96fc1142',
+      'Which proposals and committed cards are being written, which are written, which no author session has started, and which this plan never re-writes — read before wiring an edge onto another card.',
+    descriptionFingerprint: '00d2b8e7cb5a',
   },
   validate_plan: {
     // ⚠️ SUMMARY REWRITTEN, not merely re-pinned (MOTIR-3575). The old line —

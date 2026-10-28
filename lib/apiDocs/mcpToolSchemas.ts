@@ -1648,6 +1648,13 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         minLength: 1,
         description: 'The plan id `create_plan` returned (or the id shown on the plan in Motir).',
       },
+      workItems: {
+        type: 'array',
+        items: { type: 'string', minLength: 1 },
+        maxItems: 50,
+        description:
+          'OPTIONAL — committed work items to answer for, by key (`ACME-7`) or id, beside the ones the walk re-authors. A named card the walk does not re-author reads `not_in_walk`.',
+      },
     },
     required: ['planId'],
     additionalProperties: false,
