@@ -274,6 +274,51 @@ describe('assembleDispatchPrompt — the per-type WHAT TO DO variant', () => {
     expect(prompt).toContain(marker);
   });
 
+  // ── MOTIR-9953: a code run owns the suites that pin what it changes, and the
+  // coverage of what it adds. Only the `code` steps carry it; a design or test
+  // card's steps are untouched.
+  describe('WHAT_TO_DO.code owns the pinned suites and the coverage of the change (MOTIR-9953)', () => {
+    const PINNED_SUITES = [
+      'The suites that ALREADY assert the behaviour you change are part of the',
+      'grep the tests for every function, route, message and state you',
+      'update each suite that asserts the old behaviour in this same',
+      'existing suite is modified, does not stop this: make the update, and record',
+      'the mismatch with the record_run_discrepancy tool (BUILD THROUGH below).',
+      'files you added or changed — the existing suites you updated under 3 are',
+    ];
+    const COVERAGE = [
+      'COVER the code you add to at least 90% — statements, branches, functions and',
+      'lines: per file for every file you add, and every function and branch you add',
+      'Measure the change, never the',
+      'Where the repository has its own coverage gates,',
+      'Run coverage over the files you changed and put each changed',
+      'file’s numbers in the pull request body.',
+    ];
+    const promptFor = (type: WorkItemTypeDto) =>
+      assembleDispatchPrompt(source({ type, executor: 'coding_agent' })).prompt;
+
+    it.each([...PINNED_SUITES, ...COVERAGE])('a code dispatch is told: %s', (rule) => {
+      expect(promptFor('code')).toContain(rule);
+    });
+
+    it('keeps the pinned-suite step inside step 3, before step 4', () => {
+      const prompt = promptFor('code');
+      const step3 = prompt.indexOf('3. Ship the TESTS that cover the change');
+      const pinned = prompt.indexOf('The suites that ALREADY assert the behaviour you change');
+      const step4 = prompt.indexOf('4. Run the repository checks');
+      expect(step3).toBeGreaterThan(-1);
+      expect(pinned).toBeGreaterThan(step3);
+      expect(step4).toBeGreaterThan(pinned);
+    });
+
+    it.each(['design', 'test'] as const)('a %s dispatch carries neither rule', (type) => {
+      const prompt = promptFor(type);
+      for (const rule of [...PINNED_SUITES, ...COVERAGE]) {
+        expect(prompt).not.toContain(rule);
+      }
+    });
+  });
+
   // ── MOTIR-7437: the DECISION lane writes a PAGE and publishes it
   //
   // The gate asks a person about the published page VERSION (`approval-gates.md`
