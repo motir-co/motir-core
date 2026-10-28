@@ -8,6 +8,7 @@ import {
 } from '@/lib/github/installState';
 import type { GithubBannerStatus } from '@/lib/github/bannerStatus';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
+import { organizationRepoService } from '@/lib/services/organizationRepoService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import {
@@ -22,6 +23,11 @@ import {
   RepoSelectionRequiredError,
   RepositoryOwnedByOtherOrganizationError,
 } from '@/lib/github/errors';
+import {
+  PermissionDeniedError,
+  ProjectAccessDeniedError,
+  ProjectNotFoundError,
+} from '@/lib/projects/errors';
 import {
   OrganizationClosingError,
   OrganizationNotFoundError,
@@ -177,17 +183,36 @@ export async function GET(req: NextRequest): Promise<Response> {
   // `repoIds` is omitted, so a first link of an unshared account and a refresh
   // of an already-linked one behave as before, and a new link beside another
   // organisation sends the person to choose instead of taking anything.
+  //
+  // THE PROJECT ROOM (Bug MOTIR-9828). A state that ALSO names a project was
+  // minted by a Repositories room's `Connect a new one`, which promises the
+  // organisation connection AND the project link in one act. The same org link
+  // runs, and then the repositories this round trip connected are linked into
+  // that project — so the person lands back in the room with the new rows in it,
+  // rather than on the org's inventory with half the job done.
   const organizationId = decoded.state.organizationId;
   if (organizationId) {
+    const projectKey =
+      decoded.state.origin === 'projectRepositories' ? decoded.state.projectKey : undefined;
     try {
-      await githubInstallationService.linkExistingInstallation({
-        organizationId,
-        actorUserId: session.user.id,
-        installationId,
-        via: 'install_return',
-        workspaceIdHint: decoded.state.workspaceId,
-        requireHintInOrganization: true,
-      });
+      if (projectKey) {
+        await organizationRepoService.linkInstallReturnIntoProject({
+          projectKey,
+          organizationId,
+          installationId,
+          since: new Date(decoded.issuedAt * 1000),
+          ctx: { userId: session.user.id, workspaceId: decoded.state.workspaceId },
+        });
+      } else {
+        await githubInstallationService.linkExistingInstallation({
+          organizationId,
+          actorUserId: session.user.id,
+          installationId,
+          via: 'install_return',
+          workspaceIdHint: decoded.state.workspaceId,
+          requireHintInOrganization: true,
+        });
+      }
     } catch (err) {
       const status = orgBranchOutcome(err);
       return settingsRedirect(
@@ -236,7 +261,12 @@ function orgBranchOutcome(err: unknown): GithubBannerStatus {
   if (
     err instanceof OrgForbiddenError ||
     err instanceof OrganizationNotFoundError ||
-    err instanceof OrganizationClosingError
+    err instanceof OrganizationClosingError ||
+    // The project half (MOTIR-9828): the project the state names is gone, or
+    // the actor may no longer manage its repositories.
+    err instanceof ProjectNotFoundError ||
+    err instanceof ProjectAccessDeniedError ||
+    err instanceof PermissionDeniedError
   ) {
     return 'install_forbidden';
   }

@@ -7,6 +7,7 @@ import { projectsService } from '@/lib/services/projectsService';
 import { githubIdentityService } from '@/lib/services/githubIdentityService';
 import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
 import { githubAppInstallUrl } from '@/lib/github/appLinks';
+import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { provisioningOrgLogin } from '@/lib/ciMetering/config';
 import type { OtherHostedProjectDto, ProjectRepoRoomViewDto } from '@/lib/dto/projectRepos';
 
@@ -40,16 +41,24 @@ export const projectRepoRoomService = {
    * unresolvable sibling list renders no pointers. The rows are the surface's
    * substance and are the only read allowed to throw — a room that cannot list
    * the repositories has nothing to render.
+   *
+   * `projectKey` is what the room's install link names (Bug MOTIR-9828); without
+   * it the link carries no state, as it did before.
    */
-  async getRoomView(projectId: string, ctx: ServiceContext): Promise<ProjectRepoRoomViewDto> {
+  async getRoomView(
+    projectId: string,
+    ctx: ServiceContext,
+    options: { projectKey?: string } = {},
+  ): Promise<ProjectRepoRoomViewDto> {
     const [set, identity] = await Promise.all([
       projectRepoSetService.getSet(projectId, ctx),
       githubIdentityService.getIdentityForUser(ctx.userId),
     ]);
 
-    const [ciPaused, otherHostedProjects] = await Promise.all([
+    const [ciPaused, otherHostedProjects, installHref] = await Promise.all([
       readCiPaused(ctx),
       listOtherHostedProjects(projectId, ctx),
+      readInstallHref(options.projectKey, ctx),
     ]);
 
     return {
@@ -58,7 +67,7 @@ export const projectRepoRoomService = {
       hostOwner: provisioningOrgLogin(),
       githubLogin: identity?.githubLogin ?? null,
       githubAvatarUrl: identity?.avatarUrl ?? null,
-      installHref: githubAppInstallUrl(),
+      installHref,
       ciPaused,
       otherHostedProjects,
       // Compatibility fields for the room UI; organisation connections are not
@@ -68,6 +77,45 @@ export const projectRepoRoomService = {
     };
   },
 };
+
+/**
+ * The room's App install link (Bug MOTIR-9828).
+ *
+ * ⚠️ IT CARRIES A SIGNED STATE NAMING THIS PROJECT, and that is the fix. A bare
+ * `installations/new` URL came back to the setup handler with nothing naming
+ * the project, the actor or the room, so the repository was connected to the
+ * organisation, never linked here, and the person was dropped on the default
+ * return path. The state routes the callback through the org branch (which
+ * refreshes the installation's repositories), links what the round trip
+ * connected into the project, and returns to this room.
+ *
+ * Minted only for an ORG ADMIN — the one actor `Connect a new one` is drawn for
+ * and the one the callback's org branch accepts. Anyone else (and any failure
+ * reading the organisation or minting) gets the bare link, exactly as before:
+ * the same link also serves the take-over row's reinstall and the hosted-run
+ * reconnect line, which must not disappear because a state could not be signed.
+ */
+async function readInstallHref(
+  projectKey: string | undefined,
+  ctx: ServiceContext,
+): Promise<string | null> {
+  if (!projectKey) return githubAppInstallUrl();
+  try {
+    const organizationId = await withWorkspaceContext(ctx, async (tx) => {
+      const workspace = await workspaceRepository.findByIdInTx(ctx.workspaceId, tx);
+      return workspace?.organizationId ?? null;
+    });
+    if (!organizationId) return githubAppInstallUrl();
+    return await githubInstallationService.installUrlForProjectRepositories({
+      organizationId,
+      actorUserId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+      projectKey,
+    });
+  } catch {
+    return githubAppInstallUrl();
+  }
+}
 
 /**
  * Whether the workspace's organization is out of CI credits.

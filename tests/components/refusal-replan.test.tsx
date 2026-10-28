@@ -66,6 +66,10 @@ vi.mock('@/app/(authed)/items/[key]/approvalGateActions', () => ({
 vi.mock('@/lib/approvals/decidedGates', () => ({
   announceGateDecided: vi.fn(),
   useDecidedGate: () => null,
+  // The press-in-flight mark (MOTIR-9696) has nothing to tell a list here.
+  markGatePressPending: () => {},
+  clearGatePressPending: () => {},
+  useGatePressPending: () => false,
 }));
 
 vi.mock('@/app/(authed)/items/[key]/_components/DesignResultPanel', () => ({

@@ -67,6 +67,10 @@ vi.mock('@/lib/approvals/decidedGates', () => ({
   announceGateDecided: vi.fn(),
   // Read only by the item page's hand-over (MOTIR-6323); no announcement reaches it here.
   useDecidedGate: () => null,
+  // The press-in-flight mark (MOTIR-9696) has nothing to tell a list here.
+  markGatePressPending: () => {},
+  clearGatePressPending: () => {},
+  useGatePressPending: () => false,
 }));
 
 // The item page's late stack, with only its unrelated neighbours stubbed — the same set

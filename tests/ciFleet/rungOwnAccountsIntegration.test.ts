@@ -7,12 +7,7 @@ import type { RawSubscriptionResponse } from '@/lib/ai/types';
 import { MOTIR_SYSTEM_USER_EMAIL } from '@/lib/ai/systemPrincipal';
 import { hostMonthlyPlanCredits, largerPoolPlans } from '@/lib/billing/catalog';
 import { ownAccountPoolCredits, planCarriesOwnAccounts } from '@/lib/billing/ownAccountPlans';
-import {
-  capsForPlanKey,
-  HOST_FLOOR_CAPS,
-  HOST_PLAN_KEY,
-  LARGER_POOL_FLOOR_CAPS,
-} from '@/lib/billing/planCaps';
+import { capsForPlanKey, HOST_PLAN_KEY, LARGER_POOL_FLOOR_CAPS } from '@/lib/billing/planCaps';
 import { ownAccountRaiseTargetVcpu, type HostAccountSlot } from '@/lib/ciFleet/hostAccounts';
 import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
 import { wireFleetKindSwitch } from '@/lib/ciFleet/shardTargets';
@@ -647,10 +642,7 @@ describe('granted, each org runs on its own accounts at granted ÷ 2', () => {
       ciBurstCap: ci / 2,
     });
     expect([read.agentRunsInParallel, read.ciBurstCap]).toEqual([128, 800]);
-    expect([read.agentsPerUser, read.agentsRunningPerOrg]).toEqual([
-      HOST_FLOOR_CAPS.agentsPerUser,
-      HOST_FLOOR_CAPS.agentsRunningPerOrg,
-    ]);
+    expect([read.agentsPerUser, read.agentsRunningPerOrg]).toEqual([10, 50]);
     const job = await ciJob(top);
     expect(job.landed).toEqual(on(await row(top.organizationId, 'ci_runner')));
     await finishCi([job.intentId]);

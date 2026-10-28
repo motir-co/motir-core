@@ -36,18 +36,21 @@ import { withSystemContext } from '@/lib/workspaces/context';
 // agent-runner or CI account is live — and that kind's switch reads AWS, as
 // admission's does — the figure is the account's granted vCPU ÷ 2, read from its
 // quota requests on every call (a later raise shows on the next read, nothing is
-// copied). Any failure of that read answers the plan's row, the shared floor —
+// copied). Once the merged account's agent hoster row is live on the same terms,
+// the two agent figures lift to the own-accounts 10 / 50 (MOTIR-9668). Any failure of that read answers the plan's row, the shared floor —
 // never a larger figure.
 
 const AGENT_RUNNER: FleetWorkloadKind = 'hosted_agent';
 const CI_RUNNER: FleetWorkloadKind = 'ci_runner';
+/** The merged account's agent hoster row — what lifts the agent figures. */
+const AGENT_HOSTER: FleetWorkloadKind = 'agent_instance';
 
 /** A live own account's granted vCPU per kind — only for a kind on its pool. */
 async function ownGranted(
   organizationId: string,
 ): Promise<Partial<Record<FleetWorkloadKind, number>>> {
   const kinds = new Set<FleetWorkloadKind>();
-  for (const kind of [AGENT_RUNNER, CI_RUNNER]) {
+  for (const kind of [AGENT_RUNNER, CI_RUNNER, AGENT_HOSTER]) {
     if (await fleetKindOnPool(kind)) kinds.add(kind);
   }
   if (kinds.size === 0) return {};
@@ -74,6 +77,7 @@ async function ownAccountCaps(organizationId: string, floor: PlanCaps): Promise<
       floor,
       agentRunnerGrantedVcpu: granted[AGENT_RUNNER] ?? null,
       ciGrantedVcpu: granted[CI_RUNNER] ?? null,
+      mergedGrantedVcpu: granted[AGENT_HOSTER] ?? null,
     });
   } catch (err) {
     console.error(

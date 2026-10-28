@@ -399,9 +399,9 @@ describe('judgeOrganization — the plan figures each workload is read against',
       planKey: 'pro',
       planName: 'Pro',
       agentRunsInParallel: 3,
-      agentsPerUser: 5,
-      agentsRunningPerOrg: 30,
-      ciBurstCap: 10,
+      agentsPerUser: 2,
+      agentsRunningPerOrg: 10,
+      ciBurstCap: 5,
       ciBurstSource: 'plan',
     });
   });
@@ -417,8 +417,8 @@ describe('judgeOrganization — the plan figures each workload is read against',
       kind: 'capped',
       planKey: 'max',
       agentRunsInParallel: 5,
-      agentsPerUser: 10,
-      agentsRunningPerOrg: 50,
+      agentsPerUser: 3,
+      agentsRunningPerOrg: 20,
       ciBurstCap: 7,
       ciBurstSource: 'override',
     });
@@ -577,7 +577,7 @@ describe('orgFleet', () => {
     if (dto.meter !== 'enabled') throw new Error('expected the meter enabled');
     expect(dto.row).toMatchObject({
       organizationId: t.organizationId,
-      plan: { kind: 'capped', planKey: 'max', ciBurstCap: 25, ciBurstSource: 'plan' },
+      plan: { kind: 'capped', planKey: 'max', ciBurstCap: 10, ciBurstSource: 'plan' },
       confirmedCreditsThisMonth: 0,
       pendingCredits: 0,
       verdicts: ['ok'],

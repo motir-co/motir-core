@@ -128,6 +128,7 @@ import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import { isMarkOnlyPatch } from '@/lib/plans/markOnlyPatch';
 import {
   assertBodyRefsResolve,
+  findUnresolvedIntraPlanRefIds,
   validateProposedBodyRefs,
 } from '@/lib/plans/validateProposedBodyRefs';
 import { patchRescopes } from '@/lib/plans/rescopeReset';
@@ -1033,6 +1034,39 @@ function mergeProposedFields(
     });
   }
   return next;
+}
+
+/**
+ * Refuse an `add` edit whose bodies link a `planItem:` id the plan does not hold
+ * (bug MOTIR-9175), judged on the bodies the edit WRITES (bug MOTIR-9836). A
+ * write carrying `sections` sends no `descriptionMd` of its own — the body it
+ * stores is the one `mergeProposedFields` rendered into `next` — so judging
+ * `input.descriptionMd` skipped the check on the path both planners author
+ * through. Sections are sparse over the stored body, so a link the stored body
+ * already carried is inherited, not written: it stays repairable by a write that
+ * does not touch it, as an unrelated edit already is on the plain path.
+ */
+function assertEditBodyRefsResolve(
+  current: PlanItemProposedFields,
+  input: UpdateProposalInput,
+  next: PlanItemProposedFields,
+  addIds: ReadonlySet<string>,
+  label: string,
+): void {
+  if (!hasSectionsInput(input)) {
+    assertBodyRefsResolve(
+      { descriptionMd: input.descriptionMd, explanationMd: input.explanationMd },
+      addIds,
+      label,
+    );
+    return;
+  }
+  const inherited = findUnresolvedIntraPlanRefIds(current.descriptionMd ?? '', addIds);
+  assertBodyRefsResolve(
+    { descriptionMd: next.descriptionMd, explanationMd: input.explanationMd },
+    new Set([...addIds, ...inherited]),
+    label,
+  );
 }
 
 /**
@@ -3217,7 +3251,7 @@ async function materialize(
           projectId: plan.projectId,
           projectIdentifier: prefix,
         },
-        text: `${finalRow.descriptionMd ?? ''}\n${finalRow.explanationMd ?? ''}`,
+        bodies: [finalRow.descriptionMd, finalRow.explanationMd],
         ctx,
       },
       tx,
@@ -4645,10 +4679,13 @@ async function applyAddProposalEdit(
     proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
   );
   // ...and the links THIS edit writes must name a proposal on the plan (bug
-  // MOTIR-9175). Only the bodies the edit sets are judged, so a proposal that
-  // inherited a dangling link can still be repaired by an unrelated edit.
-  assertBodyRefsResolve(
-    { descriptionMd: input.descriptionMd, explanationMd: input.explanationMd },
+  // MOTIR-9175), the rendered body when it carries `sections` (bug MOTIR-9836).
+  // Only the bodies the edit writes are judged, so a proposal that inherited a
+  // dangling link can still be repaired by an unrelated edit.
+  assertEditBodyRefsResolve(
+    current,
+    input,
+    next,
     new Set(
       (await planItemRepository.findByPlan(fresh.id, tx))
         .filter((i) => i.op === 'add')
@@ -6907,9 +6944,11 @@ export const plansService = {
             proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
           );
           // ...and the links the correction writes must name a proposal on the plan
-          // (bug MOTIR-9175), judged on the bodies it sets.
-          assertBodyRefsResolve(
-            { descriptionMd: input.descriptionMd, explanationMd: input.explanationMd },
+          // (bug MOTIR-9175), judged on the bodies it writes (bug MOTIR-9836).
+          assertEditBodyRefsResolve(
+            current,
+            input,
+            next,
             new Set(all.filter((i) => i.op === 'add').map((i) => i.id)),
             proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
           );

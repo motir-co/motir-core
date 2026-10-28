@@ -3598,7 +3598,9 @@ cross-workspace key returns a `WORK_ITEM_NOT_FOUND` tool error.
 subtree card whose body, parsed against the section registry for its kind × type,
 misses a required section or carries one it cannot read is reported as
 `{ item, state: "unstructured" | "incomplete", missing, invalid, otherHeadings, signals }`,
-sorted by `item`. It never changes `valid` (a VALID verdict states the count and says
+sorted by `item`. A heading the registry does not define for the cell is an allowed
+`otherSections` entry: it is listed in `otherHeadings` beside a real finding, and never
+makes a finding on its own (MOTIR-9835). It never changes `valid` (a VALID verdict states the count and says
 so), and with a `planId` the body is the projected one. Fix a finding by re-writing the
 card with `sections` (see `get_section_sets`).
 
@@ -5052,7 +5054,7 @@ this plan's to fix. An old edge the plan touches nothing of is reported by
 `validate_plan` also returns `sectionFindings` (MOTIR-9032), the same advisory
 channel as on `validate_work_item`, over the cards the plan adds or modifies: the
 projected body parsed against the section registry, a missing required section
-named by `item`. It never changes `valid`.
+named by `item`. An extra heading alone is not a finding (MOTIR-9835). It never changes `valid`.
 
 ```jsonc
 validate_plan({ planId })

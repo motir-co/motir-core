@@ -55,7 +55,7 @@ import type {
   PlanWithItemsDto,
   StaleReason,
 } from '@/lib/dto/plans';
-import type { ExecutorDto, WorkItemTypeDto } from '@/lib/dto/workItems';
+import type { ExecutorDto, WorkItemRefMap, WorkItemTypeDto } from '@/lib/dto/workItems';
 import { resolveExecutor } from '@/lib/issues/executorDefaults';
 import { isContainerKind } from '@/lib/plans/validateProposedKind';
 import type { PlanRevision, Prisma } from '@/generated/prisma/client';
@@ -1983,8 +1983,12 @@ export const planReviewService = {
         ),
       ]),
     );
+    // The plan's own SUMMARY (the briefing) rides the SAME read (bug MOTIR-9697):
+    // both surfaces that draw it — the review rail and the overlay's briefing
+    // bubble — had no map built from it, so every chip in it was drawn deleted.
+    const summaryRefIds = plan.summary ? parseWorkItemTokenIds(plan.summary) : [];
     const bodyRefs = await resolveWorkItemRefSummaries(
-      { ids: [...new Set([...refIdsByItem.values()].flat())], keys: [] },
+      { ids: [...new Set([...refIdsByItem.values()].flat().concat(summaryRefIds))], keys: [] },
       plan.projectId,
       reader,
     );
@@ -1996,6 +2000,12 @@ export const planReviewService = {
         }),
       );
     }
+    const summaryRefs: WorkItemRefMap = Object.fromEntries(
+      summaryRefIds.flatMap((id) => {
+        const summary = bodyRefs[id];
+        return summary ? [[id, summary]] : [];
+      }),
+    );
 
     // ── WHAT EACH OFF-LEVEL EDGE DRAWS AFTER APPROVE (MOTIR-6362) ──────────────
     //
@@ -2205,6 +2215,7 @@ export const planReviewService = {
       status: plan.status,
       title: plan.title,
       summary: plan.summary,
+      summaryRefs,
       itemCount: plan.itemCount,
       createdAt: plan.createdAt,
       plannedAt: plan.plannedAt,

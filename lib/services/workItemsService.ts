@@ -2487,8 +2487,9 @@ export const workItemsService = {
       // link (source = mention) to each viewable, same-workspace target — in
       // THIS transaction (a DB write, correctly in-tx). ADD-only, idempotent,
       // never throws out: an unresolved / cross-workspace / unviewable / self
-      // reference is dropped silently. One combined parse over all three bodies
-      // (the parser dedups). `prefix` is the in-tx project identifier.
+      // reference is dropped silently. The title is read as plain text and each
+      // body as Markdown, so a key quoted in code relates nothing (MOTIR-9825).
+      // `prefix` is the in-tx project identifier.
       await autoRelateWorkItemMentions(
         {
           source: {
@@ -2497,7 +2498,8 @@ export const workItemsService = {
             projectId: input.projectId,
             projectIdentifier: prefix,
           },
-          text: [row.title, row.descriptionMd, row.explanationMd].filter(Boolean).join('\n'),
+          title: row.title,
+          bodies: [row.descriptionMd, row.explanationMd],
           ctx,
         },
         tx,
@@ -3202,7 +3204,8 @@ export const workItemsService = {
                 projectId: current.projectId,
                 projectIdentifier: project.identifier,
               },
-              text: [row.title, row.descriptionMd, row.explanationMd].filter(Boolean).join('\n'),
+              title: row.title,
+              bodies: [row.descriptionMd, row.explanationMd],
               ctx,
             },
             tx,
