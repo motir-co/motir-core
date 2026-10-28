@@ -307,6 +307,11 @@ export class FakeOrganization implements AwsManagementApi {
     return { ...this.session };
   }
 
+  async assumeTenantDeployRole(accountId: string) {
+    this.calls.push(`assumeTenantDeployRole:${accountId}`);
+    return { ...this.session };
+  }
+
   async moveAccountToOrganizationalUnit(accountId: string, organizationalUnitId: string) {
     this.calls.push(`moveAccountToOrganizationalUnit:${accountId}:${organizationalUnitId}`);
     if (this.accountUnits.get(accountId) === organizationalUnitId) return { moved: false };

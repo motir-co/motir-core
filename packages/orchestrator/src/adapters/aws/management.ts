@@ -125,6 +125,7 @@ const RUNNER_SESSION_SECONDS = 3600;
 const RUNNER_SESSION_NAME = 'motir-fleet-runner';
 /** A deploy session in a tenant account: an hour, long enough for one deploy. */
 const TENANT_DEPLOY_SESSION_SECONDS = 3600;
+const TENANT_DEPLOY_SESSION_NAME = 'motir-tenant-deploy';
 /** CreateAccount is asynchronous; AWS documents it as taking minutes. */
 export const AWS_CREATE_ACCOUNT_TIMEOUT_MS = 10 * 60_000;
 const CREATE_ACCOUNT_POLL_MS = 5_000;
@@ -291,6 +292,9 @@ export interface AwsManagementApi {
   ): Promise<{ created: string[] }>;
   /** A runner session in the member account, from the management role. */
   assumeRunnerRole(accountId: string): Promise<AwsSessionCredentials>;
+  /** A deploy session in a tenant account (MOTIR-10004): `motir-tenant-deploy`,
+   *  assumed from the management session, the only principal it trusts. */
+  assumeTenantDeployRole(accountId: string): Promise<AwsSessionCredentials>;
   /** Put the account under `organizationalUnitId`; a no-op when it is there. */
   moveAccountToOrganizationalUnit(
     accountId: string,
@@ -477,7 +481,12 @@ export function createAwsManagementApi(
     const command = new AssumeRoleCommand({
       RoleArn: `arn:aws:iam::${accountId}:role/${roleName}`,
       RoleSessionName: sessionName,
-      DurationSeconds: roleName === AWS_RUNNER_IAM_ROLE ? RUNNER_SESSION_SECONDS : SESSION_SECONDS,
+      DurationSeconds:
+        roleName === AWS_RUNNER_IAM_ROLE
+          ? RUNNER_SESSION_SECONDS
+          : roleName === AWS_TENANT_DEPLOY_ROLE
+            ? TENANT_DEPLOY_SESSION_SECONDS
+            : SESSION_SECONDS,
     });
     for (let attempt = 1; ; attempt += 1) {
       try {
@@ -818,6 +827,10 @@ export function createAwsManagementApi(
 
     async assumeRunnerRole(accountId) {
       return assumeInMember(accountId, AWS_RUNNER_IAM_ROLE, RUNNER_SESSION_NAME);
+    },
+
+    async assumeTenantDeployRole(accountId) {
+      return assumeInMember(accountId, AWS_TENANT_DEPLOY_ROLE, TENANT_DEPLOY_SESSION_NAME);
     },
 
     async ensureRunnerRole(credentials, policyDocument) {
