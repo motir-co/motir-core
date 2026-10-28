@@ -133,9 +133,7 @@ describe('the `organization` platform-staff policy arms (MOTIR-4565)', () => {
     // `platform_run_model_list` marker are MOTIR-7525's hosted-run model list —
     // platform configuration, written solely from this tier, and so is
     // `platform_fleet_org_ci`, MOTIR-8714's fleet org CI switch, and so is
-    // `platform_fleet_kind_switch`, MOTIR-9503's per-fleet-kind Fly↔AWS switch. `enterprise_request`
-    // is MOTIR-7605's Contact-sales request, which staff list and move from the
-    // console (MOTIR-7608); its tenant arm is the org's own.
+    // `platform_fleet_kind_switch`, MOTIR-9503's per-fleet-kind Fly↔AWS switch.
     // The five `idea*`
     // tables are MOTIR-7662's idea store — Motir's own content, readable by
     // anyone and written solely from this tier (`20261007100000_idea_store`);
@@ -148,7 +146,6 @@ describe('the `organization` platform-staff policy arms (MOTIR-4565)', () => {
     expect(rows.map((r) => r.tablename)).toEqual([
       'capacity_alert_setting',
       'capacity_raised_alert',
-      'enterprise_request',
       'idea',
       'idea_evidence',
       'idea_evidence_translation',

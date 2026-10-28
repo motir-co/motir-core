@@ -441,10 +441,6 @@ model User {
   contentLanguageChanges           OrganizationContentLanguageChange[] @relation("OrganizationContentLanguageChangedBy")
   autoTranslateChanges             ProjectAutoTranslateChange[]        @relation("ProjectAutoTranslateChangedBy")
   cancelledOrganizationDeletions   OrganizationDeletionRequest[]       @relation("OrganizationDeletionCancelledBy")
-  // SCHEMA-ONLY phase of the Contact-sales removal (MOTIR-9386): `@ignore`d with
-  // its model so the generated client stops naming the table; the CONTRACT
-  // migration drops the table and deletes this line in a later release.
-  enterpriseRequests               EnterpriseRequest[]                 @ignore
   // Personal-data export requests this person has raised (Story 8.4 ·
   // MOTIR-3698). A LIST for the same reason: each request builds its own
   // archive, and the previous ones remain as history until they expire.
@@ -1521,9 +1517,6 @@ model Organization {
   // one may follow it. `Restrict` on the request's side: an org row may not
   // vanish under its own deletion record (the purge deletes the requests first).
   deletionRequests      OrganizationDeletionRequest[]
-  /// SCHEMA-ONLY phase of the Contact-sales removal (MOTIR-9386): `@ignore`d with
-  /// its model; the CONTRACT migration drops the table and this line later.
-  enterpriseRequests    EnterpriseRequest[]           @ignore
   /// Per-org kill-switch OVERRIDES (MOTIR-750); absence = the registry default.
   featureFlags          OrgFeatureFlag[]
   /// Staff "View as" sessions opened inside this organization (MOTIR-749).
@@ -12359,126 +12352,6 @@ model AccountDeletionRequest {
   /// columns are in its `WHERE`, so the second earns its place.
   @@index([status, erasureDueAt])
   @@map("account_deletion_request")
-}
-
-/// ⚠️ RETIRED — SCHEMA-ONLY PHASE (Story MOTIR-9385 · MOTIR-9386). Motir has no
-/// Enterprise plan, and the feature that wrote and read this table is deleted.
-/// The model is `@@ignore`d so the generated client no longer names the table,
-/// while the table and its five enum types stay in place: `fly.toml`'s
-/// `release_command` migrates BEFORE the new image takes traffic, so dropping
-/// them in the same release would pull the table from under the still-serving
-/// image (`docs/decisions/delivery-reader-migration.md` §6a,
-/// `tests/contract-phase-guard.test.ts`). A CONTRACT migration in a LATER
-/// release drops the table and the enums and deletes these declarations.
-///
-/// A request for the ENTERPRISE plan, sent from the Enterprise card's Contact
-/// sales control on Billing & plans (Story MOTIR-7602 · Subtask MOTIR-7605).
-/// Platform staff work it in the operator console's Enterprise requests page
-/// through `new → contacted → offer_sent → won | lost`.
-///
-/// AT MOST ONE OPEN REQUEST PER ORG — the PARTIAL UNIQUE INDEX
-/// `enterprise_request_open_per_org_key` (`(organization_id) WHERE status IN
-/// ('new','contacted','offer_sent')`), not a check-then-insert: two tabs racing
-/// both read "nothing open", so only the index can refuse the second insert. It
-/// is the table's only index on `(organization_id)` alone — the history read is
-/// `(organizationId, createdAt)` (`CLAUDE.md`, the partial-index rule).
-///
-/// It never stores a PRICE: the offer is private and lives outside the product.
-/// Every answer the org gives is optional except the note.
-///
-/// TENANCY — org-scoped (`app.organization_id`), with an `app.platform_staff`
-/// arm for the console and an `app.system_admin` arm for the email job. See the
-/// migration.
-model EnterpriseRequest {
-  id             String  @id @default(cuid())
-  organizationId String  @map("organization_id")
-  /// Who pressed Send. SetNull: the org's record outlives the sender's account.
-  requestedById  String? @map("requested_by_id")
-
-  status EnterpriseRequestStatus @default(new)
-
-  /// Roughly how many cards a day the org wants to run.
-  cardsPerDay      Int?                 @map("cards_per_day")
-  /// How many agents in parallel.
-  parallelAgents   Int?                 @map("parallel_agents")
-  agentPath        EnterpriseAgentPath? @map("agent_path")
-  autonomy         EnterpriseAutonomy?
-  startWhen        EnterpriseStartWhen? @map("start_when")
-  teamSize         EnterpriseTeamSize?  @map("team_size")
-  /// How to reach them. The service defaults it to the sender's email.
-  contact          String
-  /// The free-text note — the one required answer.
-  note             String
-  /// The PM-core tier the org was on when it asked (`pmTierForOrg`), snapshotted.
-  tierKeyAtRequest String?              @map("tier_key_at_request")
-
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
-  /// When staff moved it to `won` or `lost`. Null while it is open.
-  closedAt  DateTime? @map("closed_at")
-
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  requestedBy  User?        @relation(fields: [requestedById], references: [id], onDelete: SetNull)
-
-  /// The console list — newest first within a state filter.
-  @@index([status, createdAt])
-  /// The org's history read. NOT `([organizationId])` — see the doc comment.
-  @@index([organizationId, createdAt])
-  @@index([requestedById])
-  @@map("enterprise_request")
-  @@ignore
-}
-
-/// Where an {@link EnterpriseRequest} stands. `new`, `contacted` and
-/// `offer_sent` are OPEN (the partial index); `won` and `lost` are terminal.
-enum EnterpriseRequestStatus {
-  new
-  contacted
-  offer_sent
-  won
-  lost
-
-  @@map("enterprise_request_status")
-}
-
-/// Which agents the org would run.
-enum EnterpriseAgentPath {
-  /// Motir's hosted agents, on Motir's models.
-  hosted
-  /// Their own agents (Claude Code, Codex, …) on their own credential.
-  own
-  both
-
-  @@map("enterprise_agent_path")
-}
-
-/// Whether the org wants the project run on its own, or only a volume of runs.
-enum EnterpriseAutonomy {
-  autonomous_lead
-  volume_only
-  unsure
-
-  @@map("enterprise_autonomy")
-}
-
-/// When the org would start.
-enum EnterpriseStartWhen {
-  now
-  within_month
-  within_quarter
-  exploring
-
-  @@map("enterprise_start_when")
-}
-
-/// The org's team size, as a range.
-enum EnterpriseTeamSize {
-  size_1_10
-  size_11_50
-  size_51_200
-  size_201_plus
-
-  @@map("enterprise_team_size")
 }
 
 /// A request to DELETE AN ORGANIZATION (Story MOTIR-6306 · Subtask MOTIR-6391) —
