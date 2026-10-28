@@ -1081,6 +1081,70 @@ describe('workItemsService.validateWorkItem — the MISLABELLED-LINK advisory', 
   });
 });
 
+// Bug MOTIR-9825 — link syntax quoted in code renders as literal text, so it is
+// not a link and the advisory never judges it.
+describe('workItemsService.validateWorkItem — the MISLABELLED-LINK advisory ignores code', () => {
+  const mislabelled = (r: WorkItemValidityDto) => r.advisories.filter(isMislabelledLinkAdvisory);
+  const DEAD = 'cmtehjd4s00kjhwphdoxk2mwz';
+
+  it('AC1: a dead link quoted in an inline code span raises nothing, whatever the backtick run', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await mkBody(
+      fx,
+      'Card quoting a bad link',
+      'task',
+      `The defect was \`${ref('PROD-4202', DEAD)}\`, and \`\` \` ${ref('PROD-1', 'cl_nowhere')} \`\`.`,
+    );
+
+    const result = await workItemsService.validateWorkItem(fx.projectId, card.identifier, fx.ctx);
+    expect(mislabelled(result)).toEqual([]);
+  });
+
+  it('AC2: a dead link inside a fenced or an indented code block raises nothing', async () => {
+    const fx = await makeWorkItemFixture();
+    const body = [
+      'Fenced:',
+      '',
+      '```md',
+      ref('PROD-4202', DEAD),
+      '```',
+      '',
+      'Indented:',
+      '',
+      `    ${ref('PROD-1', 'cl_nowhere')}`,
+    ].join('\n');
+    const card = await mkBody(fx, 'Card quoting bad links in blocks', 'task', body);
+
+    const result = await workItemsService.validateWorkItem(fx.projectId, card.identifier, fx.ctx);
+    expect(mislabelled(result)).toEqual([]);
+  });
+
+  it('AC4: a quoted token and a real link to the same id raise exactly ONE advisory, for the real link', async () => {
+    const fx = await makeWorkItemFixture();
+    const meant = await mk(fx, 'The card the label names', 'task');
+    const opened = await mk(fx, 'The card the id opens', 'task');
+    const bad = ref(meant.identifier, opened.id);
+    const card = await mkBody(
+      fx,
+      'Card quoting and using a link',
+      'task',
+      `It was written \`${bad}\`. Still wrong here: ${bad}.`,
+    );
+
+    const result = await workItemsService.validateWorkItem(fx.projectId, card.identifier, fx.ctx);
+    expect(mislabelled(result)).toEqual([
+      {
+        kind: 'shape',
+        item: card.identifier,
+        severity: 'likely-mislabelled-link',
+        label: meant.identifier,
+        targetId: opened.id,
+        targetKey: opened.identifier,
+      },
+    ]);
+  });
+});
+
 describe('validate_work_item (MCP) — the MISLABELLED-LINK advisory reaches the author', () => {
   const text = (r: CallToolResult) =>
     (r.content as { text: string }[]).map((c) => c.text).join('\n');

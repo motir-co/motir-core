@@ -469,3 +469,98 @@ describe('the MCP plan tools carry `sections`', () => {
     await client.close();
   });
 });
+
+// Bug MOTIR-9836 — the MOTIR-9175 link check judged `input.descriptionMd`, which a
+// `sections` write never sends, so a dangling `planItem:` link written through
+// sections passed the deepen / revise and the correction. It is judged on the
+// rendered body now, with a link the stored body already carried left repairable.
+describe('a `sections` edit linking a planItem the plan does not hold (MOTIR-9836)', () => {
+  const deadRefs = {
+    contextRefs: [{ ref: '[x](motir-ref:planItem:doesnotexist)', why: 'a mistyped id' }],
+  };
+
+  async function withSibling(fx: WorkItemFixture) {
+    const plan = await newPlan(fx);
+    const siblingId = await appendOne(fx, plan.id, { title: 'Sibling', sections });
+    const itemId = await appendOne(fx, plan.id, { title: 'Card', sections });
+    return { planId: plan.id, siblingId, itemId };
+  }
+
+  it('the deepen refuses it, naming the id, and leaves the body as it was', async () => {
+    const fx = await makeWorkItemFixture();
+    const { planId, itemId } = await withSibling(fx);
+    const before = (await storedFields(itemId))['descriptionMd'];
+
+    const message = await refusal(
+      plansService.deepenProposal(planId, itemId, { sections: deadRefs }, fx.ctx),
+    );
+    expect(message).toContain('planItem:doesnotexist');
+    expect((await storedFields(itemId))['descriptionMd']).toBe(before);
+  });
+
+  it('the correction refuses it too, and accepts a link to a proposal the plan holds', async () => {
+    const fx = await makeWorkItemFixture();
+    const { planId, siblingId, itemId } = await withSibling(fx);
+
+    const message = await refusal(
+      plansService.correctProposal(planId, itemId, { sections: deadRefs }, fx.ctx),
+    );
+    expect(message).toContain('planItem:doesnotexist');
+
+    await plansService.correctProposal(
+      planId,
+      itemId,
+      {
+        sections: {
+          contextRefs: [{ ref: `[s](motir-ref:planItem:${siblingId})`, why: 'the sibling' }],
+        },
+      },
+      fx.ctx,
+    );
+    expect((await storedFields(itemId))['descriptionMd']).toContain(
+      `motir-ref:planItem:${siblingId}`,
+    );
+  });
+
+  it('accepts a sections edit that leaves an INHERITED dangling link untouched, so it stays repairable', async () => {
+    const fx = await makeWorkItemFixture();
+    const { planId, siblingId, itemId } = await withSibling(fx);
+    await plansService.deepenProposal(
+      planId,
+      itemId,
+      { sections: { contextRefs: [{ ref: `[s](motir-ref:planItem:${siblingId})`, why: 'w' }] } },
+      fx.ctx,
+    );
+    // The link goes dangling behind the door's back, as a body stored before
+    // the MOTIR-9175 check would.
+    const stored = (await storedFields(itemId))['descriptionMd'] as string;
+    await adminDb.planItem.update({
+      where: { id: itemId },
+      data: {
+        proposedFields: {
+          ...(await storedFields(itemId)),
+          descriptionMd: stored.replace(siblingId, 'pi_gone'),
+        } as never,
+      },
+    });
+
+    await plansService.deepenProposal(
+      planId,
+      itemId,
+      { sections: { scopeBoundary: 'Stops at the parser.' } },
+      fx.ctx,
+    );
+    await plansService.correctProposal(
+      planId,
+      itemId,
+      { sections: { framing: 'Reworded framing.' } },
+      fx.ctx,
+    );
+    const after = (await storedFields(itemId))['descriptionMd'] as string;
+    expect(after).toContain('Stops at the parser.');
+    expect(after).toContain('motir-ref:planItem:pi_gone');
+
+    // ...and a new dangling link beside the inherited one is still refused.
+    await refusal(plansService.deepenProposal(planId, itemId, { sections: deadRefs }, fx.ctx));
+  });
+});

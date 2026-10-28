@@ -1093,6 +1093,23 @@ export interface PlanReviewDto {
   status: PlanStatusDto;
   title: string | null;
   summary: string | null;
+  /**
+   * The LIVE summaries of the work items `summary` links to with
+   * `[KEY](motir:<id>)` (bug MOTIR-9697), keyed by work-item id — the map both
+   * surfaces that draw the briefing (`PlanReviewRail`, `PlanChangeRail`'s
+   * briefing bubble) render its chips from.
+   *
+   * Resolved in the SAME batched read as each proposal's `workItemRefs`
+   * (`planReviewService.getPlanReview`), for the reader, so a Visitor gets the
+   * no-access summary and never a title. Before it, the rail rendered the summary
+   * with no map and the overlay with the chat session's turn-only map, so every
+   * link was drawn as a deleted card. An id that resolves to nothing is absent,
+   * which is the struck-through state a genuinely deleted card owes.
+   *
+   * Optional only for the hand-built reviews tests construct; the plan-review
+   * read always sets it.
+   */
+  summaryRefs?: WorkItemRefMap;
   itemCount: number;
   createdAt: string;
   plannedAt: string | null;

@@ -89,16 +89,16 @@ describe('per person, at create — the plan’s agentsPerUser', () => {
     await expectNothingTaken(1, provisioned);
   });
 
-  it('Pro (5): the fifth create succeeds and the sixth is refused with limit 5', async () => {
+  it('Pro (2): the second create succeeds and the third is refused with limit 2', async () => {
     onPlan(TIERS.pro);
-    for (let i = 1; i <= 5; i++) expect((await create(`a-${i}`)).state).toBe('running');
-    await expect(create('a-6')).rejects.toMatchObject({
+    for (let i = 1; i <= 2; i++) expect((await create(`a-${i}`)).state).toBe('running');
+    await expect(create('a-3')).rejects.toMatchObject({
       reason: 'user_cap',
-      limit: 5,
+      limit: 2,
       planName: 'Pro',
-      message: expect.stringContaining('Pro plan allows 5 agents per person'),
+      message: expect.stringContaining('Pro plan allows 2 agents per person'),
     });
-    expect(await slots()).toHaveLength(5);
+    expect(await slots()).toHaveLength(2);
   });
 
   it('a larger pool plan (10, MOTIR-9653): the tenth create succeeds and the eleventh is refused, naming the plan', async () => {
@@ -115,23 +115,23 @@ describe('per person, at create — the plan’s agentsPerUser', () => {
 });
 
 describe('running per org, at create and wake — the plan’s agentsRunningPerOrg, under the lock', () => {
-  it('Standard (5): with 5 running, a wake and a create are each refused, naming the plan and 5, and leave no slot', async () => {
+  it('Standard (2): with 2 running, a wake and a create are each refused, naming the plan and 2, and leave no slot', async () => {
     onPlan(TIERS.standard);
     const mine = await create('mine');
     await lifecycle.hibernate(fx.projectIdentifier, mine.id, fx.ctx);
-    await seedRunning(5);
+    await seedRunning(2);
     const provisioned = fleet.persistentSpecs.length;
 
-    const words = expect.stringContaining('Standard plan runs 5 agents at once, and 5 are running');
+    const words = expect.stringContaining('Standard plan runs 2 agents at once, and 2 are running');
     await expect(lifecycle.wake(fx.projectIdentifier, mine.id, fx.ctx)).rejects.toMatchObject({
       reason: 'org_running_cap',
-      limit: 5,
+      limit: 2,
       planName: 'Standard',
       message: words,
     });
     await expect(create('theirs', await memberCtx())).rejects.toMatchObject({
       reason: 'org_running_cap',
-      limit: 5,
+      limit: 2,
       planName: 'Standard',
       message: words,
     });
@@ -139,12 +139,12 @@ describe('running per org, at create and wake — the plan’s agentsRunningPerO
   });
 
   it('two concurrent wakes one below the figure: exactly one is admitted', async () => {
-    onPlan(TIERS.pro); // 30 running
+    onPlan(TIERS.pro); // 10 running
     const a = await create('a');
     const b = await create('b');
     await lifecycle.hibernate(fx.projectIdentifier, a.id, fx.ctx);
     await lifecycle.hibernate(fx.projectIdentifier, b.id, fx.ctx);
-    await seedRunning(29);
+    await seedRunning(9);
 
     const results = await Promise.allSettled([
       lifecycle.wake(fx.projectIdentifier, a.id, fx.ctx),
@@ -156,7 +156,7 @@ describe('running per org, at create and wake — the plan’s agentsRunningPerO
     expect(rejected).toHaveLength(1);
     expect((rejected[0] as PromiseRejectedResult).reason).toMatchObject({
       reason: 'org_running_cap',
-      limit: 30,
+      limit: 10,
     });
     expect(await slots()).toHaveLength(1);
   });

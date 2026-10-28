@@ -179,11 +179,11 @@ afterAll(async () => {
 
 describe('each plan’s CI burst cap, over CI runners alone', () => {
   it.each([
-    ['standard', 5],
-    ['pro', 10],
-    ['max', 25],
-    ['max_x2', 25],
-    ['host', 50],
+    ['standard', 2],
+    ['pro', 5],
+    ['max', 10],
+    ['max_x2', 15],
+    ['host', 20],
     ['pool_600k', 20],
   ] as const)('%s admits %i and defers the next plan_cap', async (planKey, figure) => {
     stubPaidAiPlan(planKey);
@@ -205,14 +205,14 @@ describe('each plan’s CI burst cap, over CI runners alone', () => {
   it('the words name the plan and the figure, never 500 or the env var; a finished runner lets the deferred job in', async () => {
     stubPaidAiPlan('pro');
     const fx = await seedTenant();
-    const running = await inFlight(fx, 10);
+    const running = await inFlight(fx, 5);
     const queued = await seedIntent(fx);
 
     const verdict = await ciRunnerAdmissionService.admit(queued);
     expect(verdict).toMatchObject({ outcome: 'deferred', reason: 'plan_cap' });
     const detail = (verdict as { detail: string }).detail;
     expect(detail).toContain('Pro');
-    expect(detail).toContain('10 CI jobs at once');
+    expect(detail).toContain('5 CI jobs at once');
     expect(detail).not.toContain('500');
     expect(detail).not.toContain('MOTIR_FLEET_ORG_MAX_IN_FLIGHT');
     expect(await statusOf(queued.id)).toBe('pending');
@@ -233,15 +233,15 @@ describe('each plan’s CI burst cap, over CI runners alone', () => {
     for (let i = 0; i < 5; i++) await otherSlot(fx, 'hosted_agent');
     for (let i = 0; i < 3; i++) await otherSlot(fx, 'code_graph_index');
 
-    expect(await admit(fx)).toMatchObject({ outcome: 'admitted', ciInFlight: 0, ciBurstCap: 5 });
+    expect(await admit(fx)).toMatchObject({ outcome: 'admitted', ciInFlight: 0, ciBurstCap: 2 });
   });
 
   // ⚠️ MUTATION-CHECK: delete the `lockScope` call in `ciRunnerAdmissionService.admit`
-  // and both racers read "4 in flight" and both claim.
+  // and both racers read "1 in flight" and both claim.
   it('two concurrent admits one below a Standard figure: exactly one is admitted', async () => {
     stubPaidAiPlan('standard');
     const fx = await seedTenant();
-    await inFlight(fx, 4);
+    await inFlight(fx, 1);
     const [a, b] = [await seedIntent(fx), await seedIntent(fx)];
 
     const verdicts = await Promise.all([
@@ -276,7 +276,7 @@ describe('the staff override, and the plans that have no figure', () => {
     expect(await admit(fx)).toMatchObject({ outcome: 'deferred', reason: 'plan_cap' });
   });
 
-  it('an exempt org with no override runs past Max’s 25, and the kill switch still stops it', async () => {
+  it('an exempt org with no override runs past Max’s 10, and the kill switch still stops it', async () => {
     vi.spyOn(planCapsService, 'capsFor').mockResolvedValue({ kind: 'exempt' });
     const fx = await seedTenant({ isMeta: true });
     await inFlight(fx, 30);

@@ -77,6 +77,25 @@ export interface InstallState {
    *  as `o` and `g` are, so a token minted without one is byte-identical to one
    *  minted before the field existed and decodes with no `context` key. */
   context?: InstallReturnContext;
+  /** The PROJECT the install was started for (Bug MOTIR-9828) — payload key
+   *  `p`, omitted when absent exactly as `o`, `g` and `c` are. Minted only by a
+   *  project's Repositories room, whose `Connect a new one` promises the
+   *  organisation connection AND the project link in one act: on return the
+   *  setup handler links the repositories this round trip connected into this
+   *  project. It is the project's KEY, resolved again under the acting
+   *  session's own access checks on return — a hint, like `w`, never an
+   *  authorisation by itself. */
+  projectKey?: string;
+}
+
+/** The longest project key the state carries. Project keys are short prefixes;
+ *  anything longer is not one and is dropped rather than signed into a link. */
+const PROJECT_KEY_MAX_LENGTH = 64;
+
+function narrowProjectKey(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 && value.length <= PROJECT_KEY_MAX_LENGTH
+    ? value
+    : undefined;
 }
 
 /** Encode + sign a short-lived install-state token.
@@ -96,6 +115,7 @@ export function encodeInstallState(
     o?: GithubReturnSurfaceId;
     g?: string;
     c?: InstallReturnContext;
+    p?: string;
   } = {
     w: state.workspaceId,
     u: state.userId,
@@ -105,6 +125,8 @@ export function encodeInstallState(
   if (state.organizationId) payload.g = state.organizationId;
   const context = narrowContextShape(state.context);
   if (context) payload.c = context;
+  const projectKey = narrowProjectKey(state.projectKey);
+  if (projectKey) payload.p = projectKey;
   const b64 = Buffer.from(JSON.stringify(payload)).toString('base64url');
   return `${b64}.${sign(b64)}`;
 }
@@ -118,7 +140,15 @@ export function encodeInstallState(
 export type InstallStateRejection = 'malformed' | 'expired';
 
 export type InstallStateResult =
-  | { ok: true; state: InstallState }
+  | {
+      ok: true;
+      state: InstallState;
+      /** When the token was minted, in epoch seconds — `exp` minus the TTL.
+       *  The project round trip (MOTIR-9828) links only the repositories
+       *  connected AFTER this moment, so it reads it off the signed payload
+       *  rather than trusting a clock nobody signed. */
+      issuedAt: number;
+    }
   | { ok: false; reason: 'malformed' }
   | {
       ok: false;
@@ -159,6 +189,7 @@ export function decodeInstallStateResult(
     o?: unknown;
     g?: unknown;
     c?: unknown;
+    p?: unknown;
   };
   try {
     payload = JSON.parse(Buffer.from(b64, 'base64url').toString('utf8')) as typeof payload;
@@ -191,8 +222,10 @@ export function decodeInstallStateResult(
       ...(context ? { context } : {}),
     };
   }
+  const projectKey = narrowProjectKey(payload.p);
   return {
     ok: true,
+    issuedAt: payload.exp - TTL_SECONDS,
     state: {
       workspaceId: payload.w,
       userId: payload.u,
@@ -201,6 +234,7 @@ export function decodeInstallStateResult(
         ? { organizationId: payload.g }
         : {}),
       ...(context ? { context } : {}),
+      ...(projectKey ? { projectKey } : {}),
     },
   };
 }

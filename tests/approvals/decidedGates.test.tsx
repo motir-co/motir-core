@@ -5,8 +5,11 @@ import { renderToString } from 'react-dom/server';
 import {
   announceGateDecided,
   announceGateStateDecided,
+  clearGatePressPending,
+  markGatePressPending,
   useDecidedGate,
   useDecidedGateState,
+  useGatePressPending,
 } from '@/lib/approvals/decidedGates';
 import type { ApprovalGateDTO } from '@/lib/dto/approvalGate';
 
@@ -144,5 +147,44 @@ describe('a STATE-only announcement (MOTIR-6037 — a plan decided from the plan
     render(<Probe gateId="g-plan-await" />);
     act(() => announceGateStateDecided('g-plan-await', 'awaiting'));
     expect(screen.getByTestId('g-plan-await').textContent).toBe('none');
+  });
+});
+
+describe('a PRESS IN FLIGHT on this page (MOTIR-9696)', () => {
+  function PendingProbe({ gateId }: { gateId: string }) {
+    return <span data-testid={`pending-${gateId}`}>{String(useGatePressPending(gateId))}</span>;
+  }
+
+  it('marks and clears one gate, and only that gate', () => {
+    render(
+      <>
+        <PendingProbe gateId="g-press" />
+        <PendingProbe gateId="g-other" />
+      </>,
+    );
+    expect(screen.getByTestId('pending-g-press').textContent).toBe('false');
+
+    act(() => markGatePressPending('g-press'));
+    expect(screen.getByTestId('pending-g-press').textContent).toBe('true');
+    expect(screen.getByTestId('pending-g-other').textContent).toBe('false');
+
+    act(() => clearGatePressPending('g-press'));
+    expect(screen.getByTestId('pending-g-press').textContent).toBe('false');
+  });
+
+  it('a second mark and a clear of an unmarked gate change nothing', () => {
+    render(<PendingProbe gateId="g-twice" />);
+    act(() => markGatePressPending('g-twice'));
+    act(() => markGatePressPending('g-twice'));
+    expect(screen.getByTestId('pending-g-twice').textContent).toBe('true');
+    // One clear undoes it: the mark is a set, not a count.
+    act(() => clearGatePressPending('g-twice'));
+    act(() => clearGatePressPending('g-twice'));
+    expect(screen.getByTestId('pending-g-twice').textContent).toBe('false');
+  });
+
+  it('renders false on the server, whatever this tab is pressing', () => {
+    act(() => markGatePressPending('g-press-server'));
+    expect(renderToString(<PendingProbe gateId="g-press-server" />)).toContain('false');
   });
 });

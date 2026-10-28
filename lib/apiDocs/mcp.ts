@@ -834,7 +834,9 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // is another severity on the channel, not part of the verdict this line names.
     // Re-pinned for MOTIR-9007, summary UNCHANGED: the new `likely-mislabelled-link`
     // advisory is another severity on the channel, outside the verdict.
-    descriptionFingerprint: '94d73c229405',
+    // Re-pinned for MOTIR-9835, summary UNCHANGED: an extra heading alone is not a
+    // section finding — advisory channel only, outside the verdict.
+    descriptionFingerprint: '3810aa68df89',
   },
   validate_plan: {
     // ⚠️ SUMMARY REWRITTEN, not merely re-pinned (MOTIR-3575). The old line —
@@ -861,7 +863,9 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Re-pinned for MOTIR-9032's advisory `sectionFindings`, summary UNCHANGED.
     // Re-pinned for MOTIR-9007, summary UNCHANGED: `advisories` (mislabelled links in
     // proposed bodies) rides beside the verdict and never touches it.
-    descriptionFingerprint: 'f10d745aade7',
+    // Re-pinned for MOTIR-9835, summary UNCHANGED: an extra heading alone is not a
+    // section finding — advisory channel only, outside the verdict.
+    descriptionFingerprint: '17faf9b75460',
   },
   get_plan_status: {
     // Re-pinned for MOTIR-3064, summary UNCHANGED and deliberately so: the tool

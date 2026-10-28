@@ -92,6 +92,48 @@ describe('planReviewService.getPlanReview — the proposed bodies’ work-item r
     expect(refReads).toHaveLength(1);
   });
 
+  it('resolves the plan SUMMARY’s links in the same batched read (MOTIR-9697)', async () => {
+    const fx = await makeWorkItemFixture();
+    const pool = await seed(fx, 'The fleet pool layer');
+    const aws = await seed(fx, 'The AWS runner pool');
+
+    const plan = await plansService.createPlan(
+      fx.projectId,
+      {
+        title: 'Summary plan',
+        summary: `## 1. Asked\nBuilds on ${link(pool)}, not [MOTIR-1](motir:wi_gone).`,
+      },
+      fx.ctx,
+    );
+    await plansService.addProposals(
+      plan.id,
+      [
+        {
+          op: 'add',
+          proposedFields: { title: 'Added', kind: 'task', descriptionMd: `Uses ${link(aws)}.` },
+        },
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const reads = vi.spyOn(workItemRepository, 'findByIdsInWorkspace');
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+
+    expect(Object.keys(review.summaryRefs ?? {})).toEqual([pool.id]);
+    expect(review.summaryRefs?.[pool.id]).toMatchObject({
+      accessible: true,
+      identifier: pool.identifier,
+      title: 'The fleet pool layer',
+    });
+    // ONE resolve covers the summary AND the proposal bodies.
+    const refReads = reads.mock.calls.filter(
+      ([ids]) => ids.includes(pool.id) || ids.includes(aws.id),
+    );
+    expect(refReads).toHaveLength(1);
+    expect(refReads[0]![0]).toEqual(expect.arrayContaining([pool.id, aws.id]));
+  });
+
   it('carries an empty map when no body links a work item', async () => {
     const fx = await makeWorkItemFixture();
     const plan = await plansService.createPlan(fx.projectId, { title: 'Plain plan' }, fx.ctx);
