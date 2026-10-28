@@ -151,10 +151,7 @@ const fakeProvider: ShardProvisioningProvider = {
     return { vcpuQuota: fake.quota, limits: { machineLimit: 10 } };
   },
   async runtimeCredential(ctx) {
-    return {
-      created: [],
-      confirmed: process.env[`${ctx.credentialRef}_ACCESS_KEY`] === SECRETS.runtimeKey,
-    };
+    return { confirmed: process.env[`${ctx.credentialRef}_ACCESS_KEY`] === SECRETS.runtimeKey };
   },
   manualCredentialStep: (ctx) =>
     `create the account's access key, then run: flyctl secrets set -a motir-core ${ctx.credentialRef}_ACCESS_KEY=<key>`,

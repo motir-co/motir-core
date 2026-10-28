@@ -303,12 +303,12 @@ export function createAwsShardProvisioningProvider(
       // trusts the management role, and the orchestrator assumes it (MOTIR-9460).
       // Confirmed by assuming it once; IAM propagation may make that wait.
       const accountId = accountIdOf(ctx);
-      if (!accountId) return { created: [], confirmed: false };
+      if (!accountId) return { confirmed: false };
       try {
         await api().assumeRunnerRole(accountId);
-        return { created: [], confirmed: true };
+        return { confirmed: true };
       } catch {
-        return { created: [], confirmed: false };
+        return { confirmed: false };
       }
     },
 

@@ -579,20 +579,10 @@ async function walk(
 
   const credential = await provider.runtimeCredential(ctx);
   if (credential.confirmed) {
-    report(
-      'runtime_credential',
-      credential.created.length > 0 ? 'done' : 'already',
-      'the runtime credential is confirmed',
-    );
+    report('runtime_credential', 'already', 'the runtime credential is confirmed');
   } else {
     const owed = provider.manualCredentialStep(ctx);
-    report(
-      'runtime_credential',
-      'pending',
-      credential.created.length > 0
-        ? `created ${credential.created.join(', ')}; the runtime credential is not confirmed yet`
-        : 'the runtime credential is not confirmed yet',
-    );
+    report('runtime_credential', 'pending', 'the runtime credential is not confirmed yet');
     pending.push(owed);
   }
 

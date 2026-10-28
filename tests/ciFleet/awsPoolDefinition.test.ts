@@ -289,15 +289,9 @@ describe('the aws provider’s network step', () => {
 
   it('confirms the stack-built runner role by assuming it, and never creates it', async () => {
     await provider().network(ctx());
-    await expect(provider().runtimeCredential(ctx())).resolves.toEqual({
-      created: [],
-      confirmed: true,
-    });
+    await expect(provider().runtimeCredential(ctx())).resolves.toEqual({ confirmed: true });
     expect(organization.calls.some((c) => c.startsWith('ensureRunnerRole'))).toBe(false);
     organization.runnerRoles.clear();
-    await expect(provider().runtimeCredential(ctx())).resolves.toEqual({
-      created: [],
-      confirmed: false,
-    });
+    await expect(provider().runtimeCredential(ctx())).resolves.toEqual({ confirmed: false });
   });
 });

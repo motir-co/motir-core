@@ -77,9 +77,8 @@ export interface ProviderQuotaResult {
 }
 
 export interface ProviderCredentialResult {
-  /** What this run created without minting a key (e.g. a user with no key). */
-  created: string[];
-  /** The key under the account's prefix resolves on this machine and works. */
+  /** The account's runtime credential works. The step only confirms it: what the
+   *  credential is made of is built by the network step (MOTIR-9847). */
   confirmed: boolean;
 }
 
