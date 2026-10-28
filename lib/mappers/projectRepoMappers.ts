@@ -89,6 +89,11 @@ export function toProjectRepoDto(row: ProjectRepoWithRealized): ProjectRepoDto {
     // level to them), which is what keeps this field answering the same question
     // it always has now that a row can hold a whole team's records (MOTIR-1910).
     access: toAccessDto(findOwnerAccessRecord(row.collaborators)),
+    // The Prisma enums carry exactly `lib/hosting/vocabulary.ts`'s values (a test
+    // pins the two lists together), so these are identities, not narrowings.
+    hostingTarget: row.hostingTarget,
+    hostingUseCase: row.hostingUseCase,
+    hostingSize: row.hostingSize,
     position: row.position,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),

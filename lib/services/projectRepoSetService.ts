@@ -37,13 +37,24 @@ import { classifyProjectRepoUniqueViolation } from '@/lib/projectRepos/uniqueVio
 import {
   PROJECT_REPO_PROPOSAL_SIGNALS,
   defaultSeedSourceForRole,
+  isOrganizationSeedSource,
   isProjectRepoProposalSignal,
 } from '@/lib/projectRepos/vocabulary';
 import {
+  HOSTING_SIZES,
+  HOSTING_TARGETS,
+  HOSTING_USE_CASES,
+  isHostingSize,
+  isHostingTarget,
+  isHostingUseCase,
+} from '@/lib/hosting/vocabulary';
+import {
+  ProjectRepoHostingTargetFixedError,
   ProjectRepoInvalidFieldError,
   ProjectRepoLinkConflictError,
   ProjectRepoNameTakenError,
   ProjectRepoNotFoundError,
+  ProjectRepoNotMotirHostedError,
   ProjectRepoStateTransitionError,
   RealizedRepoAlreadyClaimedError,
 } from '@/lib/projectRepos/errors';
@@ -1026,6 +1037,64 @@ export const projectRepoSetService = {
       } catch (err) {
         translateUniqueViolation(err, { projectId: row.projectId, name: row.name, githubRepoId });
       }
+    });
+  },
+
+  /**
+   * Record where a Motir repo's app runs, what it is for and how big it is
+   * (MOTIR-9808) — the plan's hosting decision and build directly are the two
+   * callers. One locked transaction; returns the row's DTO.
+   *
+   * Refuses, changing nothing: a value outside the vocabulary
+   * (`ProjectRepoInvalidFieldError` naming `target` / `useCase` / `size`), a
+   * customer row (`ProjectRepoNotMotirHostedError`, D1) and a row already on a
+   * DIFFERENT target (`ProjectRepoHostingTargetFixedError` — moving is a
+   * migration, D3). The same three values again are a no-op with no write; on
+   * the same target the use case and size may be revised.
+   */
+  async setHosting(
+    rowId: string,
+    input: { target: string; useCase: string; size: string },
+    ctx: ServiceContext,
+  ): Promise<ProjectRepoDto> {
+    const { target, useCase, size } = input;
+    if (!isHostingTarget(target)) {
+      throw new ProjectRepoInvalidFieldError(
+        'target',
+        `must be one of ${HOSTING_TARGETS.join(', ')}.`,
+      );
+    }
+    if (!isHostingUseCase(useCase)) {
+      throw new ProjectRepoInvalidFieldError(
+        'useCase',
+        `must be one of ${HOSTING_USE_CASES.join(', ')}.`,
+      );
+    }
+    if (!isHostingSize(size)) {
+      throw new ProjectRepoInvalidFieldError('size', `must be one of ${HOSTING_SIZES.join(', ')}.`);
+    }
+    return inLockedRow(rowId, ctx, async (row, tx) => {
+      if (isOrganizationSeedSource(row.seedSource)) throw new ProjectRepoNotMotirHostedError(rowId);
+      if (row.hostingTarget !== null && row.hostingTarget !== target) {
+        throw new ProjectRepoHostingTargetFixedError(rowId, row.hostingTarget, target);
+      }
+      if (
+        row.hostingTarget === target &&
+        row.hostingUseCase === useCase &&
+        row.hostingSize === size
+      ) {
+        return toProjectRepoDto(row);
+      }
+      const updated = await projectRepoRepository.setHosting(
+        rowId,
+        { hostingTarget: target, hostingUseCase: useCase, hostingSize: size },
+        tx,
+      );
+      return toProjectRepoDto({
+        ...updated,
+        githubRepo: row.githubRepo,
+        collaborators: row.collaborators,
+      });
     });
   },
 };

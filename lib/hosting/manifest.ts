@@ -13,12 +13,10 @@ import {
   HostingManifestMissingError,
   type HostingManifestIssue,
 } from './errors';
+import { HOSTING_TARGETS } from './vocabulary';
 
 /** The manifest's file name, at the repository root. JSON only. */
 export const HOSTING_MANIFEST_FILE_NAME = 'motir.hosting.json';
-
-export const HOSTING_TARGETS = ['serverless', 'fly', 'aws'] as const;
-export type HostingTarget = (typeof HOSTING_TARGETS)[number];
 
 export const HOSTING_DATABASE_KINDS = ['none', 'postgres'] as const;
 export type HostingDatabaseKind = (typeof HOSTING_DATABASE_KINDS)[number];

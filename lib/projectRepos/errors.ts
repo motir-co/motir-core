@@ -315,3 +315,40 @@ export class AiPlanUnknownError extends Error {
     this.name = 'AiPlanUnknownError';
   }
 }
+
+// ── HOSTING (Story MOTIR-9791 · MOTIR-9808) ─────────────────────────────────
+
+/**
+ * The row is a CUSTOMER repository (`seedSource` is `organization`), and Motir
+ * never hosts one (requirement D1: the cloud follows the repo's owner — a
+ * customer's repo deploys through its own CI to its own infrastructure). So it
+ * never carries a Motir hosting target. → 409
+ */
+export class ProjectRepoNotMotirHostedError extends Error {
+  readonly code = 'PROJECT_REPO_NOT_MOTIR_HOSTED' as const;
+  constructor(readonly rowId: string) {
+    super(
+      `Project repository ${rowId} belongs to the organisation, so Motir does not host it and it takes no hosting target.`,
+    );
+    this.name = 'ProjectRepoNotMotirHostedError';
+  }
+}
+
+/**
+ * The row already runs on a DIFFERENT hosting target. Moving an app between
+ * targets is a migration (requirement D3), planned as its own epic — never an
+ * overwrite of this column. Setting the SAME target again is not this error. → 409
+ */
+export class ProjectRepoHostingTargetFixedError extends Error {
+  readonly code = 'PROJECT_REPO_HOSTING_TARGET_FIXED' as const;
+  constructor(
+    readonly rowId: string,
+    readonly current: string,
+    readonly requested: string,
+  ) {
+    super(
+      `Project repository ${rowId} already runs on ${current}; moving it to ${requested} is a migration, not a setting.`,
+    );
+    this.name = 'ProjectRepoHostingTargetFixedError';
+  }
+}
