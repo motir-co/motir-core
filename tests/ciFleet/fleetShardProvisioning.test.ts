@@ -465,4 +465,23 @@ describe('refresh-limits', () => {
     expect(result.code).toBe(1);
     expect(result.err).toContain('is not a superadmin');
   });
+
+  it('refuses a name no fleet account carries', async () => {
+    const result = await run(['refresh-limits', '--name', 'nope', '--operator', operatorEmail]);
+
+    expect(result.code).toBe(1);
+    expect(result.err).toContain('no fleet account is named nope');
+  });
+
+  it("refuses before reading the quota when the provider's env is missing", async () => {
+    await run(args());
+    fake.quota = 4000;
+    vi.stubEnv('FAKE_PROVIDER_MANAGEMENT_TOKEN', '');
+
+    const result = await run(['refresh-limits', '--name', NAME, '--operator', operatorEmail]);
+
+    expect(result.code).toBe(1);
+    expect(result.err).toContain('missing env: FAKE_PROVIDER_MANAGEMENT_TOKEN');
+    expect((await shardRow())!.vcpuQuota).not.toBe(4000);
+  });
 });
