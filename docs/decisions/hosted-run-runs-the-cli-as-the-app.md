@@ -88,8 +88,9 @@ per-repository git credential, a one-card allow-list, a single pull request in t
      a **connected** one (`state = connected`) by its **Motir Integration** installation.
    - The credential is always an **installation access token**: uncached, minted **one per App
      installation the run's repositories span**, narrowed with `repository_ids` to exactly the run's
-     repositories in that installation and to `contents: write` + `pull_requests: write` — never
-     `workflows`, never `administration`.
+     repositories in that installation and to `contents: write` + `pull_requests: write` — ~~never
+     `workflows`~~ plus `workflows: write` when the installation holds it (AMENDMENT 2026-10-29
+     below), never `administration`.
    - It lives one hour. The CLI's `git` and `gh` obtain it through a credential helper that calls
      the run's git-credential route with the run credential — for the clone, every push and every
      pull request — so **no git token is ever in the container's environment**.
@@ -145,6 +146,55 @@ per-repository git credential, a one-card allow-list, a single pull request in t
   (MOTIR-6557). The accepted routes are one table in code, pinned against the CLI client's calls.
 - **Pull requests show Motir's App as their author**, not the dispatcher. Who dispatched a run is in
   the pull request body and on the run.
+
+---
+
+## AMENDMENT 2026-10-29 — a run's token carries `workflows: write`
+
+> **AMENDED 2026-10-29.** §5's _"never `workflows`"_ is withdrawn, struck through rather than
+> deleted. It also withdraws `hosted-run-one-github-app.md` §2's _"Never `workflows`"_ and
+> `hosted-agent-run.md` §4's _"`workflows: write` is deliberately NOT requested"_, which this record
+> had left standing.
+
+**Decided by:** Yue, 2026-10-29, after MOTIR-9928's `.github/workflows/aws-deploy.yml` never reached
+`main`: _"motir-integration should be able to change the workflow, this happened too many times.
+motir-integration will also update the user's repo too later"_.
+
+**Why.** A card whose deliverable is a workflow file could not be delivered by a run. GitHub refused
+the push, the run shipped the file as a patch for a person to apply, and nothing made sure anyone
+did. PR #3850 merged without its workflow, and MOTIR-9928 was closed Done anyway. The failure was
+silent, and it recurs, because CI is ordinary work on a card. Motir Integration will also maintain
+CI in the repositories teams connect, which it cannot do without this permission.
+
+**What changes.**
+
+1. **Motir Integration requests `workflows: write`** beside `contents: write` and
+   `pull_requests: write`. Existing installations get GitHub's request to accept the new
+   permission, as they did for write access (`hosted-run-one-github-app.md` Consequences).
+2. **A build run's token adds `workflows: write` when the installation holds it**
+   (`RUN_GIT_WORKFLOWS_PERMISSION` in `lib/github/runGitCredential.ts`). It is not one of §8's
+   preconditions: an installation that has not accepted it is not refused. Its runs push as before,
+   and a change to `.github/workflows/` fails at push with GitHub's own message. The mint asks only
+   for what the installation holds, because GitHub refuses the whole token when a narrowing names a
+   permission the installation lacks.
+3. **`motir-studio` follows the same rule.** It already holds `workflows: write`
+   (`unlinked-pull-request-check.md`'s App table), so runs on Motir-created repositories gain it
+   too. A review run stays at `contents: read`.
+
+**What it accepts, plainly.** A run's branch can now change the CI that GitHub runs on that branch.
+Workflows triggered by `push` or by a same-repository `pull_request` run with the repository's
+Actions secrets, so an agent can, in principle, write a workflow that reads them. These still bound
+it:
+
+- the token is the run's: its repositories only, dead within an hour, revoked at the run's end
+  (§5, §7);
+- a run pushes branches and opens pull requests. Whether a change reaches the default branch is
+  decided by that repository's branch protection, merge queue and review, not by this token;
+- a secret scoped to a protected **environment**, or a cloud role whose OIDC trust names
+  `refs/heads/main` (as motir-infra's deploy roles do), is unreachable from a run's branch.
+
+`administration` stays withheld: a run must not be able to change the protection that gates its own
+merge.
 
 ---
 
