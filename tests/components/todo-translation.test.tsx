@@ -67,6 +67,7 @@ function mount() {
     <TranslationProvider itemId="item-1" translation={{ offer: OFFER, canAddCredits: false }}>
       <TranslateControl />
       <TodoListSection
+        initialWorkItemRefs={{}}
         workItemId="item-1"
         initialTodos={TODOS}
         initialProgress={{ done: 0, total: 2 }}

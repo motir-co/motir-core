@@ -17,6 +17,8 @@ import { MarkdownView } from '@/components/ui/MarkdownView';
 import { useRowWindow } from '@/components/ui/useRowWindow';
 import { ChatToolCallRow } from './ChatToolCallRow';
 import type { ChatRow, Transcript } from './transcriptModel';
+import type { WorkItemRefMap } from '@/lib/dto/workItems';
+import { useChatWorkItemRefs } from './useChatWorkItemRefs';
 
 // THE TRANSCRIPT (Story MOTIR-6863 · MOTIR-7017; `design/my-agents/design-notes.md`
 // § the Chat tab, panels 2–4 and 6).
@@ -65,6 +67,7 @@ export function ChatTranscript({
     : transcript.rows;
   const last = rows[rows.length - 1];
   const streamingKey = running && last?.type === 'text' ? last.key : null;
+  const workItemRefs = useChatWorkItemRefs(rows);
 
   const getScrollElement = useCallback(() => scroller.current, []);
   const { containerRef, range, totalSize, getOffset, measureElement, windowing } = useRowWindow({
@@ -143,6 +146,7 @@ export function ChatTranscript({
                       running={running}
                       streaming={row.key === streamingKey}
                       agentName={agentName}
+                      workItemRefs={workItemRefs}
                     />
                   </div>
                 );
@@ -180,11 +184,13 @@ function Row({
   running,
   streaming,
   agentName,
+  workItemRefs,
 }: {
   row: ChatRow;
   running: boolean;
   streaming: boolean;
   agentName: string;
+  workItemRefs: WorkItemRefMap;
 }) {
   const t = useTranslations('myAgents.panel.chat');
   switch (row.type) {
@@ -200,7 +206,7 @@ function Row({
     case 'text':
       return (
         <div data-testid="chat-text" className="text-(--el-text)">
-          <MarkdownView value={row.text} />
+          <MarkdownView value={row.text} workItemRefs={workItemRefs} />
           {streaming ? (
             <span
               aria-hidden="true"

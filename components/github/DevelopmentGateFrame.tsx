@@ -897,6 +897,9 @@ export function DevelopmentGateFrame({
     ) : gate.state === 'changes_requested' ? (
       <SentBackBand
         findingsMd={gate.noteMd}
+        // The frame's gate IS the latest agent review here, so its findings' links are
+        // the view's (MOTIR-10023).
+        findingsRefs={agentReview?.findingsRefs ?? {}}
         run={agentReview?.run ?? null}
         decidedAt={gate.decidedAt}
         count={reviewCount}
@@ -915,6 +918,7 @@ export function DevelopmentGateFrame({
     reviewBehindMerge.gate.decidedUnderAuthority === 'review_agent' ? (
       <PassedBand
         findingsMd={reviewBehindMerge.gate.noteMd}
+        findingsRefs={reviewBehindMerge.findingsRefs}
         run={reviewBehindMerge.run}
         decidedAt={reviewBehindMerge.gate.decidedAt}
         count={membersOf(reviewBehindMerge.gate.subjectVersion).length}

@@ -47,6 +47,7 @@ import {
 } from '@/lib/triage/errors';
 import { storedAssetUrl } from '@/lib/blob/referencedUrls';
 import { readProject, readProjectByIdentifier, readWorkItem } from '@/lib/workspaces/tenantRead';
+import { resolveMarkdownWorkItemRefs } from '@/lib/workItems/resolveWorkItemRefs';
 import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 /** The two request-grammar kinds a triage submission is born as (ADR §1): a
@@ -205,9 +206,12 @@ export const triageService = {
     if (item.triagedAt === null) throw new NotInTriageError(workItemId);
 
     const submitter = await resolveSubmitter(item);
-    const [commentsPage, attachmentsPage] = await Promise.all([
+    const [commentsPage, attachmentsPage, bodyRefs] = await Promise.all([
       commentsService.listComments(workItemId, { order: 'asc' }, ctx),
       attachmentsService.listForWorkItem(workItemId, {}, ctx),
+      // The thread's links come resolved with its page; the body's are read here — no
+      // query when it links nothing (bug MOTIR-10023).
+      resolveMarkdownWorkItemRefs(item.descriptionMd ?? '', ctx),
     ]);
     // Flatten roots + their single-level replies (oldest-first) — the detail
     // pane renders a read-only thread, not the paged composer surface.
@@ -224,6 +228,7 @@ export const triageService = {
       triagedAt: item.triagedAt.toISOString(),
       comments,
       attachments: attachmentsPage.attachments,
+      workItemRefs: { ...commentsPage.workItemRefs, ...bodyRefs },
     };
   },
 

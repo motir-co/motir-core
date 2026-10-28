@@ -1979,7 +1979,10 @@ export const planReviewService = {
       items.map((i) => [
         i.planItemId,
         parseWorkItemTokenIds(
-          [i.title, i.descriptionMd, i.explanationMd].filter(Boolean).join('\n'),
+          // A proposed step's NOTES draw in the peek too (bug MOTIR-10023).
+          [i.title, i.descriptionMd, i.explanationMd, ...(i.todos ?? []).map((t) => t.notesMd)]
+            .filter(Boolean)
+            .join('\n'),
         ),
       ]),
     );

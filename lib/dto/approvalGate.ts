@@ -23,7 +23,7 @@ import type { WorkItemRepairViewDto } from '@/lib/dto/workItemRepair';
 import type { AgentReviewViewDto } from '@/lib/dto/agentReview';
 import type { LinkedPullRequestDto, WorkItemDeliveryDto } from '@/lib/dto/github';
 import type { HowToTestDto } from '@/lib/dto/howToTest';
-import type { WorkItemKindDto, WorkItemTypeDto } from '@/lib/dto/workItems';
+import type { WorkItemKindDto, WorkItemRefMap, WorkItemTypeDto } from '@/lib/dto/workItems';
 import type { PlanAuthorSourceDto, PlanOriginDto } from '@/lib/dto/plans';
 import type { RepoDelivery } from '@/lib/workItems/repoDelivery';
 import type { TodoProgressDto, WorkItemTodoDto } from '@/lib/dto/workItemTodos';
@@ -609,6 +609,14 @@ export interface DecisionApprovalSubjectSummaryDTO {
  */
 export type DecisionChoicePortDTO = Omit<ParsedChoice, 'ok'>;
 
+/**
+ * A choice's port AS A SURFACE DRAWS IT (bug MOTIR-10023): the parse, plus the
+ * `[KEY](motir:<id>)` links in its Markdown sections resolved for the reader — so
+ * an option's why or the follow-up that names a card draws it live, never deleted.
+ * The parse itself stays pure (`choiceBodyOf`); the read that serves a port adds this.
+ */
+export type DecisionChoicePortViewDTO = DecisionChoicePortDTO & { workItemRefs: WorkItemRefMap };
+
 /** One reason a choice's body cannot be asked yet — the closed set point 2 fixes. */
 export type ChoiceDefectDTO = ChoiceDefect;
 
@@ -642,6 +650,12 @@ export type DecisionConfirmationPortDTO = Omit<ParsedDecision, 'ok'> & {
   /** The ids of those records — a decided band reads *record removed* when its STAMPED
    *  attachment is no longer among them, never by comparing it with the newest. */
   presentRecordIds: string[];
+};
+
+/** A decision's port as a surface draws it — the parse plus its sections' resolved
+ *  work-item links (bug MOTIR-10023); see {@link DecisionChoicePortViewDTO}. */
+export type DecisionConfirmationPortViewDTO = DecisionConfirmationPortDTO & {
+  workItemRefs: WorkItemRefMap;
 };
 
 /** One key a decision supersedes, as the port's work-item chip draws it (MOTIR-5960). */
@@ -751,6 +765,8 @@ export interface ManualWorkPortDTO {
   /** The card's to-do rows, in list order — drawn read-only; the port ticks nothing. */
   todos: WorkItemTodoDto[];
   progress: TodoProgressDto;
+  /** The rows' notes' work-item links, resolved for the reader (bug MOTIR-10023). */
+  workItemRefs: WorkItemRefMap;
   /** True when the card has an OPEN delivering pull request: Mark done then records the
    *  decision and the merge writes Done (`manualWorkHandler.approve`). */
   mergeWritesDone: boolean;
@@ -1120,7 +1136,7 @@ export type ApprovalGateOverlaySubjectDTO =
        * THE CHOICE PORT (Story MOTIR-4914) — the parsed body the gate asks about. A
        * body that no longer parses is `gone`: there is nothing left to pick from.
        */
-      choice: DecisionChoicePortDTO;
+      choice: DecisionChoicePortViewDTO;
     }
   | {
       state: 'resolved';
@@ -1130,7 +1146,7 @@ export type ApprovalGateOverlaySubjectDTO =
        * asks about, with the record it would stamp. A body that no longer parses is
        * `gone`: there is nothing left to confirm.
        */
-      confirm: DecisionConfirmationPortDTO;
+      confirm: DecisionConfirmationPortViewDTO;
     }
   | {
       state: 'resolved';

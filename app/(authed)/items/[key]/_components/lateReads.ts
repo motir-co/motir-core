@@ -21,6 +21,7 @@ import { decisionDocumentService } from '@/lib/services/decisionDocumentService'
 import { choiceGateService } from '@/lib/services/choiceGateService';
 import { decisionConfirmationGateService } from '@/lib/services/decisionConfirmationGateService';
 import type { ChoiceBodyDTO, DecisionConfirmationBodyDTO } from '@/lib/dto/approvalGate';
+import type { WorkItemRefMap } from '@/lib/dto/workItems';
 import { asksTheDecisionQuestion } from '@/lib/approvalGates/decisionDocument';
 import type { DecisionDocumentViewDTO } from '@/lib/dto/decisionDocument';
 import { workItemRepairService } from '@/lib/services/workItemRepairService';
@@ -181,6 +182,8 @@ export interface LateReads {
    */
   choiceGate: Awaited<ReturnType<typeof approvalGatesService.getForWorkItem>> & {
     body: ChoiceBodyDTO | null;
+    /** The body's work-item links, resolved for the reader (bug MOTIR-10023). */
+    workItemRefs: WorkItemRefMap;
   };
   /**
    * A `human` DECISION work item's confirm question (Story MOTIR-5871 · MOTIR-5954) —
@@ -190,6 +193,8 @@ export interface LateReads {
    */
   confirmGate: Awaited<ReturnType<typeof approvalGatesService.getForWorkItem>> & {
     body: DecisionConfirmationBodyDTO | null;
+    /** The body's work-item links, resolved for the reader (bug MOTIR-10023). */
+    workItemRefs: WorkItemRefMap;
   };
   mergeGate: Awaited<ReturnType<typeof approvalGatesService.getForWorkItem>> & {
     members: PullRequestApprovalMemberDTO[];
@@ -319,20 +324,21 @@ const NO_CHOICE_GATE: LateReads['choiceGate'] = {
   stamp: null,
   movedSince: [],
   body: null,
+  workItemRefs: {},
 };
 
 /** A choice's gate and body (MOTIR-5896) — only for `type: choice`, contained. */
 async function readChoiceGate(input: LateReadsInput): Promise<LateReads['choiceGate']> {
   if (input.itemType !== 'choice') return NO_CHOICE_GATE;
   try {
-    const [read, body] = await Promise.all([
+    const [read, { body, workItemRefs }] = await Promise.all([
       approvalGatesService.getForWorkItem(
         { workItemId: input.itemId, kind: 'decision_choice' },
         input.ctx,
       ),
-      choiceGateService.readBody(input.itemId, input.ctx),
+      choiceGateService.readBodyWithRefs(input.itemId, input.ctx),
     ]);
-    return { ...read, body };
+    return { ...read, body, workItemRefs };
   } catch {
     return NO_CHOICE_GATE;
   }
@@ -344,14 +350,14 @@ const NO_CONFIRM_GATE: LateReads['confirmGate'] = { ...NO_CHOICE_GATE, body: nul
 async function readConfirmGate(input: LateReadsInput): Promise<LateReads['confirmGate']> {
   if (input.itemType !== 'decision' || input.itemExecutor !== 'human') return NO_CONFIRM_GATE;
   try {
-    const [read, body] = await Promise.all([
+    const [read, { body, workItemRefs }] = await Promise.all([
       approvalGatesService.getForWorkItem(
         { workItemId: input.itemId, kind: 'decision_confirmation' },
         input.ctx,
       ),
-      decisionConfirmationGateService.readBody(input.itemId, input.ctx),
+      decisionConfirmationGateService.readBodyWithRefs(input.itemId, input.ctx),
     ]);
-    return { ...read, body };
+    return { ...read, body, workItemRefs };
   } catch {
     return NO_CONFIRM_GATE;
   }
