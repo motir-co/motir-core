@@ -302,6 +302,17 @@ describe('projectRepoRoomService.getRoomView', () => {
     expect(view.ciPaused).toBe(false);
   });
 
+  // Bug MOTIR-9828 — with no organisation there is nobody to sign the state for,
+  // so the project-keyed link falls back to the bare install URL, never to none.
+  it('keeps the bare install link when the workspace resolves to no organization', async () => {
+    const fx = await makeWorkItemFixture();
+    vi.spyOn(workspaceRepository, 'findByIdInTx').mockResolvedValue(null);
+    const view = await projectRepoRoomService.getRoomView(fx.projectId, fx.ctx, {
+      projectKey: fx.project.identifier,
+    });
+    expect(view.installHref).toBe('https://github.com/apps/motir/installations/new');
+  });
+
   it('drops the install hand-off on a deployment with no App slug', async () => {
     const fx = await makeWorkItemFixture();
     vi.stubEnv('GITHUB_APP_SLUG', '');
