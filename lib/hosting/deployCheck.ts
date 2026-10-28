@@ -18,7 +18,19 @@
 //
 // State between steps lives on the platform, not in a local file: each step finds
 // the check's app by its fixed name and asks the port which release it serves.
+//
+// With `--workspace`, `--repository` and `--environment` (Story MOTIR-9795 ·
+// MOTIR-9965) the deploying steps take their environment from the entries an
+// administrator stored for that repository and environment, through the injected
+// `resolveEnvironment`, and default to the env-reporting fixture app; the `report`
+// step prints what that app says it received. Only entry NAMES and their secret
+// flag are printed — never a value.
 
+import {
+  ENVIRONMENTS,
+  isEnvironmentName,
+  type EnvironmentName,
+} from '@/lib/environmentConfig/vocabulary';
 import { HostingManifestInvalidError, HostingManifestMissingError } from '@/lib/hosting/errors';
 import { parseHostingManifest, type HostingManifest } from '@/lib/hosting/manifest';
 import {
@@ -29,6 +41,7 @@ import {
   type HostingDeployPort,
   type HostingEnvironment,
   type ReleaseArtifact,
+  type ReleaseEnvVar,
   type ReleaseHandle,
 } from '@motir/orchestrator';
 
@@ -47,12 +60,27 @@ export const DEPLOY_CHECK_IMAGE =
 /** The committed fixture manifest the check deploys by default. */
 export const DEPLOY_CHECK_DEFAULT_MANIFEST = 'tests/fixtures/hosting/motir.hosting.json';
 
+/** The env-reporting fixture app (MOTIR-9965), deployed by default when the check
+ *  resolves a stored environment. It runs on the public Node image below through
+ *  the manifest's start command — an inline `node -e` program, the same server as
+ *  `tests/fixtures/hosting/envReporter/server.mjs` — so no image is published.
+ *  `GET /` answers `GREETING=<value>` and `API_KEY: present|absent`: the secret's
+ *  presence, never its value. */
+export const DEPLOY_CHECK_ENV_REPORT_MANIFEST =
+  'tests/fixtures/hosting/motir.hosting.env-report.json';
+
+/** `node:22-alpine`, pinned by its multi-arch index digest (read from Docker Hub
+ *  2026-10-28, tag last pushed 2026-10-22). */
+export const DEPLOY_CHECK_ENV_REPORT_IMAGE =
+  'docker.io/library/node@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914';
+
 export const DEPLOY_CHECK_STEPS = [
   'deploy',
   'release2',
   'rollback',
   'status',
   'probe',
+  'report',
   'destroy',
   'all',
 ] as const;
@@ -84,6 +112,15 @@ export class DeployCheckProbeFailedError extends Error {
   }
 }
 
+/** The `report` step did not get a 2xx answer from a serving release. */
+export class DeployCheckReportFailedError extends Error {
+  readonly code = 'DEPLOY_CHECK_REPORT_FAILED' as const;
+  constructor(detail: string) {
+    super(`The report failed: ${detail}.`);
+    this.name = 'DeployCheckReportFailedError';
+  }
+}
+
 /** The command line did not say what to do. */
 export class DeployCheckUsageError extends Error {
   readonly code = 'DEPLOY_CHECK_USAGE' as const;
@@ -95,16 +132,30 @@ export class DeployCheckUsageError extends Error {
 
 export const DEPLOY_CHECK_USAGE = [
   'Usage: pnpm hosting:deploy-check <step> [--manifest <path>] [--name <app>] [--image <ref>]',
+  '         [--workspace <workspaceId> --repository <projectRepositoryId> --environment <env>]',
   `  steps: ${DEPLOY_CHECK_STEPS.join(', ')}`,
-  `  --manifest  defaults to ${DEPLOY_CHECK_DEFAULT_MANIFEST}`,
-  `  --name      defaults to ${DEPLOY_CHECK_DEFAULT_NAME}; must start with ${DEPLOY_CHECK_APP_PREFIX}`,
-  `  --image     defaults to ${DEPLOY_CHECK_IMAGE}`,
+  '         report GETs / on the serving release and prints what the app answers',
+  `  --manifest     defaults to ${DEPLOY_CHECK_DEFAULT_MANIFEST}`,
+  `  --name         defaults to ${DEPLOY_CHECK_DEFAULT_NAME}; must start with ${DEPLOY_CHECK_APP_PREFIX}`,
+  `  --image        defaults to ${DEPLOY_CHECK_IMAGE}`,
+  '  --workspace    with --repository and --environment (all three or none): deploy with the',
+  '  --repository   environment stored for that repository, read from the database; the',
+  `  --environment  manifest and image then default to the env-reporting fixture. env: ${ENVIRONMENTS.join(', ')}`,
 ].join('\n');
+
+/** Which stored environment the deploying steps resolve (all three flags given). */
+export interface DeployCheckStoredEnvironment {
+  readonly workspaceId: string;
+  readonly repositoryId: string;
+  readonly environment: EnvironmentName;
+}
 
 export interface DeployCheckOptions {
   readonly manifestPath: string;
   readonly appName: string;
   readonly image: string;
+  /** Absent: the check's own fixed environment, as before MOTIR-9965. */
+  readonly stored?: DeployCheckStoredEnvironment;
 }
 
 export interface DeployCheckDeps {
@@ -120,6 +171,13 @@ export interface DeployCheckDeps {
   /** The key app origin secrets are derived from; read only by `probe`, and only
    *  for a release whose origin credential is the secret. */
   readonly originSecretKey: () => string;
+  /** A repository's stored environment in the deploy port's shape
+   *  (`lib/environmentConfig/resolveEnvironment.ts`); called only with `stored`. */
+  readonly resolveEnvironment: (
+    repositoryId: string,
+    environment: EnvironmentName,
+    options: { workspaceId: string },
+  ) => Promise<readonly ReleaseEnvVar[]>;
 }
 
 /** A stand-in for a guarded release over HTTP, for runs against the fake port,
@@ -180,6 +238,8 @@ async function deployRelease(
   // Parse FIRST: a refused manifest makes no port call at all.
   const manifest = readManifest(deps, options.manifestPath);
   const { repositoryId, appRef } = deployCheckApp(options.appName);
+  // Resolve before the port too: a refused repository deploys nothing.
+  const env = await releaseEnvironment(deps, options, appRef, manifest, release);
   const port = deps.port();
   if (release === 1) await port.ensureApp({ repositoryId, environment: ENVIRONMENT });
   const handle = await port.deploy({
@@ -187,11 +247,7 @@ async function deployRelease(
     environment: ENVIRONMENT,
     artifact: imageArtifact(options.image),
     runtime: manifest,
-    env: [
-      { name: 'MOTIR_DEPLOY_CHECK_RELEASE', value: String(release), secret: false },
-      { name: 'WHOAMI_NAME', value: `${appRef} release ${release}`, secret: false },
-      { name: 'WHOAMI_PORT_NUMBER', value: String(manifest.port), secret: false },
-    ],
+    env,
     size: 'small',
     idle: { mode: 'suspend', idleSeconds: 300 },
   });
@@ -203,6 +259,36 @@ async function deployRelease(
     state: description.state,
     address: description.upstreamAddress,
   });
+}
+
+/** The release's environment: the stored entries plus the check's release marker
+ *  when `stored` is given (the resolver refuses `MOTIR_*` names, so the two cannot
+ *  collide), the check's own fixed three otherwise. */
+async function releaseEnvironment(
+  deps: DeployCheckDeps,
+  options: DeployCheckOptions,
+  appRef: string,
+  manifest: HostingManifest,
+  release: 1 | 2,
+): Promise<ReleaseEnvVar[]> {
+  const marker = { name: 'MOTIR_DEPLOY_CHECK_RELEASE', value: String(release), secret: false };
+  if (!options.stored) {
+    return [
+      marker,
+      { name: 'WHOAMI_NAME', value: `${appRef} release ${release}`, secret: false },
+      { name: 'WHOAMI_PORT_NUMBER', value: String(manifest.port), secret: false },
+    ];
+  }
+  const { workspaceId, repositoryId, environment } = options.stored;
+  const resolved = await deps.resolveEnvironment(repositoryId, environment, { workspaceId });
+  // Names and the secret flag only — never a value.
+  deps.print('environment', {
+    repository: repositoryId,
+    environment,
+    entries: resolved.length,
+    ...Object.fromEntries(resolved.map((v) => [v.name, v.secret ? 'secret' : 'plain'])),
+  });
+  return [...resolved, marker];
 }
 
 async function rollback(deps: DeployCheckDeps, options: DeployCheckOptions): Promise<void> {
@@ -275,6 +361,34 @@ async function probe(deps: DeployCheckDeps, options: DeployCheckOptions): Promis
   }
 }
 
+/** GET `/` on the serving release (with the origin secret when the release is
+ *  guarded) and print the lines the app answers — for the env-reporting fixture,
+ *  `GREETING=<value>` and `API_KEY: present|absent`. */
+async function report(deps: DeployCheckDeps, options: DeployCheckOptions): Promise<void> {
+  const { appRef } = deployCheckApp(options.appName);
+  const port = deps.port();
+  const handle = await servingHandle(port, appRef);
+  const description = handle ? await port.describe(handle) : null;
+  if (!description?.upstreamAddress) {
+    deps.print('report', { app: appRef, state: description?.state ?? 'none' });
+    throw new DeployCheckReportFailedError(`${appRef} serves no release`);
+  }
+  const url = new URL('/', description.upstreamAddress).toString();
+  const secret =
+    description.originCredential === 'origin_secret'
+      ? deriveOriginSecret(deps.originSecretKey(), appRef)
+      : null;
+  const res = await deps.fetch(url, { headers: secret ? { [ORIGIN_SECRET_HEADER]: secret } : {} });
+  const lines = (await res.text()).split('\n').filter((line) => line.trim() !== '');
+  deps.print('report', {
+    app: appRef,
+    url,
+    status: statusLine(res),
+    ...Object.fromEntries(lines.map((line, i) => [`line${i + 1}`, line])),
+  });
+  if (!res.ok) throw new DeployCheckReportFailedError(`the app answered ${res.status}`);
+}
+
 async function destroy(deps: DeployCheckDeps, options: DeployCheckOptions): Promise<void> {
   const { appRef } = deployCheckApp(options.appName);
   const port = deps.port();
@@ -312,6 +426,8 @@ export async function runDeployCheckStep(
       return status(deps, options);
     case 'probe':
       return probe(deps, options);
+    case 'report':
+      return report(deps, options);
     case 'destroy':
       return destroy(deps, options);
     case 'all':
@@ -324,6 +440,7 @@ export async function runDeployCheckStep(
       await rollback(deps, options);
       await status(deps, options);
       await probe(deps, options);
+      await report(deps, options);
       return destroy(deps, options);
   }
 }
@@ -334,14 +451,20 @@ export function parseDeployCheckArgs(argv: readonly string[]): {
   options: DeployCheckOptions;
 } {
   let step: DeployCheckStep | undefined;
-  const flags: Record<'manifest' | 'name' | 'image', string | undefined> = {
+  const flags: Record<
+    'manifest' | 'name' | 'image' | 'workspace' | 'repository' | 'environment',
+    string | undefined
+  > = {
     manifest: undefined,
     name: undefined,
     image: undefined,
+    workspace: undefined,
+    repository: undefined,
+    environment: undefined,
   };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i]!;
-    const flag = /^--(manifest|name|image)(?:=(.*))?$/.exec(arg);
+    const flag = /^--(manifest|name|image|workspace|repository|environment)(?:=(.*))?$/.exec(arg);
     if (flag) {
       const key = flag[1] as keyof typeof flags;
       const value = flag[2] ?? argv[(i += 1)];
@@ -354,14 +477,41 @@ export function parseDeployCheckArgs(argv: readonly string[]): {
     }
   }
   if (!step) throw new DeployCheckUsageError('Name a step.');
+  const stored = parseStoredEnvironment(flags);
   return {
     step,
     options: {
-      manifestPath: flags.manifest ?? DEPLOY_CHECK_DEFAULT_MANIFEST,
+      manifestPath:
+        flags.manifest ??
+        (stored ? DEPLOY_CHECK_ENV_REPORT_MANIFEST : DEPLOY_CHECK_DEFAULT_MANIFEST),
       appName: flags.name ?? DEPLOY_CHECK_DEFAULT_NAME,
-      image: flags.image ?? DEPLOY_CHECK_IMAGE,
+      image: flags.image ?? (stored ? DEPLOY_CHECK_ENV_REPORT_IMAGE : DEPLOY_CHECK_IMAGE),
+      ...(stored ? { stored } : {}),
     },
   };
+}
+
+/** All three of `--workspace`, `--repository`, `--environment`, or none. */
+function parseStoredEnvironment(flags: {
+  workspace?: string;
+  repository?: string;
+  environment?: string;
+}): DeployCheckStoredEnvironment | undefined {
+  const { workspace, repository, environment } = flags;
+  if (workspace === undefined && repository === undefined && environment === undefined) {
+    return undefined;
+  }
+  if (workspace === undefined || repository === undefined || environment === undefined) {
+    throw new DeployCheckUsageError(
+      '--workspace, --repository and --environment go together: give all three or none.',
+    );
+  }
+  if (!isEnvironmentName(environment)) {
+    throw new DeployCheckUsageError(
+      `Unknown environment ${environment}: use one of ${ENVIRONMENTS.join(', ')}.`,
+    );
+  }
+  return { workspaceId: workspace, repositoryId: repository, environment };
 }
 
 /** The whole command: parse argv, run the step, print a refusal as one block.
