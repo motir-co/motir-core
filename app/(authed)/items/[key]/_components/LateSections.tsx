@@ -697,6 +697,7 @@ export async function LateUpperSections({
           {r.choiceGate.gate ? <DecidedGateStatusBridge gateId={r.choiceGate.gate.id} /> : null}
           <ChoiceSection
             body={r.choiceGate.body}
+            workItemRefs={r.choiceGate.workItemRefs}
             gate={r.choiceGate.gate}
             canDecide={r.choiceGate.canDecide}
             routedToLabel={r.choiceGate.routedToLabel}
@@ -717,6 +718,7 @@ export async function LateUpperSections({
           {r.confirmGate.gate ? <DecidedGateStatusBridge gateId={r.confirmGate.gate.id} /> : null}
           <DecisionConfirmSection
             body={r.confirmGate.body}
+            workItemRefs={r.confirmGate.workItemRefs}
             gate={r.confirmGate.gate}
             canDecide={r.confirmGate.canDecide}
             routedToLabel={r.confirmGate.routedToLabel}

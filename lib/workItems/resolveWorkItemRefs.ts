@@ -140,6 +140,22 @@ export async function resolveMarkdownWorkItemRefs(
 }
 
 /**
+ * {@link resolveMarkdownWorkItemRefs} over SEVERAL stored bodies a surface renders
+ * together, in ONE read (bug MOTIR-10023) — a to-do list's notes, a gate's sections,
+ * a triage item's description beside its thread. Absent bodies are skipped, and
+ * when none of them links anything the answer is `{}` with no query.
+ */
+export async function resolveMarkdownBodiesWorkItemRefs(
+  bodies: readonly (string | null | undefined)[],
+  ctx: ServiceContext | VisitorReadContext,
+): Promise<WorkItemRefMap> {
+  return resolveMarkdownWorkItemRefs(
+    bodies.filter((body): body is string => Boolean(body)).join('\n'),
+    ctx,
+  );
+}
+
+/**
  * A VISITOR's chip resolution (MOTIR-6652, `epic-privacy.md` §3). The only
  * project a Visitor can read is `ctx.project`, so a target anywhere else — or in
  * the private-epic hidden set — resolves to NOTHING: it is left out of the map

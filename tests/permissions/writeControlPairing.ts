@@ -142,6 +142,7 @@ export const SERVER_ACTION_GATES: Record<string, ActionGate> = {
   'items/actions.ts#listRootIssuesAction': READ,
   'items/actions.ts#moveFolderAction': EDIT,
   'items/actions.ts#renameFolderAction': EDIT,
+  'my-agents/_actions.ts#resolveChatWorkItemRefsAction': READ,
   'plans/_actions.ts#loadMoreSessionsAction': READ,
   'ready/_actions.ts#loadMoreReadyBugsAction': READ,
   'ready/_actions.ts#loadMoreReadyLeavesAction': READ,

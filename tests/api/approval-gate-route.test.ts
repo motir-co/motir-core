@@ -1157,6 +1157,9 @@ describe('guard · the handler stays a THIN HTTP layer', () => {
       // The manual-work port (MOTIR-7478): the card's to-do list, the same read the item
       // page's To-do section makes.
       'workItemTodosService.listTodos',
+      // The list's note links (MOTIR-10023) — the same resolve the item page's To-do
+      // section makes over the same list.
+      'workItemTodosService.resolveNotesRefs',
       'workItemsService.getDeliveryView',
       // A design's PARENT — where its Re-plan opens the planner (MOTIR-6427, §10h).
       'workItemsService.getWorkItem',
@@ -1186,6 +1189,7 @@ describe('guard · the handler stays a THIN HTTP layer', () => {
       'howToTestService.getForWorkItem',
       'pullRequestMergeService.listApprovalMembers',
       'workItemRepairService.getRepairView',
+      'workItemTodosService.resolveNotesRefs',
       'workItemsService.getDeliveryView',
       'workItemsService.listLinkedPullRequests',
     ]) {

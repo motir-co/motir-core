@@ -191,6 +191,7 @@ function RecordPart({ howToTest }: HowToTestBlockProps) {
       {record.bodyMd.trim() ? (
         <MarkdownView
           value={record.bodyMd}
+          workItemRefs={record.workItemRefs}
           copyableCode
           // `motir-how-to-test` scales the agent's `##` sections down to sub-headings
           // of the card — in `markdown-editor.css`, because the unlayered prose

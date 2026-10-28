@@ -14,7 +14,7 @@ import {
   TodoTextTooLongError,
   WorkItemTodoNotFoundError,
 } from '@/lib/workItemTodos/errors';
-import type { ExecutorDto } from '@/lib/dto/workItems';
+import type { ExecutorDto, WorkItemRefMap } from '@/lib/dto/workItems';
 import type { TodoProgressDto, WorkItemTodoDto } from '@/lib/dto/workItemTodos';
 import { unmappedActionRefusalMessage } from '@/lib/actions/unmappedRefusal';
 
@@ -42,7 +42,17 @@ import { unmappedActionRefusalMessage } from '@/lib/actions/unmappedRefusal';
 const ISSUES_PATH = '/items';
 
 export type TodoActionResult =
-  | { ok: true; todo: WorkItemTodoDto; progress: TodoProgressDto }
+  | {
+      ok: true;
+      todo: WorkItemTodoDto;
+      progress: TodoProgressDto;
+      /**
+       * The written step's note links, resolved for the reader (bug MOTIR-10023) —
+       * returned by the two writes that can change a note (add, edit), so the
+       * island draws a just-saved link live. The section merges it into its map.
+       */
+      workItemRefs?: WorkItemRefMap;
+    }
   | { ok: false; error: string };
 
 export type DeleteTodoActionResult =
@@ -89,7 +99,13 @@ async function genericError(): Promise<string> {
 }
 
 export type ListTodosActionResult =
-  | { ok: true; items: WorkItemTodoDto[]; progress: TodoProgressDto }
+  | {
+      ok: true;
+      items: WorkItemTodoDto[];
+      progress: TodoProgressDto;
+      /** The notes' work-item links, resolved for the reader (bug MOTIR-10023). */
+      workItemRefs: WorkItemRefMap;
+    }
   | { ok: false; error: string };
 
 /**
@@ -106,7 +122,8 @@ export async function listTodosAction(input: {
   if (!ctx) return { ok: false, error: await genericError() };
   try {
     const list = await workItemTodosService.listTodos(input.workItemId, ctx);
-    return { ok: true, items: list.items, progress: list.progress };
+    const workItemRefs = await workItemTodosService.resolveNotesRefs(list.items, ctx);
+    return { ok: true, items: list.items, progress: list.progress, workItemRefs };
   } catch (err) {
     const message = await todoErrorMessage(err);
     if (message) return { ok: false, error: message };
@@ -137,7 +154,8 @@ export async function addTodoAction(input: {
       ctx,
     );
     revalidatePath(ISSUES_PATH);
-    return { ok: true, todo, progress };
+    const workItemRefs = await workItemTodosService.resolveNotesRefs([todo], ctx);
+    return { ok: true, todo, progress, workItemRefs };
   } catch (err) {
     const message = await todoErrorMessage(err);
     if (message) return { ok: false, error: message };
@@ -172,7 +190,8 @@ export async function updateTodoAction(input: {
 
     const { todo, progress } = await workItemTodosService.updateTodo(input.todoId, patch, ctx);
     revalidatePath(ISSUES_PATH);
-    return { ok: true, todo, progress };
+    const workItemRefs = await workItemTodosService.resolveNotesRefs([todo], ctx);
+    return { ok: true, todo, progress, workItemRefs };
   } catch (err) {
     const message = await todoErrorMessage(err);
     if (message) return { ok: false, error: message };

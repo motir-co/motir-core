@@ -1371,6 +1371,7 @@ describe('a CHOICE in the overlay (Story MOTIR-4914 · MOTIR-5896)', () => {
           ],
           followUpMd: 'The export story.',
           subjectVersion: 'a'.repeat(64),
+          workItemRefs: {},
         },
       },
     });

@@ -19,12 +19,22 @@ import { useFieldTranslation } from './TranslationProvider';
 export function TranslatableMarkdown({
   fieldRef,
   value,
+  workItemRefs,
   ...rest
-}: MarkdownViewProps & { fieldRef: string }) {
+}: MarkdownViewProps & {
+  fieldRef: string;
+  /** Stated by every caller (bug MOTIR-10023): with no map each card link draws as deleted. */
+  workItemRefs: WorkItemRefMap | undefined;
+}) {
   const { text } = useFieldTranslation(fieldRef);
   return (
     <ChipTitleScope>
-      <MarkdownView {...rest} value={text ?? value} data-translated={text ? '' : undefined} />
+      <MarkdownView
+        {...rest}
+        value={text ?? value}
+        workItemRefs={workItemRefs}
+        data-translated={text ? '' : undefined}
+      />
     </ChipTitleScope>
   );
 }

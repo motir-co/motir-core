@@ -1128,6 +1128,7 @@ export function ApprovalOverlay() {
             layout="fill"
             gate={gate}
             view={subject.confirm}
+            workItemRefs={subject.confirm.workItemRefs}
             record={subject.confirm.record}
             recordCount={subject.confirm.recordCount}
             presentRecordIds={subject.confirm.presentRecordIds}
@@ -1178,6 +1179,7 @@ export function ApprovalOverlay() {
             layout="fill"
             gate={gate}
             port={subject.choice}
+            workItemRefs={subject.choice.workItemRefs}
             replan={replan}
             canDecide={read.canDecide && !decidedState}
             routedToLabel={read.routedToLabel}

@@ -9,6 +9,7 @@ import type { GateRefusal } from '@/lib/approvalGates/refusals';
 import { useNoneOfTheseVerb } from './RefusalReason';
 import { useRefusalReplanSlots, type RefusalReplanProps } from './RefusalReplan';
 import type { ApprovalGateDTO, ChoiceDefectDTO, GateDecision } from '@/lib/dto/approvalGate';
+import type { WorkItemRefMap } from '@/lib/dto/workItems';
 import {
   ApprovalGateControl,
   type ApprovalGateControlProps,
@@ -70,7 +71,7 @@ export function useSituationLabel(): (situation: ChoiceSituation) => string {
 }
 
 /** WHY THIS IS A CHOICE (design Panel 1d) — under the question, above the options. */
-function WhyBlock({ why }: { why: ChoiceWhy }) {
+function WhyBlock({ why, workItemRefs }: { why: ChoiceWhy; workItemRefs: WorkItemRefMap }) {
   const t = useTranslations('approvalGate.choice');
   const situationLabel = useSituationLabel();
   return (
@@ -88,6 +89,7 @@ function WhyBlock({ why }: { why: ChoiceWhy }) {
       {why.evidenceMd ? (
         <MarkdownView
           value={why.evidenceMd}
+          workItemRefs={workItemRefs}
           className="mt-2 text-[13px] leading-snug text-(--el-text-secondary)"
         />
       ) : null}
@@ -124,6 +126,7 @@ export interface ChoiceBodyView {
 
 export function ChoicePortBody({
   body,
+  workItemRefs,
   mode,
   groupName,
   selectedId = null,
@@ -131,6 +134,8 @@ export function ChoicePortBody({
   chosenId = null,
 }: {
   body: ChoiceBodyView;
+  /** The chips of every `[KEY](motir:<id>)` in the body (MOTIR-10023). */
+  workItemRefs: WorkItemRefMap;
   mode: ChoiceRowMode;
   /** The radio group's name — unique per gate on the page. */
   groupName: string;
@@ -147,7 +152,7 @@ export function ChoicePortBody({
           <p className="mt-1 text-sm font-medium text-(--el-text)">{body.question}</p>
         </div>
       ) : null}
-      {body.why ? <WhyBlock why={body.why} /> : null}
+      {body.why ? <WhyBlock why={body.why} workItemRefs={workItemRefs} /> : null}
       <div
         className="flex flex-col gap-2"
         {...(mode === 'pick'
@@ -159,6 +164,7 @@ export function ChoicePortBody({
           <OptionRow
             key={option.id}
             option={option}
+            workItemRefs={workItemRefs}
             mode={mode}
             groupName={groupName}
             selected={selectedId === option.id}
@@ -172,6 +178,7 @@ export function ChoicePortBody({
           <Eyebrow>{t('gates')}</Eyebrow>
           <MarkdownView
             value={body.followUpMd}
+            workItemRefs={workItemRefs}
             className="mt-1 text-[13px] leading-snug text-(--el-text)"
           />
         </div>
@@ -182,6 +189,7 @@ export function ChoicePortBody({
 
 function OptionRow({
   option,
+  workItemRefs,
   mode,
   groupName,
   selected,
@@ -189,6 +197,7 @@ function OptionRow({
   onSelect,
 }: {
   option: ChoiceOption;
+  workItemRefs: WorkItemRefMap;
   mode: ChoiceRowMode;
   groupName: string;
   selected: boolean;
@@ -206,6 +215,7 @@ function OptionRow({
       {option.whyMd ? (
         <MarkdownView
           value={option.whyMd}
+          workItemRefs={workItemRefs}
           className="mt-0.5 block text-[13px] leading-snug text-(--el-text-secondary)"
         />
       ) : null}
@@ -282,6 +292,8 @@ export interface ChoiceGateFrameProps {
    * accepted too: a decided gate's record outlives a body that stopped parsing.
    */
   port: ChoiceBodyView;
+  /** The chips of every `[KEY](motir:<id>)` in the port (MOTIR-10023). */
+  workItemRefs: WorkItemRefMap;
   canDecide: boolean;
   routedToLabel: string | null;
   /** The card's `KEY-<n>`, named in the consequence and confirm lines. */
@@ -309,6 +321,7 @@ export interface ChoiceGateFrameProps {
 export function ChoiceGateFrame({
   gate,
   port,
+  workItemRefs,
   canDecide,
   routedToLabel,
   identifier,
@@ -367,6 +380,7 @@ export function ChoiceGateFrame({
       port={
         <ChoicePortBody
           body={port}
+          workItemRefs={workItemRefs}
           mode={chosen ? 'chosen' : live ? 'pick' : 'read'}
           groupName={`choice-${gate.id}`}
           selectedId={selectedId}
@@ -451,9 +465,11 @@ export function ChoiceGateFrame({
 export function ChoiceDefectBody({
   defects,
   draft,
+  workItemRefs,
 }: {
   defects: ChoiceDefectDTO[];
   draft: ChoiceBodyView;
+  workItemRefs: WorkItemRefMap;
 }) {
   const t = useTranslations('approvalGate.choice');
   return (
@@ -475,7 +491,12 @@ export function ChoiceDefectBody({
           <p className="text-(--el-text-secondary)">{t('defect.fix')}</p>
         </div>
       </div>
-      <ChoicePortBody body={draft} mode="defect" groupName="choice-defect" />
+      <ChoicePortBody
+        body={draft}
+        workItemRefs={workItemRefs}
+        mode="defect"
+        groupName="choice-defect"
+      />
     </div>
   );
 }

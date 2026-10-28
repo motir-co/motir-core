@@ -92,6 +92,7 @@ function reviewView(over: Partial<AgentReviewViewDto> = {}): AgentReviewViewDto 
       startedAt: '2026-09-29T09:41:00.000Z',
     },
     settingsDoorHref: null,
+    findingsRefs: {},
     ...over,
   };
 }
