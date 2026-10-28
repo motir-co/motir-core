@@ -165,6 +165,8 @@ export function MembersCard({
         onSent={(email) => {
           toast({ variant: 'success', title: t('members.inviteSentToast', { email }) });
           setInviteOpen(false);
+          // The Pending invitations block is server-rendered (MOTIR-9997).
+          router.refresh();
         }}
       />
     </Card>

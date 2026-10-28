@@ -271,6 +271,23 @@ describe('on the Members card', () => {
     expect(screen.getByRole('heading', { name: 'Pending invitations' })).toBeTruthy();
   });
 
+  it('refreshes the card after an invite is sent, so the new invitation is listed', async () => {
+    const fetchMock = vi.fn(async () => new Response('{}', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      renderCard([]);
+      fireEvent.click(screen.getByRole('button', { name: 'Invite' }));
+      fireEvent.change(await screen.findByLabelText('Email address'), {
+        target: { value: 'new@example.com' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Send invite' }));
+      await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+      expect(fetchMock).toHaveBeenCalledWith('/api/workspaces/ws1/invites', expect.anything());
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('is absent with no invites, and absent for a viewer who may not invite', () => {
     renderCard(undefined);
     expect(screen.queryByText('Pending invitations')).toBeNull();
