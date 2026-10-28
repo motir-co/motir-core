@@ -362,11 +362,13 @@ test.describe('The Calculator on Billing & plans', () => {
     });
     await beat();
 
-    await chapter('Two categories split evenly; three split in thirds', async () => {
+    await chapter('Two categories start even; three start in thirds', async () => {
       await pickOnly(page, [first!, second!]);
       await ask(page);
       let sent = stub.estimates.at(-1)!.body;
       expect([...(sent['categories'] as string[])].sort()).toEqual([first, second].sort());
+      // An untouched form sends the even split (MOTIR-9832).
+      expect(Object.values(sent['shares'] as Record<string, number>)).toEqual([50, 50]);
       expect(JSON.stringify(sent)).not.toMatch(/"(planning|running|modelIds)"/);
       let split = result(page)
         .locator('p', { hasText: label(first!) })
@@ -378,6 +380,7 @@ test.describe('The Calculator on Billing & plans', () => {
       await ask(page);
       sent = stub.estimates.at(-1)!.body;
       expect(sent['categories']).toHaveLength(3);
+      expect(Object.values(sent['shares'] as Record<string, number>)).toEqual([34, 33, 33]);
       split = result(page)
         .locator('p', { hasText: label(third!) })
         .first();

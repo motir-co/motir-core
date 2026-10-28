@@ -6677,9 +6677,12 @@
         "lowLabel": "Laag",
         "highLabel": "Hoog",
         "runCategoriesLabel": "Modellen die de runner gebruikt",
-        "runCategoriesHelp": "Kies er één tot drie. De uitvoering wordt gelijk verdeeld over wat je kiest: één krijgt 100%, twee elk 50%, alle drie elk 33%. Je kiest nooit een model — elke categorie toont de modellen die erbij horen als voorbeeld.",
+        "runCategoriesHelp": "Kies er één tot drie. Bij twee of drie sleep je hieronder het aandeel van elk in de uitvoering; ze beginnen gelijk verdeeld. Je kiest nooit een model — elke categorie noemt de modellen die ze bedient als voorbeeld.",
         "categoryShare": "{share} van de uitvoering",
         "categoryExamples": "Bijvoorbeeld: {models}",
+        "sharesLabel": "Het aandeel van elke categorie in de uitvoering",
+        "sharesHelp": "Sleep een aandeel en de andere geven of nemen het verschil in gelijke delen, zodat ze altijd samen 100% zijn. Een categorie toevoegen of weghalen verdeelt ze weer gelijk.",
+        "shareValue": "{category}: {share}% van de uitvoering",
         "submit": "Credits schatten"
       },
       "categories": {
@@ -6688,7 +6691,7 @@
       },
       "split": {
         "one": "Eén categorie, dus de hele uitvoering valt op {category}.",
-        "even": "De uitvoering is gelijk verdeeld over {categories} — {shares} per categorie."
+        "shares": "De uitvoering is verdeeld als {shares}."
       },
       "result": {
         "idle": "Er wordt niets geschat totdat je erom vraagt: vul het bereik in, kies één tot drie categorieën en kies dan Credits schatten.",

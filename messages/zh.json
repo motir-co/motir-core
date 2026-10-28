@@ -6668,9 +6668,12 @@
         "lowLabel": "下限",
         "highLabel": "上限",
         "runCategoriesLabel": "运行器使用的模型",
-        "runCategoriesHelp": "选择一到三类。运行部分在你选中的类别之间平均分摊：选一类占 100%，两类各占 50%，三类各占 33%。无需选择模型 —— 每个类别下列出的是它所服务的示例模型。",
+        "runCategoriesHelp": "选一到三类。选两类或三类时，在下方拖动每一类在运行中的占比——初始为平均分配。你从不选择具体模型——每个类别都会列出它支持的模型作为示例。",
         "categoryShare": "运行部分的 {share}",
         "categoryExamples": "例如：{models}",
+        "sharesLabel": "每个类别在运行中的占比",
+        "sharesHelp": "拖动一个占比，其余类别会平均让出或接收差额，因此总和始终为 100%。添加或移除类别后会重新平均分配。",
+        "shareValue": "{category}：运行的 {share}%",
         "submit": "估算积分"
       },
       "categories": {
@@ -6679,7 +6682,7 @@
       },
       "split": {
         "one": "只选了一类，全部运行都落在 {category} 上。",
-        "even": "运行部分在 {categories} 之间平均分摊 —— 各占 {shares}。"
+        "shares": "运行的分配为 {shares}。"
       },
       "result": {
         "idle": "在你发起估算之前不会计算任何内容：填写区间、选择一到三个类别，然后选择「估算积分」。",

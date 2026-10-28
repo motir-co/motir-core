@@ -933,6 +933,7 @@ export async function estimateCalculator(
       plannedPerMonth: { low: request.plannedPerMonth.low, high: request.plannedPerMonth.high },
       runPerMonth: { low: request.runPerMonth.low, high: request.runPerMonth.high },
       categories: [...request.categories],
+      ...(request.shares ? { shares: { ...request.shares } } : {}),
       cadence: request.cadence,
     }),
   });
