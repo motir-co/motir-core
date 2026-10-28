@@ -85,6 +85,38 @@ export const seedRegistryEntryRepository = {
     });
   },
 
+  /**
+   * One page of the ACTIVE entries a row of `role` may seed from (MOTIR-709's
+   * hard filter): the role's own entries whose `hostingTargets` contains
+   * `target` (`{ contains }`), is empty (`'none'`), or either (`'any'`, a `web`
+   * row with no target yet) — plus every any-role entry with no targets
+   * (`initialised`), which fits every row.
+   */
+  async listCompatible(
+    where: { role: ProjectRepoRole; target: { contains: HostingTarget } | 'none' | 'any' },
+    page: { take: number; afterKey: string | null },
+  ): Promise<SeedRegistryEntry[]> {
+    return db.seedRegistryEntry.findMany({
+      where: {
+        status: 'active',
+        OR: [
+          {
+            OR: [{ role: where.role }, { role: null }],
+            ...(where.target === 'none'
+              ? { hostingTargets: { isEmpty: true } }
+              : where.target === 'any'
+                ? {}
+                : { hostingTargets: { has: where.target.contains } }),
+          },
+          { role: null, hostingTargets: { isEmpty: true } },
+        ],
+        ...(page.afterKey !== null ? { key: { gt: page.afterKey } } : {}),
+      },
+      orderBy: { key: 'asc' },
+      take: page.take,
+    });
+  },
+
   /** Every ACTIVE entry — what the default map is computed over. */
   async listActive(): Promise<SeedRegistryEntry[]> {
     return db.seedRegistryEntry.findMany({

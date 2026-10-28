@@ -1141,6 +1141,7 @@ function hostedRow(overrides: Partial<ProjectRepoDto> = {}): ProjectRepoDto {
     state: 'created',
     failureReason: null,
     proposalSignal: 'default-web',
+    seedMatch: null,
     realizedRepo: {
       id: 'gh-1',
       provider: 'github',

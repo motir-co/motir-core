@@ -484,6 +484,121 @@ describe('roleDefaultSeedKey — the rule, pure', () => {
   });
 });
 
+describe('matchSeedEntry over the live registry (MOTIR-709)', () => {
+  it('answers the shipped registry as 706 v2 §3.5 does', async () => {
+    expect(await seedRegistryService.matchSeedEntry({ role: 'web' })).toEqual({
+      key: SEED_SOURCE_PLATFORM_STARTER,
+      result: 'no_target',
+    });
+    expect(
+      await seedRegistryService.matchSeedEntry({ role: 'web', hostingTarget: 'serverless' }),
+    ).toEqual({ key: SEED_SOURCE_PLATFORM_STARTER, result: 'no_stack_signal' });
+    expect(await seedRegistryService.matchSeedEntry({ role: 'web', hostingTarget: 'fly' })).toEqual(
+      { key: SEED_SOURCE_INITIALISED, result: 'no_match' },
+    );
+    expect(await seedRegistryService.matchSeedEntry({ role: 'api' })).toEqual({
+      key: SEED_SOURCE_INITIALISED,
+      result: 'no_match',
+    });
+  });
+
+  it('picks up a registered starter, and drops it again once retired', async () => {
+    await write((tx) => seedRegistryService.create(entry(), tx));
+    expect(await seedRegistryService.matchSeedEntry({ role: 'web', hostingTarget: 'fly' })).toEqual(
+      { key: 'nextjs-prisma-fly-starter', result: 'no_stack_signal' },
+    );
+    expect(
+      await seedRegistryService.matchSeedEntry({
+        role: 'web',
+        stack: 'nextjs',
+        hostingTarget: 'fly',
+      }),
+    ).toEqual({ key: 'nextjs-prisma-fly-starter', result: 'matched' });
+
+    await write((tx) =>
+      seedRegistryService.update('nextjs-prisma-fly-starter', { status: 'retired' }, tx),
+    );
+    expect(
+      (await seedRegistryService.matchSeedEntry({ role: 'web', hostingTarget: 'fly' })).key,
+    ).toBe(SEED_SOURCE_INITIALISED);
+  });
+
+  it('answers each target’s new-app starter from the registry', async () => {
+    const before = await seedRegistryService.starterByHostingTarget();
+    expect(Object.keys(before).sort()).toEqual([...HOSTING_TARGETS].sort());
+    expect(before).toMatchObject({
+      serverless: SEED_SOURCE_PLATFORM_STARTER,
+      fly: SEED_SOURCE_INITIALISED,
+      aws: SEED_SOURCE_INITIALISED,
+    });
+
+    await write((tx) => seedRegistryService.create(entry(), tx));
+    expect((await seedRegistryService.starterByHostingTarget()).fly).toBe(
+      'nextjs-prisma-fly-starter',
+    );
+    expect(await seedRegistryService.seedSourceForHostingTarget('fly')).toBe(
+      'nextjs-prisma-fly-starter',
+    );
+  });
+});
+
+describe('listCompatible — what a row may be re-pointed to (MOTIR-709)', () => {
+  const keys = async (row: Parameters<typeof seedRegistryService.listCompatible>[0]) =>
+    (await seedRegistryService.listCompatible(row)).items.map((e) => e.key);
+
+  it('lists the role’s entries passing the target, and `initialised` for every row', async () => {
+    await write(async (tx) => {
+      await seedRegistryService.create(entry(), tx);
+      await seedRegistryService.create(
+        entry({
+          key: 'hono-api-starter',
+          role: 'api',
+          stack: 'hono',
+          label: 'Hono API',
+          source: { owner: 'motir-co', repo: 'hono-api-starter' },
+          hostingTargets: [],
+        }),
+        tx,
+      );
+      await seedRegistryService.create(
+        entry({ key: 'retired-web', label: 'Old', status: 'retired', hostingTargets: [] }),
+        tx,
+      );
+    });
+
+    expect(await keys({ role: 'web', hostingTarget: null })).toEqual([
+      SEED_SOURCE_INITIALISED,
+      'nextjs-prisma-fly-starter',
+      SEED_SOURCE_PLATFORM_STARTER,
+    ]);
+    expect(await keys({ role: 'web', hostingTarget: 'fly' })).toEqual([
+      SEED_SOURCE_INITIALISED,
+      'nextjs-prisma-fly-starter',
+    ]);
+    expect(await keys({ role: 'web', hostingTarget: 'aws' })).toEqual([SEED_SOURCE_INITIALISED]);
+    expect(await keys({ role: 'api', hostingTarget: null })).toEqual([
+      'hono-api-starter',
+      SEED_SOURCE_INITIALISED,
+    ]);
+    expect(await keys({ role: 'mobile', hostingTarget: null })).toEqual([SEED_SOURCE_INITIALISED]);
+  });
+
+  it('paginates by key with a cursor', async () => {
+    const first = await seedRegistryService.listCompatible(
+      { role: 'web', hostingTarget: null },
+      { limit: 1 },
+    );
+    expect(first.items.map((e) => e.key)).toEqual([SEED_SOURCE_INITIALISED]);
+    expect(first.nextCursor).toBe(SEED_SOURCE_INITIALISED);
+    const second = await seedRegistryService.listCompatible(
+      { role: 'web', hostingTarget: null },
+      { limit: 1, cursor: first.nextCursor! },
+    );
+    expect(second.items.map((e) => e.key)).toEqual([SEED_SOURCE_PLATFORM_STARTER]);
+    expect(second.nextCursor).toBeNull();
+  });
+});
+
 describe('the table’s RLS (platform reference data)', () => {
   async function asAppRole<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
     return db.$transaction(async (tx) => {

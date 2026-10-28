@@ -3,6 +3,7 @@ import type {
   ProjectRepoDto,
   ProjectRepoOwnershipDto,
   ProjectRepoProposalSignalDto,
+  ProjectRepoSeedMatchDto,
   ProjectRepoRoleDto,
   ProjectRepoSetDto,
   ProjectRepoStateDto,
@@ -65,6 +66,8 @@ export function toProjectRepoDto(row: ProjectRepoWithRealized): ProjectRepoDto {
     // signal the UI can map to copy — or null, which is the honest answer for a
     // user-added row and for every row written before MOTIR-1892.
     proposalSignal: row.proposalSignal as ProjectRepoProposalSignalDto | null,
+    // Written only through the set service, which checks `SEED_MATCH_RESULTS`.
+    seedMatch: row.seedMatch as ProjectRepoSeedMatchDto | null,
     realizedRepo: row.githubRepo ? toRealizedDto(row.githubRepo) : null,
     // BOTH halves, deliberately: a settled state whose mirror row has since been
     // deleted is NOT established (the repository no longer exists), even though

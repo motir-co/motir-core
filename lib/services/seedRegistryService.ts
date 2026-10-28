@@ -4,6 +4,7 @@ import type {
   HostingUseCase as PrismaHostingUseCase,
   Prisma,
   ProjectRepoRole,
+  SeedRegistryEntry,
 } from '@/generated/prisma/client';
 import {
   SEED_REGISTRY_ANY,
@@ -17,7 +18,18 @@ import {
   type SeedRegistryListFilter,
   type SeedRegistryPage,
 } from '@/lib/dto/seedRegistry';
-import { isHostingSize, isHostingTarget, isHostingUseCase } from '@/lib/hosting/vocabulary';
+import {
+  HOSTING_TARGETS,
+  isHostingSize,
+  isHostingTarget,
+  isHostingUseCase,
+  type HostingTarget,
+} from '@/lib/hosting/vocabulary';
+import {
+  matchSeedEntry,
+  type SeedMatch,
+  type SeedMatchInput,
+} from '@/lib/projectRepos/seedMatching';
 import { toSeedRegistryEntryDto } from '@/lib/mappers/seedRegistryMappers';
 import { isProjectRepoRole } from '@/lib/projectRepos/vocabulary';
 import {
@@ -65,6 +77,8 @@ const STACK_PATTERN = /^[a-z0-9][a-z0-9.+-]*$/;
 /** A GitHub owner or repository name. */
 const GITHUB_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const STATUSES: readonly SeedRegistryEntryStatusDto[] = ['active', 'retired'];
+/** The role a new app takes when the planner asks for a target's starter. */
+const NEW_APP_ROLE: ProjectRepoRole = 'web';
 
 export const seedRegistryService = {
   /**
@@ -80,6 +94,12 @@ export const seedRegistryService = {
     if (row.status !== 'active') throw new SeedEntryRetiredError(seedSource);
     const entry = toSeedRegistryEntryDto(row);
     return { key: entry.key, source: entry.source };
+  },
+
+  /** One entry by its current or a legacy key, or null — the re-point's read. */
+  async findEntry(key: string): Promise<SeedRegistryEntryDto | null> {
+    const row = await seedRegistryEntryRepository.findByKeyOrLegacyKey(key);
+    return row ? toSeedRegistryEntryDto(row) : null;
   },
 
   /** One entry by its current or a legacy key. */
@@ -115,11 +135,7 @@ export const seedRegistryService = {
       },
       { take: limit + 1, afterKey: page.cursor ?? null },
     );
-    const items = rows.slice(0, limit).map(toSeedRegistryEntryDto);
-    return {
-      items,
-      nextCursor: rows.length > limit ? (items[items.length - 1]?.key ?? null) : null,
-    };
+    return toPage(rows, limit);
   },
 
   /**
@@ -131,6 +147,60 @@ export const seedRegistryService = {
   async defaultSeedSourceForRole(role: ProjectRepoRole): Promise<string> {
     const active = await seedRegistryEntryRepository.listActive();
     return roleDefaultSeedKey(role, active.map(toSeedRegistryEntryDto));
+  },
+
+  /**
+   * The seed matching over the live registry (MOTIR-709; decision MOTIR-706 v2
+   * §3.5): the entry a row with these inputs seeds from, and how it was chosen.
+   */
+  async matchSeedEntry(input: SeedMatchInput): Promise<SeedMatch> {
+    const active = await seedRegistryEntryRepository.listActive();
+    return matchSeedEntry(input, active.map(toSeedRegistryEntryDto));
+  },
+
+  /**
+   * The starter a NEW app on `target` seeds from — the matching with role `web`,
+   * that target and no use case or size (706 §3.5). The planner names it in a
+   * hosting decision card, so it comes from the matching and never from text. A
+   * target no registered starter deploys to answers `initialised`.
+   */
+  async seedSourceForHostingTarget(target: HostingTarget): Promise<string> {
+    return (await seedRegistryService.matchSeedEntry({ role: NEW_APP_ROLE, hostingTarget: target }))
+      .key;
+  },
+
+  /** {@link seedSourceForHostingTarget} for EVERY target, over one registry read. */
+  async starterByHostingTarget(): Promise<Record<HostingTarget, string>> {
+    const active = (await seedRegistryEntryRepository.listActive()).map(toSeedRegistryEntryDto);
+    return Object.fromEntries(
+      HOSTING_TARGETS.map((target) => [
+        target,
+        matchSeedEntry({ role: NEW_APP_ROLE, hostingTarget: target }, active).key,
+      ]),
+    ) as Record<HostingTarget, string>;
+  },
+
+  /**
+   * One page of the active entries a row may be re-pointed to — its role's
+   * entries and `initialised`, passing the row's target (MOTIR-709's hard
+   * filter, `seedEntryFitsRow`), for MOTIR-712's picker.
+   */
+  async listCompatible(
+    row: { role: ProjectRepoRole; hostingTarget: HostingTarget | null },
+    page: SeedRegistryPage = {},
+  ): Promise<SeedRegistryEntryListDto> {
+    const limit = pageSize(page.limit);
+    const target =
+      row.hostingTarget !== null
+        ? { contains: row.hostingTarget }
+        : row.role === NEW_APP_ROLE
+          ? ('any' as const)
+          : ('none' as const);
+    const rows = await seedRegistryEntryRepository.listCompatible(
+      { role: row.role, target },
+      { take: limit + 1, afterKey: page.cursor ?? null },
+    );
+    return toPage(rows, limit);
   },
 
   /**
@@ -171,6 +241,15 @@ export const seedRegistryService = {
     return toSeedRegistryEntryDto(await seedRegistryEntryRepository.update(current.id, data, tx));
   },
 };
+
+/** A page of `limit` from a `limit + 1` read: the extra row says a next page exists. */
+function toPage(rows: SeedRegistryEntry[], limit: number): SeedRegistryEntryListDto {
+  const items = rows.slice(0, limit).map(toSeedRegistryEntryDto);
+  return {
+    items,
+    nextCursor: rows.length > limit ? (items[items.length - 1]?.key ?? null) : null,
+  };
+}
 
 // ── Validation ──────────────────────────────────────────────────────────────
 

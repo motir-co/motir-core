@@ -41,9 +41,11 @@ export function roleDefaultSeedKey(
   return best?.key ?? SEED_SOURCE_INITIALISED;
 }
 
-/** 706 3.5 rule 5: `promotedAt`, else `createdAt`, newest first; then `key` ascending. */
-function byMostRecentlyPromoted(a: DefaultCandidate, b: DefaultCandidate): number {
-  const at = (entry: DefaultCandidate) => entry.promotedAt ?? entry.createdAt;
-  const byTime = at(b).localeCompare(at(a));
-  return byTime !== 0 ? byTime : a.key.localeCompare(b.key);
+type Promotable = Pick<SeedRegistryEntryDto, 'key' | 'promotedAt' | 'createdAt'>;
+
+/** 706 3.5 rule 5, the matching's tie-break: `promotedAt`, else `createdAt`,
+ *  newest first; then `key` ascending, so the answer is deterministic. */
+export function byMostRecentlyPromoted(a: Promotable, b: Promotable): number {
+  const at = (entry: Promotable) => entry.promotedAt ?? entry.createdAt;
+  return at(b).localeCompare(at(a)) || a.key.localeCompare(b.key);
 }

@@ -1,5 +1,9 @@
 import type { ProjectRepoRole, ProjectRepoState } from '@/generated/prisma/client';
-import type { ProjectRepoProposalSignalDto, ProjectRepoRoleDto } from '@/lib/dto/projectRepos';
+import type {
+  ProjectRepoProposalSignalDto,
+  ProjectRepoRoleDto,
+  ProjectRepoSeedMatchDto,
+} from '@/lib/dto/projectRepos';
 
 // The repo-SET vocabulary (Story MOTIR-1775 · MOTIR-1780) — the small set of
 // constants `docs/decisions/project-repository-set.md` fixes, in one module so no
@@ -101,6 +105,23 @@ export const PROJECT_REPO_PROPOSAL_SIGNALS = [
  *  the write rather than discovered by a UI that cannot map it to copy. */
 export function isProjectRepoProposalSignal(value: unknown): value is ProjectRepoProposalSignalDto {
   return (PROJECT_REPO_PROPOSAL_SIGNALS as readonly unknown[]).includes(value);
+}
+
+/**
+ * Every result the seed matching records on a row (MOTIR-709; decision MOTIR-706
+ * v2 §3.5) — the ONE runtime list the set service checks a written `seedMatch`
+ * against. See {@link ProjectRepoSeedMatchDto} for what each one means.
+ */
+export const SEED_MATCH_RESULTS = [
+  'matched',
+  'no_stack_signal',
+  'no_target',
+  'no_match',
+] as const satisfies readonly ProjectRepoSeedMatchDto[];
+
+/** Whether a value is one of {@link SEED_MATCH_RESULTS}. */
+export function isSeedMatchResult(value: unknown): value is ProjectRepoSeedMatchDto {
+  return (SEED_MATCH_RESULTS as readonly unknown[]).includes(value);
 }
 
 /**

@@ -1,6 +1,7 @@
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { adminDb } from '../../helpers/adminDb';
+import { SEED_SOURCE_ORGANIZATION } from '@/lib/projectRepos/vocabulary';
 import type { WorkspaceContext } from '@/lib/workspaces';
 
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures/workItemFixtures';
@@ -278,6 +279,167 @@ describe('PATCH / DELETE /api/projects/[key]/repositories/[rowId]', () => {
     expect(
       (await DELETE(json(`${BASE}/PROD/repositories/x`, 'DELETE'), rowParams('x'))).status,
     ).toBe(401);
+  });
+});
+
+describe('PATCH seedSource — a person re-points a row’s seed (MOTIR-709)', () => {
+  // The registry is migration-seeded platform data no truncate reaches: every
+  // entry a test registers is removed again.
+  const FLY = 'nextjs-prisma-fly-starter';
+
+  afterEach(async () => {
+    await adminDb.seedRegistryEntry.deleteMany({
+      where: { key: { notIn: ['nextjs-prisma-serverless-starter', 'initialised'] } },
+    });
+  });
+
+  async function registerFly() {
+    await adminDb.seedRegistryEntry.create({
+      data: {
+        key: FLY,
+        role: 'web',
+        stack: 'nextjs',
+        label: 'Next.js · Fly',
+        templateOwner: 'motir-co',
+        templateRepo: FLY,
+        useCases: ['mvp'],
+        sizes: ['small'],
+        hostingTargets: ['fly'],
+      },
+    });
+  }
+
+  async function webRow(fx: WorkItemFixture) {
+    return projectRepoSetService.addRow(fx.projectId, { role: 'web', name: 'acme' }, fx.ctx);
+  }
+
+  const repoint = (rowId: string, seedSource: string) =>
+    PATCH(json(`${BASE}/P/repositories/${rowId}`, 'PATCH', { seedSource }), rowParams(rowId));
+
+  const stored = (id: string) =>
+    adminDb.projectRepo.findUniqueOrThrow({
+      where: { id },
+      select: { seedSource: true, seedMatch: true },
+    });
+
+  it('stores a compatible entry and clears the recorded match result', async () => {
+    const fx = await makeWorkItemFixture();
+    signInAs(fx);
+    const row = await webRow(fx);
+    await adminDb.projectRepo.update({ where: { id: row.id }, data: { seedMatch: 'no_target' } });
+    await registerFly();
+
+    const res = await repoint(row.id, FLY);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ seedSource: FLY, seedMatch: null });
+    expect(await stored(row.id)).toEqual({ seedSource: FLY, seedMatch: null });
+  });
+
+  it('stores the CURRENT key when the person names a legacy one', async () => {
+    const fx = await makeWorkItemFixture();
+    signInAs(fx);
+    const row = await webRow(fx);
+    await adminDb.projectRepo.update({
+      where: { id: row.id },
+      data: { seedSource: 'initialised' },
+    });
+
+    const res = await repoint(row.id, 'nextjs-prisma-vercel-starter');
+    expect(res.status).toBe(200);
+    expect((await stored(row.id)).seedSource).toBe('nextjs-prisma-serverless-starter');
+  });
+
+  it.each([
+    ['unknown', 'no-such-starter', async () => {}],
+    [
+      'retired',
+      FLY,
+      async () => {
+        await registerFly();
+        await adminDb.seedRegistryEntry.update({
+          where: { key: FLY },
+          data: { status: 'retired' },
+        });
+      },
+    ],
+  ] as const)(
+    'refuses an %s entry with a 422 naming it, and stores nothing',
+    async (refusal, key, arrange) => {
+      const fx = await makeWorkItemFixture();
+      signInAs(fx);
+      const row = await webRow(fx);
+      await arrange();
+      const before = await stored(row.id);
+
+      const res = await repoint(row.id, key);
+      expect(res.status).toBe(422);
+      expect(await res.json()).toMatchObject({ code: 'PROJECT_REPO_SEED_REFUSED', refusal });
+      expect(await stored(row.id)).toEqual(before);
+    },
+  );
+
+  it('refuses another role’s entry as role_mismatch', async () => {
+    const fx = await makeWorkItemFixture();
+    signInAs(fx);
+    const row = await projectRepoSetService.addRow(
+      fx.projectId,
+      { role: 'api', name: 'acme-api' },
+      fx.ctx,
+    );
+    const before = await stored(row.id);
+
+    const res = await repoint(row.id, 'nextjs-prisma-serverless-starter');
+    expect(res.status).toBe(422);
+    expect(await res.json()).toMatchObject({ refusal: 'role_mismatch' });
+    expect(await stored(row.id)).toEqual(before);
+  });
+
+  it('refuses a starter that does not deploy to the row’s target as target_mismatch', async () => {
+    const fx = await makeWorkItemFixture();
+    signInAs(fx);
+    const row = await webRow(fx);
+    await adminDb.projectRepo.update({ where: { id: row.id }, data: { hostingTarget: 'aws' } });
+    await registerFly();
+    const before = await stored(row.id);
+
+    const res = await repoint(row.id, FLY);
+    expect(res.status).toBe(422);
+    expect(await res.json()).toMatchObject({ refusal: 'target_mismatch' });
+    expect(await stored(row.id)).toEqual(before);
+
+    // `initialised` fits every row: it is what the matching answers when nothing does.
+    expect((await repoint(row.id, 'initialised')).status).toBe(200);
+  });
+
+  it('refuses a row past proposed / failed with a 409, and admits a failed row', async () => {
+    const fx = await makeWorkItemFixture();
+    signInAs(fx);
+    const row = await webRow(fx);
+    await adminDb.projectRepo.update({ where: { id: row.id }, data: { state: 'creating' } });
+    const before = await stored(row.id);
+
+    const res = await repoint(row.id, 'initialised');
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ refusal: 'not_editable' });
+    expect(await stored(row.id)).toEqual(before);
+
+    await adminDb.projectRepo.update({ where: { id: row.id }, data: { state: 'failed' } });
+    expect((await repoint(row.id, 'initialised')).status).toBe(200);
+  });
+
+  it('refuses the organisation’s own repository as organization_row', async () => {
+    const fx = await makeWorkItemFixture();
+    signInAs(fx);
+    const row = await webRow(fx);
+    await adminDb.projectRepo.update({
+      where: { id: row.id },
+      data: { seedSource: SEED_SOURCE_ORGANIZATION },
+    });
+
+    const res = await repoint(row.id, 'initialised');
+    expect(res.status).toBe(422);
+    expect(await res.json()).toMatchObject({ refusal: 'organization_row' });
+    expect((await stored(row.id)).seedSource).toBe(SEED_SOURCE_ORGANIZATION);
   });
 });
 

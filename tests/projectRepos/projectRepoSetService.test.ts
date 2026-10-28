@@ -860,14 +860,14 @@ describe('editing the set', () => {
     );
     const patched = await projectRepoSetService.patchRow(
       row.id,
-      { name: 'acme-frontend', role: 'other', label: 'the SPA', seedSource: 'custom' },
+      { name: 'acme-frontend', role: 'other', label: 'the SPA', seedSource: 'initialised' },
       fx.ctx,
     );
     expect(patched).toMatchObject({
       name: 'acme-frontend',
       role: 'other',
       label: 'the SPA',
-      seedSource: 'custom',
+      seedSource: 'initialised',
     });
   });
 

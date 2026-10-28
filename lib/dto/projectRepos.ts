@@ -77,6 +77,19 @@ export interface ProjectRepoTakeoverDto {
 export type ProjectRepoProposalSignalDto = 'plan-item-role' | 'preplan-platform' | 'default-web';
 
 /**
+ * HOW the seed matching chose a row's `seedSource` (MOTIR-709; decision MOTIR-706
+ * v2 §3.5). Only `matched` is a match; each other value says which input the
+ * matching lacked, so a surface never presents a fallback as a choice:
+ *
+ *   * `matched` — an entry passed every hard filter, the stack signal included.
+ *   * `no_stack_signal` — an entry passed role and target, but no signal named a
+ *     stack, so the stack was not checked (it is never guessed).
+ *   * `no_target` — a `web` row with no hosting target took the role default.
+ *   * `no_match` — no entry passed; the row seeds from `initialised`.
+ */
+export type ProjectRepoSeedMatchDto = 'matched' | 'no_stack_signal' | 'no_target' | 'no_match';
+
+/**
  * Whether the user can REACH the repository behind a row (MOTIR-1900).
  *
  * A repository Motir creates lives in Motir's own org and is private, so the
@@ -300,6 +313,9 @@ export interface ProjectRepoDto {
    * rewrite that history.
    */
   proposalSignal: ProjectRepoProposalSignalDto | null;
+  /** How the seed matching chose `seedSource` (MOTIR-709), or NULL when it did
+   *  not — a hand-added row, a person's re-point, an organisation's repository. */
+  seedMatch: ProjectRepoSeedMatchDto | null;
   /** The connected repository this row realizes, or null when it has none yet
    *  (or no longer has one — see the type doc). */
   realizedRepo: RealizedProjectRepoDto | null;
@@ -555,14 +571,17 @@ export interface AddProjectRepoInput {
   role: ProjectRepoRoleDto;
   name: string;
   label?: string | null;
-  /** Override ADR §2's default for the role — the seam MOTIR-709's starter
-   *  registry will use. Omit for the default. */
+  /** Override the seed registry's default for the role (MOTIR-706 3.8) — the
+   *  proposer passes the matching's choice here (MOTIR-709). Omit for the default. */
   seedSource?: string;
   /** The ADR §0.1 signal that produced this row, when Motir's derivation is what
    *  proposed it (MOTIR-1892). OMITTED by every hand-added row — a row the user
    *  added has no inference to record — which is what makes the persisted column
    *  read as "this one was Motir's idea, and here is why". */
   proposalSignal?: ProjectRepoProposalSignalDto;
+  /** How the seed matching chose `seedSource` (MOTIR-709) — supplied only by the
+   *  proposer, beside the key it chose. A hand-added row omits it (NULL). */
+  seedMatch?: ProjectRepoSeedMatchDto;
 }
 
 /** Input to `projectRepoSetService.patchRow` — a PARTIAL edit of an unestablished
@@ -572,6 +591,8 @@ export interface PatchProjectRepoInput {
   role?: ProjectRepoRoleDto;
   name?: string;
   label?: string | null;
+  /** A person's re-point (MOTIR-709): checked against the seed registry — an
+   *  active entry of the row's role that deploys to the row's target. */
   seedSource?: string;
 }
 

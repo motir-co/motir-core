@@ -325,6 +325,10 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
     'public',
     'seed_registry_entry_read (20261028200000_seed_registry) · seedRegistryService.test "ADMITS a read with nothing bound" (under SET LOCAL ROLE motir_app, nothing bound)',
   ],
+  'seedRegistryEntryRepository.ts#listCompatible': [
+    'public',
+    'seed_registry_entry_read (20261028200000_seed_registry) · seedRegistryService.test "ADMITS a read with nothing bound" (under SET LOCAL ROLE motir_app, nothing bound)',
+  ],
   'platformRunModelRepository.ts#findListedModelsForOffer': [
     'public',
     'platform_run_model_read + platform_run_model_list_read (20261004120000) · platformRunModelOfferRead.test "the offer read" (under SET LOCAL ROLE motir_app, nothing bound)',

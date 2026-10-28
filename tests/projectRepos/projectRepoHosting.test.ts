@@ -155,6 +155,7 @@ describe('toProjectRepoDto hosting fields', () => {
     state: 'proposed',
     failureReason: null,
     proposalSignal: null,
+    seedMatch: null,
     githubRepoId: null,
     position: 'a0',
     seedHeadSha: null,

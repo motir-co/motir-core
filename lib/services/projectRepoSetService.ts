@@ -24,9 +24,11 @@ import type {
   PatchProjectRepoInput,
   ProjectRepoDto,
   ProjectRepoProposalSignalDto,
+  ProjectRepoSeedMatchDto,
   ProjectRepoSetDto,
   SetProjectRepoOwnershipInput,
 } from '@/lib/dto/projectRepos';
+import type { SeedRegistryEntryListDto, SeedRegistryPage } from '@/lib/dto/seedRegistry';
 import {
   toProjectRepoNames,
   toProjectRepoPinNames,
@@ -37,15 +39,19 @@ import { classifyProjectRepoUniqueViolation } from '@/lib/projectRepos/uniqueVio
 import { seedRegistryService } from '@/lib/services/seedRegistryService';
 import {
   PROJECT_REPO_PROPOSAL_SIGNALS,
+  SEED_MATCH_RESULTS,
   isOrganizationSeedSource,
   isProjectRepoProposalSignal,
+  isSeedMatchResult,
 } from '@/lib/projectRepos/vocabulary';
+import { seedEntryFitsRow } from '@/lib/projectRepos/seedMatching';
 import {
   HOSTING_SIZES,
   HOSTING_TARGETS,
   HOSTING_USE_CASES,
   isHostingSize,
   isHostingTarget,
+  type HostingTarget,
   isHostingUseCase,
 } from '@/lib/hosting/vocabulary';
 import {
@@ -55,6 +61,7 @@ import {
   ProjectRepoNameTakenError,
   ProjectRepoNotFoundError,
   ProjectRepoNotMotirHostedError,
+  ProjectRepoSeedRefusedError,
   ProjectRepoStateTransitionError,
   RealizedRepoAlreadyClaimedError,
 } from '@/lib/projectRepos/errors';
@@ -190,6 +197,55 @@ function validateSeedSource(raw: string): string {
  * ADR fixes: the column is what the establish step maps to copy, so a value it
  * cannot map is a bug to reject at the write, not one to discover at render.
  */
+/** Validate the matching's recorded result (MOTIR-709) against its closed list. */
+function validateSeedMatch(raw: unknown): ProjectRepoSeedMatchDto | null {
+  if (raw === undefined || raw === null) return null;
+  if (!isSeedMatchResult(raw)) {
+    throw new ProjectRepoInvalidFieldError(
+      'seedMatch',
+      `it must be one of ${SEED_MATCH_RESULTS.join(', ')}.`,
+    );
+  }
+  return raw;
+}
+
+/**
+ * Check a person's re-point (MOTIR-709; decision MOTIR-706 v2 §3.5) and answer
+ * the key to store — the entry's CURRENT key, so a legacy key is never written
+ * anew. Role and target are HARD: an entry of another role, or one that cannot
+ * deploy where the row runs, is refused rather than stored. Each refusal names
+ * its rule, and nothing is written.
+ */
+async function checkRepoint(
+  seedSource: string,
+  row: { role: ProjectRepoRole; hostingTarget: HostingTarget | null },
+): Promise<string> {
+  const entry = await seedRegistryService.findEntry(seedSource);
+  if (!entry) {
+    throw new ProjectRepoSeedRefusedError('unknown', seedSource, 'no starter has that key.');
+  }
+  if (entry.status !== 'active') {
+    throw new ProjectRepoSeedRefusedError('retired', seedSource, 'that starter has been retired.');
+  }
+  if (entry.role !== row.role && entry.role !== 'any') {
+    throw new ProjectRepoSeedRefusedError(
+      'role_mismatch',
+      seedSource,
+      `that starter is for a ${entry.role} repository, and this one is ${row.role}.`,
+    );
+  }
+  if (!seedEntryFitsRow(entry, row)) {
+    throw new ProjectRepoSeedRefusedError(
+      'target_mismatch',
+      seedSource,
+      row.hostingTarget === null
+        ? 'that starter deploys to a hosting target, and this repository runs on none.'
+        : `that starter does not deploy to ${row.hostingTarget}, where this repository runs.`,
+    );
+  }
+  return entry.key;
+}
+
 function validateProposalSignal(raw: unknown): ProjectRepoProposalSignalDto | null {
   if (raw === undefined || raw === null) return null;
   if (!isProjectRepoProposalSignal(raw)) {
@@ -337,6 +393,29 @@ export const projectRepoSetService = {
   },
 
   /**
+   * The seeds a person may re-point this row to (MOTIR-709), one page at a time:
+   * the ACTIVE registry entries of the row's role — and the any-role
+   * `initialised` — that pass the row's hosting target, exactly the entries
+   * `patchRow` would accept. For MOTIR-712's picker; a browse read, since seeing
+   * the choices is not changing them.
+   */
+  async listCompatibleSeeds(
+    rowId: string,
+    page: SeedRegistryPage,
+    ctx: ServiceContext,
+  ): Promise<SeedRegistryEntryListDto> {
+    const row = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      projectRepoRepository.findById(rowId, ctx.workspaceId, tx),
+    );
+    if (!row) throw new ProjectRepoNotFoundError(rowId);
+    await projectAccessService.assertCanBrowse(row.projectId, ctx);
+    return seedRegistryService.listCompatible(
+      { role: row.role, hostingTarget: row.hostingTarget },
+      page,
+    );
+  },
+
+  /**
    * The rows carrying a given ROLE, in set order — a LIST, because a role may
    * repeat (ADR §1.2). A caller resolving an item's repo pin by role must treat
    * `length !== 1` as unresolvable (§5.3: no match → null; more than one → null,
@@ -451,6 +530,7 @@ export const projectRepoSetService = {
         (await seedRegistryService.defaultSeedSourceForRole(input.role as ProjectRepoRole)),
     );
     const proposalSignal = validateProposalSignal(input.proposalSignal);
+    const seedMatch = validateSeedMatch(input.seedMatch);
 
     const row = await inProject(projectId, ctx, 'edit', async (tx) => {
       const clash = await projectRepoRepository.findByProjectAndNameInsensitive(
@@ -471,6 +551,7 @@ export const projectRepoSetService = {
             name,
             seedSource,
             proposalSignal,
+            seedMatch,
             state: 'proposed',
             position: keyForAppend(last),
           },
@@ -513,12 +594,36 @@ export const projectRepoSetService = {
     const label = 'label' in input ? validateLabel(input.label) : undefined;
 
     return inLockedRow(rowId, ctx, async (row, tx) => {
+      // A re-point's own refusals come first, each naming its rule (MOTIR-709):
+      // the organisation's repository is never seeded (D1), and a row past
+      // `proposed` / `failed` already has its repository, or one on the way.
+      if (seedSource !== undefined && isOrganizationSeedSource(row.seedSource)) {
+        throw new ProjectRepoSeedRefusedError(
+          'organization_row',
+          seedSource,
+          "it is the organisation's own repository, which Motir never seeds.",
+        );
+      }
+      if (seedSource !== undefined && !PLAN_EDITABLE_STATES.includes(row.state)) {
+        throw new ProjectRepoSeedRefusedError(
+          'not_editable',
+          seedSource,
+          `a ${row.state} repository already exists or is being created.`,
+        );
+      }
       if (wantsPlanEdit && !PLAN_EDITABLE_STATES.includes(row.state)) {
         throw new ProjectRepoInvalidFieldError(
           'state',
           `a ${row.state} row's role / name / seed source can no longer be edited (only ${PLAN_EDITABLE_STATES.join(' or ')} rows can); its label still can.`,
         );
       }
+      const repointed =
+        seedSource !== undefined
+          ? await checkRepoint(seedSource, {
+              role: (input.role ?? row.role) as ProjectRepoRole,
+              hostingTarget: row.hostingTarget,
+            })
+          : undefined;
       if (name !== undefined) {
         const clash = await projectRepoRepository.findByProjectAndNameInsensitive(
           row.projectId,
@@ -536,7 +641,9 @@ export const projectRepoSetService = {
             ...(input.role !== undefined ? { role: input.role as ProjectRepoRole } : {}),
             ...(name !== undefined ? { name } : {}),
             ...(label !== undefined ? { label } : {}),
-            ...(seedSource !== undefined ? { seedSource } : {}),
+            // A person's choice is authoritative and is not the matching's, so
+            // the recorded match result is cleared with it.
+            ...(repointed !== undefined ? { seedSource: repointed, seedMatch: null } : {}),
           },
           tx,
         );
@@ -642,6 +749,7 @@ export const projectRepoSetService = {
           name: row.name,
           seedSource: row.seedSource,
           proposalSignal: row.proposalSignal,
+          seedMatch: row.seedMatch,
           state: 'proposed',
           position: row.position,
         },

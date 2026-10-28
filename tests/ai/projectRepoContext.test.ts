@@ -45,7 +45,7 @@ import {
   type HostingTarget,
   type HostingUseCase,
 } from '@/lib/hosting/vocabulary';
-import { starterByHostingTarget } from '@/lib/projectRepos/seedMatching';
+import { seedRegistryService } from '@/lib/services/seedRegistryService';
 import {
   SEED_SOURCE_ORGANIZATION,
   SEED_SOURCE_PLATFORM_STARTER,
@@ -209,7 +209,7 @@ describe('resolveProjectRepoContext', () => {
           ...UNHOSTED,
         },
       ],
-      starterByTarget: starterByHostingTarget(),
+      starterByTarget: await seedRegistryService.starterByHostingTarget(),
     });
     // Two DISTINCT refs for one role — the property the whole field exists for.
     expect(new Set(repositories!.repos.map((r) => r.ref)).size).toBe(2);
@@ -327,7 +327,9 @@ describe('MOTIR-10014 — owner inputs, hosting and the starter per target', () 
     const repositories = await resolveProjectRepoContext(ctx.projectId, ctx);
 
     expect(Object.keys(repositories!.starterByTarget)).toEqual([...HOSTING_TARGETS]);
-    expect(repositories!.starterByTarget).toEqual(starterByHostingTarget());
+    expect(repositories!.starterByTarget).toEqual(
+      await seedRegistryService.starterByHostingTarget(),
+    );
   });
 });
 
@@ -417,7 +419,7 @@ describe('the planning-job ENVELOPE', () => {
             ...UNHOSTED,
           },
         ],
-        starterByTarget: starterByHostingTarget(),
+        starterByTarget: await seedRegistryService.starterByHostingTarget(),
       },
     });
   });

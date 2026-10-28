@@ -13,6 +13,7 @@ import {
   ProjectRepoNameTakenError,
   ProjectRepoNotFoundError,
   ProjectRepoNotTransferableError,
+  ProjectRepoSeedRefusedError,
   ProjectRepoStateTransitionError,
   ProjectRepoTakeoverStateError,
   RealizedRepoAlreadyClaimedError,
@@ -49,6 +50,9 @@ import { OrganizationNotFoundError, OrgForbiddenError } from '@/lib/organization
  *     on the add paths, MOTIR-4678 — see the note at the arm)
  *   AiPlanRequiredError → 402 · AiPlanUnknownError → 503 (the paid-AI-plan gate
  *     on establish, MOTIR-6909)
+ *   ProjectRepoSeedRefusedError → 409 when the row's state moved on, else 422
+ *     (a re-point to a seed the row may not start from, MOTIR-709); the body
+ *     carries `refusal`, so a client can tell the rules apart
  */
 export function mapProjectRepoError(err: unknown): NextResponse | null {
   if (err instanceof ProjectNotFoundError || err instanceof ProjectRepoNotFoundError) {
@@ -77,6 +81,12 @@ export function mapProjectRepoError(err: unknown): NextResponse | null {
     err instanceof GithubIdentityRequiredError
   ) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
+  }
+  if (err instanceof ProjectRepoSeedRefusedError) {
+    return NextResponse.json(
+      { code: err.code, refusal: err.refusal, error: err.message },
+      { status: err.refusal === 'not_editable' ? 409 : 422 },
+    );
   }
   if (err instanceof ProjectRepoInvalidFieldError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 422 });

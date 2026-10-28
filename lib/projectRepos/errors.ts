@@ -145,6 +145,41 @@ export class ProjectRepoInvalidFieldError extends Error {
   }
 }
 
+/** Why a person's re-point of a row's seed was refused (MOTIR-709). */
+export type ProjectRepoSeedRefusal =
+  /** No registry entry has the key, current or legacy. */
+  | 'unknown'
+  /** The entry is retired: never offered, never established from. */
+  | 'retired'
+  /** The entry seeds another role. */
+  | 'role_mismatch'
+  /** The entry does not deploy to the row's hosting target (or deploys somewhere
+   *  when the row's role runs nowhere the hosting port reaches). */
+  | 'target_mismatch'
+  /** The row is past `proposed` / `failed`: its repository exists or is being made. */
+  | 'not_editable'
+  /** The row is the organisation's own repository, which Motir never seeds (D1). */
+  | 'organization_row';
+
+/**
+ * A person tried to re-point a row's `seedSource` to an entry it may not seed
+ * from (MOTIR-709; decision MOTIR-706 v2 §3.5 — role and target are HARD, so a
+ * starter that cannot deploy where the row runs is refused, not merely
+ * discouraged). `refusal` says which rule; nothing is stored. → 409 for
+ * `not_editable` (the row's state moved on), 422 for every other value.
+ */
+export class ProjectRepoSeedRefusedError extends Error {
+  readonly code = 'PROJECT_REPO_SEED_REFUSED' as const;
+  constructor(
+    readonly refusal: ProjectRepoSeedRefusal,
+    readonly seedSource: string,
+    detail: string,
+  ) {
+    super(`This repository cannot start from "${seedSource}": ${detail}`);
+    this.name = 'ProjectRepoSeedRefusedError';
+  }
+}
+
 // ── The TAKE-IT-OVER saga (MOTIR-711) ───────────────────────────────────────
 
 /**
