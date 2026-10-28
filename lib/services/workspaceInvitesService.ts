@@ -411,23 +411,30 @@ export const workspaceInvitesService = {
     );
     if (!workspace) throw new NotAMemberError(args.actorUserId, args.workspaceId);
 
-    const token = await db.$transaction(async (tx) => {
-      const minted = await mintInvite(
-        {
-          workspaceId: stored.workspaceId,
-          email: stored.email,
-          workspaceRole: stored.workspaceRole,
-          inviterUserId: stored.inviterUserId,
-          accessScope: stored.accessScope,
-          projectIds: stored.projectIds,
-          resentByUserId: args.actorUserId,
-        },
-        tx,
-      );
-      const retired = await verificationRepository.retireUnexpiredByIdentifier(row.identifier, tx);
-      if (retired === 0) throw new InviteExpiredOrMissingError();
-      return minted;
-    });
+    // Bound like the read above, so nothing in the transaction runs dark.
+    const token = await withWorkspaceContext(
+      { userId: args.actorUserId, workspaceId: args.workspaceId },
+      async (tx) => {
+        const minted = await mintInvite(
+          {
+            workspaceId: stored.workspaceId,
+            email: stored.email,
+            workspaceRole: stored.workspaceRole,
+            inviterUserId: stored.inviterUserId,
+            accessScope: stored.accessScope,
+            projectIds: stored.projectIds,
+            resentByUserId: args.actorUserId,
+          },
+          tx,
+        );
+        const retired = await verificationRepository.retireUnexpiredByIdentifier(
+          row.identifier,
+          tx,
+        );
+        if (retired === 0) throw new InviteExpiredOrMissingError();
+        return minted;
+      },
+    );
 
     // The email names whoever pressed Resend; the list keeps the original inviter.
     await enqueueInviteEmail({
