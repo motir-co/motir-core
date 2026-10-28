@@ -44,9 +44,9 @@ export const IDEA_CATEGORY_LABELS: Record<IdeaCategory, string> = {
 };
 
 /**
- * The label of every category in each of the ten translation locales (bug
+ * The label of every category in each of the eleven translation locales (bug
  * MOTIR-8082). A total `Record<IdeaTranslationLocale, Record<IdeaCategory,
- * string>>`, so a new enum value without all ten labels — or a new locale
+ * string>>`, so a new enum value without all eleven labels — or a new locale
  * without its column — is a compile error. English is `IDEA_CATEGORY_LABELS`.
  */
 export const IDEA_CATEGORY_TRANSLATIONS: Record<
@@ -88,6 +88,42 @@ export const IDEA_CATEGORY_TRANSLATIONS: Record<
     silver_economy: '银发经济',
     independent_work: '独立工作',
     ai_infrastructure: 'AI 基础设施',
+  },
+  zh_tw: {
+    legal: '法務',
+    finance: '財務',
+    security_compliance: '安全與合規',
+    customer_support: '客戶支援',
+    localization: '本地化',
+    growth_marketing: '成長與行銷',
+    sales: '銷售',
+    people_hr: '人事與人力資源',
+    operations: '營運',
+    engineering: '工程',
+    ecommerce: '電子商務',
+    healthcare: '醫療健康',
+    education: '教育',
+    financial_services: '金融服務',
+    real_estate: '房地產',
+    logistics: '物流',
+    construction: '建築',
+    agriculture: '農業',
+    pets: '寵物',
+    family_care: '家庭照護',
+    public_sector: '公共部門',
+    entertainment_media: '娛樂與媒體',
+    hospitality_travel: '旅宿與旅遊',
+    mobility: '交通與汽車',
+    energy_climate: '能源與氣候',
+    manufacturing: '製造業',
+    local_services: '在地生活服務',
+    personal_growth: '個人成長',
+    personal_finance: '個人理財',
+    health_wellness: '健康與養生',
+    social_community: '社交與社群',
+    silver_economy: '銀髮經濟',
+    independent_work: '獨立工作',
+    ai_infrastructure: 'AI 基礎設施',
   },
   ja: {
     legal: '法務',

@@ -15050,6 +15050,10 @@ model IdeaTagAssignment {
 /// name is the UI's type, and this one means "the non-English ones".
 enum IdeaTranslationLocale {
   zh
+  // Traditional Chinese (Taiwan). An enum value cannot hold a hyphen, so it is
+  // stored as `zh_tw`; the public reads take and answer `zh-tw`, motir.co's code
+  // (lib/ideas/publicLocale.ts).
+  zh_tw
   ja
   ko
   de
