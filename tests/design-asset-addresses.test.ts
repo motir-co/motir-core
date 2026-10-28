@@ -255,16 +255,8 @@ function sweep(): Finding[] {
 // it finds is its own card), and MOTIR-2340 then corrected the assets and
 // deleted the rows. A stale address belongs in a fix, never in this table.
 const KNOWN: { file: string; address: string; why: string }[] = [
-  // ── FORWARD-LOOKING: the workspace address room (Story MOTIR-4528 · MOTIR-9513) ──
-  //  The design names the room's address before the workspace-settings control
-  //  card builds `app/(authed)/settings/workspace/public-address/page.tsx`. These
-  //  rows stop applying, and the expired arm below fails, the moment that page
-  //  lands — the card that builds it deletes them.
-  {
-    file: 'design/workspace-address/design-notes.md',
-    address: '/settings/workspace/public-address',
-    why: 'Forward-looking: the workspace address room is drawn before its page is built. Delete this row when `app/(authed)/settings/workspace/public-address/page.tsx` lands.',
-  },
+  // ── ✅ RETIRED 2026-10-28 (MOTIR-9514) — the workspace address room's
+  //  forward-looking row stopped applying when its page landed, and was deleted.
   // ── ✅ RETIRED 2026-09-11 (MOTIR-5170, under Bug MOTIR-4925) ──────────────
   //  Three FORWARD-LOOKING rows stood here for `/settings/project/approvals` —
   //  MOTIR-4942's design named the room's address in `design/projects/`,
