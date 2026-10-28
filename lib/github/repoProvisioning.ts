@@ -3,6 +3,11 @@ import { provisioningOrgLogin } from '@/lib/ciMetering/config';
 import { OrgTargetAuthError, resolveOrgAuth, type GithubOrgTarget } from '@/lib/github/orgTarget';
 import type { ProjectRepoRoleDto } from '@/lib/dto/projectRepos';
 import { SEED_REGISTRY_INITIALISED_SOURCE, type ResolvedSeedDto } from '@/lib/dto/seedRegistry';
+import {
+  DESIGN_MANIFEST_PATH,
+  designSeedFor,
+  type StoredDesignChoice,
+} from '@/lib/projectRepos/designChoiceSeed';
 
 // The repo-CREATION boundary (Story MOTIR-1775 · MOTIR-1781) — the one module
 // that talks to GitHub about making a repository exist. Everything above it
@@ -176,6 +181,25 @@ export class SeedTemplateUnavailableError extends RepoProvisioningError {
   }
 }
 
+/**
+ * The repository exists and is seeded, but the project's design choice could not
+ * be committed to it (MOTIR-1529). The repository is KEPT — it is a real artifact
+ * — and the row is resumable: the retry adopts it and applies the choice, and a
+ * choice that already landed is not committed twice.
+ */
+export class DesignChoiceNotAppliedError extends RepoProvisioningError {
+  readonly code = 'DESIGN_CHOICE_NOT_APPLIED' as const;
+  constructor(
+    readonly repoName: string,
+    readonly status: number | null,
+  ) {
+    super(
+      `Motir created "${repoName}" but could not apply the project's design choice to it` +
+        `${status === null ? '' : ` (HTTP ${status})`}. The repository is kept — retry this row to apply it.`,
+    );
+  }
+}
+
 // ── Inputs / outputs ────────────────────────────────────────────────────────
 
 export interface ProvisionRepoInput {
@@ -190,6 +214,14 @@ export interface ProvisionRepoInput {
   seed: ResolvedSeedDto;
   /** The owning project's display name — the README/description names it. */
   projectName: string;
+  /**
+   * The project's stored design choice (MOTIR-1529), to apply to a repository
+   * generated from a design-system starter. Absent: the caller did not ask, and
+   * nothing is applied. `{ choice: null }`: no choice was stored, so the registry
+   * defaults are written. Only a TEMPLATE whose tree carries
+   * `motir.design.json` is touched; every other repository gets no extra call.
+   */
+  design?: { choice: StoredDesignChoice | null };
 }
 
 export interface ProvisionedRepo {
@@ -607,6 +639,14 @@ export const repoProvisioningClient = {
         // one we can claim.
         const existing = await readRepository(org, input.name, token);
         if (!existing) throw new RepoNameTakenOnHostError(input.name);
+        // The retry of a row whose design commit failed lands HERE: the
+        // repository exists, so the choice is applied to it now. Idempotent — a
+        // choice that already landed is read back and not committed again.
+        if (templated && input.design) {
+          const ready = await awaitReady(org, input.name, token);
+          await applyDesignChoice(org, ready.name, token, ready.defaultBranch, input.design.choice);
+          return { installationId, ...ready, adopted: true, seedHeadSha: null };
+        }
         return { installationId, ...existing, adopted: true, seedHeadSha: null };
       }
       if (template && isTemplateRefusal(res.status, body)) {
@@ -629,6 +669,16 @@ export const repoProvisioningClient = {
     // usable repository, and failing the whole row over a missing placeholder
     // would turn a cosmetic gap into a lost artifact.
     if (!templated) await seedCiStub(org, ready.name, token, ready.defaultBranch);
+
+    // The project's design choice, BEFORE the row is reported established and
+    // before the seed head is read, so the head the row records includes it.
+    // Unlike the stub this is NOT best-effort: a repository that ignores the
+    // choice the user made is the defect this commit exists to prevent, so a
+    // failure fails the row (resumably). An initialised repository cannot carry
+    // the manifest, so it is not even asked.
+    if (templated && input.design) {
+      await applyDesignChoice(org, ready.name, token, ready.defaultBranch, input.design.choice);
+    }
 
     // Read AFTER every seeding write, so the stub's commit counts as seed too.
     const seedHeadSha = await readBranchHead(org, ready.name, token, ready.defaultBranch);
@@ -767,6 +817,123 @@ async function seedCiStub(org: string, name: string, token: string, branch: stri
       err instanceof Error ? err.message : 'unknown',
     );
   }
+}
+
+// ── The project's design choice (MOTIR-1529) ───────────────────────────────
+
+/**
+ * Apply the project's design choice to a repository generated from a template,
+ * as ONE commit on its default branch writing `motir.design.json` (the ids the
+ * root layout reads) and `DESIGN.md` (naming them for later agent runs).
+ *
+ * - The manifest is also the MARKER: a template without it does not use
+ *   `@motir/design-system`, and its repository is left exactly as generated.
+ * - IDEMPOTENT: both files are read first, and when they already hold the
+ *   resolved content nothing is written. That is what makes a retry after a
+ *   failure safe — whether the earlier commit landed or not, the branch ends with
+ *   exactly one design commit.
+ * - The ref update is a fast-forward (`force: false`): a branch that moved under
+ *   us is a failure to retry, never history to overwrite.
+ *
+ * Every refusal is {@link DesignChoiceNotAppliedError}; no GitHub body escapes.
+ */
+async function applyDesignChoice(
+  org: string,
+  name: string,
+  token: string,
+  branch: string,
+  choice: StoredDesignChoice | null,
+): Promise<'not_design_system' | 'already_applied' | 'committed'> {
+  const repo = `${GITHUB_API}/repos/${encodeURIComponent(org)}/${encodeURIComponent(name)}`;
+  const auth = { authorization: `Bearer ${token}` };
+  const call = async (
+    url: string,
+    init: { method: string; body?: unknown },
+    accept: number[] = [],
+  ): Promise<{ status: number; body: Record<string, unknown> | null }> => {
+    let res: Response;
+    try {
+      res = await request(url, {
+        method: init.method,
+        headers: auth,
+        ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
+      });
+    } catch {
+      throw new DesignChoiceNotAppliedError(name, null);
+    }
+    if (!res.ok && !accept.includes(res.status)) {
+      throw new DesignChoiceNotAppliedError(name, res.status);
+    }
+    return { status: res.status, body: await readJson(res) };
+  };
+  /** A file's text on the branch, or null when it is not there. */
+  const readFile = async (path: string): Promise<string | null> => {
+    const { status, body } = await call(
+      `${repo}/contents/${path}?ref=${encodeURIComponent(branch)}`,
+      { method: 'GET' },
+      [404],
+    );
+    if (status === 404) return null;
+    const content = body?.['content'];
+    return typeof content === 'string' ? Buffer.from(content, 'base64').toString('utf8') : null;
+  };
+
+  const manifest = await readFile(DESIGN_MANIFEST_PATH);
+  if (manifest === null) return 'not_design_system';
+
+  const seed = designSeedFor(choice);
+  if (seed.fallbacks.length > 0) {
+    console.warn(
+      `[repoProvisioning] design choice for ${org}/${name} fell back to the registry default ` +
+        `on: ${seed.fallbacks.join(', ')}. Applied:`,
+      seed.applied,
+    );
+  }
+
+  const current: (string | null)[] = [manifest];
+  for (const file of seed.files.slice(1)) current.push(await readFile(file.path));
+  if (seed.files.every((file, i) => current[i] === file.content)) return 'already_applied';
+
+  const ref = await call(`${repo}/git/ref/heads/${encodeURIComponent(branch)}`, { method: 'GET' });
+  const head = asRecord(ref.body?.['object'])?.['sha'];
+  if (typeof head !== 'string') throw new DesignChoiceNotAppliedError(name, ref.status);
+  const parent = await call(`${repo}/git/commits/${head}`, { method: 'GET' });
+  const baseTree = asRecord(parent.body?.['tree'])?.['sha'];
+  if (typeof baseTree !== 'string') throw new DesignChoiceNotAppliedError(name, parent.status);
+
+  const tree = await call(`${repo}/git/trees`, {
+    method: 'POST',
+    body: {
+      base_tree: baseTree,
+      tree: seed.files.map((file) => ({
+        path: file.path,
+        mode: '100644',
+        type: 'blob',
+        content: file.content,
+      })),
+    },
+  });
+  const treeSha = tree.body?.['sha'];
+  if (typeof treeSha !== 'string') throw new DesignChoiceNotAppliedError(name, tree.status);
+
+  const commit = await call(`${repo}/git/commits`, {
+    method: 'POST',
+    body: {
+      message:
+        "chore(design): apply the project's design choice " +
+        `(${seed.applied.styleId} · ${seed.applied.paletteId} · ${seed.applied.typeId})`,
+      tree: treeSha,
+      parents: [head],
+    },
+  });
+  const commitSha = commit.body?.['sha'];
+  if (typeof commitSha !== 'string') throw new DesignChoiceNotAppliedError(name, commit.status);
+
+  await call(`${repo}/git/refs/heads/${encodeURIComponent(branch)}`, {
+    method: 'PATCH',
+    body: { sha: commitSha, force: false },
+  });
+  return 'committed';
 }
 
 // ── Shared with the starter promotion (MOTIR-710) ──────────────────────────

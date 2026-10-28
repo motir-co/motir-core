@@ -17,12 +17,15 @@ import { fleetRunnerVariableService } from '@/lib/services/fleetRunnerVariableSe
 import { fleetGithubOrgAssignmentService } from '@/lib/services/fleetGithubOrgAssignmentService';
 import type { GithubOrgTarget } from '@/lib/github/orgTarget';
 import { enqueueCodeGraphIndex } from '@/lib/github/indexEnqueue';
+import { getPreplanState } from '@/lib/ai/motirAiClient';
+import type { StoredDesignChoice } from '@/lib/projectRepos/designChoiceSeed';
 import {
   RepoHostOrgUnavailableError,
   RepoNameTakenOnHostError,
   RepoProvisioningError,
   repoProvisioningClient,
   type ProvisionedRepo,
+  type ProvisionRepoInput,
 } from '@/lib/github/repoProvisioning';
 import {
   AiPlanRequiredError,
@@ -227,6 +230,11 @@ export const projectRepoProvisioningService = {
     // which is exactly what the `|| 'ubuntu-latest'` fallback is for.
     await fleetRunnerVariableService.ensureQuietly(hosting.target);
 
+    // THE PROJECT'S DESIGN CHOICE, READ ONCE FOR THE RUN (MOTIR-1529). A row
+    // seeded from a design-system starter wears it from its first commit; every
+    // other row ignores it. Read only when something will be created.
+    const design = willAttempt ? { choice: await readDesignChoice(projectId, ctx) } : undefined;
+
     const results: EstablishRowResult[] = [];
     // SEQUENTIAL on purpose — see the module header.
     for (const row of rows) {
@@ -249,7 +257,7 @@ export const projectRepoProvisioningService = {
         });
         continue;
       }
-      results.push(await establishRow(row, projectName, hosting, ctx));
+      results.push(await establishRow(row, projectName, hosting, design, ctx));
     }
 
     return { projectId, rows: results };
@@ -288,6 +296,35 @@ async function planHosting(organizationId: string, willAttempt: boolean): Promis
   return {};
 }
 
+/**
+ * The project's stored design choice, from the pre-plan session motir-ai keeps
+ * (`GET /v1/preplan`, the read the onboarding wizard resumes from), or null.
+ *
+ * Never fails the run: a project that never reached the design step, an
+ * unreachable motir-ai and a deployment without one all read as "no choice", and
+ * the repository wears the registry defaults — the outcome the card asks for
+ * when no choice is stored. The ids are NOT validated here; the apply resolves
+ * each through the package's own registries and logs any fallback.
+ */
+async function readDesignChoice(
+  projectId: string,
+  ctx: ServiceContext,
+): Promise<StoredDesignChoice | null> {
+  try {
+    const state = await getPreplanState({
+      coreWorkspaceId: ctx.workspaceId,
+      coreProjectId: projectId,
+    });
+    return state.session?.designChoice ?? null;
+  } catch (err) {
+    console.warn(
+      '[projectRepoProvisioningService] design choice not read; the registry defaults apply:',
+      err instanceof Error ? err.message : 'unknown',
+    );
+    return null;
+  }
+}
+
 /** The project's display name — it goes into the repository description, which
  *  GitHub also renders into an initialised repo's README (ADR §2's "a README
  *  naming the project and the row's role"). */
@@ -308,6 +345,7 @@ async function establishRow(
   row: ProjectRepoDto,
   projectName: string,
   hosting: HostingPlan,
+  design: ProvisionRepoInput['design'],
   ctx: ServiceContext,
 ): Promise<EstablishRowResult> {
   // CLAIM the row first (`proposed | failed → creating`). This is the concurrency
@@ -347,6 +385,7 @@ async function establishRow(
         role: row.role,
         seed,
         projectName,
+        design,
       },
       hosting.target,
     );

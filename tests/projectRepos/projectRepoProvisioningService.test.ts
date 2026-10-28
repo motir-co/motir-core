@@ -1435,3 +1435,112 @@ describe('seeds resolve through the seed registry (MOTIR-708)', () => {
     expect(retry.rows.map((r) => r.outcome)).toEqual(['created']);
   });
 });
+
+describe('the project’s stored design choice reaches a design-system repo (MOTIR-1529)', () => {
+  const CHOICE = { styleId: 'neo-brutalism', paletteId: 'cobalt', typeId: 'grotesk' };
+  const MANIFEST = `${JSON.stringify({ styleId: 'warm-editorial', paletteId: 'motir', typeId: 'motir' }, null, 2)}\n`;
+
+  /** Put a design-system starter and motir-ai in front of the suite's GitHub:
+   *  the template carries the manifest, the git data API accepts one commit, and
+   *  `GET /v1/preplan` answers `preplan` (or fails when it is null). */
+  function wearDesignSystem(preplan: Response | null): void {
+    vi.stubEnv('MOTIR_AI_URL', 'https://ai.test');
+    vi.stubEnv('MOTIR_AI_SERVICE_TOKEN', 'svc');
+    const github = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation(async (url, init) => {
+      const u = String(url);
+      const method = init?.method ?? 'GET';
+      if (u.startsWith('https://ai.test/v1/preplan')) {
+        calls.push({ url: u, method, body: null });
+        if (!preplan) return json(503, { type: 'about:blank', title: 'down', status: 503 });
+        return preplan;
+      }
+      if (u.includes('/contents/motir.design.json')) {
+        return json(200, { content: Buffer.from(MANIFEST).toString('base64') });
+      }
+      if (u.includes('/contents/DESIGN.md')) return json(404, { message: 'Not Found' });
+      if (u.endsWith('/git/ref/heads/main')) return json(200, { object: { sha: 'head1' } });
+      if (u.endsWith('/git/commits/head1')) return json(200, { tree: { sha: 'tree1' } });
+      if (u.includes('/git/')) {
+        calls.push({
+          url: u,
+          method,
+          body: typeof init?.body === 'string' ? JSON.parse(init.body) : null,
+        });
+        return json(method === 'PATCH' ? 200 : 201, { sha: `${method}-sha` });
+      }
+      return github(url as string, init);
+    });
+  }
+
+  function writtenManifest(): unknown {
+    const tree = calls.find((c) => c.url.endsWith('/git/trees'))!;
+    const entries = tree.body?.['tree'] as { path: string; content: string }[];
+    return JSON.parse(entries.find((e) => e.path === 'motir.design.json')!.content);
+  }
+
+  it('reads the choice from the pre-plan session and commits it to the web row', async () => {
+    wearDesignSystem(
+      json(200, { session: { designChoice: CHOICE }, docs: [], revisions: [], diffs: [] }),
+    );
+    const fx = await makeWorkItemFixture();
+    const rowId = await addRow(fx, 'web', 'acme-web');
+
+    const result = await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
+
+    expect(result.rows[0]).toMatchObject({ rowId, outcome: 'created' });
+    const read = calls.find((c) => c.url.startsWith('https://ai.test/v1/preplan'))!;
+    expect(read.url).toContain(`coreProjectId=${fx.projectId}`);
+    expect(writtenManifest()).toEqual(CHOICE);
+    expect(calls.filter((c) => c.url.endsWith('/git/commits') && c.method === 'POST')).toHaveLength(
+      1,
+    );
+  });
+
+  it('an unreachable motir-ai means the registry defaults, and the row is still created', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    wearDesignSystem(null);
+    const fx = await makeWorkItemFixture();
+    const rowId = await addRow(fx, 'web', 'acme-web');
+
+    const result = await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
+
+    expect(result.rows[0]).toMatchObject({ rowId, outcome: 'created' });
+    expect(writtenManifest()).toEqual({
+      styleId: 'warm-editorial',
+      paletteId: 'motir',
+      typeId: 'motir',
+    });
+  });
+
+  it('a failed design commit fails the row with its reason', async () => {
+    wearDesignSystem(json(200, { session: { designChoice: CHOICE }, docs: [] }));
+    const designed = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation(async (url, init) =>
+      String(url).endsWith('/git/refs/heads/main')
+        ? json(500, { message: 'boom' })
+        : designed(url as string, init),
+    );
+    const fx = await makeWorkItemFixture();
+    const rowId = await addRow(fx, 'web', 'acme-web');
+
+    const result = await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
+
+    expect(result.rows[0]).toMatchObject({
+      rowId,
+      outcome: 'failed',
+      failureCode: 'DESIGN_CHOICE_NOT_APPLIED',
+    });
+    expect((await readState(rowId, fx)).state).toBe('failed');
+  });
+
+  it('a row seeded with no template makes no design call and no extra commit', async () => {
+    wearDesignSystem(json(200, { session: { designChoice: CHOICE }, docs: [] }));
+    const fx = await makeWorkItemFixture();
+    await addRow(fx, 'api', 'acme-api');
+
+    await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
+
+    expect(calls.some((c) => c.url.includes('/git/'))).toBe(false);
+  });
+});
