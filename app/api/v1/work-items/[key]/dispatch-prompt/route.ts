@@ -116,8 +116,8 @@ function parseAutoApproveReplan(req: Request): boolean {
  * rather than a version, because a CLI built from `main` reports the same version
  * string as the release it is ahead of.
  */
-function parseAgentReport(req: Request): boolean {
-  const raw = new URL(req.url).searchParams.get('agentReport');
+function parseAgentReport(req: Request, param = 'agentReport'): boolean {
+  const raw = new URL(req.url).searchParams.get(param);
   if (raw === null) return false;
   const value = raw.trim().toLowerCase();
   return value === '1' || value === 'true';
@@ -156,6 +156,8 @@ export const GET = withV1Route<{ key: string }>(
       sessionBranch,
       findingsPolicy,
       runnerPostsAgentReport: parseAgentReport(ctx.req),
+      // MOTIR-10000: the client also posts the agent's `decisions`.
+      runnerPostsDecisions: parseAgentReport(ctx.req, 'agentReportDecisions'),
       ...(continueFrom ? { continueFrom } : {}),
     });
 

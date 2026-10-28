@@ -397,9 +397,9 @@ export const pl: McpSummaryTranslations = {
   },
   record_run_discrepancy: {
     summary:
-      'Runner, który zbudował element roboczy według planu błędnego tylko co do JAK, zapisuje, co zbudował inaczej — komentarz do elementu i wpis przebiegu, przyjęte do wiadomości.',
+      'Runner zapisuje, co zbudował inaczej niż według planu błędnego tylko co do JAK, oraz decyzje podjęte tam, gdzie plan milczał — komentarz do elementu i wpis przebiegu, przyjęte do wiadomości.',
     source:
-      'A runner that built a card through a plan wrong only about the HOW records what it built differently — a card comment and a run record, acknowledged.',
+      'A runner records what it built differently from a plan wrong only about the HOW, and the decisions it made where the plan was silent — a card comment and a run record, acknowledged.',
   },
   report_unbuildable_target: {
     summary:

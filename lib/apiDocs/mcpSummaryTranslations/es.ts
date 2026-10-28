@@ -401,9 +401,9 @@ export const es: McpSummaryTranslations = {
   },
   record_run_discrepancy: {
     summary:
-      'Un runner que construyó un elemento de trabajo con un plan equivocado solo en el CÓMO registra lo que construyó de otra forma: un comentario en el elemento y un registro de la ejecución, con acuse de recibo.',
+      'Un runner registra lo que construyó de otra forma que un plan equivocado solo en el CÓMO, y las decisiones que tomó donde el plan no decía nada: un comentario en el elemento y un registro de la ejecución, con acuse de recibo.',
     source:
-      'A runner that built a card through a plan wrong only about the HOW records what it built differently — a card comment and a run record, acknowledged.',
+      'A runner records what it built differently from a plan wrong only about the HOW, and the decisions it made where the plan was silent — a card comment and a run record, acknowledged.',
   },
   report_unbuildable_target: {
     summary:

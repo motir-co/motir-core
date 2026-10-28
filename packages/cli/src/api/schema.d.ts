@@ -1226,7 +1226,7 @@ export interface paths {
         put?: never;
         /**
          * Record that a run built through a card whose plan was wrong about the HOW
-         * @description The RUN records that its agent BUILT THROUGH `key`, a card the run holds, whose plan was wrong only about the route — the same record as the `record_run_discrepancy` MCP tool, sent by the CLI with the run’s own credential after the agent exits, from the points the agent wrote into its self-report. It writes ONE comment on the card listing every point (what the plan asked · what was built · why) and ONE finding on the card’s leg of THIS run. ONE record per leg: a second is refused `DISCREPANCY_ALREADY_RECORDED` and writes nothing. A card that is not an open leg of the run is refused `UNKNOWN_DISPATCH_RUN_CARD`. Only the operator who opened the run may record for it.
+         * @description The RUN records that its agent BUILT THROUGH `key`, a card the run holds, whose plan was wrong only about the route — the same record as the `record_run_discrepancy` MCP tool, sent by the CLI with the run’s own credential after the agent exits, from the points the agent wrote into its self-report. It writes ONE comment on the card listing every point (what the plan asked · what was built · why) — and every DECISION the agent made where the plan was silent (what it said · what was chosen · why), in their own section (MOTIR-10000) — and ONE finding on the card’s leg of THIS run. At least one point or one decision. ONE record per leg: a second is refused `DISCREPANCY_ALREADY_RECORDED` and writes nothing. A card that is not an open leg of the run is refused `UNKNOWN_DISPATCH_RUN_CARD`. Only the operator who opened the run may record for it.
          *
          *     Requires the `work_item:edit` permission.
          */
@@ -9300,6 +9300,8 @@ export interface operations {
                 autoApproveReplan?: string;
                 /** @description `1` when the CLIENT that will launch the agent posts what the agent writes into `$MOTIR_AGENT_REPORT` as `unbuildable`, `discrepancy` and `stop` (MOTIR-8810). With it, the STOP branch tells the agent to put its unbuildable reason in that file, and an agent with no Motir tools to put its discrepancy and its stop there too. Absent means no: the report goes through the `report_unbuildable_target` tool and neither file route is named, because a client that does not post them would drop them. ⚠️ It changes the TEXT only. */
                 agentReport?: string;
+                /** @description `1` when the CLIENT that will launch the agent also posts the `decisions` the agent writes into `$MOTIR_AGENT_REPORT` (MOTIR-10000). With it, and with `agentReport`, the prompt tells an agent with no Motir tools to record its decisions in that file. Absent means no: the decisions are recorded through `record_run_discrepancy` and listed in the pull request, and the file route is not named, because a client that does not post them would drop them. ⚠️ It changes the TEXT only. */
+                agentReportDecisions?: string;
                 /** @description The id of a DEAD run of this item to CONTINUE (MOTIR-6531, `motir continue`). The prompt then carries a CONTINUE block — how that run ended, when it was last heard from, who ran it, its branch and its open pull request — and a git workflow that CHECKS THAT BRANCH OUT instead of cutting one. The branch is the item’s open pull request’s head, else the one the run recorded on `checkout_ready`. A run that is still open, that succeeded, that holds no leg for this item or that belongs to another workspace is `CONTINUE_FROM_INVALID` (422). */
                 continueFrom?: string;
             };
@@ -13244,15 +13246,21 @@ export interface operations {
             };
             cookie?: never;
         };
-        /** @description The card that was built through, and every discrepancy in one list. */
+        /** @description The card that was built through, every discrepancy in one list, and every decision in another. */
         requestBody: {
             content: {
                 "application/json": {
                     key: string;
-                    points: {
+                    points?: {
                         planAsked: string;
                         built: string;
                         why: string;
+                    }[];
+                    decisions?: {
+                        planSaid: string;
+                        chose: string;
+                        why: string;
+                        alternatives?: string;
                     }[];
                 };
             };
