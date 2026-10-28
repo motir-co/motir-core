@@ -12162,5 +12162,7 @@
   "platformAdmin.jobs.dlqEmpty.title": "Nothing waiting",
   "platformAdmin.jobs.dlqEmpty.body": "No job has run out of attempts. Dead letters appear here when one does.",
   "platformAdmin.shell.navJobs": "Jobs",
-  "platformAdmin.users.log.action.jobs.dlq_replay": "Replayed a dead letter"
+  "platformAdmin.users.log.action.jobs.dlq_replay": "Replayed a dead letter",
+  "platformAdmin.users.log.action.seed_registry.promote": "Promoted a repository to a starter",
+  "platformAdmin.users.log.action.seed_registry.retire": "Retired a starter"
 }

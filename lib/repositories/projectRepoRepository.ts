@@ -212,6 +212,29 @@ function toNested(r: JoinedRow): ProjectRepoWithRealized {
 
 export const projectRepoRepository = {
   /**
+   * The row a STARTER PROMOTION names, in any workspace, with the repository it
+   * realised (Story MOTIR-704 · MOTIR-710). Inside a platform context only: the
+   * operator names a row by id with no tenant to bind, and the read passes on the
+   * `platform_staff` arms of `project_repository` and `github_repo`
+   * (`20261028220000_seed_registry_promotion`). Nothing else calls it.
+   */
+  async findForPromotionInTx(id: string, tx: Prisma.TransactionClient) {
+    return tx.projectRepo.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        workspaceId: true,
+        projectId: true,
+        name: true,
+        state: true,
+        seedSource: true,
+        takeoverState: true,
+        githubRepo: { select: { owner: true, name: true, organizationId: true } },
+      },
+    });
+  },
+
+  /**
    * A project's whole repository set, ORDERED (primary first), with each row's
    * realized `GithubRepo` joined — in ONE query.
    *

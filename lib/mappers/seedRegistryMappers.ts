@@ -23,6 +23,7 @@ export function toSeedRegistryEntryDto(row: SeedRegistryEntry): SeedRegistryEntr
     hostingTargets: row.hostingTargets,
     status: row.status,
     promotedFrom: row.promotedFrom,
+    promotedRef: row.promotedRef,
     promotedBy: row.promotedBy,
     promotedAt: row.promotedAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),

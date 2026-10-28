@@ -10405,6 +10405,10 @@
           },
           "jobs": {
             "dlq_replay": "Replayed a dead letter"
+          },
+          "seed_registry": {
+            "promote": "Promoted a repository to a starter",
+            "retire": "Retired a starter"
           }
         }
       }

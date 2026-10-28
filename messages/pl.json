@@ -10408,6 +10408,10 @@
           },
           "jobs": {
             "dlq_replay": "Ponownie uruchomiono niedostarczony wpis"
+          },
+          "seed_registry": {
+            "promote": "Awansowano repozytorium na szablon startowy",
+            "retire": "Wycofano szablon startowy"
           }
         }
       }

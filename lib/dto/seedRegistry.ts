@@ -35,7 +35,10 @@ export interface SeedRegistryEntryDto {
   /** Empty means the hosting port does not deploy what it seeds. */
   hostingTargets: HostingTarget[];
   status: SeedRegistryEntryStatusDto;
+  /** The `project_repository` row it was promoted from (MOTIR-710). */
   promotedFrom: string | null;
+  /** The commit SHA it was promoted at. */
+  promotedRef: string | null;
   promotedBy: string | null;
   promotedAt: string | null;
   createdAt: string;
@@ -79,6 +82,7 @@ export interface SeedRegistryEntryInput {
   hostingTargets: string[];
   status?: SeedRegistryEntryStatusDto;
   promotedFrom?: string | null;
+  promotedRef?: string | null;
   promotedBy?: string | null;
   promotedAt?: Date | null;
 }

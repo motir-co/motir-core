@@ -10402,6 +10402,10 @@
           },
           "jobs": {
             "dlq_replay": "데드 레터를 재실행함"
+          },
+          "seed_registry": {
+            "promote": "저장소를 스타터로 승격함",
+            "retire": "스타터를 폐기함"
           }
         }
       }

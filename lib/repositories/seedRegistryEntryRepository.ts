@@ -43,6 +43,7 @@ export interface SeedRegistryEntryData {
   hostingTargets: HostingTarget[];
   status: SeedRegistryEntryStatus;
   promotedFrom: string | null;
+  promotedRef: string | null;
   promotedBy: string | null;
   promotedAt: Date | null;
 }
@@ -117,6 +118,17 @@ export const seedRegistryEntryRepository = {
     });
   },
 
+  /** The entry promoted from this source row at this commit, if any — read
+   *  before a promotion copies anything, so a re-promotion skips the copy. */
+  async findByPromotion(
+    promotedFrom: string,
+    promotedRef: string,
+  ): Promise<SeedRegistryEntry | null> {
+    return db.seedRegistryEntry.findUnique({
+      where: { promotedFrom_promotedRef: { promotedFrom, promotedRef } },
+    });
+  },
+
   /** Every ACTIVE entry — what the default map is computed over. */
   async listActive(): Promise<SeedRegistryEntry[]> {
     return db.seedRegistryEntry.findMany({
@@ -141,6 +153,18 @@ export const seedRegistryEntryRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<SeedRegistryEntry> {
     return tx.seedRegistryEntry.create({ data });
+  },
+
+  /** The entry promoted from this source row at this commit, inside the promote's
+   *  transaction — what makes a re-promotion an update (MOTIR-710). */
+  async findByPromotionInTx(
+    promotedFrom: string,
+    promotedRef: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<SeedRegistryEntry | null> {
+    return tx.seedRegistryEntry.findUnique({
+      where: { promotedFrom_promotedRef: { promotedFrom, promotedRef } },
+    });
   },
 
   /** The entry a write is about to change, read inside that write's transaction. */

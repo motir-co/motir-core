@@ -10408,6 +10408,10 @@
           },
           "jobs": {
             "dlq_replay": "Ha rieseguito una dead-letter"
+          },
+          "seed_registry": {
+            "promote": "Ha promosso un repository a modello iniziale",
+            "retire": "Ha ritirato un modello iniziale"
           }
         }
       }

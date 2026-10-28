@@ -279,6 +279,12 @@ describe('the reason rule', () => {
     // A dead letter replayed from /admin/jobs (Story MOTIR-9980 · MOTIR-9985):
     // the screen has no reason field, so the service writes its default.
     'jobs.dlq_replay': 'inherited',
+    // The seed registry's curation (Story MOTIR-704 · MOTIR-710; decision
+    // MOTIR-706 v2 §3.6): reading the promoted row is a read; promoting and
+    // retiring are writes that say why.
+    'seed_registry.promote_source_read': 'never',
+    'seed_registry.promote': 'required',
+    'seed_registry.retire': 'required',
   } as const;
 
   it('every action carries the policy the ADR allocates it', () => {
@@ -308,6 +314,8 @@ describe('the reason rule', () => {
       'audit.verify',
       // The platform admin's list of capacity requests (MOTIR-9583).
       'fleet.capacity_request.list',
+      // The source row a starter promotion reads (MOTIR-710).
+      'seed_registry.promote_source_read',
     ];
     for (const action of Object.keys(PLATFORM_AUDIT_ACTIONS)) {
       const key = action as keyof typeof PLATFORM_AUDIT_ACTIONS;

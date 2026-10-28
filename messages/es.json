@@ -10408,6 +10408,10 @@
           },
           "jobs": {
             "dlq_replay": "Volvió a ejecutar un mensaje fallido"
+          },
+          "seed_registry": {
+            "promote": "Promovió un repositorio a plantilla inicial",
+            "retire": "Retiró una plantilla inicial"
           }
         }
       }

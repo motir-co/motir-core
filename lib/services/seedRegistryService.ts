@@ -204,6 +204,15 @@ export const seedRegistryService = {
   },
 
   /**
+   * The write path's checks on `input`, with nothing written — for a caller that
+   * must refuse before any side effect (MOTIR-710's promote, before it copies a
+   * repository on GitHub).
+   */
+  checkInput(input: SeedRegistryEntryInput): void {
+    checkEntry(input);
+  },
+
+  /**
    * Add an entry. Every vocabulary-checked field is refused BEFORE anything is
    * written, with the field and the value; a key (or legacy key) another entry
    * already holds, as either, is refused too, so a stored `seedSource` resolves
@@ -368,6 +377,7 @@ function checkEntry(input: SeedRegistryEntryInput): SeedRegistryEntryData {
     ) as PrismaHostingTarget[],
     status: checkStatus(input.status ?? 'active'),
     promotedFrom: input.promotedFrom ?? null,
+    promotedRef: input.promotedRef ?? null,
     promotedBy: input.promotedBy ?? null,
     promotedAt: input.promotedAt ?? null,
   };

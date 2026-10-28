@@ -10408,6 +10408,10 @@
           },
           "jobs": {
             "dlq_replay": "Dead Letter erneut ausgeführt"
+          },
+          "seed_registry": {
+            "promote": "Repository zur Startvorlage befördert",
+            "retire": "Startvorlage ausgemustert"
           }
         }
       }

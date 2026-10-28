@@ -10399,6 +10399,10 @@
           },
           "jobs": {
             "dlq_replay": "重放了一条死信"
+          },
+          "seed_registry": {
+            "promote": "将一个仓库提升为起始模板",
+            "retire": "下架了一个起始模板"
           }
         }
       }

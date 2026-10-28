@@ -143,9 +143,15 @@ describe('the `organization` platform-staff policy arms (MOTIR-4565)', () => {
     // provider-capacity alert state (`20261025230000_capacity_alert_state`):
     // platform-only, written by the alert job under `app.system_admin`, the
     // share set and both read from this tier.
+    // `seed_registry_entry` is MOTIR-708's seed registry — Motir's catalogue,
+    // readable by anyone and written solely from this tier
+    // (`20261028200000_seed_registry`). `project_repository` and `github_repo`
+    // carry MOTIR-710's SELECT-only arms, for the one cross-tenant read a starter
+    // promotion makes (`20261028220000_seed_registry_promotion`).
     expect(rows.map((r) => r.tablename)).toEqual([
       'capacity_alert_setting',
       'capacity_raised_alert',
+      'github_repo',
       'idea',
       'idea_evidence',
       'idea_evidence_translation',
@@ -164,6 +170,8 @@ describe('the `organization` platform-staff policy arms (MOTIR-4565)', () => {
       'platform_run_model',
       'platform_run_model_list',
       'project',
+      'project_repository',
+      'seed_registry_entry',
       'workspace',
       'workspace_membership',
     ]);

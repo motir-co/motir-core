@@ -12077,8 +12077,12 @@ model SeedRegistryEntry {
   /// deploy it (mobile, api, `initialised`).
   hostingTargets HostingTarget[]         @map("hosting_targets")
   status         SeedRegistryEntryStatus @default(active)
-  /// The Motir-created repository and ref an operator promoted it from (MOTIR-710).
+  /// The Motir-created `project_repository` row an operator promoted it from
+  /// (MOTIR-710), kept as text: the row may be removed, the provenance stays.
   promotedFrom   String?                 @map("promoted_from")
+  /// The commit SHA it was promoted at. With `promotedFrom`, unique: promoting
+  /// the same source at the same ref again updates this entry.
+  promotedRef    String?                 @map("promoted_ref")
   /// The operator's user id, kept as PROVENANCE text rather than a foreign key:
   /// an FK to `user` would put this platform table in every `TRUNCATE "user"
   /// CASCADE` and on every account erasure's cascade, and provenance must
@@ -12088,6 +12092,7 @@ model SeedRegistryEntry {
   createdAt      DateTime                @default(now()) @map("created_at")
   updatedAt      DateTime                @updatedAt @map("updated_at")
 
+  @@unique([promotedFrom, promotedRef])
   @@index([role, status])
   @@index([legacyKeys], type: Gin)
   @@map("seed_registry_entry")

@@ -768,3 +768,20 @@ async function seedCiStub(org: string, name: string, token: string, branch: stri
     );
   }
 }
+
+// ── Shared with the starter promotion (MOTIR-710) ──────────────────────────
+
+/**
+ * The transport, readback and readiness helpers `lib/github/seedPromotion.ts`
+ * builds a promoted starter's template copy from, so that copy talks to GitHub
+ * exactly as establish does: the same headers, the same typed transport error,
+ * the same collision rule and the same readiness poll.
+ */
+export const provisioningTransport = {
+  request,
+  readJson,
+  asRecord,
+  errorDetail,
+  isNameCollision,
+  awaitReady,
+};
