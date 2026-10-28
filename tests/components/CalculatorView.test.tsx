@@ -45,7 +45,7 @@ function categories(over: Partial<CalculatorCategoriesDTO> = {}): CalculatorCate
         key: 'balanced',
         models: [
           { id: 'model-b', provider: 'p' },
-          { id: 'model-c', provider: 'p' },
+          { id: 'other-c', provider: 'p' },
         ],
       },
       { key: 'flagship', models: [{ id: 'model-d', provider: 'p' }] },
@@ -245,7 +245,7 @@ describe('opening the view', () => {
       .map((b) => b.textContent);
     expect(names).toEqual([
       'EconomyFor example: model-a',
-      'BalancedFor example: model-b, model-c',
+      'BalancedFor example: model-b, other-c',
       'FlagshipFor example: model-d',
     ]);
     // Nothing selects a model: the only controls in the group are the categories.
@@ -260,7 +260,8 @@ describe('opening the view', () => {
           categories: [
             {
               key: 'economy',
-              models: ['m1', 'm2', 'm3', 'm4', 'm5', 'm6'].map((id) => ({ id, provider: 'p' })),
+              // Six families: the examples keep one model per family (lib/billing/modelExamples.ts).
+              models: ['a1', 'b1', 'c1', 'd1', 'e1', 'f1'].map((id) => ({ id, provider: 'p' })),
             },
           ],
         }),
@@ -269,7 +270,7 @@ describe('opening the view', () => {
     renderView();
     await ready();
     const group = screen.getByRole('group', { name: m.inputs.runCategoriesLabel });
-    expect(within(group).getByRole('button').textContent).toBe('EconomyFor example: m1, m2, m3');
+    expect(within(group).getByRole('button').textContent).toBe('EconomyFor example: a1, b1, c1');
   });
 
   it('shows a category with no live model as unavailable and keeps the others usable', async () => {
