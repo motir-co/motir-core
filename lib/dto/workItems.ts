@@ -442,6 +442,10 @@ export interface RelationshipLinkDto {
   /** The `work_item_link.id` of THIS edge — what `unlinkWorkItems` deletes. */
   linkId: string;
   item: WorkItemSummaryDto;
+  /** WHY the edge exists (MOTIR-9827) — the one line an approved plan's
+   *  `blocked_by` carried, saying what the waiting card consumes. Present only on
+   *  an edge that has one. */
+  reason?: string;
 }
 
 /**

@@ -785,6 +785,11 @@ export interface PlanItemDto {
   patch: PlanItemPatch | null;
   parentRef: string | null;
   blockedByRefs: string[];
+  /** WHY each drawn edge exists (MOTIR-9827): ref → one short line saying what the
+   *  waiting card consumes from that blocker, keyed by `blockedByRefs` on an `add`
+   *  and by `patch.blockedByAdd` on a `modify`. A ref with no entry carries no
+   *  reason; `{}` on a plan item written before reasons existed. */
+  edgeReasons: Record<string, string>;
   /** `add` only: the older cards the created card supersedes (MOTIR-6630);
    *  `[]` on every other op and on a plan item written before the column. */
   supersedesRefs: string[];
@@ -1117,6 +1122,15 @@ export interface ProposalInput {
   /** `add` / edge changes: blocked-by refs (real ids or intra-plan temp-refs). */
   blockedByRefs?: string[];
   /**
+   * WHY each edge this proposal draws exists (MOTIR-9827) — ref → one short line
+   * saying what the waiting card consumes from it, keyed by `blockedByRefs` on an
+   * `add` and by `patch.blockedByAdd` on a `modify`. A door receiving the wire form
+   * (`{ ref, reason }` entries) splits it into the refs and this map
+   * (`lib/plans/edgeReasons.ts`); a reason keyed by a ref the proposal does not
+   * draw is refused.
+   */
+  edgeReasons?: Record<string, string>;
+  /**
    * `add` only: the OLDER work items the created card SUPERSEDES (Story
    * MOTIR-6577 · MOTIR-6630) — real ids or intra-plan temp-refs naming an `add`
    * persisted by an EARLIER call. Each becomes one `supersedes` link at approve
@@ -1245,6 +1259,10 @@ export interface CorrectProposalInput extends UpdateProposalInput {
   parentRef?: string | null;
   /** REPLACES the blocked-by set (see the note above); `[]` clears it. */
   blockedByRefs?: string[];
+  /** REPLACES the proposal's edge reasons (MOTIR-9827) — sent by a door whenever
+   *  it replaces `blockedByRefs` or a `modify`'s `patch`, keyed by the refs the
+   *  corrected proposal draws. */
+  edgeReasons?: Record<string, string>;
   /** `add` only — REPLACES the supersedes set (MOTIR-6630), exactly as
    *  {@link blockedByRefs} replaces its own; `[]` clears it. */
   supersedesRefs?: string[];
@@ -1363,6 +1381,7 @@ export const CORRECT_PROPOSAL_KEYS = [
   ...UPDATE_PROPOSAL_KEYS,
   'parentRef',
   'blockedByRefs',
+  'edgeReasons',
   'supersedesRefs',
   'targetRepo',
   'targetRepos',
