@@ -1012,9 +1012,9 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // are all about a PROPOSAL and this one is not — that is the whole reason a
     // reader picks between them.
     summary:
-      "Correct a plan's OWN title and summary — the heading above the tree — without touching a single proposal.",
+      "Correct a plan's OWN title and summary — the heading above the tree — without touching a single proposal, and keep your planner record on it.",
     // Regenerated from a live `tools/list` handshake, never from the source.
-    descriptionFingerprint: '3c8e94ce5a31',
+    descriptionFingerprint: 'd8f72cc61e0f',
   },
   record_plan_revision_reason: {
     // The line has to say the thing that makes this tool unlike its six
