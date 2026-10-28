@@ -45,6 +45,16 @@ export class SystemReplayForbiddenError extends Error {
 }
 
 /**
+ * True for {@link SystemReplayForbiddenError}. The `(admin)` console's actions
+ * test for the refusal through this guard rather than the class, because no
+ * executable text under `app/(admin)` may spell the word the console's 404
+ * posture forbids (`tests/platform/adminRouteGate.test.ts`).
+ */
+export function isSystemReplayRefusal(err: unknown): err is SystemReplayForbiddenError {
+  return err instanceof SystemReplayForbiddenError;
+}
+
+/**
  * Thrown when the operator's system replay is pointed at a dead letter that
  * BELONGS to a workspace (MOTIR-8083). That row keeps its own door, the
  * manager-gated replay on the workspace's Dead letter tab; the system door runs

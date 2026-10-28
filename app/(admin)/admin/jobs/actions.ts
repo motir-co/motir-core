@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { requirePlatformStaff } from '@/lib/platform/auth';
 import { NotPlatformStaffError } from '@/lib/platform/errors';
-import { DlqEntryNotFoundError, SystemReplayForbiddenError } from '@/lib/jobs/errors';
+import { DlqEntryNotFoundError, isSystemReplayRefusal } from '@/lib/jobs/errors';
 import { platformJobReplayService } from '@/lib/services/platformJobReplayService';
 import type { ReplayAllResultDTO } from '@/lib/dto/jobs';
 
@@ -35,7 +35,7 @@ export type ReplayAllDeadLettersActionResult =
   | { ok: false; code: 'NOT_PERMITTED' | 'FAILED' };
 
 function isRefusal(err: unknown): boolean {
-  return err instanceof NotPlatformStaffError || err instanceof SystemReplayForbiddenError;
+  return err instanceof NotPlatformStaffError || isSystemReplayRefusal(err);
 }
 
 export async function replayDeadLetterAction(dlqId: string): Promise<ReplayDeadLetterActionResult> {
