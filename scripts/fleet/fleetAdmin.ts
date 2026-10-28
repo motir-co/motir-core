@@ -15,6 +15,10 @@
  * (--ceiling <n> | --clear)`, `disable --name <account> --reason <text>` and
  * `enable --name <account>`, each with `--operator <email>`.
  *
+ * and `check-quota --account-id <id> [--region <region>]` (MOTIR-9926,
+ * `fleetAdminCheckQuota.ts`): a read-only, database-free read of one account's
+ * granted vCPU quota through the assumed management role.
+ *
  * and the pool commands (MOTIR-9463, `fleetAdminPoolCommands.ts`):
  * `request-quota`, `pool-status`, `growth-events` and `org-accounts` (MOTIR-9588); and the capacity request
  * commands (MOTIR-9583, `fleetAdminCapacityRequestCommands.ts`):
@@ -65,6 +69,7 @@ import {
   capacityRequestLink,
   capacityRequests,
 } from './fleetAdminCapacityRequestCommands';
+import { checkQuota, type FleetAdminCheckDeps } from './fleetAdminCheckQuota';
 import { hostingTenant } from './fleetAdminHostingTenantCommands';
 
 export const EXIT_OK = 0;
@@ -94,6 +99,7 @@ const USAGE = [
   '  fleet-admin capacity-request-close <request> <note> --operator <email>',
   '  fleet-admin hosting-tenant ensure <organization id>',
   '  fleet-admin hosting-tenant converge-deploy-policy [--organization <id>]',
+  '  fleet-admin check-quota --account-id <12-digit AWS account id> [--region <region>]',
 ].join('\n');
 
 /** Where the command writes — stdout and stderr in production, a buffer in tests. */
@@ -253,14 +259,16 @@ async function control(command: string, args: string[], io: FleetAdminIo): Promi
 }
 
 /** Run one `fleet-admin` command; answers its exit code. `pool` carries the pool
- *  commands' service seams for a test. */
+ *  commands' service seams for a test, `check` the quota check's. */
 export async function runFleetAdmin(
   argv: string[],
   io: FleetAdminIo,
   pool: FleetAdminPoolDeps = {},
+  check: FleetAdminCheckDeps = {},
 ): Promise<number> {
   const [command, ...args] = argv;
   try {
+    if (command === 'check-quota') return await checkQuota(args, io, check);
     if (command === 'request-quota') return await requestQuota(args, io, pool);
     if (command === 'pool-status') return await poolStatus(args, io, pool);
     if (command === 'growth-events') return await growthEvents(args, io);

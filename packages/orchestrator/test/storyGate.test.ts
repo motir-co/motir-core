@@ -336,8 +336,15 @@ describe('the port boundary', () => {
       {
         name: 'serverless-sdk',
         // The fleet's AWS adapter shares the STS client and is held to its own
-        // directory by `tests/ciFleet/awsSdkBoundary.test.ts`.
-        allowed: [SERVERLESS, `${ORCHESTRATOR}/adapters/aws/`],
+        // directory by `tests/ciFleet/awsSdkBoundary.test.ts`. Core's own
+        // deploy script (MOTIR-9927) is a CI tool, not hosting: it speaks to
+        // ECR and CloudWatch Logs through its own ports file, tested beside it.
+        allowed: [
+          SERVERLESS,
+          `${ORCHESTRATOR}/adapters/aws/`,
+          'scripts/aws-deploy/',
+          'tests/awsDeploy/',
+        ],
         modules: serverlessModules(),
         identifiers: new Set(),
       },

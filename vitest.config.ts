@@ -1761,6 +1761,21 @@ export default defineConfig({
         'lib/services/fleetQuotaRequestService.ts',
         'lib/services/fleetShardQuotaService.ts',
         'scripts/fleet/fleetAdminPoolCommands.ts',
+        // Story MOTIR-9709 · MOTIR-9933 — the AWS deploy script and the read-only
+        // `fleet-admin check-quota`. MEASURED on the story branch against
+        // `tests/awsDeploy/**`, `tests/hosting/credentialModes.test.ts` and
+        // `tests/ciFleet/fleetAdminCheckQuota.test.ts`: awsDeploy 98.87 / 98.07 /
+        // 100 / 100, rollingDeploy 100 / 96.42 / 100 / 100, migrateRun, ports and
+        // taskDefinitions 100 on all four, fleetAdminCheckQuota 100 / 100 / 100 /
+        // 100 (statements / branches / functions / lines). The branches left are the
+        // entry guard and a container missing from its own clone. Pinned at the
+        // fleet's 90 floor below. (`lib/blob/s3.ts` is gated further down.)
+        'scripts/aws-deploy/awsDeploy.ts',
+        'scripts/aws-deploy/migrateRun.ts',
+        'scripts/aws-deploy/ports.ts',
+        'scripts/aws-deploy/rollingDeploy.ts',
+        'scripts/aws-deploy/taskDefinitions.ts',
+        'scripts/fleet/fleetAdminCheckQuota.ts',
         // Story MOTIR-9367 · MOTIR-9564 — the platform Pools read and its section on
         // /admin/monitoring. MEASURED on this branch against `poolsStoryIntegration`,
         // `poolsSection` and `platformFleetPoolsService`: the service 100 on all four,
@@ -3849,6 +3864,43 @@ export default defineConfig({
           statements: 90,
         },
         'scripts/fleet/fleetAdminPoolCommands.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // Story MOTIR-9709 · MOTIR-9933 — measured above, pinned at the floor.
+        'scripts/aws-deploy/awsDeploy.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'scripts/aws-deploy/migrateRun.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'scripts/aws-deploy/ports.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'scripts/aws-deploy/rollingDeploy.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'scripts/aws-deploy/taskDefinitions.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'scripts/fleet/fleetAdminCheckQuota.ts': {
           lines: 90,
           functions: 90,
           branches: 90,
