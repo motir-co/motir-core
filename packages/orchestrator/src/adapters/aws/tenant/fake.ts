@@ -460,6 +460,18 @@ export function fakeTenantStackOutputs(
     if (m) {
       return { PreviewSecretArn: secret(`motir/${m[1]}/preview-${m[2]}/database`, generation) };
     }
+    m = /^motir-registry-([a-z0-9]+)$/.exec(name);
+    if (m) {
+      const registry = `${accountId}.dkr.ecr.${region}.amazonaws.com/mh/${m[1]}`;
+      const role = (environment: string) =>
+        `arn:aws:iam::${accountId}:role/mh-${m![1]}-${environment}-push`;
+      return {
+        PreviewRepositoryUri: `${registry}/preview`,
+        ProductionRepositoryUri: `${registry}/production`,
+        PreviewPushRoleArn: role('preview'),
+        ProductionPushRoleArn: role('production'),
+      };
+    }
     return { StackName: name, ...parameters };
   };
 }

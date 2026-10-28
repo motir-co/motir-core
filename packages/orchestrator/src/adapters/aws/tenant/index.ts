@@ -27,3 +27,5 @@ export * from './database';
 export * from './releaseTemplate';
 export * from './function';
 export * from './container';
+export * from './releaseIds';
+export * from './hostingAdapter';
