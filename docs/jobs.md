@@ -1228,21 +1228,22 @@ cluster bought nothing. The why is
 
 **Daily (UTC)**
 
-| job                                      | cron         |
-| ---------------------------------------- | ------------ |
-| `system.account-erasure-sweep`           | `0 3 * * *`  |
-| `system.attachment-gc`                   | `30 3 * * *` |
-| `system.rate-limit-sweep`                | `0 4 * * *`  |
-| `system.automation-retention-sweep`      | `30 4 * * *` |
-| `system.code-graph-offboard-sweep`       | `0 5 * * *`  |
-| `system.data-export-expiry-sweep`        | `30 5 * * *` |
-| `system.job-run-reap`                    | `0 6 * * *`  |
-| `system.job-queue-retention`             | `15 6 * * *` |
-| `system.dispatch-run-sweep`              | `30 6 * * *` |
-| `system.dlq-standing-depth-sweep`        | `0 7 * * *`  |
-| `system.organization-retention-purge`    | `30 7 * * *` |
-| `system.daily-health-check`              | `0 9 * * *`  |
-| `system.organization-deletion-reminders` | `0 9 * * *`  |
+| job                                        | cron         |
+| ------------------------------------------ | ------------ |
+| `system.account-erasure-sweep`             | `0 3 * * *`  |
+| `system.attachment-gc`                     | `30 3 * * *` |
+| `system.rate-limit-sweep`                  | `0 4 * * *`  |
+| `system.automation-retention-sweep`        | `30 4 * * *` |
+| `system.code-graph-offboard-sweep`         | `0 5 * * *`  |
+| `system.data-export-expiry-sweep`          | `30 5 * * *` |
+| `system.public-hostname-reservation-sweep` | `45 5 * * *` |
+| `system.job-run-reap`                      | `0 6 * * *`  |
+| `system.job-queue-retention`               | `15 6 * * *` |
+| `system.dispatch-run-sweep`                | `30 6 * * *` |
+| `system.dlq-standing-depth-sweep`          | `0 7 * * *`  |
+| `system.organization-retention-purge`      | `30 7 * * *` |
+| `system.daily-health-check`                | `0 9 * * *`  |
+| `system.organization-deletion-reminders`   | `0 9 * * *`  |
 
 **Weekly (UTC)**
 

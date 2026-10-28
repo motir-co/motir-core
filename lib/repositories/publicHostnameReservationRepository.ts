@@ -70,6 +70,22 @@ export const publicHostnameReservationRepository = {
   },
 
   /**
+   * Delete every hold that has lapsed at `now` (`expires_at <= now`) — the daily
+   * sweep's one write (MOTIR-9509). Returns how many rows went.
+   *
+   * Housekeeping, not a rule: a lapsed row already protects nothing (every read
+   * here asks about an unexpired row, and `reserveMany` refreshes one in place).
+   * Deleting it keeps the table to what Amendment 1 says it holds — a digest
+   * and the date it stops mattering.
+   */
+  async deleteExpiredInTx(now: Date, tx: Prisma.TransactionClient): Promise<number> {
+    const { count } = await tx.publicHostnameReservation.deleteMany({
+      where: { expiresAt: { lte: now } },
+    });
+    return count;
+  },
+
+  /**
    * Reserve a set of digests until each row's `expiresAt`, retiring them from
    * one workspace.
    *

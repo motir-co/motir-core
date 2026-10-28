@@ -749,6 +749,10 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/dataExportExpirySweep.ts',
     shape: '{ expired: number; failed: number; scanned: number }',
   },
+  'sweep-expired-name-holds': {
+    file: 'lib/jobs/definitions/publicHostnameReservationSweep.ts',
+    shape: '{ deleted: number }',
+  },
   'sweep-oauth-leftovers': {
     file: 'lib/jobs/definitions/oauthSweep.ts',
     shape:
