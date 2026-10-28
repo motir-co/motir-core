@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import type { WorkspaceAccessScope } from '@/generated/prisma/client';
+import type { Prisma, WorkspaceAccessScope } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
@@ -92,6 +92,12 @@ interface InvitePayload {
   accessScope: WorkspaceAccessScope;
   /** The projects a Limited invite joins on accept — empty on a Full one. */
   projectIds: string[];
+  /**
+   * Who pressed Resend, when this row replaced an earlier invitation
+   * (MOTIR-9996). Optional, so every older payload still parses; the inviter
+   * above stays the ORIGINAL one.
+   */
+  resentByUserId?: string;
 }
 
 function normalizeEmail(email: string): string {
@@ -127,6 +133,9 @@ function parsePayload(value: string): InvitePayload | null {
       projectIds: Array.isArray(parsed.projectIds)
         ? parsed.projectIds.filter((id): id is string => typeof id === 'string')
         : [],
+      ...(typeof parsed.resentByUserId === 'string'
+        ? { resentByUserId: parsed.resentByUserId }
+        : {}),
     };
   } catch {
     return null;
@@ -135,6 +144,24 @@ function parsePayload(value: string): InvitePayload | null {
 
 function buildInviteAcceptUrl(token: string): string {
   return `${resolveBaseUrlTrimmed()}/invite/accept?token=${encodeURIComponent(token)}`;
+}
+
+/**
+ * Write a new invitation row for `payload` with a fresh token and a fresh
+ * `INVITE_EXPIRY_MS` expiry, returning the token. Shared by `sendInvite` and
+ * `resendInvite`; a write, so it takes the caller's transaction.
+ */
+async function mintInvite(payload: InvitePayload, tx: Prisma.TransactionClient): Promise<string> {
+  const token = generateToken();
+  await verificationRepository.create(
+    {
+      identifier: INVITE_IDENTIFIER_PREFIX + token,
+      value: JSON.stringify(payload),
+      expiresAt: new Date(Date.now() + INVITE_EXPIRY_MS),
+    },
+    tx,
+  );
+  return token;
 }
 
 async function enqueueInviteEmail(args: {
@@ -290,7 +317,6 @@ export const workspaceInvitesService = {
       throw new NotAMemberError(args.inviterUserId, args.workspaceId);
     }
 
-    const token = generateToken();
     const payload: InvitePayload = {
       workspaceId: args.workspaceId,
       email,
@@ -299,16 +325,7 @@ export const workspaceInvitesService = {
       accessScope,
       projectIds,
     };
-    await db.$transaction(async (tx) => {
-      await verificationRepository.create(
-        {
-          identifier: INVITE_IDENTIFIER_PREFIX + token,
-          value: JSON.stringify(payload),
-          expiresAt: new Date(Date.now() + INVITE_EXPIRY_MS),
-        },
-        tx,
-      );
-    });
+    const token = await db.$transaction((tx) => mintInvite(payload, tx));
 
     await enqueueInviteEmail({
       workspaceId: args.workspaceId,
@@ -316,6 +333,109 @@ export const workspaceInvitesService = {
       workspaceName: workspace.name,
       recipientEmail: email,
       inviterUserId: args.inviterUserId,
+      token,
+    });
+
+    return { ok: true };
+  },
+
+  /**
+   * Replace a pending invitation with a fresh one (MOTIR-9996): a new token, a
+   * new seven-day expiry and a new email, while the earlier link stops working.
+   * `inviteId` is the invitation row's id, never the token — the token is the
+   * credential.
+   *
+   * Refusals, in order, each writing nothing: a row that is missing, expired,
+   * retired, not an invitation or of another workspace is
+   * `InviteExpiredOrMissingError` (one answer, so existence is not leaked);
+   * then `sendInvite`'s own gates against the stored payload — membership,
+   * the scope rules, already-a-member, and the hourly limit. The limit counts
+   * the original and every earlier Resend, because a retired row is kept.
+   *
+   * The new row and the retire of the old one are one transaction; a retire
+   * that finds the row already gone throws there, so two concurrent Resends
+   * leave exactly one live link. The email is enqueued after the commit, as in
+   * `sendInvite`: if that enqueue fails, the old link is already dead and the
+   * new row has no email — it lists as queued or failed, and Resend can be
+   * pressed again.
+   */
+  async resendInvite(args: {
+    actorUserId: string;
+    actorName: string;
+    workspaceId: string;
+    inviteId: string;
+  }): Promise<SendInviteResultDTO> {
+    const row = await verificationRepository.findById(args.inviteId);
+    if (
+      !row ||
+      !row.identifier.startsWith(INVITE_IDENTIFIER_PREFIX) ||
+      row.expiresAt.getTime() <= Date.now()
+    ) {
+      throw new InviteExpiredOrMissingError();
+    }
+    const stored = parsePayload(row.value);
+    if (!stored || stored.workspaceId !== args.workspaceId) {
+      throw new InviteExpiredOrMissingError();
+    }
+
+    const actorMembership = await readMembership(args.actorUserId, args.workspaceId);
+    if (!actorMembership) throw new NotAMemberError(args.actorUserId, args.workspaceId);
+    const actorIsManager = (await readReachRole(args.actorUserId, args.workspaceId)) === 'manager';
+    if (!actorIsManager) {
+      if (actorMembership.accessScope === 'limited') {
+        throw new InviteNotAllowedForScopeError(args.actorUserId, args.workspaceId);
+      }
+      if (stored.accessScope === 'limited' || stored.projectIds.length > 0) {
+        throw new InviteScopeForbiddenError(args.actorUserId, args.workspaceId);
+      }
+    }
+
+    const existingUser = await userRepository.findByEmail(stored.email);
+    if (existingUser && (await readMembership(existingUser.id, args.workspaceId))) {
+      throw new InviteTargetAlreadyMemberError(stored.email, args.workspaceId);
+    }
+
+    const recent = await verificationRepository.countByIdentifierPrefixAndValueAndSince({
+      identifierPrefix: INVITE_IDENTIFIER_PREFIX,
+      valueContainsAll: [args.workspaceId, stored.email],
+      since: new Date(Date.now() - INVITE_RATE_LIMIT.windowMs),
+    });
+    if (recent >= INVITE_RATE_LIMIT.max) {
+      throw new InviteRateLimitedError(INVITE_RATE_LIMIT.max);
+    }
+
+    // Bound, for the reason `sendInvite` gives on the same read.
+    const workspace = await withWorkspaceContext(
+      { userId: args.actorUserId, workspaceId: args.workspaceId },
+      (tx) => workspaceRepository.findByIdInTx(args.workspaceId, tx),
+    );
+    if (!workspace) throw new NotAMemberError(args.actorUserId, args.workspaceId);
+
+    const token = await db.$transaction(async (tx) => {
+      const minted = await mintInvite(
+        {
+          workspaceId: stored.workspaceId,
+          email: stored.email,
+          workspaceRole: stored.workspaceRole,
+          inviterUserId: stored.inviterUserId,
+          accessScope: stored.accessScope,
+          projectIds: stored.projectIds,
+          resentByUserId: args.actorUserId,
+        },
+        tx,
+      );
+      const retired = await verificationRepository.retireUnexpiredByIdentifier(row.identifier, tx);
+      if (retired === 0) throw new InviteExpiredOrMissingError();
+      return minted;
+    });
+
+    // The email names whoever pressed Resend; the list keeps the original inviter.
+    await enqueueInviteEmail({
+      workspaceId: args.workspaceId,
+      inviterName: args.actorName,
+      workspaceName: workspace.name,
+      recipientEmail: stored.email,
+      inviterUserId: args.actorUserId,
       token,
     });
 

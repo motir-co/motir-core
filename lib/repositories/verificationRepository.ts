@@ -69,6 +69,11 @@ export const verificationRepository = {
     });
   },
 
+  /** One row by its id — the handle a Resend names, never the token (MOTIR-9996). */
+  async findById(id: string): Promise<Verification | null> {
+    return db.verification.findUnique({ where: { id } });
+  },
+
   async create(
     data: { identifier: string; value: string; expiresAt: Date },
     tx: Prisma.TransactionClient,
@@ -167,6 +172,33 @@ export const verificationRepository = {
             AND "value" LIKE '{"type":"authorization_code"%'
           LIMIT ${limit}
        )`;
+  },
+
+  /**
+   * Retire a still-live row by back-dating its `expiresAt` to the moment of the
+   * write (MOTIR-9996), returning how many rows changed: 1, or 0 when it had
+   * already expired, been retired or been accepted. The row is KEPT, because the
+   * invite rate limit counts rows by `createdAt` and a delete would erase the count.
+   *
+   * ⚠️ `clock_timestamp()`, not a `now` from the caller and not `now()`. Two
+   * concurrent retires of one row serialise on its lock, and Postgres re-checks
+   * the second's WHERE against the first's committed write. With a caller's
+   * clock — or the transaction-start `now()` — a second caller that read its
+   * time EARLIER would still see the row as live and retire it again, minting a
+   * second live link. The wall clock at the re-check is always past the first
+   * write, so exactly one wins. `AT TIME ZONE 'UTC'` because the column is a
+   * zone-less `TIMESTAMP(3)` holding UTC, as `jobQueueRepository` explains.
+   */
+  async retireUnexpiredByIdentifier(
+    identifier: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    return tx.$executeRaw`
+      UPDATE "verification"
+         SET "expiresAt" = (clock_timestamp() AT TIME ZONE 'UTC'),
+             "updatedAt" = (clock_timestamp() AT TIME ZONE 'UTC')
+       WHERE "identifier" = ${identifier}
+         AND "expiresAt" > (clock_timestamp() AT TIME ZONE 'UTC')`;
   },
 
   async deleteByIdentifier(identifier: string, tx: Prisma.TransactionClient): Promise<number> {
