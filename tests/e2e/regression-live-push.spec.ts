@@ -360,7 +360,11 @@ test.describe('live updates reach an open page by server push', () => {
 
     const window = log.mark();
     await page.clock.runFor(QUIET_WINDOW_MS);
-    expect(log.planReads(plan.id, window), 'plan reads on a timer').toEqual([]);
+    // As URLs: a `LoggedRequest` holds its live `Request`, which the diff cannot print.
+    expect(
+      log.planReads(plan.id, window).map((r) => r.url.href),
+      'plan reads on a timer',
+    ).toEqual([]);
     expect(log.openStreams()).toHaveLength(1);
 
     // The write — armed first, so a read that happened BEFORE it could not be
