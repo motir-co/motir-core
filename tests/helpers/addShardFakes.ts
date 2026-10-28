@@ -103,7 +103,7 @@ export function installAddShardGithub(github: GithubWorld, installationToken: st
 export type FakeOrganizationStep =
   | 'createOrganizationAccount'
   | 'ensureOrganizationalUnit'
-  | 'moveAccountToOu'
+  | 'moveAccountToOrganizationalUnit'
   | 'tenantRoleCreated'
   | 'tenantRolePolicyPut'
   | 'accountTagged'
@@ -158,8 +158,6 @@ export class FakeOrganization implements AwsManagementApi {
   stackInstanceFailure: Error | null = null;
   /** Organizational units under the root, by name to id (MOTIR-9940). */
   readonly organizationalUnits = new Map<string, string>();
-  /** Each account's parent (the root unless moved), by account id. */
-  readonly accountParents = new Map<string, string>();
   /** Per step: an error thrown ONCE after the step's effect lands, as a pass cut
    *  off after AWS answered would see it (MOTIR-9940). */
   readonly failAfter = new Map<FakeOrganizationStep, Error>();
@@ -313,6 +311,7 @@ export class FakeOrganization implements AwsManagementApi {
     this.calls.push(`moveAccountToOrganizationalUnit:${accountId}:${organizationalUnitId}`);
     if (this.accountUnits.get(accountId) === organizationalUnitId) return { moved: false };
     this.accountUnits.set(accountId, organizationalUnitId);
+    this.failOnceAfter('moveAccountToOrganizationalUnit');
     return { moved: true };
   }
 
@@ -371,14 +370,6 @@ export class FakeOrganization implements AwsManagementApi {
     this.organizationalUnits.set(name, ouId);
     this.failOnceAfter('ensureOrganizationalUnit');
     return { ouId, created: true };
-  }
-
-  async moveAccountToOu(accountId: string, ouId: string) {
-    this.calls.push(`moveAccountToOu:${accountId}`);
-    if ((this.accountParents.get(accountId) ?? 'r-root') === ouId) return { moved: false };
-    this.accountParents.set(accountId, ouId);
-    this.failOnceAfter('moveAccountToOu');
-    return { moved: true };
   }
 
   async ensureTenantDeployRole(credentials: AwsSessionCredentials, policy: AwsPolicyDocument) {

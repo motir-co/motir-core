@@ -30,7 +30,6 @@ import {
   type Account,
   type CreateAccountStatus,
   type OrganizationalUnit,
-  type Parent,
   type Root,
   type Tag,
 } from '@aws-sdk/client-organizations';
@@ -310,8 +309,6 @@ export interface AwsManagementApi {
   /** The organizational unit `name` directly under the Organization root,
    *  created only when absent (MOTIR-9940). */
   ensureOrganizationalUnit(name: string): Promise<AwsOrganizationalUnitResult>;
-  /** Move `accountId` under `ouId` unless it already sits there. */
-  moveAccountToOu(accountId: string, ouId: string): Promise<{ moved: boolean }>;
   /** The tenant deploy role and its inline policy, trusting only the management
    *  role (MOTIR-9941); `created` when the role was made by this call. */
   ensureTenantDeployRole(
@@ -904,27 +901,6 @@ export function createAwsManagementApi(
         if (!raced) throw err;
         return { ouId: raced, created: false };
       }
-    },
-
-    async moveAccountToOu(accountId, ouId) {
-      const orgs = await organizations();
-      const { Parents: parents } = await call<{ Parents?: Parent[] }>(
-        'organizations',
-        orgs,
-        new ListParentsCommand({ ChildId: accountId }),
-      );
-      const parentId = required(parents?.[0]?.Id, 'Parents[0].Id');
-      if (parentId === ouId) return { moved: false };
-      await call(
-        'organizations',
-        orgs,
-        new MoveAccountCommand({
-          AccountId: accountId,
-          SourceParentId: parentId,
-          DestinationParentId: ouId,
-        }),
-      );
-      return { moved: true };
     },
 
     async ensureTenantDeployRole(credentials, policyDocument) {

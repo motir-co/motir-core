@@ -857,34 +857,6 @@ describe('the Tenants organizational unit (MOTIR-9940)', () => {
       awsCode: 'AccessDeniedException',
     });
   });
-
-  it('moves an account from its parent into the OU', async () => {
-    const { api, calls } = harness({
-      AssumeRoleCommand: assume,
-      ListParentsCommand: () => ({ Parents: [{ Id: 'r-root', Type: 'ROOT' }] }),
-      MoveAccountCommand: () => ({}),
-    });
-
-    expect(await api.moveAccountToOu('123456789012', 'ou-tenants')).toEqual({ moved: true });
-    expect(calls.find((c) => c.command === 'ListParentsCommand')!.input).toEqual({
-      ChildId: '123456789012',
-    });
-    expect(calls.find((c) => c.command === 'MoveAccountCommand')!.input).toEqual({
-      AccountId: '123456789012',
-      SourceParentId: 'r-root',
-      DestinationParentId: 'ou-tenants',
-    });
-  });
-
-  it('moves nothing when the account already sits in the OU', async () => {
-    const { api, calls } = harness({
-      AssumeRoleCommand: assume,
-      ListParentsCommand: () => ({ Parents: [{ Id: 'ou-tenants', Type: 'ORGANIZATIONAL_UNIT' }] }),
-    });
-
-    expect(await api.moveAccountToOu('123456789012', 'ou-tenants')).toEqual({ moved: false });
-    expect(calls.map((c) => c.command)).not.toContain('MoveAccountCommand');
-  });
 });
 
 describe('the tenant account bootstrap calls (MOTIR-9941)', () => {

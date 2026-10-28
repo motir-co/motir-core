@@ -109,6 +109,6 @@ export async function createOrFindTenantAccount(
     });
   }
 
-  const { moved } = await api().moveAccountToOu(accountId, ouId);
+  const { moved } = await api().moveAccountToOrganizationalUnit(accountId, ouId);
   return { accountId, ouId, created: step.created, moved };
 }

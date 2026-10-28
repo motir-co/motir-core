@@ -120,7 +120,7 @@ beforeEach(async () => {
   // Count the moves that landed, at the fake's own parent store — a move cut
   // off after it landed counts too.
   moves = 0;
-  const parents = organization.accountParents;
+  const parents = organization.accountUnits;
   const setParent = parents.set.bind(parents);
   parents.set = (accountId: string, parentId: string) => {
     moves += 1;
@@ -174,7 +174,7 @@ describe('resume at every AWS step', () => {
         );
       },
     ],
-    ['the account was moved', cut('moveAccountToOu')],
+    ['the account was moved', cut('moveAccountToOrganizationalUnit')],
     ['the role was created', cut('tenantRoleCreated')],
     ['the role policy was put', cut('tenantRolePolicyPut')],
     ['the tag was written', cut('accountTagged')],
@@ -197,7 +197,7 @@ describe('resume at every AWS step', () => {
     expect([...organization.organizationalUnits.keys()]).toEqual([TENANT_OU_NAME]);
     expect(await adminDb.hostingTenantAccount.count()).toBe(1);
     expect(moves).toBe(1);
-    expect(organization.accountParents.get(accountId)).toBe(
+    expect(organization.accountUnits.get(accountId)).toBe(
       organization.organizationalUnits.get(TENANT_OU_NAME),
     );
     expect([...organization.tenantRoles.keys()]).toEqual([accountId]);
