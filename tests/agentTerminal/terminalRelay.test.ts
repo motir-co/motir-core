@@ -27,6 +27,16 @@ const MASTER = 'm'.repeat(48);
 const ORIGIN = 'https://motir.test';
 const MARKER = 'MARKER-6940-never-logged-7f3a';
 const RELAY_ID = 'relay-test-machine';
+/**
+ * The relay's auth window AND every `until`'s deadline (MOTIR-9877): sized for a
+ * loaded CI shard, where minting a ticket (a Postgres write) has been measured at
+ * 437–519 ms against ~25 ms unloaded (MOTIR-9875). Every ticket is minted BEFORE
+ * its browser connects, so nothing a test does waits inside the window; the one
+ * test that exercises the window itself runs a relay of its own on
+ * `SHORT_AUTH_WINDOW_MS`.
+ */
+const LOADED_SHARD_MS = 5_000;
+const SHORT_AUTH_WINDOW_MS = 300;
 
 // ── The fake terminal server ────────────────────────────────────────────────
 
@@ -136,7 +146,7 @@ let failTouch = false;
 let holdTouch: Promise<void> | null = null;
 
 async function startRelay(
-  overrides: { pingIntervalMs?: number; heartbeatIntervalMs?: number } = {},
+  overrides: { pingIntervalMs?: number; heartbeatIntervalMs?: number; authTimeoutMs?: number } = {},
 ): Promise<void> {
   relay = createTerminalRelay({
     allowedOrigin: ORIGIN,
@@ -156,7 +166,7 @@ async function startRelay(
     reportError: (err) => reported.push(err),
     now: () => nowMs,
     heartbeatIntervalMs: overrides.heartbeatIntervalMs ?? 60_000,
-    authTimeoutMs: 300,
+    authTimeoutMs: overrides.authTimeoutMs ?? LOADED_SHARD_MS,
     pingIntervalMs: overrides.pingIntervalMs ?? 60_000,
     dialTimeoutMs: 2_000,
   });
@@ -194,6 +204,8 @@ interface Browser {
   ws: WebSocket;
   inbox: { isBinary: boolean; data: Buffer }[];
   pings: number;
+  /** The close code once the socket has closed, so a wait on it can fail at once. */
+  closeCode: number | null;
   closed: Promise<number>;
   opened: Promise<void>;
   texts(): Record<string, unknown>[];
@@ -205,7 +217,13 @@ function browser(origin: string | null = ORIGIN, url = relayUrl): Browser {
     ws,
     inbox: [],
     pings: 0,
-    closed: new Promise((resolve) => ws.on('close', (code) => resolve(code))),
+    closeCode: null,
+    closed: new Promise((resolve) =>
+      ws.on('close', (code) => {
+        b.closeCode = code;
+        resolve(code);
+      }),
+    ),
     opened: new Promise((resolve, reject) => {
       ws.on('open', () => resolve());
       ws.on('error', reject);
@@ -224,10 +242,26 @@ function browser(origin: string | null = ORIGIN, url = relayUrl): Browser {
   return b;
 }
 
-async function until(done: () => boolean | Promise<boolean>, ms = 4_000): Promise<void> {
+/**
+ * Poll until `done`. Given the browser the wait depends on, a browser the relay
+ * has closed fails the wait at once with its close code and the relay's log
+ * lines, instead of running out the deadline as a bare timeout (MOTIR-9877).
+ */
+async function until(
+  done: () => boolean | Promise<boolean>,
+  on?: Browser,
+  ms = LOADED_SHARD_MS,
+): Promise<void> {
   const deadline = Date.now() + ms;
   while (!(await done())) {
-    if (Date.now() > deadline) throw new Error('timed out waiting');
+    if (on && on.closeCode !== null) {
+      throw new Error(
+        `the relay closed the browser ${on.closeCode} while waiting; relay log:\n${logs.join('\n')}`,
+      );
+    }
+    if (Date.now() > deadline) {
+      throw new Error(`timed out waiting after ${ms} ms; relay log:\n${logs.join('\n')}`);
+    }
     await new Promise((r) => setTimeout(r, 10));
   }
 }
@@ -244,13 +278,17 @@ const runningAgent = async () => {
 const ticketFor = async (id: string) =>
   (await agentTerminalService.issueTicket(fx.projectIdentifier, id, fx.ctx)).ticket;
 
-/** A browser that has authenticated and whose `open` got a `ready`. */
+/**
+ * A browser that has authenticated and whose `open` got a `ready`. The ticket is
+ * minted BEFORE the socket connects: the relay's auth window starts at connect.
+ */
 async function openTerminal(id: string, session?: string) {
+  const ticket = await ticketFor(id);
   const b = browser();
   await b.opened;
-  b.ws.send(JSON.stringify({ t: 'auth', ticket: await ticketFor(id) }));
+  b.ws.send(JSON.stringify({ t: 'auth', ticket }));
   b.ws.send(JSON.stringify({ t: 'open', cols: 80, rows: 24, ...(session ? { session } : {}) }));
-  await until(() => b.texts().some((f) => f['t'] === 'ready'));
+  await until(() => b.texts().some((f) => f['t'] === 'ready'), b);
   return b;
 }
 
@@ -261,6 +299,8 @@ const connections = () =>
 
 describe('refusals before any byte flows (Q3)', () => {
   it('closes 4401 when no auth frame arrives within the window', async () => {
+    await relay.close();
+    await startRelay({ authTimeoutMs: SHORT_AUTH_WINDOW_MS });
     const b = browser();
     await b.opened;
     expect(await b.closed).toBe(4401);
@@ -311,9 +351,10 @@ describe('refusals before any byte flows (Q3)', () => {
   it('closes 4502 when the machine does not answer, and records why', async () => {
     const id = await runningAgent();
     fleet.setTerminalAddress('ws://127.0.0.1:1');
+    const ticket = await ticketFor(id);
     const b = browser();
     await b.opened;
-    b.ws.send(JSON.stringify({ t: 'auth', ticket: await ticketFor(id) }));
+    b.ws.send(JSON.stringify({ t: 'auth', ticket }));
     expect(await b.closed).toBe(4502);
     await until(async () => (await connections())[0]?.closedAt != null);
     expect(await connections()).toMatchObject([
@@ -346,9 +387,10 @@ describe('refusals before any byte flows (Q3)', () => {
     });
     await new Promise<void>((resolve) => notFound.listen(0, '127.0.0.1', resolve));
     fleet.setTerminalAddress(`ws://127.0.0.1:${(notFound.address() as AddressInfo).port}`);
+    const ticket = await ticketFor(id);
     const b = browser();
     await b.opened;
-    b.ws.send(JSON.stringify({ t: 'auth', ticket: await ticketFor(id) }));
+    b.ws.send(JSON.stringify({ t: 'auth', ticket }));
     expect(await b.closed).toBe(4502);
     expect(reported.map((e) => e.message)).toContain(
       'relay: the terminal server refused the upgrade (HTTP 404)',
@@ -376,6 +418,9 @@ describe('refusals before any byte flows (Q3)', () => {
   });
 
   it('answers 404 off /v1/terminal and /v1/chat, and 200 on /healthz', async () => {
+    // The chat check below waits out the auth window, so this relay's is short.
+    await relay.close();
+    await startRelay({ authTimeoutMs: SHORT_AUTH_WINDOW_MS });
     for (const path of ['/v1/other', '/v1/terminal/x', '/v1/chatty', '/']) {
       const off = new WebSocket(relayUrl.replace('/v1/terminal', path), { origin: ORIGIN });
       const status = await new Promise<number>((resolve) =>
@@ -424,7 +469,7 @@ describe('a live terminal (Q3, Q4, Q5)', () => {
     });
 
     // The sign-in frame is the server's, as the server sent it.
-    await until(() => b.texts().some((f) => f['t'] === 'signin'));
+    await until(() => b.texts().some((f) => f['t'] === 'signin'), b);
     expect(b.texts().find((f) => f['t'] === 'signin')).toEqual({
       t: 'signin',
       profile: 'claude',
@@ -434,7 +479,7 @@ describe('a live terminal (Q3, Q4, Q5)', () => {
     // Terminal bytes: input reaches the shell exactly, and its output comes back binary.
     const input = Buffer.from([0x1b, 0x5b, 0x41, 0x00, 0xff, ...Buffer.from('ls -la\r')]);
     b.ws.send(input, { binary: true });
-    await until(() => b.inbox.some((m) => m.isBinary));
+    await until(() => b.inbox.some((m) => m.isBinary), b);
     expect(fake.received.find((m) => m.isBinary)).toEqual({ isBinary: true, data: input });
     expect(b.inbox.find((m) => m.isBinary)!.data).toEqual(
       Buffer.concat([Buffer.from('echo:'), input]),
@@ -443,7 +488,7 @@ describe('a live terminal (Q3, Q4, Q5)', () => {
     // A second auth frame mid-session is dropped, never forwarded.
     b.ws.send(JSON.stringify({ t: 'auth', ticket: 'again' }));
     b.ws.send(JSON.stringify({ t: 'resize', cols: 120, rows: 40 }));
-    await until(() => fake.received.length === 3);
+    await until(() => fake.received.length === 3, b);
     expect(
       fake.received.map((m) => (m.isBinary ? 'bin' : JSON.parse(m.data.toString())['t'])),
     ).toEqual(['open', 'bin', 'resize']);
@@ -526,9 +571,39 @@ describe('a live terminal (Q3, Q4, Q5)', () => {
     await startRelay({ pingIntervalMs: 40 });
     const id = await runningAgent();
     const b = await openTerminal(id);
-    await until(() => fake.pings >= 2 && b.pings >= 2);
+    await until(() => fake.pings >= 2 && b.pings >= 2, b);
     b.ws.close(1000);
     await b.closed;
+  });
+});
+
+describe('the test harness holds on a loaded shard (MOTIR-9877)', () => {
+  it('a mint slower than the old 300 ms window still dials, because it happens before connect', async () => {
+    const id = await runningAgent();
+    const issue = agentTerminalService.issueTicket.bind(agentTerminalService);
+    vi.spyOn(agentTerminalService, 'issueTicket').mockImplementation(async (...args) => {
+      await new Promise((r) => setTimeout(r, 1_000));
+      return issue(...args);
+    });
+    const b = await openTerminal(id);
+    expect(b.texts().find((f) => f['t'] === 'ready')).toMatchObject({ resumed: false });
+    b.ws.close(1000);
+    await b.closed;
+  });
+
+  it('a wait on the dial fails at once with the close code when the relay refuses it', async () => {
+    const id = await runningAgent();
+    const ticket = await ticketFor(id);
+    await adminDb.agentInstance.update({ where: { id }, data: { state: 'hibernated' } });
+    const started = Date.now();
+    const b = browser();
+    await b.opened;
+    b.ws.send(JSON.stringify({ t: 'auth', ticket }));
+    b.ws.send(JSON.stringify({ t: 'open', cols: 80, rows: 24 }));
+    await expect(until(() => b.texts().some((f) => f['t'] === 'ready'), b)).rejects.toThrow(
+      /closed the browser 4409 while waiting/,
+    );
+    expect(Date.now() - started).toBeLessThan(LOADED_SHARD_MS);
   });
 });
 
@@ -540,7 +615,7 @@ describe('activity (Q6) — throttled, and silent after close', () => {
     const sendAndSettle = async (data: string | Buffer, binary: boolean) => {
       const before = fake.received.length;
       b.ws.send(data, { binary });
-      await until(() => fake.received.length > before);
+      await until(() => fake.received.length > before, b);
       await new Promise((r) => setTimeout(r, 20));
     };
 
@@ -557,8 +632,9 @@ describe('activity (Q6) — throttled, and silent after close', () => {
     // Output alone (server → browser binary) keeps the agent awake too.
     nowMs += 60_000;
     await sendAndSettle(JSON.stringify({ t: 'emit' }), false);
-    await until(() =>
-      b.inbox.some((m) => m.isBinary && m.data.toString() === 'output from the shell'),
+    await until(
+      () => b.inbox.some((m) => m.isBinary && m.data.toString() === 'output from the shell'),
+      b,
     );
     expect(touches).toHaveLength(3);
 
@@ -616,19 +692,19 @@ describe('nothing that flows is logged or reported (Q8)', () => {
       });
     }
     const id = await runningAgent();
+    const ticket = await ticketFor(id);
     const b = browser();
     await b.opened;
-    const ticket = await ticketFor(id);
     b.ws.send(JSON.stringify({ t: 'auth', ticket }));
     b.ws.send(JSON.stringify({ t: 'open', cols: 80, rows: 24 }));
-    await until(() => b.texts().some((f) => f['t'] === 'ready'));
+    await until(() => b.texts().some((f) => f['t'] === 'ready'), b);
 
     failTouch = true; // every bump from here on throws, with the marker in its message
     nowMs += 60_000;
     b.ws.send(Buffer.from(`echo ${MARKER}\r`), { binary: true });
-    await until(() => b.inbox.some((m) => m.isBinary && m.data.includes(MARKER)));
+    await until(() => b.inbox.some((m) => m.isBinary && m.data.includes(MARKER)), b);
     b.ws.send(JSON.stringify({ t: 'resize', cols: 1, rows: 1, note: MARKER }));
-    await until(() => fake.received.some((m) => m.data.includes(`"note":"${MARKER}"`)));
+    await until(() => fake.received.some((m) => m.data.includes(`"note":"${MARKER}"`)), b);
     b.ws.send(JSON.stringify({ t: 'die' })); // the machine drops mid-stream
     expect(await b.closed).toBe(4502);
     await until(async () => (await connections())[0]?.closedAt != null);
