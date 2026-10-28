@@ -68,7 +68,7 @@ describe('every refusal maps to the design’s copy', () => {
     [{ reason: 'credits' }, 'credits'],
     [{ reason: 'credits_unknown' }, 'creditsUnknown'],
     [{ reason: 'user_cap' }, 'userCap'],
-    [{ reason: 'org_running_cap', limit: 50 }, 'orgRunningLimit'],
+    [{ reason: 'org_cap', limit: 50 }, 'orgCap'],
     [{ reason: 'fleet_busy' }, 'busy'],
     [{ code: 'agent_instance_name_taken' }, 'nameTaken'],
     [{ code: 'agent_instance_name_invalid' }, 'nameInvalid'],

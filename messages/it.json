@@ -6805,13 +6805,13 @@
       "loading": "Caricamento…",
       "label": {
         "agentRunsInParallel": "Esecuzioni di agenti in parallelo",
-        "agentsRunningInOrg": "Agenti ospitati per organizzazione",
+        "agentsInOrg": "Agenti ospitati per organizzazione",
         "agentsPerPerson": "Agenti ospitati per persona",
         "ciJobsInFlight": "Job CI in corso"
       },
       "explain": {
         "agentRunsInParallel": "Job di agenti ospitati eseguiti in contemporanea. Oltre il limite attendono in coda.",
-        "agentsRunningInOrg": "Agenti ospitati attivi in contemporanea in tutta l’organizzazione. Oltre il limite un avvio viene rifiutato, non messo in coda.",
+        "agentsInOrg": "Agenti ospitati attivi in tutta l’organizzazione, in funzione o ibernati. Oltre il limite uno nuovo viene rifiutato, non messo in coda.",
         "agentsPerPerson": "Agenti ospitati attivi che una persona può avere. Oltre il limite uno nuovo viene rifiutato, non messo in coda.",
         "ciJobsInFlight": "Job CI eseguiti in contemporanea sui runner di Motir. Oltre il limite attendono in coda."
       },
@@ -11813,8 +11813,8 @@
           "override": "deroga"
         },
         "facts": {
-          "plan": "Piano <strong>{plan}</strong> · {runs} esecuzioni ospitate alla volta · {perUser} agenti per persona · {running} agenti in esecuzione · {ci} job di CI alla volta",
-          "planCiUnreadable": "Piano <strong>{plan}</strong> · {runs} esecuzioni ospitate alla volta · {perUser} agenti per persona · {running} agenti in esecuzione · limite CI illeggibile",
+          "plan": "Piano <strong>{plan}</strong> · {runs} esecuzioni ospitate alla volta · {perUser} agenti per persona · {agents} agenti · {ci} job di CI alla volta",
+          "planCiUnreadable": "Piano <strong>{plan}</strong> · {runs} esecuzioni ospitate alla volta · {perUser} agenti per persona · {agents} agenti · limite CI illeggibile",
           "planExempt": "Piano <strong>Nessun limite di piano</strong>",
           "planExemptOverride": "Piano <strong>Nessun limite di piano</strong> · {ci} job di CI alla volta (deroga)",
           "planUnknown": "Piano <strong>sconosciuto · {key}</strong> · nuovi container rifiutati",
@@ -12715,8 +12715,8 @@
       "creditsUnknown": "Motir non è riuscito a verificare i crediti della tua organizzazione in questo momento. Riprova tra poco.",
       "userCap": "Il piano {plan} della tua organizzazione consente {limit, plural, one {# agente} other {# agenti}} per persona. Ognuno viene addebitato ogni giorno per lo spazio di archiviazione, anche se ibernato. Eliminane uno per crearne un altro.",
       "userCapNoFigure": "Hai già tanti agenti quanti ne consente per persona il piano della tua organizzazione. Ognuno viene addebitato ogni giorno per lo spazio di archiviazione, anche se ibernato. Eliminane uno per crearne un altro.",
-      "orgRunningLimit": "Il piano {plan} della tua organizzazione esegue {limit, plural, one {# agente} other {# agenti}} alla volta, e sono già tutti in funzione. Ibernane uno per avviarne un altro.",
-      "orgRunningLimitNoFigure": "La tua organizzazione ha già in funzione tanti agenti quanti ne consente il suo piano. Ibernane uno per avviarne un altro.",
+      "orgCap": "Il piano {plan} della tua organizzazione consente {limit, plural, one {# agente} other {# agenti}} nell’organizzazione, in funzione o ibernati. Ognuno viene addebitato ogni giorno per lo spazio di archiviazione, anche se ibernato. Eliminane uno per crearne un altro.",
+      "orgCapNoFigure": "La tua organizzazione ha già tanti agenti quanti ne consente il suo piano, in funzione o ibernati. Ognuno viene addebitato ogni giorno per lo spazio di archiviazione, anche se ibernato. Eliminane uno per crearne un altro.",
       "busy": "Motir sta facendo girare tutte le macchine che può in questo momento. Riprova tra qualche minuto.",
       "notOffered": "Quell’agente di programmazione non è disponibile: i suoi termini non consentono ancora a una piattaforma di ospitarlo. Scegli un altro agente di programmazione.",
       "nameTaken": "Hai già un agente chiamato {name} in questo progetto.",
@@ -12730,7 +12730,7 @@
       "aiPlanUnknown": "Impossibile verificare il tuo piano AI",
       "credits": "Crediti esauriti",
       "userCap": "Il tuo limite",
-      "orgRunningLimit": "Il limite della tua organizzazione"
+      "orgCap": "Il limite della tua organizzazione"
     },
     "lapse": {
       "bannerLead": "Il piano AI della tua organizzazione è terminato.",

@@ -27,7 +27,6 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { createTestLink } from '../fixtures/workItemFixtures';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { adminDb } from '../helpers/adminDb';
-import { capAgentsAt } from '../helpers/agentPlanCaps';
 import { truncateJobRuns } from '../helpers/db';
 import {
   AI,
@@ -675,18 +674,17 @@ const REFUSALS: RefusalCase[] = [
     beforeWake: false,
   },
   {
-    // The organisation's OWN running cap since MOTIR-6926 (agent-instances.md
-    // AMENDMENT 3) — no longer a fleet-wide `fleet_busy`.
-    name: 'the wake’s full organisation running cap, passed through',
+    // A wake is never refused by the organisation's agent figure (MOTIR-9954,
+    // agent-instances.md AMENDMENT 7); the operator's kill switch still refuses it.
+    name: 'the wake’s kill-switch refusal, passed through',
     arrange: async () => {
       const agentId = await sleepingAgent();
-      await agent('holds-the-only-slot');
-      capAgentsAt({ running: 1 });
+      vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '0');
       return { ...(await freshCard()), agentId };
     },
     status: 429,
     code: 'agent_instance_start_refused',
-    extra: { reason: 'org_running_cap', limit: 1 },
+    extra: { reason: 'fleet_busy' },
     beforeWake: false,
   },
 ];

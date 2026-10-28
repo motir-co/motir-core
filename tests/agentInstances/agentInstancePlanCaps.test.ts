@@ -10,7 +10,8 @@ import { fleet, fx, otherMember, setUpHarness, slots, stub, tearDownHarness } fr
 
 // AGENTS HELD TO THE PLAN'S FIGURES (Story MOTIR-9363 · MOTIR-9374) — create and
 // wake judged against the org's `agentsPerUser` (at create) and
-// `agentsRunningPerOrg` (at create and wake, under the fleet admission lock), over
+// `agentsPerOrg` (live agents, running or asleep, at create only, under the
+// fleet admission lock — MOTIR-9954; a wake is never refused by it), over
 // real Postgres and the fake persistent fleet. The plan is the REAL read: the
 // harness's motir-ai stub answers the subscription with the plan tier named here,
 // and `planCapsService` turns its key into the real figures.
@@ -34,8 +35,8 @@ const create = (name: string, ctx = fx.ctx) =>
   lifecycle.create(fx.projectIdentifier, { name, profileId: 'claude' }, ctx);
 
 let seeded = 0;
-/** `count` agents already running in the org, owned by someone else. */
-async function seedRunning(count: number): Promise<void> {
+/** `count` live agents already in the org, in `state`, owned by someone else. */
+async function seedLive(count: number, state: 'running' | 'hibernated' = 'running'): Promise<void> {
   const owner = await otherMember();
   for (let i = 0; i < count; i++) {
     seeded += 1;
@@ -50,16 +51,10 @@ async function seedRunning(count: number): Promise<void> {
         imageTag: 't',
         imageDigest: 'sha256:x',
         region: 'iad',
-        state: 'running',
+        state,
       },
     });
   }
-}
-
-/** Another member of the workspace, as a service context. */
-async function memberCtx() {
-  const other = await otherMember();
-  return { ...fx.ctx, userId: other.userId };
 }
 
 async function expectNothingTaken(slotsBefore: number, provisionedBefore: number) {
@@ -114,48 +109,58 @@ describe('per person, at create — the plan’s agentsPerUser', () => {
   });
 });
 
-describe('running per org, at create and wake — the plan’s agentsRunningPerOrg, under the lock', () => {
-  it('Standard (2): with 2 running, a wake and a create are each refused, naming the plan and 2, and leave no slot', async () => {
+describe('live agents per org, at create only — the plan’s agentsPerOrg, under the lock', () => {
+  it('Standard (2): with 2 live agents, every one hibernated, a create is refused naming the plan and 2, and leaves no slot', async () => {
     onPlan(TIERS.standard);
-    const mine = await create('mine');
-    await lifecycle.hibernate(fx.projectIdentifier, mine.id, fx.ctx);
-    await seedRunning(2);
+    await seedLive(2, 'hibernated');
     const provisioned = fleet.persistentSpecs.length;
 
-    const words = expect.stringContaining('Standard plan runs 2 agents at once, and 2 are running');
-    await expect(lifecycle.wake(fx.projectIdentifier, mine.id, fx.ctx)).rejects.toMatchObject({
-      reason: 'org_running_cap',
-      limit: 2,
-      planName: 'Standard',
-      message: words,
-    });
-    await expect(create('theirs', await memberCtx())).rejects.toMatchObject({
-      reason: 'org_running_cap',
-      limit: 2,
-      planName: 'Standard',
-      message: words,
-    });
+    const refused = await create('mine').catch((e: unknown) => e);
+    expect(refused).toBeInstanceOf(AgentInstanceStartRefusedError);
+    expect(refused).toMatchObject({ reason: 'org_cap', limit: 2, planName: 'Standard' });
+    expect((refused as Error).message).toContain(
+      'Standard plan allows 2 agents in the organization, running or asleep',
+    );
+    expect((refused as Error).message).toContain('Delete one to create another');
     await expectNothingTaken(0, provisioned);
   });
 
-  it('two concurrent wakes one below the figure: exactly one is admitted', async () => {
-    onPlan(TIERS.pro); // 10 running
-    const a = await create('a');
-    const b = await create('b');
-    await lifecycle.hibernate(fx.projectIdentifier, a.id, fx.ctx);
-    await lifecycle.hibernate(fx.projectIdentifier, b.id, fx.ctx);
-    await seedRunning(9);
+  it('the same create succeeds once one of the live agents is deleted', async () => {
+    onPlan(TIERS.standard);
+    await seedLive(2, 'hibernated');
+    await expect(create('mine')).rejects.toMatchObject({ reason: 'org_cap' });
 
-    const results = await Promise.allSettled([
-      lifecycle.wake(fx.projectIdentifier, a.id, fx.ctx),
-      lifecycle.wake(fx.projectIdentifier, b.id, fx.ctx),
-    ]);
+    const one = await adminDb.agentInstance.findFirstOrThrow({
+      where: { organizationId: fx.workspace.organizationId, deletedAt: null },
+    });
+    await adminDb.agentInstance.update({
+      where: { id: one.id },
+      data: { state: 'deleting', deletedAt: new Date() },
+    });
+
+    expect((await create('mine')).state).toBe('running');
+  });
+
+  it('a wake is never refused by it: an org at its figure wakes a hibernated agent', async () => {
+    onPlan(TIERS.standard); // 2 per org, 1 per person
+    const mine = await create('mine');
+    await lifecycle.hibernate(fx.projectIdentifier, mine.id, fx.ctx);
+    await seedLive(1, 'running'); // 2 live: the figure, one of them asleep
+
+    expect((await lifecycle.wake(fx.projectIdentifier, mine.id, fx.ctx)).state).toBe('running');
+  });
+
+  it('two concurrent creates one below the figure: exactly one is admitted', async () => {
+    onPlan(TIERS.pro); // 10 per org, 2 per person
+    await seedLive(9, 'hibernated');
+
+    const results = await Promise.allSettled([create('a'), create('b')]);
 
     expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
     const rejected = results.filter((r) => r.status === 'rejected');
     expect(rejected).toHaveLength(1);
     expect((rejected[0] as PromiseRejectedResult).reason).toMatchObject({
-      reason: 'org_running_cap',
+      reason: 'org_cap',
       limit: 10,
     });
     expect(await slots()).toHaveLength(1);
@@ -222,7 +227,7 @@ describe('a plan with no figures is refused — never a default', () => {
 describe('exempt and the gates before the plan', () => {
   it('an exempt org creates past 10 per person and runs past 50', async () => {
     vi.spyOn(planCapsService, 'capsFor').mockResolvedValue({ kind: 'exempt' });
-    await seedRunning(50);
+    await seedLive(50);
     for (let i = 0; i < 11; i++) expect((await create(`e-${i}`)).state).toBe('running');
   });
 

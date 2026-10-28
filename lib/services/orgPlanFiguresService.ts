@@ -38,7 +38,7 @@ export const orgPlanFiguresService = {
         planName: caps.planName,
         agentRunsInParallel: caps.caps.agentRunsInParallel,
         agentsPerUser: caps.caps.agentsPerUser,
-        agentsRunningPerOrg: caps.caps.agentsRunningPerOrg,
+        agentsPerOrg: caps.caps.agentsPerOrg,
         ciBurstCap: ciCapped?.figure ?? null,
         ciBurstSource: ciCapped?.source ?? 'unreadable',
       };

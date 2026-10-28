@@ -50,9 +50,10 @@ export class AgentProfileNotOfferedError extends Error {
  * Which rule refused a start (§5, §6). `ai_plan_required` / `ai_plan_unknown` are
  * `agent-instance-storage.md` §1 and §4's: no paid AI plan, or one that could not
  * be read — asked before every other rule (MOTIR-6918). `user_cap` and
- * `org_running_cap` are the organisation's PLAN figures — `agentsPerUser` at create,
- * `agentsRunningPerOrg` at create and wake (the fleet-capacity decision record
- * MOTIR-9357, MOTIR-9374) — each carrying the `limit` and `planName` the words
+ * `org_cap` are the organisation's PLAN figures — `agentsPerUser` at create,
+ * `agentsPerOrg` (the org's live agents, running or asleep) at create only — a
+ * wake is never refused by it (the fleet-capacity decision record MOTIR-9357,
+ * MOTIR-9374, MOTIR-9954) — each carrying the `limit` and `planName` the words
  * name. `plan_unknown` is a plan whose figures could not be read (or whose key
  * has no row): refused, never given a default figure. `fleet_busy` is left for
  * the operator's kill switch alone.
@@ -64,7 +65,7 @@ export type AgentInstanceRefusalReason =
   | 'credits'
   | 'credits_unknown'
   | 'user_cap'
-  | 'org_running_cap'
+  | 'org_cap'
   | 'fleet_busy';
 
 /** A create or wake refused BEFORE anything was booted (§5, §6). */
@@ -73,7 +74,7 @@ export class AgentInstanceStartRefusedError extends Error {
   constructor(
     readonly reason: AgentInstanceRefusalReason,
     message: string,
-    /** The number a cap refusal names (`user_cap`, `org_running_cap`), so the page renders it. */
+    /** The number a cap refusal names (`user_cap`, `org_cap`), so the page renders it. */
     readonly limit?: number,
     /** The plan a cap refusal names, as motir-ai sends it (MOTIR-9374). */
     readonly planName?: string,

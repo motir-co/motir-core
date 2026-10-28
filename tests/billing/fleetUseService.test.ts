@@ -303,9 +303,9 @@ describe('a Pro org: figures are figuresFor’s, use is countsFor’s', () => {
       waiting: { planLimit: 2, poolFull: 1, other: 0 },
       figureSource: 'plan',
     });
-    expect(answer.figures.agentsRunningInOrg).toEqual({
-      figure: figures.agentsRunningPerOrg,
-      inUse: counts.agentsRunning.inFlight,
+    expect(answer.figures.agentsInOrg).toEqual({
+      figure: figures.agentsPerOrg,
+      inUse: counts.agentsLive.inFlight,
       waiting: null,
       figureSource: 'plan',
     });

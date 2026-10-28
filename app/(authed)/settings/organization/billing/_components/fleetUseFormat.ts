@@ -17,14 +17,14 @@ import { fmt } from './billingFormat';
 
 export type FleetUseFigureKey =
   | 'agentRunsInParallel'
-  | 'agentsRunningInOrg'
+  | 'agentsInOrg'
   | 'agentsPerPerson'
   | 'ciJobsInFlight';
 
 /** The design's row order (design/billing § Amendment 2026-10-26, element 3). */
 export const FIGURE_KEYS: readonly FleetUseFigureKey[] = [
   'agentRunsInParallel',
-  'agentsRunningInOrg',
+  'agentsInOrg',
   'agentsPerPerson',
   'ciJobsInFlight',
 ];

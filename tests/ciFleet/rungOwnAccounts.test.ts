@@ -702,7 +702,7 @@ describe('a pool_2400k org', () => {
       agentRunsInParallel: 128,
       ciBurstCap: 800,
     });
-    expect([read.agentsPerUser, read.agentsRunningPerOrg]).toEqual([10, 50]);
+    expect([read.agentsPerUser, read.agentsPerOrg]).toEqual([10, 50]);
     const run = await hostedRun(top);
     expect(run.landed).toEqual(on(await row(top.organizationId, 'hosted_agent')));
     await finishHosted([run.ref]);

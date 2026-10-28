@@ -642,7 +642,7 @@ describe('granted, each org runs on its own accounts at granted ÷ 2', () => {
       ciBurstCap: ci / 2,
     });
     expect([read.agentRunsInParallel, read.ciBurstCap]).toEqual([128, 800]);
-    expect([read.agentsPerUser, read.agentsRunningPerOrg]).toEqual([10, 50]);
+    expect([read.agentsPerUser, read.agentsPerOrg]).toEqual([10, 50]);
     const job = await ciJob(top);
     expect(job.landed).toEqual(on(await row(top.organizationId, 'ci_runner')));
     await finishCi([job.intentId]);
@@ -656,7 +656,7 @@ describe('granted, each org runs on its own accounts at granted ÷ 2', () => {
     expect([index.state, index.liveAt]).toEqual([hoster.state, hoster.liveAt]);
     expect(index.liveAt).not.toBeNull();
 
-    const perOrg = (await caps(rung.organizationId)).agentsRunningPerOrg;
+    const perOrg = (await caps(rung.organizationId)).agentsPerOrg;
     const placed: Landed[] = [];
     for (let i = 0; i <= perOrg; i++) placed.push(await agentInstance(rung));
     expect(placed.slice(0, perOrg)).toEqual(Array(perOrg).fill(on(hoster)));
