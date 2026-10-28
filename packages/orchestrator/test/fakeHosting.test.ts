@@ -153,6 +153,34 @@ describe('the fake hosting deploy port', () => {
   });
 });
 
+describe('the fake serverless port (MOTIR-9975)', () => {
+  it('refuses by the manifest field before looking for the app, as the adapter does', async () => {
+    const port = createFakeHostingDeployPort({ target: 'serverless', appPrefix: 'x-' });
+    const worker = input('x-r', PRODUCTION);
+    const refused = {
+      ...worker,
+      runtime: { ...worker.runtime, requires: { websockets: false, backgroundWork: true } },
+    };
+    await expect(port.deploy(refused)).rejects.toMatchObject({
+      code: 'HOSTING_RUNTIME_REFUSED',
+      field: 'requires.backgroundWork',
+    });
+    await expect(port.deploy(worker)).rejects.toMatchObject({ field: 'requires' });
+    expect(port.app('x-r')).toBeUndefined();
+  });
+
+  it('serves an HTTP release behind the SigV4 origin credential', async () => {
+    const port = createFakeHostingDeployPort({ target: 'serverless', appPrefix: 'x-' });
+    await port.ensureApp({ repositoryId: 'r', environment: PRODUCTION });
+    const http = input('x-r', PRODUCTION);
+    const handle = await port.deploy({
+      ...http,
+      runtime: { ...http.runtime, requires: { websockets: false, backgroundWork: false } },
+    });
+    expect((await port.describe(handle)).originCredential).toBe('aws_sigv4');
+  });
+});
+
 describe('hostingAppNames', () => {
   it('refuses a name that is not a DNS label, or a pull request that is not a number', () => {
     expect(() => hostingAppNames('mh-', 'Bad_Id', PRODUCTION)).toThrow(HostingAppNameInvalidError);

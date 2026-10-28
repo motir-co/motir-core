@@ -1,5 +1,5 @@
 import { ReleaseArtifactUnsupportedError, ReleaseRuntimeRefusedError } from '../../hosting/errors';
-import type { DeployReleaseInput } from '../../hosting/types';
+import type { DeployReleaseInput, ReleaseRuntime } from '../../hosting/types';
 import type { ServerlessHostingConfig } from './config';
 import { parseStartCommand } from './startCommand';
 
@@ -54,6 +54,16 @@ export function assertServerlessRunnable(
       artifact.kind === 'image' ? 'non-ECR image' : artifact.kind,
     );
   }
+  return {
+    imageUri: imageUriOf(artifact.ref, artifact.digest),
+    command: assertServerlessRuntime(runtime),
+  };
+}
+
+/** The runtime half of the refusals, in their fixed order, and the start
+ *  command as argv. Exported so the fake serverless port refuses exactly what
+ *  the adapter does. */
+export function assertServerlessRuntime(runtime: ReleaseRuntime): string[] {
   const { requires } = runtime;
   if (!requires) refuse('requires', 'the release does not say what it requires');
   if (requires.backgroundWork) {
@@ -62,5 +72,5 @@ export function assertServerlessRunnable(
   if (requires.websockets) refuse('requires.websockets', 'websockets need a held connection');
   const start = parseStartCommand(runtime.startCommand);
   if ('refused' in start) refuse('startCommand', start.refused);
-  return { imageUri: imageUriOf(artifact.ref, artifact.digest), command: start.argv };
+  return start.argv;
 }

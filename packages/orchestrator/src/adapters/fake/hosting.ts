@@ -6,6 +6,7 @@ import type {
   HostingDeployPort,
   HostingDeployTarget,
   HostingEnvironment,
+  OriginCredentialKind,
   ReleaseDescription,
   ReleaseHandle,
   ReleaseRuntime,
@@ -13,6 +14,7 @@ import type {
   ReleaseUsage,
 } from '../../hosting/types';
 import { runningSecondsBetween, type RunTransition } from '../../hosting/usage';
+import { assertServerlessRuntime } from '../serverless/preflight';
 
 // The FAKE hosting deploy port (MOTIR-5773) — the second implementation shipped
 // beside the Fly adapter, for the reason every port here has one: the preview
@@ -68,6 +70,11 @@ export interface FakeHostingOptions {
   readonly appPrefix?: string;
   readonly start?: Date;
 }
+
+const ORIGIN_CREDENTIALS: Partial<Record<HostingDeployTarget, OriginCredentialKind>> = {
+  fly: 'origin_secret',
+  serverless: 'aws_sigv4',
+};
 
 export function createFakeHostingDeployPort(
   options: FakeHostingOptions = {},
@@ -185,6 +192,9 @@ export function createFakeHostingDeployPort(
     },
 
     async deploy(input) {
+      // As the serverless adapter: its manifest refusals come before anything
+      // else, so a refused release finds no app and creates nothing.
+      if (target === 'serverless') assertServerlessRuntime(input.runtime);
       const app = appOf(input.appRef);
       if (!sameEnvironment(app.environment, input.environment)) {
         throw new OrchestratorApiError('fake', 409, `app ${app.appRef} is another environment's`);
@@ -214,8 +224,9 @@ export function createFakeHostingDeployPort(
         previousReleaseId: app.previous?.releaseId ?? null,
         upstreamAddress: `https://${app.appRef}.fake.invalid`,
         // As the real adapters: a Fly release sits behind the origin-secret
-        // guard (MOTIR-9947); the other targets' credentials are their adapters'.
-        originCredential: target === 'fly' ? 'origin_secret' : 'none',
+        // guard (MOTIR-9947), a serverless one behind a SigV4-signed function
+        // URL (MOTIR-9972); the other targets' credentials are their adapters'.
+        originCredential: ORIGIN_CREDENTIALS[target] ?? 'none',
       };
     },
 

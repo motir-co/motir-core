@@ -18,14 +18,25 @@
 //
 // State between steps lives on the platform, not in a local file: each step finds
 // the check's app by its fixed name and asks the port which release it serves.
+//
+// `--target serverless` (MOTIR-9975) runs the serverless target's steps instead,
+// from `./serverlessDeployCheck`; this module stays the dispatcher and the Fly
+// steps, which `--target fly` (the default) runs unchanged.
 
 import { HostingManifestInvalidError, HostingManifestMissingError } from '@/lib/hosting/errors';
 import { parseHostingManifest, type HostingManifest } from '@/lib/hosting/manifest';
+// A cycle by design: that module uses this one's helpers, and this one only
+// calls into it at run time. Neither touches the other's bindings while loading.
+import {
+  runServerlessDeployCheckStep,
+  type ServerlessDeployCheckDeps,
+} from '@/lib/hosting/serverlessDeployCheck';
 import {
   deriveOriginSecret,
   hostingAppNames,
   HostingAppNameInvalidError,
   ORIGIN_SECRET_HEADER,
+  OrchestratorNotConfiguredError,
   type HostingDeployPort,
   type HostingEnvironment,
   type ReleaseArtifact,
@@ -47,6 +58,17 @@ export const DEPLOY_CHECK_IMAGE =
 /** The committed fixture manifest the check deploys by default. */
 export const DEPLOY_CHECK_DEFAULT_MANIFEST = 'tests/fixtures/hosting/motir.hosting.json';
 
+/** The serverless target's app prefix (MOTIR-9975): inside the scoped role's
+ *  `mh-*`, which a `motir-deploy-check-` function name would fall outside. */
+export const SERVERLESS_DEPLOY_CHECK_APP_PREFIX = 'mh-deploy-check-';
+/** The serverless fixture, and its worker twin that the target refuses. */
+export const SERVERLESS_DEPLOY_CHECK_DEFAULT_MANIFEST =
+  'tests/fixtures/hosting/serverless/motir.hosting.json';
+export const SERVERLESS_DEPLOY_CHECK_WORKER_MANIFEST =
+  'tests/fixtures/hosting/serverless-worker/motir.hosting.json';
+/** The directory the serverless fixture image is built from. */
+export const SERVERLESS_DEPLOY_CHECK_IMAGE_CONTEXT = 'tests/fixtures/hosting/serverless';
+
 export const DEPLOY_CHECK_STEPS = [
   'deploy',
   'release2',
@@ -56,7 +78,16 @@ export const DEPLOY_CHECK_STEPS = [
   'destroy',
   'all',
 ] as const;
-export type DeployCheckStep = (typeof DEPLOY_CHECK_STEPS)[number];
+
+/** The steps only the serverless target has (MOTIR-9975). */
+export const SERVERLESS_ONLY_DEPLOY_CHECK_STEPS = ['database', 'image', 'refuse'] as const;
+export type DeployCheckStep =
+  | (typeof DEPLOY_CHECK_STEPS)[number]
+  | (typeof SERVERLESS_ONLY_DEPLOY_CHECK_STEPS)[number];
+
+/** The targets the check drives. */
+export const DEPLOY_CHECK_TARGETS = ['fly', 'serverless'] as const;
+export type DeployCheckTarget = (typeof DEPLOY_CHECK_TARGETS)[number];
 
 /** The synthetic environment: production-shaped, so it exercises the production
  *  path's sizing and naming without a pull request. */
@@ -94,17 +125,21 @@ export class DeployCheckUsageError extends Error {
 }
 
 export const DEPLOY_CHECK_USAGE = [
-  'Usage: pnpm hosting:deploy-check <step> [--manifest <path>] [--name <app>] [--image <ref>]',
+  'Usage: pnpm hosting:deploy-check <step> [--target fly|serverless] [--manifest <path>] [--name <app>] [--image <ref>]',
   `  steps: ${DEPLOY_CHECK_STEPS.join(', ')}`,
-  `  --manifest  defaults to ${DEPLOY_CHECK_DEFAULT_MANIFEST}`,
+  `  serverless-only steps: ${SERVERLESS_ONLY_DEPLOY_CHECK_STEPS.join(', ')}`,
+  '  --target    fly (default) or serverless',
+  `  --manifest  defaults to ${DEPLOY_CHECK_DEFAULT_MANIFEST} (fly) or ${SERVERLESS_DEPLOY_CHECK_DEFAULT_MANIFEST} (serverless)`,
   `  --name      defaults to ${DEPLOY_CHECK_DEFAULT_NAME}; must start with ${DEPLOY_CHECK_APP_PREFIX}`,
-  `  --image     defaults to ${DEPLOY_CHECK_IMAGE}`,
+  `  --image     fly only; defaults to ${DEPLOY_CHECK_IMAGE}`,
 ].join('\n');
 
 export interface DeployCheckOptions {
   readonly manifestPath: string;
   readonly appName: string;
   readonly image: string;
+  /** Absent means `fly`. */
+  readonly target?: DeployCheckTarget;
 }
 
 export interface DeployCheckDeps {
@@ -120,6 +155,9 @@ export interface DeployCheckDeps {
   /** The key app origin secrets are derived from; read only by `probe`, and only
    *  for a release whose origin credential is the secret. */
   readonly originSecretKey: () => string;
+  /** What only the serverless target needs; absent, `--target serverless` is
+   *  refused as not configured. */
+  readonly serverless?: ServerlessDeployCheckDeps;
 }
 
 /** A stand-in for a guarded release over HTTP, for runs against the fake port,
@@ -159,12 +197,15 @@ export function imageArtifact(image: string): ReleaseArtifact {
   return { kind: 'image', ref: image.slice(0, at), digest: image.slice(at + 1) };
 }
 
-function readManifest(deps: DeployCheckDeps, path: string): HostingManifest {
+export function readManifest(
+  deps: Pick<DeployCheckDeps, 'readManifest'>,
+  path: string,
+): HostingManifest {
   return parseHostingManifest(deps.readManifest(path));
 }
 
 /** The release the check's app serves now, or null when it has none. */
-async function servingHandle(
+export async function servingHandle(
   port: HostingDeployPort,
   appRef: string,
 ): Promise<ReleaseHandle | null> {
@@ -207,7 +248,15 @@ async function deployRelease(
 
 async function rollback(deps: DeployCheckDeps, options: DeployCheckOptions): Promise<void> {
   const { appRef } = deployCheckApp(options.appName);
-  const port = deps.port();
+  await rollbackApp(deps, deps.port(), appRef);
+}
+
+/** Roll the app back and print which release serves; shared by both targets. */
+export async function rollbackApp(
+  deps: Pick<DeployCheckDeps, 'print'>,
+  port: HostingDeployPort,
+  appRef: string,
+): Promise<void> {
   const handle = await port.rollback({ appRef, environment: ENVIRONMENT });
   const description = await port.describe(handle);
   deps.print('rollback', {
@@ -220,7 +269,15 @@ async function rollback(deps: DeployCheckDeps, options: DeployCheckOptions): Pro
 
 async function status(deps: DeployCheckDeps, options: DeployCheckOptions): Promise<void> {
   const { appRef } = deployCheckApp(options.appName);
-  const port = deps.port();
+  await statusOf(deps, deps.port(), appRef);
+}
+
+/** Print which release the app serves, from the port; shared by both targets. */
+export async function statusOf(
+  deps: Pick<DeployCheckDeps, 'print'>,
+  port: HostingDeployPort,
+  appRef: string,
+): Promise<void> {
   const handle = await servingHandle(port, appRef);
   if (!handle) {
     deps.print('status', { app: appRef, state: 'none', servingReleaseId: null });
@@ -236,7 +293,7 @@ async function status(deps: DeployCheckDeps, options: DeployCheckOptions): Promi
   });
 }
 
-const statusLine = (res: Response): string => `${res.status} ${res.statusText}`.trim();
+export const statusLine = (res: Response): string => `${res.status} ${res.statusText}`.trim();
 
 async function probe(deps: DeployCheckDeps, options: DeployCheckOptions): Promise<void> {
   const manifest = readManifest(deps, options.manifestPath);
@@ -301,6 +358,12 @@ export async function runDeployCheckStep(
   deps: DeployCheckDeps,
   options: DeployCheckOptions,
 ): Promise<void> {
+  if (options.target === 'serverless') {
+    if (!deps.serverless) {
+      throw new OrchestratorNotConfiguredError('the serverless deploy check has no dependencies');
+    }
+    return runServerlessDeployCheckStep(step, { ...deps, serverless: deps.serverless }, options);
+  }
   switch (step) {
     case 'deploy':
       return deployRelease(deps, options, 1);
@@ -325,6 +388,10 @@ export async function runDeployCheckStep(
       await status(deps, options);
       await probe(deps, options);
       return destroy(deps, options);
+    case 'database':
+    case 'image':
+    case 'refuse':
+      throw new DeployCheckUsageError(`The ${step} step needs --target serverless.`);
   }
 }
 
@@ -334,32 +401,48 @@ export function parseDeployCheckArgs(argv: readonly string[]): {
   options: DeployCheckOptions;
 } {
   let step: DeployCheckStep | undefined;
-  const flags: Record<'manifest' | 'name' | 'image', string | undefined> = {
+  const flags: Record<'manifest' | 'name' | 'image' | 'target', string | undefined> = {
     manifest: undefined,
     name: undefined,
     image: undefined,
+    target: undefined,
   };
+  const steps: readonly string[] = [...DEPLOY_CHECK_STEPS, ...SERVERLESS_ONLY_DEPLOY_CHECK_STEPS];
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i]!;
-    const flag = /^--(manifest|name|image)(?:=(.*))?$/.exec(arg);
+    const flag = /^--(manifest|name|image|target)(?:=(.*))?$/.exec(arg);
     if (flag) {
       const key = flag[1] as keyof typeof flags;
       const value = flag[2] ?? argv[(i += 1)];
       if (!value) throw new DeployCheckUsageError(`--${key} needs a value.`);
       flags[key] = value;
-    } else if (!step && (DEPLOY_CHECK_STEPS as readonly string[]).includes(arg)) {
+    } else if (!step && steps.includes(arg)) {
       step = arg as DeployCheckStep;
     } else {
       throw new DeployCheckUsageError(`Unknown argument: ${arg}`);
     }
   }
   if (!step) throw new DeployCheckUsageError('Name a step.');
+  const target = flags.target ?? 'fly';
+  if (!(DEPLOY_CHECK_TARGETS as readonly string[]).includes(target)) {
+    throw new DeployCheckUsageError(`Unknown target: ${target}`);
+  }
+  if (
+    target === 'fly' &&
+    (SERVERLESS_ONLY_DEPLOY_CHECK_STEPS as readonly string[]).includes(step)
+  ) {
+    throw new DeployCheckUsageError(`The ${step} step needs --target serverless.`);
+  }
+  const serverless = target === 'serverless';
   return {
     step,
     options: {
-      manifestPath: flags.manifest ?? DEPLOY_CHECK_DEFAULT_MANIFEST,
+      manifestPath:
+        flags.manifest ??
+        (serverless ? SERVERLESS_DEPLOY_CHECK_DEFAULT_MANIFEST : DEPLOY_CHECK_DEFAULT_MANIFEST),
       appName: flags.name ?? DEPLOY_CHECK_DEFAULT_NAME,
       image: flags.image ?? DEPLOY_CHECK_IMAGE,
+      ...(serverless ? { target: 'serverless' as const } : {}),
     },
   };
 }
