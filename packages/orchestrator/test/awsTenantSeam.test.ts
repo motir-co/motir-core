@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   AWS_TENANT_DEPLOY_ROLE,
@@ -592,7 +592,10 @@ describe('the seam’s SDK boundary', () => {
   const SDK_IMPORT = /import\s*\{([^}]*)\}\s*from\s*'@aws-sdk\/[^']+'/g;
 
   it('imports the SDK in sdk.ts only, and exports no SDK name from it or the entry', () => {
-    const files = readdirSync(DIR);
+    const files = readdirSync(DIR, { recursive: true, withFileTypes: true })
+      .filter((e) => e.isFile())
+      .map((e) => relative(DIR, join(e.parentPath, e.name)));
+    expect(files.length).toBeGreaterThan(8);
     const importers = files.filter((f) => /@aws-sdk\//.test(readFileSync(join(DIR, f), 'utf8')));
     expect(importers).toEqual(['sdk.ts']);
 

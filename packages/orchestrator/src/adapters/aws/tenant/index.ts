@@ -9,9 +9,13 @@ export * from './stackRunner';
 export {
   createTenantSdkClient,
   sdkTenantCloudFormation,
+  sdkTenantRdsData,
+  sdkTenantSecretsManager,
   tenantApiError,
   type TenantSdkClientFactory,
   type TenantSdkCredentials,
   type TenantSdkService,
 } from './sdk';
 export * from './registry';
+export * from './network';
+export * from './database';

@@ -1,6 +1,12 @@
 import type { AwsManagementApi } from '../management';
 import type { TenantClients } from './clients';
-import { createTenantSdkClient, sdkTenantCloudFormation, type TenantSdkClientFactory } from './sdk';
+import {
+  createTenantSdkClient,
+  sdkTenantCloudFormation,
+  sdkTenantRdsData,
+  sdkTenantSecretsManager,
+  type TenantSdkClientFactory,
+} from './sdk';
 import { tenantDeploySession } from './session';
 
 // The ASSUMED-ROLE CLIENT FACTORY (MOTIR-10004): every client of a tenant
@@ -24,12 +30,13 @@ export function createTenantClients(options: TenantClientsOptions): TenantClient
     accountId: options.accountId,
     ...(options.now ? { now: options.now } : {}),
   });
+  const config = { region: options.region, credentials };
   return {
     accountId: options.accountId,
     region: options.region,
-    cloudformation: sdkTenantCloudFormation(
-      factory('cloudformation', { region: options.region, credentials }),
-    ),
+    cloudformation: sdkTenantCloudFormation(factory('cloudformation', config)),
+    rdsData: sdkTenantRdsData(factory('rds-data', config)),
+    secretsManager: sdkTenantSecretsManager(factory('secretsmanager', config)),
   };
 }
 

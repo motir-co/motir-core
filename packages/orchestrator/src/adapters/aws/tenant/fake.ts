@@ -1,4 +1,14 @@
-import type { TenantClients, TenantCloudFormation, TenantStack, TenantStackWrite } from './clients';
+import { createHash } from 'node:crypto';
+import type {
+  TenantClients,
+  TenantCloudFormation,
+  TenantRdsData,
+  TenantSecretsManager,
+  TenantSqlValue,
+  TenantStack,
+  TenantStackWrite,
+  TenantStatement,
+} from './clients';
 import { AwsTenantApiError } from './errors';
 
 // The FAULT-INJECTING FAKE of a tenant account (MOTIR-10004): CloudFormation held
@@ -44,6 +54,7 @@ export interface FakeTenantCloudFormationOptions {
   readonly outputs?: (
     name: string,
     parameters: Readonly<Record<string, string>>,
+    generation: number,
   ) => Record<string, string>;
 }
 
@@ -56,6 +67,9 @@ export function createFakeTenantCloudFormation(
   const faults: Array<{ operation: string; at: number; when: 'before' | 'after' }> = [];
   const counts = new Map<string, number>();
   const failingCreates = new Set<string>();
+  // Each create is a new stack id; a re-created stack's suffix differs.
+  let generation = 0;
+  const generations = new Map<string, number>();
 
   /** Counts the call; throws when a `before` fault is due; answers whether an
    *  `after` fault is. */
@@ -96,7 +110,7 @@ export function createFakeTenantCloudFormation(
       record.templateBody = next.templateBody;
       record.parameters = { ...next.parameters };
       record.tags = { ...next.tags };
-      record.outputs = outputsOf(name, next.parameters);
+      record.outputs = outputsOf(name, next.parameters, generations.get(name) ?? 0);
     }
     record.next = null;
   }
@@ -147,6 +161,7 @@ export function createFakeTenantCloudFormation(
         throw new AwsTenantApiError('cloudformation', 'AlreadyExistsException', 400);
       }
       const fails = failingCreates.delete(input.name);
+      generations.set(input.name, (generation += 1));
       stacks.set(input.name, {
         status: 'CREATE_IN_PROGRESS',
         templateBody: input.templateBody,
@@ -200,13 +215,236 @@ export function createFakeTenantCloudFormation(
   return fake;
 }
 
+// ── RDS Data API and Secrets Manager (MOTIR-10007) ──────────────────────────
+
+export type FakeTenantOperation =
+  | FakeCloudFormationOperation
+  | 'executeStatement'
+  | 'getSecretValue'
+  | 'putSecretValue';
+
+/** Faults counted per operation, as the CloudFormation fake counts them. */
+function faultCounter(service: string) {
+  const faults: Array<{ operation: string; at: number; when: 'before' | 'after' }> = [];
+  const counts = new Map<string, number>();
+  return {
+    failAt(operation: string, n: number, when: 'before' | 'after' = 'before') {
+      faults.push({ operation, at: (counts.get(operation) ?? 0) + n, when });
+    },
+    /** Throws for a `before` fault; answers whether an `after` one is due. */
+    enter(operation: string): boolean {
+      const count = (counts.get(operation) ?? 0) + 1;
+      counts.set(operation, count);
+      const index = faults.findIndex((f) => f.operation === operation && f.at === count);
+      if (index < 0) return false;
+      const [fault] = faults.splice(index, 1);
+      if (fault!.when === 'before') throw new AwsTenantApiError(service, 'InjectedFault', null);
+      return true;
+    },
+    injected: () => new AwsTenantApiError(service, 'InjectedFault', null),
+  };
+}
+
+/** A role on the fake cluster. */
+export interface FakeDatabaseRole {
+  password: string;
+}
+
+export interface FakeTenantRdsData extends TenantRdsData {
+  /** Roles by name, and databases by name with their owner. */
+  readonly roles: Map<string, FakeDatabaseRole>;
+  readonly databases: Map<string, { owner: string }>;
+  /** Every statement run, in order. */
+  readonly statements: TenantStatement[];
+  failAt(operation: 'executeStatement', n: number, when?: 'before' | 'after'): void;
+  /** The next `n` statements answer that the cluster is resuming. */
+  resumingFor(n: number): void;
+}
+
+const ident = String.raw`"([a-z0-9_]+)"`;
+
+/** The fake cluster: understands exactly the statements the database module
+ *  sends, and refuses anything else. */
+export function createFakeTenantRdsData(mainDatabase = 'app'): FakeTenantRdsData {
+  const roles = new Map<string, FakeDatabaseRole>();
+  const databases = new Map<string, { owner: string }>([[mainDatabase, { owner: 'motir_master' }]]);
+  const statements: TenantStatement[] = [];
+  const counter = faultCounter('rds-data');
+  let resuming = 0;
+
+  function run(statement: TenantStatement): TenantSqlValue[][] {
+    const { sql } = statement;
+    const p = statement.parameters ?? {};
+    let m: RegExpExecArray | null;
+    if (/^SELECT 1 FROM pg_roles WHERE rolname = :name$/.test(sql)) {
+      return roles.has(p['name']!) ? [[1]] : [];
+    }
+    if (/^SELECT 1 FROM pg_database WHERE datname = :name$/.test(sql)) {
+      return databases.has(p['name']!) ? [[1]] : [];
+    }
+    if ((m = new RegExp(`^CREATE ROLE ${ident} WITH LOGIN PASSWORD '([A-Za-z0-9]+)'$`).exec(sql))) {
+      if (roles.has(m[1]!)) throw new AwsTenantApiError('rds-data', 'DuplicateObject', 400);
+      roles.set(m[1]!, { password: m[2]! });
+      return [];
+    }
+    if ((m = new RegExp(`^ALTER ROLE ${ident} WITH LOGIN PASSWORD '([A-Za-z0-9]+)'$`).exec(sql))) {
+      const role = roles.get(m[1]!);
+      if (!role) throw new AwsTenantApiError('rds-data', 'UndefinedObject', 400);
+      role.password = m[2]!;
+      return [];
+    }
+    if ((m = new RegExp(`^GRANT ${ident} TO CURRENT_USER$`).exec(sql))) {
+      if (!roles.has(m[1]!)) throw new AwsTenantApiError('rds-data', 'UndefinedObject', 400);
+      return [];
+    }
+    if ((m = new RegExp(`^CREATE DATABASE ${ident} OWNER ${ident}$`).exec(sql))) {
+      if (databases.has(m[1]!)) throw new AwsTenantApiError('rds-data', 'DuplicateDatabase', 400);
+      databases.set(m[1]!, { owner: m[2]! });
+      return [];
+    }
+    if ((m = new RegExp(`^ALTER DATABASE ${ident} OWNER TO ${ident}$`).exec(sql))) {
+      databases.set(m[1]!, { owner: m[2]! });
+      return [];
+    }
+    if ((m = new RegExp(`^DROP DATABASE IF EXISTS ${ident} WITH \\(FORCE\\)$`).exec(sql))) {
+      databases.delete(m[1]!);
+      return [];
+    }
+    if ((m = new RegExp(`^DROP ROLE IF EXISTS ${ident}$`).exec(sql))) {
+      roles.delete(m[1]!);
+      return [];
+    }
+    throw new AwsTenantApiError('rds-data', 'UnsupportedStatement', 400);
+  }
+
+  return {
+    roles,
+    databases,
+    statements,
+    failAt: (operation, n, when) => counter.failAt(operation, n, when),
+    resumingFor(n) {
+      resuming = n;
+    },
+    async executeStatement(statement) {
+      const lost = counter.enter('executeStatement');
+      if (resuming > 0) {
+        resuming -= 1;
+        throw new AwsTenantApiError('rds-data', 'DatabaseResumingException', 400);
+      }
+      statements.push(statement);
+      const rows = run(statement);
+      if (lost) throw counter.injected();
+      return rows;
+    },
+  };
+}
+
+export interface FakeTenantSecretsManager extends TenantSecretsManager {
+  /** Secret values by ARN. A secret a stack generated reads as
+   *  `{"password":…}` the first time it is asked for. */
+  readonly values: Map<string, string>;
+  readonly calls: string[];
+  failAt(
+    operation: 'getSecretValue' | 'putSecretValue',
+    n: number,
+    when?: 'before' | 'after',
+  ): void;
+}
+
+/** A generated password, deterministic per secret. */
+export function fakeGeneratedPassword(secretArn: string): string {
+  return createHash('sha256').update(secretArn).digest('hex').slice(0, 32);
+}
+
+export function createFakeTenantSecretsManager(): FakeTenantSecretsManager {
+  const values = new Map<string, string>();
+  const calls: string[] = [];
+  const counter = faultCounter('secretsmanager');
+  return {
+    values,
+    calls,
+    failAt: (operation, n, when) => counter.failAt(operation, n, when),
+    async getSecretValue(secretId) {
+      calls.push(`getSecretValue:${secretId}`);
+      const lost = counter.enter('getSecretValue');
+      if (!values.has(secretId)) {
+        if (!secretId.startsWith('arn:aws:secretsmanager:')) {
+          throw new AwsTenantApiError('secretsmanager', 'ResourceNotFoundException', 400);
+        }
+        values.set(secretId, JSON.stringify({ password: fakeGeneratedPassword(secretId) }));
+      }
+      if (lost) throw counter.injected();
+      return values.get(secretId)!;
+    },
+    async putSecretValue(secretId, value) {
+      calls.push(`putSecretValue:${secretId}`);
+      const lost = counter.enter('putSecretValue');
+      values.set(secretId, value);
+      if (lost) throw counter.injected();
+    },
+  };
+}
+
+/** The outputs the tenant templates give, for the stack names the README
+ *  fixes — so a fake account answers like a real one. Any other stack echoes. */
+export function fakeTenantStackOutputs(
+  accountId: string,
+  region: string,
+): (
+  name: string,
+  parameters: Readonly<Record<string, string>>,
+  generation: number,
+) => Record<string, string> {
+  const secret = (name: string, generation: number) =>
+    `arn:aws:secretsmanager:${region}:${accountId}:secret:${name}-g${generation}`;
+  return (name, parameters, generation): Record<string, string> => {
+    if (name === 'motir-network') {
+      return {
+        VpcId: 'vpc-fake',
+        PrivateSubnetIds: 'subnet-private-a,subnet-private-b',
+        PublicSubnetIds: 'subnet-public-a,subnet-public-b',
+        DatabaseSecurityGroupId: 'sg-database',
+        AppSecurityGroupId: 'sg-app',
+        AlbArn: `arn:aws:elasticloadbalancing:${region}:${accountId}:loadbalancer/app/motir-tenant/1`,
+        AlbListenerArn: `arn:aws:elasticloadbalancing:${region}:${accountId}:listener/app/motir-tenant/1/2`,
+        AlbDnsName: `motir-tenant-1.${region}.elb.amazonaws.com`,
+      };
+    }
+    let m = /^motir-database-([a-z0-9]+)$/.exec(name);
+    if (m) {
+      return {
+        ClusterArn: `arn:aws:rds:${region}:${accountId}:cluster:motir-${m[1]}`,
+        ClusterEndpoint: `motir-${m[1]}.cluster-fake.${region}.rds.amazonaws.com`,
+        MasterSecretArn: secret(`motir/${m[1]}/database-master`, generation),
+        ProductionConnectionSecretArn: secret(`motir/${m[1]}/production/database`, generation),
+        DatabaseName: 'app',
+      };
+    }
+    m = /^motir-database-([a-z0-9]+)-pr([0-9]+)$/.exec(name);
+    if (m) {
+      return { PreviewSecretArn: secret(`motir/${m[1]}/preview-${m[2]}/database`, generation) };
+    }
+    return { StackName: name, ...parameters };
+  };
+}
+
 /** A tenant account's clients, all fakes. */
 export function createFakeTenantClients(
   options: FakeTenantCloudFormationOptions & { accountId?: string; region?: string } = {},
-): TenantClients & { readonly cloudformation: FakeTenantCloudFormation } {
+): TenantClients & {
+  readonly cloudformation: FakeTenantCloudFormation;
+  readonly rdsData: FakeTenantRdsData;
+  readonly secretsManager: FakeTenantSecretsManager;
+} {
+  const accountId = options.accountId ?? '210987654321';
+  const region = options.region ?? 'us-east-1';
   return {
-    accountId: options.accountId ?? '210987654321',
-    region: options.region ?? 'us-east-1',
-    cloudformation: createFakeTenantCloudFormation(options),
+    accountId,
+    region,
+    cloudformation: createFakeTenantCloudFormation({
+      outputs: options.outputs ?? fakeTenantStackOutputs(accountId, region),
+    }),
+    rdsData: createFakeTenantRdsData(),
+    secretsManager: createFakeTenantSecretsManager(),
   };
 }

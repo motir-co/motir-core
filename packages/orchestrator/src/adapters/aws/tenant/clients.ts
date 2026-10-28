@@ -31,9 +31,37 @@ export interface TenantCloudFormation {
   deleteStack(name: string): Promise<void>;
 }
 
+/** One SQL value as the RDS Data API returns it. */
+export type TenantSqlValue = string | number | boolean | null;
+
+export interface TenantStatement {
+  /** The cluster's ARN and the secret that authorises the call (the master's). */
+  readonly resourceArn: string;
+  readonly secretArn: string;
+  readonly database: string;
+  readonly sql: string;
+  /** Named `:parameters`, all strings. */
+  readonly parameters?: Readonly<Record<string, string>>;
+}
+
+/** The RDS Data API (MOTIR-10007): SQL on a private cluster without a
+ *  connection. A paused Serverless v2 cluster answers `DatabaseResumingException`. */
+export interface TenantRdsData {
+  executeStatement(statement: TenantStatement): Promise<TenantSqlValue[][]>;
+}
+
+/** Read and put a secret's value (MOTIR-10007). No create, tag or delete: every
+ *  secret is a stack's resource. */
+export interface TenantSecretsManager {
+  getSecretValue(secretId: string): Promise<string>;
+  putSecretValue(secretId: string, value: string): Promise<void>;
+}
+
 /** Every client of one tenant account, all under its deploy role. */
 export interface TenantClients {
   readonly accountId: string;
   readonly region: string;
   readonly cloudformation: TenantCloudFormation;
+  readonly rdsData: TenantRdsData;
+  readonly secretsManager: TenantSecretsManager;
 }

@@ -7,8 +7,21 @@ import {
   UpdateStackCommand,
   type Stack,
 } from '@aws-sdk/client-cloudformation';
+import { ExecuteStatementCommand, RDSDataClient, type Field } from '@aws-sdk/client-rds-data';
+import {
+  GetSecretValueCommand,
+  PutSecretValueCommand,
+  SecretsManagerClient,
+} from '@aws-sdk/client-secrets-manager';
 import type { AwsSdkClient } from '../management';
-import type { TenantCloudFormation, TenantStack, TenantStackWrite } from './clients';
+import type {
+  TenantCloudFormation,
+  TenantRdsData,
+  TenantSecretsManager,
+  TenantSqlValue,
+  TenantStack,
+  TenantStackWrite,
+} from './clients';
 import { AwsTenantApiError, TenantRoleUnavailableError } from './errors';
 
 // The SDK-backed tenant clients (MOTIR-10004). The only file of the seam that
@@ -17,9 +30,12 @@ import { AwsTenantApiError, TenantRoleUnavailableError } from './errors';
 // API references, read 2026-10-28:
 //   https://docs.aws.amazon.com/AWSCloudFormation/latest/APIReference/API_DescribeStacks.html,
 //   API_GetTemplate.html, API_CreateStack.html, API_UpdateStack.html, API_DeleteStack.html
+//   https://docs.aws.amazon.com/rdsdataservice/latest/APIReference/API_ExecuteStatement.html
+//   https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_GetSecretValue.html,
+//   API_PutSecretValue.html
 
 /** The services a tenant client bundle builds. Later cards add theirs. */
-export type TenantSdkService = 'cloudformation';
+export type TenantSdkService = 'cloudformation' | 'rds-data' | 'secretsmanager';
 
 /** Temporary credentials, as the SDK's credential provider answers them. */
 export interface TenantSdkCredentials {
@@ -37,8 +53,16 @@ export type TenantSdkClientFactory = (
 ) => AwsSdkClient;
 
 /** The real SDK client for each service. */
-export const createTenantSdkClient: TenantSdkClientFactory = (_service, config) =>
-  new CloudFormationClient(config);
+export const createTenantSdkClient: TenantSdkClientFactory = (service, config) => {
+  switch (service) {
+    case 'cloudformation':
+      return new CloudFormationClient(config);
+    case 'rds-data':
+      return new RDSDataClient(config);
+    case 'secretsmanager':
+      return new SecretsManagerClient(config);
+  }
+};
 
 interface SdkErrorShape {
   name?: unknown;
@@ -157,6 +181,64 @@ export function sdkTenantCloudFormation(client: AwsSdkClient): TenantCloudFormat
 
     async deleteStack(name) {
       await send(new DeleteStackCommand({ StackName: name }));
+    },
+  };
+}
+
+function valueOf(field: Field): TenantSqlValue {
+  if (field.isNull) return null;
+  if (field.stringValue !== undefined) return field.stringValue;
+  if (field.longValue !== undefined) return field.longValue;
+  if (field.doubleValue !== undefined) return field.doubleValue;
+  if (field.booleanValue !== undefined) return field.booleanValue;
+  return null;
+}
+
+/** `TenantRdsData` over an SDK client. A failure carries AWS's code only — never
+ *  the statement, which can hold a password. */
+export function sdkTenantRdsData(client: AwsSdkClient): TenantRdsData {
+  return {
+    async executeStatement(statement) {
+      try {
+        const { records } = (await client.send(
+          new ExecuteStatementCommand({
+            resourceArn: statement.resourceArn,
+            secretArn: statement.secretArn,
+            database: statement.database,
+            sql: statement.sql,
+            parameters: Object.entries(statement.parameters ?? {}).map(([name, stringValue]) => ({
+              name,
+              value: { stringValue },
+            })),
+          }),
+        )) as { records?: Field[][] };
+        return (records ?? []).map((row) => row.map(valueOf));
+      } catch (err) {
+        throw tenantApiError('rds-data', err);
+      }
+    },
+  };
+}
+
+/** `TenantSecretsManager` over an SDK client. */
+export function sdkTenantSecretsManager(client: AwsSdkClient): TenantSecretsManager {
+  return {
+    async getSecretValue(secretId) {
+      try {
+        const { SecretString } = (await client.send(
+          new GetSecretValueCommand({ SecretId: secretId }),
+        )) as { SecretString?: string };
+        return SecretString ?? '';
+      } catch (err) {
+        throw tenantApiError('secretsmanager', err);
+      }
+    },
+    async putSecretValue(secretId, value) {
+      try {
+        await client.send(new PutSecretValueCommand({ SecretId: secretId, SecretString: value }));
+      } catch (err) {
+        throw tenantApiError('secretsmanager', err);
+      }
     },
   };
 }
