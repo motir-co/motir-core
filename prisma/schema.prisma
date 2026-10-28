@@ -7552,6 +7552,14 @@ model Plan {
   /// `SubmittedRequirement` parts, `plannerAssumptions` and `settledAt`. NULL
   /// means nobody sharpened this plan — every plan written before the column.
   sharpenedRequirement Json?                   @map("sharpened_requirement")
+  /// The PLANNER's own record (MOTIR-9978) — machine state an authoring agent
+  /// keeps ON the plan between its runs, as data rather than briefing prose.
+  /// plan.py keeps the targets its PART 1 settled here (`{ targets: [...] }`),
+  /// the record motir-ai keeps as `context.conversation` on its job. Written and
+  /// read only through the MCP's `update_plan` / `get_plan`; deliberately NOT on
+  /// `PlanDto`, so the review surface never receives it. NULL means the planner
+  /// keeps none — every plan written before the column, and every hosted plan.
+  plannerRecord        Json?                   @map("planner_record")
 
   workspace         Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project           Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
