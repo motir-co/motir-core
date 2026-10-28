@@ -737,9 +737,6 @@
       "pickProjectFirst": "Choisissez d’abord un projet.",
       "unknownRelationship": "Relation inconnue.",
       "pickIssueToLink": "Choisissez un élément de travail à lier.",
-      "missingDlqId": "Identifiant de lettre morte manquant.",
-      "ownerOnlyReplay": "Seul un gestionnaire de l’espace de travail peut rejouer des tâches.",
-      "dlqGone": "Cette entrée de file de lettres mortes n’existe plus.",
       "workspaceNameEmpty": "Le nom de l’espace de travail ne peut pas être vide.",
       "useLeaveToRemoveSelf": "Utilisez Quitter pour vous retirer vous-même.",
       "cannotRemoveLastMember": "Impossible de retirer le dernier membre.",
@@ -765,9 +762,7 @@
       "workspaceSecurityForbidden": "Seuls les propriétaires et les administrateurs d’un espace de travail peuvent modifier ses paramètres de sécurité.",
       "refused": "L’opération n’a pas abouti : {reason}",
       "organizationClosing": "La suppression de cette organisation est programmée et elle est en lecture seule. Seul son propriétaire peut annuler la suppression.",
-      "memberProjectsFailed": "Impossible de charger ses projets.",
-      "systemReplayWorkspaceRow": "Cette lettre morte appartient à un espace de travail : rejouez-la depuis l’onglet Lettres mortes de cet espace.",
-      "systemReplayOperatorOnly": "Seul l’opérateur de la plateforme peut rejouer les lettres mortes système."
+      "memberProjectsFailed": "Impossible de charger ses projets."
     },
     "links": {
       "notFound": "Cet élément de travail n’existe plus.",
@@ -2066,13 +2061,11 @@
       "nav": {
         "group": {
           "general": "Général",
-          "access": "Accès",
-          "operations": "Opérations"
+          "access": "Accès"
         },
         "workspace": "Espace de travail",
         "security": "Sécurité",
         "roles": "Rôles et permissions",
-        "jobs": "Exécutions de tâches",
         "publicAddress": "Adresse publique"
       }
     },
@@ -2971,86 +2964,6 @@
       "heroOverviewSubheading": "Le slogan, les tags et le README que les visiteurs voient sur votre page publique.",
       "editOnPublicPage": "Modifier la page publique",
       "heroOverviewNote": "Ouvre Paramètres › Page publique. Vous pouvez la rédiger avant que le projet soit public."
-    },
-    "jobs": {
-      "title": "Exécutions de tâches",
-      "subtitle": "Les tâches d’arrière-plan de cet espace de travail : envoi des invitations et des réinitialisations de mot de passe, et tout travail planifié. Les tâches en échec arrivent dans la file de lettres mortes, où un propriétaire peut les rejouer.",
-      "tab": {
-        "runs": "Exécutions récentes",
-        "dlq": "Lettres mortes",
-        "system": "Système"
-      },
-      "tabNavLabel": "Vues des exécutions de tâches",
-      "dlqBadgeLabel": "{count} dans la file de lettres mortes",
-      "filterGroupLabel": "Filtrer par statut",
-      "filter": {
-        "all": "Toutes",
-        "succeeded": "Réussies",
-        "failed": "Échouées",
-        "running": "En cours",
-        "abandoned": "Abandonnées"
-      },
-      "runsTableCaption": "Exécutions de tâches d’arrière-plan",
-      "col": {
-        "status": "Statut",
-        "delivery": "Distribution",
-        "function": "Fonction",
-        "event": "Événement",
-        "attempts": "Tentatives",
-        "started": "Début",
-        "duration": "Durée",
-        "failure": "Échec",
-        "details": "Détails",
-        "firstFailed": "Premier échec",
-        "lastFailed": "Dernier échec",
-        "replayed": "Rejouée",
-        "actions": "Actions"
-      },
-      "view": "Voir",
-      "runDetailTitle": "Détail de l’exécution",
-      "dlqTableCaption": "File de lettres mortes",
-      "replay": "Rejouer",
-      "replayTooltip": "Seul un gestionnaire de l’espace de travail peut rejouer des tâches",
-      "alreadyReplayedToastTitle": "Déjà rejouée",
-      "alreadyReplayedToastDesc": "Cette entrée a déjà été rejouée : rien de nouveau n’a été mis en file d’attente.",
-      "replayedToastTitle": "Tâche rejouée",
-      "replayedToastDesc": "L’événement d’origine a été réémis.",
-      "replayErrorTitle": "Impossible de rejouer",
-      "dlqDetailTitle": "Détail de la lettre morte",
-      "dlqDetailDesc": "L’échec et la charge utile de l’événement d’origine (rejouable telle quelle).",
-      "failureHeading": "Échec",
-      "eventPayloadHeading": "Charge utile de l’événement",
-      "pageLabel": "Page {page}",
-      "previous": "Précédent",
-      "next": "Suivant",
-      "refresh": "Actualiser",
-      "dlqEmptyTitle": "La file de lettres mortes est vide",
-      "dlqEmptyDesc": "Toutes les tâches ont réussi ou sont encore en cours de nouvelle tentative.",
-      "runsEmptyTitle": "Aucune exécution de tâche pour l’instant",
-      "runsEmptyDesc": "Lorsqu’une tâche d’arrière-plan s’exécutera, elle apparaîtra ici.",
-      "delivery": {
-        "accepted": "acceptée",
-        "delivered": "distribuée",
-        "bounced": "rejetée",
-        "complained": "signalée comme indésirable",
-        "delayed": "retardée"
-      },
-      "deliveryNone": "Aucun enregistrement de distribution",
-      "deliveryDetail": {
-        "heading": "Distribution",
-        "state": "État",
-        "messageId": "Identifiant du message",
-        "recipient": "Destinataire",
-        "template": "Modèle",
-        "lastEvent": "Dernier événement",
-        "never": "Aucun événement du fournisseur pour l’instant"
-      },
-      "systemDlqTitle": "Lettres mortes sans espace de travail",
-      "systemDlqSummary": "{waiting} en attente d’être rejouées · {replayed} rejouées au cours des 7 derniers jours",
-      "systemDlqTableCaption": "Lettres mortes système",
-      "systemDlqEmptyTitle": "Aucune lettre morte système",
-      "systemDlqEmptyDesc": "Chaque tâche sans espace de travail a réussi ou est encore en cours de nouvelle tentative.",
-      "systemRunsTitle": "Exécutions système"
     },
     "account": {
       "eyebrow": "Paramètres du compte",

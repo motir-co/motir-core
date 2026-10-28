@@ -92,7 +92,7 @@ describe('the workspace-tier sub-routes BELOW the reveal threshold', () => {
 
   it('⚠️ names NO workspace sub-route either — the exemption is gone (MOTIR-4847)', () => {
     // AMENDED, and its assertion INVERTED. This case used to assert
-    // `/settings/workspace/jobs` PRESENT here, on the §6 "reveals a tier rather
+    // the workspace Job runs route PRESENT here, on the §6 "reveals a tier rather
     // than relocating every page" reading. That reading was the defect: a
     // workspace-tier surface answering 200 below the reveal, advertised from the
     // PROJECT's rail, is what MOTIR-4861's fold-in and this card together
@@ -117,7 +117,6 @@ describe('the workspace-tier sub-routes BELOW the reveal threshold', () => {
     // It is asserted ABSENT rather than dropped because that is what fails if
     // the fold is ever partly reverted and a loose `Git` row returns.
     const { container } = renderRail(false);
-    expect(container.innerHTML).not.toContain('/settings/workspace/jobs');
     expect(container.innerHTML).not.toContain('/settings/organization/git');
     // ⚠️ AND THE WITNESS THAT THIS IS NOT AN EMPTY RAIL. `Git` used to be it —
     // the one row asserted PRESENT, which is what kept every negative above
@@ -156,7 +155,6 @@ describe('the workspace-tier sub-routes AT the reveal threshold', () => {
     // NOTHING IN THE WORKSPACE TIER — not the area, not one of its rooms. This
     // is main's assertion set (MOTIR-4873 · MOTIR-4847) kept whole.
     expect(container.innerHTML).not.toContain('href="/settings/workspace"');
-    expect(container.innerHTML).not.toContain('/settings/workspace/jobs');
     expect(container.innerHTML).not.toContain('/settings/workspace/security');
     // ⚠️ AND NOTHING IN THE ORGANISATION TIER EITHER (Story MOTIR-1754 ·
     // MOTIR-1768). This line asserted `/settings/organization/git` PRESENT,

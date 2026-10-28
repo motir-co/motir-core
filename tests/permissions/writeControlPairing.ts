@@ -280,17 +280,6 @@ export const SERVER_ACTION_GATES: Record<string, ActionGate> = {
   // Resend a pending invitation (MOTIR-9996): the invite's own scope rules,
   // re-asserted by `workspaceInvitesService.resendInvite`.
   'settings/workspace/actions.ts#resendInviteAction': { kind: 'role', role: 'workspace:inviter' },
-  'settings/workspace/jobs/actions.ts#replayDlqAction': { kind: 'role', role: 'workspace:manager' },
-  // MOTIR-8083: the platform OPERATOR's replay of a workspace-less dead letter. Not a
-  // tenant permission at all — the service asserts the `operator` platform role (and refuses a
-  // row that has a workspace), and the control exists only on the System tab, which
-  // `parseJobsParams` / `showSystemTab` render for that operator alone. So there is no
-  // capability for a client control to read; `self` is the kind that asks for none.
-  'settings/workspace/jobs/actions.ts#replaySystemDlqAction': {
-    kind: 'self',
-    reason:
-      'platform staff at operator level (User.platformRole), asserted in the service; the control only exists on the operator-only System tab',
-  },
   'settings/workspace/security/actions.ts#setWorkspaceRequireTwoFactorAction': {
     kind: 'role',
     role: 'workspace:manager',

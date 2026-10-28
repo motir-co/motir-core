@@ -737,9 +737,6 @@
       "pickProjectFirst": "Wählen Sie zuerst ein Projekt aus.",
       "unknownRelationship": "Unbekannte Beziehung.",
       "pickIssueToLink": "Wählen Sie ein Arbeitselement zum Verknüpfen aus.",
-      "missingDlqId": "Dead-Letter-ID fehlt.",
-      "ownerOnlyReplay": "Nur ein Manager des Arbeitsbereichs kann Aufträge erneut ausführen.",
-      "dlqGone": "Dieser Dead-Letter-Eintrag existiert nicht mehr.",
       "workspaceNameEmpty": "Der Name des Arbeitsbereichs darf nicht leer sein.",
       "useLeaveToRemoveSelf": "Verwenden Sie „Verlassen“, um sich selbst zu entfernen.",
       "cannotRemoveLastMember": "Das letzte Mitglied kann nicht entfernt werden.",
@@ -765,9 +762,7 @@
       "workspaceSecurityForbidden": "Nur Inhaber und Administratoren eines Arbeitsbereichs können dessen Sicherheitseinstellungen ändern.",
       "refused": "Das hat nicht geklappt: {reason}",
       "organizationClosing": "Diese Organisation ist zur Löschung vorgesehen und schreibgeschützt. Nur ihr Inhaber kann die Löschung abbrechen.",
-      "memberProjectsFailed": "Die Projekte dieser Person konnten nicht geladen werden.",
-      "systemReplayWorkspaceRow": "Dieser Dead-Letter-Eintrag gehört zu einem Workspace – führe ihn im Tab „Dead Letter“ dieses Workspace erneut aus.",
-      "systemReplayOperatorOnly": "Nur der Plattform-Betreiber kann System-Dead-Letter erneut ausführen."
+      "memberProjectsFailed": "Die Projekte dieser Person konnten nicht geladen werden."
     },
     "links": {
       "notFound": "Dieses Arbeitselement existiert nicht mehr.",
@@ -2066,13 +2061,11 @@
       "nav": {
         "group": {
           "general": "Allgemein",
-          "access": "Zugriff",
-          "operations": "Betrieb"
+          "access": "Zugriff"
         },
         "workspace": "Arbeitsbereich",
         "security": "Sicherheit",
         "roles": "Rollen & Berechtigungen",
-        "jobs": "Auftragsausführungen",
         "publicAddress": "Öffentliche Adresse"
       }
     },
@@ -2971,86 +2964,6 @@
       "heroOverviewSubheading": "Slogan, Tags und README, die Besucher auf Ihrer öffentlichen Seite sehen.",
       "editOnPublicPage": "Öffentliche Seite bearbeiten",
       "heroOverviewNote": "Öffnet Einstellungen › Öffentliche Seite. Sie können sie schreiben, bevor das Projekt öffentlich ist."
-    },
-    "jobs": {
-      "title": "Auftragsausführungen",
-      "subtitle": "Hintergrundaufträge für diesen Arbeitsbereich – Zustellung von Einladungen und Passwort-Zurücksetzungen sowie geplante Arbeiten. Fehlgeschlagene Aufträge landen in der Dead-Letter-Queue, wo ein Inhaber sie erneut ausführen kann.",
-      "tab": {
-        "runs": "Letzte Ausführungen",
-        "dlq": "Dead Letter",
-        "system": "System"
-      },
-      "tabNavLabel": "Ansichten der Auftragsausführungen",
-      "dlqBadgeLabel": "{count} in der Dead-Letter-Queue",
-      "filterGroupLabel": "Nach Status filtern",
-      "filter": {
-        "all": "Alle",
-        "succeeded": "Erfolgreich",
-        "failed": "Fehlgeschlagen",
-        "running": "Läuft",
-        "abandoned": "Aufgegeben"
-      },
-      "runsTableCaption": "Ausführungen von Hintergrundaufträgen",
-      "col": {
-        "status": "Status",
-        "delivery": "Zustellung",
-        "function": "Funktion",
-        "event": "Ereignis",
-        "attempts": "Versuche",
-        "started": "Gestartet",
-        "duration": "Dauer",
-        "failure": "Fehler",
-        "details": "Details",
-        "firstFailed": "Erster Fehler",
-        "lastFailed": "Letzter Fehler",
-        "replayed": "Erneut ausgeführt",
-        "actions": "Aktionen"
-      },
-      "view": "Anzeigen",
-      "runDetailTitle": "Ausführungsdetails",
-      "dlqTableCaption": "Dead-Letter-Queue",
-      "replay": "Erneut ausführen",
-      "replayTooltip": "Nur ein Manager des Arbeitsbereichs kann Aufträge erneut ausführen",
-      "alreadyReplayedToastTitle": "Bereits erneut ausgeführt",
-      "alreadyReplayedToastDesc": "Dieser Eintrag wurde bereits früher erneut ausgeführt – es wurde nichts Neues eingereiht.",
-      "replayedToastTitle": "Auftrag erneut ausgeführt",
-      "replayedToastDesc": "Das ursprüngliche Ereignis wurde erneut ausgelöst.",
-      "replayErrorTitle": "Erneute Ausführung nicht möglich",
-      "dlqDetailTitle": "Dead-Letter-Details",
-      "dlqDetailDesc": "Der Fehler und die ursprünglichen Ereignisdaten (unverändert erneut ausführbar).",
-      "failureHeading": "Fehler",
-      "eventPayloadHeading": "Ereignisdaten",
-      "pageLabel": "Seite {page}",
-      "previous": "Zurück",
-      "next": "Weiter",
-      "refresh": "Aktualisieren",
-      "dlqEmptyTitle": "Nichts in der Dead-Letter-Queue",
-      "dlqEmptyDesc": "Jeder Auftrag war erfolgreich oder wird noch wiederholt.",
-      "runsEmptyTitle": "Noch keine Auftragsausführungen",
-      "runsEmptyDesc": "Wenn ein Hintergrundauftrag ausgeführt wird, erscheint er hier.",
-      "delivery": {
-        "accepted": "angenommen",
-        "delivered": "zugestellt",
-        "bounced": "unzustellbar",
-        "complained": "beanstandet",
-        "delayed": "verzögert"
-      },
-      "deliveryNone": "Kein Zustellungsdatensatz",
-      "deliveryDetail": {
-        "heading": "Zustellung",
-        "state": "Status",
-        "messageId": "Nachrichten-ID",
-        "recipient": "Empfänger",
-        "template": "Vorlage",
-        "lastEvent": "Letztes Ereignis",
-        "never": "Noch kein Ereignis vom Anbieter"
-      },
-      "systemDlqTitle": "Dead Letter ohne Workspace",
-      "systemDlqSummary": "{waiting} warten auf erneute Ausführung · {replayed} in den letzten 7 Tagen erneut ausgeführt",
-      "systemDlqTableCaption": "System-Dead-Letter",
-      "systemDlqEmptyTitle": "Keine System-Dead-Letter",
-      "systemDlqEmptyDesc": "Jeder Job ohne Workspace war erfolgreich oder wird noch wiederholt.",
-      "systemRunsTitle": "Systemläufe"
     },
     "account": {
       "eyebrow": "Kontoeinstellungen",

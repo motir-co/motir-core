@@ -85,7 +85,7 @@ const SHELL_ROUTES: { path: string; ready: (page: Page) => Promise<void> }[] = [
     //
     // ⚠️ THE OPERATOR DASHBOARD WAS SWEPT HERE from Story MOTIR-4843 · MOTIR-4861
     // until Story MOTIR-9982 retired it: the tenant Job runs section left this
-    // page with `/settings/workspace/jobs`, and the ledger is staff-only at
+    // page with the tenant Job runs route, and the ledger is staff-only at
     // `/admin/jobs`. Neither tenant address returns to this list.
     path: '/settings/organization',
     ready: async (page) =>

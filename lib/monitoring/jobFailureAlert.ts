@@ -11,7 +11,7 @@ import type { JobRunLane } from '@/lib/dto/jobs';
 // sense that mattered — it was doing exactly what it was built to do, writing a
 // `failed` row and a dead-letter row and putting a diagnosis in the message. The
 // defect was that **its verdict had no consumer**: the only surfaces carrying it
-// were `job_run` and the DLQ tab of `/settings/workspace/jobs`, both of which
+// were `job_run` and the DLQ tab of the then-tenant Job runs page, both of which
 // are places a person has to decide to go and look. A correct alarm nobody hears
 // and a silent one are the same alarm from outside, and this deployment ran the
 // whole job-substrate migration with the second kind.

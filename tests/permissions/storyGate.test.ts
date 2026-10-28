@@ -187,22 +187,12 @@ const UI_AFFORDANCE_DERIVATIONS = [
   // they were found, and it is exactly the worklist behaviour its author
   // intended.
   //
-  // Workspace-level, so no project permission could govern it either way — the
-  // same argument MOTIR-2294 made about `repository:connect`. It is the only
-  // survivor, and it is not MOTIR-2258's to remove.
-  //
-  // ⚠️ IT MOVED FILE, AND DID NOT MULTIPLY (Story MOTIR-4843 · MOTIR-4849). The
-  // derivation was `jobs/page.tsx`'s; the jobs dashboard now has TWO doors — its
-  // own route above the workspace-tier reveal, and `JobRunsFoldInSection` on
-  // `/settings/organization` below it — and the reads that feed it, this
-  // `isOwnerRole` among them, are SHARED in `JobsPane` rather than copied. So
-  // the pin follows the derivation to its new home and the list stays at three:
-  // had the fold-in grown a second copy instead, this guard would have caught
-  // it, which is the worklist behaviour its author intended.
-  'app/(authed)/settings/workspace/jobs/_components/JobsPane.tsx',
+  // The jobs dashboard's `isOwnerRole` was the one survivor of that sweep,
+  // pinned in the tenant jobs pane; it LEFT with the tenant Job runs surface (Story
+  // MOTIR-9982 · MOTIR-10043), which retired the page rather than fixing it.
   // ⚠️ Story MOTIR-1215 · Subtask MOTIR-3647 — the require-2FA switch, at the
   // workspace tier and in its organization-tier fold-in. Both derive
-  // `isWorkspaceManager` for the SAME reason the jobs page above does, and the
+  // `isWorkspaceManager` for the reason the retired jobs page did, and the
   // same reason keeps them out of MOTIR-2258's reach: the question is a
   // WORKSPACE-tier role, so no project permission could govern it either way.
   //

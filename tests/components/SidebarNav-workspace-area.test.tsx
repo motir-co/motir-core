@@ -47,7 +47,6 @@ function renderRail(workspaceTierRevealed: boolean) {
 const ROWS = [
   { label: 'Workspace', href: '/settings/workspace' },
   { label: 'Security', href: '/settings/workspace/security' },
-  { label: 'Job runs', href: '/settings/workspace/jobs' },
 ];
 
 afterEach(() => {
@@ -56,7 +55,7 @@ afterEach(() => {
 });
 
 describe('the workspace-settings AREA rail — above the reveal', () => {
-  it.each(ROWS)('renders all three rows at $href', ({ href }) => {
+  it.each(ROWS)('renders every row at $href', ({ href }) => {
     pathname = href;
     renderRail(true);
     for (const row of ROWS) {
@@ -83,12 +82,12 @@ describe('the workspace-settings AREA rail — above the reveal', () => {
     expect(screen.getByText('Workspace settings')).toBeTruthy();
   });
 
-  it('groups the three rows under General · Access · Operations, in that order', () => {
+  it('groups the rows under General · Access, in that order — no Operations group', () => {
     renderRail(true);
     const headings = screen
       .getAllByText(/^(General|Access|Operations)$/)
       .map((el) => el.textContent);
-    expect(headings).toEqual(['General', 'Access', 'Operations']);
+    expect(headings).toEqual(['General', 'Access']);
   });
 });
 
@@ -108,17 +107,16 @@ describe('the workspace-settings AREA rail — BELOW the reveal', () => {
     }
   });
 
-  it('⚠️ `Job runs` is absent too — the axis is UNIFORM, and that is the re-plan', () => {
-    // An earlier shape of this registry exempted `jobs`, because
-    // `/settings/workspace/jobs` answered 200 at every workspace count while its
-    // siblings 404'd (MOTIR-3502 AC 6). That was an UNFINISHED COLLAPSE rather
-    // than a decision: it was the one workspace surface with no fold-in.
-    // MOTIR-4861 gives it one on `/settings/organization`. MOTIR-4859 is the
-    // planning bug. This assertion is what keeps the exception from returning.
-    pathname = '/settings/workspace/jobs';
-    renderRail(false);
-    expect(screen.queryByRole('link', { name: 'Job runs' })).toBeNull();
-  });
+  it.each([[true], [false]])(
+    '⚠️ `Job runs` is absent at revealed=%s — the row was RETIRED (MOTIR-9982)',
+    (revealed) => {
+      // The tenant Job runs surface is gone (decision MOTIR-4896): the ledger is
+      // staff-only at `/admin/jobs`, the tenant route has no page, and
+      // the registry has no row for it on either side of the reveal.
+      renderRail(revealed);
+      expect(screen.queryByRole('link', { name: 'Job runs' })).toBeNull();
+    },
+  );
 });
 
 // ═════════════════════════════════════════════════════════════════════════════

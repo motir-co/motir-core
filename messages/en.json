@@ -737,9 +737,6 @@
       "pickProjectFirst": "Pick a project first.",
       "unknownRelationship": "Unknown relationship.",
       "pickIssueToLink": "Pick a work item to link.",
-      "missingDlqId": "Missing dead-letter id.",
-      "ownerOnlyReplay": "Only a workspace Manager can replay jobs.",
-      "dlqGone": "That dead-letter entry no longer exists.",
       "workspaceNameEmpty": "Workspace name cannot be empty.",
       "useLeaveToRemoveSelf": "Use Leave to remove yourself.",
       "cannotRemoveLastMember": "Cannot remove the last member.",
@@ -765,9 +762,7 @@
       "workspaceSecurityForbidden": "Only owners and admins of a workspace can change its security settings.",
       "refused": "That didn’t go through: {reason}",
       "organizationClosing": "This organization is scheduled for deletion and is read-only. Only its Owner can cancel the deletion.",
-      "memberProjectsFailed": "Couldn’t load their projects.",
-      "systemReplayWorkspaceRow": "That dead letter belongs to a workspace — replay it from that workspace's Dead letter tab.",
-      "systemReplayOperatorOnly": "Only the platform operator can replay system dead letters."
+      "memberProjectsFailed": "Couldn’t load their projects."
     },
     "links": {
       "notFound": "That work item no longer exists.",
@@ -2066,13 +2061,11 @@
       "nav": {
         "group": {
           "general": "General",
-          "access": "Access",
-          "operations": "Operations"
+          "access": "Access"
         },
         "workspace": "Workspace",
         "security": "Security",
         "roles": "Roles & permissions",
-        "jobs": "Job runs",
         "publicAddress": "Public address"
       }
     },
@@ -2971,86 +2964,6 @@
       "heroOverviewSubheading": "The tagline, tags and README visitors see on your public page.",
       "editOnPublicPage": "Edit the public page",
       "heroOverviewNote": "Opens Settings › Public page. You can write it before the project is public."
-    },
-    "jobs": {
-      "title": "Job runs",
-      "subtitle": "Background jobs for this workspace — delivery of invites & password resets, and any scheduled work. Failed jobs land in the dead-letter queue, where an owner can replay them.",
-      "tab": {
-        "runs": "Recent runs",
-        "dlq": "Dead letter",
-        "system": "System"
-      },
-      "tabNavLabel": "Job run views",
-      "dlqBadgeLabel": "{count} in dead-letter queue",
-      "filterGroupLabel": "Filter by status",
-      "filter": {
-        "all": "All",
-        "succeeded": "Succeeded",
-        "failed": "Failed",
-        "running": "Running",
-        "abandoned": "Abandoned"
-      },
-      "runsTableCaption": "Background job runs",
-      "col": {
-        "status": "Status",
-        "delivery": "Delivery",
-        "function": "Function",
-        "event": "Event",
-        "attempts": "Attempts",
-        "started": "Started",
-        "duration": "Duration",
-        "failure": "Failure",
-        "details": "Details",
-        "firstFailed": "First failed",
-        "lastFailed": "Last failed",
-        "replayed": "Replayed",
-        "actions": "Actions"
-      },
-      "view": "View",
-      "runDetailTitle": "Run detail",
-      "dlqTableCaption": "Dead-letter queue",
-      "replay": "Replay",
-      "replayTooltip": "Only a workspace Manager can replay jobs",
-      "alreadyReplayedToastTitle": "Already replayed",
-      "alreadyReplayedToastDesc": "This entry was replayed earlier — nothing new was queued.",
-      "replayedToastTitle": "Job replayed",
-      "replayedToastDesc": "The original event was re-emitted.",
-      "replayErrorTitle": "Could not replay",
-      "dlqDetailTitle": "Dead-letter detail",
-      "dlqDetailDesc": "The failure and the original event payload (replayable as-is).",
-      "failureHeading": "Failure",
-      "eventPayloadHeading": "Event payload",
-      "pageLabel": "Page {page}",
-      "previous": "Previous",
-      "next": "Next",
-      "refresh": "Refresh",
-      "dlqEmptyTitle": "Nothing in the dead-letter queue",
-      "dlqEmptyDesc": "Every job has succeeded or is still retrying.",
-      "runsEmptyTitle": "No job runs yet",
-      "runsEmptyDesc": "When a background job runs, it'll appear here.",
-      "delivery": {
-        "accepted": "accepted",
-        "delivered": "delivered",
-        "bounced": "bounced",
-        "complained": "complained",
-        "delayed": "delayed"
-      },
-      "deliveryNone": "No delivery record",
-      "deliveryDetail": {
-        "heading": "Delivery",
-        "state": "State",
-        "messageId": "Message id",
-        "recipient": "Recipient",
-        "template": "Template",
-        "lastEvent": "Last event",
-        "never": "No provider event yet"
-      },
-      "systemDlqTitle": "Dead letters with no workspace",
-      "systemDlqSummary": "{waiting} waiting to be replayed · {replayed} replayed in the last 7 days",
-      "systemDlqTableCaption": "System dead letters",
-      "systemDlqEmptyTitle": "No system dead letters",
-      "systemDlqEmptyDesc": "Every job without a workspace has succeeded or is still retrying.",
-      "systemRunsTitle": "System runs"
     },
     "account": {
       "eyebrow": "Account settings",

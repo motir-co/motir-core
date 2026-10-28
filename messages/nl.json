@@ -737,9 +737,6 @@
       "pickProjectFirst": "Kies eerst een project.",
       "unknownRelationship": "Onbekende relatie.",
       "pickIssueToLink": "Kies een werkitem om te koppelen.",
-      "missingDlqId": "Dead-letter-id ontbreekt.",
-      "ownerOnlyReplay": "Alleen een Manager van de werkruimte kan taken opnieuw afspelen.",
-      "dlqGone": "Dat dead-letter-item bestaat niet meer.",
       "workspaceNameEmpty": "De naam van de werkruimte mag niet leeg zijn.",
       "useLeaveToRemoveSelf": "Gebruik Verlaten om jezelf te verwijderen.",
       "cannotRemoveLastMember": "Het laatste lid kan niet worden verwijderd.",
@@ -765,9 +762,7 @@
       "workspaceSecurityForbidden": "Alleen eigenaren en beheerders van een werkruimte kunnen de beveiligingsinstellingen ervan wijzigen.",
       "refused": "Dat is niet gelukt: {reason}",
       "organizationClosing": "Deze organisatie staat gepland voor verwijdering en is alleen-lezen. Alleen de Eigenaar kan de verwijdering annuleren.",
-      "memberProjectsFailed": "Kan de projecten van deze persoon niet laden.",
-      "systemReplayWorkspaceRow": "Dat dead-letter-item hoort bij een workspace – speel het opnieuw af vanaf het tabblad Dead letter van die workspace.",
-      "systemReplayOperatorOnly": "Alleen de platformbeheerder kan dead letters van het systeem opnieuw afspelen."
+      "memberProjectsFailed": "Kan de projecten van deze persoon niet laden."
     },
     "links": {
       "notFound": "Dat werkitem bestaat niet meer.",
@@ -2066,13 +2061,11 @@
       "nav": {
         "group": {
           "general": "Algemeen",
-          "access": "Toegang",
-          "operations": "Bedrijfsvoering"
+          "access": "Toegang"
         },
         "workspace": "Werkruimte",
         "security": "Beveiliging",
         "roles": "Rollen en rechten",
-        "jobs": "Taakuitvoeringen",
         "publicAddress": "Openbaar adres"
       }
     },
@@ -2971,86 +2964,6 @@
       "heroOverviewSubheading": "De slogan, tags en README die bezoekers op je openbare pagina zien.",
       "editOnPublicPage": "De openbare pagina bewerken",
       "heroOverviewNote": "Opent Instellingen › Openbare pagina. Je kunt hem schrijven voordat het project openbaar is."
-    },
-    "jobs": {
-      "title": "Taakuitvoeringen",
-      "subtitle": "Achtergrondtaken voor deze werkruimte — het bezorgen van uitnodigingen en wachtwoordherstel, en gepland werk. Mislukte taken komen in de dead-letter-wachtrij terecht, waar een eigenaar ze opnieuw kan afspelen.",
-      "tab": {
-        "runs": "Recente uitvoeringen",
-        "dlq": "Dead letter",
-        "system": "Systeem"
-      },
-      "tabNavLabel": "Weergaven van taakuitvoeringen",
-      "dlqBadgeLabel": "{count} in dead-letter-wachtrij",
-      "filterGroupLabel": "Filteren op status",
-      "filter": {
-        "all": "Alle",
-        "succeeded": "Geslaagd",
-        "failed": "Mislukt",
-        "running": "Bezig",
-        "abandoned": "Opgegeven"
-      },
-      "runsTableCaption": "Uitvoeringen van achtergrondtaken",
-      "col": {
-        "status": "Status",
-        "delivery": "Bezorging",
-        "function": "Functie",
-        "event": "Gebeurtenis",
-        "attempts": "Pogingen",
-        "started": "Gestart",
-        "duration": "Duur",
-        "failure": "Fout",
-        "details": "Details",
-        "firstFailed": "Eerst mislukt",
-        "lastFailed": "Laatst mislukt",
-        "replayed": "Opnieuw afgespeeld",
-        "actions": "Acties"
-      },
-      "view": "Bekijken",
-      "runDetailTitle": "Details van de uitvoering",
-      "dlqTableCaption": "Dead-letter-wachtrij",
-      "replay": "Opnieuw afspelen",
-      "replayTooltip": "Alleen een Manager van de werkruimte kan taken opnieuw afspelen",
-      "alreadyReplayedToastTitle": "Al opnieuw afgespeeld",
-      "alreadyReplayedToastDesc": "Dit item is eerder al opnieuw afgespeeld — er is niets nieuws in de wachtrij gezet.",
-      "replayedToastTitle": "Taak opnieuw afgespeeld",
-      "replayedToastDesc": "De oorspronkelijke gebeurtenis is opnieuw verzonden.",
-      "replayErrorTitle": "Kan niet opnieuw afspelen",
-      "dlqDetailTitle": "Dead-letter-details",
-      "dlqDetailDesc": "De fout en de oorspronkelijke payload van de gebeurtenis (ongewijzigd opnieuw af te spelen).",
-      "failureHeading": "Fout",
-      "eventPayloadHeading": "Payload van de gebeurtenis",
-      "pageLabel": "Pagina {page}",
-      "previous": "Vorige",
-      "next": "Volgende",
-      "refresh": "Vernieuwen",
-      "dlqEmptyTitle": "Niets in de dead-letter-wachtrij",
-      "dlqEmptyDesc": "Elke taak is geslaagd of wordt nog opnieuw geprobeerd.",
-      "runsEmptyTitle": "Nog geen taakuitvoeringen",
-      "runsEmptyDesc": "Wanneer een achtergrondtaak wordt uitgevoerd, verschijnt die hier.",
-      "delivery": {
-        "accepted": "geaccepteerd",
-        "delivered": "bezorgd",
-        "bounced": "gebounced",
-        "complained": "klacht",
-        "delayed": "vertraagd"
-      },
-      "deliveryNone": "Geen bezorgregistratie",
-      "deliveryDetail": {
-        "heading": "Bezorging",
-        "state": "Status",
-        "messageId": "Bericht-id",
-        "recipient": "Ontvanger",
-        "template": "Sjabloon",
-        "lastEvent": "Laatste gebeurtenis",
-        "never": "Nog geen gebeurtenis van de provider"
-      },
-      "systemDlqTitle": "Dead letters zonder workspace",
-      "systemDlqSummary": "{waiting} wachten op opnieuw afspelen · {replayed} opnieuw afgespeeld in de afgelopen 7 dagen",
-      "systemDlqTableCaption": "Dead letters van het systeem",
-      "systemDlqEmptyTitle": "Geen dead letters van het systeem",
-      "systemDlqEmptyDesc": "Elke taak zonder workspace is geslaagd of wordt nog opnieuw geprobeerd.",
-      "systemRunsTitle": "Systeemruns"
     },
     "account": {
       "eyebrow": "Accountinstellingen",

@@ -16,7 +16,7 @@ import { REPO_ROOT, stripComments } from '../helpers/importGraph';
 // lived on stopped existing. Four green per-surface tests are exactly what that
 // failure looks like from the inside.
 //
-// This story is the worked example: `/settings/workspace/jobs` was left out of
+// This story is the worked example: the workspace Job runs route was left out of
 // MOTIR-3502's collapse for a defensible reason, kept answering at every count,
 // and its absence from `WorkspaceFoldInSection` went unnoticed for months —
 // until it was read as an EXEMPTION and nearly written into the plan as one
@@ -213,7 +213,6 @@ describe('the host page mounts the fold-in on ONE condition, and no Job runs sec
   });
 
   it('hosts no Job runs section and carries no job-dashboard query (MOTIR-9982)', () => {
-    expect(source).not.toMatch(/JobRunsFoldInSection|JobsPane|jobsParams/);
-    expect(source).not.toContain('/settings/workspace/jobs');
+    expect(source).not.toMatch(/JobRunsFold|JobsPa|jobsParams|workspace\/jobs/);
   });
 });

@@ -26,7 +26,7 @@ import {
 // refuses.
 //
 // ⚠️ THE CARVE-OUT THIS COMMENT USED TO CARRY IS RETIRED (Story MOTIR-4843 ·
-// MOTIR-4847). It read: `/settings/workspace/jobs` and
+// MOTIR-4847). It read: the workspace Job runs route and
 // `/settings/workspace/github` "are NOT covered by that rule and must keep
 // rendering at every count — they are workspace-SCOPED but not workspace-NAMED".
 // That was MOTIR-3502's AC 6, and it was the tell rather than the exception: a

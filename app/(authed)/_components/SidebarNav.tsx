@@ -719,8 +719,8 @@ export function SidebarNav({
             // is the active route, so only one row ever reads current.
             //
             // ⚠️ TWO CLAUSES WENT WITH THEIR ROWS (MOTIR-4847). This predicate
-            // used to negate `/settings/workspace/security` and
-            // `/settings/workspace/jobs` as well. Both are now unreachable from
+            // used to negate `/settings/workspace/security` and the workspace
+            // Job runs route (since retired, Story MOTIR-9982) as well. Both are now unreachable from
             // here in TWO independent ways — the rows they yielded to are gone,
             // and `isWorkspaceSettingsPath` returns the workspace area's own
             // Sidebar before this block is ever built — so a clause that can
