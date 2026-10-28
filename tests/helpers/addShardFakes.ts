@@ -387,11 +387,13 @@ export class FakeOrganization implements AwsManagementApi {
       this.failOnceAfter('tenantRoleCreated');
     }
     const wanted = JSON.stringify(policy);
+    let policyChanged = false;
     if (this.tenantRoles.get(accountId) !== wanted) {
       this.tenantRoles.set(accountId, wanted);
+      policyChanged = true;
       this.failOnceAfter('tenantRolePolicyPut');
     }
-    return { created };
+    return { created, policyChanged };
   }
 
   async ensureAccountTag(accountId: string, key: string, value: string) {

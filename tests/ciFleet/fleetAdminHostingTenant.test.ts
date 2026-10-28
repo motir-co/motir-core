@@ -3,7 +3,11 @@ import { join } from 'node:path';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { TENANT_ACCOUNT_REGION } from '@/lib/ciFleet/hostingTenantAccounts';
 import { hostingTenantAccountRepository } from '@/lib/repositories/hostingTenantAccountRepository';
-import type { TenantAccountAnswer } from '@/lib/services/hostingTenantAccountService';
+import type {
+  DeployPolicyConvergeSummary,
+  DeployPolicyConvergence,
+  TenantAccountAnswer,
+} from '@/lib/services/hostingTenantAccountService';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { EXIT_ERROR, EXIT_OK, EXIT_PENDING, runFleetAdmin } from '@/scripts/fleet/fleetAdmin';
 import { formatTenantAccountAnswer } from '@/scripts/fleet/fleetAdminHostingTenantCommands';
@@ -143,5 +147,108 @@ describe('fleet-admin hosting-tenant ensure', () => {
     ]) {
       expect(imports.filter((i) => i.includes(forbidden))).toEqual([]);
     }
+  });
+});
+
+// `fleet-admin hosting-tenant converge-deploy-policy [--organization <id>]`
+// (MOTIR-10005): one outcome line per organisation and the counts, exit 1 when
+// any organisation failed, never a credential.
+describe('fleet-admin hosting-tenant converge-deploy-policy', () => {
+  const SECRET = 'ASIA_DISTINCTIVE_key_never_printed';
+  const summary = (organizations: DeployPolicyConvergence[]): DeployPolicyConvergeSummary => ({
+    organizations,
+    changed: organizations.filter((o) => o.outcome === 'changed').length,
+    unchanged: organizations.filter((o) => o.outcome === 'unchanged').length,
+    failures: organizations.filter((o) => o.outcome === 'failed').length,
+  });
+  const convergeAll = (result: DeployPolicyConvergeSummary, argv: string[] = []) =>
+    runFleetAdmin(['hosting-tenant', 'converge-deploy-policy', ...argv], io, {
+      hostingTenant: { convergeAll: async () => result },
+    });
+  const convergeOne = (result: DeployPolicyConvergence) =>
+    runFleetAdmin(
+      ['hosting-tenant', 'converge-deploy-policy', '--organization', result.organizationId],
+      io,
+      { hostingTenant: { convergeOne: async () => result } },
+    );
+
+  it('converges every ready account and prints each outcome and the counts', async () => {
+    expect(
+      await convergeAll(
+        summary([
+          { organizationId: 'org_a', outcome: 'changed' },
+          { organizationId: 'org_b', outcome: 'unchanged' },
+        ]),
+      ),
+    ).toBe(EXIT_OK);
+    expect(out).toEqual([
+      'deploy policy org_a: changed',
+      'deploy policy org_b: unchanged',
+      'deploy policy: 2 ready account(s), 1 changed, 1 unchanged, 0 failed',
+    ]);
+  });
+
+  it('exits 1 when any organisation failed, still printing the rest', async () => {
+    expect(
+      await convergeAll(
+        summary([
+          { organizationId: 'org_a', outcome: 'failed' },
+          { organizationId: 'org_b', outcome: 'changed' },
+        ]),
+      ),
+    ).toBe(EXIT_ERROR);
+    expect(out).toContain('deploy policy org_b: changed');
+    expect(out.at(-1)).toBe('deploy policy: 2 ready account(s), 1 changed, 0 unchanged, 1 failed');
+  });
+
+  it('converges one organisation with --organization', async () => {
+    expect(await convergeOne({ organizationId: 'org_a', outcome: 'changed' })).toBe(EXIT_OK);
+    expect(out).toEqual(['deploy policy org_a: changed']);
+  });
+
+  it('exits 1 for one failed organisation and 2 for one not yet ready', async () => {
+    expect(await convergeOne({ organizationId: 'org_a', outcome: 'failed' })).toBe(EXIT_ERROR);
+    expect(await convergeOne({ organizationId: 'org_b', outcome: 'not_ready' })).toBe(EXIT_PENDING);
+    expect(out).toEqual(['deploy policy org_a: failed', 'deploy policy org_b: not_ready']);
+  });
+
+  it('runs the real service over the database: a pending row is not ready', async () => {
+    const org = await seedOrg();
+    await withSystemContext((tx) =>
+      hostingTenantAccountRepository.ensureRequestedInTx(org.id, TENANT_ACCOUNT_REGION, tx),
+    );
+
+    expect(
+      await runFleetAdmin(
+        ['hosting-tenant', 'converge-deploy-policy', '--organization', org.id],
+        io,
+      ),
+    ).toBe(EXIT_PENDING);
+    expect(out).toEqual([`deploy policy ${org.id}: not_ready`]);
+    expect(await runFleetAdmin(['hosting-tenant', 'converge-deploy-policy'], io)).toBe(EXIT_OK);
+    expect(out.at(-1)).toBe('deploy policy: 0 ready account(s), 0 changed, 0 unchanged, 0 failed');
+  });
+
+  it.each([
+    ['a positional', ['hosting-tenant', 'converge-deploy-policy', 'org_a']],
+    ['an empty --organization', ['hosting-tenant', 'converge-deploy-policy', '--organization', '']],
+  ])('prints the usage and exits 1 for %s', async (_, argv) => {
+    expect(await runFleetAdmin(argv, io)).toBe(EXIT_ERROR);
+    expect(out).toEqual([]);
+    expect(err.join('\n')).toContain('converge-deploy-policy [--organization <id>]');
+  });
+
+  it('lists the command in the usage', async () => {
+    expect(await runFleetAdmin([], io)).toBe(EXIT_ERROR);
+    expect(err.join('\n')).toContain(
+      'fleet-admin hosting-tenant converge-deploy-policy [--organization <id>]',
+    );
+  });
+
+  it('never prints a credential, even in an organisation id', async () => {
+    expect(
+      await convergeAll(summary([{ organizationId: `org-${SECRET}`, outcome: 'failed' }])),
+    ).toBe(EXIT_ERROR);
+    expect([...out, ...err].join('\n')).not.toContain(SECRET);
   });
 });

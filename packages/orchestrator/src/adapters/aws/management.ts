@@ -314,11 +314,13 @@ export interface AwsManagementApi {
    *  created only when absent (MOTIR-9940). */
   ensureOrganizationalUnit(name: string): Promise<AwsOrganizationalUnitResult>;
   /** The tenant deploy role and its inline policy, trusting only the management
-   *  role (MOTIR-9941); `created` when the role was made by this call. */
+   *  role (MOTIR-9941); `created` when the role was made by this call,
+   *  `policyChanged` when the inline policy was written because it differed
+   *  (MOTIR-10005). */
   ensureTenantDeployRole(
     credentials: AwsSessionCredentials,
     policyDocument: AwsPolicyDocument,
-  ): Promise<{ created: boolean }>;
+  ): Promise<{ created: boolean; policyChanged: boolean }>;
   /** `key=value` on the account in Organizations, written only when it differs. */
   ensureAccountTag(accountId: string, key: string, value: string): Promise<{ tagged: boolean }>;
   /** A quota at `target.desiredValue` or above: nothing filed when it already is,
@@ -917,14 +919,14 @@ export function createAwsManagementApi(
     },
 
     async ensureTenantDeployRole(credentials, policyDocument) {
-      const { roleCreated } = await ensureRoleWithPolicy(credentials, {
+      const { roleCreated, policyPut } = await ensureRoleWithPolicy(credentials, {
         roleName: AWS_TENANT_DEPLOY_ROLE,
         policyName: AWS_TENANT_DEPLOY_ROLE,
         policyDocument,
         maxSessionSeconds: TENANT_DEPLOY_SESSION_SECONDS,
         tag: 'tenant-deploy',
       });
-      return { created: roleCreated };
+      return { created: roleCreated, policyChanged: policyPut };
     },
 
     async ensureAccountTag(accountId, key, value) {

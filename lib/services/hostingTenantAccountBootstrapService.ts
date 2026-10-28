@@ -47,10 +47,8 @@ export interface TenantAccountBootstrapResult {
   quotaRaisesPending: number;
 }
 
-export async function bootstrapTenantAccount(
-  organizationId: string,
-  deps: TenantAccountBootstrapDeps = {},
-): Promise<TenantAccountBootstrapResult> {
+/** The member session of the organisation's recorded account, and the account. */
+async function memberSession(organizationId: string, management: AwsManagementApi) {
   const record = await withSystemContext((tx) =>
     hostingTenantAccountRepository.findByOrganizationId(organizationId, tx),
   );
@@ -60,10 +58,19 @@ export async function bootstrapTenantAccount(
       `organisation ${organizationId} has no tenant AWS account recorded yet`,
     ]);
   }
-  const management =
-    deps.management ?? createAwsManagementApi(awsManagementCredentials(process.env));
+  return { accountId, credentials: await management.assumeMemberRole(accountId) };
+}
 
-  const credentials = await management.assumeMemberRole(accountId);
+function managementOf(deps: TenantAccountBootstrapDeps): AwsManagementApi {
+  return deps.management ?? createAwsManagementApi(awsManagementCredentials(process.env));
+}
+
+export async function bootstrapTenantAccount(
+  organizationId: string,
+  deps: TenantAccountBootstrapDeps = {},
+): Promise<TenantAccountBootstrapResult> {
+  const management = managementOf(deps);
+  const { accountId, credentials } = await memberSession(organizationId, management);
   const { created: roleCreated } = await management.ensureTenantDeployRole(
     credentials,
     tenantDeployPolicyDocument(),
@@ -81,4 +88,31 @@ export async function bootstrapTenantAccount(
     if (raise.pending) quotaRaisesPending += 1;
   }
   return { roleCreated, tagged, quotaRaisesFiled, quotaRaisesPending };
+}
+
+/** What converging one account's deploy-role policy did. */
+export interface TenantDeployPolicyConvergence {
+  /** Whether the live inline policy differed and was rewritten. */
+  policyChanged: boolean;
+}
+
+/**
+ * Bring an existing tenant account's deploy role onto today's
+ * `tenantDeployPolicyDocument()` (MOTIR-10005). A `ready` account never re-runs
+ * the bootstrap, so a policy change reaches it only through this: assume the
+ * member role and make the same `ensureTenantDeployRole` call, which reads the
+ * inline policy and writes it only when it differs. Writes no record state, and
+ * a replay changes nothing.
+ */
+export async function convergeTenantDeployPolicy(
+  organizationId: string,
+  deps: TenantAccountBootstrapDeps = {},
+): Promise<TenantDeployPolicyConvergence> {
+  const management = managementOf(deps);
+  const { credentials } = await memberSession(organizationId, management);
+  const { policyChanged } = await management.ensureTenantDeployRole(
+    credentials,
+    tenantDeployPolicyDocument(),
+  );
+  return { policyChanged };
 }
