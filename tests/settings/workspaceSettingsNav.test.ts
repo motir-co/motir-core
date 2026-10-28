@@ -51,18 +51,26 @@ describe('workspaceSettingsNav — totality (route ↔ entry, mistake #29)', () 
     // No drift in either direction: a new page without an entry, or an entry
     // without a page, both fail.
     expect(registryRoutes).toEqual(fsRoutes);
-    expect(fsRoutes).toHaveLength(7);
+    expect(fsRoutes).toHaveLength(8);
   });
 });
 
 describe('workspaceSettingsNav — the ONE filter axis, and it defaults closed', () => {
   it('returns EVERY row when the tier is revealed — Roles & permissions under Access (MOTIR-6466)', () => {
-    expect(visibleWorkspaceSettingsNav(true).map((e) => e.id)).toEqual([
-      'workspace',
-      'security',
-      'roles',
-      'jobs',
-    ]);
+    expect(
+      visibleWorkspaceSettingsNav(true, undefined, { publicProjectsAvailable: true }).map(
+        (e) => e.id,
+      ),
+    ).toEqual(['workspace', 'security', 'roles', 'public-address', 'jobs']);
+  });
+
+  it('drops the cloud-only Public address row off-cloud, and by default (MOTIR-9514)', () => {
+    // Off-cloud the room 404s, so the row is ABSENT rather than a door onto it.
+    const offCloud = visibleWorkspaceSettingsNav(true, undefined, {
+      publicProjectsAvailable: false,
+    }).map((e) => e.id);
+    expect(offCloud).toEqual(['workspace', 'security', 'roles', 'jobs']);
+    expect(visibleWorkspaceSettingsNav(true).map((e) => e.id)).toEqual(offCloud);
   });
 
   it('returns NO rows below the reveal — not fewer rows, none', () => {
@@ -89,8 +97,9 @@ describe('workspaceSettingsNav — the ONE filter axis, and it defaults closed',
     // would take a shipped capability away silently.
     for (const entry of WORKSPACE_SETTINGS_NAV) {
       // A drill-down's `nestedRoutes` (the Roles room, MOTIR-6466) is routing,
-      // not a gate.
-      const keys = Object.keys(entry).filter((k) => k !== 'nestedRoutes');
+      // not a gate; `cloudOnly` (Public address, MOTIR-9514) is the DEPLOYMENT
+      // axis — whether the room exists on this build — never a role.
+      const keys = Object.keys(entry).filter((k) => k !== 'nestedRoutes' && k !== 'cloudOnly');
       expect(keys.sort()).toEqual(
         entry.exact
           ? ['exact', 'group', 'href', 'icon', 'id', 'labelKey']

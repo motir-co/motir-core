@@ -201,7 +201,9 @@ describe('the public contract document', () => {
     // 1.6.0 was the deprecations; 1.7.0 (MOTIR-7676) added the three idea-store
     // reads, another MINOR. Neither moved anything on the wire. 1.8.0 (MOTIR-8350)
     // declared a 503 on those three reads, a MINOR for a new declared status.
-    expect(PUBLIC_CONTRACT_VERSION).toBe('1.8.0');
+    // 2.0.0 (MOTIR-9511) is the MAJOR for resolvePublicHost's breaking reshape;
+    // it left these deprecations exactly as they were.
+    expect(PUBLIC_CONTRACT_VERSION).toBe('2.0.0');
   });
 });
 

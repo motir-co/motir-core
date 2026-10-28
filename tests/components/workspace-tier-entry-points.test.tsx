@@ -210,8 +210,13 @@ describe('the shell tier nav', () => {
 const ORG = { id: 'org-1', name: 'Acme', role: 'owner' as const };
 const RAIL_USER = { name: 'Ada', email: 'ada@example.com' };
 
-/** The area rail's three routes, read off the registry rather than retyped. */
-const AREA_ROUTES = WORKSPACE_SETTINGS_NAV.map((e) => e.href);
+/**
+ * The area rail's routes, read off the registry rather than retyped. A
+ * `cloudOnly` entry (Public address, MOTIR-9514) is a DEPLOYMENT axis, not a
+ * tier one: the rail rendered here has no public-projects availability, so it
+ * is left out, exactly as the rail leaves it out.
+ */
+const AREA_ROUTES = WORKSPACE_SETTINGS_NAV.filter((e) => !e.cloudOnly).map((e) => e.href);
 
 function tierNav(count: number) {
   return renderWithIntl(

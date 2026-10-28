@@ -3,6 +3,10 @@ import { NextResponse } from 'next/server';
 import { publicSurfaceUnavailable } from '@/lib/publicProjects/cloudGate';
 import { PublicAddressesUnavailableError } from '@/lib/publicAddresses/errors';
 import {
+  HOST_CONTRACT_CACHE_CONTROL,
+  NOT_FOUND_CACHE_CONTROL,
+} from '@/lib/publicAddresses/hostContractCache';
+import {
   PublicHostNotFoundError,
   publicAddressesService,
 } from '@/lib/services/publicAddressesService';
@@ -29,17 +33,17 @@ import {
 // its eleven read siblings carry, so it follows the shipped shape instead and
 // the deviation is recorded on the card. Rung 2 over rung 3.
 //
+// ── The cache bound: 30 seconds, and no revalidate window ────────────────
+//
+// A renamed or released name stops answering at once (ADR §8 Amendment 3 rule
+// 2). The row goes in the rename's own transaction; what could still answer for
+// it is a cached 200. So a 200 is cacheable for 30 seconds and no longer, with
+// no `stale-while-revalidate` (which would serve the retired answer past the
+// bound), and a 404 is `no-store`, so a name claimed moments after a refusal is
+// not hidden by it. `lib/publicAddresses/hostContractCache.ts` holds the number
+// and the reasoning; the consumer must not stack a longer cache on top.
+//
 // HTTP only: gate → one service call → map errors (the 4-layer rule).
-
-/**
- * How long a resolution may be cached.
- *
- * The router reads this on EVERY request to a tenant host, and the answer
- * changes only when a customer acts — claims, renames, promotes or removes an
- * address. `stale-while-revalidate` means a rename is visible within a minute
- * without any request ever waiting on this hop.
- */
-const CACHE_CONTROL = 'public, max-age=60, stale-while-revalidate=300';
 
 export async function GET(
   _req: Request,
@@ -54,14 +58,19 @@ export async function GET(
 
   try {
     const resolution = await publicAddressesService.resolveHost(decodeURIComponent(host));
-    return NextResponse.json(resolution, { headers: { 'Cache-Control': CACHE_CONTROL } });
+    return NextResponse.json(resolution, {
+      headers: { 'Cache-Control': HOST_CONTRACT_CACHE_CONTROL },
+    });
   } catch (err) {
     // ⚠️ ONE refusal shape for every reason — unknown host, un-issued
     // certificate, the base domain, a non-cloud build. A caller must not be able
     // to tell "no such tenant" from "a tenant exists but is not serving yet";
     // that difference is precisely what would make walking hostnames worthwhile.
     if (err instanceof PublicHostNotFoundError || err instanceof PublicAddressesUnavailableError) {
-      return NextResponse.json({ code: err.code }, { status: 404 });
+      return NextResponse.json(
+        { code: err.code },
+        { status: 404, headers: { 'Cache-Control': NOT_FOUND_CACHE_CONTROL } },
+      );
     }
     throw err;
   }

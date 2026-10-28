@@ -70,6 +70,7 @@ import { abandonedPlanService } from '@/lib/services/abandonedPlanService';
 import { jobRunsService } from '@/lib/services/jobRunsService';
 import { jobQueueRetentionService } from '@/lib/services/jobQueueRetentionService';
 import { dataExportService } from '@/lib/services/dataExportService';
+import { publicHostnameReservationService } from '@/lib/services/publicHostnameReservationService';
 import { accountErasureSweepService } from '@/lib/services/accountErasureSweepService';
 import { organizationDeletionNotifier } from '@/lib/services/organizationDeletionNotifier';
 import { organizationErasureSweepService } from '@/lib/services/organizationErasureSweepService';
@@ -186,6 +187,9 @@ export const jobServices = {
   // The personal-data export (Story 8.4 · MOTIR-3701) — the build job and
   // the retention sweep are both its callers.
   dataExport: dataExportService,
+  // The expired name-hold sweep (Story MOTIR-4528 · MOTIR-9509): deletes the
+  // public-hostname reservations whose hold has lapsed.
+  publicHostnameReservation: publicHostnameReservationService,
   // The nightly erasure of accounts whose grace period has run out (MOTIR-3702).
   accountErasureSweep: accountErasureSweepService,
   // The 7-day and 1-day reminders before an organization is erased (MOTIR-6395).

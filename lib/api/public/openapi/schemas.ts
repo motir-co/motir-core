@@ -58,38 +58,31 @@ const publicProjectLinks = z
  * addresses for one page can never compete.
  */
 /**
- * What `GET /api/public/hosts/{host}` answers (Story MOTIR-3878 · MOTIR-4217).
+ * What `GET /api/public/hosts/{host}` answers (Story MOTIR-3878 · MOTIR-4217;
+ * reshaped by Story MOTIR-4528 · MOTIR-9511 in 2.0.0).
  *
- * A DISCRIMINATED UNION on `kind`, not one shape with nullable halves. The three
- * cases share nothing but the discriminator, and a consumer that has to check
- * which fields are present is a consumer that will one day check the wrong one.
+ * A DISCRIMINATED UNION on `kind`, not one shape with nullable halves. The cases
+ * share nothing but the discriminator, and a consumer that has to check which
+ * fields are present is a consumer that will one day check the wrong one.
+ *
+ * There is no redirect outcome: a renamed or released name is the same 404 as
+ * an unknown one (ADR §8 Amendment 3 rule 2).
  */
 export const publicHostResolutionSchema = z
   .discriminatedUnion('kind', [
     z
       .object({
-        kind: z.literal('workspace'),
+        kind: z.literal('no_application'),
         workspace: z.object({ name: z.string() }).strict(),
-        projects: z.array(z.object({ identifier: z.string(), name: z.string() }).strict()).meta({
-          description:
-            "Every public project under this workspace's subdomain, freshest first. MAY BE " +
-            'EMPTY — a workspace whose projects have all gone private still holds the address, ' +
-            'and an empty list is the honest answer to a visitor who followed a valid link.',
-        }),
       })
       .strict()
-      .meta({ id: 'PublicHostWorkspace' }),
-    z
-      .object({
-        kind: z.literal('alias'),
-        redirectTo: z.string().meta({
-          description:
-            'The live hostname to 301 to. This is the ADR §8 never-released promise made ' +
-            'observable: a renamed-away-from subdomain keeps answering, for ever.',
-        }),
-      })
-      .strict()
-      .meta({ id: 'PublicHostAlias' }),
+      .meta({
+        id: 'PublicHostNoApplication',
+        description:
+          'A live workspace host with no application to serve yet. The bare workspace host ' +
+          "belongs to the workspace's default application (MOTIR-9790); it no longer lists " +
+          'projects, which live at `motir.co/p/<identifier>`.',
+      }),
     z
       .object({
         kind: z.literal('project'),

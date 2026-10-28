@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import {
   MAX_SUBDOMAIN_LENGTH,
-  MAX_SUBDOMAIN_RENAMES,
   MIN_SUBDOMAIN_LENGTH,
   RESERVED_SUBDOMAIN_LABELS,
   isReservedLabel,
@@ -190,11 +189,5 @@ describe('the label grammar', () => {
     // `_motir-verify` fails both rules. Grammar wins, because the underscore is
     // what a customer would have to change either way.
     expect(refuseLabel('_motir-verify')).toBe('bad_grammar');
-  });
-});
-
-describe('the rename cap', () => {
-  it('is the ADR §8 value, as a constant one line changes', () => {
-    expect(MAX_SUBDOMAIN_RENAMES).toBe(5);
   });
 });

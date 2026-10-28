@@ -2071,7 +2071,8 @@
         "workspace": "Werkruimte",
         "security": "Beveiliging",
         "roles": "Rollen en rechten",
-        "jobs": "Taakuitvoeringen"
+        "jobs": "Taakuitvoeringen",
+        "publicAddress": "Openbaar adres"
       }
     },
     "name": {
@@ -2706,43 +2707,6 @@
         "title": "Er is geen openbare namespace geconfigureerd",
         "description": "Voor deze installatie is geen basisdomein voor tenants ingesteld, dus er kan nog geen subdomein worden geclaimd. Een beheerder stelt MOTIR_PUBLIC_TENANT_DOMAIN in."
       },
-      "subdomain": {
-        "title": "Subdomein van de werkruimte",
-        "subtitle": "Eén adres voor de hele werkruimte. Elk openbaar project erin is daaronder bereikbaar.",
-        "label": "Subdomein",
-        "helper": "Je projecten komen op {preview}. Kleine letters, cijfers en koppeltekens; 3–63 tekens.",
-        "claim": "Subdomein claimen",
-        "claimable": "Dit kan later nog een beperkt aantal keer worden hernoemd.",
-        "active": "Actief",
-        "alias": "Verwijst hierheen door",
-        "aliasShort": "Verwijst door",
-        "copy": "Adres kopiëren",
-        "copied": "Adres gekopieerd",
-        "open": "Openen in een nieuw tabblad",
-        "rename": "Hernoemen",
-        "renamesLeft": "{count, plural, =0 {Geen hernoemingen meer over.} one {Nog # hernoeming over.} other {Nog # hernoemingen over.}}",
-        "readOnly": "Beheerd door een eigenaar of beheerder van de werkruimte.",
-        "none": "Nog geen subdomein geclaimd."
-      },
-      "rename": {
-        "title": "Dit subdomein hernoemen?",
-        "warningTitle": "Het oude adres blijft werken en wordt nooit vrijgegeven.",
-        "warningBody": "{old} verwijst voorgoed hierheen door en kan door niemand anders worden geclaimd — ook later niet door jou.",
-        "remaining": "Na deze heb je nog {count, plural, one {# hernoeming} other {# hernoemingen}} over.",
-        "cancel": "Annuleren",
-        "confirm": "Hernoemen"
-      },
-      "release": {
-        "remove": "Verwijderen",
-        "title": "{hostname} verwijderen?",
-        "lead": "{count, plural, one {Dit adres is dan niet meer bereikbaar:} other {Deze # adressen zijn dan niet meer bereikbaar:}}",
-        "warningTitle": "{count, plural, one {Deze naam blijft voor altijd vastgehouden. Niemand kan hem opnieuw claimen — ook jij niet.} other {Deze namen blijven voor altijd vastgehouden. Niemand kan ze opnieuw claimen — ook jij niet.}}",
-        "warningBody": "Motir houdt elke vrijgegeven naam permanent buiten de namespace, zodat geen andere werkruimte links kan erven die naar de jouwe verwezen.",
-        "renamesAfter": "Als je opnieuw een subdomein claimt, heb je nog {count, plural, =0 {geen hernoemingen} one {# hernoeming} other {# hernoemingen}} over — vrijgeven geeft ze niet terug.",
-        "fallback": "Je openbare projecten gaan terug naar {url} en verschijnen weer op {site}.",
-        "cancel": "Annuleren",
-        "confirm": "Subdomein verwijderen"
-      },
       "domains": {
         "title": "Je eigen domein",
         "subtitle": "Dit project aanbieden vanaf een domein dat je bezit.",
@@ -2831,17 +2795,6 @@
         },
         "lastChecked": "Laatst gecontroleerd {when}",
         "error": "Dat is niet gelukt. Probeer het zo opnieuw."
-      },
-      "error": {
-        "reserved": "{label} is gereserveerd. Motir houdt een kleine set namen vrij voor zijn eigen hosts en voor namen die een lezer daarmee zou kunnen verwarren.",
-        "structurallyReserved": "{label} is gereserveerd. Namen die beginnen met een underscore, xn-- of motir- horen bij Motir of bij DNS zelf.",
-        "tooShort": "Te kort — een subdomein heeft minstens 3 tekens.",
-        "tooLong": "Te lang — een subdomein heeft maximaal 63 tekens.",
-        "badGrammar": "Alleen kleine letters, cijfers en koppeltekens, beginnend en eindigend met een letter of cijfer.",
-        "taken": "{label} is al in gebruik. Een subdomein dat is hernoemd, houdt ook zijn naam vast, dus deze kan horen bij een werkruimte die er niet meer op bereikbaar is.",
-        "capReached": "Je hebt alle hernoemingen voor deze werkruimte gebruikt. Het adres kan niet meer worden gewijzigd.",
-        "forbidden": "Alleen een eigenaar of beheerder van de werkruimte kan dit adres wijzigen.",
-        "generic": "Dat is niet gelukt. Probeer het zo opnieuw."
       }
     },
     "codeAccess": {
@@ -4274,6 +4227,92 @@
       "saveError": "Er ging iets mis. Probeer het opnieuw.",
       "saveForbidden": "Je kunt niet meer wijzigen waar de bugs van dit project worden opgeslagen.",
       "folderGone": "Die map bestaat niet meer. Kies een andere."
+    },
+    "workspaceAddress": {
+      "door": {
+        "title": "Openbaar adres",
+        "claimed": "{host} — één naam voor de werkruimte.",
+        "none": "Nog geen naam geclaimd.",
+        "manage": "Beheren →",
+        "claim": "Een naam claimen →"
+      },
+      "title": "Openbaar adres",
+      "subtitle": "De ene naam waarop je werkruimte antwoordt.",
+      "readOnly": "Alleen eigenaren en beheerders van de werkruimte kunnen dit wijzigen.",
+      "none": "Nog geen naam geclaimd.",
+      "unavailable": {
+        "title": "Openbare adressen zijn niet ingesteld op deze server",
+        "description": "Een beheerder moet MOTIR_PUBLIC_TENANT_DOMAIN instellen voordat een werkruimte een naam kan claimen."
+      },
+      "field": {
+        "label": "Naam",
+        "renameLabel": "Nieuwe naam",
+        "hint": "Kleine letters, cijfers en losse koppeltekens; {min}–{max} tekens. Een werkruimte heeft één naam.",
+        "preview": "Lezers vinden je op {host}"
+      },
+      "claim": "Naam claimen",
+      "refusal": {
+        "tooShort": "Gebruik minstens {min} tekens.",
+        "badGrammar": "Gebruik alleen kleine letters, cijfers en koppeltekens.",
+        "doubleHyphen": "Een naam mag geen twee koppeltekens achter elkaar bevatten — die zijn gereserveerd voor applicatieadressen.",
+        "tooLong": "Gebruik maximaal {max} tekens.",
+        "taken": "{host} is al bezet. Probeer een andere naam.",
+        "reserved": "‘{label}’ is gereserveerd. Kies een andere naam.",
+        "quarantined": "{host} is onlangs vrijgegeven en wordt vastgehouden tot {date}. Vanaf dan kan iedereen hem claimen.",
+        "generic": "De naam kon niet worden opgeslagen. Probeer het opnieuw."
+      },
+      "row": {
+        "live": "Live",
+        "copy": "Adres kopiëren",
+        "copied": "Adres gekopieerd",
+        "open": "Openen in nieuw tabblad"
+      },
+      "rename": "Hernoemen",
+      "release": "Vrijgeven",
+      "lock": "Je kunt de naam op {date} weer wijzigen. Een hernoeming en een vrijgave tellen elk als één wijziging, eens per 30 dagen.",
+      "lockShort": "Je kunt de naam op {date} weer wijzigen.",
+      "review": "Controleren",
+      "cancel": "Annuleren",
+      "confirm": {
+        "renameTitle": "Hernoemen naar {host}?",
+        "releaseTitle": "{host} vrijgeven?",
+        "stops": "{host} antwoordt vanaf nu niet meer.",
+        "returnsOn": "Iedereen kan hem claimen vanaf {date}.",
+        "returnsNow": "Iedereen kan hem meteen claimen — je had hem minder dan 24 uur.",
+        "noRedirectRename": "Er is geen doorverwijzing van het oude adres naar het nieuwe, dus werk links die je hebt gedeeld bij.",
+        "noRedirectRelease": "Er is geen doorverwijzing. Je openbare projecten blijven op hun motir.co-adressen.",
+        "lockAfterRename": "Je kunt de naam pas op {date} weer wijzigen.",
+        "lockAfterRelease": "Je kunt meteen een nieuwe naam claimen. De volgende wijziging daarna is toegestaan vanaf {date}.",
+        "rename": "Hernoemen",
+        "renaming": "Hernoemen…",
+        "release": "Naam vrijgeven",
+        "releasing": "Vrijgeven…"
+      },
+      "toast": {
+        "claimed": "{host} is van jou",
+        "renamed": "Hernoemd naar {host}",
+        "renamedBody": "{old} antwoordt niet meer.",
+        "released": "{host} vrijgegeven",
+        "refusedTitle": "Naam niet gewijzigd",
+        "refusedLimit": "Je kunt hem op {date} weer wijzigen.",
+        "refusedTaken": "{host} is net bezet. Probeer een andere naam.",
+        "refusedQuarantined": "{host} wordt vastgehouden tot {date}."
+      },
+      "released": {
+        "held": "{host} is vrijgegeven. Hij wordt vastgehouden tot {date}, daarna kan iedereen hem claimen.",
+        "free": "{host} is vrijgegeven. Iedereen kan hem nu claimen.",
+        "lock": "Je kunt nu een naam claimen. Daarna is de volgende wijziging toegestaan vanaf {date}."
+      },
+      "loadError": "Het adres kon niet worden geladen.",
+      "retry": "Opnieuw proberen",
+      "echo": {
+        "title": "Werkruimteadres",
+        "claimedSub": "De naam waarop je werkruimte antwoordt.",
+        "noneSub": "Je werkruimte heeft nog geen naam.",
+        "projectPage": "De openbare pagina van dit project staat op {url}.",
+        "change": "Wijzigen in de werkruimte-instellingen →",
+        "claim": "Een naam claimen voor de werkruimte →"
+      }
     }
   },
   "boards": {

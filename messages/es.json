@@ -2071,7 +2071,8 @@
         "workspace": "Espacio de trabajo",
         "security": "Seguridad",
         "roles": "Roles y permisos",
-        "jobs": "Ejecuciones de trabajos"
+        "jobs": "Ejecuciones de trabajos",
+        "publicAddress": "Dirección pública"
       }
     },
     "name": {
@@ -2706,43 +2707,6 @@
         "title": "No hay ningún espacio de nombres público configurado",
         "description": "Esta implementación no tiene configurado un dominio base para inquilinos, así que todavía no se puede reclamar un subdominio. Un operador debe establecer MOTIR_PUBLIC_TENANT_DOMAIN."
       },
-      "subdomain": {
-        "title": "Subdominio del espacio de trabajo",
-        "subtitle": "Una dirección para todo el espacio de trabajo. Todos sus proyectos públicos responden debajo de ella.",
-        "label": "Subdominio",
-        "helper": "Tus proyectos estarán en {preview}. Letras minúsculas, dígitos y guiones; de 3 a 63 caracteres.",
-        "claim": "Reclamar subdominio",
-        "claimable": "Se puede renombrar más adelante un número limitado de veces.",
-        "active": "Activo",
-        "alias": "Redirige aquí",
-        "aliasShort": "Redirige",
-        "copy": "Copiar dirección",
-        "copied": "Dirección copiada",
-        "open": "Abrir en una pestaña nueva",
-        "rename": "Renombrar",
-        "renamesLeft": "{count, plural, =0 {No quedan cambios de nombre.} one {Queda # cambio de nombre.} other {Quedan # cambios de nombre.}}",
-        "readOnly": "Lo gestiona un propietario o administrador del espacio de trabajo.",
-        "none": "Aún no se ha reclamado ningún subdominio."
-      },
-      "rename": {
-        "title": "¿Renombrar este subdominio?",
-        "warningTitle": "La dirección antigua sigue funcionando y nunca se libera.",
-        "warningBody": "{old} redirigirá aquí de forma permanente y nadie más podrá reclamarla, ni siquiera tú más adelante.",
-        "remaining": "Te {count, plural, one {quedará # cambio de nombre} other {quedarán # cambios de nombre}} después de este.",
-        "cancel": "Cancelar",
-        "confirm": "Renombrar"
-      },
-      "release": {
-        "remove": "Quitar",
-        "title": "¿Quitar {hostname}?",
-        "lead": "{count, plural, one {Esta dirección dejará de responder:} other {Estas # direcciones dejarán de responder:}}",
-        "warningTitle": "{count, plural, one {Este nombre queda reservado para siempre. Nadie podrá volver a reclamarlo, ni siquiera tú.} other {Estos nombres quedan reservados para siempre. Nadie podrá volver a reclamarlos, ni siquiera tú.}}",
-        "warningBody": "Motir mantiene fuera de su espacio de nombres todos los nombres liberados de forma permanente, para que ningún otro espacio de trabajo herede enlaces que apuntaban al tuyo.",
-        "renamesAfter": "Te {count, plural, =0 {quedarán cero cambios de nombre} one {quedará # cambio de nombre} other {quedarán # cambios de nombre}} si vuelves a reclamar un subdominio: liberarlo no los devuelve.",
-        "fallback": "Tus proyectos públicos vuelven a {url} y aparecen de nuevo en {site}.",
-        "cancel": "Cancelar",
-        "confirm": "Quitar subdominio"
-      },
       "domains": {
         "title": "Tu propio dominio",
         "subtitle": "Sirve este proyecto desde un dominio de tu propiedad.",
@@ -2831,17 +2795,6 @@
         },
         "lastChecked": "Última comprobación: {when}",
         "error": "No ha funcionado. Vuelve a intentarlo en un momento."
-      },
-      "error": {
-        "reserved": "{label} está reservado. Motir guarda un pequeño conjunto de nombres para sus propios hosts y para nombres que un lector podría confundir con ellos.",
-        "structurallyReserved": "{label} está reservado. Los nombres que empiezan por guion bajo, xn-- o motir- pertenecen a Motir o al propio DNS.",
-        "tooShort": "Demasiado corto: un subdominio tiene al menos 3 caracteres.",
-        "tooLong": "Demasiado largo: un subdominio tiene como máximo 63 caracteres.",
-        "badGrammar": "Solo letras minúsculas, dígitos y guiones, empezando y terminando por una letra o un dígito.",
-        "taken": "{label} ya está en uso. Un subdominio cuyo nombre se ha cambiado también conserva su nombre, así que este puede pertenecer a un espacio de trabajo que ya no responde en él.",
-        "capReached": "Has usado todos los cambios de nombre de este espacio de trabajo. La dirección ya no se puede volver a cambiar.",
-        "forbidden": "Solo un propietario o administrador del espacio de trabajo puede cambiar esta dirección.",
-        "generic": "No ha funcionado. Vuelve a intentarlo en un momento."
       }
     },
     "codeAccess": {
@@ -4274,6 +4227,92 @@
       "saveError": "Algo ha fallado. Vuelve a intentarlo.",
       "saveForbidden": "Ya no puedes cambiar dónde se registran los errores de este proyecto.",
       "folderGone": "Esa carpeta ya no existe. Elige otra."
+    },
+    "workspaceAddress": {
+      "door": {
+        "title": "Dirección pública",
+        "claimed": "{host} — un solo nombre para el espacio de trabajo.",
+        "none": "Todavía no se ha reclamado ningún nombre.",
+        "manage": "Gestionar →",
+        "claim": "Reclamar un nombre →"
+      },
+      "title": "Dirección pública",
+      "subtitle": "El único nombre con el que responde tu espacio de trabajo.",
+      "readOnly": "Solo los propietarios y administradores del espacio de trabajo pueden cambiar esto.",
+      "none": "Todavía no se ha reclamado ningún nombre.",
+      "unavailable": {
+        "title": "Las direcciones públicas no están configuradas en este servidor",
+        "description": "Un operador debe definir MOTIR_PUBLIC_TENANT_DOMAIN antes de que un espacio de trabajo pueda reclamar un nombre."
+      },
+      "field": {
+        "label": "Nombre",
+        "renameLabel": "Nombre nuevo",
+        "hint": "Letras minúsculas, dígitos y guiones sueltos; de {min} a {max} caracteres. Un espacio de trabajo tiene un solo nombre.",
+        "preview": "Tus lectores te encontrarán en {host}"
+      },
+      "claim": "Reclamar nombre",
+      "refusal": {
+        "tooShort": "Usa al menos {min} caracteres.",
+        "badGrammar": "Usa solo letras minúsculas, dígitos y guiones.",
+        "doubleHyphen": "Un nombre no puede tener dos guiones seguidos: eso se reserva para las direcciones de aplicaciones.",
+        "tooLong": "Usa {max} caracteres o menos.",
+        "taken": "{host} ya está ocupado. Prueba con otro nombre.",
+        "reserved": "“{label}” está reservado. Elige otro nombre.",
+        "quarantined": "{host} se liberó hace poco y está retenido hasta el {date}. A partir de entonces, cualquiera puede reclamarlo.",
+        "generic": "No se pudo guardar el nombre. Inténtalo de nuevo."
+      },
+      "row": {
+        "live": "Activo",
+        "copy": "Copiar dirección",
+        "copied": "Dirección copiada",
+        "open": "Abrir en una pestaña nueva"
+      },
+      "rename": "Renombrar",
+      "release": "Liberar",
+      "lock": "Podrás volver a cambiar el nombre el {date}. Un cambio de nombre y una liberación cuentan cada uno como un cambio, una vez cada 30 días.",
+      "lockShort": "Podrás volver a cambiar el nombre el {date}.",
+      "review": "Revisar",
+      "cancel": "Cancelar",
+      "confirm": {
+        "renameTitle": "¿Renombrar a {host}?",
+        "releaseTitle": "¿Liberar {host}?",
+        "stops": "{host} deja de responder ahora.",
+        "returnsOn": "Cualquiera puede reclamarlo a partir del {date}.",
+        "returnsNow": "Cualquiera puede reclamarlo de inmediato: lo tuviste menos de 24 horas.",
+        "noRedirectRename": "No hay redirección de la dirección antigua a la nueva, así que actualiza los enlaces que hayas compartido.",
+        "noRedirectRelease": "No hay redirección. Tus proyectos públicos siguen en sus direcciones de motir.co.",
+        "lockAfterRename": "No podrás volver a cambiar el nombre hasta el {date}.",
+        "lockAfterRelease": "Puedes reclamar un nombre nuevo de inmediato. El siguiente cambio después de eso se permite a partir del {date}.",
+        "rename": "Renombrar",
+        "renaming": "Renombrando…",
+        "release": "Liberar nombre",
+        "releasing": "Liberando…"
+      },
+      "toast": {
+        "claimed": "{host} es tuyo",
+        "renamed": "Renombrado a {host}",
+        "renamedBody": "{old} ya no responde.",
+        "released": "{host} liberado",
+        "refusedTitle": "El nombre no cambió",
+        "refusedLimit": "Podrás volver a cambiarlo el {date}.",
+        "refusedTaken": "{host} se acaba de ocupar. Prueba con otro nombre.",
+        "refusedQuarantined": "{host} está retenido hasta el {date}."
+      },
+      "released": {
+        "held": "{host} se liberó. Está retenido hasta el {date}; después, cualquiera puede reclamarlo.",
+        "free": "{host} se liberó. Cualquiera puede reclamarlo ahora.",
+        "lock": "Ya puedes reclamar un nombre. Después, el siguiente cambio se permite a partir del {date}."
+      },
+      "loadError": "No se pudo cargar la dirección.",
+      "retry": "Reintentar",
+      "echo": {
+        "title": "Dirección del espacio de trabajo",
+        "claimedSub": "El nombre con el que responde tu espacio de trabajo.",
+        "noneSub": "Tu espacio de trabajo aún no tiene nombre.",
+        "projectPage": "La página pública de este proyecto está en {url}.",
+        "change": "Cambiar en la configuración del espacio de trabajo →",
+        "claim": "Reclamar un nombre para el espacio de trabajo →"
+      }
     }
   },
   "boards": {
