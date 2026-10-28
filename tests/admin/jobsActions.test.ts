@@ -175,7 +175,7 @@ describe('replayAllDeadLettersAction', () => {
     expect(revalidatePath).not.toHaveBeenCalled();
   });
 
-  it('operator: replays every waiting row of the function and revalidates; a repeat replays none', async () => {
+  it('operator: replays every waiting row of the function, leaves the re-read to Done; a repeat replays none', async () => {
     await seedDlq(0);
     await seedDlq(1, { workspaceId });
     currentPrincipal = operator;
@@ -186,7 +186,8 @@ describe('replayAllDeadLettersAction', () => {
     });
     expect(await replayedCount()).toBe(2);
     expect(await auditCount()).toBe(2);
-    expect(revalidatePath).toHaveBeenCalledWith('/admin/jobs');
+    // The dialog's Done refreshes the page: a re-read here would unmount it.
+    expect(revalidatePath).not.toHaveBeenCalled();
 
     await expect(replayAllDeadLettersAction(METER)).resolves.toEqual({
       ok: true,

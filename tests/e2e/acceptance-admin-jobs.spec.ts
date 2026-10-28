@@ -136,8 +136,9 @@ test('platform staff read the whole job ledger, and an operator replays one row,
 }) => {
   acceptanceStory('MOTIR-9980');
   // Ten chapters, and Replay all writes one transaction and one audit row per
-  // dead letter: past the lane's 90s default.
-  test.setTimeout(180_000);
+  // dead letter while the worker runs each replayed sweep: about two minutes
+  // of the walk in CI, against the lane's 90s default.
+  test.setTimeout(300_000);
 
   const tenant = await seedTenantOrg('Northwind Labs', 'e2e-jobs-northwind');
   await seedLedger(tenant.workspaceId);

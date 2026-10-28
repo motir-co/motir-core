@@ -65,7 +65,10 @@ export async function replayAllDeadLettersAction(
       functionId,
       principal,
     });
-    revalidatePath(PAGE);
+    // ⚠️ NO revalidatePath HERE, unlike the row replay. The re-read would land
+    // with this answer, and once the function has nothing waiting it leaves the
+    // filter: the page falls back to All functions and unmounts the dialog
+    // before its result is read. Done re-reads the page instead.
     return { ok: true, result };
   } catch (err) {
     if (isRefusal(err)) return { ok: false, code: 'NOT_PERMITTED' };
