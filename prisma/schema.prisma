@@ -12041,6 +12041,60 @@ enum HostingSize {
   @@map("hosting_size")
 }
 
+/// A SEED REGISTRY entry (Story MOTIR-704 · MOTIR-708; decision MOTIR-706, page
+/// cmvsezd8800eihnoikhllqqev v2): what a Motir-created repository starts from.
+/// A Motir row's `seedSource` is an entry's `key` (or one of its `legacyKeys`).
+///
+/// PLATFORM-WIDE: Motir's catalogue, read by every workspace's establish, so it
+/// carries no `workspace_id`. Its RLS reads unconditionally and writes only under
+/// `app.platform_staff` (the migration says why).
+model SeedRegistryEntry {
+  id             String                  @id @default(cuid())
+  /// The key a row's `seedSource` stores. Opaque: never shown as the explanation.
+  key            String                  @unique
+  /// Earlier keys of the same entry; a row storing one resolves here (3.7).
+  legacyKeys     String[]                @default([]) @map("legacy_keys")
+  /// The role it seeds; NULL means any role (the `initialised` entry only).
+  role           ProjectRepoRole?
+  /// A lowercase stack name (`nextjs`, `expo`, `spring`); NULL means any stack.
+  stack          String?
+  /// What a person reads ("Next.js · serverless").
+  label          String
+  /// The GitHub TEMPLATE repository `/generate` copies. Both NULL means the
+  /// `initialised` seed (`auto_init`); a CHECK keeps the pair together.
+  templateOwner  String?                 @map("template_owner")
+  templateRepo   String?                 @map("template_repo")
+  useCases       HostingUseCase[]        @map("use_cases")
+  sizes          HostingSize[]
+  /// The hosting targets it deploys to; EMPTY means the hosting port does not
+  /// deploy it (mobile, api, `initialised`).
+  hostingTargets HostingTarget[]         @map("hosting_targets")
+  status         SeedRegistryEntryStatus @default(active)
+  /// The Motir-created repository and ref an operator promoted it from (MOTIR-710).
+  promotedFrom   String?                 @map("promoted_from")
+  /// The operator's user id, kept as PROVENANCE text rather than a foreign key:
+  /// an FK to `user` would put this platform table in every `TRUNCATE "user"
+  /// CASCADE` and on every account erasure's cascade, and provenance must
+  /// outlive the account that wrote it (the platform audit log's posture).
+  promotedBy     String?                 @map("promoted_by")
+  promotedAt     DateTime?               @map("promoted_at")
+  createdAt      DateTime                @default(now()) @map("created_at")
+  updatedAt      DateTime                @updatedAt @map("updated_at")
+
+  @@index([role, status])
+  @@index([legacyKeys], type: Gin)
+  @@map("seed_registry_entry")
+}
+
+/// Whether a seed registry entry is offered: a `retired` entry is kept, with its
+/// lists and provenance, and is never matched or established from (MOTIR-706 3.6).
+enum SeedRegistryEntryStatus {
+  active
+  retired
+
+  @@map("seed_registry_entry_status")
+}
+
 /// The repo-role vocabulary (`docs/decisions/project-repository-set.md` §1.1).
 /// Six values, fixed — do NOT add one without amending the ADR, and keep it in
 /// lockstep with motir-ai's proposal-schema role enum (MOTIR-1885).

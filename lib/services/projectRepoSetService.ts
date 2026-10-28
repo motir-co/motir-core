@@ -34,9 +34,9 @@ import {
 } from '@/lib/projectRepos/names';
 import { allowedTransitions, canTransition } from '@/lib/projectRepos/transitions';
 import { classifyProjectRepoUniqueViolation } from '@/lib/projectRepos/uniqueViolation';
+import { seedRegistryService } from '@/lib/services/seedRegistryService';
 import {
   PROJECT_REPO_PROPOSAL_SIGNALS,
-  defaultSeedSourceForRole,
   isOrganizationSeedSource,
   isProjectRepoProposalSignal,
 } from '@/lib/projectRepos/vocabulary';
@@ -444,8 +444,11 @@ export const projectRepoSetService = {
   ): Promise<ProjectRepoDto> {
     const name = validateName(input.name);
     const label = validateLabel(input.label);
+    // The default is the seed REGISTRY's (MOTIR-706 3.8), read live, so a role
+    // whose foundation is registered later gets it with no code change here.
     const seedSource = validateSeedSource(
-      input.seedSource ?? defaultSeedSourceForRole(input.role as ProjectRepoRole),
+      input.seedSource ??
+        (await seedRegistryService.defaultSeedSourceForRole(input.role as ProjectRepoRole)),
     );
     const proposalSignal = validateProposalSignal(input.proposalSignal);
 

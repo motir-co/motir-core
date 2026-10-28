@@ -10,6 +10,8 @@ import {
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
+import { seedRegistryService } from '@/lib/services/seedRegistryService';
+import { SeedResolutionError } from '@/lib/seedRegistry/errors';
 import { projectRunnerGroupService } from '@/lib/services/projectRunnerGroupService';
 import { fleetRunnerVariableService } from '@/lib/services/fleetRunnerVariableService';
 import { fleetGithubOrgAssignmentService } from '@/lib/services/fleetGithubOrgAssignmentService';
@@ -336,11 +338,14 @@ async function establishRow(
   try {
     // Never the fallback org for an organisation assigned another (MOTIR-8966).
     if (hosting.unavailableOrg) throw new RepoHostOrgUnavailableError(hosting.unavailableOrg, null);
+    // The row's seed, through the registry (MOTIR-708). An unknown key or a
+    // retired entry fails THIS row here, before GitHub is asked for anything.
+    const seed = await seedRegistryService.resolveForEstablish(row.seedSource);
     provisioned = await repoProvisioningClient.provisionRepository(
       {
         name: row.name,
         role: row.role,
-        seedSource: row.seedSource,
+        seed,
         projectName,
       },
       hosting.target,
@@ -491,7 +496,7 @@ async function failRow(
  * raw GitHub or database payload must not reach a rendered surface.
  */
 function describeFailure(err: unknown, repoName: string): { reason: string; code: string } {
-  if (err instanceof RepoProvisioningError) {
+  if (err instanceof RepoProvisioningError || err instanceof SeedResolutionError) {
     return { reason: err.reason, code: err.code };
   }
   if (err instanceof RealizedRepoAlreadyClaimedError) {

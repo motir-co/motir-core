@@ -31,7 +31,7 @@ afterEach(() => {
 describe('seedSourceForHostingTarget', () => {
   it('answers what the role matching answers for a new app (`web`), for every target', () => {
     for (const target of HOSTING_TARGETS) {
-      expect(seedSourceForHostingTarget(target)).toBe('nextjs-prisma-vercel-starter');
+      expect(seedSourceForHostingTarget(target)).toBe('nextjs-prisma-serverless-starter');
     }
     expect(defaultSeedSourceForRole).toHaveBeenCalledWith('web');
   });
@@ -58,6 +58,8 @@ describe('starterByHostingTarget', () => {
   it('carries no starter key as a string literal in its source', async () => {
     const { readFile } = await import('node:fs/promises');
     const source = await readFile('lib/projectRepos/seedMatching.ts', 'utf8');
-    expect(source).not.toMatch(/['"`](nextjs-prisma-vercel-starter|initialised|blank)['"`]/);
+    expect(source).not.toMatch(
+      /['"`](nextjs-prisma-(?:vercel|serverless)-starter|initialised|blank)['"`]/,
+    );
   });
 });

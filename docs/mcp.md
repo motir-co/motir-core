@@ -2644,7 +2644,7 @@ chapters?, commitSha?, producedByKey? }` → the receipt.
 ⚠️ **WHO publishes depends on the repository, and the agent reads its checkout to
 find out (MOTIR-7254).** In a repository whose acceptance lane carries the
 `upload-acceptance-video` action — motir-core, and every project generated from
-`nextjs-prisma-vercel-starter` since MOTIR-7255 — **CI publishes the receipt**, from
+`nextjs-prisma-serverless-starter` since MOTIR-7255 — **CI publishes the receipt**, from
 a green pull-request run over keyless GitHub OIDC, and the agent makes no call. The
 dispatch prompt spells the check out:
 `grep -rlE 'uses:\s*\./\.github/actions/upload-acceptance-video' .github/workflows/`

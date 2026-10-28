@@ -311,7 +311,7 @@ describe('MOTIR-10014 — owner inputs, hosting and the starter per target', () 
         role: 'web',
         label: null,
         state: 'proposed',
-        seedSource: 'nextjs-prisma-vercel-starter',
+        seedSource: 'nextjs-prisma-serverless-starter',
         hostingTarget: 'serverless',
         hostingUseCase: 'internal_tool',
         hostingSize: 'small',

@@ -78,7 +78,7 @@ export const MOTIR_RUNNER_LABEL = MOTIR_FLEET_RUNNER_LABEL;
  * workflow file in a repository Motir does not control after handover and a
  * variable Motir writes. Both halves have to agree on this exact string, and only
  * one of them lives in this codebase — the other is committed YAML in
- * `nextjs-prisma-vercel-starter` (MOTIR-1925, all 5 job sites) and in the CI stub
+ * `nextjs-prisma-serverless-starter` (MOTIR-1925, all 5 job sites) and in the CI stub
  * `lib/github/repoProvisioning.ts` seeds into an initialised repo. A rename here
  * that is not made in both places does not fail anything: the variable is simply
  * never read, `runs-on` silently resolves to `ubuntu-latest`, and the fleet stops

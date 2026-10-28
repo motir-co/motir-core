@@ -1220,8 +1220,8 @@
       ],
       "jobCount": 2
     },
-    "motir-co/nextjs-prisma-vercel-starter": {
-      "repoRef": "motir-co/nextjs-prisma-vercel-starter",
+    "motir-co/nextjs-prisma-serverless-starter": {
+      "repoRef": "motir-co/nextjs-prisma-serverless-starter",
       "ref": "main",
       "sha": "2856141b96d938865f053966fb84661e24391fa3",
       "visibility": "public",

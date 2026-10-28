@@ -2,7 +2,7 @@ import { createAppJwt, mintInstallationToken } from '@/lib/github/appAuth';
 import { provisioningOrgLogin } from '@/lib/ciMetering/config';
 import { OrgTargetAuthError, resolveOrgAuth, type GithubOrgTarget } from '@/lib/github/orgTarget';
 import type { ProjectRepoRoleDto } from '@/lib/dto/projectRepos';
-import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
+import { SEED_REGISTRY_INITIALISED_SOURCE, type ResolvedSeedDto } from '@/lib/dto/seedRegistry';
 
 // The repo-CREATION boundary (Story MOTIR-1775 · MOTIR-1781) — the one module
 // that talks to GitHub about making a repository exist. Everything above it
@@ -54,15 +54,10 @@ const GITHUB_API = 'https://api.github.com';
 const GITIGNORE_TEMPLATE = 'Node';
 
 /** The licence GitHub applies to an initialised repo — MIT, because that is what
- *  `nextjs-prisma-vercel-starter` (the `web` seed, §2 of the ADR) already ships.
+ *  the platform starter (the `web` seed, §2 of the ADR) already ships.
  *  A set whose web repo is MIT and whose api repo is something else would be a
  *  licensing decision made by accident of seed path. */
 const LICENSE_TEMPLATE = 'mit';
-
-/** The org that owns `nextjs-prisma-vercel-starter`. The starter is public and
- *  `is_template: true` (verified live in the spike §4.4), so the same template
- *  seeds every `web` row with no per-template exclusivity. */
-const STARTER_TEMPLATE_OWNER = 'moooon-B-V';
 
 /** Readiness polling (spike §4.2). A generated repo's `201` precedes its tree, so
  *  a row is only reported established once GitHub reports a non-empty
@@ -160,6 +155,27 @@ export class RepoHostOrgUnavailableError extends RepoProvisioningError {
   }
 }
 
+/**
+ * GitHub refused to generate from the row's seed TEMPLATE — the registry entry
+ * names a repository GitHub no longer serves (404) or that is not marked
+ * `is_template` (422). Names the ENTRY and its template, so the row's reason says
+ * what to fix; the row stays resumable, and a retry after the entry is fixed
+ * succeeds. Never a fallback to an initialised repository. (MOTIR-708)
+ */
+export class SeedTemplateUnavailableError extends RepoProvisioningError {
+  readonly code = 'SEED_TEMPLATE_UNAVAILABLE' as const;
+  constructor(
+    readonly seedKey: string,
+    readonly template: string,
+    readonly status: number,
+  ) {
+    super(
+      `GitHub would not create this repository from "${seedKey}" (template ${template}, HTTP ` +
+        `${status}), so nothing was created. The starter needs fixing in Motir's registry — retry this row once it is.`,
+    );
+  }
+}
+
 // ── Inputs / outputs ────────────────────────────────────────────────────────
 
 export interface ProvisionRepoInput {
@@ -167,11 +183,11 @@ export interface ProvisionRepoInput {
   name: string;
   /** The row's role (ADR §1.1) — selects the seed path and names the repo. */
   role: ProjectRepoRoleDto;
-  /** The row's seed source (ADR §2). `nextjs-prisma-vercel-starter` templates the
-   *  repo; anything else initialises it. An UNKNOWN key initialises rather than
-   *  throwing: MOTIR-709's registry will add keys, and a row whose key this build
-   *  does not know is better served by an honest empty repo than by a failure. */
-  seedSource: string;
+  /** The row's seed, already RESOLVED through the seed registry (MOTIR-708): a
+   *  template `source` is generated from that entry's own `owner/repo`; the
+   *  `initialised` source takes the `auto_init` path. The caller resolves it, so
+   *  an unknown or retired key has already failed the row before this runs. */
+  seed: ResolvedSeedDto;
   /** The owning project's display name — the README/description names it. */
   projectName: string;
 }
@@ -319,6 +335,18 @@ function errorDetail(body: Record<string, unknown> | null): string {
 function isNameCollision(status: number, body: Record<string, unknown> | null): boolean {
   if (status !== 422) return false;
   return collisionCandidates(body).some((text) => text.toLowerCase().includes('already exists'));
+}
+
+/**
+ * Whether a `/generate` refusal is about the TEMPLATE rather than the new
+ * repository: `404` (the template repository is gone, renamed past its redirect,
+ * or unreadable to Motir's App) or a `422` saying it is not a template. Any other
+ * `422` (a name the org's policy rejects, say) stays the generic API error.
+ */
+function isTemplateRefusal(status: number, body: Record<string, unknown> | null): boolean {
+  if (status === 404) return true;
+  if (status !== 422) return false;
+  return collisionCandidates(body).some((text) => /not a template/i.test(text));
 }
 
 /** Every string a GitHub error body could carry the collision phrase in, across
@@ -508,8 +536,9 @@ export async function provisioningAuth(): Promise<{
 export const repoProvisioningClient = {
   /**
    * Create ONE repository in Motir's org and return it once GitHub reports it
-   * ready. Seeds per role (ADR §2): the platform starter templates a `web` row;
-   * every other role gets an initialised repo (README naming the project + role,
+   * ready. Seeds from the row's RESOLVED seed registry entry (MOTIR-706 3.1): a
+   * template entry is generated from its own `owner/repo`; the `initialised`
+   * entry gets an initialised repo (README naming the project + role,
    * a licence, a `.gitignore`, a CI stub).
    *
    * IDEMPOTENT for a re-run. A `422 already exists` is not treated as a failure
@@ -539,10 +568,12 @@ export const repoProvisioningClient = {
       : await provisioningAuth();
     const auth = { authorization: `Bearer ${token}` };
 
-    const templated = input.seedSource === SEED_SOURCE_PLATFORM_STARTER;
+    const template =
+      input.seed.source === SEED_REGISTRY_INITIALISED_SOURCE ? null : input.seed.source;
+    const templated = template !== null;
     const res = templated
       ? await request(
-          `${GITHUB_API}/repos/${STARTER_TEMPLATE_OWNER}/${SEED_SOURCE_PLATFORM_STARTER}/generate`,
+          `${GITHUB_API}/repos/${encodeURIComponent(template.owner)}/${encodeURIComponent(template.repo)}/generate`,
           {
             method: 'POST',
             headers: auth,
@@ -577,6 +608,13 @@ export const repoProvisioningClient = {
         const existing = await readRepository(org, input.name, token);
         if (!existing) throw new RepoNameTakenOnHostError(input.name);
         return { installationId, ...existing, adopted: true, seedHeadSha: null };
+      }
+      if (template && isTemplateRefusal(res.status, body)) {
+        throw new SeedTemplateUnavailableError(
+          input.seed.key,
+          `${template.owner}/${template.repo}`,
+          res.status,
+        );
       }
       throw new RepoProvisioningApiError(res.status, errorDetail(body));
     }
