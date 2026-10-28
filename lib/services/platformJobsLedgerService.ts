@@ -15,13 +15,14 @@ import type { JobRunStatus, PlatformDlqListDTO, PlatformRunsPageDTO } from '@/li
 // run and every dead letter, of every workspace and of none.
 //
 // ⚠️ Both reads run under `withSystemContext`, which bypasses tenant RLS, so the
-// role check below is the whole gate. The caller resolves the role fresh per
-// request (`resolveJobsPlatformRole`) and hands it in, the same shape
-// `jobsDashboardService.replaySystemDLQ` takes; the page's 404 is a second line.
+// role check below is the whole gate. The caller resolves the principal fresh
+// per request (`requirePlatformStaffPage` on the page, `requirePlatformStaff`
+// in its actions) and hands its role in; the page's 404 is a second line.
 //
-// The shipped `listSystemDlq` is NOT this read: it is workspace-less only and
-// caps at the newest 200 across every function, so a function's older rows were
-// unreachable (MOTIR-9957). It keeps serving the tenant dashboard unchanged.
+// This read replaced the tenant dashboard's `listSystemDlq`, which was
+// workspace-less only and capped at the newest 200 across every function, so a
+// function's older rows were unreachable (MOTIR-9957). That read was deleted
+// with the tenant dashboard (Story MOTIR-9982).
 
 /**
  * The cap on each half of the dead-letter list, PER SELECTION: with a function

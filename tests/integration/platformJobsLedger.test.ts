@@ -10,7 +10,6 @@ import {
   DlqEntryNotFoundError,
   PlatformJobsReadForbiddenError,
   SystemReplayForbiddenError,
-  SystemReplayWorkspaceRowError,
 } from '@/lib/jobs/errors';
 import type { PlatformPrincipal } from '@/lib/platform/auth';
 import type { PlatformRole } from '@/generated/prisma/client';
@@ -442,50 +441,14 @@ describe('Replay all, then re-read', () => {
   });
 });
 
-describe('the shipped doors are unchanged on the same ledger', () => {
-  it('listSystemDlq, listSystemRuns, replaySystemDLQ and the tenant replayDLQ behave as before and write no audit row', async () => {
+describe('the kept runs read is unchanged on the same ledger', () => {
+  // The tenant dashboard's dead-letter list and its two replay doors were
+  // deleted with that dashboard (Story MOTIR-9982 · MOTIR-10044); the one read
+  // of `jobsDashboardService` left is the runs read this ledger pages through.
+  it('listSystemRuns reads the same ledger and writes no audit row', async () => {
     await seedLedger();
 
-    const system = await jobsDashboardService.listSystemDlq(NOW);
-    expect(system.rows).toHaveLength(200);
-    expect(system.rows.every((r) => r.workspaceId === null)).toBe(true);
     await expect(jobsDashboardService.listSystemRuns({ limit: 5, offset: 0 })).resolves.toEqual([]);
-
-    const owned = await adminDb.jobRunDlq.findFirstOrThrow({ where: { workspaceId: workspaceA } });
-    await expect(
-      jobsDashboardService.replaySystemDLQ({
-        dlqId: owned.id,
-        userId: principals.operator.userId,
-        platformRole: 'operator',
-      }),
-    ).rejects.toBeInstanceOf(SystemReplayWorkspaceRowError);
-
-    const tenant = await jobsDashboardService.replayDLQ({
-      dlqId: owned.id,
-      workspaceId: workspaceA,
-      userId: owner.id,
-    });
-    expect(tenant.outcome).toBe('replayed');
-    const otherWorkspaceRow = await adminDb.jobRunDlq.findFirstOrThrow({
-      where: { workspaceId: workspaceB },
-    });
-    await expect(
-      jobsDashboardService.replayDLQ({
-        dlqId: otherWorkspaceRow.id,
-        workspaceId: workspaceA,
-        userId: owner.id,
-      }),
-    ).rejects.toBeInstanceOf(DlqEntryNotFoundError);
-
-    const bare = await adminDb.jobRunDlq.findFirstOrThrow({
-      where: { workspaceId: null, functionId: METER },
-    });
-    const viaSystem = await jobsDashboardService.replaySystemDLQ({
-      dlqId: bare.id,
-      userId: principals.operator.userId,
-      platformRole: 'operator',
-    });
-    expect(viaSystem.outcome).toBe('replayed');
 
     expect(await auditRows()).toHaveLength(0);
   });
