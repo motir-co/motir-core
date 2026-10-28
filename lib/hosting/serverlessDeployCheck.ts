@@ -28,6 +28,7 @@ import {
 } from '@motir/orchestrator';
 import {
   DeployCheckProbeFailedError,
+  DeployCheckUsageError,
   deployCheckApp,
   readManifest,
   rollbackApp,
@@ -393,5 +394,10 @@ export async function runServerlessDeployCheckStep(
       return destroy(deps, options);
     case 'all':
       return all(deps, options);
+    case 'converge':
+    case 'push':
+    case 'page':
+    case 'no-shape':
+      throw new DeployCheckUsageError(`${step} runs with --target aws only.`);
   }
 }

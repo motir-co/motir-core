@@ -891,6 +891,36 @@ export const projectRepoRepository = {
   },
 
   /**
+   * A row's HOSTING IDENTITY for the AWS adapter (MOTIR-10010): its seed source
+   * (a customer repository is never hosted), the organisation its workspace
+   * belongs to, and its realized GitHub repository's id, if any. A platform read
+   * by id alone — the caller holds a `withSystemContext` transaction.
+   */
+  async findHostingIdentityInTx(
+    id: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{
+    seedSource: string;
+    organizationId: string;
+    githubRepositoryId: string | null;
+  } | null> {
+    const row = await tx.projectRepo.findUnique({
+      where: { id },
+      select: {
+        seedSource: true,
+        workspace: { select: { organizationId: true } },
+        githubRepo: { select: { repoId: true } },
+      },
+    });
+    if (!row) return null;
+    return {
+      seedSource: row.seedSource,
+      organizationId: row.workspace.organizationId,
+      githubRepositoryId: row.githubRepo?.repoId ?? null,
+    };
+  },
+
+  /**
    * Whether ANY project in ANY of the organisation's workspaces has an
    * established row whose realized repository `hostOwner` owns (MOTIR-8966) —
    * "is this organisation already hosted in that org?". Case-insensitive on the

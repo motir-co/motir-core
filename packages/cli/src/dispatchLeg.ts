@@ -272,8 +272,11 @@ export async function runDispatchLeg(input: DispatchLegInput): Promise<DispatchL
   // the prompt sends through `$MOTIR_AGENT_REPORT` when the agent has no Motir tools (a
   // hosted run, a run inside an agent instance). Made with the run's credential, BEFORE the
   // verdict below: the STOP's move to Planning is what `agentSubmittedReplan` then reads.
-  if (result.discrepancy && result.discrepancy.length > 0) {
-    await reporter.reportDiscrepancy?.(key, result.discrepancy);
+  // The DECISIONS (MOTIR-10000) ride the same one record, beside the points or alone.
+  const points = result.discrepancy ?? [];
+  const decisions = result.decisions ?? [];
+  if (points.length > 0 || decisions.length > 0) {
+    await reporter.reportDiscrepancy?.(key, points, decisions);
   }
   if (result.stop) await reporter.reportStop?.(key, result.stop);
 

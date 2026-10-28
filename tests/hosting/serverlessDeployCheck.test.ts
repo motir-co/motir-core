@@ -485,8 +485,15 @@ describe('the command line', () => {
       target: 'serverless',
       manifestPath: SERVERLESS_DEPLOY_CHECK_DEFAULT_MANIFEST,
     });
-    expect(() => parseDeployCheckArgs(['all', '--target=aws'])).toThrow(/Unknown target: aws/);
-    expect(() => parseDeployCheckArgs(['refuse'])).toThrow(/needs --target serverless/);
+    expect(() => parseDeployCheckArgs(['all', '--target=gcp'])).toThrow(
+      /--target is fly or aws or serverless/,
+    );
+    expect(() => parseDeployCheckArgs(['refuse'])).toThrow(
+      /refuse runs with --target serverless only/,
+    );
+    expect(() =>
+      parseDeployCheckArgs(['database', '--target', 'aws', '--repository', 'cmrepo1']),
+    ).toThrow(/database runs with --target serverless only/);
   });
 
   it('a serverless-only step dispatched to Fly is a usage error', async () => {
@@ -498,6 +505,18 @@ describe('the command line', () => {
         image: 'x',
       }),
     ).rejects.toMatchObject({ code: 'DEPLOY_CHECK_USAGE' });
+  });
+
+  it('an AWS-only step dispatched to serverless is a usage error', async () => {
+    const h = harness();
+    await expect(
+      runDeployCheckStep('push', h.deps, {
+        manifestPath: SERVERLESS_DEPLOY_CHECK_DEFAULT_MANIFEST,
+        appName: DEPLOY_CHECK_DEFAULT_NAME,
+        image: 'x',
+        target: 'serverless',
+      }),
+    ).rejects.toThrow(/push runs with --target aws only/);
   });
 
   it('without the serverless dependencies the target is not configured', async () => {

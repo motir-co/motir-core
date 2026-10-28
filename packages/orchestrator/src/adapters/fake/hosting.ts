@@ -1,6 +1,12 @@
 import { OrchestratorApiError } from '../../errors';
-import { NoPreviousReleaseError, ReleaseNotFoundError } from '../../hosting/errors';
+import {
+  CustomerRepositoryRefusedError,
+  IdlePolicyUnsupportedError,
+  NoPreviousReleaseError,
+  ReleaseNotFoundError,
+} from '../../hosting/errors';
 import { hostingAppNames, sameEnvironment } from '../../hosting/names';
+import { requireReleaseShape } from '../../hosting/shape';
 import type {
   DeployReleaseInput,
   HostingDeployPort,
@@ -10,10 +16,12 @@ import type {
   ReleaseDescription,
   ReleaseHandle,
   ReleaseRuntime,
+  ReleaseShape,
+  ReleaseSize,
   ReleaseSummary,
   ReleaseUsage,
 } from '../../hosting/types';
-import { runningSecondsBetween, type RunTransition } from '../../hosting/usage';
+import { computeUsageFor, runningSecondsBetween, type RunTransition } from '../../hosting/usage';
 import { assertServerlessRuntime } from '../serverless/preflight';
 
 // The FAKE hosting deploy port (MOTIR-5773) — the second implementation shipped
@@ -26,6 +34,13 @@ import { assertServerlessRuntime } from '../serverless/preflight';
 // it replaced, a rollback that swaps them, idle stop and wake, usage that counts
 // only running time, and a destroy that returns usage. Its controls arrange what
 // a test needs: a clock, a release's health, and an idle stop.
+//
+// Built with `target: 'aws'` it also models the AWS adapter's two SHAPES
+// (MOTIR-10002, to MOTIR-5769 §4): a release with no shape is refused by name, a
+// container refuses the `suspend` idle policy, a deploy waits in
+// `waiting_for_account` while the tenant account is not ready (and a repeat once
+// it is completes the SAME release), each shape answers its own upstream and
+// origin credential, and usage carries compute units from the shared size table.
 
 export interface FakeHostedRelease {
   readonly releaseId: string;
@@ -33,6 +48,9 @@ export interface FakeHostedRelease {
   readonly image: string;
   readonly runtime: ReleaseRuntime;
   readonly env: Readonly<Record<string, string>>;
+  /** The AWS shape, when the target has shapes. */
+  readonly shape?: ReleaseShape;
+  readonly size?: ReleaseSize;
 }
 
 export interface FakeHostedApp {
@@ -41,6 +59,8 @@ export interface FakeHostedApp {
   readonly environment: HostingEnvironment;
   live: FakeHostedRelease | null;
   previous: FakeHostedRelease | null;
+  /** A release held until the tenant account is ready (AWS). */
+  pending: FakeHostedRelease | null;
   health: 'deploying' | 'healthy' | 'unhealthy';
   running: boolean;
   transitions: RunTransition[];
@@ -63,18 +83,39 @@ export interface FakeHostingControls {
    *  `OrchestratorApiError` and changes nothing — a destroy that destroyed
    *  nothing, for the usage-always rule's error path. */
   failNext(operation: 'destroy' | 'destroyApp'): void;
+  /** Whether the organisation's AWS tenant account is ready. Ready unless a test
+   *  sets it false; while not ready an `aws` deploy waits in
+   *  `waiting_for_account`. */
+  setAccountReady(ready: boolean): void;
 }
 
 export interface FakeHostingOptions {
   readonly target?: HostingDeployTarget;
   readonly appPrefix?: string;
   readonly start?: Date;
+  /** Repository ids `ensureApp` refuses as customer repositories (D1). */
+  readonly refuseRepositories?: readonly string[];
 }
 
-const ORIGIN_CREDENTIALS: Partial<Record<HostingDeployTarget, OriginCredentialKind>> = {
-  fly: 'origin_secret',
-  serverless: 'aws_sigv4',
-};
+/** The origin credential a forwarder sends to a release of that target and
+ *  shape (MOTIR-5769 §4): Fly's guard and an AWS container's load-balancer rule
+ *  check the origin secret; a serverless release and an AWS function URL are
+ *  IAM-authorised (SigV4). */
+function originCredentialFor(
+  target: HostingDeployTarget,
+  shape: ReleaseShape | undefined,
+): OriginCredentialKind {
+  if (target === 'fly') return 'origin_secret';
+  if (target === 'serverless') return 'aws_sigv4';
+  return shape === 'function' ? 'aws_sigv4' : 'origin_secret';
+}
+
+/** Where the fake says a release answers: the shape's own host on AWS. */
+function upstreamFor(appRef: string, shape: ReleaseShape | undefined): string {
+  if (shape === 'function') return `https://${appRef}.lambda-url.fake.invalid`;
+  if (shape === 'container') return `https://${appRef}.alb.fake.invalid`;
+  return `https://${appRef}.fake.invalid`;
+}
 
 export function createFakeHostingDeployPort(
   options: FakeHostingOptions = {},
@@ -86,6 +127,11 @@ export function createFakeHostingDeployPort(
   const apps = new Map<string, FakeHostedApp>();
   const mintedFor: string[] = [];
   const failing = new Set<'destroy' | 'destroyApp'>();
+  const refused = new Set(options.refuseRepositories ?? []);
+  // Every release's shape, kept past its destroy so a repeated destroy still
+  // reports usage in the unit of the release it names.
+  const shapes = new Map<string, FakeHostedRelease>();
+  let accountReady = true;
 
   function injectedFailure(operation: 'destroy' | 'destroyApp'): void {
     if (!failing.delete(operation)) return;
@@ -116,32 +162,66 @@ export function createFakeHostingDeployPort(
     };
   }
 
-  function usage(app: FakeHostedApp, releaseId: string, since: Date): ReleaseUsage {
-    const until = now();
+  /** Usage of a release, in compute units too when it has an AWS shape. */
+  function usageRecord(
+    appRef: string,
+    releaseId: string,
+    since: Date,
+    until: Date,
+    runningSeconds: number,
+  ): ReleaseUsage {
+    const base = { target, appRef, releaseId, since, until, runningSeconds };
+    const shaped = shapes.get(releaseId);
+    if (!shaped?.shape) return base;
     return {
-      target,
-      appRef: app.appRef,
-      releaseId,
-      since,
-      until,
-      runningSeconds: runningSecondsBetween(app.transitions, since, until),
+      ...base,
+      compute: computeUsageFor(shaped.shape, shaped.size, shaped.environment, runningSeconds),
     };
   }
 
-  function release(input: DeployReleaseInput): FakeHostedRelease {
-    sequence += 1;
+  function usage(app: FakeHostedApp, releaseId: string, since: Date): ReleaseUsage {
+    const until = now();
+    return usageRecord(
+      app.appRef,
+      releaseId,
+      since,
+      until,
+      runningSecondsBetween(app.transitions, since, until),
+    );
+  }
+
+  /** The AWS refusals, before any state changes: no shape, or a container
+   *  asked to suspend when idle. Returns the shape (undefined off AWS). */
+  function shapeOf(input: DeployReleaseInput): ReleaseShape | undefined {
+    if (target !== 'aws') return undefined;
+    const shape = requireReleaseShape(target, input);
+    if (shape === 'container' && input.idle.mode === 'suspend') {
+      throw new IdlePolicyUnsupportedError(target, shape, input.idle.mode);
+    }
+    return shape;
+  }
+
+  function release(
+    input: DeployReleaseInput,
+    shape: ReleaseShape | undefined,
+    releaseId?: string,
+  ): FakeHostedRelease {
+    if (!releaseId) sequence += 1;
     const { artifact } = input;
     const image =
       artifact.kind === 'image' && artifact.digest
         ? `${artifact.ref}@${artifact.digest}`
         : artifact.ref;
-    return {
-      releaseId: `rel-${sequence}`,
+    const made: FakeHostedRelease = {
+      releaseId: releaseId ?? `rel-${sequence}`,
       environment: input.environment,
       image,
       runtime: input.runtime,
       env: Object.fromEntries(input.env.map((v) => [v.name, v.value])),
+      ...(shape ? { shape, ...(input.size ? { size: input.size } : {}) } : {}),
     };
+    shapes.set(made.releaseId, made);
+    return made;
   }
 
   return {
@@ -164,8 +244,12 @@ export function createFakeHostingDeployPort(
     failNext(operation) {
       failing.add(operation);
     },
+    setAccountReady(ready) {
+      accountReady = ready;
+    },
 
     async ensureApp({ repositoryId, environment }) {
+      if (refused.has(repositoryId)) throw new CustomerRepositoryRefusedError(repositoryId);
       const names = hostingAppNames(prefix, repositoryId, environment);
       if (!apps.has(names.appRef)) {
         apps.set(names.appRef, {
@@ -173,6 +257,7 @@ export function createFakeHostingDeployPort(
           environment,
           live: null,
           previous: null,
+          pending: null,
           health: 'deploying',
           running: false,
           transitions: [],
@@ -195,11 +280,19 @@ export function createFakeHostingDeployPort(
       // As the serverless adapter: its manifest refusals come before anything
       // else, so a refused release finds no app and creates nothing.
       if (target === 'serverless') assertServerlessRuntime(input.runtime);
+      const shape = shapeOf(input);
       const app = appOf(input.appRef);
       if (!sameEnvironment(app.environment, input.environment)) {
         throw new OrchestratorApiError('fake', 409, `app ${app.appRef} is another environment's`);
       }
-      const next = release(input);
+      // A deploy held for the account resumes as the SAME release: the repeat
+      // reuses the held release's id, so a resumed run never makes a second.
+      const next = release(input, shape, app.pending?.releaseId);
+      if (target === 'aws' && !accountReady) {
+        app.pending = next;
+        return handleFor(app, next);
+      }
+      app.pending = null;
       app.previous = app.live;
       app.live = next;
       app.health = 'healthy';
@@ -209,6 +302,15 @@ export function createFakeHostingDeployPort(
 
     async describe(handle): Promise<ReleaseDescription> {
       const app = apps.get(handle.appRef);
+      if (app?.pending) {
+        return {
+          state: 'waiting_for_account',
+          releaseId: app.pending.releaseId,
+          previousReleaseId: app.live?.releaseId ?? null,
+          upstreamAddress: null,
+          originCredential: originCredentialFor(target, app.pending.shape),
+        };
+      }
       if (!app || !app.live) {
         return {
           state: 'destroyed',
@@ -222,11 +324,11 @@ export function createFakeHostingDeployPort(
         state: app.running ? app.health : 'stopped',
         releaseId: app.live.releaseId,
         previousReleaseId: app.previous?.releaseId ?? null,
-        upstreamAddress: `https://${app.appRef}.fake.invalid`,
+        upstreamAddress: upstreamFor(app.appRef, app.live.shape),
         // As the real adapters: a Fly release sits behind the origin-secret
         // guard (MOTIR-9947), a serverless one behind a SigV4-signed function
-        // URL (MOTIR-9972); the other targets' credentials are their adapters'.
-        originCredential: ORIGIN_CREDENTIALS[target] ?? 'none',
+        // URL (MOTIR-9972), an AWS release behind its shape's credential.
+        originCredential: originCredentialFor(target, app.live.shape),
       };
     },
 
@@ -249,14 +351,8 @@ export function createFakeHostingDeployPort(
       injectedFailure('destroy');
       const app = apps.get(handle.appRef);
       if (!app || !app.live) {
-        return {
-          target,
-          appRef: handle.appRef,
-          releaseId: handle.releaseId,
-          since: now(),
-          until: now(),
-          runningSeconds: 0,
-        };
+        if (app) app.pending = null;
+        return usageRecord(handle.appRef, handle.releaseId, now(), now(), 0);
       }
       const first = app.transitions[0]?.at ?? now();
       const result = usage(app, handle.releaseId, first);
@@ -276,6 +372,9 @@ export function createFakeHostingDeployPort(
 
     async listReleases({ appRef }): Promise<ReleaseSummary[]> {
       const app = apps.get(appRef);
+      if (app?.pending) {
+        return [{ handle: handleFor(app, app.pending), state: 'waiting_for_account' }];
+      }
       if (!app?.live) return [];
       return [
         {

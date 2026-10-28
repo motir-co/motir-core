@@ -15,6 +15,7 @@ import {
 } from '../src/index';
 import {
   ADAPTERS,
+  IMAGE,
   START,
   serverlessHarness,
   type HostingHarness,
@@ -53,7 +54,7 @@ function releaseOf(
     environment: PRODUCTION,
     // Another digest per marker: the serverless target publishes nothing new
     // for an image it already runs.
-    artifact: { kind: 'image', ref: h.facts.image.ref, digest: `sha256:${marker}` },
+    artifact: { kind: 'image', ref: (h.image ?? IMAGE).ref, digest: `sha256:${marker}` },
     runtime: {
       port: 8080,
       healthCheck: { path: '/health' },
@@ -62,7 +63,8 @@ function releaseOf(
       requires: { websockets: false, backgroundWork: false },
     },
     env: [{ name: 'WHOAMI_NAME', value: marker, secret: false }, ...env],
-    idle: { mode: 'suspend', idleSeconds: 300 },
+    idle: h.idle,
+    ...(h.shape ? { shape: h.shape } : {}),
   };
 }
 
@@ -88,8 +90,16 @@ afterEach(() => {
 });
 
 describe('one deploy contract for every deploy adapter', () => {
-  it('the contract runs exactly the fake, Fly and serverless adapters', () => {
-    expect(ADAPTERS.map(([name]) => name)).toEqual(['fake', 'fly', 'serverless']);
+  it('the contract runs the fake, Fly and serverless adapters, beside the AWS ones', () => {
+    expect(ADAPTERS.map(([name]) => name)).toEqual([
+      'fake',
+      'fly',
+      'serverless',
+      'fake-aws-function',
+      'fake-aws-container',
+      'aws function',
+      'aws container',
+    ]);
   });
 });
 

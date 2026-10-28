@@ -14,6 +14,7 @@ import {
   type HostingDeployTarget,
   type ServerlessSourceCredentials,
 } from '@motir/orchestrator';
+import { createConfiguredAwsHostingPort } from './awsHosting';
 import { selectedOrchestratorProvider } from './provider';
 
 // ── The HOSTING DEPLOY PORT (Story MOTIR-9791 · MOTIR-5773) ─────────────────
@@ -112,6 +113,14 @@ export function hostingOriginSecretKey(): string {
   if (selectedOrchestratorProvider() === 'fake') return 'fake-origin-secret-key';
   throw new OrchestratorNotConfiguredError(`set ${ORIGIN_SECRET_KEY_ENV}`);
 }
+
+/** The `aws` target's adapter (MOTIR-10010), built from this deployment's
+ *  configuration at call time; registered below. Its app names are fixed by the
+ *  tenant stacks (`mh-`), so a narrowed prefix does not apply to it. */
+export const awsHostingAdapter: HostingAdapterFactory = () =>
+  createConfiguredAwsHostingPort(hostingOriginSecretKey());
+
+registerHostingAdapter('aws', awsHostingAdapter);
 
 /** Drop the per-target fakes — for tests. */
 export function resetHostingFakes(): void {

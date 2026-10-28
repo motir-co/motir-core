@@ -22,7 +22,8 @@
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "files": [
-    "dist"
+    "dist",
+    "aws-tenant-stacks"
   ],
   "engines": {
     "node": ">=22"
@@ -39,15 +40,19 @@
     "@aws-sdk/client-cloudwatch-logs": "^3.1157.0",
     "@aws-sdk/client-ec2": "^3.1156.0",
     "@aws-sdk/client-ecr": "^3.1157.0",
+    "@aws-sdk/client-ecs": "^3.1157.0",
+    "@aws-sdk/client-elastic-load-balancing-v2": "^3.1157.0",
     "@aws-sdk/client-iam": "^3.1156.0",
     "@aws-sdk/client-lambda": "^3.1157.0",
     "@aws-sdk/client-organizations": "^3.1156.0",
+    "@aws-sdk/client-rds-data": "^3.1157.0",
     "@aws-sdk/client-secrets-manager": "^3.1157.0",
     "@aws-sdk/client-service-quotas": "^3.1156.0",
+    "@aws-sdk/client-ssm": "^3.1157.0",
     "@aws-sdk/client-sts": "^3.1156.0",
     "@peculiar/x509": "1.14.3",
     "@smithy/hash-node": "^4.5.2",
-    "@smithy/signature-v4": "^5.7.4",
+    "@smithy/signature-v4": "5.7.4",
     "decimal.js": "^10.6.0"
   },
   "devDependencies": {

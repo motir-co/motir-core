@@ -550,3 +550,16 @@ closed it `drained` (indistinguishable from running out of work). This amends th
 > refuses it, the CLI's `ReportableEventKind` excludes it, and `EVENT_STEP` maps it to `null`
 > because a finding advances no step. Like the other findings it is not a stage the leg passed
 > through. With no open leg the comment is still written and no event exists.
+
+## AMENDMENT 7 — the same record carries the run's DECISIONS (MOTIR-10000, 2026-10-28)
+
+> **Added 2026-10-28 (MOTIR-10000).** A run never asks the user about the implementation: what
+> the card and its plan leave open it decides — the repository's conventions first, then the
+> established industry best practice for the stack — and records. The record is AMENDMENT 6's,
+> widened rather than doubled: `record_run_discrepancy` (and `POST
+/api/v1/dispatch-runs/{id}/discrepancy`) take `decisions` — `{ planSaid, chose, why,
+alternatives? }` — beside `points` or alone, in the same ONE call. **No new event kind.** The
+> leg still carries at most one `discrepancy_recorded`; its `data` gains **`decisionCount`**, and
+> **`pointCount` counts every entry** (points + decisions), so the run's findings strip, which
+> reads `pointCount`, never shows _0 points_ for a decisions-only record. The card comment gives
+> the decisions their own section. A points-only record writes exactly what it wrote before.

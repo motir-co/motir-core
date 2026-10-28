@@ -93,6 +93,12 @@ export interface AgentRunResult {
    */
   discrepancy?: AgentDiscrepancyPoint[] | null;
   /**
+   * The DECISIONS the agent made where its card left the HOW open, written into its
+   * self-report as `decisions` (MOTIR-10000) — the prompt tells an agent with no Motir tools
+   * to, so the CLI records them beside any discrepancy. Null (or absent) when it wrote none.
+   */
+  decisions?: AgentDecisionPoint[] | null;
+  /**
    * The agent's STOP, when it wrote one into its self-report as `stop` (MOTIR-8722) — the
    * comment, whether the card goes to Planning, and the re-plan brief — so the CLI can
    * make those writes with the run's own credential. Null (or absent) when it wrote none.
@@ -105,6 +111,14 @@ export interface AgentDiscrepancyPoint {
   planAsked: string;
   built: string;
   why: string;
+}
+
+/** One decision the agent made: what the plan said · what it chose · why (· alternatives). */
+export interface AgentDecisionPoint {
+  planSaid: string;
+  chose: string;
+  why: string;
+  alternatives?: string;
 }
 
 /** The six `SettledRequirement` fields of a re-plan brief, as far as the agent wrote them. */
@@ -159,6 +173,7 @@ export interface AgentReport {
   model: string | null;
   unbuildableReason: string | null;
   discrepancy: AgentDiscrepancyPoint[] | null;
+  decisions: AgentDecisionPoint[] | null;
   stop: AgentStopReport | null;
 }
 
@@ -166,6 +181,7 @@ const EMPTY_REPORT: AgentReport = {
   model: null,
   unbuildableReason: null,
   discrepancy: null,
+  decisions: null,
   stop: null,
 };
 
@@ -189,10 +205,11 @@ export function readAgentReport(path: string): AgentReport {
     return EMPTY_REPORT;
   }
   if (typeof parsed !== 'object' || parsed === null) return EMPTY_REPORT;
-  const { model, unbuildable, discrepancy, stop } = parsed as {
+  const { model, unbuildable, discrepancy, decisions, stop } = parsed as {
     model?: unknown;
     unbuildable?: unknown;
     discrepancy?: unknown;
+    decisions?: unknown;
     stop?: unknown;
   };
   const unbuildableReason = reasonOf(unbuildable);
@@ -200,6 +217,7 @@ export function readAgentReport(path: string): AgentReport {
     model: modelOf(model),
     unbuildableReason,
     discrepancy: discrepancyOf(discrepancy),
+    decisions: decisionsOf(decisions),
     stop: stopOf(stop, unbuildableReason),
   };
 }
@@ -227,6 +245,26 @@ function discrepancyOf(value: unknown): AgentDiscrepancyPoint[] | null {
     if (planAsked && built && why) points.push({ planAsked, built, why });
   }
   return points.length === 0 ? null : points.slice(0, MAX_DISCREPANCY_POINTS);
+}
+
+/**
+ * The decisions, on the same terms as the points: one missing a required field is dropped,
+ * not the record; `alternatives` is kept when it is a non-blank string; cut to the server's 20.
+ */
+function decisionsOf(value: unknown): AgentDecisionPoint[] | null {
+  if (!Array.isArray(value)) return null;
+  const decisions: AgentDecisionPoint[] = [];
+  for (const entry of value) {
+    if (typeof entry !== 'object' || entry === null) continue;
+    const raw = entry as Record<string, unknown>;
+    const planSaid = textOf(raw.planSaid, MAX_DISCREPANCY_FIELD_LENGTH);
+    const chose = textOf(raw.chose, MAX_DISCREPANCY_FIELD_LENGTH);
+    const why = textOf(raw.why, MAX_DISCREPANCY_FIELD_LENGTH);
+    if (!planSaid || !chose || !why) continue;
+    const alternatives = textOf(raw.alternatives, MAX_DISCREPANCY_FIELD_LENGTH);
+    decisions.push({ planSaid, chose, why, ...(alternatives ? { alternatives } : {}) });
+  }
+  return decisions.length === 0 ? null : decisions.slice(0, MAX_DISCREPANCY_POINTS);
 }
 
 /**
