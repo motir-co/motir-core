@@ -17,7 +17,13 @@ import {
   REPO_TARBALL_TIMEOUT_MS,
   type GitProvider,
 } from '../provider';
-import { classifyRepoBlob, describeBody, normalizeRepoFilePath } from '../fileRead';
+import {
+  classifyRepoBlob,
+  describeBody,
+  normalizeRepoFilePath,
+  parseGithubDirectoryListing,
+  REPO_DIRECTORY_MAX_ENTRIES,
+} from '../fileRead';
 import {
   MergeChangeRequestError,
   RepoFileReadError,
@@ -1063,7 +1069,19 @@ export const githubProvider: GitProvider = {
     // The BYTES, never `res.text()` — a lenient decode turns a binary blob into
     // `found` and inflates its size (`classifyRepoBlob`, MOTIR-7873).
     const blob = new Uint8Array(await res.arrayBuffer());
-    // The size arm the host did not take. A directory read, a repo whose blob
+    // A DIRECTORY is answered with GitHub's JSON listing whatever media type was
+    // asked for (MOTIR-9868): named and listed, never handed over as text.
+    const listing = parseGithubDirectoryListing(blob, guarded.path);
+    if (listing) {
+      return {
+        outcome: 'directory',
+        path: guarded.path,
+        ref,
+        entries: listing,
+        truncated: listing.length >= REPO_DIRECTORY_MAX_ENTRIES,
+      };
+    }
+    // The size arm the host did not take. A repo whose blob
     // limit differs, a future endpoint change: whatever the reason, a caller
     // must never receive more than the named bound WITHOUT being told, so the
     // check is ours as well as GitHub's — on the blob's REAL length.

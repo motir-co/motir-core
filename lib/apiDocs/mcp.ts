@@ -620,8 +620,8 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   },
   read_file: {
     summary:
-      "One file's text from a repository in the project's set, at a ref — capped and line-ranged like the hosted planner's read, every absence a named outcome.",
-    descriptionFingerprint: '8cca00253741',
+      "One file's text, or a directory's immediate entries, from a repository in the project's set, at a ref — capped and line-ranged like the hosted planner's read, every absence a named outcome.",
+    descriptionFingerprint: '8c24af03ed4e',
   },
   code_explore: {
     summary:
@@ -837,6 +837,12 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Re-pinned for MOTIR-9835, summary UNCHANGED: an extra heading alone is not a
     // section finding — advisory channel only, outside the verdict.
     descriptionFingerprint: '3810aa68df89',
+  },
+  get_plan_authoring_state: {
+    // MOTIR-9821: the live read an author session makes before it wires an edge onto a sibling.
+    summary:
+      'Which proposals are being written, which are written, and which no author session has started — read before wiring an edge onto a sibling.',
+    descriptionFingerprint: '1dbc96fc1142',
   },
   validate_plan: {
     // ⚠️ SUMMARY REWRITTEN, not merely re-pinned (MOTIR-3575). The old line —

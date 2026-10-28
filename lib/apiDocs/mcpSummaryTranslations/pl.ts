@@ -367,9 +367,9 @@ export const pl: McpSummaryTranslations = {
   },
   read_file: {
     summary:
-      'Tekst jednego pliku z repozytorium ze zbioru Projektu, w danym ref — z limitem i zakresem linii jak odczyt hostowanego planisty, każda nieobecność jako nazwany wynik.',
+      'Tekst jednego pliku lub bezpośrednie wpisy katalogu z repozytorium ze zbioru Projektu, w danym ref — z limitem i zakresem linii jak odczyt hostowanego planisty, każda nieobecność jako nazwany wynik.',
     source:
-      "One file's text from a repository in the project's set, at a ref — capped and line-ranged like the hosted planner's read, every absence a named outcome.",
+      "One file's text, or a directory's immediate entries, from a repository in the project's set, at a ref — capped and line-ranged like the hosted planner's read, every absence a named outcome.",
   },
   record_plan_revision_reason: {
     summary:
