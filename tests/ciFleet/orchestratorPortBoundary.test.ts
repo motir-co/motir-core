@@ -96,6 +96,9 @@ const FLY_TELLS: ReadonlyArray<{ pattern: RegExp; what: string }> = [
   { pattern: /\bFlyMachine\b/, what: 'the FlyMachine type' },
   { pattern: /\bauto_destroy\b/, what: "Fly's machine-config key" },
   { pattern: /\bcpu_kind\b/, what: "Fly's guest-config key" },
+  // The HOSTING deploy port's Fly lane (MOTIR-5773) has its own token and org
+  // variables; like `FLY_*`, only its adapter and the composition root read them.
+  { pattern: /\bMOTIR_HOSTING_FLY_[A-Z_]+\b/, what: "the hosting lane's Fly variable" },
 ];
 
 /**
@@ -303,6 +306,32 @@ describe('§4 rule 1 — no `fly` escapes the adapter directory', () => {
       expect(allowed.tell.test(source), `${allowed.file} no longer contains ${allowed.tell}`).toBe(
         true,
       );
+    }
+  });
+});
+
+describe('the HOSTING deploy port is inside the same boundary (MOTIR-5773)', () => {
+  const HOSTING_PORT = join('packages', 'orchestrator', 'src', 'hosting');
+
+  it('scans the port directory, and finds no Fly name in it', () => {
+    const files = walk(join(root, HOSTING_PORT)).map((f) => relative(root, f));
+    expect(files.length).toBeGreaterThan(0);
+    expect(SCANNED_ROOTS.some((r) => HOSTING_PORT.startsWith(r + sep))).toBe(true);
+    expect(violations().filter((v) => v.file.startsWith(HOSTING_PORT + sep))).toEqual([]);
+  });
+
+  it('would fail on a Fly leak in the port (mutation check)', () => {
+    const leaks = [
+      "import { createFlyHostingDeployPort } from '../adapters/fly/hosting';",
+      "const token = process.env['MOTIR_HOSTING_FLY_API_TOKEN'];",
+      "const base = 'https://api.machines.dev/v1/apps/mh-x/deploy_token';",
+      "const guest = { cpu_kind: 'shared' };",
+    ];
+    for (const leak of leaks) {
+      expect(
+        FLY_TELLS.some(({ pattern }) => pattern.test(stripComments(leak))),
+        leak,
+      ).toBe(true);
     }
   });
 });

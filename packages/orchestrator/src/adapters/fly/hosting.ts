@@ -1,0 +1,477 @@
+import { OrchestratorApiError, OrchestratorNotConfiguredError } from '../../errors';
+import {
+  NoPreviousReleaseError,
+  ReleaseArtifactUnsupportedError,
+  ReleaseNotFoundError,
+} from '../../hosting/errors';
+import { hostingAppNames } from '../../hosting/names';
+import type {
+  DeployCredential,
+  DeployReleaseInput,
+  HostingDeployPort,
+  HostingEnvironment,
+  ReleaseDescription,
+  ReleaseHandle,
+  ReleaseIdlePolicy,
+  ReleaseSize,
+  ReleaseState,
+  ReleaseSummary,
+  ReleaseUsage,
+} from '../../hosting/types';
+import { runningSecondsBetween, type RunTransition } from '../../hosting/usage';
+import {
+  flyErrorDetail,
+  flyMachinesClientFor,
+  flyRequest,
+  readFlyJson,
+  toFlyMachine,
+  type FlyMachine,
+} from './flyMachines';
+import { flyAppProvisioning } from './persistent';
+
+// The FLY adapter of the HOSTING DEPLOY PORT (Story MOTIR-9791 · MOTIR-5773), to
+// the decision of record MOTIR-5769 §4 (page cmvrcywwc00jkhpr1zvvnike8, v1).
+//
+// ⚠️ ITS OWN ORGANISATION AND TOKEN. Hosted apps live in the Fly org
+// `motir-hosting`, reached with `MOTIR_HOSTING_FLY_API_TOKEN` — never the CI
+// fleet's or the agent instances' token, so a tenant app can never be created
+// in, or reach, either of those organisations' apps.
+//
+// The units: one app per production (`mh-<rid>`) and one per preview pull request
+// (`mh-<rid>-pr<n>`), each created on its OWN private network so no two tenants'
+// Machines share a 6PN; previews' images live in `mh-<rid>-pv`, an app with no
+// Machines. Each deploy app runs ONE Machine, which a later deploy UPDATES IN
+// PLACE. The release a deploy replaced stays readable as one of the Machine's
+// config versions (`GET …/versions`), which is what rollback restores — image,
+// env and all — rather than a second Machine.
+//
+// Reused, not copied: the bounded `flyRequest`, its error helpers and the
+// machine parser (`./flyMachines`), and app creation and public addresses
+// (`./persistent`'s `flyAppProvisioning`). The single-use `createMachine` of the
+// fleet client is NOT used: it sets `auto_destroy` and `restart: no`, which is
+// exactly wrong for a release that must keep serving.
+
+export interface FlyHostingConfig {
+  readonly token: string;
+  readonly org: string;
+  readonly region: string;
+  readonly appPrefix: string;
+}
+
+const TOKEN_ENV = 'MOTIR_HOSTING_FLY_API_TOKEN';
+
+/** The hosting lane's configuration, read at call time, or the typed
+ *  not-configured error naming the token variable. */
+export function flyHostingConfig(): FlyHostingConfig {
+  const token = process.env[TOKEN_ENV];
+  if (!token) throw new OrchestratorNotConfiguredError(`set ${TOKEN_ENV}`);
+  return {
+    token,
+    org: process.env['MOTIR_HOSTING_FLY_ORG']?.trim() || 'motir-hosting',
+    region: process.env['MOTIR_HOSTING_FLY_REGION']?.trim() || 'iad',
+    appPrefix: process.env['MOTIR_HOSTING_FLY_APP_PREFIX']?.trim() || 'mh-',
+  };
+}
+
+/** Machine metadata the adapter reads back. */
+export const HOSTING_RELEASE_METADATA = {
+  marker: 'motir_hosting',
+  releaseId: 'motir_release_id',
+  previousReleaseId: 'motir_previous_release_id',
+  environment: 'motir_environment',
+} as const;
+
+/** App-scoped deploy tokens live 90 days; enablement re-mints under 14 (§4). */
+const DEPLOY_TOKEN_EXPIRY = '2160h';
+const DEPLOY_TOKEN_TTL_MS = 90 * 86_400_000;
+
+/** Previews run `shared-cpu-1x` 512 MB; production by the row's size (§4). */
+const PREVIEW_GUEST = { cpu_kind: 'shared', cpus: 1, memory_mb: 512 };
+const PRODUCTION_GUEST: Record<ReleaseSize, { cpu_kind: string; cpus: number; memory_mb: number }> =
+  {
+    small: { cpu_kind: 'shared', cpus: 1, memory_mb: 1024 },
+    medium: { cpu_kind: 'shared', cpus: 2, memory_mb: 2048 },
+    large: { cpu_kind: 'shared', cpus: 4, memory_mb: 4096 },
+  };
+
+export interface FlyHostingOptions {
+  /** The clock usage windows end at. */
+  readonly now?: () => Date;
+  /** A new release id. */
+  readonly newReleaseId?: () => string;
+}
+
+function appPath(app: string, rest = ''): string {
+  return `/apps/${encodeURIComponent(app)}${rest}`;
+}
+
+async function refuse(res: Response): Promise<never> {
+  throw new OrchestratorApiError('fly', res.status, flyErrorDetail(await readFlyJson(res)));
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function environmentLabel(environment: HostingEnvironment): string {
+  return environment.kind === 'production' ? 'production' : `pr-${environment.pullRequest}`;
+}
+
+function environmentOf(label: string | undefined): HostingEnvironment {
+  const match = /^pr-(\d+)$/.exec(label ?? '');
+  return match ? { kind: 'preview', pullRequest: Number(match[1]) } : { kind: 'production' };
+}
+
+/** `suspend`: autostop "suspend", autostart, min 0; `always_on`: autostop "off",
+ *  min 1. Fly picks the idle window, so `idleSeconds` is not applied (§4). */
+function idleService(idle: ReleaseIdlePolicy) {
+  return idle.mode === 'suspend'
+    ? { autostop: 'suspend', autostart: true, min_machines_running: 0 }
+    : { autostop: 'off', autostart: true, min_machines_running: 1 };
+}
+
+function imageOf(input: DeployReleaseInput): string {
+  const { artifact } = input;
+  if (artifact.kind !== 'image') throw new ReleaseArtifactUnsupportedError('fly', artifact.kind);
+  return artifact.digest ? `${artifact.ref}@${artifact.digest}` : artifact.ref;
+}
+
+/** The start command as argv — no shell, so an image without one (`scratch`)
+ *  still starts; arguments are separated by whitespace. */
+function argvOf(command: string): string[] {
+  return command.trim().split(/\s+/);
+}
+
+function machineConfig(
+  input: DeployReleaseInput,
+  metadata: Record<string, string>,
+): Record<string, unknown> {
+  const { runtime } = input;
+  return {
+    image: imageOf(input),
+    init: { exec: argvOf(runtime.startCommand) },
+    guest:
+      input.environment.kind === 'preview'
+        ? PREVIEW_GUEST
+        : PRODUCTION_GUEST[input.size ?? 'small'],
+    env: Object.fromEntries(input.env.map((v) => [v.name, v.value])),
+    services: [
+      {
+        protocol: 'tcp',
+        internal_port: runtime.port,
+        ...idleService(input.idle),
+        ports: [
+          { port: 80, handlers: ['http'], force_https: true },
+          { port: 443, handlers: ['tls', 'http'] },
+        ],
+      },
+    ],
+    checks: {
+      health: {
+        type: 'http',
+        port: runtime.port,
+        method: 'GET',
+        path: runtime.healthCheck.path,
+        interval: '15s',
+        timeout: '5s',
+        grace_period: '10s',
+      },
+    },
+    metadata,
+  };
+}
+
+/** The raw machine fields `toFlyMachine` does not keep: the config version and
+ *  the health checks' statuses. */
+function versionOf(body: unknown): string | null {
+  const version = asRecord(body)?.['version'];
+  return typeof version === 'string' ? version : null;
+}
+
+function checkStatusesOf(body: unknown): string[] {
+  const checks = asRecord(body)?.['checks'];
+  return (Array.isArray(checks) ? checks : []).flatMap((c) => {
+    const status = asRecord(c)?.['status'];
+    return typeof status === 'string' ? [status] : [];
+  });
+}
+
+/** Fly's machine state and checks → the port's closed release state. */
+export function releaseStateOf(
+  machineState: string,
+  checkStatuses: readonly string[],
+): ReleaseState {
+  if (machineState === 'destroyed' || machineState === 'destroying') return 'destroyed';
+  if (machineState === 'stopped' || machineState === 'suspended' || machineState === 'stopping') {
+    return 'stopped';
+  }
+  if (machineState !== 'started') return 'deploying';
+  if (checkStatuses.includes('critical')) return 'unhealthy';
+  if (checkStatuses.length > 0 && checkStatuses.every((s) => s === 'passing')) return 'healthy';
+  return 'deploying';
+}
+
+/** Fly's machine events → running transitions: a `start` begins running; a
+ *  `stop`, `suspend`, `exit` or `destroy` ends it. */
+export function runTransitionsOf(machine: FlyMachine): RunTransition[] {
+  return machine.events.flatMap((event): RunTransition[] => {
+    if (!event.timestamp) return [];
+    if (event.type === 'start') return [{ at: event.timestamp, running: true }];
+    if (['stop', 'suspend', 'exit', 'destroy'].includes(event.type)) {
+      return [{ at: event.timestamp, running: false }];
+    }
+    return [];
+  });
+}
+
+function defaultReleaseId(): string {
+  return `rel-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+export function createFlyHostingDeployPort(
+  config: FlyHostingConfig,
+  options: FlyHostingOptions = {},
+): HostingDeployPort {
+  const now = options.now ?? (() => new Date());
+  const newReleaseId = options.newReleaseId ?? defaultReleaseId;
+  const { token } = config;
+  const clientFor = (app: string) => flyMachinesClientFor({ token, app });
+
+  async function readMachine(
+    app: string,
+    id: string,
+  ): Promise<{ body: unknown; machine: FlyMachine } | null> {
+    const res = await flyRequest(appPath(app, `/machines/${encodeURIComponent(id)}`), {
+      method: 'GET',
+      token,
+    });
+    if (res.status === 404) return null;
+    const body = await readFlyJson(res);
+    if (!res.ok) throw new OrchestratorApiError('fly', res.status, flyErrorDetail(body));
+    const machine = toFlyMachine(body);
+    return machine ? { body, machine } : null;
+  }
+
+  /** The app's release Machine, or null when it has none yet. */
+  async function releaseMachine(app: string): Promise<FlyMachine | null> {
+    const machines = await clientFor(app).listMachines();
+    return (
+      machines.find(
+        (m) => m.metadata[HOSTING_RELEASE_METADATA.marker] === 'release' && m.state !== 'destroyed',
+      ) ?? null
+    );
+  }
+
+  async function writeMachine(
+    app: string,
+    existing: { id: string; version: string | null } | null,
+    body: Record<string, unknown>,
+    region: string,
+  ): Promise<string> {
+    const res = existing
+      ? await flyRequest(appPath(app, `/machines/${encodeURIComponent(existing.id)}`), {
+          method: 'POST',
+          token,
+          body: JSON.stringify({
+            config: body,
+            ...(existing.version ? { current_version: existing.version } : {}),
+          }),
+        })
+      : await flyRequest(appPath(app, '/machines'), {
+          method: 'POST',
+          token,
+          body: JSON.stringify({ name: 'release', region, config: body }),
+        });
+    const parsed = await readFlyJson(res);
+    if (!res.ok) throw new OrchestratorApiError('fly', res.status, flyErrorDetail(parsed));
+    const machine = toFlyMachine(parsed);
+    if (!machine)
+      throw new OrchestratorApiError(
+        'fly',
+        res.status,
+        'machine write returned an unexpected shape',
+      );
+    return machine.id;
+  }
+
+  function handleOf(app: string, machine: FlyMachine): ReleaseHandle {
+    return {
+      target: 'fly',
+      appRef: app,
+      environment: environmentOf(machine.metadata[HOSTING_RELEASE_METADATA.environment]),
+      releaseId: machine.metadata[HOSTING_RELEASE_METADATA.releaseId] ?? '',
+      providerRef: machine.id,
+    };
+  }
+
+  async function usageOf(
+    handle: ReleaseHandle,
+    machine: FlyMachine | null,
+    since: Date | null,
+  ): Promise<ReleaseUsage> {
+    const until = now();
+    const from = since ?? machine?.createdAt ?? until;
+    return {
+      target: 'fly',
+      appRef: handle.appRef,
+      releaseId: handle.releaseId,
+      since: from,
+      until,
+      runningSeconds: machine ? runningSecondsBetween(runTransitionsOf(machine), from, until) : 0,
+    };
+  }
+
+  return {
+    target: 'fly',
+
+    async ensureApp({ repositoryId, environment }) {
+      const names = hostingAppNames(config.appPrefix, repositoryId, environment);
+      await flyAppProvisioning.ensureApp(config, names.appRef);
+      if (names.pushNamespace !== names.appRef) {
+        await flyAppProvisioning.ensureApp(config, names.pushNamespace);
+      }
+      await flyAppProvisioning.ensureAddresses(config, names.appRef);
+      return names;
+    },
+
+    async mintDeployCredential({ pushNamespace }): Promise<DeployCredential> {
+      const res = await flyRequest(appPath(pushNamespace, '/deploy_token'), {
+        method: 'POST',
+        token,
+        body: JSON.stringify({ expiry: DEPLOY_TOKEN_EXPIRY }),
+      });
+      const body = await readFlyJson(res);
+      if (!res.ok) throw new OrchestratorApiError('fly', res.status, flyErrorDetail(body));
+      const value = asRecord(body)?.['token'];
+      if (typeof value !== 'string' || value.length === 0) {
+        throw new OrchestratorApiError('fly', res.status, 'deploy token response carried no token');
+      }
+      return {
+        kind: 'secret',
+        pushNamespace,
+        value,
+        expiresAt: new Date(now().getTime() + DEPLOY_TOKEN_TTL_MS),
+      };
+    },
+
+    async deploy(input) {
+      const current = await releaseMachine(input.appRef);
+      const currentRaw = current ? await readMachine(input.appRef, current.id) : null;
+      const releaseId = newReleaseId();
+      const metadata: Record<string, string> = {
+        [HOSTING_RELEASE_METADATA.marker]: 'release',
+        [HOSTING_RELEASE_METADATA.releaseId]: releaseId,
+        [HOSTING_RELEASE_METADATA.environment]: environmentLabel(input.environment),
+      };
+      const replaced = current?.metadata[HOSTING_RELEASE_METADATA.releaseId];
+      if (replaced) metadata[HOSTING_RELEASE_METADATA.previousReleaseId] = replaced;
+      const id = await writeMachine(
+        input.appRef,
+        current ? { id: current.id, version: versionOf(currentRaw?.body) } : null,
+        machineConfig(input, metadata),
+        input.region ?? config.region,
+      );
+      return {
+        target: 'fly',
+        appRef: input.appRef,
+        environment: input.environment,
+        releaseId,
+        providerRef: id,
+      };
+    },
+
+    async describe(handle): Promise<ReleaseDescription> {
+      const read = await readMachine(handle.appRef, handle.providerRef);
+      if (!read || read.machine.state === 'destroyed') {
+        return {
+          state: 'destroyed',
+          releaseId: null,
+          previousReleaseId: null,
+          upstreamAddress: null,
+          originCredential: 'none',
+        };
+      }
+      const { machine, body } = read;
+      return {
+        state: releaseStateOf(machine.state, checkStatusesOf(body)),
+        releaseId: machine.metadata[HOSTING_RELEASE_METADATA.releaseId] ?? null,
+        previousReleaseId: machine.metadata[HOSTING_RELEASE_METADATA.previousReleaseId] ?? null,
+        upstreamAddress: `https://${handle.appRef}.fly.dev`,
+        // The guard container that checks X-Motir-Origin-Secret is not built
+        // yet (MOTIR-5769 §4); until it is, a Fly upstream answers directly.
+        originCredential: 'none',
+      };
+    },
+
+    async rollback({ appRef }) {
+      const current = await releaseMachine(appRef);
+      if (!current) throw new ReleaseNotFoundError(appRef);
+      const previousId = current.metadata[HOSTING_RELEASE_METADATA.previousReleaseId];
+      if (!previousId) throw new NoPreviousReleaseError(appRef);
+      const res = await flyRequest(
+        appPath(appRef, `/machines/${encodeURIComponent(current.id)}/versions`),
+        {
+          method: 'GET',
+          token,
+        },
+      );
+      const body = await readFlyJson(res);
+      if (!res.ok) throw new OrchestratorApiError('fly', res.status, flyErrorDetail(body));
+      const kept = (Array.isArray(body) ? body : [])
+        .map((v) => asRecord(asRecord(v)?.['user_config']))
+        .find(
+          (c) => asRecord(c?.['metadata'])?.[HOSTING_RELEASE_METADATA.releaseId] === previousId,
+        );
+      if (!kept) throw new NoPreviousReleaseError(appRef);
+      const currentId = current.metadata[HOSTING_RELEASE_METADATA.releaseId] ?? '';
+      const restored = {
+        ...kept,
+        metadata: {
+          ...(asRecord(kept['metadata']) ?? {}),
+          [HOSTING_RELEASE_METADATA.previousReleaseId]: currentId,
+        },
+      };
+      const raw = await readMachine(appRef, current.id);
+      const id = await writeMachine(
+        appRef,
+        { id: current.id, version: versionOf(raw?.body) },
+        restored,
+        current.region,
+      );
+      return {
+        target: 'fly',
+        appRef,
+        environment: environmentOf(current.metadata[HOSTING_RELEASE_METADATA.environment]),
+        releaseId: previousId,
+        providerRef: id,
+      };
+    },
+
+    async usageSince(handle, since) {
+      const read = await readMachine(handle.appRef, handle.providerRef);
+      return usageOf(handle, read?.machine ?? null, since);
+    },
+
+    async destroy(handle) {
+      const read = await readMachine(handle.appRef, handle.providerRef);
+      const usage = await usageOf(handle, read?.machine ?? null, null);
+      if (read) await clientFor(handle.appRef).destroyMachine(handle.providerRef);
+      return usage;
+    },
+
+    async destroyApp({ appRef }) {
+      const res = await flyRequest(appPath(appRef), { method: 'DELETE', token });
+      if (res.ok || res.status === 404) return;
+      await refuse(res);
+    },
+
+    async listReleases({ appRef }): Promise<ReleaseSummary[]> {
+      const machines = await clientFor(appRef).listMachines();
+      return machines
+        .filter((m) => m.metadata[HOSTING_RELEASE_METADATA.marker] === 'release')
+        .map((m) => ({ handle: handleOf(appRef, m), state: releaseStateOf(m.state, []) }));
+    },
+  };
+}
