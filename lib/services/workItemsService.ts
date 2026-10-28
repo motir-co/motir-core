@@ -320,6 +320,7 @@ import { acceptanceCriteriaTexts } from '@/lib/workItems/proseVsGraph';
 import { sectionFindingsFor } from '@/lib/workItems/sections/validity';
 import {
   distinctAssigneeIds,
+  resolveMarkdownBodiesWorkItemRefs,
   resolveWorkItemRefSummaries,
 } from '@/lib/workItems/resolveWorkItemRefs';
 import { parseWorkItemRefs, type WorkItemRefs } from '@/lib/mentions/workItemRefs';
@@ -7173,7 +7174,16 @@ export const workItemsService = {
     );
     const workItemRefs = await resolveWorkItemRefSummaries(
       parseWorkItemRefs(
-        [detail.item.title, detail.item.descriptionMd].filter(Boolean).join('\n'),
+        // Every body the peek draws through `MarkdownView` (bug MOTIR-10023): the
+        // explanation and the obsolescence note beside the description.
+        [
+          detail.item.title,
+          detail.item.descriptionMd,
+          detail.item.explanationMd,
+          detail.item.obsolescenceNoteMd,
+        ]
+          .filter(Boolean)
+          .join('\n'),
         prefix,
       ),
       projectId,
@@ -7338,7 +7348,16 @@ export const workItemsService = {
     );
     const workItemRefs = await this.resolveReferenceSummaries(
       parseWorkItemRefs(
-        [detail.item.title, detail.item.descriptionMd].filter(Boolean).join('\n'),
+        // Every body the peek draws through `MarkdownView` (bug MOTIR-10023): the
+        // explanation and the obsolescence note beside the description.
+        [
+          detail.item.title,
+          detail.item.descriptionMd,
+          detail.item.explanationMd,
+          detail.item.obsolescenceNoteMd,
+        ]
+          .filter(Boolean)
+          .join('\n'),
         prefix,
       ),
       projectId,
@@ -8451,6 +8470,26 @@ export const workItemsService = {
     ctx: ServiceContext | VisitorReadContext,
   ): Promise<{ items: ReadyItemDto[]; nextCursor: string | null }> {
     return listReadyLaneRows(projectId, 'bug', filter, ctx);
+  },
+
+  /**
+   * One page of a ready lane AS THE /ready PAGE DRAWS IT (bug MOTIR-10023): the lane's
+   * rows, plus the chips of every `[KEY](motir:<id>)` in the instructions its manual
+   * rows open — the only bodies the page renders. ONE ref read for the page, and none
+   * when no instruction links a card. The API and MCP lane reads stay row-only.
+   */
+  async listReadyLanePage(
+    projectId: string,
+    lane: 'leaf' | 'bug',
+    filter: ReadyListFilter,
+    ctx: ServiceContext | VisitorReadContext,
+  ): Promise<{ items: ReadyItemDto[]; nextCursor: string | null; workItemRefs: WorkItemRefMap }> {
+    const page = await listReadyLaneRows(projectId, lane, filter, ctx);
+    const workItemRefs = await resolveMarkdownBodiesWorkItemRefs(
+      page.items.map((item) => item.descriptionMd),
+      ctx,
+    );
+    return { ...page, workItemRefs };
   },
 
   /**

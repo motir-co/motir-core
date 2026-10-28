@@ -1274,6 +1274,7 @@ function PlanWorkspaceHost({
                   <RequirementDocument
                     requestMd={requirementPane.requestMd}
                     requirement={requirementPane.requirement}
+                    workItemRefs={state.session?.workItemRefs ?? {}}
                   />
                 ) : (
                   <RequirementNotice />

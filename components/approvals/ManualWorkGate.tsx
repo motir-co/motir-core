@@ -134,7 +134,14 @@ function ManualWorkPort({ view, done }: { view: ManualWorkPortDTO; done: boolean
           <ul className="list-none">
             {view.todos.map((todo) => {
               const row: TodoRowContent = todo;
-              return <TodoRowReadOnly key={todo.id} row={row} drawDone />;
+              return (
+                <TodoRowReadOnly
+                  key={todo.id}
+                  row={row}
+                  workItemRefs={view.workItemRefs}
+                  drawDone
+                />
+              );
             })}
           </ul>
         </ContentSectionCard>

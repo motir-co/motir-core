@@ -69,6 +69,7 @@ export function recordDto(over: Partial<HowToTestDto> = {}): HowToTestDto {
       author: { kind: 'run', runId: 'run-318', label: 'Parent run #318' },
       createdAt: '2026-09-13T14:05:00.000Z',
       bodyMd: SECTIONED_BODY,
+      workItemRefs: {},
       previewPath: '/settings/api-keys',
     },
     history: [],

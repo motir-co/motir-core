@@ -497,6 +497,7 @@ describe('the item page — the door on None of these and on the overturn', () =
     params = new URLSearchParams();
     render(
       <ChoiceSection
+        workItemRefs={{}}
         body={{ ok: true, port: choicePort() }}
         gate={CHOICE_NONE}
         canDecide={false}
@@ -519,6 +520,7 @@ describe('the item page — the door on None of these and on the overturn', () =
     params = new URLSearchParams();
     render(
       <ChoiceSection
+        workItemRefs={{}}
         body={{ ok: true, port: choicePort() }}
         gate={{
           ...CHOICE_AWAITING,
@@ -555,6 +557,7 @@ describe('the item page — the door on None of these and on the overturn', () =
   it('a chosen option shows no door to a reader who may not plan', () => {
     render(
       <ChoiceSection
+        workItemRefs={{}}
         body={{ ok: true, port: choicePort() }}
         gate={{
           ...CHOICE_AWAITING,
@@ -581,6 +584,7 @@ describe('the item page — the door on None of these and on the overturn', () =
     const body = confirmPort();
     render(
       <DecisionConfirmSection
+        workItemRefs={{}}
         body={{ ok: true, port: body }}
         gate={OVERTURNED}
         canDecide={false}
@@ -607,6 +611,7 @@ describe('the item page — the door on None of these and on the overturn', () =
   it('Overturned, for a reader who may not plan: no door, and still no epic entrance', () => {
     render(
       <DecisionConfirmSection
+        workItemRefs={{}}
         body={{ ok: true, port: confirmPort() }}
         gate={OVERTURNED}
         canDecide={false}
@@ -623,6 +628,7 @@ describe('the item page — the door on None of these and on the overturn', () =
   it('a confirmed decision carries no door', () => {
     render(
       <DecisionConfirmSection
+        workItemRefs={{}}
         body={{ ok: true, port: confirmPort() }}
         gate={{ ...CONFIRM_AWAITING, ...DECIDED, state: 'approved', confirmedRecord: RECORD }}
         canDecide={false}
@@ -696,7 +702,7 @@ describe('the approval overlay — Overturn and None of these ask first', () => 
       overlayRead(CONFIRM_AWAITING, {
         state: 'resolved',
         kind: 'decision_confirmation',
-        confirm: confirmPort(),
+        confirm: { ...confirmPort(), workItemRefs: {} },
       }),
     );
     await overturn(dialog);
@@ -733,7 +739,7 @@ describe('the approval overlay — Overturn and None of these ask first', () => 
       overlayRead(CHOICE_AWAITING, {
         state: 'resolved',
         kind: 'decision_choice',
-        choice: choicePort(),
+        choice: { ...choicePort(), workItemRefs: {} },
       }),
     );
     await refuseWithReason({ scope: within(dialog), verb: 'choice', reason: 'None fit.' });
@@ -766,7 +772,7 @@ describe('the approval overlay — Overturn and None of these ask first', () => 
       overlayRead(CHOICE_AWAITING, {
         state: 'resolved',
         kind: 'decision_choice',
-        choice: choicePort(),
+        choice: { ...choicePort(), workItemRefs: {} },
       }),
       zh,
     );
@@ -809,7 +815,7 @@ describe('the approval overlay — Overturn and None of these ask first', () => 
       overlayRead(CHOICE_AWAITING, {
         state: 'resolved',
         kind: 'decision_choice',
-        choice: choicePort(),
+        choice: { ...choicePort(), workItemRefs: {} },
       }),
     );
     fireEvent.click(within(dialog).getByRole('radio', { name: /Our own Postgres/ }));
@@ -884,7 +890,7 @@ describe('the approval overlay — Overturn and None of these ask first', () => 
       overlayRead(CONFIRM_AWAITING, {
         state: 'resolved',
         kind: 'decision_confirmation',
-        confirm: confirmPort(),
+        confirm: { ...confirmPort(), workItemRefs: {} },
       }),
     );
     const t = en.approvalGate.decisionConfirm;
@@ -907,7 +913,7 @@ describe('the approval overlay — Overturn and None of these ask first', () => 
       overlayRead(CONFIRM_AWAITING, {
         state: 'resolved',
         kind: 'decision_confirmation',
-        confirm: confirmPort(),
+        confirm: { ...confirmPort(), workItemRefs: {} },
       }),
     );
     await overturn(dialog);
@@ -926,7 +932,11 @@ describe('the approval overlay — Overturn and None of these ask first', () => 
       'decision_confirmation',
       overlayRead(
         CONFIRM_AWAITING,
-        { state: 'resolved', kind: 'decision_confirmation', confirm: confirmPort() },
+        {
+          state: 'resolved',
+          kind: 'decision_confirmation',
+          confirm: { ...confirmPort(), workItemRefs: {} },
+        },
         false,
       ),
     );

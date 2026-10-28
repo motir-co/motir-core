@@ -15,6 +15,7 @@ import type {
   WorkItemDto,
   WorkItemKindDto,
   WorkItemPlacementDto,
+  WorkItemRefMap,
   WorkItemSummaryDto,
 } from '@/lib/dto/workItems';
 import type { WorkflowDto } from '@/lib/dto/workflows';
@@ -100,6 +101,12 @@ export interface CoreFieldsPanelProps {
    * plan door, to an editor and a reader alike. Defaults to none.
    */
   planHold?: PlanHoldDTO | null;
+  /**
+   * The page's resolved work-item refs (bug MOTIR-10023) — the item read resolves
+   * the obsolescence note's `[KEY](motir:<id>)` links with the bodies', and the
+   * Obsolescence field draws them from this. Defaults to none.
+   */
+  workItemRefs?: WorkItemRefMap;
   members: WorkspaceMemberDTO[];
   workflow: WorkflowDto;
   /** The resolved parent summary (for the Parent card's display). */
@@ -186,6 +193,9 @@ function ExecutorIndicator({ executor }: { executor: ExecutorDto }) {
 // one of five — which is how `implemented` could share a chip with three
 // other statuses in every one of them at once.
 
+/** No resolved refs — a host with no item read (a test, a story) passes none. */
+const NO_REFS: WorkItemRefMap = {};
+
 // Priority chip presentation now lives in the shared `PRIORITY_META` (reused by
 // the issue-list row, 2.5.3) — imported above.
 
@@ -205,6 +215,7 @@ export function CoreFieldsPanel({
   sprints = [],
   heldTransitions,
   planHold,
+  workItemRefs = NO_REFS,
 }: CoreFieldsPanelProps) {
   const routes = useReaderRoutes();
   const router = useRouter();
@@ -687,6 +698,7 @@ export function CoreFieldsPanel({
           <ObsolescenceField
             value={eff.obsolescence}
             noteMd={eff.obsolescenceNoteMd}
+            workItemRefs={workItemRefs}
             editing={editing === 'obsolescence' && !readOnly}
             locked={!canCarryObsolescence(statusMeta?.category)}
             pending={isPending}

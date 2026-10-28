@@ -77,6 +77,7 @@ function view(gate: ApprovalGateDTO, over: Partial<AgentReviewViewDto> = {}): Ag
     reviewUnavailableReason: null,
     run: RUN,
     settingsDoorHref: null,
+    findingsRefs: {},
     ...over,
   };
 }

@@ -164,20 +164,3 @@ describe('the INK — danger on a page surface', () => {
     expect(screen.getByRole('button', { name: 'Disconnect' })).toBeTruthy();
   });
 });
-
-describe('⚠️ the fourth state is NOT rendered, and that is deliberate', () => {
-  it('nothing in the pane claims to know an identity is REVOKED', () => {
-    // The design draws four states; this pane renders three. `GithubIdentity`
-    // carries no revocation column and nothing in the tree detects a 401 from a
-    // user token — the service's own comment says a substrate change "is the fix
-    // HERE" were tokens ever to expire. So the state has no producer, and
-    // rendering one would be inventing a signal rather than reporting it.
-    //
-    // The three that ARE derivable — connected, none connected, and connected
-    // with no organisation installation — are all rendered. The fourth is
-    // proposed as a precondition rather than improvised.
-    //
-    // This case deletes itself in the commit that adds the substrate.
-    expect(PAGE).not.toMatch(/revoked|needsReauth|Needs re-auth/i);
-  });
-});

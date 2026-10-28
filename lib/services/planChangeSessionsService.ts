@@ -230,6 +230,25 @@ async function failedWaitingShape(
  *  renders them through the shipped `WorkItemRefChip` path exactly as the detail
  *  page and the comment thread do. A thread with no references pays nothing:
  *  `resolveWorkItemRefSummaries` returns `{}` for an empty ref set. */
+/** The Markdown a stored answer offer draws — its request, and the parts of the
+ *  requirement a no-target plan offer composed (MOTIR-9432) — whose card links ride
+ *  the thread's ONE resolve, so the requirement document draws them live (bug
+ *  MOTIR-10023). Read defensively: the column is JSON. */
+function offerBodiesOf(stored: unknown): string[] {
+  if (!stored || typeof stored !== 'object') return [];
+  const offer = stored as { requestMd?: unknown; requirement?: unknown };
+  const requirement =
+    offer.requirement && typeof offer.requirement === 'object'
+      ? (offer.requirement as Record<string, unknown>)
+      : {};
+  return [
+    offer.requestMd,
+    ...(['outcome', 'behaviour', 'scopeEdge', 'constraints', 'acceptance'] as const).map(
+      (part) => requirement[part],
+    ),
+  ].filter((body): body is string => typeof body === 'string');
+}
+
 async function toDto(
   row: PlanChangeSession,
   pctx: ProjectContext,
@@ -246,7 +265,8 @@ async function toDto(
       );
   const ids = turns
     .filter((t) => t.role === 'assistant')
-    .flatMap((t) => parseWorkItemTokenIds(t.body));
+    .flatMap((t) => [t.body, ...offerBodiesOf(t.answerOffer)])
+    .flatMap((body) => parseWorkItemTokenIds(body));
   // An ANSWER's citations are stored as IDENTIFIERS, not as `motir:` id tokens
   // in the body, so they ride the `keys` half of the same ONE resolve
   // (MOTIR-1818). Two reasons they are not left to the client: the rail must

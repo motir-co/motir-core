@@ -3,6 +3,7 @@
 import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import type { ReadyItemDto } from '@/lib/dto/ready';
+import type { WorkItemRefMap } from '@/lib/dto/workItems';
 import { Segmented } from '@/components/ui/Segmented';
 import { shallowPush } from '@/lib/navigation/shallowUrl';
 import { ReadyList } from './ReadyList';
@@ -20,9 +21,16 @@ import { ReadyList } from './ReadyList';
 
 type Lane = 'main' | 'bugs';
 
+/** A lane's first page, with its instructions' card links (MOTIR-10023). */
+type ReadyLanePage = {
+  items: ReadyItemDto[];
+  nextCursor: string | null;
+  workItemRefs: WorkItemRefMap;
+};
+
 export interface ReadyLanesProps {
-  leaves: { items: ReadyItemDto[]; nextCursor: string | null };
-  bugs: { items: ReadyItemDto[]; nextCursor: string | null };
+  leaves: ReadyLanePage;
+  bugs: ReadyLanePage;
   counts: { leaves: number; bugs: number };
 }
 
@@ -65,10 +73,20 @@ export function ReadyLanes({ leaves, bugs, counts }: ReadyLanesProps) {
         className="h-[calc(100dvh_-_16rem_-_var(--shell-bottom-clearance,1.5rem))] min-h-80 overflow-y-auto pr-1"
       >
         <div hidden={lane !== 'main'} data-testid="ready-lane-main">
-          <ReadyList initialItems={leaves.items} initialCursor={leaves.nextCursor} lane="leaf" />
+          <ReadyList
+            initialItems={leaves.items}
+            initialCursor={leaves.nextCursor}
+            initialWorkItemRefs={leaves.workItemRefs}
+            lane="leaf"
+          />
         </div>
         <div hidden={lane !== 'bugs'} data-testid="ready-lane-bugs">
-          <ReadyList initialItems={bugs.items} initialCursor={bugs.nextCursor} lane="bug" />
+          <ReadyList
+            initialItems={bugs.items}
+            initialCursor={bugs.nextCursor}
+            initialWorkItemRefs={bugs.workItemRefs}
+            lane="bug"
+          />
         </div>
       </div>
     </div>

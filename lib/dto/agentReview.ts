@@ -3,6 +3,7 @@
 
 import type { ReviewVerdict } from '@/lib/dispatch/reviewPromptTemplate';
 import type { ApprovalGateDTO } from '@/lib/dto/approvalGate';
+import type { WorkItemRefMap } from '@/lib/dto/workItems';
 
 /** One pull request the review is about, at its REVIEWED head. */
 export interface ReviewPullRequestDto {
@@ -73,4 +74,7 @@ export interface AgentReviewViewDto {
   reviewUnavailableReason: string | null;
   run: AgentReviewRunRefDto | null;
   settingsDoorHref: string | null;
+  /** The chips of every `[KEY](motir:<id>)` in the gate's `noteMd` — the findings — resolved
+   *  for the reader (bug MOTIR-10023); `{}` when they link nothing. */
+  findingsRefs: WorkItemRefMap;
 }

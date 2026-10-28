@@ -50,11 +50,11 @@ function Page({
       <TranslateControl />
       <section aria-label="Title">
         <FieldTranslationMark fieldRef="title" field="title" />
-        <TranslatableMarkdown fieldRef="title" value="标题" />
+        <TranslatableMarkdown fieldRef="title" value="标题" workItemRefs={{}} />
       </section>
       <section aria-label="Description">
         <FieldTranslationMark fieldRef="description" field="description" />
-        <TranslatableMarkdown fieldRef="description" value={description} />
+        <TranslatableMarkdown fieldRef="description" value={description} workItemRefs={{}} />
       </section>
     </TranslationProvider>
   );

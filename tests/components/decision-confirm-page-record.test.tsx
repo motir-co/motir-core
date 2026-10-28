@@ -109,6 +109,7 @@ function renderFrame(
     <DecisionConfirmGateFrame
       gate={AWAITING}
       view={view()}
+      workItemRefs={{}}
       record={record}
       recordCount={0}
       presentRecordIds={[]}

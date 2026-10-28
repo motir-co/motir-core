@@ -25,7 +25,7 @@ import {
   setTodoDoneAction,
   updateTodoAction,
 } from '../todoActions';
-import type { ExecutorDto } from '@/lib/dto/workItems';
+import type { ExecutorDto, WorkItemRefMap } from '@/lib/dto/workItems';
 import type { TodoProgressDto, WorkItemTodoDto } from '@/lib/dto/workItemTodos';
 
 // The TO-DO LIST section on the work item page (Story MOTIR-3808 · MOTIR-3815).
@@ -54,6 +54,12 @@ export interface TodoListSectionProps {
   workItemId: string;
   initialTodos: WorkItemTodoDto[];
   initialProgress: TodoProgressDto;
+  /**
+   * The notes' `[KEY](motir:<id>)` links, resolved for the reader by the page's read
+   * (bug MOTIR-10023, `workItemTodosService.resolveNotesRefs`). An add or an edit
+   * merges the written step's own links in, so a just-saved link draws live.
+   */
+  initialWorkItemRefs: WorkItemRefMap;
   /** `work_item:edit` — the ONE key every write is gated on (ADR §4). */
   canEdit: boolean;
 }
@@ -66,10 +72,15 @@ export function TodoListSection({
   workItemId,
   initialTodos,
   initialProgress,
+  initialWorkItemRefs,
   canEdit,
 }: TodoListSectionProps) {
   const t = useTranslations('workItemTodos');
   const [todos, setTodos] = useState<WorkItemTodoDto[]>(initialTodos);
+  const [workItemRefs, setWorkItemRefs] = useState<WorkItemRefMap>(initialWorkItemRefs);
+  const mergeRefs = useCallback((next: WorkItemRefMap | undefined) => {
+    if (next && Object.keys(next).length > 0) setWorkItemRefs((prev) => ({ ...prev, ...next }));
+  }, []);
   const [progress, setProgress] = useState<TodoProgressDto>(initialProgress);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -157,6 +168,7 @@ export function TodoListSection({
         const result = await addTodoAction({ workItemId, text });
         if (result.ok) {
           setTodos((prev) => [...prev, result.todo]);
+          mergeRefs(result.workItemRefs);
           setProgress(result.progress);
           setAdding('');
         }
@@ -184,6 +196,7 @@ export function TodoListSection({
         });
         if (result.ok) {
           replaceTodo(result.todo);
+          mergeRefs(result.workItemRefs);
           setProgress(result.progress);
           setEditingId(null);
         }
@@ -285,6 +298,7 @@ export function TodoListSection({
             <TodoRow
               key={row.id}
               row={row}
+              workItemRefs={workItemRefs}
               index={index}
               total={todos.length}
               canEdit={canEdit}
@@ -355,6 +369,7 @@ export function TodoListSection({
 
 interface TodoRowProps {
   row: WorkItemTodoDto;
+  workItemRefs: WorkItemRefMap;
   index: number;
   total: number;
   canEdit: boolean;
@@ -375,6 +390,7 @@ interface TodoRowProps {
 
 function TodoRow({
   row,
+  workItemRefs,
   index,
   total,
   canEdit,
@@ -463,6 +479,7 @@ function TodoRow({
         ) : (
           <TodoRowBody
             row={row}
+            workItemRefs={workItemRefs}
             todoId={row.id}
             isExpanded={isExpanded}
             onToggleExpanded={onToggleExpanded}
@@ -531,12 +548,18 @@ export interface TodoRowContent {
 
 export function TodoRowBody({
   row,
+  workItemRefs,
   todoId,
   isExpanded,
   onToggleExpanded,
   notesId,
 }: {
   row: TodoRowContent;
+  /**
+   * The notes' work-item links, resolved for the reader by the host's read (bug
+   * MOTIR-10023). Required: with no map every card a step names draws as deleted.
+   */
+  workItemRefs: WorkItemRefMap;
   /**
    * The step's id, on a REAL card's row (MOTIR-8122): its text and notes then take
    * part in on-demand translation. A proposal's row has none, and translates nothing.
@@ -595,9 +618,13 @@ export function TodoRowBody({
               className="mt-1.5 border-l-2 border-(--el-border-strong) pl-3 text-[12.5px] text-(--el-text-secondary)"
             >
               {notesRef ? (
-                <TranslatableMarkdown fieldRef={notesRef} value={row.notesMd} />
+                <TranslatableMarkdown
+                  fieldRef={notesRef}
+                  value={row.notesMd}
+                  workItemRefs={workItemRefs}
+                />
               ) : (
-                <MarkdownView value={row.notesMd} />
+                <MarkdownView value={row.notesMd} workItemRefs={workItemRefs} />
               )}
             </div>
           ) : null}
@@ -638,9 +665,12 @@ export function TodoRowBody({
  */
 export function TodoRowReadOnly({
   row,
+  workItemRefs,
   drawDone = false,
 }: {
   row: TodoRowContent;
+  /** The notes' work-item links, resolved by the host's read (bug MOTIR-10023). */
+  workItemRefs: WorkItemRefMap;
   /**
    * DRAW THE BOX BY STATE (Story MOTIR-7460 · MOTIR-7478; design § 33.3) — a REAL card's
    * list read in a decision frame, where a ticked row is a fact the reader needs:
@@ -681,6 +711,7 @@ export function TodoRowReadOnly({
       <div className="min-w-0">
         <TodoRowBody
           row={row}
+          workItemRefs={workItemRefs}
           isExpanded={isExpanded}
           onToggleExpanded={() => setExpanded((prev) => !prev)}
           notesId={notesId}
