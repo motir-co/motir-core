@@ -14,9 +14,44 @@ import { vi } from 'vitest';
  *  the role path needs (MOTIR-9839). */
 export const TEST_MANAGEMENT_ROLE_ARN = 'arn:aws:iam::576360162297:role/motir-add-shard';
 
-/** Configure the management credential as the role ARN alone. */
-export function stubRunnerRoleManagementEnv(): void {
+/** The management key pair the `key` mode configures; never a real key. */
+export const TEST_MANAGEMENT_KEY = {
+  accessKeyId: 'AKIA_TEST_MANAGEMENT_KEY',
+  secretAccessKey: 'TEST_MANAGEMENT_SECRET',
+} as const;
+
+// THE MANAGEMENT CREDENTIAL'S TWO MODES (MOTIR-9850). Core on Fly holds the
+// management key pair and assumes the role through it; on Fargate it holds only
+// the role ARN and the SDK's default chain supplies the rest (MOTIR-9839). The
+// fleet suites configure the credential through `stubAwsManagementCredential`,
+// so one switch runs the same files, with the same assertions, in either mode:
+// `MOTIR_TEST_AWS_MANAGEMENT_CREDENTIAL=key` (CI's second pass, `ci.yml`) or
+// unset / `role` (the sharded run).
+
+export const AWS_MANAGEMENT_CREDENTIAL_MODE_ENV = 'MOTIR_TEST_AWS_MANAGEMENT_CREDENTIAL';
+
+export type AwsManagementCredentialMode = 'key' | 'role';
+
+/** The mode this run's fleet suites use. */
+export function awsManagementCredentialMode(): AwsManagementCredentialMode {
+  const mode = process.env[AWS_MANAGEMENT_CREDENTIAL_MODE_ENV]?.trim() || 'role';
+  if (mode !== 'key' && mode !== 'role') {
+    throw new Error(`${AWS_MANAGEMENT_CREDENTIAL_MODE_ENV}=${mode} is neither key nor role`);
+  }
+  return mode;
+}
+
+/** Configure the management credential: the role ARN, and in `key` mode the key
+ *  pair it is assumed through. `role` clears the key, whatever the shell set. */
+export function stubAwsManagementCredential(
+  mode: AwsManagementCredentialMode = awsManagementCredentialMode(),
+): void {
   vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', TEST_MANAGEMENT_ROLE_ARN);
+  vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', mode === 'key' ? TEST_MANAGEMENT_KEY.accessKeyId : '');
+  vi.stubEnv(
+    'AWS_ORG_ADMIN_SECRET_ACCESS_KEY',
+    mode === 'key' ? TEST_MANAGEMENT_KEY.secretAccessKey : '',
+  );
 }
 
 interface Ec2Config {

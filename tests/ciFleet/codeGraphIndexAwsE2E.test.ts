@@ -53,7 +53,7 @@ import { createTestUser } from '../fixtures/userFixtures';
 import { JobTestEngine } from '../helpers/jobs';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
-import { runnerRole, stubRunnerRoleManagementEnv } from '../helpers/awsRunnerRoleFake';
+import { runnerRole, stubAwsManagementCredential } from '../helpers/awsRunnerRoleFake';
 import {
   ADD_SHARD_ENTERPRISE_SLUG,
   FakeOrganization,
@@ -338,7 +338,7 @@ beforeEach(async () => {
   fly().reset();
   fakes.ec2ByKeyId.clear();
   runnerRole.reset();
-  stubRunnerRoleManagementEnv();
+  stubAwsManagementCredential();
   fleetShardOrchestratorService.resetCache();
   _resetInstallationTokenCache();
   _resetProvisioningInstallationCache();

@@ -9,6 +9,7 @@ import {
   createAwsManagementApi,
   createAwsManagementSdkClient,
   parameterOverridesFor,
+  parameterOverridesOf,
   sameParameterOverrides,
   stackInstanceOutcome,
   type AwsManagementClientFactory,
@@ -206,6 +207,22 @@ describe('awsStackSetOperationId', () => {
     expect(sameParameterOverrides({ ...OVERRIDES }, OVERRIDES)).toBe(true);
     expect(sameParameterOverrides({ ...OVERRIDES, Extra: 'x' }, OVERRIDES)).toBe(false);
     expect(sameParameterOverrides({ ...OVERRIDES, ShardTag: 'x' }, OVERRIDES)).toBe(false);
+  });
+
+  it('reads AWS’s ParameterOverrides leniently and writes them in key order (MOTIR-9850)', () => {
+    // AWS may leave a value out (an empty override) or answer an entry with no key.
+    expect(
+      parameterOverridesOf([
+        { ParameterKey: 'ShardTag', ParameterValue: 'ci-eu-1' },
+        { ParameterKey: 'ReapUntagged' },
+        { ParameterValue: 'orphan' },
+      ]),
+    ).toEqual({ ShardTag: 'ci-eu-1', ReapUntagged: '' });
+    expect(parameterOverridesOf(undefined)).toEqual({});
+    expect(parameterOverridesFor({ b: '2', a: undefined as unknown as string })).toEqual([
+      { ParameterKey: 'a', ParameterValue: '' },
+      { ParameterKey: 'b', ParameterValue: '2' },
+    ]);
   });
 });
 

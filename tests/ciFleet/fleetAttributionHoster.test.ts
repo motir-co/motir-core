@@ -13,7 +13,7 @@ import {
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomInt } from '../helpers/random';
-import { runnerRole, stubRunnerRoleManagementEnv } from '../helpers/awsRunnerRoleFake';
+import { runnerRole, stubAwsManagementCredential } from '../helpers/awsRunnerRoleFake';
 
 // THE RECONCILER READS EVERY AGENT-HOSTER ACCOUNT (Story MOTIR-9361 · MOTIR-9476)
 // against real Postgres. Each hoster account is an `AwsEc2Fake`, reached through
@@ -173,7 +173,7 @@ beforeEach(async () => {
   vi.stubEnv('FLY_FLEET_API_TOKEN', '');
   world.accounts.clear();
   runnerRole.reset();
-  stubRunnerRoleManagementEnv();
+  stubAwsManagementCredential();
   captureException.mockReset();
   vi.spyOn(console, 'warn').mockImplementation(() => undefined);
   vi.spyOn(console, 'error').mockImplementation(() => undefined);

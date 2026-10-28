@@ -25,7 +25,7 @@ import type { FleetShardDTO } from '@/lib/dto/fleetShard';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomInt, randomToken } from '../helpers/random';
-import { runnerRole, stubRunnerRoleManagementEnv } from '../helpers/awsRunnerRoleFake';
+import { runnerRole, stubAwsManagementCredential } from '../helpers/awsRunnerRoleFake';
 
 // AN AWS CAPACITY REFUSAL MOVES THE JOB OR DEFERS IT — NEVER TO FLY (Story
 // MOTIR-9270 · MOTIR-9279), against real Postgres.
@@ -273,7 +273,7 @@ beforeEach(async () => {
   fly().reset();
   fakes.ec2ByKeyId.clear();
   runnerRole.reset();
-  stubRunnerRoleManagementEnv();
+  stubAwsManagementCredential();
   fleetShardOrchestratorService.resetCache();
   githubCalls = [];
   logged = [];

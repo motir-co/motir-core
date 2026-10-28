@@ -36,7 +36,7 @@ import { JobTestEngine } from '../helpers/jobs';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import { randomToken } from '../helpers/random';
-import { runnerRole, stubRunnerRoleManagementEnv } from '../helpers/awsRunnerRoleFake';
+import { runnerRole, stubAwsManagementCredential } from '../helpers/awsRunnerRoleFake';
 import {
   driveIndexFleetFast,
   indexEventFor,
@@ -277,7 +277,7 @@ beforeEach(async () => {
   fly().reset();
   fakes.ec2ByKeyId.clear();
   runnerRole.reset();
-  stubRunnerRoleManagementEnv();
+  stubAwsManagementCredential();
   fleetShardOrchestratorService.resetCache();
   resetTarballBodyTrap();
   driveIndexFleetFast();

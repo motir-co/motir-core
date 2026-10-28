@@ -17,7 +17,7 @@ import type { UnattributedMachineDestroyedError } from '@/lib/ciFleet/attributio
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomInt, randomToken } from '../helpers/random';
-import { runnerRole, stubRunnerRoleManagementEnv } from '../helpers/awsRunnerRoleFake';
+import { runnerRole, stubAwsManagementCredential } from '../helpers/awsRunnerRoleFake';
 
 // A HOST ORGANISATION'S OWN ACCOUNTS ARE REAPED AND ATTRIBUTED TO THEIR OWNER
 // (Story MOTIR-9365 · MOTIR-9584), against real Postgres.
@@ -290,7 +290,7 @@ beforeEach(async () => {
   await truncateAuthTables();
   fakes.ec2ByKeyId.clear();
   runnerRole.reset();
-  stubRunnerRoleManagementEnv();
+  stubAwsManagementCredential();
   fleetShardOrchestratorService.resetCache();
   captureException.mockReset();
   vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', '');

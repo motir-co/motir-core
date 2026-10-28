@@ -1738,6 +1738,15 @@ export default defineConfig({
         'lib/fleetShards/awsMemberAccountPlan.ts',
         'lib/fleetShards/fleetAutomationPrincipal.ts',
         'lib/fleetShards/scrubSecrets.ts',
+        // Story MOTIR-9708 · MOTIR-9850 — the pool-account definition as add-shard
+        // reads it, and the `aws` provider that applies it. MEASURED on this branch
+        // against `tests/ciFleet/awsPoolStackSeam.test.ts`, `awsPoolDefinition`,
+        // `fleetShardProvisioningAws` and `fleetShardProvisioningAwsIndexer` alone:
+        // awsPoolDefinition 100 / 95 / 100 / 100, awsProvisioningProvider
+        // 96.94 / 90 / 100 / 98.34 (statements / branches / functions / lines).
+        // Pinned at the fleet's 90 floor below.
+        'lib/fleetShards/awsPoolDefinition.ts',
+        'lib/fleetShards/awsProvisioningProvider.ts',
         'lib/jobs/definitions/fleetPoolGrowth.ts',
         'lib/mappers/fleetPoolMappers.ts',
         'lib/repositories/fleetGrowthEventRepository.ts',
@@ -3729,6 +3738,20 @@ export default defineConfig({
           statements: 90,
         },
         'lib/fleetShards/scrubSecrets.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // Story MOTIR-9708 · MOTIR-9850 — the pool-account definition and the `aws`
+        // provider, measured above.
+        'lib/fleetShards/awsPoolDefinition.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/fleetShards/awsProvisioningProvider.ts': {
           lines: 90,
           functions: 90,
           branches: 90,

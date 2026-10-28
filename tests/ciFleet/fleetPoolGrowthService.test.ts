@@ -33,6 +33,7 @@ import {
   newGithubWorld,
   type GithubWorld,
 } from '../helpers/addShardFakes';
+import { TEST_MANAGEMENT_KEY, stubAwsManagementCredential } from '../helpers/awsRunnerRoleFake';
 
 // ONE POOL GROWTH (Story MOTIR-9362 · MOTIR-9461), against a real database for
 // the rows, the claim, the event and the audit entry, and the REAL unattended
@@ -46,8 +47,8 @@ const ORG = 'motir-fleet-use1-1';
 const TEMPLATE = 'aws+{name}@motir.co';
 const SECRETS = {
   installation: 'ghs_INSTALL_SECRET_never_printed',
-  managementKey: 'AKIA_MANAGEMENT_never_printed',
-  managementSecret: 'MANAGEMENT_SECRET_never_printed',
+  managementKey: TEST_MANAGEMENT_KEY.accessKeyId,
+  managementSecret: TEST_MANAGEMENT_KEY.secretAccessKey,
   sessionKeyId: 'ASIA_SESSION_never_printed',
   sessionSecret: 'SESSION_SECRET_never_printed',
   sessionToken: 'SESSION_TOKEN_never_printed',
@@ -150,9 +151,7 @@ beforeEach(async () => {
   vi.stubEnv('GITHUB_STUDIO_APP_ID', '4445390');
   vi.stubEnv('GITHUB_STUDIO_APP_PRIVATE_KEY', privateKey);
   vi.stubEnv('GITHUB_ENTERPRISE_SLUG', SLUG);
-  vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', SECRETS.managementKey);
-  vi.stubEnv('AWS_ORG_ADMIN_SECRET_ACCESS_KEY', SECRETS.managementSecret);
-  vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', 'arn:aws:iam::576360162297:role/motir-add-shard');
+  stubAwsManagementCredential();
   stubPoolDefinitionEnv();
   _resetInstallationTokenCache();
   _resetProvisioningInstallationCache();

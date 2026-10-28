@@ -1,14 +1,25 @@
 import { execFileSync } from 'node:child_process';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   AwsShardNetworkConflictError,
   AwsShardNetworkMissingError,
+  awsShardSecurityGroupName,
   awsShardVpcExists,
   readAwsShardNetwork,
   zoneCidrs,
 } from '../src/index';
 import * as orchestrator from '../src/index';
 import { AwsEc2Fake } from './contract/awsEc2Fake';
+
+// Only the credentials case below reaches `createEc2Api`; it answers that case's fake.
+const built = vi.hoisted(() => ({ ec2: null as unknown, configs: [] as unknown[] }));
+vi.mock('../src/adapters/aws/ec2Client', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/adapters/aws/ec2Client')>()),
+  createEc2Api: (config: unknown) => {
+    built.configs.push(config);
+    return built.ec2;
+  },
+}));
 
 // An AWS shard's network (Story MOTIR-9270 · MOTIR-9273), READ AND CHECKED
 // against the in-memory EC2 (MOTIR-9845): the pool-account definition builds it,
@@ -78,6 +89,82 @@ describe('readAwsShardNetwork', () => {
       resource: 'subnet in us-east-1a',
       ids: ['subnet-ci-1-us-east-1a', 'subnet-copy'],
     });
+  });
+
+  it('refuses a doubled gateway, route table or group, naming both ids (MOTIR-9850)', async () => {
+    const cases: [string, (ec2: AwsEc2Fake) => void, string, string[]][] = [
+      [
+        'VPC',
+        (ec2) => ec2.vpcs.set('vpc-copy', { ...ec2.vpcs.get('vpc-ci-1')!, vpcId: 'vpc-copy' }),
+        'VPC',
+        ['vpc-ci-1', 'vpc-copy'],
+      ],
+      [
+        'gateway',
+        (ec2) =>
+          ec2.internetGateways.set('igw-copy', {
+            ...ec2.internetGateways.get('igw-ci-1')!,
+            internetGatewayId: 'igw-copy',
+          }),
+        'internet gateway',
+        ['igw-ci-1', 'igw-copy'],
+      ],
+      [
+        'route table',
+        (ec2) =>
+          ec2.routeTables.set('rtb-copy', {
+            ...ec2.routeTables.get('rtb-ci-1')!,
+            routeTableId: 'rtb-copy',
+          }),
+        'route table',
+        ['rtb-ci-1', 'rtb-copy'],
+      ],
+      [
+        'group',
+        (ec2) =>
+          ec2.securityGroups.set('sg-copy', {
+            ...ec2.securityGroups.get('sg-ci-1')!,
+            groupId: 'sg-copy',
+          }),
+        'security group',
+        ['sg-ci-1', 'sg-copy'],
+      ],
+    ];
+    for (const [label, double, resource, ids] of cases) {
+      const ec2 = new AwsEc2Fake();
+      ec2.seedShardNetwork('ci-1');
+      double(ec2);
+      const thrown = await readAwsShardNetwork(input(ec2)).catch((err: unknown) => err);
+      expect(thrown, label).toBeInstanceOf(AwsShardNetworkConflictError);
+      expect(thrown, label).toMatchObject({ resource, ids });
+    }
+  });
+
+  it('needs an EC2 surface or the credentials to build one', async () => {
+    const thrown = await readAwsShardNetwork({ regionId: 'us-east-1', shardTag: 'ci-1' }).catch(
+      (err: unknown) => err,
+    );
+    expect(thrown).toMatchObject({
+      message: 'readAwsShardNetwork needs credentials or an ec2 surface.',
+    });
+  });
+
+  it('builds its EC2 surface from the credentials and region when none is given', async () => {
+    const ec2 = new AwsEc2Fake();
+    ec2.seedShardNetwork('ci-1');
+    built.ec2 = ec2;
+    built.configs = [];
+
+    await expect(
+      awsShardVpcExists({ credentials: CREDENTIALS, regionId: 'eu-west-1', shardTag: 'ci-1' }),
+    ).resolves.toBe(true);
+    expect(built.configs).toEqual([{ ...CREDENTIALS, region: 'eu-west-1' }]);
+  });
+
+  it('names the group the definition builds after the shard tag', () => {
+    const ec2 = new AwsEc2Fake();
+    const { groupId } = ec2.seedShardNetwork('ci-1');
+    expect(awsShardSecurityGroupName('ci-1')).toBe(ec2.securityGroups.get(groupId)!.groupName);
   });
 
   it('awsShardVpcExists says whether any VPC carries the tag', async () => {

@@ -19,7 +19,7 @@ import type { FleetShardDTO } from '@/lib/dto/fleetShard';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomInt, randomToken } from '../helpers/random';
-import { runnerRole, stubRunnerRoleManagementEnv } from '../helpers/awsRunnerRoleFake';
+import { runnerRole, stubAwsManagementCredential } from '../helpers/awsRunnerRoleFake';
 
 // EVERY VM ON EVERY AGENT-RUNNER ACCOUNT BELONGS TO A RECORD, OR IT DIES (Story
 // MOTIR-9359 · MOTIR-9426, `docs/decisions/fleet-per-org-pool.md` §5), against
@@ -260,7 +260,7 @@ beforeEach(async () => {
   await truncateAuthTables();
   fakes.ec2ByKeyId.clear();
   runnerRole.reset();
-  stubRunnerRoleManagementEnv();
+  stubAwsManagementCredential();
   fleetShardOrchestratorService.resetCache();
   captureException.mockReset();
   // The deployment's own selection — each account resolves through its real

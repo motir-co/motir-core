@@ -1451,6 +1451,33 @@ jobs:
           path: .vitest-reports
           include-hidden-files: true
           retention-days: 1
+      # THE FLEET SUITES IN THE MANAGEMENT CREDENTIAL'S OTHER MODE (MOTIR-9850).
+      # The sharded run above gives them the role ARN alone, which the SDK's
+      # default chain completes (core on Fargate, MOTIR-9839). Core on Fly holds
+      # the key pair and assumes the role through it, so the same files run once
+      # more, unchanged, with `stubAwsManagementCredential` supplying the key
+      # (`tests/helpers/awsRunnerRoleFake.ts`). One leg only: it is one pass, not
+      # a share of the suite, and it adds no coverage blob.
+      - name: Fleet suites with the management key pair
+        if: matrix.leg == '1'
+        env:
+          MOTIR_TEST_AWS_MANAGEMENT_CREDENTIAL: key
+        run: >-
+          pnpm vitest run
+          tests/ciFleet/awsPoolDeferral.test.ts
+          tests/ciFleet/awsIndexPoolSeam.test.ts
+          tests/ciFleet/fleetGrowthIntegration.test.ts
+          tests/ciFleet/fleetGrowthWalk.test.ts
+          tests/ciFleet/fleetPoolGrowthService.test.ts
+          tests/ciFleet/fleetPoolGrowthPassService.test.ts
+          tests/ciFleet/addSpareShard.test.ts
+          tests/ciFleet/hostAccountReconcile.test.ts
+          tests/ciFleet/hostOwnAccountsIntegration.test.ts
+          tests/ciFleet/fleetAttributionAws.test.ts
+          tests/ciFleet/fleetAttributionHoster.test.ts
+          tests/ciFleet/fleetAttributionOrgOwned.test.ts
+          tests/ciFleet/codeGraphIndexAwsE2E.test.ts
+          tests/agentInstances/agentHosterCharging.test.ts
 
   coverage:
     name: Vitest coverage

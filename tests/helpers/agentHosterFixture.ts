@@ -15,7 +15,7 @@ import type {
 import type { FleetShard } from '@/generated/prisma/client';
 import type { FleetShardDTO } from '@/lib/dto/fleetShard';
 import { adminDb } from './adminDb';
-import { runnerRole, stubRunnerRoleManagementEnv } from './awsRunnerRoleFake';
+import { runnerRole, stubAwsManagementCredential } from './awsRunnerRoleFake';
 
 // THE AGENT HOSTER, ASSEMBLED (Story MOTIR-9361 · MOTIR-9477). Two (or more) AWS
 // hoster accounts, each the REAL AWS persistent adapter over its own in-memory
@@ -286,7 +286,7 @@ export async function seedHosterAccount(name: string, machineLimit = 10): Promis
   const credentialRef = `FLEET_SHARD_HOSTER_GATE_${seq}`;
   const keyId = `AKIA-GATE-${seq}`;
   const awsAccountId = `7777${String(seq).padStart(8, '0')}`;
-  stubRunnerRoleManagementEnv();
+  stubAwsManagementCredential();
   runnerRole.grant(awsAccountId, keyId, 'not-a-secret');
   const shard = await adminDb.fleetShard.create({
     data: {

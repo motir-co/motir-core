@@ -29,6 +29,7 @@ import {
   installAddShardGithub,
   newGithubWorld,
 } from '../helpers/addShardFakes';
+import { TEST_MANAGEMENT_KEY, stubAwsManagementCredential } from '../helpers/awsRunnerRoleFake';
 
 // THE STORY'S VERIFICATION WALK (Story MOTIR-9362 · MOTIR-9465). The seven-step
 // recipe, in order, as a platform admin meets it: `fleet-admin pool-status`,
@@ -48,8 +49,8 @@ const SPARE_ACCOUNT = '444455556666';
 const INDEX_ACCOUNT = '999900001111';
 const SECRETS = {
   installation: 'ghs_INSTALL_SECRET_never_printed',
-  managementKey: 'AKIA_MANAGEMENT_never_printed',
-  managementSecret: 'MANAGEMENT_SECRET_never_printed',
+  managementKey: TEST_MANAGEMENT_KEY.accessKeyId,
+  managementSecret: TEST_MANAGEMENT_KEY.secretAccessKey,
   sessionKeyId: 'ASIA_SESSION_never_printed',
   sessionSecret: 'SESSION_SECRET_never_printed',
   sessionToken: 'SESSION_TOKEN_never_printed',
@@ -149,9 +150,7 @@ beforeAll(async () => {
   vi.stubEnv('GITHUB_STUDIO_APP_ID', '4445390');
   vi.stubEnv('GITHUB_STUDIO_APP_PRIVATE_KEY', privateKey);
   vi.stubEnv('GITHUB_ENTERPRISE_SLUG', SLUG);
-  vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', SECRETS.managementKey);
-  vi.stubEnv('AWS_ORG_ADMIN_SECRET_ACCESS_KEY', SECRETS.managementSecret);
-  vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', 'arn:aws:iam::576360162297:role/motir-add-shard');
+  stubAwsManagementCredential();
   stubPoolDefinitionEnv();
   _resetInstallationTokenCache();
   _resetProvisioningInstallationCache();
