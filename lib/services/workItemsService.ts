@@ -699,14 +699,20 @@ function clampBound(n: number | undefined, lo: number, hi: number, fallback: num
  * map is 1:1.
  */
 function toRelationshipLinks(
-  links: ReadonlyArray<{ id: string; fromId: string; toId: string }>,
+  links: ReadonlyArray<{ id: string; fromId: string; toId: string; reason?: string | null }>,
   rows: WorkItem[],
   endpoint: 'fromId' | 'toId',
 ): RelationshipLinkDto[] {
-  const linkIdByItem = new Map(links.map((l) => [l[endpoint], l.id]));
-  return rows
-    .sort(byKeyAsc)
-    .map((r) => ({ linkId: linkIdByItem.get(r.id) ?? '', item: toWorkItemSummaryDto(r) }));
+  const linkByItem = new Map(links.map((l) => [l[endpoint], l]));
+  return rows.sort(byKeyAsc).map((r) => {
+    const link = linkByItem.get(r.id);
+    return {
+      linkId: link?.id ?? '',
+      item: toWorkItemSummaryDto(r),
+      // The edge's reason (MOTIR-9827), only where it has one.
+      ...(link?.reason ? { reason: link.reason } : {}),
+    };
+  });
 }
 
 /** The seven link-row batches of one item, before their far ends are resolved. */

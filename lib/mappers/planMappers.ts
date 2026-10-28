@@ -23,6 +23,7 @@ import type {
   WorkItemPlanHistoryEntryDto,
 } from '@/lib/dto/plans';
 import { redactNativeActor, redactNativeProvenance } from '@/lib/plans/redactNativeModel';
+import { readEdgeReasons } from '@/lib/plans/edgeReasons';
 
 /**
  * The stored proposed fields as a tenant may read them: a native `add`'s
@@ -46,6 +47,8 @@ export function toPlanItemDto(row: PlanItem): PlanItemDto {
     patch: (row.patch as PlanItemPatch | null) ?? null,
     parentRef: row.parentRef,
     blockedByRefs: row.blockedByRefs,
+    // A row read through a narrow select may lack the column (MOTIR-9827).
+    edgeReasons: readEdgeReasons(row.edgeReasons),
     // A row read through a narrow select may lack the column (MOTIR-6630).
     supersedesRefs: row.supersedesRefs ?? [],
     baseRevision: row.baseRevision,

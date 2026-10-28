@@ -1,4 +1,5 @@
 import type { CorrectProposalInput, PlanItemPatch, ProposalInput } from '@/lib/dto/plans';
+import { normalizeCorrectionEdges, normalizeProposalEdges } from '@/lib/plans/edgeReasons';
 import { resolveWorkItemIdsByKeys } from '@/lib/mcp/tools/workItemRef';
 import { PlanRefGraphError } from '@/lib/plans/errors';
 import { isFolderRef, isTempRef, SUPERSEDES_PATCH_SITES } from '@/lib/plans/refs';
@@ -168,6 +169,10 @@ export async function resolveKeyRefs(
   proposals: ProposalInput[],
   ctx: ServiceContext,
 ): Promise<ProposalInput[]> {
+  // An edge entry may arrive as `{ ref, reason }` (MOTIR-9827): split it into
+  // the bare ref and an `edgeReasons` entry FIRST, so the swap below resolves the
+  // ref and re-keys its reason with it.
+  proposals = proposals.map(normalizeProposalEdges);
   const swap = await keyRefSwapper(proposals, ctx);
   return proposals.map((p) => ({
     ...p,
@@ -175,7 +180,19 @@ export async function resolveKeyRefs(
     blockedByRefs: (p.blockedByRefs ?? []).map(swap),
     ...(p.supersedesRefs !== undefined ? { supersedesRefs: p.supersedesRefs.map(swap) } : {}),
     patch: swapPatchRefs(p.patch, swap),
+    ...(p.edgeReasons !== undefined ? { edgeReasons: swapReasonKeys(p.edgeReasons, swap) } : {}),
   }));
+}
+
+/**
+ * Re-key an edge-reason map (MOTIR-9827) by the same swap its refs took, so a
+ * reason given against `MOTIR-<n>` still names the edge once the ref is an id.
+ */
+function swapReasonKeys(
+  reasons: Record<string, string>,
+  swap: (ref: string) => string,
+): Record<string, string> {
+  return Object.fromEntries(Object.entries(reasons).map(([ref, reason]) => [swap(ref), reason]));
 }
 
 /**
@@ -199,6 +216,7 @@ export async function resolveCorrectionKeyRefs(
   input: CorrectProposalInput,
   ctx: ServiceContext,
 ): Promise<CorrectProposalInput> {
+  input = normalizeCorrectionEdges(input);
   const swap = await keyRefSwapper([input], ctx);
   const resolved: CorrectProposalInput = { ...input };
   if (input.parentRef) resolved.parentRef = swap(input.parentRef);
@@ -208,5 +226,8 @@ export async function resolveCorrectionKeyRefs(
     resolved.supersedesRefs = input.supersedesRefs.map(swap);
   }
   if (input.patch) resolved.patch = swapPatchRefs(input.patch, swap) as PlanItemPatch;
+  if (input.edgeReasons !== undefined) {
+    resolved.edgeReasons = swapReasonKeys(input.edgeReasons, swap);
+  }
   return resolved;
 }
