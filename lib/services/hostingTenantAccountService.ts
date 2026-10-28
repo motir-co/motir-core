@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { HostingTenantAccount } from '@prisma/client';
+import type { HostingTenantAccount } from '@/generated/prisma/client';
 import { FleetShardAccountRefusedError } from '@/lib/ciFleet/errors';
 import { TenantAccountRefusedError } from '@/lib/ciFleet/headroomErrors';
 import {

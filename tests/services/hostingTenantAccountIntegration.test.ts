@@ -336,7 +336,11 @@ describe('a tenant account never reaches the fleet', () => {
     expect(admitted.map((s) => s.id)).toEqual([shard.id]);
     expect(headroom.map((r) => r.shardId).sort()).toEqual(
       shardsBefore
-        .filter((s) => s.state !== 'retired')
+        .filter(
+          (s) =>
+            (s.state === 'active' || s.state === 'disabled') &&
+            (s.role === 'primary' || s.role === 'spare'),
+        )
         .map((s) => s.id)
         .sort(),
     );
