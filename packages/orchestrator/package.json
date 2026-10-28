@@ -22,7 +22,8 @@
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "files": [
-    "dist"
+    "dist",
+    "aws-tenant-stacks"
   ],
   "engines": {
     "node": ">=22"

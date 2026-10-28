@@ -43,6 +43,7 @@ export * from './adapters/aws/inventory';
 export * from './adapters/aws/persistentUserData';
 export * from './adapters/aws/hostAgentClient';
 export * from './adapters/aws/hostCertificates';
+export * from './adapters/aws/tenantStacks';
 // The HOSTING DEPLOY PORT (MOTIR-5773): a hosted app's releases, its fake and
 // its Fly adapter.
 export * from './hosting/types';

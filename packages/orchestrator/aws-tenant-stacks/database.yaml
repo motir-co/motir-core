@@ -1,0 +1,133 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Motir APPLICATION DATABASE — one per application (stack
+  motir-database-<rid>). An Aurora PostgreSQL Serverless v2 cluster that idles
+  down, with the HTTP endpoint for the RDS Data API (the cluster is private, so
+  Motir reaches it only through that API), its subnet group and the network's
+  database security group, its master secret as a tagged stack resource, and
+  production's connection secret.
+
+Parameters:
+  OrganizationId:
+    Type: String
+    Description: The Motir organisation (tag motir:organization).
+    AllowedPattern: '^[a-z0-9]+$'
+  RepositoryId:
+    Type: String
+    Description: The Motir repository id (tag motir:repository).
+    AllowedPattern: '^[a-z0-9]+$'
+  PrivateSubnetIds:
+    Type: CommaDelimitedList
+    Description: The network stack's PrivateSubnetIds output.
+  DatabaseSecurityGroupId:
+    Type: String
+    Description: The network stack's DatabaseSecurityGroupId output.
+  MaxCapacity:
+    Type: Number
+    Default: 4
+    Description: The cluster's ceiling in Aurora capacity units.
+    MinValue: 1
+    MaxValue: 256
+
+Resources:
+  # The master credentials are a resource of this stack (not a password RDS
+  # manages), so the secret carries both tags and a tag-scoped GetSecretValue
+  # reaches it.
+  MasterSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub
+        - motir/${RepositoryId}/database-master-${Suffix}
+        - Suffix: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]
+      Description: The application cluster's master credentials.
+      GenerateSecretString:
+        SecretStringTemplate: '{"username":"motir_master"}'
+        GenerateStringKey: password
+        PasswordLength: 32
+        ExcludePunctuation: true
+      Tags:
+        - { Key: 'motir:organization', Value: !Ref OrganizationId }
+        - { Key: 'motir:repository', Value: !Ref RepositoryId }
+
+  # Production's role password, later joined by its connection URL (key `url`).
+  ProductionConnectionSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub
+        - motir/${RepositoryId}/production/database-${Suffix}
+        - Suffix: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]
+      Description: Production's database role password and connection URL.
+      GenerateSecretString:
+        SecretStringTemplate: '{}'
+        GenerateStringKey: password
+        PasswordLength: 32
+        ExcludePunctuation: true
+      Tags:
+        - { Key: 'motir:organization', Value: !Ref OrganizationId }
+        - { Key: 'motir:repository', Value: !Ref RepositoryId }
+
+  SubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: !Sub motir-${RepositoryId}
+      DBSubnetGroupDescription: !Sub Motir application database ${RepositoryId}
+      SubnetIds: !Ref PrivateSubnetIds
+      Tags:
+        - { Key: 'motir:organization', Value: !Ref OrganizationId }
+        - { Key: 'motir:repository', Value: !Ref RepositoryId }
+
+  Cluster:
+    Type: AWS::RDS::DBCluster
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      DBClusterIdentifier: !Sub motir-${RepositoryId}
+      Engine: aurora-postgresql
+      EngineVersion: '16.6'
+      DatabaseName: app
+      MasterUsername: !Sub '{{resolve:secretsmanager:${MasterSecret}:SecretString:username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${MasterSecret}:SecretString:password}}'
+      EnableHttpEndpoint: true
+      StorageEncrypted: true
+      DBSubnetGroupName: !Ref SubnetGroup
+      VpcSecurityGroupIds:
+        - !Ref DatabaseSecurityGroupId
+      # MinCapacity 0 lets the cluster pause when idle (Aurora PostgreSQL 16.3+).
+      ServerlessV2ScalingConfiguration:
+        MinCapacity: 0
+        MaxCapacity: !Ref MaxCapacity
+        SecondsUntilAutoPause: 300
+      Tags:
+        - { Key: 'motir:organization', Value: !Ref OrganizationId }
+        - { Key: 'motir:repository', Value: !Ref RepositoryId }
+
+  Instance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub motir-${RepositoryId}-1
+      DBClusterIdentifier: !Ref Cluster
+      DBInstanceClass: db.serverless
+      Engine: aurora-postgresql
+      Tags:
+        - { Key: 'motir:organization', Value: !Ref OrganizationId }
+        - { Key: 'motir:repository', Value: !Ref RepositoryId }
+
+  # Completes the master secret with the cluster's host, port and identifier.
+  MasterSecretAttachment:
+    Type: AWS::SecretsManager::SecretTargetAttachment
+    Properties:
+      SecretId: !Ref MasterSecret
+      TargetId: !Ref Cluster
+      TargetType: AWS::RDS::DBCluster
+
+Outputs:
+  ClusterArn:
+    Value: !GetAtt Cluster.DBClusterArn
+  ClusterEndpoint:
+    Value: !GetAtt Cluster.Endpoint.Address
+  MasterSecretArn:
+    Value: !Ref MasterSecret
+  ProductionConnectionSecretArn:
+    Value: !Ref ProductionConnectionSecret
+  DatabaseName:
+    Value: app

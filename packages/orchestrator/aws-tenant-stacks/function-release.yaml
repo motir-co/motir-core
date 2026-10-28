@@ -1,0 +1,190 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Motir FUNCTION RELEASE — one per (repository, environment) (stack
+  motir-release-<appRef>). A Lambda function named the release's appRef that
+  runs the image through the AWS Lambda Web Adapter: 1,769 MB, x86_64, in the
+  network's private subnets. A version per image behind the alias `live`, with
+  replaced versions RETAINED so a rollback can point `live` back at one; a
+  function URL on `live` that only the forwarder's principal may invoke (IAM,
+  SigV4); provisioned concurrency 1 on `live` when the idle policy is always_on.
+
+Parameters:
+  OrganizationId:
+    Type: String
+    Description: The Motir organisation (tag motir:organization).
+    AllowedPattern: '^[a-z0-9]+$'
+  RepositoryId:
+    Type: String
+    Description: The Motir repository id (tag motir:repository).
+    AllowedPattern: '^[a-z0-9]+$'
+  AppRef:
+    Type: String
+    Description: The release's app name, mh-<rid> or mh-<rid>-pr<n> - the function's name.
+    AllowedPattern: '^mh-[a-z0-9]+(-pr[0-9]+)?$'
+    MaxLength: 63
+  Environment:
+    Type: String
+    AllowedValues: [production, preview]
+  ImageUri:
+    Type: String
+    Description: The release's image in the registry stack's repository, by digest.
+  IdlePolicy:
+    Type: String
+    AllowedValues: [always_on, suspend]
+  Port:
+    Type: Number
+    Default: 8080
+    Description: The port the app listens on (the Web Adapter forwards to it).
+  HealthCheckPath:
+    Type: String
+    Default: /
+    Description: The path the Web Adapter checks before the app takes traffic.
+  PrivateSubnetIds:
+    Type: CommaDelimitedList
+    Description: The network stack's PrivateSubnetIds output.
+  AppSecurityGroupId:
+    Type: String
+    Description: The network stack's AppSecurityGroupId output.
+  EnvironmentSecretArn:
+    Type: String
+    Description: The release's environment secret (its variables as one JSON object).
+  DatabaseSecretArn:
+    Type: String
+    Default: ''
+    Description: The environment's database connection secret (key `url`), or empty.
+  ConfigHash:
+    Type: String
+    Default: ''
+    Description: A hash of the environment secret's values; a change publishes a new version.
+  InvokePrincipalArn:
+    Type: String
+    Description: The forwarder's IAM principal, the only one allowed to invoke the URL.
+
+Conditions:
+  AlwaysOn: !Equals [!Ref IdlePolicy, always_on]
+  HasDatabase: !Not [!Equals [!Ref DatabaseSecretArn, '']]
+
+Resources:
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${AppRef}
+      RetentionInDays: 30
+      Tags:
+        - { Key: 'motir:organization', Value: !Ref OrganizationId }
+        - { Key: 'motir:repository', Value: !Ref RepositoryId }
+
+  # Reads only its own log group and its own secrets.
+  ExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub motir-${AppRef}-fn
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: release
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !Sub ${LogGroup.Arn}
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: !If
+                  - HasDatabase
+                  - [!Ref EnvironmentSecretArn, !Ref DatabaseSecretArn]
+                  - [!Ref EnvironmentSecretArn]
+              # The function's network interfaces in the private subnets.
+              - Effect: Allow
+                Action:
+                  - ec2:AssignPrivateIpAddresses
+                  - ec2:CreateNetworkInterface
+                  - ec2:DeleteNetworkInterface
+                  - ec2:DescribeNetworkInterfaces
+                  - ec2:UnassignPrivateIpAddresses
+                Resource: '*'
+      Tags:
+        - { Key: 'motir:organization', Value: !Ref OrganizationId }
+        - { Key: 'motir:repository', Value: !Ref RepositoryId }
+
+  Function:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Ref AppRef
+      PackageType: Image
+      Code:
+        ImageUri: !Ref ImageUri
+      Architectures: [x86_64]
+      MemorySize: 1769
+      Timeout: 60
+      Role: !GetAtt ExecutionRole.Arn
+      VpcConfig:
+        SubnetIds: !Ref PrivateSubnetIds
+        SecurityGroupIds:
+          - !Ref AppSecurityGroupId
+      LoggingConfig:
+        LogGroup: !Ref LogGroup
+      Environment:
+        Variables:
+          AWS_LWA_PORT: !Ref Port
+          AWS_LWA_READINESS_CHECK_PATH: !Ref HealthCheckPath
+          MOTIR_ENVIRONMENT: !Ref Environment
+          MOTIR_ENVIRONMENT_SECRET_ARN: !Ref EnvironmentSecretArn
+          MOTIR_DATABASE_SECRET_ARN: !Ref DatabaseSecretArn
+          MOTIR_CONFIG_HASH: !Ref ConfigHash
+      Tags:
+        - { Key: 'motir:organization', Value: !Ref OrganizationId }
+        - { Key: 'motir:repository', Value: !Ref RepositoryId }
+
+  # Every property of a version forces a new one, so the description naming the
+  # image and the config hash publishes a version per release; the replaced one
+  # is RETAINED, the rollback target.
+  Version:
+    Type: AWS::Lambda::Version
+    UpdateReplacePolicy: Retain
+    DeletionPolicy: Retain
+    Properties:
+      FunctionName: !Ref Function
+      Description: !Sub ${ImageUri} ${ConfigHash}
+
+  LiveAlias:
+    Type: AWS::Lambda::Alias
+    Properties:
+      FunctionName: !Ref Function
+      Name: live
+      FunctionVersion: !GetAtt Version.Version
+      ProvisionedConcurrencyConfig: !If
+        - AlwaysOn
+        - ProvisionedConcurrentExecutions: 1
+        - !Ref AWS::NoValue
+
+  FunctionUrl:
+    Type: AWS::Lambda::Url
+    DependsOn: LiveAlias
+    Properties:
+      TargetFunctionArn: !Ref Function
+      Qualifier: live
+      AuthType: AWS_IAM
+
+  ForwarderInvoke:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunctionUrl
+      FunctionName: !Ref LiveAlias
+      FunctionUrlAuthType: AWS_IAM
+      Principal: !Ref InvokePrincipalArn
+
+Outputs:
+  FunctionName:
+    Value: !Ref Function
+  FunctionArn:
+    Value: !GetAtt Function.Arn
+  FunctionUrl:
+    Value: !GetAtt FunctionUrl.FunctionUrl
+  LiveVersion:
+    Value: !GetAtt Version.Version
