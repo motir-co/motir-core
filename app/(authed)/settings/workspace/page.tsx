@@ -3,6 +3,7 @@ import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
 import { getWorkspaceContext } from '@/lib/workspaces';
 import { workspacesService } from '@/lib/services/workspacesService';
+import { workspaceInvitesService } from '@/lib/services/workspaceInvitesService';
 import { roleMigrationReportService } from '@/lib/services/roleMigrationReportService';
 import { RoleMigrationNotice } from './_components/RoleMigrationNotice';
 import { orgCanForWorkspace } from '@/lib/services/organizationAccessService';
@@ -79,6 +80,13 @@ export default async function WorkspaceSettingsPage() {
     roleMigrationReportService.firstPageForViewer(ctx.workspaceId, ctx.userId),
   ]);
   const memberCount = members.length;
+  // Pending invitations (MOTIR-9997) — only for a viewer who may invite, and a
+  // failed read draws the card without the block rather than failing the page.
+  const pendingInvites = roleContext.canInvite
+    ? await workspaceInvitesService
+        .listPendingInvites({ userId: ctx.userId, workspaceId: ctx.workspaceId })
+        .catch(() => [])
+    : [];
 
   return (
     <div className="mx-auto flex max-w-[42rem] flex-col gap-6">
@@ -99,6 +107,7 @@ export default async function WorkspaceSettingsPage() {
         members={members}
         currentUserId={ctx.userId}
         roleContext={roleContext}
+        pendingInvites={pendingInvites}
       />
 
       <DangerZoneCard

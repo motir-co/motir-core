@@ -1,6 +1,7 @@
 import { getTranslations } from 'next-intl/server';
 import { allSettledOrThrow } from '@/lib/async/allSettledOrThrow';
 import { workspacesService } from '@/lib/services/workspacesService';
+import { workspaceInvitesService } from '@/lib/services/workspaceInvitesService';
 import { twoFactorPolicyService } from '@/lib/services/twoFactorPolicyService';
 import { isWorkspaceManager } from '@/lib/projects/roles';
 import { NameCard } from '../../workspace/_components/NameCard';
@@ -66,6 +67,14 @@ export async function WorkspaceFoldInSection({
   // The caller resolved this workspace from the actor's OWN membership list, so
   // a null here means it went away between the two reads. Nothing to host.
   if (!workspace) return null;
+  // The Members card's pending invitations fold in with it (MOTIR-9997): the
+  // same read as `/settings/workspace`, only for a viewer who may invite, and a
+  // failed read draws the card without the block.
+  const pendingInvites = roleContext.canInvite
+    ? await workspaceInvitesService
+        .listPendingInvites({ userId: actorUserId, workspaceId })
+        .catch(() => [])
+    : [];
 
   return (
     <>
@@ -88,6 +97,7 @@ export async function WorkspaceFoldInSection({
         members={members}
         currentUserId={actorUserId}
         roleContext={roleContext}
+        pendingInvites={pendingInvites}
       />
 
       <RolesDoorCard customRoleCount={roleContext.customRoles.length} />

@@ -19,9 +19,11 @@ import type {
   MemberRoleContextDTO,
   WorkspaceMemberWithAccessDTO,
 } from '@/lib/dto/workspaces';
+import type { PendingInviteDTO } from '@/lib/dto/invites';
 import { removeMemberAction, setMemberRoleAction } from '../actions';
 import { AccessScopeCell, NoProjectsHelp } from './AccessScopeCell';
 import { InviteAccessFields } from './InviteAccessFields';
+import { PendingInvitesSection } from './PendingInvitesSection';
 
 export interface MembersCardProps {
   workspaceId: string;
@@ -36,6 +38,11 @@ export interface MembersCardProps {
    * a Manager.
    */
   roleContext: MemberRoleContextDTO;
+  /**
+   * The workspace's pending invitations (MOTIR-9997), loaded by the host only
+   * for a viewer who may invite. Absent or empty draws no block at all.
+   */
+  pendingInvites?: PendingInviteDTO[];
 }
 
 export function MembersCard({
@@ -44,6 +51,7 @@ export function MembersCard({
   members,
   currentUserId,
   roleContext,
+  pendingInvites = [],
 }: MembersCardProps) {
   const t = useTranslations('settings');
   const { toast } = useToast();
@@ -144,6 +152,8 @@ export function MembersCard({
           />
         ))}
       </ul>
+
+      {roleContext.canInvite ? <PendingInvitesSection invites={pendingInvites} /> : null}
 
       <InviteModal
         open={inviteOpen}

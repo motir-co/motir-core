@@ -2200,7 +2200,58 @@
       "inviteNoProjectsWarning": "Osoba nie będzie mogła niczego otworzyć, dopóki menedżer nie doda jej do projektu.",
       "inviteJoinsAsMember": "Osoba dołączy jako członek. Możesz zmienić jej rolę po przyjęciu zaproszenia.",
       "errorInviteProjects": "Do jednego z tych projektów nie można dołączyć. Wybierz je ponownie.",
-      "errorInviteNotAllowed": "Nie możesz wysłać tego zaproszenia. Tylko menedżer obszaru roboczego może zapraszać z ograniczonym dostępem."
+      "errorInviteNotAllowed": "Nie możesz wysłać tego zaproszenia. Tylko menedżer obszaru roboczego może zapraszać z ograniczonym dostępem.",
+      "pending": {
+        "heading": "Oczekujące zaproszenia",
+        "invitationColumn": "Zaproszenie",
+        "deliveryColumn": "Dostarczenie",
+        "invitedBy": "Zaprasza: {name}, {sent}",
+        "invitedByFormer": "Zaprasza: były członek, {sent}",
+        "expiresIn": "Wygasa za {count, plural, one {# dzień} few {# dni} many {# dni} other {# dnia}}",
+        "expiresToday": "Wygasa dzisiaj",
+        "expiresOn": "Wygasa {date}",
+        "resend": "Wyślij ponownie",
+        "resendLabel": "Wyślij ponownie zaproszenie na adres {email}",
+        "resendScopeTooltip": "Tylko menedżer może ponownie wysłać ograniczone zaproszenie",
+        "resentToast": "Wysłano nowe zaproszenie na adres {email}",
+        "refusalRateLimited": "Osiągnięto limit: 3 zaproszenia na adres na godzinę.",
+        "refusalRateLimitedBody": "Spróbuj ponownie później.",
+        "refusalAlreadyMember": "Ta osoba już dołączyła do obszaru roboczego.",
+        "refusalNotAllowed": "Nie możesz ponownie wysłać tego zaproszenia.",
+        "refusalNoLongerPending": "To zaproszenie już nie oczekuje.",
+        "showAll": "Pokaż wszystkie oczekujące zaproszenia ({count})",
+        "showFewer": "Pokaż mniej",
+        "delivery": {
+          "queued": {
+            "label": "W kolejce",
+            "helper": "Czeka na wysłanie"
+          },
+          "accepted": {
+            "label": "Przyjęte",
+            "helper": "Dostawca poczty je otrzymał"
+          },
+          "delivered": {
+            "label": "Dostarczone",
+            "helper": "Dotarło do serwera poczty odbiorcy"
+          },
+          "bounced": {
+            "label": "Odrzucone",
+            "helper": "Adres je odrzucił"
+          },
+          "complained": {
+            "label": "Skarga",
+            "helper": "Oznaczone jako spam"
+          },
+          "delayed": {
+            "label": "Opóźnione",
+            "helper": "Dostawca wciąż ponawia próby"
+          },
+          "failed": {
+            "label": "Niepowodzenie",
+            "helper": "Nie udało się wysłać"
+          }
+        }
+      }
     },
     "danger": {
       "cantLeaveTitle": "Nie można odejść",

@@ -2200,7 +2200,58 @@
       "inviteNoProjectsWarning": "A pessoa não poderá abrir nada até que um Gerente a adicione a um projeto.",
       "inviteJoinsAsMember": "A pessoa entra como Membro. Você pode alterar a função dela depois que ela aceitar.",
       "errorInviteProjects": "Não é possível participar de um desses projetos. Escolha-os novamente.",
-      "errorInviteNotAllowed": "Você não pode enviar este convite. Somente um Gerente do espaço de trabalho pode convidar com acesso Limitado."
+      "errorInviteNotAllowed": "Você não pode enviar este convite. Somente um Gerente do espaço de trabalho pode convidar com acesso Limitado.",
+      "pending": {
+        "heading": "Convites pendentes",
+        "invitationColumn": "Convite",
+        "deliveryColumn": "Entrega",
+        "invitedBy": "Convidado por {name}, {sent}",
+        "invitedByFormer": "Convidado por um ex-membro, {sent}",
+        "expiresIn": "Expira em {count, plural, one {# dia} other {# dias}}",
+        "expiresToday": "Expira hoje",
+        "expiresOn": "Expira em {date}",
+        "resend": "Reenviar",
+        "resendLabel": "Reenviar o convite para {email}",
+        "resendScopeTooltip": "Somente um gerente pode reenviar um convite limitado",
+        "resentToast": "Novo convite enviado para {email}",
+        "refusalRateLimited": "Limite atingido: 3 convites por endereço por hora.",
+        "refusalRateLimitedBody": "Tente novamente mais tarde.",
+        "refusalAlreadyMember": "Esta pessoa já entrou no espaço de trabalho.",
+        "refusalNotAllowed": "Você não pode reenviar este convite.",
+        "refusalNoLongerPending": "Este convite não está mais pendente.",
+        "showAll": "Mostrar todos os {count} convites pendentes",
+        "showFewer": "Mostrar menos",
+        "delivery": {
+          "queued": {
+            "label": "Na fila",
+            "helper": "Aguardando envio"
+          },
+          "accepted": {
+            "label": "Aceito",
+            "helper": "O provedor de e-mail o recebeu"
+          },
+          "delivered": {
+            "label": "Entregue",
+            "helper": "Chegou ao servidor de e-mail do destinatário"
+          },
+          "bounced": {
+            "label": "Devolvido",
+            "helper": "O endereço o recusou"
+          },
+          "complained": {
+            "label": "Reclamação",
+            "helper": "Marcado como spam"
+          },
+          "delayed": {
+            "label": "Atrasado",
+            "helper": "O provedor ainda está tentando"
+          },
+          "failed": {
+            "label": "Falhou",
+            "helper": "Não foi possível enviar"
+          }
+        }
+      }
     },
     "danger": {
       "cantLeaveTitle": "Não é possível sair",

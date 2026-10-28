@@ -2200,7 +2200,58 @@
       "inviteNoProjectsWarning": "They won’t be able to open anything until a Manager adds them to a project.",
       "inviteJoinsAsMember": "They join as a Member. You can change their role after they accept.",
       "errorInviteProjects": "One of those projects can’t be joined. Pick them again.",
-      "errorInviteNotAllowed": "You can’t send this invite. Only a workspace Manager can invite with Limited access."
+      "errorInviteNotAllowed": "You can’t send this invite. Only a workspace Manager can invite with Limited access.",
+      "pending": {
+        "heading": "Pending invitations",
+        "invitationColumn": "Invitation",
+        "deliveryColumn": "Delivery",
+        "invitedBy": "Invited by {name}, {sent}",
+        "invitedByFormer": "Invited by a former member, {sent}",
+        "expiresIn": "Expires in {count, plural, one {# day} other {# days}}",
+        "expiresToday": "Expires today",
+        "expiresOn": "Expires {date}",
+        "resend": "Resend",
+        "resendLabel": "Resend the invitation to {email}",
+        "resendScopeTooltip": "Only a Manager can resend a Limited invitation",
+        "resentToast": "New invitation sent to {email}",
+        "refusalRateLimited": "Limit reached: 3 invitations per address per hour.",
+        "refusalRateLimitedBody": "Try again later.",
+        "refusalAlreadyMember": "This person has already joined the workspace.",
+        "refusalNotAllowed": "You can't resend this invitation.",
+        "refusalNoLongerPending": "This invitation is no longer pending.",
+        "showAll": "Show all {count} pending invitations",
+        "showFewer": "Show fewer",
+        "delivery": {
+          "queued": {
+            "label": "Queued",
+            "helper": "Waiting to be sent"
+          },
+          "accepted": {
+            "label": "Accepted",
+            "helper": "The mail provider has it"
+          },
+          "delivered": {
+            "label": "Delivered",
+            "helper": "Reached the recipient's mail server"
+          },
+          "bounced": {
+            "label": "Bounced",
+            "helper": "The address refused it"
+          },
+          "complained": {
+            "label": "Complained",
+            "helper": "Marked as spam"
+          },
+          "delayed": {
+            "label": "Delayed",
+            "helper": "The provider is still retrying"
+          },
+          "failed": {
+            "label": "Failed",
+            "helper": "Could not be sent"
+          }
+        }
+      }
     },
     "danger": {
       "cantLeaveTitle": "Can't leave",

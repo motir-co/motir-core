@@ -2200,7 +2200,58 @@
       "inviteNoProjectsWarning": "在管理者将其添加到某个项目之前，他们将无法打开任何内容。",
       "inviteJoinsAsMember": "他们将以成员身份加入。接受后你可以更改其角色。",
       "errorInviteProjects": "其中某个项目无法加入。请重新选择。",
-      "errorInviteNotAllowed": "你无法发送此邀请。只有工作区管理者可以发送受限访问的邀请。"
+      "errorInviteNotAllowed": "你无法发送此邀请。只有工作区管理者可以发送受限访问的邀请。",
+      "pending": {
+        "heading": "待处理的邀请",
+        "invitationColumn": "邀请",
+        "deliveryColumn": "投递",
+        "invitedBy": "由 {name} 邀请，{sent}",
+        "invitedByFormer": "由前成员邀请，{sent}",
+        "expiresIn": "{count, plural, other {# 天后过期}}",
+        "expiresToday": "今天过期",
+        "expiresOn": "{date} 过期",
+        "resend": "重新发送",
+        "resendLabel": "向 {email} 重新发送邀请",
+        "resendScopeTooltip": "只有管理者可以重新发送受限邀请",
+        "resentToast": "已向 {email} 发送新邀请",
+        "refusalRateLimited": "已达上限：每个邮箱每小时最多 3 次邀请。",
+        "refusalRateLimitedBody": "请稍后再试。",
+        "refusalAlreadyMember": "此人已加入该工作区。",
+        "refusalNotAllowed": "你无法重新发送此邀请。",
+        "refusalNoLongerPending": "此邀请已不再处于待处理状态。",
+        "showAll": "显示全部 {count} 个待处理的邀请",
+        "showFewer": "收起",
+        "delivery": {
+          "queued": {
+            "label": "排队中",
+            "helper": "等待发送"
+          },
+          "accepted": {
+            "label": "已接收",
+            "helper": "邮件服务商已接收"
+          },
+          "delivered": {
+            "label": "已送达",
+            "helper": "已到达收件人的邮件服务器"
+          },
+          "bounced": {
+            "label": "被退回",
+            "helper": "该地址拒收"
+          },
+          "complained": {
+            "label": "被投诉",
+            "helper": "被标记为垃圾邮件"
+          },
+          "delayed": {
+            "label": "延迟",
+            "helper": "服务商仍在重试"
+          },
+          "failed": {
+            "label": "失败",
+            "helper": "无法发送"
+          }
+        }
+      }
     },
     "danger": {
       "cantLeaveTitle": "无法离开",

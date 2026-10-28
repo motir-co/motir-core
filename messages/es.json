@@ -2200,7 +2200,58 @@
       "inviteNoProjectsWarning": "No podrá abrir nada hasta que un gestor le añada a un proyecto.",
       "inviteJoinsAsMember": "Se unirá como miembro. Puedes cambiar su rol cuando acepte.",
       "errorInviteProjects": "No es posible unirse a uno de esos proyectos. Vuelve a elegirlos.",
-      "errorInviteNotAllowed": "No puedes enviar esta invitación. Solo un gestor del espacio de trabajo puede invitar con acceso Limitado."
+      "errorInviteNotAllowed": "No puedes enviar esta invitación. Solo un gestor del espacio de trabajo puede invitar con acceso Limitado.",
+      "pending": {
+        "heading": "Invitaciones pendientes",
+        "invitationColumn": "Invitación",
+        "deliveryColumn": "Entrega",
+        "invitedBy": "Invitado por {name}, {sent}",
+        "invitedByFormer": "Invitado por un antiguo miembro, {sent}",
+        "expiresIn": "Caduca en {count, plural, one {# día} other {# días}}",
+        "expiresToday": "Caduca hoy",
+        "expiresOn": "Caduca el {date}",
+        "resend": "Reenviar",
+        "resendLabel": "Reenviar la invitación a {email}",
+        "resendScopeTooltip": "Solo un gestor puede reenviar una invitación limitada",
+        "resentToast": "Nueva invitación enviada a {email}",
+        "refusalRateLimited": "Límite alcanzado: 3 invitaciones por dirección y hora.",
+        "refusalRateLimitedBody": "Vuelve a intentarlo más tarde.",
+        "refusalAlreadyMember": "Esta persona ya se ha unido al espacio de trabajo.",
+        "refusalNotAllowed": "No puedes reenviar esta invitación.",
+        "refusalNoLongerPending": "Esta invitación ya no está pendiente.",
+        "showAll": "Mostrar las {count} invitaciones pendientes",
+        "showFewer": "Mostrar menos",
+        "delivery": {
+          "queued": {
+            "label": "En cola",
+            "helper": "Esperando para enviarse"
+          },
+          "accepted": {
+            "label": "Aceptada",
+            "helper": "El proveedor de correo la tiene"
+          },
+          "delivered": {
+            "label": "Entregada",
+            "helper": "Llegó al servidor de correo del destinatario"
+          },
+          "bounced": {
+            "label": "Rebotada",
+            "helper": "La dirección la rechazó"
+          },
+          "complained": {
+            "label": "Denunciada",
+            "helper": "Marcada como spam"
+          },
+          "delayed": {
+            "label": "Retrasada",
+            "helper": "El proveedor sigue reintentando"
+          },
+          "failed": {
+            "label": "Fallida",
+            "helper": "No se pudo enviar"
+          }
+        }
+      }
     },
     "danger": {
       "cantLeaveTitle": "No puedes salir",
