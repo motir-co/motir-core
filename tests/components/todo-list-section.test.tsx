@@ -78,6 +78,7 @@ function mount(
 ) {
   return render(
     <TodoListSection
+      initialWorkItemRefs={{}}
       workItemId="wi-1"
       initialTodos={todos}
       initialProgress={p}

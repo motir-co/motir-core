@@ -303,7 +303,7 @@ export const PERSONAL_DATA_SECTIONS: readonly PersonalDataSection[] = [
     model: 'githubIdentity',
     tier: 'identity',
     basis: 'The linked GitHub identity (login and account id).',
-    redact: ['accessTokenEncrypted'],
+    redact: ['accessTokenEncrypted', 'refreshTokenEncrypted'],
     where: byUserId,
   },
   {

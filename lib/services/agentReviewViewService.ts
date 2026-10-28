@@ -6,6 +6,7 @@ import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository'
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { resolveMarkdownWorkItemRefs } from '@/lib/workItems/resolveWorkItemRefs';
 
 // THE AGENT REVIEW, as the item page's Development block reads it (Story MOTIR-1626 ·
 // MOTIR-6825; `design/github/design-notes.md` § 30, `approval-gates.md` §12).
@@ -42,6 +43,7 @@ export const agentReviewViewService = {
         tx,
       ),
     }));
+    const findingsRefs = gate.noteMd ? await resolveMarkdownWorkItemRefs(gate.noteMd, ctx) : {};
     return {
       gate,
       canDecide: read.canDecide,
@@ -58,6 +60,7 @@ export const agentReviewViewService = {
           }
         : null,
       settingsDoorHref: read.settingsDoor?.href ?? null,
+      findingsRefs,
     };
   },
 };

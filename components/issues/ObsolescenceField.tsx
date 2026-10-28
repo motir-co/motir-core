@@ -6,7 +6,7 @@ import { LoaderCircle } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { MarkdownView } from '@/components/ui/MarkdownView';
 import { Textarea } from '@/components/ui/Textarea';
-import type { WorkItemObsolescenceDto } from '@/lib/dto/workItems';
+import type { WorkItemObsolescenceDto, WorkItemRefMap } from '@/lib/dto/workItems';
 import { ObsolescenceBadge } from './ObsolescenceBadge';
 import { ObsolescencePicker } from './ObsolescencePicker';
 
@@ -30,6 +30,12 @@ const LONG_NOTE_CHARS = 90;
 export interface ObsolescenceFieldProps {
   value: WorkItemObsolescenceDto | null;
   noteMd: string | null;
+  /**
+   * The note's `[KEY](motir:<id>)` links, resolved for the reader by the host's
+   * read (bug MOTIR-10023). A note usually names the cards that superseded this
+   * one, and with no map every one of them draws as deleted.
+   */
+  workItemRefs: WorkItemRefMap;
   editing: boolean;
   /** The card's status is not in the done category. */
   locked: boolean;
@@ -44,6 +50,7 @@ export interface ObsolescenceFieldProps {
 export function ObsolescenceField({
   value,
   noteMd,
+  workItemRefs,
   editing,
   locked,
   pending,
@@ -95,7 +102,7 @@ export function ObsolescenceField({
             }
             data-obsolescence-note=""
           >
-            <MarkdownView value={noteMd} />
+            <MarkdownView value={noteMd} workItemRefs={workItemRefs} />
           </div>
           {long ? (
             <button

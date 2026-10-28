@@ -108,8 +108,8 @@ async function ReadyBody({
   const t = await getTranslations('ready');
   const projectId = project.id;
   const [leaves, bugs, counts, titleTranslation] = await Promise.all([
-    workItemsService.listReadyLeaves(projectId, {}, svcCtx),
-    workItemsService.listReadyBugs(projectId, {}, svcCtx),
+    workItemsService.listReadyLanePage(projectId, 'leaf', {}, svcCtx),
+    workItemsService.listReadyLanePage(projectId, 'bug', {}, svcCtx),
     workItemsService.countReadyLanes(projectId, svcCtx),
     // The reader's title-translation context (Story MOTIR-7738 · MOTIR-8833).
     resolveSurfaceTranslation(project, svcCtx),

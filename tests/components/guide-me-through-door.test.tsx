@@ -92,8 +92,8 @@ function reads(): LateReads {
     monitorHasConnection: false,
     continueView: { state: 'none' },
     decisionGate: { ...NO_GATE, document: null },
-    choiceGate: { ...NO_GATE, body: null },
-    confirmGate: { ...NO_GATE, body: null },
+    choiceGate: { ...NO_GATE, body: null, workItemRefs: {} },
+    confirmGate: { ...NO_GATE, body: null, workItemRefs: {} },
     agentReview: null,
     gatedRun: null,
   } as LateReads;

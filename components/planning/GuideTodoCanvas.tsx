@@ -11,6 +11,7 @@ import {
   TodoRowReadOnly,
 } from '@/app/(authed)/items/[key]/_components/TodoListSection';
 import type { GuideRow, GuideRowTag, GuideView } from '@/lib/planning/guideView';
+import type { WorkItemRefMap } from '@/lib/dto/workItems';
 
 // THE GUIDE CANVAS (Story MOTIR-7459 · MOTIR-7466; design
 // `design/ai-chat/planning-workspace--guide.mock.html` panels 1–16 and
@@ -113,6 +114,11 @@ function diffViews(prev: GuideView, next: GuideView): Motion {
 
 export interface GuideTodoCanvasProps {
   view: GuideView;
+  /**
+   * The steps' notes' work-item links, resolved for the reader (bug MOTIR-10023) —
+   * the card's rows from their read, the conversation's from the thread's.
+   */
+  workItemRefs: WorkItemRefMap;
   /** The person may tick (`work_item:edit`); a saved list only. */
   canTick: boolean;
   onSetDone: (todoId: string, done: boolean) => void;
@@ -126,6 +132,7 @@ export interface GuideTodoCanvasProps {
 
 export function GuideTodoCanvas({
   view,
+  workItemRefs,
   canTick,
   onSetDone,
   onSave,
@@ -265,7 +272,7 @@ export function GuideTodoCanvas({
           // tick, no actions (panel 3).
           <ul className="mt-2 list-none p-0" data-testid="guide-list">
             {view.rows.map((row) => (
-              <TodoRowReadOnly key={row.id} row={row} />
+              <TodoRowReadOnly key={row.id} row={row} workItemRefs={workItemRefs} />
             ))}
           </ul>
         ) : (
@@ -274,6 +281,7 @@ export function GuideTodoCanvas({
               <GuideTodoRow
                 key={leaving ? `leaving-${row.id}` : row.id}
                 row={row}
+                workItemRefs={workItemRefs}
                 current={!leaving && row.id === view.currentId}
                 tag={leaving ? null : (view.tags[row.id] ?? null)}
                 temporary={temporary}
@@ -342,6 +350,7 @@ function Tag({ kind }: { kind: GuideRowTag | 'current' | 'notSaved' }) {
 
 function GuideTodoRow({
   row,
+  workItemRefs,
   current,
   tag,
   temporary,
@@ -352,6 +361,7 @@ function GuideTodoRow({
   tickLabels,
 }: {
   row: GuideRow;
+  workItemRefs: WorkItemRefMap;
   current: boolean;
   tag: GuideRowTag | null;
   temporary: boolean;
@@ -407,6 +417,7 @@ function GuideTodoRow({
       <div className="min-w-0">
         <TodoRowBody
           row={temporary ? { ...row, doneBy: null } : row}
+          workItemRefs={workItemRefs}
           isExpanded={expanded}
           onToggleExpanded={() => setExpanded(!expanded)}
           notesId={notesId}

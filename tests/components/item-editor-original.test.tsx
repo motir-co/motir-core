@@ -211,6 +211,7 @@ describe('the to-do row editor', () => {
   function open(row: WorkItemTodoDto) {
     render(
       <TodoListSection
+        initialWorkItemRefs={{}}
         workItemId="wi-1"
         initialTodos={[row]}
         initialProgress={{ done: 0, total: 1 }}

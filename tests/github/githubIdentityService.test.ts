@@ -4,8 +4,13 @@ import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { githubIdentityService } from '@/lib/services/githubIdentityService';
 import { githubIdentityRepository } from '@/lib/repositories/githubIdentityRepository';
-import { decryptToken } from '@/lib/github/tokenCrypto';
-import { GithubOAuthExchangeError, GithubOAuthNotConfiguredError } from '@/lib/github/errors';
+import { decryptToken, encryptToken } from '@/lib/github/tokenCrypto';
+import {
+  GithubIdentityRefreshUnavailableError,
+  GithubIdentityRefusedError,
+  GithubOAuthExchangeError,
+  GithubOAuthNotConfiguredError,
+} from '@/lib/github/errors';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
@@ -262,5 +267,276 @@ describe('githubIdentityService.disconnect', () => {
     expect(await countIdentities()).toBe(1);
     expect(await githubIdentityService.getIdentityForUser(alice.id)).toBeNull();
     expect(await githubIdentityService.getIdentityForUser(bob.id)).not.toBeNull();
+  });
+});
+
+// ─── Bug MOTIR-10021 — the expiring user token is kept and renewed ────────────
+//
+// Motir Integration expires user tokens after eight hours (MOTIR-6522). These
+// assert the link keeps what renewal needs, and that `getLiveToken` renews —
+// once, under concurrency — against the real datastore, with GitHub's token
+// endpoint faked.
+
+const HOUR = 60 * 60 * 1000;
+
+/** Seed an identity row directly, as a link made at some earlier time left it. */
+async function seedIdentity(
+  userId: string,
+  fields: {
+    accessToken: string;
+    refreshToken?: string | null;
+    tokenExpiresAt?: Date | null;
+    refreshTokenExpiresAt?: Date | null;
+  },
+) {
+  return adminDb.githubIdentity.create({
+    data: {
+      userId,
+      githubUserId: `gh-${userId}`,
+      githubLogin: 'octocat',
+      accessTokenEncrypted: encryptToken(fields.accessToken),
+      refreshTokenEncrypted: fields.refreshToken ? encryptToken(fields.refreshToken) : null,
+      tokenExpiresAt: fields.tokenExpiresAt ?? null,
+      refreshTokenExpiresAt: fields.refreshTokenExpiresAt ?? null,
+    },
+  });
+}
+
+function readIdentity(userId: string) {
+  return adminDb.githubIdentity.findUniqueOrThrow({ where: { userId } });
+}
+
+/** Fake GitHub's token endpoint for the refresh grant, recording every call. */
+function mockRefreshEndpoint(answer: {
+  body?: Record<string, unknown>;
+  status?: number;
+  delayMs?: number;
+}) {
+  const calls: Record<string, unknown>[] = [];
+  const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    if (!url.includes('/login/oauth/access_token')) {
+      throw new Error(`unexpected fetch in test: ${url}`);
+    }
+    calls.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+    if (answer.delayMs) await new Promise((r) => setTimeout(r, answer.delayMs));
+    return new Response(JSON.stringify(answer.body ?? {}), {
+      status: answer.status ?? 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  return { calls, fetchMock };
+}
+
+const ROTATED = {
+  access_token: 'ghu_rotated_access',
+  refresh_token: 'ghr_rotated_refresh',
+  expires_in: 28_800,
+  refresh_token_expires_in: 15_897_600,
+  token_type: 'bearer',
+};
+
+describe('githubIdentityService — expiring user tokens (Bug MOTIR-10021)', () => {
+  it('linking stores the access token, the encrypted refresh token and both expiries', async () => {
+    const user = await makeUser();
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      const body = url.includes('/login/oauth/access_token')
+        ? {
+            access_token: 'ghu_linked',
+            refresh_token: 'ghr_linked',
+            expires_in: 28_800,
+            refresh_token_expires_in: 15_897_600,
+          }
+        : { id: 77, login: 'expiring', avatar_url: null };
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const before = Date.now();
+    await githubIdentityService.completeOAuthCallback({ code: 'c', userId: user.id });
+
+    const row = await readIdentity(user.id);
+    expect(decryptToken(row.accessTokenEncrypted)).toBe('ghu_linked');
+    expect(row.refreshTokenEncrypted).not.toBe('ghr_linked'); // encrypted at rest
+    expect(decryptToken(row.refreshTokenEncrypted!)).toBe('ghr_linked');
+    expect(row.tokenExpiresAt!.getTime()).toBeGreaterThanOrEqual(before + 28_800_000);
+    expect(row.tokenExpiresAt!.getTime()).toBeLessThanOrEqual(Date.now() + 28_800_000);
+    expect(row.refreshTokenExpiresAt!.getTime()).toBeGreaterThanOrEqual(before + 15_897_600_000);
+  });
+
+  it('renews an access token inside the margin: one refresh grant, the rotated pair persisted', async () => {
+    const user = await makeUser();
+    await seedIdentity(user.id, {
+      accessToken: 'ghu_old',
+      refreshToken: 'ghr_old',
+      tokenExpiresAt: new Date(Date.now() + 30_000), // inside the 60 s margin
+      refreshTokenExpiresAt: new Date(Date.now() + 1000 * HOUR),
+    });
+    const { calls } = mockRefreshEndpoint({ body: ROTATED });
+
+    const before = Date.now();
+    const live = await githubIdentityService.getLiveToken(user.id);
+
+    expect(live).toEqual({ accessToken: 'ghu_rotated_access' });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({
+      grant_type: 'refresh_token',
+      refresh_token: 'ghr_old',
+      client_id: process.env['GITHUB_APP_CLIENT_ID'],
+    });
+    const row = await readIdentity(user.id);
+    expect(decryptToken(row.accessTokenEncrypted)).toBe('ghu_rotated_access');
+    expect(decryptToken(row.refreshTokenEncrypted!)).toBe('ghr_rotated_refresh');
+    expect(row.tokenExpiresAt!.getTime()).toBeGreaterThanOrEqual(before + 8 * HOUR);
+    expect(row.refreshTokenExpiresAt!.getTime()).toBeGreaterThanOrEqual(before + 4000 * HOUR);
+    expect(row.refreshLeaseUntil).toBeNull();
+  });
+
+  it('two concurrent calls on an expiring identity spend ONE refresh and both get its token', async () => {
+    const user = await makeUser();
+    await seedIdentity(user.id, {
+      accessToken: 'ghu_old',
+      refreshToken: 'ghr_old',
+      tokenExpiresAt: new Date(Date.now() - HOUR),
+    });
+    const { calls } = mockRefreshEndpoint({ body: ROTATED, delayMs: 400 });
+
+    const [a, b] = await Promise.all([
+      githubIdentityService.getLiveToken(user.id),
+      githubIdentityService.getLiveToken(user.id),
+    ]);
+
+    expect(calls).toHaveLength(1);
+    expect(a).toEqual({ accessToken: 'ghu_rotated_access' });
+    expect(b).toEqual({ accessToken: 'ghu_rotated_access' });
+  });
+
+  it('a refused refresh (bad_refresh_token) lands on the reconnect state and is not retried', async () => {
+    const user = await makeUser();
+    await seedIdentity(user.id, {
+      accessToken: 'ghu_old',
+      refreshToken: 'ghr_revoked',
+      tokenExpiresAt: new Date(Date.now() - HOUR),
+    });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { calls } = mockRefreshEndpoint({
+      body: { error: 'bad_refresh_token', error_description: 'The refresh token is invalid.' },
+    });
+
+    await expect(githubIdentityService.getLiveToken(user.id)).rejects.toBeInstanceOf(
+      GithubIdentityRefusedError,
+    );
+    const row = await readIdentity(user.id);
+    expect(row.refreshRefusedAt).not.toBeNull();
+    expect(row.refreshLeaseUntil).toBeNull();
+    // The log line names the reason and carries no credential.
+    expect(JSON.stringify(warn.mock.calls)).toContain('bad_refresh_token');
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('ghr_revoked');
+
+    // The next call answers the same state at once, with no call to GitHub.
+    await expect(githubIdentityService.getLiveToken(user.id)).rejects.toBeInstanceOf(
+      GithubIdentityRefusedError,
+    );
+    expect(calls).toHaveLength(1);
+    warn.mockRestore();
+  });
+
+  it('a refresh token past its own expiry is refused without spending a call', async () => {
+    const user = await makeUser();
+    await seedIdentity(user.id, {
+      accessToken: 'ghu_old',
+      refreshToken: 'ghr_aged_out',
+      tokenExpiresAt: new Date(Date.now() - HOUR),
+      refreshTokenExpiresAt: new Date(Date.now() - HOUR),
+    });
+    const { calls } = mockRefreshEndpoint({ body: ROTATED });
+
+    await expect(githubIdentityService.getLiveToken(user.id)).rejects.toBeInstanceOf(
+      GithubIdentityRefusedError,
+    );
+    expect(calls).toHaveLength(0);
+    expect((await readIdentity(user.id)).refreshRefusedAt).not.toBeNull();
+  });
+
+  it('a renewal GitHub does not answer is UNAVAILABLE: the pair is kept and the lease released', async () => {
+    const user = await makeUser();
+    await seedIdentity(user.id, {
+      accessToken: 'ghu_old',
+      refreshToken: 'ghr_old',
+      tokenExpiresAt: new Date(Date.now() - HOUR),
+    });
+    const { calls } = mockRefreshEndpoint({ status: 502 });
+
+    await expect(githubIdentityService.getLiveToken(user.id)).rejects.toBeInstanceOf(
+      GithubIdentityRefreshUnavailableError,
+    );
+    const row = await readIdentity(user.id);
+    expect(decryptToken(row.refreshTokenEncrypted!)).toBe('ghr_old');
+    expect(row.refreshRefusedAt).toBeNull();
+    expect(row.refreshLeaseUntil).toBeNull();
+
+    // Not a dead sign-in: the next call tries the renewal again.
+    mockRefreshEndpoint({ body: ROTATED });
+    await expect(githubIdentityService.getLiveToken(user.id)).resolves.toEqual({
+      accessToken: 'ghu_rotated_access',
+    });
+    expect(calls).toHaveLength(1);
+  });
+
+  it('a token outside the margin is returned as stored, with no refresh', async () => {
+    const user = await makeUser();
+    await seedIdentity(user.id, {
+      accessToken: 'ghu_fresh',
+      refreshToken: 'ghr_fresh',
+      tokenExpiresAt: new Date(Date.now() + 4 * HOUR),
+    });
+    const { calls } = mockRefreshEndpoint({ body: ROTATED });
+
+    await expect(githubIdentityService.getLiveToken(user.id)).resolves.toEqual({
+      accessToken: 'ghu_fresh',
+    });
+    expect(calls).toHaveLength(0);
+  });
+
+  it('an identity linked before this change (no refresh token) is returned unchanged, never renewed', async () => {
+    const user = await makeUser();
+    const seeded = await seedIdentity(user.id, { accessToken: 'gho_legacy' });
+    const { calls } = mockRefreshEndpoint({ body: ROTATED });
+
+    await expect(githubIdentityService.getLiveToken(user.id)).resolves.toEqual({
+      accessToken: 'gho_legacy',
+    });
+    expect(calls).toHaveLength(0);
+    const row = await readIdentity(user.id);
+    expect(row.accessTokenEncrypted).toBe(seeded.accessTokenEncrypted);
+    expect(row.updatedAt).toEqual(seeded.updatedAt);
+  });
+
+  it('reconnecting clears the refused mark, so the new sign-in works', async () => {
+    const user = await makeUser();
+    await seedIdentity(user.id, { accessToken: 'ghu_dead', refreshToken: 'ghr_dead' });
+    await adminDb.githubIdentity.update({
+      where: { userId: user.id },
+      data: { refreshRefusedAt: new Date() },
+    });
+    await expect(githubIdentityService.getLiveToken(user.id)).rejects.toBeInstanceOf(
+      GithubIdentityRefusedError,
+    );
+
+    mockGithub({ token: 'gho_reconnected', user: { id: 5150, login: 'octocat' } });
+    await githubIdentityService.completeOAuthCallback({ code: 'c', userId: user.id });
+
+    const row = await readIdentity(user.id);
+    expect(row.refreshRefusedAt).toBeNull();
+    // A sign-in that came back with no refresh token keeps no stale one.
+    expect(row.refreshTokenEncrypted).toBeNull();
+    await expect(githubIdentityService.getLiveToken(user.id)).resolves.toEqual({
+      accessToken: 'gho_reconnected',
+    });
   });
 });

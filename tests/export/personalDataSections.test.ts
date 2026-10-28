@@ -147,7 +147,7 @@ describe('each section names a real table, model and column set', () => {
       api_token: ['tokenHash'],
       passkey: ['publicKey', 'credentialID'],
       email_change_request: ['token'],
-      github_identity: ['accessTokenEncrypted'],
+      github_identity: ['accessTokenEncrypted', 'refreshTokenEncrypted'],
       import_source_identity: ['accessTokenEncrypted', 'refreshTokenEncrypted'],
       device_code: ['deviceCode', 'userCode'],
       oauth_client: ['clientSecret'],
