@@ -104,7 +104,8 @@ async function seedLedger(workspaceId: string) {
       functionId,
       eventName: functionId,
       eventData: { idempotencyKey: `e2e-${functionId}-${i}` },
-      failure: { message: `boom ${i}` },
+      // Zero-padded, so no message is a substring of another: a row is found by its text.
+      failure: { message: `boom ${String(i).padStart(3, '0')}` },
       attempts: 5,
       firstFailedAt: at,
       lastFailedAt: at,
