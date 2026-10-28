@@ -270,23 +270,19 @@ describe('addressesForProject — the ADR §7 default rule', () => {
     expect(a.alternates).toEqual([]);
   });
 
-  it('a subdomain claimed → the subdomain PATH is primary, motir.co becomes an alternate', async () => {
-    // ⚠️ `/ACME`, NOT `/p/ACME`. The ADR's Q2 and §3 spell the address
-    // `acme.<base>/<identifier>` and the renderer's router serves it there
-    // (MOTIR-4220); `/p/` is `motir.co`'s shape, because that host also carries
-    // a landing, an /explore and a /docs a bare key would collide with. This
-    // assertion carried the wrong shape until the router was built against it —
-    // the URL still RESOLVED, which is why nothing else caught it, so what was
-    // shipped was a canonical naming the duplicate instead of the address.
+  it('a subdomain claimed → motir.co stays primary, and the subdomain is not listed at all', async () => {
+    // The address decision (MOTIR-9790): the bare workspace host belongs to the
+    // workspace's default application and serves no project path, so
+    // `acme.<base>/ACME` is a 404. Naming it as a canonical or an alternate would
+    // send readers and crawlers to a page that does not exist.
     await seedSubdomain(host, `acme.${BASE}`);
     const a = await publicAddressesService.addressesForProject(
       host.projectId,
       host.workspaceId,
       'ACME',
     );
-    expect(a.primary).toBe(`https://acme.${BASE}/ACME`);
-    expect(a.alternates.some((u) => u.includes('/p/ACME'))).toBe(true);
-    expect(a.alternates).not.toContain(a.primary);
+    expect(a.primary).toContain('/p/ACME');
+    expect(a.alternates).toEqual([]);
   });
 
   it('a custom domain PROMOTED → it wins over the subdomain', async () => {
@@ -302,8 +298,9 @@ describe('addressesForProject — the ADR §7 default rule', () => {
       'ACME',
     );
     expect(a.primary).toBe('https://roadmap.acme.test');
-    // Both the subdomain path and the motir.co URL are alternates that redirect.
-    expect(a.alternates).toContain(`https://acme.${BASE}/ACME`);
+    // The motir.co URL is the one alternate; the workspace host is never listed.
+    expect(a.alternates).toHaveLength(1);
+    expect(a.alternates[0]).toContain('/p/ACME');
   });
 
   it('an ADDED-but-not-issued custom domain is neither primary nor an alternate', async () => {
@@ -365,6 +362,11 @@ describe('primaryHostsForProjects — the batched crawl read', () => {
     // Two paths computing one rule is how they come apart. Asserted against
     // each other rather than against a restated expectation.
     await seedSubdomain(host, `acme.${BASE}`);
+    const addr = await seedCustomDomain(host, 'roadmap.acme.test', 'issued');
+    await adminDb.project.update({
+      where: { id: host.projectId },
+      data: { primaryAddressId: addr.id },
+    });
     const map = await publicAddressesService.primaryHostsForProjects([
       { id: host.projectId, workspaceId: host.workspaceId, identifier: 'ACME' },
     ]);
@@ -376,7 +378,8 @@ describe('primaryHostsForProjects — the batched crawl read', () => {
     expect(map.get(host.projectId)).toBe(new URL(single.primary).host);
   });
 
-  it('is empty for a project with no claimed address, so the caller falls back', async () => {
+  it('is empty for a project with no promoted domain, a claimed workspace subdomain included', async () => {
+    await seedSubdomain(host, `acme.${BASE}`);
     const map = await publicAddressesService.primaryHostsForProjects([
       { id: host.projectId, workspaceId: host.workspaceId, identifier: 'ACME' },
     ]);

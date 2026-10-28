@@ -753,7 +753,7 @@ describe('release and the 30-day limit (rule 4 — renames and releases count al
 });
 
 describe('release and how the rest of the system then ADDRESSES the projects', () => {
-  it('returns the projects to motir.co/p/<identifier>, asserted through the services', async () => {
+  it('keeps the projects at motir.co/p/<identifier> before and after, asserted through the services', async () => {
     // Through `publicAddressesService`, never by reading rows: the point is that
     // the RESOLUTION agrees, and a row read would pass while the service did not.
     //
@@ -779,16 +779,15 @@ describe('release and how the rest of the system then ADDRESSES the projects', (
       fx.workspaceId,
       project.identifier,
     );
-    expect(claimed.primary).toBe(`https://acme.${BASE}/${project.identifier}`);
-    expect(
-      claimed.alternates.some((u) => u.includes(publicProjectPath(project.identifier))),
-      'while claimed, motir.co/p/<id> is only an ALTERNATE — it 301s to the subdomain',
-    ).toBe(true);
+    // MOTIR-9790: a claimed workspace subdomain serves no project, so the
+    // project's address is motir.co/p/<id> while claimed AND after release.
+    expect(claimed.primary).toBe(`${publicSiteOrigin()}${publicProjectPath(project.identifier)}`);
+    expect(claimed.alternates).toEqual([]);
     expect(
       await publicAddressesService.primaryHostsForProjects([
         { id: project.id, workspaceId: fx.workspaceId, identifier: project.identifier },
       ]),
-    ).toEqual(new Map([[project.id, `acme.${BASE}`]]));
+    ).toEqual(new Map());
 
     await publicSubdomainService.release(fx.workspaceId, fx.ownerId);
 
