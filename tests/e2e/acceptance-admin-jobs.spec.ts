@@ -157,6 +157,18 @@ test('platform staff read the whole job ledger, and an operator replays one row,
   });
 
   await adminDb.user.update({ where: { email: STAFF }, data: { platformRole: 'support' } });
+  // The worker's runs are newer than the seeded ones and the Runs tab pages at
+  // 50, newest first: move the two seeded runs to now, so they lead the page.
+  for (const [eventId, agoMs] of [
+    ['e2e-jobs-run-1', 60_000],
+    ['e2e-jobs-run-2', 30_000],
+  ] as const) {
+    const startedAt = new Date(Date.now() - agoMs);
+    await adminDb.jobRun.updateMany({
+      where: { eventId },
+      data: { startedAt, finishedAt: new Date(startedAt.getTime() + 1000) },
+    });
+  }
 
   await chapter(
     'Support opens Operations → Jobs: every run, in a workspace and in none',
