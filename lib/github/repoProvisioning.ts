@@ -881,7 +881,7 @@ async function applyDesignChoice(
   const manifest = await readFile(DESIGN_MANIFEST_PATH);
   if (manifest === null) return 'not_design_system';
 
-  const seed = designSeedFor(choice);
+  const seed = await designSeedFor(choice);
   if (seed.fallbacks.length > 0) {
     console.warn(
       `[repoProvisioning] design choice for ${org}/${name} fell back to the registry default ` +

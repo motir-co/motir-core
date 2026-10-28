@@ -1,12 +1,11 @@
-import {
-  isPaletteId,
-  isStyleId,
-  isTypeId,
-  resolveAxesToApplied,
-  resolvePalette,
-  resolveStyle,
-  resolveType,
-} from '@motir/design-system';
+// ⚠️ `@motir/design-system` IS LOADED LAZILY, in `designSeedFor`, never at the
+// top of this file. This module sits under `lib/github/repoProvisioning.ts`, which
+// `projectsService` and the other core services reach, and the package is
+// ESM-only with no `require` export: a static import puts it in every E2E seed's
+// graph, and Playwright's CommonJS loader then refuses the whole spec file
+// (`No "exports" main defined`, the MOTIR-8477 note in
+// `tests/e2e/_helpers/onboarding-github-connect-seed.ts`).
+type DesignSystem = typeof import('@motir/design-system');
 
 // THE PROJECT'S DESIGN CHOICE, AS THE FILES A SEEDED REPOSITORY CARRIES
 // (Story MOTIR-704 · MOTIR-1529).
@@ -52,8 +51,9 @@ export interface DesignSeed {
  * for that axis; an unknown type follows the resolved style's default type,
  * exactly as the package resolves an unpinned type at runtime.
  */
-export function designSeedFor(choice: StoredDesignChoice | null): DesignSeed {
-  const resolved = resolveAxesToApplied({
+export async function designSeedFor(choice: StoredDesignChoice | null): Promise<DesignSeed> {
+  const ds = await import('@motir/design-system');
+  const resolved = ds.resolveAxesToApplied({
     styleId: choice?.styleId ?? null,
     paletteId: choice?.paletteId ?? null,
     typeId: choice?.typeId ?? null,
@@ -64,26 +64,26 @@ export function designSeedFor(choice: StoredDesignChoice | null): DesignSeed {
     typeId: resolved.typeId,
   };
   const fallbacks: DesignAxis[] = [];
-  if (!isStyleId(choice?.styleId)) fallbacks.push('styleId');
-  if (!isPaletteId(choice?.paletteId)) fallbacks.push('paletteId');
-  if (!isTypeId(choice?.typeId)) fallbacks.push('typeId');
+  if (!ds.isStyleId(choice?.styleId)) fallbacks.push('styleId');
+  if (!ds.isPaletteId(choice?.paletteId)) fallbacks.push('paletteId');
+  if (!ds.isTypeId(choice?.typeId)) fallbacks.push('typeId');
 
   return {
     applied,
     fallbacks,
     files: [
       { path: DESIGN_MANIFEST_PATH, content: `${JSON.stringify(applied, null, 2)}\n` },
-      { path: DESIGN_NOTES_PATH, content: designNotes(applied) },
+      { path: DESIGN_NOTES_PATH, content: designNotes(ds, applied) },
     ],
   };
 }
 
 /** The short `DESIGN.md` a later agent run reads to learn the project's look. */
-function designNotes(applied: DesignSeed['applied']): string {
+function designNotes(ds: DesignSystem, applied: DesignSeed['applied']): string {
   const rows: [string, string, string][] = [
-    ['Style', applied.styleId, resolveStyle(applied.styleId).name],
-    ['Palette', applied.paletteId, resolvePalette(applied.paletteId).name],
-    ['Type', applied.typeId, resolveType(applied.typeId).name],
+    ['Style', applied.styleId, ds.resolveStyle(applied.styleId).name],
+    ['Palette', applied.paletteId, ds.resolvePalette(applied.paletteId).name],
+    ['Type', applied.typeId, ds.resolveType(applied.typeId).name],
   ];
   return [
     '# Design',

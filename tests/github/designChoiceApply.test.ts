@@ -235,14 +235,14 @@ afterEach(() => {
 });
 
 describe('the stored choice, resolved through the package registries', () => {
-  it('keeps every registered id', () => {
-    const seed = designSeedFor(CHOICE);
+  it('keeps every registered id', async () => {
+    const seed = await designSeedFor(CHOICE);
     expect(seed.applied).toEqual(CHOICE);
     expect(seed.fallbacks).toEqual([]);
   });
 
-  it('gives the registry defaults for no choice, and names every axis as a fallback', () => {
-    const seed = designSeedFor(null);
+  it('gives the registry defaults for no choice, and names every axis as a fallback', async () => {
+    const seed = await designSeedFor(null);
     expect(seed.applied).toEqual({
       styleId: THEME_DEFAULTS.style,
       paletteId: THEME_DEFAULTS.palette,
@@ -251,8 +251,8 @@ describe('the stored choice, resolved through the package registries', () => {
     expect(seed.fallbacks).toEqual(['styleId', 'paletteId', 'typeId']);
   });
 
-  it('falls back per axis on an unknown id, and an unknown type follows the style', () => {
-    const seed = designSeedFor({
+  it('falls back per axis on an unknown id, and an unknown type follows the style', async () => {
+    const seed = await designSeedFor({
       styleId: 'swiss-minimal-flat',
       paletteId: 'gone',
       typeId: 'gone',
@@ -265,10 +265,10 @@ describe('the stored choice, resolved through the package registries', () => {
     expect(seed.fallbacks).toEqual(['paletteId', 'typeId']);
   });
 
-  it('agrees with the package’s own resolution — no table of its own', () => {
+  it('agrees with the package’s own resolution — no table of its own', async () => {
     const input = { styleId: 'aurora', paletteId: 'evergreen', typeId: 'nope' };
     const { pattern: _pattern, typePinned: _pinned, ...ids } = resolveAxesToApplied(input);
-    expect(designSeedFor(input).applied).toEqual(ids);
+    expect((await designSeedFor(input)).applied).toEqual(ids);
   });
 });
 
