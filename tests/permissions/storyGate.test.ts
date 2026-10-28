@@ -127,16 +127,12 @@ const POLICY_OWNERS = [
  */
 const ALLOWED_DERIVATIONS: { file: string; why: string }[] = [
   {
-    file: 'lib/services/jobsDashboardService.ts',
-    why: 'a WORKSPACE-level jobs dashboard, gated on the workspace role. No project is resolved, so no project permission can govern it (the `repository:connect` argument, MOTIR-2294)',
-  },
-  {
     file: 'lib/services/publicSubdomainService.ts',
-    why: "a WORKSPACE's public address (MOTIR-4221), gated on the workspace role — the Manager (Story MOTIR-6168 · MOTIR-6462; it was a `['owner','admin']` set before, which the patterns could not see). The address names the whole workspace, so no project permission can govern it — the `jobsDashboardService` argument",
+    why: "a WORKSPACE's public address (MOTIR-4221), gated on the workspace role — the Manager (Story MOTIR-6168 · MOTIR-6462; it was a `['owner','admin']` set before, which the patterns could not see). The address names the whole workspace, so no project permission can govern it — the `repository:connect` argument (MOTIR-2294)",
   },
   {
     file: 'lib/services/twoFactorPolicyService.ts',
-    why: 'a WORKSPACE-level and ORGANIZATION-level security policy (Story MOTIR-1215 · MOTIR-3645), gated on the workspace / org role. It resolves no project, so no project permission can govern it — the `jobsDashboardService` argument. Reading the policy needs no role at all; only SETTING it is gated, and that gate is the tier admin',
+    why: 'a WORKSPACE-level and ORGANIZATION-level security policy (Story MOTIR-1215 · MOTIR-3645), gated on the workspace / org role. It resolves no project, so no project permission can govern it — the `repository:connect` argument (MOTIR-2294). Reading the policy needs no role at all; only SETTING it is gated, and that gate is the tier admin',
   },
 ];
 
