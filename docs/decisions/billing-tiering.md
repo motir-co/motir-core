@@ -585,7 +585,7 @@ only vs the PM tools above, not vs Cursor).
 > hoster account. Their quota raises are filed at CI 200 × (pool ÷ 300,000), agent runner 32 ×
 > (pool ÷ 300,000), and 120 vCPU for the merged account, so 600k asks 400 / 64 / 120 and 2,400k
 > asks 1,600 / 256 / 120. Until an account of a kind is live, the org runs on the shared floor: 5
-> agent runs, agents 10 per user and 50 running per org, and CI at 20 (owner, 2026-10-26). The mechanisms belong to the Host accounts story, MOTIR-9365; this
+> agent runs, agents 10 per user and 50 per org, and CI at 20 (owner, 2026-10-26). The mechanisms belong to the Host accounts story, MOTIR-9365; this
 > record states only the figures.
 >
 > **What stands.** The ladder's pools and prices, the top-up path and its price, the included

@@ -139,6 +139,13 @@ export interface Projection {
    */
   projectedDescription: Map<string, string | null>;
   /**
+   * The PROPOSED explanation of each node the plan sets one on — an `add`'s
+   * proposed text, or a `modify`'s patched text — with the same sparse `has()`
+   * semantics as {@link projectedDescription}. Read ONLY by the mislabelled-link
+   * advisory (MOTIR-9938), which scans both bodies.
+   */
+  projectedExplanation: Map<string, string | null>;
+  /**
    * The PROJECTED `type` / `executor` of each node the plan sets one on — an
    * `add`'s proposed values, or a `modify`'s patched `type`. Read ONLY by the
    * ORDERING advisory's exemption (MOTIR-2175), which suppresses on
@@ -411,6 +418,7 @@ export async function buildProjection(
   // Pass 1 — virtual `add` nodes (keyed by their temp-ref, so an intra-plan
   // parent/blocker ref resolves with no topo ordering needed).
   const projectedDescription = new Map<string, string | null>();
+  const projectedExplanation = new Map<string, string | null>();
   const projectedType = new Map<string, string | null>();
   const projectedExecutor = new Map<string, string | null>();
   const proposalByRef = new Map<string, PlanItemDto>();
@@ -418,6 +426,7 @@ export async function buildProjection(
     const id = `${TEMP_REF_PREFIX}${item.id}`;
     proposalByRef.set(id, item);
     projectedDescription.set(id, item.proposedFields?.descriptionMd ?? null);
+    projectedExplanation.set(id, item.proposedFields?.explanationMd ?? null);
     // An `add` has no stored row, so its proposed shape is the ONLY shape there
     // is — set both keys unconditionally, absent proposal included (`null`).
     projectedType.set(id, item.proposedFields?.type ?? null);
@@ -490,6 +499,9 @@ export async function buildProjection(
     // means the plan clears it.
     if (item.patch && 'descriptionMd' in item.patch) {
       projectedDescription.set(item.workItemId, item.patch.descriptionMd ?? null);
+    }
+    if (item.patch && 'explanationMd' in item.patch) {
+      projectedExplanation.set(item.workItemId, item.patch.explanationMd ?? null);
     }
     // Same sparse-patch semantics for the ORDERING exemption's `type`
     // (MOTIR-2175). `PlanItemPatch` has no `executor` key, so a modified node's
@@ -570,6 +582,7 @@ export async function buildProjection(
     childrenByParent,
     terminalByProject,
     projectedDescription,
+    projectedExplanation,
     projectedType,
     projectedExecutor,
     proposalByRef,

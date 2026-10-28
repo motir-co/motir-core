@@ -626,11 +626,11 @@ describe('the larger-pool recipe, steps 5–8, for one pool_600k org', () => {
 
   it('recipe 8 — a member creates agents: the tenth is created, the eleventh refused naming the plan; 10 / 50 as on the floor', async () => {
     const read = await caps(rung.organizationId);
-    expect([read.agentsPerUser, read.agentsRunningPerOrg]).toEqual([
+    expect([read.agentsPerUser, read.agentsPerOrg]).toEqual([
       LARGER_POOL_FLOOR_CAPS.agentsPerUser,
-      LARGER_POOL_FLOOR_CAPS.agentsRunningPerOrg,
+      LARGER_POOL_FLOOR_CAPS.agentsPerOrg,
     ]);
-    expect([read.agentsPerUser, read.agentsRunningPerOrg]).toEqual([10, 50]);
+    expect([read.agentsPerUser, read.agentsPerOrg]).toEqual([10, 50]);
 
     const project = await adminDb.project.findUniqueOrThrow({ where: { id: rung.projectId } });
     const ctx = { userId: rung.userId, workspaceId: rung.workspaceId };

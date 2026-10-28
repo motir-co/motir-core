@@ -8,7 +8,7 @@ import type { PlanCaps } from '@/lib/billing/planCaps';
 // vCPU ÷ 2 (one fleet machine is 2 vCPU), rounded down —
 //   * the agent-runner account → `agentRunsInParallel`;
 //   * the CI account           → `ciBurstCap`;
-//   * the merged account       → `agentsPerUser` and `agentsRunningPerOrg`, lifted
+//   * the merged account       → `agentsPerUser` and `agentsPerOrg`, lifted
 //     to the own-accounts figures (10 / 50) — never below the floor's — once it
 //     is live (MOTIR-9668). How many agents its granted vCPU can hold, with the
 //     index spots kept, is the account's own admission bound
@@ -20,8 +20,8 @@ export const VCPU_PER_MACHINE = 2;
 
 /** A user's agents once the org's merged account is live (owner, MOTIR-9357). */
 export const OWN_ACCOUNT_AGENTS_PER_USER = 10;
-/** The org's running agents once its merged account is live (owner, MOTIR-9357). */
-export const OWN_ACCOUNT_AGENTS_RUNNING_PER_ORG = 50;
+/** The org's live agents once its merged account is live (owner, MOTIR-9357). */
+export const OWN_ACCOUNT_AGENTS_PER_ORG = 50;
 
 export interface OwnAccountGranted {
   /** The plan's row — the shared floor. */
@@ -46,9 +46,9 @@ export function ownAccountCapsFromGranted(input: OwnAccountGranted): PlanCaps {
     agentsPerUser: mergedLive
       ? Math.max(input.floor.agentsPerUser, OWN_ACCOUNT_AGENTS_PER_USER)
       : input.floor.agentsPerUser,
-    agentsRunningPerOrg: mergedLive
-      ? Math.max(input.floor.agentsRunningPerOrg, OWN_ACCOUNT_AGENTS_RUNNING_PER_ORG)
-      : input.floor.agentsRunningPerOrg,
+    agentsPerOrg: mergedLive
+      ? Math.max(input.floor.agentsPerOrg, OWN_ACCOUNT_AGENTS_PER_ORG)
+      : input.floor.agentsPerOrg,
     agentRunsInParallel:
       input.agentRunnerGrantedVcpu === null
         ? input.floor.agentRunsInParallel

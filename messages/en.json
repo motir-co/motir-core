@@ -6802,13 +6802,13 @@
       "loading": "Loading…",
       "label": {
         "agentRunsInParallel": "Agent runs in parallel",
-        "agentsRunningInOrg": "Hosted agents per organisation",
+        "agentsInOrg": "Hosted agents per organisation",
         "agentsPerPerson": "Hosted agents per person",
         "ciJobsInFlight": "CI jobs in flight"
       },
       "explain": {
         "agentRunsInParallel": "Hosted agent runs that run at the same time. More wait their turn in the queue.",
-        "agentsRunningInOrg": "Hosted agents running across the organisation at once. A start beyond it is refused, not queued.",
+        "agentsInOrg": "Live hosted agents across the organisation, running or asleep. A new one beyond it is refused, not queued.",
         "agentsPerPerson": "Live hosted agents one person may hold. A new one beyond it is refused, not queued.",
         "ciJobsInFlight": "CI jobs on Motir's runners at once. More wait in the queue."
       },
@@ -11814,8 +11814,8 @@
           "override": "override"
         },
         "facts": {
-          "plan": "Plan <strong>{plan}</strong> · hosted runs at once: {runs} · agents per person: {perUser} · agents running: {running} · CI jobs at once: {ci}",
-          "planCiUnreadable": "Plan <strong>{plan}</strong> · hosted runs at once: {runs} · agents per person: {perUser} · agents running: {running} · CI limit unreadable",
+          "plan": "Plan <strong>{plan}</strong> · hosted runs at once: {runs} · agents per person: {perUser} · agents: {agents} · CI jobs at once: {ci}",
+          "planCiUnreadable": "Plan <strong>{plan}</strong> · hosted runs at once: {runs} · agents per person: {perUser} · agents: {agents} · CI limit unreadable",
           "planExempt": "Plan <strong>No plan limit</strong>",
           "planExemptOverride": "Plan <strong>No plan limit</strong> · CI jobs at once: {ci} (override)",
           "planUnknown": "Plan <strong>unknown · {key}</strong> · new containers refused",
@@ -12814,8 +12814,8 @@
       "creditsUnknown": "Motir could not check your organization’s credits just now. Try again in a moment.",
       "userCap": "Your organization’s {plan} plan allows {limit, plural, one {# agent} other {# agents}} per person. Each one is charged for its storage every day, even asleep. Delete one to create another.",
       "userCapNoFigure": "You already have as many agents as your organization’s plan allows per person. Each one is charged for its storage every day, even asleep. Delete one to create another.",
-      "orgRunningLimit": "Your organization’s {plan} plan runs {limit, plural, one {# agent} other {# agents}} at once, and all of them are running. Hibernate one to start another.",
-      "orgRunningLimitNoFigure": "Your organization is already running as many agents at once as its plan allows. Hibernate one to start another.",
+      "orgCap": "Your organization’s {plan} plan allows {limit, plural, one {# agent} other {# agents}} in the organization, running or asleep. Each one is charged for its storage every day, even asleep. Delete one to create another.",
+      "orgCapNoFigure": "Your organization already has as many agents as its plan allows, running or asleep. Each one is charged for its storage every day, even asleep. Delete one to create another.",
       "busy": "Motir is running as many machines as it can right now. Try again in a few minutes.",
       "notOffered": "That coding agent isn’t offered: its terms don’t yet allow a platform to host it. Choose another coding agent.",
       "nameTaken": "You already have an agent called {name} on this project.",
@@ -12829,7 +12829,7 @@
       "aiPlanUnknown": "Couldn’t check your AI plan",
       "credits": "Out of credits",
       "userCap": "Your limit",
-      "orgRunningLimit": "Your organization’s limit"
+      "orgCap": "Your organization’s limit"
     },
     "lapse": {
       "bannerLead": "Your organization’s AI plan has ended.",

@@ -6805,13 +6805,13 @@
       "loading": "Laden…",
       "label": {
         "agentRunsInParallel": "Parallelle agentruns",
-        "agentsRunningInOrg": "Gehoste agents per organisatie",
+        "agentsInOrg": "Gehoste agents per organisatie",
         "agentsPerPerson": "Gehoste agents per persoon",
         "ciJobsInFlight": "Lopende CI-jobs"
       },
       "explain": {
         "agentRunsInParallel": "Jobs van gehoste agents die tegelijk draaien. Meer wacht in de wachtrij.",
-        "agentsRunningInOrg": "Gehoste agents die tegelijk draaien in de hele organisatie. Daarboven wordt een start geweigerd, niet in de wachtrij gezet.",
+        "agentsInOrg": "Actieve gehoste agents in de hele organisatie, draaiend of slapend. Daarboven wordt een nieuwe geweigerd, niet in de wachtrij gezet.",
         "agentsPerPerson": "Actieve gehoste agents die één persoon kan hebben. Daarboven wordt een nieuwe geweigerd, niet in de wachtrij gezet.",
         "ciJobsInFlight": "CI-jobs die tegelijk draaien op de runners van Motir. Meer wacht in de wachtrij."
       },
@@ -11817,8 +11817,8 @@
           "override": "afwijking"
         },
         "facts": {
-          "plan": "Abonnement <strong>{plan}</strong> · {runs} gehoste runs tegelijk · {perUser} agents per persoon · {running} actieve agents · {ci} CI-jobs tegelijk",
-          "planCiUnreadable": "Abonnement <strong>{plan}</strong> · {runs} gehoste runs tegelijk · {perUser} agents per persoon · {running} actieve agents · CI-limiet onleesbaar",
+          "plan": "Abonnement <strong>{plan}</strong> · {runs} gehoste runs tegelijk · {perUser} agents per persoon · {agents} agents · {ci} CI-jobs tegelijk",
+          "planCiUnreadable": "Abonnement <strong>{plan}</strong> · {runs} gehoste runs tegelijk · {perUser} agents per persoon · {agents} agents · CI-limiet onleesbaar",
           "planExempt": "Abonnement <strong>Geen abonnementslimiet</strong>",
           "planExemptOverride": "Abonnement <strong>Geen abonnementslimiet</strong> · {ci} CI-jobs tegelijk (afwijking)",
           "planUnknown": "Abonnement <strong>onbekend · {key}</strong> · nieuwe containers geweigerd",
@@ -12817,8 +12817,8 @@
       "creditsUnknown": "Motir kon de credits van je organisatie nu niet controleren. Probeer het zo opnieuw.",
       "userCap": "Het {plan}-abonnement van je organisatie staat {limit, plural, one {# agent} other {# agents}} per persoon toe. Voor elk ervan wordt elke dag opslag gerekend, ook als hij slaapt. Verwijder er een om een nieuwe te maken.",
       "userCapNoFigure": "Je hebt al zoveel agents als het abonnement van je organisatie per persoon toestaat. Voor elk ervan wordt elke dag opslag gerekend, ook als hij slaapt. Verwijder er een om een nieuwe te maken.",
-      "orgRunningLimit": "Het {plan}-abonnement van je organisatie draait {limit, plural, one {# agent} other {# agents}} tegelijk, en die draaien allemaal. Zet er een in slaap om een andere te starten.",
-      "orgRunningLimitNoFigure": "Je organisatie draait al zoveel agents tegelijk als haar abonnement toestaat. Zet er een in slaap om een andere te starten.",
+      "orgCap": "Het {plan}-abonnement van je organisatie staat {limit, plural, one {# agent} other {# agents}} in de organisatie toe, draaiend of slapend. Voor elk ervan wordt elke dag opslag gerekend, ook als hij slaapt. Verwijder er een om een nieuwe te maken.",
+      "orgCapNoFigure": "Je organisatie heeft al zoveel agents als haar abonnement toestaat, draaiend of slapend. Voor elk ervan wordt elke dag opslag gerekend, ook als hij slaapt. Verwijder er een om een nieuwe te maken.",
       "busy": "Motir draait op dit moment zoveel machines als het kan. Probeer het over een paar minuten opnieuw.",
       "notOffered": "Die codeeragent wordt niet aangeboden: de voorwaarden staan nog niet toe dat een platform hem host. Kies een andere codeeragent.",
       "nameTaken": "Je hebt al een agent met de naam {name} in dit project.",
@@ -12832,7 +12832,7 @@
       "aiPlanUnknown": "Kan je AI-abonnement niet controleren",
       "credits": "Geen credits meer",
       "userCap": "Jouw limiet",
-      "orgRunningLimit": "De limiet van je organisatie"
+      "orgCap": "De limiet van je organisatie"
     },
     "lapse": {
       "bannerLead": "Het AI-abonnement van je organisatie is beëindigd.",

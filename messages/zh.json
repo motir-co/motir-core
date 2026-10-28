@@ -6796,13 +6796,13 @@
       "loading": "加载中…",
       "label": {
         "agentRunsInParallel": "并行智能体运行",
-        "agentsRunningInOrg": "每个组织托管智能体",
+        "agentsInOrg": "每个组织托管智能体",
         "agentsPerPerson": "每人托管智能体",
         "ciJobsInFlight": "进行中的 CI 任务"
       },
       "explain": {
         "agentRunsInParallel": "同时运行的托管智能体任务，超出部分排队等待。",
-        "agentsRunningInOrg": "整个组织同时运行的托管智能体，超出时启动会被拒绝，不排队。",
+        "agentsInOrg": "整个组织中的活动托管智能体，无论运行中还是休眠中，超出时新建会被拒绝，不排队。",
         "agentsPerPerson": "每人可持有的活动托管智能体，超出时新建会被拒绝，不排队。",
         "ciJobsInFlight": "Motir 运行器上同时进行的 CI 任务，超出部分排队等待。"
       },
@@ -11808,8 +11808,8 @@
           "override": "覆盖值"
         },
         "facts": {
-          "plan": "套餐 <strong>{plan}</strong> · 同时 {runs} 个托管运行 · 每人 {perUser} 个智能体 · {running} 个智能体运行中 · 同时 {ci} 个 CI 作业",
-          "planCiUnreadable": "套餐 <strong>{plan}</strong> · 同时 {runs} 个托管运行 · 每人 {perUser} 个智能体 · {running} 个智能体运行中 · CI 上限无法读取",
+          "plan": "套餐 <strong>{plan}</strong> · 同时 {runs} 个托管运行 · 每人 {perUser} 个智能体 · {agents} 个智能体 · 同时 {ci} 个 CI 作业",
+          "planCiUnreadable": "套餐 <strong>{plan}</strong> · 同时 {runs} 个托管运行 · 每人 {perUser} 个智能体 · {agents} 个智能体 · CI 上限无法读取",
           "planExempt": "套餐 <strong>无套餐限制</strong>",
           "planExemptOverride": "套餐 <strong>无套餐限制</strong> · 同时 {ci} 个 CI 作业（覆盖值）",
           "planUnknown": "套餐 <strong>未知 · {key}</strong> · 新容器被拒绝",
@@ -12808,8 +12808,8 @@
       "creditsUnknown": "Motir 暂时无法查询你的组织额度。请稍后重试。",
       "userCap": "你的组织的 {plan} 套餐每人最多可有 {limit, plural, other {#}} 个智能体。每个智能体即使休眠，每天也会收取存储费用。删除一个后才能再创建。",
       "userCapNoFigure": "你拥有的智能体已达到组织套餐允许的每人上限。每个智能体即使休眠，每天也会收取存储费用。删除一个后才能再创建。",
-      "orgRunningLimit": "你的组织的 {plan} 套餐最多可同时运行 {limit, plural, other {#}} 个智能体，现已全部在运行。休眠一个后才能启动另一个。",
-      "orgRunningLimitNoFigure": "你的组织同时运行的智能体已达到套餐允许的上限。休眠一个后才能启动另一个。",
+      "orgCap": "你的组织的 {plan} 套餐在整个组织中最多可有 {limit, plural, other {#}} 个智能体，无论运行中还是休眠中。每个智能体即使休眠，每天也会收取存储费用。删除一个后才能再创建。",
+      "orgCapNoFigure": "你的组织拥有的智能体已达到套餐允许的上限，无论运行中还是休眠中。每个智能体即使休眠，每天也会收取存储费用。删除一个后才能再创建。",
       "busy": "Motir 当前运行的机器已达上限。请几分钟后重试。",
       "notOffered": "暂不提供该编码智能体：其条款尚不允许平台托管它。请选择其他编码智能体。",
       "nameTaken": "你在这个项目上已经有一个名为 {name} 的智能体。",
@@ -12823,7 +12823,7 @@
       "aiPlanUnknown": "无法查询你的 AI 套餐",
       "credits": "额度已用完",
       "userCap": "你的上限",
-      "orgRunningLimit": "你的组织的上限"
+      "orgCap": "你的组织的上限"
     },
     "lapse": {
       "bannerLead": "你的组织的 AI 套餐已结束。",

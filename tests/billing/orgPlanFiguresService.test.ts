@@ -66,7 +66,7 @@ describe('a paid org on a plan with a caps row', () => {
       planName: caps.planName,
       agentRunsInParallel: caps.caps.agentRunsInParallel,
       agentsPerUser: caps.caps.agentsPerUser,
-      agentsRunningPerOrg: caps.caps.agentsRunningPerOrg,
+      agentsPerOrg: caps.caps.agentsPerOrg,
       ciBurstCap: ci.figure,
       ciBurstSource: 'plan',
     });

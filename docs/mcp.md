@@ -3699,13 +3699,16 @@ of the six carry `criterionIndex`, so narrow on `severity` before reading one.
 
 One more `shape` member is reported by `validate_work_item` and `validate_plan`
 only, never on the dispatch wire: **`likely-mislabelled-link`** (MOTIR-9007). A
-body link `[label](motir:<id>)` whose `label` names one or more work-item keys
+link `[label](motir:<id>)` in the card's description OR its explanation (both
+bodies are scanned, MOTIR-9938) whose `label` names one or more work-item keys
 (a token whose prefix is a project identifier in the workspace) none of which
 is the key `<id>` actually opens — or whose `<id>` opens no work item the caller
-can read. It carries the link's `label`, its `targetId`, and `targetKey`: the
+can read. It carries the link's `label`, its `targetId`, `targetKey`: the
 key the id resolves to, or `null` when it resolves to nothing (an unknown id,
 another workspace's id and an unbrowsable id all read the same, so the advisory
-leaks no existence). A label that names no key — `[the export flow](motir:…)` —
+leaks no existence), and `field`: the body the link sits in, `descriptionMd` or
+`explanationMd`, so the right one is fixed. A link quoted inside Markdown code,
+in either body, is not a link and is never judged (MOTIR-9825). A label that names no key — `[the export flow](motir:…)` —
 is never checked. Fix the id (resolve the key you meant with `get_work_item`) or
 the label; a link that opens the wrong card is consumed by every agent that
 reads the body.
@@ -5042,8 +5045,9 @@ MOTIR-6509). `valid` is `true` only when all four lists are empty.
 
 **`advisories` rides beside the verdict and never changes it (MOTIR-9007).** It
 lists every `likely-mislabelled-link` shape advisory in a body the plan
-PROPOSES — an `add`'s body, or a `modify` that rewrites one — as
-`{ kind: "shape", item, severity, label, targetId, targetKey }`: a
+PROPOSES — an `add`'s description or explanation, or a `modify` that rewrites
+either — as `{ kind: "shape", item, severity, label, targetId, targetKey, field }`
+(`field` is `descriptionMd` or `explanationMd`, MOTIR-9938): a
 `[label](motir:<id>)` link whose label names a work-item key the id does not
 open, or whose id opens no card at all (`targetKey: null`). Fix the id before
 sealing. The internal `validate-plan-forest` route answers the same

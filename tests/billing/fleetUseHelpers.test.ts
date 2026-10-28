@@ -35,7 +35,7 @@ const capped = (
   planName: planKey,
   agentRunsInParallel: 3,
   agentsPerUser: 5,
-  agentsRunningPerOrg: 30,
+  agentsPerOrg: 30,
   ciBurstCap: ciBurstSource === 'unreadable' ? null : 10,
   ciBurstSource,
 });
@@ -43,7 +43,7 @@ const capped = (
 describe('figureSourceFor', () => {
   const ALL: FleetUseFigureKey[] = [
     'agentRunsInParallel',
-    'agentsRunningInOrg',
+    'agentsInOrg',
     'agentsPerPerson',
     'ciJobsInFlight',
   ];
@@ -82,7 +82,7 @@ describe('figureSourceFor', () => {
     ['agentRunsInParallel', new Set<FleetWorkloadKind>(['ci_runner']), 'shared_floor'],
     ['ciJobsInFlight', new Set<FleetWorkloadKind>(['ci_runner']), 'granted_quota'],
     ['ciJobsInFlight', none, 'shared_floor'],
-    ['agentsRunningInOrg', new Set<FleetWorkloadKind>(['hosted_agent']), 'plan'],
+    ['agentsInOrg', new Set<FleetWorkloadKind>(['hosted_agent']), 'plan'],
     ['agentsPerPerson', none, 'plan'],
   ] as const)('on Host, %s with granted %o reads %s', (key, granted, expected) => {
     expect(figureSourceFor(key, capped('host'), granted)).toBe(expected);

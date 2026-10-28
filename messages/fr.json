@@ -6805,13 +6805,13 @@
       "loading": "Chargement…",
       "label": {
         "agentRunsInParallel": "Exécutions d’agent en parallèle",
-        "agentsRunningInOrg": "Agents hébergés par organisation",
+        "agentsInOrg": "Agents hébergés par organisation",
         "agentsPerPerson": "Agents hébergés par personne",
         "ciJobsInFlight": "Tâches CI en cours"
       },
       "explain": {
         "agentRunsInParallel": "Tâches d’agents hébergés exécutées en même temps. Au-delà, elles attendent dans la file.",
-        "agentsRunningInOrg": "Agents hébergés actifs en même temps dans toute l’organisation. Au-delà, un démarrage est refusé, pas mis en file.",
+        "agentsInOrg": "Agents hébergés actifs dans toute l’organisation, en cours ou en veille. Au-delà, un nouvel agent est refusé, pas mis en file.",
         "agentsPerPerson": "Agents hébergés actifs qu’une personne peut avoir. Au-delà, un nouvel agent est refusé, pas mis en file.",
         "ciJobsInFlight": "Tâches CI exécutées en même temps sur les runners de Motir. Au-delà, elles attendent dans la file."
       },
@@ -11817,8 +11817,8 @@
           "override": "dérogation"
         },
         "facts": {
-          "plan": "Forfait <strong>{plan}</strong> · {runs} exécutions hébergées à la fois · {perUser} agents par personne · {running} agents en cours · {ci} tâches de CI à la fois",
-          "planCiUnreadable": "Forfait <strong>{plan}</strong> · {runs} exécutions hébergées à la fois · {perUser} agents par personne · {running} agents en cours · limite de CI illisible",
+          "plan": "Forfait <strong>{plan}</strong> · {runs} exécutions hébergées à la fois · {perUser} agents par personne · {agents} agents · {ci} tâches de CI à la fois",
+          "planCiUnreadable": "Forfait <strong>{plan}</strong> · {runs} exécutions hébergées à la fois · {perUser} agents par personne · {agents} agents · limite de CI illisible",
           "planExempt": "Forfait <strong>Aucune limite de forfait</strong>",
           "planExemptOverride": "Forfait <strong>Aucune limite de forfait</strong> · {ci} tâches de CI à la fois (dérogation)",
           "planUnknown": "Forfait <strong>inconnu · {key}</strong> · nouveaux conteneurs refusés",
@@ -12817,8 +12817,8 @@
       "creditsUnknown": "Motir n'a pas pu vérifier les crédits de votre organisation pour le moment. Réessayez dans un instant.",
       "userCap": "Le forfait {plan} de votre organisation autorise {limit, plural, one {# agent} other {# agents}} par personne. Chacun est facturé chaque jour pour son stockage, même en veille. Supprimez-en un pour en créer un autre.",
       "userCapNoFigure": "Vous avez déjà autant d’agents que le forfait de votre organisation en autorise par personne. Chacun est facturé chaque jour pour son stockage, même en veille. Supprimez-en un pour en créer un autre.",
-      "orgRunningLimit": "Le forfait {plan} de votre organisation exécute {limit, plural, one {# agent} other {# agents}} à la fois, et tous sont déjà en cours d’exécution. Mettez-en un en veille pour en démarrer un autre.",
-      "orgRunningLimitNoFigure": "Votre organisation exécute déjà autant d’agents à la fois que son forfait le permet. Mettez-en un en veille pour en démarrer un autre.",
+      "orgCap": "Le forfait {plan} de votre organisation autorise {limit, plural, one {# agent} other {# agents}} dans l’organisation, en cours ou en veille. Chacun est facturé chaque jour pour son stockage, même en veille. Supprimez-en un pour en créer un autre.",
+      "orgCapNoFigure": "Votre organisation a déjà autant d’agents que son forfait le permet, en cours ou en veille. Chacun est facturé chaque jour pour son stockage, même en veille. Supprimez-en un pour en créer un autre.",
       "busy": "Motir exécute actuellement autant de machines que possible. Réessayez dans quelques minutes.",
       "notOffered": "Cet agent de code n'est pas proposé : ses conditions ne permettent pas encore à une plateforme de l'héberger. Choisissez un autre agent de code.",
       "nameTaken": "Vous avez déjà un agent nommé {name} sur ce projet.",
@@ -12832,7 +12832,7 @@
       "aiPlanUnknown": "Impossible de vérifier votre forfait IA",
       "credits": "Plus de crédits",
       "userCap": "Votre limite",
-      "orgRunningLimit": "La limite de votre organisation"
+      "orgCap": "La limite de votre organisation"
     },
     "lapse": {
       "bannerLead": "Le forfait IA de votre organisation a pris fin.",

@@ -67,10 +67,10 @@ describe('mapAgentInstanceError — every typed refusal is a status, never a 500
     expect(statusOf(new AgentInstanceStartRefusedError('ai_plan_unknown', 'no'))).toBe(503);
     // MOTIR-6926: the organisation's own cap is a cap (429) and carries its number.
     const orgCap = mapAgentInstanceError(
-      new AgentInstanceStartRefusedError('org_running_cap', 'full', 50),
+      new AgentInstanceStartRefusedError('org_cap', 'full', 50),
     )!;
     expect(orgCap.status).toBe(429);
-    expect(await orgCap.json()).toMatchObject({ reason: 'org_running_cap', limit: 50 });
+    expect(await orgCap.json()).toMatchObject({ reason: 'org_cap', limit: 50 });
     expect(
       await mapAgentInstanceError(new AgentInstanceStartRefusedError('user_cap', 'full'))!.json(),
     ).not.toHaveProperty('limit');
@@ -85,17 +85,17 @@ describe('mapAgentInstanceError — every typed refusal is a status, never a 500
       planName: 'Standard',
     });
     const orgPlanCap = mapAgentInstanceError(
-      new AgentInstanceStartRefusedError('org_running_cap', 'full', 30, 'Pro'),
+      new AgentInstanceStartRefusedError('org_cap', 'full', 30, 'Pro'),
     )!;
     expect(orgPlanCap.status).toBe(429);
     expect(await orgPlanCap.json()).toMatchObject({
-      reason: 'org_running_cap',
+      reason: 'org_cap',
       limit: 30,
       planName: 'Pro',
     });
     expect(
       await mapAgentInstanceError(
-        new AgentInstanceStartRefusedError('org_running_cap', 'full', 50),
+        new AgentInstanceStartRefusedError('org_cap', 'full', 50),
       )!.json(),
     ).not.toHaveProperty('planName');
     expect(statusOf(new AgentInstancesUnavailableError('x'))).toBe(503);

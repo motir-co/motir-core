@@ -14,7 +14,9 @@ import { HOST_PLAN_KEY, planCarriesOwnAccounts } from '@/lib/billing/ownAccountP
 //
 //   * `agentRunsInParallel` — the org's in-flight hosted-agent run containers.
 //   * `agentsPerUser`       — a user's live (not deleted) agent instances.
-//   * `agentsRunningPerOrg` — the org's running agent instances.
+//   * `agentsPerOrg`        — the org's live (not deleted) agent instances,
+//     running and hibernating together, judged at create; a wake is never
+//     refused by it (MOTIR-9954).
 //   * `ciBurstCap`          — the org's in-flight CI runner containers. A
 //     protection number, not capacity: the planning plans are expected to run CI
 //     on the org's own GitHub runners, so this only stops one org's burst from
@@ -40,7 +42,7 @@ import { HOST_PLAN_KEY, planCarriesOwnAccounts } from '@/lib/billing/ownAccountP
 export interface PlanCaps {
   agentRunsInParallel: number;
   agentsPerUser: number;
-  agentsRunningPerOrg: number;
+  agentsPerOrg: number;
   ciBurstCap: number;
 }
 
@@ -51,15 +53,15 @@ export { HOST_PLAN_KEY };
 function caps(
   agentRunsInParallel: number,
   agentsPerUser: number,
-  agentsRunningPerOrg: number,
+  agentsPerOrg: number,
   ciBurstCap: number,
 ): PlanCaps {
-  return Object.freeze({ agentRunsInParallel, agentsPerUser, agentsRunningPerOrg, ciBurstCap });
+  return Object.freeze({ agentRunsInParallel, agentsPerUser, agentsPerOrg, ciBurstCap });
 }
 
 /**
  * HOST'S SHARED FLOOR (MOTIR-9587 · MOTIR-9668): 5 runs, agents 5 per user and 20
- * running per org, and a CI burst of 20. A Host org runs at these until its own
+ * per org, and a CI burst of 20. A Host org runs at these until its own
  * account of a kind is live; then `planCapsService` replaces that kind's figure
  * with the account's own (`hostOwnAccountCaps.ts`). Not the larger pools' floor:
  * the two differ.
@@ -69,7 +71,7 @@ export const HOST_FLOOR_CAPS: PlanCaps = caps(5, 5, 20, 20);
 /**
  * THE LARGER POOLS' SHARED FLOOR (MOTIR-9366 · MOTIR-9653): every rung on sale runs
  * at these until its own account of a kind is live — 5 runs, agents 10 per user and
- * 50 running per org, and a CI burst of 20 (owner, 2026-10-26). Its own accounts
+ * 50 per org, and a CI burst of 20 (owner, 2026-10-26). Its own accounts
  * then replace the runs and CI figures exactly as Host's do; the agent figures are
  * already the rungs' 10 / 50 and stay.
  */

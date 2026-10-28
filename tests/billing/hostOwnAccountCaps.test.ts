@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   OWN_ACCOUNT_AGENTS_PER_USER,
-  OWN_ACCOUNT_AGENTS_RUNNING_PER_ORG,
+  OWN_ACCOUNT_AGENTS_PER_ORG,
   ownAccountCapsFromGranted,
   VCPU_PER_MACHINE,
 } from '@/lib/billing/hostOwnAccountCaps';
@@ -63,34 +63,34 @@ describe('ownAccountCapsFromGranted', () => {
       mergedGrantedVcpu: null,
     });
     expect(caps.agentsPerUser).toBe(FLOOR.agentsPerUser);
-    expect(caps.agentsRunningPerOrg).toBe(FLOOR.agentsRunningPerOrg);
+    expect(caps.agentsPerOrg).toBe(FLOOR.agentsPerOrg);
   });
 
   it("a live merged account lifts Host's agents from the floor's 5 / 20 to 10 / 50 (MOTIR-9668)", () => {
-    expect([FLOOR.agentsPerUser, FLOOR.agentsRunningPerOrg]).toEqual([5, 20]);
+    expect([FLOOR.agentsPerUser, FLOOR.agentsPerOrg]).toEqual([5, 20]);
     const caps = ownAccountCapsFromGranted({
       floor: FLOOR,
       agentRunnerGrantedVcpu: null,
       ciGrantedVcpu: null,
       mergedGrantedVcpu: 120,
     });
-    expect([caps.agentsPerUser, caps.agentsRunningPerOrg]).toEqual([
+    expect([caps.agentsPerUser, caps.agentsPerOrg]).toEqual([
       OWN_ACCOUNT_AGENTS_PER_USER,
-      OWN_ACCOUNT_AGENTS_RUNNING_PER_ORG,
+      OWN_ACCOUNT_AGENTS_PER_ORG,
     ]);
-    expect([caps.agentsPerUser, caps.agentsRunningPerOrg]).toEqual([10, 50]);
+    expect([caps.agentsPerUser, caps.agentsPerOrg]).toEqual([10, 50]);
     expect(caps.agentRunsInParallel).toBe(FLOOR.agentRunsInParallel);
     expect(caps.ciBurstCap).toBe(FLOOR.ciBurstCap);
   });
 
   it('the lift never lowers a floor already above it', () => {
-    const high = { ...FLOOR, agentsPerUser: 12, agentsRunningPerOrg: 60 };
+    const high = { ...FLOOR, agentsPerUser: 12, agentsPerOrg: 60 };
     const caps = ownAccountCapsFromGranted({
       floor: high,
       agentRunnerGrantedVcpu: null,
       ciGrantedVcpu: null,
       mergedGrantedVcpu: 120,
     });
-    expect([caps.agentsPerUser, caps.agentsRunningPerOrg]).toEqual([12, 60]);
+    expect([caps.agentsPerUser, caps.agentsPerOrg]).toEqual([12, 60]);
   });
 });

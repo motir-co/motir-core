@@ -2360,7 +2360,16 @@ export interface WorkItemProseMislabelledLinkAdvisoryDto extends WorkItemProseSh
   targetId: string;
   /** The key of the card that id opens, or `null` when it opens none. */
   targetKey: string | null;
+  /**
+   * The body the link sits in (MOTIR-9938). The explanation is a second stored
+   * body whose chips open cards exactly as the description's do, so both are
+   * scanned, and the advisory says which one to fix.
+   */
+  field: WorkItemLinkBodyField;
 }
+
+/** The stored bodies the mislabelled-link advisory scans (MOTIR-9938), in scan order. */
+export type WorkItemLinkBodyField = 'descriptionMd' | 'explanationMd';
 
 /**
  * ONE SHAPE advisory — narrowed by {@link WorkItemProseShapeAdvisoryDto.severity}

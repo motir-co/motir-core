@@ -6805,13 +6805,13 @@
       "loading": "Carregando…",
       "label": {
         "agentRunsInParallel": "Execuções de agente em paralelo",
-        "agentsRunningInOrg": "Agentes hospedados por organização",
+        "agentsInOrg": "Agentes hospedados por organização",
         "agentsPerPerson": "Agentes hospedados por pessoa",
         "ciJobsInFlight": "Jobs de CI em andamento"
       },
       "explain": {
         "agentRunsInParallel": "Jobs de agentes hospedados executados ao mesmo tempo. Os que passam do limite esperam na fila.",
-        "agentsRunningInOrg": "Agentes hospedados ativos ao mesmo tempo em toda a organização. Acima do limite, um início é recusado, não vai para a fila.",
+        "agentsInOrg": "Agentes hospedados ativos em toda a organização, em execução ou hibernados. Acima do limite, um novo é recusado, não vai para a fila.",
         "agentsPerPerson": "Agentes hospedados ativos que uma pessoa pode ter. Acima do limite, um novo é recusado, não vai para a fila.",
         "ciJobsInFlight": "Jobs de CI executados ao mesmo tempo nos runners do Motir. Os que passam do limite esperam na fila."
       },
@@ -11817,8 +11817,8 @@
           "override": "substituição"
         },
         "facts": {
-          "plan": "Plano <strong>{plan}</strong> · {runs} execuções hospedadas ao mesmo tempo · {perUser} agentes por pessoa · {running} agentes em execução · {ci} jobs de CI ao mesmo tempo",
-          "planCiUnreadable": "Plano <strong>{plan}</strong> · {runs} execuções hospedadas ao mesmo tempo · {perUser} agentes por pessoa · {running} agentes em execução · limite de CI ilegível",
+          "plan": "Plano <strong>{plan}</strong> · {runs} execuções hospedadas ao mesmo tempo · {perUser} agentes por pessoa · {agents} agentes · {ci} jobs de CI ao mesmo tempo",
+          "planCiUnreadable": "Plano <strong>{plan}</strong> · {runs} execuções hospedadas ao mesmo tempo · {perUser} agentes por pessoa · {agents} agentes · limite de CI ilegível",
           "planExempt": "Plano <strong>Sem limite de plano</strong>",
           "planExemptOverride": "Plano <strong>Sem limite de plano</strong> · {ci} jobs de CI ao mesmo tempo (substituição)",
           "planUnknown": "Plano <strong>desconhecido · {key}</strong> · novos contêineres recusados",
@@ -12817,8 +12817,8 @@
       "creditsUnknown": "O Motir não conseguiu verificar os créditos da sua organização agora. Tente novamente em instantes.",
       "userCap": "O plano {plan} da sua organização permite {limit, plural, one {# agente} other {# agentes}} por pessoa. Cada um é cobrado pelo armazenamento todos os dias, mesmo hibernado. Exclua um para criar outro.",
       "userCapNoFigure": "Você já tem tantos agentes quanto o plano da sua organização permite por pessoa. Cada um é cobrado pelo armazenamento todos os dias, mesmo hibernado. Exclua um para criar outro.",
-      "orgRunningLimit": "O plano {plan} da sua organização executa {limit, plural, one {# agente} other {# agentes}} ao mesmo tempo, e todos já estão em execução. Hiberne um para iniciar outro.",
-      "orgRunningLimitNoFigure": "Sua organização já está executando tantos agentes ao mesmo tempo quanto o plano permite. Hiberne um para iniciar outro.",
+      "orgCap": "O plano {plan} da sua organização permite {limit, plural, one {# agente} other {# agentes}} na organização, em execução ou hibernados. Cada um é cobrado pelo armazenamento todos os dias, mesmo hibernado. Exclua um para criar outro.",
+      "orgCapNoFigure": "Sua organização já tem tantos agentes quanto o plano permite, em execução ou hibernados. Cada um é cobrado pelo armazenamento todos os dias, mesmo hibernado. Exclua um para criar outro.",
       "busy": "O Motir está executando o máximo de máquinas que pode agora. Tente novamente em alguns minutos.",
       "notOffered": "Esse agente de código não é oferecido: os termos dele ainda não permitem que uma plataforma o hospede. Escolha outro agente de código.",
       "nameTaken": "Você já tem um agente com o nome {name} neste projeto.",
@@ -12832,7 +12832,7 @@
       "aiPlanUnknown": "Não foi possível verificar seu plano de IA",
       "credits": "Sem créditos",
       "userCap": "Seu limite",
-      "orgRunningLimit": "Limite da sua organização"
+      "orgCap": "Limite da sua organização"
     },
     "lapse": {
       "bannerLead": "O plano de IA da sua organização terminou.",

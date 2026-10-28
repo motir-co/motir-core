@@ -6805,13 +6805,13 @@
       "loading": "Wird geladen…",
       "label": {
         "agentRunsInParallel": "Parallele Agent-Läufe",
-        "agentsRunningInOrg": "Gehostete Agents pro Organisation",
+        "agentsInOrg": "Gehostete Agents pro Organisation",
         "agentsPerPerson": "Gehostete Agents pro Person",
         "ciJobsInFlight": "Laufende CI-Jobs"
       },
       "explain": {
         "agentRunsInParallel": "Gehostete Agent-Jobs, die gleichzeitig laufen. Weitere warten in der Warteschlange.",
-        "agentsRunningInOrg": "Gehostete Agents, die in der ganzen Organisation gleichzeitig laufen. Darüber hinaus wird ein Start abgelehnt, nicht eingereiht.",
+        "agentsInOrg": "Aktive gehostete Agents in der ganzen Organisation, laufend oder im Ruhezustand. Ein neuer darüber hinaus wird abgelehnt, nicht eingereiht.",
         "agentsPerPerson": "Aktive gehostete Agents, die eine Person haben kann. Darüber hinaus wird ein neuer abgelehnt, nicht eingereiht.",
         "ciJobsInFlight": "CI-Jobs, die gleichzeitig auf den Runnern von Motir laufen. Weitere warten in der Warteschlange."
       },
@@ -11817,8 +11817,8 @@
           "override": "Überschreibung"
         },
         "facts": {
-          "plan": "Plan <strong>{plan}</strong> · {runs} gehostete Läufe gleichzeitig · {perUser} Agenten pro Person · {running} laufende Agenten · {ci} CI-Jobs gleichzeitig",
-          "planCiUnreadable": "Plan <strong>{plan}</strong> · {runs} gehostete Läufe gleichzeitig · {perUser} Agenten pro Person · {running} laufende Agenten · CI-Limit nicht lesbar",
+          "plan": "Plan <strong>{plan}</strong> · {runs} gehostete Läufe gleichzeitig · {perUser} Agenten pro Person · {agents} Agenten · {ci} CI-Jobs gleichzeitig",
+          "planCiUnreadable": "Plan <strong>{plan}</strong> · {runs} gehostete Läufe gleichzeitig · {perUser} Agenten pro Person · {agents} Agenten · CI-Limit nicht lesbar",
           "planExempt": "Plan <strong>Kein Planlimit</strong>",
           "planExemptOverride": "Plan <strong>Kein Planlimit</strong> · {ci} CI-Jobs gleichzeitig (Überschreibung)",
           "planUnknown": "Plan <strong>unbekannt · {key}</strong> · neue Container abgelehnt",
@@ -12817,8 +12817,8 @@
       "creditsUnknown": "Motir konnte die Credits Ihrer Organisation gerade nicht prüfen. Versuchen Sie es gleich noch einmal.",
       "userCap": "Der Plan {plan} Ihrer Organisation erlaubt {limit, plural, one {# Agenten} other {# Agenten}} pro Person. Für jeden wird täglich der Speicher berechnet, auch im Ruhezustand. Löschen Sie einen, um einen weiteren zu erstellen.",
       "userCapNoFigure": "Sie haben bereits so viele Agenten, wie der Plan Ihrer Organisation pro Person erlaubt. Für jeden wird täglich der Speicher berechnet, auch im Ruhezustand. Löschen Sie einen, um einen weiteren zu erstellen.",
-      "orgRunningLimit": "Der Plan {plan} Ihrer Organisation lässt {limit, plural, one {# Agenten} other {# Agenten}} gleichzeitig laufen, und alle laufen bereits. Versetzen Sie einen in den Ruhezustand, um einen weiteren zu starten.",
-      "orgRunningLimitNoFigure": "In Ihrer Organisation laufen bereits so viele Agenten gleichzeitig, wie ihr Plan erlaubt. Versetzen Sie einen in den Ruhezustand, um einen weiteren zu starten.",
+      "orgCap": "Der Plan {plan} Ihrer Organisation erlaubt {limit, plural, one {# Agenten} other {# Agenten}} in der Organisation, laufend oder im Ruhezustand. Jeder wird täglich für seinen Speicher berechnet, auch im Ruhezustand. Löschen Sie einen, um einen weiteren zu erstellen.",
+      "orgCapNoFigure": "Ihre Organisation hat bereits so viele Agenten, wie ihr Plan erlaubt, laufend oder im Ruhezustand. Jeder wird täglich für seinen Speicher berechnet, auch im Ruhezustand. Löschen Sie einen, um einen weiteren zu erstellen.",
       "busy": "Motir betreibt gerade so viele Maschinen wie möglich. Versuchen Sie es in ein paar Minuten erneut.",
       "notOffered": "Dieser Coding-Agent wird nicht angeboten: Seine Bedingungen erlauben es einer Plattform noch nicht, ihn zu hosten. Wählen Sie einen anderen Coding-Agenten.",
       "nameTaken": "Sie haben in diesem Projekt bereits einen Agenten namens {name}.",
@@ -12832,7 +12832,7 @@
       "aiPlanUnknown": "AI-Plan konnte nicht geprüft werden",
       "credits": "Keine Credits mehr",
       "userCap": "Ihr Limit",
-      "orgRunningLimit": "Limit Ihrer Organisation"
+      "orgCap": "Limit Ihrer Organisation"
     },
     "lapse": {
       "bannerLead": "Der AI-Plan Ihrer Organisation ist beendet.",

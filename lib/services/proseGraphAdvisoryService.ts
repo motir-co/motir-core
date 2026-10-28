@@ -33,7 +33,7 @@ import {
   bodyEditAboveFieldMove,
   type RevisionKeys,
 } from '@/lib/workItems/bodyAboveFieldMove';
-import type { WorkItemProseAdvisoryDto } from '@/lib/dto/workItems';
+import type { WorkItemLinkBodyField, WorkItemProseAdvisoryDto } from '@/lib/dto/workItems';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
 // The PROSE-vs-GRAPH advisory (MOTIR-1969) — the service half of the check whose
@@ -71,6 +71,13 @@ export interface ProseAdvisorySubject {
   item: string;
   /** Its body. `null` / empty simply yields no references. */
   descriptionMd: string | null;
+  /**
+   * Its EXPLANATION — read ONLY by the MISLABELLED-LINK check (MOTIR-9938). It is
+   * a second stored body whose chips open cards exactly as the description's do,
+   * so a link there is judged the same way. Optional: a caller that does not read
+   * it scans the description alone, as before.
+   */
+  explanationMd?: string | null;
   /**
    * Its kind — read ONLY by the UNDER-AUTHORED check (MOTIR-5427), which exempts a
    * container kind because it cannot carry a `type` or `executor`. Optional: a
@@ -238,7 +245,18 @@ export async function buildProseVsGraphAdvisories(
   const scanned = subjects.map((s) => {
     const refs = new Map(bodyReferenceSeverities(s.descriptionMd));
     for (const id of s.exemptIds) refs.delete(id);
-    const links: WorkItemLink[] = checkLinks ? parseWorkItemLinks(s.descriptionMd ?? '') : [];
+    const links: BodyLink[] = checkLinks
+      ? [
+          ...parseWorkItemLinks(s.descriptionMd ?? '').map((l) => ({
+            ...l,
+            field: 'descriptionMd' as const,
+          })),
+          ...parseWorkItemLinks(s.explanationMd ?? '').map((l) => ({
+            ...l,
+            field: 'explanationMd' as const,
+          })),
+        ]
+      : [];
     return { item: s.item, refs, links, subject: s };
   });
 
@@ -410,7 +428,7 @@ const familyRank = (a: WorkItemProseAdvisoryDto): number =>
 const tieKey = (a: WorkItemProseAdvisoryDto): string =>
   a.kind === 'shape'
     ? a.severity === 'likely-mislabelled-link'
-      ? `${a.severity}\u0000${a.targetId}\u0000${a.label}`
+      ? `${a.severity}\u0000${a.field}\u0000${a.targetId}\u0000${a.label}`
       : a.severity
     : a.kind === 'subsumption'
       ? a.path
@@ -426,7 +444,7 @@ const tieKey = (a: WorkItemProseAdvisoryDto): string =>
  */
 function mislabelledLinkAdvisory(
   item: string,
-  link: WorkItemLink,
+  link: BodyLink,
   targetKey: string | null,
   knownPrefixes: ReadonlySet<string>,
 ): WorkItemProseAdvisoryDto | null {
@@ -443,8 +461,12 @@ function mislabelledLinkAdvisory(
     label: link.label,
     targetId: link.id,
     targetKey,
+    field: link.field,
   };
 }
+
+/** A link plus the body it was parsed from (MOTIR-9938). */
+type BodyLink = WorkItemLink & { field: WorkItemLinkBodyField };
 
 /**
  * The ORDERING advisory for ONE subject (MOTIR-2175) — gate 14's third axis.
