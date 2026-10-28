@@ -10,7 +10,6 @@ import {
 } from '@/lib/fleetShards/awsPoolDefinition';
 import {
   AWS_REAP_UNTAGGED_OPTION,
-  AWS_RUNTIME_CREDENTIAL_OPTION,
   createAwsShardProvisioningProvider,
 } from '@/lib/fleetShards/awsProvisioningProvider';
 import type { ProviderStepContext } from '@/lib/fleetShards/provisioningProviders';
@@ -150,7 +149,7 @@ describe('the aws provider’s network step', () => {
       name: 'ci-runner-pool-1',
       fleetKind: 'ci_runner',
       region: 'us-east-1',
-      options: { [AWS_RUNTIME_CREDENTIAL_OPTION]: 'role' },
+      options: {},
       credentialRef: 'FLEET_SHARD_CI_RUNNER_POOL_1',
       account: { accountId, credentials: SESSION },
       ...overrides,

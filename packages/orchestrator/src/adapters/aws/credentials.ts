@@ -22,12 +22,6 @@ export interface AwsManagementCredentials {
   readonly roleArn: string;
 }
 
-/** An access key pair, without a region. */
-export interface AwsAccessKey {
-  readonly accessKeyId: string;
-  readonly secretAccessKey: string;
-}
-
 type Env = Readonly<Record<string, string | undefined>>;
 
 function read(env: Env, name: string): string {
@@ -57,20 +51,4 @@ export function awsManagementCredentials(env: Env): AwsManagementCredentials {
   const accessKeyId = read(env, AWS_MANAGEMENT_ENV.accessKeyId);
   if (!accessKeyId) return { roleArn };
   return { accessKeyId, secretAccessKey: read(env, AWS_MANAGEMENT_ENV.secretAccessKey), roleArn };
-}
-
-/** The two variables an account's runtime key lives in, under its `credentialRef`. */
-export function awsRuntimeKeyEnvNames(prefix: string): {
-  accessKeyId: string;
-  secretAccessKey: string;
-} {
-  return { accessKeyId: `${prefix}_ACCESS_KEY_ID`, secretAccessKey: `${prefix}_SECRET_ACCESS_KEY` };
-}
-
-/** The account's runtime key under `prefix`, or null when either half is unset. */
-export function awsCredentialsFromEnv(prefix: string, env: Env): AwsAccessKey | null {
-  const names = awsRuntimeKeyEnvNames(prefix);
-  const accessKeyId = read(env, names.accessKeyId);
-  const secretAccessKey = read(env, names.secretAccessKey);
-  return accessKeyId && secretAccessKey ? { accessKeyId, secretAccessKey } : null;
 }

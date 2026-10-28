@@ -9,17 +9,14 @@ import {
   AWS_MANAGEMENT_ENV,
   AWS_RUNNER_IAM_POLICY,
   AWS_RUNNER_IAM_ROLE,
-  AWS_RUNNER_IAM_USER,
   AwsAccountCreationRefusedError,
   AwsManagementApiError,
   OrchestratorNotConfiguredError,
-  awsCredentialsFromEnv,
   awsManagementCredentials,
   awsManagementRequiredEnv,
   awsAgentHosterPolicyDocument,
   awsRunnerPolicyDocument,
   awsRunnerTrustPolicy,
-  awsRuntimeKeyEnvNames,
   createAwsManagementApi,
   createAwsManagementSdkClient,
   type AwsManagementClientFactory,
@@ -242,21 +239,6 @@ describe('the management role, with the key and on the default chain (MOTIR-9839
       [false, undefined, undefined],
       [true, 'ASIAMGMT', 'token-MGMT'],
     ]);
-  });
-});
-
-describe('awsCredentialsFromEnv', () => {
-  it('reads the prefix’s two variables, or null when either is unset', () => {
-    expect(awsRuntimeKeyEnvNames('FLEET_SHARD_A')).toEqual({
-      accessKeyId: 'FLEET_SHARD_A_ACCESS_KEY_ID',
-      secretAccessKey: 'FLEET_SHARD_A_SECRET_ACCESS_KEY',
-    });
-    expect(awsCredentialsFromEnv('P', { P_ACCESS_KEY_ID: 'k', P_SECRET_ACCESS_KEY: 's' })).toEqual({
-      accessKeyId: 'k',
-      secretAccessKey: 's',
-    });
-    expect(awsCredentialsFromEnv('P', { P_ACCESS_KEY_ID: 'k' })).toBeNull();
-    expect(awsCredentialsFromEnv('P', {})).toBeNull();
   });
 });
 
@@ -704,85 +686,6 @@ describe('the runner role (MOTIR-9460)', () => {
         RoleArn: `arn:aws:iam::123456789012:role/${AWS_RUNNER_IAM_ROLE}`,
         DurationSeconds: 3600,
       },
-    });
-  });
-});
-
-describe('ensureRunnerIamUser', () => {
-  const policy = awsRunnerPolicyDocument({ shardTag: 'ci-runner-use1-2', regionId: 'us-east-1' });
-
-  it('creates the user and its policy when absent, and never mints a key', async () => {
-    const { api, calls } = harness({
-      GetUserCommand: () => {
-        throw sdkError('NoSuchEntityException', 404);
-      },
-      CreateUserCommand: () => ({}),
-      GetUserPolicyCommand: () => {
-        throw Object.assign(new Error('x'), { Code: 'NoSuchEntity' });
-      },
-      PutUserPolicyCommand: () => ({}),
-    });
-
-    expect(await api.ensureRunnerIamUser(MEMBER, policy)).toEqual({
-      created: [`iam-user:${AWS_RUNNER_IAM_USER}`, `iam-policy:${AWS_RUNNER_IAM_POLICY}`],
-    });
-    expect(calls.map((c) => c.command)).toEqual([
-      'GetUserCommand',
-      'CreateUserCommand',
-      'GetUserPolicyCommand',
-      'PutUserPolicyCommand',
-    ]);
-    expect(calls.every((c) => c.service === 'iam' && c.accessKeyId === 'ASIAMEMBER')).toBe(true);
-    expect(JSON.parse(String(calls[3]!.input['PolicyDocument']))).toEqual(policy);
-    expect(calls.some((c) => c.command === 'CreateAccessKeyCommand')).toBe(false);
-  });
-
-  it('creates nothing when the user and the same policy exist', async () => {
-    const { api, calls } = harness({
-      GetUserCommand: () => ({ User: { UserName: AWS_RUNNER_IAM_USER } }),
-      GetUserPolicyCommand: () => ({
-        PolicyDocument: encodeURIComponent(JSON.stringify(policy)),
-      }),
-    });
-    expect(await api.ensureRunnerIamUser(MEMBER, policy)).toEqual({ created: [] });
-    expect(calls.map((c) => c.command)).toEqual(['GetUserCommand', 'GetUserPolicyCommand']);
-  });
-
-  it('rewrites a policy that differs, or one that is not JSON', async () => {
-    for (const document of [
-      encodeURIComponent(JSON.stringify({ Version: '2012-10-17', Statement: [] })),
-      'not-json',
-      '',
-    ]) {
-      const { api, calls } = harness({
-        GetUserCommand: () => ({}),
-        GetUserPolicyCommand: () => ({ PolicyDocument: document }),
-        PutUserPolicyCommand: () => ({}),
-      });
-      expect(await api.ensureRunnerIamUser(MEMBER, policy)).toEqual({
-        created: [`iam-policy:${AWS_RUNNER_IAM_POLICY}`],
-      });
-      expect(calls.at(-1)!.command).toBe('PutUserPolicyCommand');
-    }
-  });
-
-  it('a refusal other than not-found stops it', async () => {
-    const user = harness({
-      GetUserCommand: () => {
-        throw sdkError('AccessDenied', 403);
-      },
-    });
-    await expect(user.api.ensureRunnerIamUser(MEMBER, policy)).rejects.toMatchObject({
-      awsCode: 'AccessDenied',
-    });
-    const doc = harness({
-      GetUserCommand: () => ({}),
-      GetUserPolicyCommand: () => {
-        throw sdkError('ServiceFailure', 500);
-      },
-    });
-    await expect(doc.api.ensureRunnerIamUser(MEMBER, policy)).rejects.toMatchObject({
-      awsCode: 'ServiceFailure',
     });
   });
 });

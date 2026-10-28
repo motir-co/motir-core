@@ -16,8 +16,9 @@ import type {
 // `awsProvisioningProvider.ts`); the tests register fakes beside it.
 //
 // ⚠️ A PROVIDER NEVER MINTS OR RETURNS A SECRET. Its runtime-credential step
-// creates what it can without a key and CONFIRMS, read-only, that a key a person
-// set resolves and works; creating the key is a pending manual step it words.
+// CONFIRMS that the account's runtime credential works (for AWS, by assuming the
+// account's runner role, MOTIR-9847); when it cannot yet, the provider words the
+// pending step.
 
 /** One extra CLI option a provider takes, as `--<name> <value>`. */
 export interface ProviderOption {
@@ -97,8 +98,7 @@ export interface ShardProvisioningProvider {
   network(ctx: ProviderStepContext): Promise<ProviderNetworkResult>;
   readQuota(ctx: ProviderStepContext): Promise<ProviderQuotaResult>;
   runtimeCredential(ctx: ProviderStepContext): Promise<ProviderCredentialResult>;
-  /** The person's step when the credential is not confirmed — the exact
-   *  `flyctl secrets set -a motir-core <PREFIX>_…=…` line, worded by the provider. */
+  /** The pending step when the credential is not confirmed, worded by the provider. */
   manualCredentialStep(ctx: ProviderStepContext): string;
 }
 

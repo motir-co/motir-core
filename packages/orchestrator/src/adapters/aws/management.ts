@@ -11,12 +11,8 @@ import {
   CreateRoleCommand,
   GetRoleCommand,
   GetRolePolicyCommand,
-  GetUserCommand,
-  CreateUserCommand,
-  GetUserPolicyCommand,
   IAMClient,
   PutRolePolicyCommand,
-  PutUserPolicyCommand,
 } from '@aws-sdk/client-iam';
 import {
   CreateAccountCommand,
@@ -78,8 +74,8 @@ import {
 //     API_GetAWSDefaultServiceQuota.html, API_RequestServiceQuotaIncrease.html,
 //     API_GetRequestedServiceQuotaChange.html, API_ListRequestedServiceQuotaChangeHistoryByQuota.html
 //     (MOTIR-9459: the fleet's own quota raises)
-//   IAM — https://docs.aws.amazon.com/IAM/latest/APIReference/API_GetUser.html, API_CreateUser.html,
-//     API_GetUserPolicy.html, API_PutUserPolicy.html
+//   IAM — https://docs.aws.amazon.com/IAM/latest/APIReference/API_GetRole.html, API_CreateRole.html,
+//     API_GetRolePolicy.html, API_PutRolePolicy.html
 //   Organizations, the unit (MOTIR-9844) — API_ListParents.html, API_MoveAccount.html
 //   CloudFormation StackSets (MOTIR-9844) — see `./stackSet.ts`
 //
@@ -99,11 +95,9 @@ export const AWS_MEMBER_ROLE_NAME = 'OrganizationAccountAccessRole';
  *  measured in vCPUs — https://docs.aws.amazon.com/ec2/latest/instancetypes/ec2-instance-quotas.html */
 export const AWS_EC2_VCPU_QUOTA_CODE = 'L-1216C47A';
 
-/** The IAM user every account's runners boot with, and its inline policy. */
-export const AWS_RUNNER_IAM_USER = 'motir-fleet-runner';
-/** The runner's IAM ROLE in a member account an unattended add-shard created
- *  (MOTIR-9460): the management role assumes it, so no person mints a key.
- *  Roles and users are separate IAM namespaces; the name matches the user's. */
+/** The runner's IAM ROLE in every pool account, and its inline policy: the
+ *  definition's stack builds it, the management role assumes it (MOTIR-9460),
+ *  and it is the only credential runners boot with (MOTIR-9847). */
 export const AWS_RUNNER_IAM_ROLE = 'motir-fleet-runner';
 export const AWS_RUNNER_IAM_POLICY = 'motir-fleet-runner-ec2';
 
@@ -283,11 +277,6 @@ export interface AwsManagementApi {
   ): Promise<{ created: string[] }>;
   /** A runner session in the member account, from the management role. */
   assumeRunnerRole(accountId: string): Promise<AwsSessionCredentials>;
-  /** The runner's IAM user and inline policy; answers what it created. */
-  ensureRunnerIamUser(
-    credentials: AwsSessionCredentials,
-    policyDocument: AwsPolicyDocument,
-  ): Promise<{ created: string[] }>;
   /** Put the account under `organizationalUnitId`; a no-op when it is there. */
   moveAccountToOrganizationalUnit(
     accountId: string,
@@ -755,57 +744,6 @@ export function createAwsManagementApi(
         if (open) return quotaRequestOf(open);
       }
       return null;
-    },
-
-    async ensureRunnerIamUser(credentials, policyDocument) {
-      const iam = client('iam', credentials);
-      const created: string[] = [];
-      const absent = iamAbsent;
-
-      try {
-        await call('iam', iam, new GetUserCommand({ UserName: AWS_RUNNER_IAM_USER }));
-      } catch (err) {
-        if (!absent(err)) throw err;
-        await call(
-          'iam',
-          iam,
-          new CreateUserCommand({
-            UserName: AWS_RUNNER_IAM_USER,
-            Tags: [{ Key: 'motir-role', Value: 'fleet-runner' }],
-          }),
-        );
-        created.push(`iam-user:${AWS_RUNNER_IAM_USER}`);
-      }
-
-      const wanted = JSON.stringify(policyDocument);
-      let current: string | null = null;
-      try {
-        const answer = await call<{ PolicyDocument?: string }>(
-          'iam',
-          iam,
-          new GetUserPolicyCommand({
-            UserName: AWS_RUNNER_IAM_USER,
-            PolicyName: AWS_RUNNER_IAM_POLICY,
-          }),
-        );
-        // IAM answers the document URL-encoded (RFC 3986).
-        current = answer.PolicyDocument ? decodeURIComponent(answer.PolicyDocument) : null;
-      } catch (err) {
-        if (!absent(err)) throw err;
-      }
-      if (current === null || !samePolicy(current, wanted)) {
-        await call(
-          'iam',
-          iam,
-          new PutUserPolicyCommand({
-            UserName: AWS_RUNNER_IAM_USER,
-            PolicyName: AWS_RUNNER_IAM_POLICY,
-            PolicyDocument: wanted,
-          }),
-        );
-        created.push(`iam-policy:${AWS_RUNNER_IAM_POLICY}`);
-      }
-      return { created };
     },
 
     async moveAccountToOrganizationalUnit(accountId, organizationalUnitId) {

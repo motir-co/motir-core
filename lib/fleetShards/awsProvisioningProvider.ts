@@ -1,15 +1,10 @@
 import {
   AWS_MEMBER_ROLE_NAME,
   AWS_RUNNER_IAM_ROLE,
-  AWS_RUNNER_IAM_USER,
   AwsAccountCreationRefusedError,
   AwsManagementApiError,
-  awsCredentialsFromEnv,
-  awsAgentHosterPolicyDocument,
   awsManagementCredentials,
   awsManagementRequiredEnv,
-  awsRunnerPolicyDocument,
-  awsRuntimeKeyEnvNames,
   AwsStackOutputsMissingError,
   awsShardVpcExists,
   createAwsManagementApi,
@@ -48,22 +43,11 @@ import type {
 //
 // It reaches AWS only through `@motir/orchestrator`: no SDK import here.
 //
-// ⚠️ NO KEY IS MINTED. The member account's admin session (from assuming
-// `OrganizationAccountAccessRole`) lives in memory for the run. The runner's own
-// key is created by a person in the console; this provider words that step and
-// later CONFIRMS, read-only, that the key a person set works.
-
-/**
- * The INTERNAL option the unattended add-shard sets (MOTIR-9460) — never a CLI
- * flag (it is not in `options`): `role` makes the runtime credential the
- * account's `motir-fleet-runner` ROLE, assumed from the management credential,
- * in place of the person-keyed IAM user.
- */
-export const AWS_RUNTIME_CREDENTIAL_OPTION = 'runtime-credential';
-
-function runnerRoleMode(ctx: ProviderStepContext): boolean {
-  return ctx.options[AWS_RUNTIME_CREDENTIAL_OPTION] === 'role';
-}
+// ⚠️ NO KEY EXISTS. The member account's admin session (from assuming
+// `OrganizationAccountAccessRole`) lives in memory for the run, and the runners
+// boot only on the account's `motir-fleet-runner` ROLE, which the definition's
+// stack builds and the orchestrator assumes from the management credential
+// (MOTIR-9847): no runner IAM user or access key is created or read.
 
 /**
  * The INTERNAL option a Host organisation's own account is added with (MOTIR-9584):
@@ -100,7 +84,7 @@ export interface AwsProvisioningDeps {
   management(): AwsManagementApi;
   /** An EC2 surface for a credential and region. */
   ec2(config: AwsCredentialsConfig): Ec2Api;
-  /** Where the runtime key is read from. */
+  /** This deployment's configuration: the management credential and the pool definition. */
   env(): Readonly<Record<string, string | undefined>>;
 }
 
@@ -235,7 +219,7 @@ export function createAwsShardProvisioningProvider(
       try {
         credentials = await api().assumeMemberRole(accountId);
       } catch (err) {
-        if (!runnerRoleMode(ctx) || !(err instanceof AwsManagementApiError)) throw err;
+        if (!(err instanceof AwsManagementApiError)) throw err;
         throw new MemberRoleAssumeFailedError(accountId, AWS_MEMBER_ROLE_NAME, err.awsCode);
       }
       const account: AwsAccountState = { accountId, credentials };
@@ -315,60 +299,24 @@ export function createAwsShardProvisioningProvider(
     },
 
     async runtimeCredential(ctx) {
-      if (runnerRoleMode(ctx)) {
-        // No key at all: the definition's stack built `motir-fleet-runner`, which
-        // trusts the management role, and the orchestrator assumes it (MOTIR-9460).
-        // Confirmed by assuming it once; IAM propagation may make that wait.
-        const accountId = accountIdOf(ctx);
-        if (!accountId) return { created: [], confirmed: false };
-        try {
-          await api().assumeRunnerRole(accountId);
-          return { created: [], confirmed: true };
-        } catch {
-          return { created: [], confirmed: false };
-        }
-      }
-      const credentials = await memberCredentials(ctx);
-      const region = regionOf(ctx);
-      // An agent-hoster account's instances persist — hibernate, wake, rewrite
-      // their config, delete their disk — so its key carries those calls too.
-      const policy =
-        ctx.fleetKind === 'agent_instance' ? awsAgentHosterPolicyDocument : awsRunnerPolicyDocument;
-      const { created } = await api().ensureRunnerIamUser(
-        credentials,
-        ctx.fleetKind === 'agent_instance'
-          ? policy({ shardTag: ctx.name, regionId: region })
-          : awsRunnerPolicyDocument({
-              shardTag: ctx.name,
-              regionId: region,
-              // The attribution pass reaps untagged VMs on an indexer account (MOTIR-9450).
-              reapUntagged: ctx.fleetKind === 'code_graph_index',
-            }),
-      );
-      const key = awsCredentialsFromEnv(ctx.credentialRef, deps.env());
-      if (!key) return { created, confirmed: false };
+      // No key at all: the definition's stack built `motir-fleet-runner`, which
+      // trusts the management role, and the orchestrator assumes it (MOTIR-9460).
+      // Confirmed by assuming it once; IAM propagation may make that wait.
+      const accountId = accountIdOf(ctx);
+      if (!accountId) return { created: [], confirmed: false };
       try {
-        // Read-only, with the person-set key itself: proves it resolves and works.
-        await deps.ec2({ ...key, region }).describeInstances({ maxResults: 5 });
-        return { created, confirmed: true };
+        await api().assumeRunnerRole(accountId);
+        return { created: [], confirmed: true };
       } catch {
-        return { created, confirmed: false };
+        return { created: [], confirmed: false };
       }
     },
 
     manualCredentialStep(ctx) {
-      const names = awsRuntimeKeyEnvNames(ctx.credentialRef);
       const accountId = accountIdOf(ctx) ?? '(the account)';
-      if (runnerRoleMode(ctx)) {
-        return (
-          `the role ${AWS_RUNNER_IAM_ROLE} in AWS account ${accountId} could not be assumed yet ` +
-          '(IAM propagates within minutes); the next growth pass resumes this account'
-        );
-      }
       return (
-        `create an access key for the IAM user ${AWS_RUNNER_IAM_USER} in AWS account ${accountId} ` +
-        `(IAM console → Users → ${AWS_RUNNER_IAM_USER} → Security credentials → Create access key), ` +
-        `then run: flyctl secrets set -a motir-core ${names.accessKeyId}=… ${names.secretAccessKey}=…`
+        `the role ${AWS_RUNNER_IAM_ROLE} in AWS account ${accountId} could not be assumed yet ` +
+        '(IAM propagates within minutes); the next growth pass resumes this account'
       );
     },
   };

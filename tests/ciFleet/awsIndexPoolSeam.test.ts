@@ -36,6 +36,7 @@ import { JobTestEngine } from '../helpers/jobs';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import { randomToken } from '../helpers/random';
+import { runnerRole, stubRunnerRoleManagementEnv } from '../helpers/awsRunnerRoleFake';
 import {
   driveIndexFleetFast,
   indexEventFor,
@@ -96,11 +97,9 @@ vi.mock('@motir/orchestrator', async () => {
   fakes.fly = source.createFakeOrchestrator({ idPrefix: 'fly-machine' });
   return {
     ...source,
-    createEc2Api: (config: { accessKeyId: string }) => {
-      const ec2 = fakes.ec2ByKeyId.get(config.accessKeyId);
-      if (!ec2) throw new Error(`no EC2 fake for ${config.accessKeyId}`);
-      return ec2;
-    },
+    createAwsManagementApi: () => runnerRole.management(),
+    createEc2Api: (config: Parameters<typeof runnerRole.ec2For>[0]) =>
+      runnerRole.ec2For(config, (keyId) => fakes.ec2ByKeyId.get(keyId) as object | undefined),
     flyOrchestrator: fakes.fly,
   };
 });
@@ -128,8 +127,8 @@ async function account(fleetKind: FleetWorkloadKind, machineLimit: number): Prom
   const label = randomToken(6).toUpperCase();
   const credentialRef = `AWS_SEAM_${label}`;
   const accessKeyId = `AKIA${label}`;
-  vi.stubEnv(`${credentialRef}_ACCESS_KEY_ID`, accessKeyId);
-  vi.stubEnv(`${credentialRef}_SECRET_ACCESS_KEY`, `secret-${label}`);
+  const awsAccountId = String(100_000_000_000 + Math.floor(Math.random() * 1e9));
+  runnerRole.grant(awsAccountId, accessKeyId);
   const shard = await fleetShardService.createShard({
     name: `${fleetKind.replace(/_/g, '-')}-use1-${label.toLowerCase()}`,
     fleetKind,
@@ -137,7 +136,7 @@ async function account(fleetKind: FleetWorkloadKind, machineLimit: number): Prom
     state: 'active',
     githubOrg: 'motir-projects',
     githubInstallationId: '556677',
-    awsAccountId: String(100_000_000_000 + Math.floor(Math.random() * 1e9)),
+    awsAccountId,
     awsRegion: REGION,
     credentialRef,
     limits: { machineLimit },
@@ -277,6 +276,8 @@ beforeEach(async () => {
   _resetInstallationTokenCache();
   fly().reset();
   fakes.ec2ByKeyId.clear();
+  runnerRole.reset();
+  stubRunnerRoleManagementEnv();
   fleetShardOrchestratorService.resetCache();
   resetTarballBodyTrap();
   driveIndexFleetFast();

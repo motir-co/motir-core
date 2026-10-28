@@ -104,7 +104,6 @@ export class FakeOrganization implements AwsManagementApi {
   readonly calls: string[] = [];
   readonly accounts = new Map<string, AwsOrganizationAccount>();
   readonly inProgress = new Map<string, string>();
-  readonly iamUsers = new Set<string>();
   quota = SHARD_VCPU_QUOTA_TARGET - 1_000;
   /** Per member account: its granted quota, else `quota` (MOTIR-9458). */
   readonly quotaByAccount = new Map<string, number>();
@@ -279,13 +278,6 @@ export class FakeOrganization implements AwsManagementApi {
       throw new AwsManagementApiError('sts', 'AccessDenied', 403);
     }
     return { ...this.session };
-  }
-
-  async ensureRunnerIamUser(_credentials: AwsSessionCredentials, policy: AwsPolicyDocument) {
-    this.calls.push('ensureRunnerIamUser');
-    if (this.iamUsers.has(JSON.stringify(policy))) return { created: [] };
-    this.iamUsers.add(JSON.stringify(policy));
-    return { created: ['iam-user:motir-fleet-runner', 'iam-policy:motir-fleet-runner-ec2'] };
   }
 
   async moveAccountToOrganizationalUnit(accountId: string, organizationalUnitId: string) {

@@ -1,10 +1,9 @@
 import {
   AWS_MANAGEMENT_ENV,
   AWS_RUNNER_IAM_ROLE,
-  awsCredentialsFromEnv,
   awsTerminalEndpoint,
   awsManagementCredentials,
-  awsRuntimeKeyEnvNames,
+  awsManagementRequiredEnv,
   createAwsFleetInventory,
   createAwsManagementApi,
   createAwsOrchestrator,
@@ -404,12 +403,11 @@ function onFakeAws(shard: FleetShardDTO): boolean {
 /**
  * An AWS account's EC2 client and region — the ONE place the orchestrator and
  * the inventory of an account build it, so a kill and its settle land in the
- * account the VM was listed in. Its credential is its own IAM key, read from
- * `<credentialRef>_ACCESS_KEY_ID` / `_SECRET_ACCESS_KEY` (the suffixes add-shard
- * documents, MOTIR-9278), or, when no key is set, a session of the account's
- * `motir-fleet-runner` ROLE assumed from the management credential (MOTIR-9460:
- * an account the unattended add-shard created has no key at all); the SDK asks
- * the provider again before the session lapses. `extra` names variables only
+ * account the VM was listed in. Its credential is ALWAYS a session of the
+ * account's `motir-fleet-runner` ROLE, assumed from the management credential
+ * (MOTIR-9460, MOTIR-9847): no pool account holds a runner key, and no
+ * `<credentialRef>_*` variable is read; the SDK asks the provider again before
+ * the session lapses. `extra` names variables only
  * the caller needs (the AMI, for a launch); every missing one is named at once,
  * as `indexFleetConfig` does.
  */
@@ -427,11 +425,11 @@ function awsShardClient(
     for (const name of extra) values[name] = process.env[name]?.trim() || FAKE_AWS_AMI_ID;
     return { ec2: override(shard, { Ec2ApiError }), region: shard.aws.region, values };
   }
-  const keyNames = awsRuntimeKeyEnvNames(shard.credentialRef);
-  const key = awsCredentialsFromEnv(shard.credentialRef, process.env);
-  const management = key ? null : runnerRoleManagement();
+  const management = runnerRoleManagement();
   const values: Record<string, string> = {};
-  const missing = key || management ? [] : [keyNames.accessKeyId, keyNames.secretAccessKey];
+  const missing = management
+    ? []
+    : awsManagementRequiredEnv(process.env).filter((name) => !process.env[name]?.trim());
   for (const name of extra) {
     const value = process.env[name]?.trim();
     if (value) values[name] = value;
@@ -440,21 +438,19 @@ function awsShardClient(
   if (missing.length > 0) {
     throw new OrchestratorNotConfiguredError(
       `set ${missing.join(', ')}` +
-        (key || management
+        (management
           ? ''
-          : ` (or ${Object.values(AWS_MANAGEMENT_ENV).join(', ')} to assume ${AWS_RUNNER_IAM_ROLE})`),
+          : ` (the management credential, ${Object.values(AWS_MANAGEMENT_ENV).join(', ')}, assumes ${AWS_RUNNER_IAM_ROLE})`),
     );
   }
   if (!shard.aws) {
     throw new OrchestratorNotConfiguredError(`fleet account ${shard.name} names no AWS location`);
   }
   const { accountId, region } = shard.aws;
-  const ec2 = key
-    ? createEc2Api({ ...key, region })
-    : createEc2Api({
-        region,
-        credentialProvider: runnerRoleCredentialProvider(management!, accountId),
-      });
+  const ec2 = createEc2Api({
+    region,
+    credentialProvider: runnerRoleCredentialProvider(management!, accountId),
+  });
   return { ec2, region, values };
 }
 
