@@ -543,6 +543,11 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     why: 'Forward-looking, and the asset says so inline ("NEW — no shipped route yet"). The tier doc shipped at /direction/[tier].',
   },
   {
+    file: 'design/environment/design-notes.md',
+    address: '/settings/project/environment',
+    why: 'Forward-looking: the Environment settings room (Story MOTIR-9795) is drawn before its page is built. Delete this row when `app/(authed)/settings/project/environment/page.tsx` lands; the tightness arm below fails until it is.',
+  },
+  {
     file: 'design/project-square/project-square.mock.html',
     address: '/explore/doooo/taq',
     why: 'Forward-looking: the per-project square page (/explore/<org>/<project>) is unbuilt; the shipped project page is /p/[identifier].',
