@@ -58,3 +58,17 @@ export class SystemReplayWorkspaceRowError extends Error {
     this.name = 'SystemReplayWorkspaceRowError';
   }
 }
+
+/**
+ * Thrown when someone below the `support` platform role reads the platform job
+ * ledger (MOTIR-9984). Those reads run under `withSystemContext`, which bypasses
+ * tenant RLS, so the role check in the service is the whole gate; the page's own
+ * 404 is a second line, not the first.
+ */
+export class PlatformJobsReadForbiddenError extends Error {
+  readonly code = 'PLATFORM_JOBS_READ_FORBIDDEN' as const;
+  constructor() {
+    super('The platform job ledger is read by platform staff at support or above');
+    this.name = 'PlatformJobsReadForbiddenError';
+  }
+}

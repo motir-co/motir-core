@@ -109,6 +109,57 @@ export const jobRunDlqRepository = {
   },
 
   /**
+   * The platform ledger's unreplayed dead letters (MOTIR-9984): workspace rows
+   * and workspace-less rows together, newest failure first, optionally only one
+   * function's. NO workspace predicate — the caller MUST supply a
+   * `withSystemContext` tx, for the reason `countActiveSince` gives. `take` is
+   * the per-selection cap, so a chosen function's rows are reached however old
+   * they are next to every other function's.
+   */
+  async listUnreplayed(
+    opts: { functionId?: string; take: number },
+    tx: Prisma.TransactionClient,
+  ): Promise<JobRunDlq[]> {
+    return tx.jobRunDlq.findMany({
+      where: { replayedAt: null, ...(opts.functionId ? { functionId: opts.functionId } : {}) },
+      orderBy: { lastFailedAt: 'desc' },
+      take: opts.take,
+    });
+  },
+
+  /**
+   * The platform ledger's dead letters replayed since `since`, newest failure
+   * first, optionally only one function's. Same system-context requirement as
+   * {@link listUnreplayed}.
+   */
+  async listReplayedSince(
+    opts: { since: Date; functionId?: string; take: number },
+    tx: Prisma.TransactionClient,
+  ): Promise<JobRunDlq[]> {
+    return tx.jobRunDlq.findMany({
+      where: {
+        replayedAt: { gte: opts.since },
+        ...(opts.functionId ? { functionId: opts.functionId } : {}),
+      },
+      orderBy: { lastFailedAt: 'desc' },
+      take: opts.take,
+    });
+  },
+
+  /** How many dead letters, of every workspace and none, were replayed since `since`. */
+  async countReplayedSince(
+    opts: { since: Date; functionId?: string },
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    return tx.jobRunDlq.count({
+      where: {
+        replayedAt: { gte: opts.since },
+        ...(opts.functionId ? { functionId: opts.functionId } : {}),
+      },
+    });
+  },
+
+  /**
    * Count of ACTIVE dead-letter entries across EVERY workspace, optionally only
    * those that failed since a moment — the operator console's "Failed jobs"
    * signal (MOTIR-1167, design Panel 8's 24-hour figure).
