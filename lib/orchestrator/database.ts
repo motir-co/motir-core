@@ -4,6 +4,8 @@
 // set. `./index` re-exports everything here.
 import {
   createFakeDatabasePort,
+  createNeonDatabasePort,
+  neonDatabaseConfig,
   OrchestratorNotConfiguredError,
   type DatabasePort,
   type DatabaseProvider,
@@ -14,8 +16,9 @@ import { selectedOrchestratorProvider } from './provider';
 //
 // One port for an application's own database. The fake while
 // `MOTIR_FLEET_ORCHESTRATOR=fake`, so a suite that selects the fake gets every
-// fake; otherwise the adapter registered for the provider, so the Neon adapter
-// lands as one file and one `registerDatabaseAdapter` call.
+// fake; otherwise the adapter registered for the provider, and failing that the
+// Neon adapter built from its own key and organisation (MOTIR-9973), read at
+// call time — the way `getHostingDeployPort` builds Fly's.
 
 /** Builds a provider's adapter, at call time. */
 export type DatabaseAdapterFactory = () => DatabasePort;
@@ -49,6 +52,7 @@ export function getDatabasePort(provider: DatabaseProvider = 'neon'): DatabasePo
   }
   const registered = databaseAdapters.get(provider);
   if (registered) return registered();
+  if (provider === 'neon') return createNeonDatabasePort(neonDatabaseConfig());
   throw new OrchestratorNotConfiguredError(`no ${provider} database adapter is registered`);
 }
 

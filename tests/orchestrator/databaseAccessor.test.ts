@@ -31,14 +31,22 @@ describe('getDatabasePort', () => {
     expect(await getDatabasePort().list()).toEqual([]);
   });
 
-  it('throws the typed not-configured error naming the missing adapter', () => {
+  it('builds the Neon port from its key and organisation, or names the unset one (MOTIR-9973)', () => {
     vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', '');
+    vi.stubEnv('MOTIR_HOSTING_NEON_API_KEY', '');
+    vi.stubEnv('MOTIR_HOSTING_NEON_ORG_ID', 'org-x');
     expect(() => getDatabasePort()).toThrow(OrchestratorNotConfiguredError);
-    expect(() => getDatabasePort()).toThrow(/no neon database adapter is registered/);
+    expect(() => getDatabasePort()).toThrow(/MOTIR_HOSTING_NEON_API_KEY/);
+    vi.stubEnv('MOTIR_HOSTING_NEON_API_KEY', 'napi_key');
+    vi.stubEnv('MOTIR_HOSTING_NEON_ORG_ID', '');
+    expect(() => getDatabasePort()).toThrow(/MOTIR_HOSTING_NEON_ORG_ID/);
+    vi.stubEnv('MOTIR_HOSTING_NEON_ORG_ID', 'org-x');
+    expect(getDatabasePort().provider).toBe('neon');
   });
 
   it('returns the port a registered factory builds, until it is unregistered', () => {
     vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', '');
+    vi.stubEnv('MOTIR_HOSTING_NEON_API_KEY', '');
     const neon = createFakeDatabasePort();
     registerDatabaseAdapter('neon', () => neon);
     expect(getDatabasePort()).toBe(neon);
