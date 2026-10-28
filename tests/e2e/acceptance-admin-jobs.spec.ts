@@ -14,8 +14,8 @@ import enMessages from '@/messages/en.json';
  *  1. THE DENIED PATH FIRST — no platform role, the ordinary 404 and no page.
  *  2. SUPPORT — Operations → Jobs; the Runs tab with a workspace run and a
  *     workspace-less one, the status filter; the Dead letters tab with both kinds
- *     of row, the Function filter's counts, and 109 meter-report rows older than
- *     the newest 250 of other functions all reachable once it is chosen. No
+ *     of row, the Function filter's counts, and 109 rate-limit-sweep rows older
+ *     than the newest 250 of other functions all reachable once it is chosen. No
  *     replay control, only the Read-only notice.
  *  3. OPERATOR — one workspace-less row and one workspace row replayed, each
  *     waited on through the action's response; then Replay all for the function,
@@ -26,6 +26,16 @@ import enMessages from '@/messages/en.json';
  * The service edge cases (refusals below operator, batch sizing, a row that
  * throws) are the integration gate's (`tests/integration/platformJobsLedger.test.ts`).
  * Every wait is a response or rendered text; there is no timer.
+ *
+ * ⚠️ THE LANE'S JOB WORKER RUNS THROUGHOUT, and this page shows EVERYTHING it
+ * writes: the scheduler's catch-up runs land on the Runs tab, and the ones that
+ * fail in CI (`system.daily-health-check`, `system.platform-meter-report`)
+ * dead-letter while the spec runs. So no assertion counts the whole ledger: each
+ * reads the seeded rows by a function id the worker never writes, or a count
+ * narrowed to one such function. The replayed function is a REAL job,
+ * `system.rate-limit-sweep`, because a replay enqueues a run the worker executes
+ * at once: an unknown id would fail three times and dead-letter again mid-chapter,
+ * and the sweep succeeds and touches only expired counters.
  */
 
 const shell = enMessages.platformAdmin.shell;
@@ -34,9 +44,13 @@ const audit = enMessages.platformAdmin.audit;
 
 const STAFF = 'acceptance-jobs-staff@example.com';
 
-const METER = 'system.platform-meter-report';
-const ROLLUP = 'system.usage-rollup';
-const INDEX = 'workspace.search-index';
+/** The replayed function. A real, harmless job: see the header. */
+const SWEEP = 'system.rate-limit-sweep';
+const ROLLUP = 'system.e2e-usage-rollup';
+const INDEX = 'workspace.e2e-search-index';
+/** The two seeded runs, under ids the worker never runs. */
+const RUN_TENANT = 'workspace.e2e-ledger-export';
+const RUN_SYSTEM = 'system.e2e-ledger-report';
 
 const MIN = 60_000;
 const DAY = 24 * 60 * MIN;
@@ -52,8 +66,8 @@ async function seedLedger(workspaceId: string) {
     data: [
       {
         workspaceId,
-        functionId: 'email.send',
-        eventName: 'email.send',
+        functionId: RUN_TENANT,
+        eventName: RUN_TENANT,
         eventId: 'e2e-jobs-run-1',
         lane: 'engine',
         attempt: 1,
@@ -64,8 +78,8 @@ async function seedLedger(workspaceId: string) {
       },
       {
         workspaceId: null,
-        functionId: METER,
-        eventName: METER,
+        functionId: RUN_SYSTEM,
+        eventName: RUN_SYSTEM,
         eventId: 'e2e-jobs-run-2',
         lane: 'engine',
         attempt: 5,
@@ -98,9 +112,9 @@ async function seedLedger(workspaceId: string) {
   };
   await adminDb.jobRunDlq.createMany({
     data: [
-      // 109 meter reports, all OLDER than the 250 rows below: past the newest 200.
+      // 109 sweeps, all OLDER than the 250 rows below: past the newest 200.
       ...Array.from({ length: 109 }, (_, i) =>
-        dlq(METER, i, 2 * DAY + i * MIN, i % 10 === 0 ? workspaceId : null),
+        dlq(SWEEP, i, 2 * DAY + i * MIN, i % 10 === 0 ? workspaceId : null),
       ),
       ...Array.from({ length: 150 }, (_, i) => dlq(INDEX, i, (i + 1) * MIN, workspaceId)),
       ...Array.from({ length: 100 }, (_, i) => dlq(ROLLUP, i, (i + 1) * MIN + 30_000, null)),
@@ -153,9 +167,8 @@ test('platform staff read the whole job ledger, and an operator replays one row,
       await expect(page.getByRole('heading', { name: jm.title, level: 1 })).toBeVisible();
       await expect(row).toHaveAttribute('aria-current', 'page');
 
-      await expect(bodyRows).toHaveCount(2);
-      await expect(bodyRows.filter({ hasText: 'email.send' })).toContainText(tenant.workspaceId);
-      await expect(bodyRows.filter({ hasText: METER })).toContainText(jm.noWorkspace);
+      await expect(bodyRows.filter({ hasText: RUN_TENANT })).toContainText(tenant.workspaceId);
+      await expect(bodyRows.filter({ hasText: RUN_SYSTEM })).toContainText(jm.noWorkspace);
 
       // The page view went through the console layout, which audits it.
       const staff = await adminDb.user.findUniqueOrThrow({ where: { email: STAFF } });
@@ -174,20 +187,19 @@ test('platform staff read the whole job ledger, and an operator replays one row,
       .getByRole('link', { name: jm.status.failed })
       .click();
     await expect(page).toHaveURL(/status=failed/);
-    await expect(bodyRows).toHaveCount(1);
-    await expect(bodyRows.first()).toContainText(METER);
+    await expect(bodyRows.filter({ hasText: RUN_SYSTEM })).toHaveCount(1);
+    await expect(bodyRows.filter({ hasText: RUN_TENANT })).toHaveCount(0);
     await beat();
   });
 
   await chapter('Dead letters: both kinds of row, read-only for support', async () => {
     await page.getByRole('tab', { name: new RegExp(`^${jm.tabs.dlq}`) }).click();
     await expect(page).toHaveURL(/tab=dlq/);
-    await expect(waitingLine(359, 0)).toBeVisible();
     await expect(main.getByRole('note')).toHaveText(jm.readOnly);
-    // The newest 200 waiting rows, newest failure first: none of them a meter report.
+    // The newest 200 waiting rows: none of them a sweep, which are all older.
     await expect(bodyRows).toHaveCount(200);
-    await expect(bodyRows.first()).toContainText(INDEX);
-    await expect(bodyRows.filter({ hasText: METER })).toHaveCount(0);
+    await expect(bodyRows.filter({ hasText: INDEX }).first()).toBeVisible();
+    await expect(bodyRows.filter({ hasText: SWEEP })).toHaveCount(0);
     await expect(bodyRows.filter({ hasText: jm.noWorkspace }).first()).toBeVisible();
     await expect(bodyRows.filter({ hasText: tenant.workspaceId }).first()).toBeVisible();
     await expect(main.getByRole('button', { name: /^Replay/ })).toHaveCount(0);
@@ -198,19 +210,14 @@ test('platform staff read the whole job ledger, and an operator replays one row,
     'The Function filter: only functions with dead letters waiting, with their counts',
     async () => {
       await fnFilter.click();
-      const options = page.getByRole('option');
-      await expect(options).toHaveCount(4);
-      await expect(options.nth(0)).toContainText(jm.fn.all);
-      await expect(options.nth(0)).toContainText('359');
-      await expect(options.nth(1)).toContainText(INDEX);
-      await expect(options.nth(1)).toContainText('150');
-      await expect(options.nth(2)).toContainText(METER);
-      await expect(options.nth(2)).toContainText('109');
-      await expect(options.nth(3)).toContainText(ROLLUP);
-      await expect(options.nth(3)).toContainText('100');
+      const option = (fn: string) => page.getByRole('option').filter({ hasText: fn });
+      await expect(page.getByRole('option').first()).toContainText(jm.fn.all);
+      await expect(option(INDEX)).toContainText('150');
+      await expect(option(SWEEP)).toContainText('109');
+      await expect(option(ROLLUP)).toContainText('100');
       await beat();
-      await options.nth(2).click();
-      await expect(page).toHaveURL((url) => url.searchParams.get('fn') === METER);
+      await option(SWEEP).click();
+      await expect(page).toHaveURL((url) => url.searchParams.get('fn') === SWEEP);
       // All 109, though every one is older than the newest 200 overall.
       await expect(bodyRows).toHaveCount(109);
       await expect(waitingLine(109, 0)).toBeVisible();
@@ -225,17 +232,17 @@ test('platform staff read the whole job ledger, and an operator replays one row,
   const replayed: string[] = [];
   const replayRow = async (rowText: string) => {
     const row = bodyRows.filter({ hasText: rowText }).filter({
-      has: page.getByRole('button', { name: fill(jm.replayAria, { function: METER }) }),
+      has: page.getByRole('button', { name: fill(jm.replayAria, { function: SWEEP }) }),
     });
     const target = row.first();
     const failure = (await target.getByRole('cell').nth(2).innerText()).trim();
     const entry = await adminDb.jobRunDlq.findFirstOrThrow({
-      where: { functionId: METER, failure: { equals: { message: failure } } },
+      where: { functionId: SWEEP, failure: { equals: { message: failure } } },
     });
     const response = page.waitForResponse(
       (res) => res.request().method() === 'POST' && res.url().includes('/admin/jobs'),
     );
-    await target.getByRole('button', { name: fill(jm.replayAria, { function: METER }) }).click();
+    await target.getByRole('button', { name: fill(jm.replayAria, { function: SWEEP }) }).click();
     expect((await response).status()).toBe(200);
     replayed.push(entry.id);
     return failure;
@@ -268,12 +275,12 @@ test('platform staff read the whole job ledger, and an operator replays one row,
     await main.getByRole('button', { name: fill(jm.replayAll.button, { count: 107 }) }).click();
     const dialog = page.getByRole('alertdialog');
     await expect(
-      dialog.getByText(fill(jm.replayAll.title, { count: 107, function: METER })),
+      dialog.getByText(fill(jm.replayAll.title, { count: 107, function: SWEEP })),
     ).toBeVisible();
     await expect(dialog.getByRole('button', { name: jm.replayAll.cancel })).toBeFocused();
     // Someone else replays one of them while the confirm is open.
     const other = await adminDb.jobRunDlq.findFirstOrThrow({
-      where: { functionId: METER, replayedAt: null },
+      where: { functionId: SWEEP, replayedAt: null },
       orderBy: { lastFailedAt: 'asc' },
     });
     await adminDb.jobRunDlq.update({ where: { id: other.id }, data: { replayedAt: new Date() } });
@@ -299,9 +306,8 @@ test('platform staff read the whole job ledger, and an operator replays one row,
     // Nothing of the function waits, so it leaves the filter and the page is back
     // on All functions.
     await expect(fnFilter).toContainText(jm.fn.all);
-    await expect(waitingLine(250, 109)).toBeVisible();
     await fnFilter.click();
-    await expect(page.getByRole('option', { name: new RegExp(METER) })).toHaveCount(0);
+    await expect(page.getByRole('option').filter({ hasText: SWEEP })).toHaveCount(0);
     await page.keyboard.press('Escape');
     await beat();
   });
@@ -317,7 +323,7 @@ test('platform staff read the whole job ledger, and an operator replays one row,
         select: { actorUserId: true, targetId: true },
       });
       const bulk = await adminDb.jobRunDlq.findMany({
-        where: { functionId: METER, id: { notIn: [...replayed, stamped] } },
+        where: { functionId: SWEEP, id: { notIn: [...replayed, stamped] } },
         select: { id: true },
       });
       expect(entries).toHaveLength(108);
@@ -332,7 +338,7 @@ test('platform staff read the whole job ledger, and an operator replays one row,
       const rows = main.getByTestId('audit-table').locator('[data-testid^="audit-row-"]');
       await expect(rows.first()).toContainText('jobs.dlq_replay');
       await expect(rows.first()).toContainText(STAFF);
-      await expect(rows.first()).toContainText(METER);
+      await expect(rows.first()).toContainText(SWEEP);
       await beat();
     },
   );
