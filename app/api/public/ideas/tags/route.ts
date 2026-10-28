@@ -5,7 +5,7 @@ import {
   PUBLIC_IDEAS_CACHE_CONTROL,
   PUBLIC_IDEAS_RETRY_AFTER_SECONDS,
 } from '@/lib/ideas/publicCache';
-import { resolvePublicIdeaLocale } from '@/lib/ideas/publicLocale';
+import { publicIdeaLocaleCode, resolvePublicIdeaLocale } from '@/lib/ideas/publicLocale';
 import { publicSurfaceUnavailable } from '@/lib/publicProjects/cloudGate';
 import { ideasPublicService } from '@/lib/services/ideasPublicService';
 
@@ -22,7 +22,7 @@ export async function GET(req: Request): Promise<NextResponse> {
   const locale = resolvePublicIdeaLocale(new URL(req.url).searchParams.get('locale'));
   try {
     const tags = await ideasPublicService.listTags(locale);
-    const body: PublicIdeaTagListDto = { tags, locale };
+    const body: PublicIdeaTagListDto = { tags, locale: publicIdeaLocaleCode(locale) };
     return NextResponse.json(body, { headers: { 'Cache-Control': PUBLIC_IDEAS_CACHE_CONTROL } });
   } catch (err) {
     if (err instanceof IdeasUnavailableError) {

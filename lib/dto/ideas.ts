@@ -41,8 +41,8 @@ export interface IdeaEvidenceDto {
 
 // ── PUBLIC ──────────────────────────────────────────────────────────────────
 
-/** The locale a public read served: English, or one of the ten translations. */
-export type PublicIdeaLocaleDto = 'en' | IdeaTranslationLocale;
+/** The locale a public read served: English, or one of the eleven translations (`zh-tw`, not `zh_tw`). */
+export type PublicIdeaLocaleDto = 'en' | Exclude<IdeaTranslationLocale, 'zh_tw'> | 'zh-tw';
 
 /** A public evidence row; `claimFallback` is true when the claim is the English. */
 export interface PublicIdeaEvidenceDto extends IdeaEvidenceDto {

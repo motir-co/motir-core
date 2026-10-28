@@ -226,6 +226,34 @@ describe('?locale=', () => {
     expect(filtered.total).toBe(1);
   });
 
+  it('serves Traditional Chinese at ?locale=zh-tw, and names it zh-tw on every route', async () => {
+    const actor = await staffActor('operator');
+    await ideasAdminService.addTag(actor, {
+      slug: 'pets',
+      label: 'Pets',
+      description: 'Pet businesses.',
+      labelTranslations: { zh_tw: '寵物' },
+    });
+    await ideasAdminService.addIdeas(actor, [
+      directionInput('clinic', {
+        category: 'pets',
+        tags: ['pets'],
+        translations: { zh_tw: { title: '動物醫院' } },
+      }),
+    ]);
+    const list = await (await listGET(get('?locale=zh-tw'))).json();
+    expect(list.locale).toBe('zh-tw');
+    expect(list.items[0]).toMatchObject({ title: '動物醫院', locale: 'zh-tw' });
+    expect(list.items[0].category).toEqual({ slug: 'pets', label: '寵物' });
+    const one = await (await detailGET(get('/clinic?locale=zh-tw'), slugCtx('clinic'))).json();
+    expect(one).toMatchObject({ title: '動物醫院', locale: 'zh-tw' });
+    const tags = await (await tagsGET(get('/tags?locale=zh-tw'))).json();
+    expect(tags).toEqual({
+      tags: [{ slug: 'pets', label: '寵物', labelFallback: false, count: 1 }],
+      locale: 'zh-tw',
+    });
+  });
+
   it('keeps the English category label for an unsupported locale (MOTIR-8082)', async () => {
     await seedJa();
     const list = await (await listGET(get('?locale=xx'))).json();

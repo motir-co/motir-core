@@ -12,9 +12,13 @@ import type { IdeaTranslationLocale } from '@/generated/prisma/client';
  * description.
  */
 
-/** The ten locales a translation may be written in — the UI's eleven minus `en`. */
+/**
+ * The eleven locales a translation may be written in — motir.co's twelve minus `en`.
+ * `zh_tw` is Traditional Chinese (Taiwan); the public reads spell it `zh-tw`.
+ */
 export const IDEA_TRANSLATION_LOCALES = [
   'zh',
+  'zh_tw',
   'ja',
   'ko',
   'de',
