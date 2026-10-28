@@ -19,6 +19,7 @@
     "assert:nft-trace": "node scripts/assert-nft-trace-scope.mjs",
     "generate:cli-api": "tsx --tsconfig tsconfig.node.json scripts/generate-cli-api.ts",
     "generate:mcp-tool-schemas": "tsx --tsconfig tsconfig.node.json scripts/generate-mcp-tool-schemas.ts",
+    "deploy:aws": "tsx --tsconfig tsconfig.node.json scripts/aws-deploy/awsDeploy.ts",
     "staging:two-machine-check": "tsx --tsconfig tsconfig.node.json scripts/staging/two-machine-check.ts",
     "loadtest:preflight": "tsx --tsconfig tsconfig.node.json loadtest/preflight/sideEffects.ts",
     "loadtest:secrets-template": "tsx --tsconfig tsconfig.node.json loadtest/staging/sideEffectSwitches.ts --write",
@@ -122,7 +123,11 @@
     ]
   },
   "dependencies": {
+    "@aws-sdk/client-cloudwatch-logs": "^3.1157.0",
+    "@aws-sdk/client-ecr": "^3.1157.0",
+    "@aws-sdk/client-ecs": "^3.1157.0",
     "@aws-sdk/client-s3": "^3.1104.0",
+    "@aws-sdk/client-ssm": "^3.1157.0",
     "@aws-sdk/s3-request-presigner": "^3.1104.0",
     "@better-auth/cimd": "1.7.7",
     "@better-auth/oauth-provider": "1.7.7",
