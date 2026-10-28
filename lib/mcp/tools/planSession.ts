@@ -117,13 +117,17 @@ const scopeInputSchema = {
  * This is the WIRE for a value composed elsewhere: a dispatched agent that finds
  * its card wrong is the only actor that knows what is wrong with it, and without
  * this argument that knowledge dies in a comment while the planner is told a key
- * and nothing else. Supplying it SATISFIES the planner's first phase, so the run
- * starts knowing the problem instead of opening a conversation to ask about it.
+ * and nothing else.
+ *
+ * ⚠️ IT IS INPUT TO THE PLANNER'S FIRST PHASE, NOT ITS ANSWER (MOTIR-9878). The
+ * requirement and the targets are the planner's decision: the first phase reads
+ * this beside the thread, settles the targets with the selected keys as
+ * references, and writes the requirement the run plans against. Supplying it
+ * means that phase starts knowing the problem; it does not skip it.
  *
  * ⚠️ EVERY KEY IS OPTIONAL AND NOTHING HERE JUDGES THE CONTENT — no completeness
  * check, no non-empty check, no length cap. A submit carrying a partial
- * requirement, or none, is a LEGAL submit that simply does not settle that
- * phase; the planner opens the conversation instead. Refusing a card must never
+ * requirement, or none, is a LEGAL submit; the planner reads whatever reads. Refusing a card must never
  * become conditional on composing the WHAT well, so the validation lives at the
  * far end, where a half-answer costs a question rather than a call.
  *
@@ -194,13 +198,13 @@ const requirementField = z
   })
   .optional()
   .describe(
-    'OPTIONAL. WHAT you want built, as six named fields instead of prose — the ' +
-      'planner reads this INSTEAD of asking you what is wrong. Supply as much as ' +
-      'you actually know: nothing here is validated, and a partial requirement ' +
-      'submits fine. Three fields (`outcome`, `behaviour`, `acceptance`) must be ' +
-      'present and non-empty for the planner to treat the requirement as settled; ' +
-      'short of that it simply opens the conversation, which is the same thing it ' +
-      'does when you omit this argument entirely.',
+    'OPTIONAL. WHAT you want built, as six named fields instead of prose. It is ' +
+      'INPUT: the planner reads it beside the thread, then settles the targets and ' +
+      'writes the requirement it plans against itself. Supply as much as you ' +
+      'actually know: nothing here is validated, and a partial requirement submits ' +
+      'fine. Three fields (`outcome`, `behaviour`, `acceptance`) must be present and ' +
+      'non-empty for the planner to read it; short of that it is ignored, which is ' +
+      'the same as omitting this argument.',
   );
 
 const submitInputSchema = {
@@ -475,12 +479,13 @@ export function registerPlanSession(server: McpServer, resolveContext: McpContex
         'owner. ' +
         'OPTIONALLY pass `requirement` — WHAT you want built, as six named fields in this ' +
         'order: `outcome`, `behaviour`, `scopeEdge`, `constraints`, `acceptance`, ' +
-        '`assumptions`. The planner reads it INSTEAD of opening a conversation to ask you ' +
-        'what is wrong, so a submit that carries one starts knowing the problem. Three of ' +
-        'the six (`outcome`, `behaviour`, `acceptance`) must be present and non-empty for ' +
-        'it to count as settled; the other three may be `""`, which says you considered the ' +
-        'question and there is none. Nothing is validated here: a partial requirement, or ' +
-        'none at all, submits fine and simply opens the conversation instead. ' +
+        '`assumptions`. It is INPUT to the planner, not its answer: the planner reads it ' +
+        'beside the thread, settles the targets (your `targetKeys` are references it may ' +
+        'keep or replace) and writes the requirement it plans against — so a submit that ' +
+        'carries one starts knowing the problem. Three of the six (`outcome`, `behaviour`, ' +
+        '`acceptance`) must be present and non-empty for it to be read; the other three may ' +
+        'be `""`, which says you considered the question and there is none. Nothing is ' +
+        'validated here: a partial requirement, or none at all, submits fine. ' +
         'IF THIS TOOL REJECTS YOUR ARGUMENTS, NOTHING HAPPENED — no job was created and no ' +
         'credits were spent — so that ONE case is safe to retry, without the `requirement`. ' +
         'It is the only exception to submitting exactly once.',

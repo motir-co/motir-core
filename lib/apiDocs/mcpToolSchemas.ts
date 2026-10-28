@@ -3104,7 +3104,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         },
         additionalProperties: false,
         description:
-          'OPTIONAL. WHAT you want built, as six named fields instead of prose — the planner reads this INSTEAD of asking you what is wrong. Supply as much as you actually know: nothing here is validated, and a partial requirement submits fine. Three fields (`outcome`, `behaviour`, `acceptance`) must be present and non-empty for the planner to treat the requirement as settled; short of that it simply opens the conversation, which is the same thing it does when you omit this argument entirely.',
+          'OPTIONAL. WHAT you want built, as six named fields instead of prose. It is INPUT: the planner reads it beside the thread, then settles the targets and writes the requirement it plans against itself. Supply as much as you actually know: nothing here is validated, and a partial requirement submits fine. Three fields (`outcome`, `behaviour`, `acceptance`) must be present and non-empty for the planner to read it; short of that it is ignored, which is the same as omitting this argument.',
       },
     },
     required: ['projectKey'],

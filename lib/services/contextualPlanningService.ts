@@ -20,6 +20,25 @@ import type {
   PlanChangeSessionDto,
   PlanTargetHeldByDto,
 } from '@/lib/dto/planChange';
+import type { SubmittedRequirement } from '@/lib/ai/types';
+
+/**
+ * What a CONFIRMED targeted plan offer submits beside its turn (MOTIR-9878): the
+ * requirement the person read in the pane, the page Confirm saved it to, and the submit's
+ * options — the same supply a no-target offer's start sends (MOTIR-9436). The anchored
+ * door otherwise submits the bare accumulated intent, exactly as before.
+ */
+export interface ComposedSubmit {
+  requirement: SubmittedRequirement;
+  opts: { requirementPage: { pageId: string; title: string }; omitCarriedAnswers: true };
+}
+
+/** The shipped submit, with a confirmed offer's requirement when there is one. */
+function submitComposed(pctx: ProjectContext, sessionId: string, submitWith?: ComposedSubmit) {
+  return submitWith
+    ? planChangeSessionsService.submit(pctx, { sessionId }, submitWith.requirement, submitWith.opts)
+    : planChangeSessionsService.submit(pctx, { sessionId });
+}
 
 // CONTEXTUAL PLANNING — the motir-core side (7.12.3 · MOTIR-909).
 //
@@ -209,6 +228,7 @@ export const contextualPlanningService = {
   async planFromWorkItem(
     req: ContextualPlanRequest,
     pctx: ProjectContext,
+    submitWith?: ComposedSubmit,
   ): Promise<ContextualPlanResult> {
     const scope = await resolveScope(req, pctx);
 
@@ -282,9 +302,7 @@ export const contextualPlanningService = {
                 isAnswer: req.isAnswer === true,
               })
             ).id;
-    const { jobId, planId, session } = await planChangeSessionsService.submit(pctx, {
-      sessionId,
-    });
+    const { jobId, planId, session } = await submitComposed(pctx, sessionId, submitWith);
 
     return { jobId, planId, sessionId: session.id, session };
   },
@@ -350,12 +368,11 @@ export const contextualPlanningService = {
   async resubmitFromWorkItem(
     req: Omit<ContextualPlanRequest, 'prompt'>,
     pctx: ProjectContext,
+    submitWith?: ComposedSubmit,
   ): Promise<ContextualPlanResult> {
     const scope = await resolveScope({ ...req, prompt: '' }, pctx);
     const sessionId = await requireAddressed(req.sessionId, pctx, scope);
-    const { jobId, planId, session } = await planChangeSessionsService.submit(pctx, {
-      sessionId,
-    });
+    const { jobId, planId, session } = await submitComposed(pctx, sessionId, submitWith);
     return { jobId, planId, sessionId: session.id, session };
   },
 

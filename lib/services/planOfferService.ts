@@ -206,13 +206,11 @@ export const planOfferService = {
   ): Promise<AnswerOfferInput | null> {
     if (!offer || offer.kind !== 'plan' || offer.immediate) return null;
     if (!(await planningAvailable(pctx))) return null;
+    // The requirement the answering session composed rides the offer, target or not
+    // (MOTIR-9878): a target is where the planning starts, not what it builds.
+    const requirement = offer.requirement ? { requirement: offer.requirement } : {};
     if (offer.targetKey === null) {
-      return {
-        kind: 'plan',
-        requestMd: offer.requestMd,
-        targetKey: null,
-        ...(offer.requirement ? { requirement: offer.requirement } : {}),
-      };
+      return { kind: 'plan', requestMd: offer.requestMd, targetKey: null, ...requirement };
     }
     const target = await resolveTarget(offer.targetKey, pctx);
     if (target) {
@@ -222,7 +220,12 @@ export const planOfferService = {
       );
       if (terminal.has(target.status)) return null;
     }
-    return { kind: 'plan', requestMd: offer.requestMd, targetKey: target?.identifier ?? null };
+    return {
+      kind: 'plan',
+      requestMd: offer.requestMd,
+      targetKey: target?.identifier ?? null,
+      ...requirement,
+    };
   },
 
   /**

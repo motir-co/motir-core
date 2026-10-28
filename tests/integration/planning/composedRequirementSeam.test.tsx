@@ -647,39 +647,64 @@ describe('offers with no page', () => {
     expect(stored).not.toHaveProperty('requirementSaveFailed');
   });
 
-  it('a targeted offer and "plan this" never store, write or send a requirement', T, async () => {
+  it(
+    '"plan this" never writes or sends a requirement, even when the envelope carried one',
+    T,
+    async () => {
+      const target = await workItemsService.createWorkItem(
+        { projectId: fx.projectId, kind: 'task', title: 'CSV export' },
+        fx.ctx,
+      );
+      // "Plan this" starts at settle: no pane, no Confirm, so nothing the person read.
+      const planThis = await turn(
+        answerWith({
+          offer: {
+            kind: 'plan',
+            requestText: REQUEST,
+            targetKey: target.identifier,
+            immediate: true,
+            requirement: REQUIREMENT,
+          },
+        }),
+        undefined,
+        'Plan this card.',
+      );
+      expect(planThis.settled.outcome).toBe('redirected');
+
+      expect(writeSpy).not.toHaveBeenCalled();
+      expect(await rootFolders()).toHaveLength(0);
+      expect(await pages()).toHaveLength(0);
+      expect(planCalls().length).toBeGreaterThanOrEqual(1);
+      for (let i = 0; i < planCalls().length; i++) {
+        expect(planContext(i)).not.toHaveProperty('requirement');
+        expect(planContext(i)).not.toHaveProperty('requirementPage');
+      }
+    },
+  );
+});
+
+// MOTIR-9878: a targeted offer's requirement is the planner's too. It is stored on the
+// offer, shown in the pane, saved as ONE Requirements Docs page on Confirm, and sent as
+// `context.requirement` with that page on the target's run.
+describe('a targeted offer with a requirement', () => {
+  beforeEach(provisionMotir);
+
+  it('stores it, and Confirm saves one page and sends requirement + page', T, async () => {
     const target = await workItemsService.createWorkItem(
-      { projectId: fx.projectId, kind: 'task', title: 'CSV export' },
+      { projectId: fx.projectId, kind: 'task', title: 'Reports' },
       fx.ctx,
     );
     const { conversationId, offerTurnId } = await offered({ targetKey: target.identifier });
-    expect(await rawOffer(offerTurnId)).not.toHaveProperty('requirement');
+    expect(await rawOffer(offerTurnId)).toMatchObject({ requirement: REQUIREMENT });
+
     await confirm(conversationId, offerTurnId);
 
-    // "Plan this" starts at settle, with an envelope that also carried a requirement.
-    const planThis = await turn(
-      answerWith({
-        offer: {
-          kind: 'plan',
-          requestText: REQUEST,
-          targetKey: target.identifier,
-          immediate: true,
-          requirement: REQUIREMENT,
-        },
-      }),
-      undefined,
-      'Plan this card.',
-    );
-    expect(planThis.settled.outcome).toBe('redirected');
-
-    expect(writeSpy).not.toHaveBeenCalled();
-    expect(await rootFolders()).toHaveLength(0);
-    expect(await pages()).toHaveLength(0);
-    expect(planCalls().length).toBeGreaterThanOrEqual(2);
-    for (let i = 0; i < planCalls().length; i++) {
-      expect(planContext(i)).not.toHaveProperty('requirement');
-      expect(planContext(i)).not.toHaveProperty('requirementPage');
-    }
+    expect(writeSpy).toHaveBeenCalledTimes(1);
+    const saved = await pages();
+    expect(saved).toHaveLength(1);
+    expect(planCalls()).toHaveLength(1);
+    expect(planContext()['requirement']).toEqual(REQUIREMENT);
+    expect(planContext()['requirementPage']).toMatchObject({ pageId: saved[0]!.id });
   });
 });
 
