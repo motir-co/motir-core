@@ -16,6 +16,7 @@ import {
   hostnameReservationHash,
   reservesItsHostname,
 } from '@/lib/publicAddresses/hostnameReservation';
+import { addDays, QUARANTINE_DAYS } from '@/lib/publicAddresses/nameHold';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
 import { organizationMembershipRepository } from '@/lib/repositories/organizationMembershipRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
@@ -429,13 +430,16 @@ async function deleteWorkspaceCascade(input: {
     async (tx) => {
       await input.guard(tx);
       const addresses = await publicAddressRepository.listForWorkspaceInTx(input.workspaceId, tx);
+      const now = new Date();
       await publicHostnameReservationRepository.reserveMany(
         addresses
           .filter((address) => reservesItsHostname(address.kind))
           .map((address) => ({
             hostnameHash: hostnameReservationHash(address.hostname),
             retiredFromWorkspaceId: input.workspaceId,
+            expiresAt: addDays(now, QUARANTINE_DAYS),
           })),
+        now,
         tx,
       );
       await workspaceRepository.delete(input.workspaceId, tx);

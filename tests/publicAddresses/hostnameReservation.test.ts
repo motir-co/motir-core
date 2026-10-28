@@ -253,6 +253,7 @@ describe('the workspace delete holds the workspace’s subdomain out of the name
       data: after.map((row) => ({
         hostnameHash: row.hostnameHash,
         retiredFromWorkspaceId: row.retiredFromWorkspaceId,
+        expiresAt: row.expiresAt,
       })),
       skipDuplicates: true,
     });
@@ -334,6 +335,7 @@ describe('the retained row satisfies the erasure obligation', () => {
       // Every column, named. A test asserting only "the hostname column is
       // absent" would pass on a schema that added one back.
       expect(Object.keys(row).sort()).toEqual([
+        'expiresAt',
         'hostnameHash',
         'id',
         'retiredAt',

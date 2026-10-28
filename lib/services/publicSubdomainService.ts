@@ -16,6 +16,7 @@ import {
   hostnameReservationHash,
   reservesItsHostname,
 } from '@/lib/publicAddresses/hostnameReservation';
+import { addDays, QUARANTINE_DAYS } from '@/lib/publicAddresses/nameHold';
 import { MAX_SUBDOMAIN_RENAMES, refuseLabel } from '@/lib/publicAddresses/reservedNames';
 import { tenantBaseDomain, tenantHostname } from '@/lib/publicAddresses/tenantDomain';
 import { publicAddressRepository } from '@/lib/repositories/publicAddressRepository';
@@ -228,11 +229,14 @@ export const publicSubdomainService = {
       // rename path's 409 — `SubdomainNotFoundError` carries that reasoning.
       if (rows.length === 0) throw new SubdomainNotFoundError();
 
+      const now = new Date();
       await publicHostnameReservationRepository.reserveMany(
         rows.map((address) => ({
           hostnameHash: hostnameReservationHash(address.hostname),
           retiredFromWorkspaceId: workspaceId,
+          expiresAt: addDays(now, QUARANTINE_DAYS),
         })),
+        now,
         tx,
       );
       await publicAddressRepository.removeMany(
@@ -327,6 +331,7 @@ function assertLabelClaimable(label: string): void {
 async function assertNotReserved(hostname: string, tx: Prisma.TransactionClient): Promise<void> {
   const reserved = await publicHostnameReservationRepository.isReservedInTx(
     hostnameReservationHash(hostname),
+    new Date(),
     tx,
   );
   if (reserved) throw new HostnameTakenError(hostname);

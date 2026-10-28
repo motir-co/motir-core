@@ -1689,6 +1689,9 @@ model Workspace {
   /// `workspaceId` is denormalized onto every row so the RLS tenancy gate is a
   /// direct comparison with no join, the same pattern `project_key_alias` uses.
   publicAddresses             PublicAddress[]
+  /// The workspace's subdomain change ledger — one row, the last rename or
+  /// release (§8 Amendment 3 rule 4, MOTIR-9506).
+  publicSubdomainChange       PublicSubdomainChange?
   comments                    Comment[]
   // Work-item to-do rows (Story MOTIR-3808 · MOTIR-3813). Tenanted on the ROW,
   // the `comments` shape — a direct child of `work_item` carries its own
@@ -13528,7 +13531,36 @@ model PublicHostnameReservation {
 
   retiredAt DateTime @default(now()) @map("retired_at")
 
+  /// When the name returns to the pool (§8 Amendment 3 rule 3, MOTIR-9506). A
+  /// row whose expiry has passed reserves nothing: `isReservedInTx` ignores it
+  /// and the daily sweep deletes it. The table keeps an expiry, never a name,
+  /// so Amendment 1's erasure reasoning holds unchanged. The rule that computes
+  /// it is `lib/publicAddresses/nameHold.ts`.
+  expiresAt DateTime @map("expires_at")
+
   @@map("public_hostname_reservation")
+}
+
+/// A workspace's subdomain CHANGE LEDGER — §8 Amendment 3 rule 4 (Story
+/// MOTIR-4528 · MOTIR-9506).
+///
+/// One row per workspace holding the instant of its last rename or release, so
+/// `nameHold.canChangeNow` can refuse a second change inside 30 days. Renames and
+/// releases both write it, which is what stops delete-then-reclaim from being a
+/// free rename. A first claim is not a change and writes nothing.
+///
+/// A table rather than a column on `workspace` so its RLS is its own, and the
+/// workspace delete takes it with the cascade: the limit is per workspace, and a
+/// workspace that is gone has nothing left to limit.
+model PublicSubdomainChange {
+  id            String    @id @default(cuid())
+  workspaceId   String    @unique @map("workspace_id")
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  lastChangedAt DateTime  @map("last_changed_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  @@map("public_subdomain_change")
 }
 
 /// A FOLDER — a named, nestable place in a project's tree that carries no
@@ -13682,9 +13714,9 @@ model Page {
 /// hold them.
 model PageEmbedding {
   /// PK *and* FK — one embedding per page, by construction.
-  pageId      String @id @map("page_id")
-  workspaceId String @map("workspace_id")
-  projectId   String @map("project_id")
+  pageId      String   @id @map("page_id")
+  workspaceId String   @map("workspace_id")
+  projectId   String   @map("project_id")
   /// The model that produced this vector, as REPORTED by `POST /v1/embeddings`.
   /// A hard ranking filter: rows of another model are not comparable.
   model       String
@@ -13692,7 +13724,7 @@ model PageEmbedding {
   dimensions  Int
   /// SHA-256 of the page document (title + "\n\n" + body text). THE RE-EMBED
   /// TRIGGER: an unchanged save skips the provider call.
-  contentHash String @map("content_hash")
+  contentHash String   @map("content_hash")
   embeddedAt  DateTime @map("embedded_at") @db.Timestamptz(3)
 
   embedding Unsupported("vector(1536)")?
@@ -13710,7 +13742,6 @@ model PageEmbedding {
   @@index([embedding], map: "page_embedding_embedding_idx")
   @@map("page_embedding")
 }
-
 
 // PAGE VERSIONS — a page's history (Story MOTIR-5754 · MOTIR-7382).
 //
