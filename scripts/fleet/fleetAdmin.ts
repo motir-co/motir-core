@@ -65,6 +65,7 @@ import {
   capacityRequestLink,
   capacityRequests,
 } from './fleetAdminCapacityRequestCommands';
+import { hostingTenant } from './fleetAdminHostingTenantCommands';
 
 export const EXIT_OK = 0;
 export const EXIT_ERROR = 1;
@@ -91,6 +92,7 @@ const USAGE = [
   '  fleet-admin capacity-requests --operator <email>',
   '  fleet-admin capacity-request-link <request> <quota request> --operator <email>',
   '  fleet-admin capacity-request-close <request> <note> --operator <email>',
+  '  fleet-admin hosting-tenant ensure <organization id>',
 ].join('\n');
 
 /** Where the command writes — stdout and stderr in production, a buffer in tests. */
@@ -265,6 +267,7 @@ export async function runFleetAdmin(
     if (command === 'capacity-requests') return await capacityRequests(args, io);
     if (command === 'capacity-request-link') return await capacityRequestLink(args, io);
     if (command === 'capacity-request-close') return await capacityRequestClose(args, io);
+    if (command === 'hosting-tenant') return await hostingTenant(args, io, pool.hostingTenant);
     if (command === 'add-shard') return await addShard(args, io);
     if (command === 'refresh-limits') return await refreshLimits(args, io);
     if (command === 'set-ceiling' || command === 'disable' || command === 'enable') {
