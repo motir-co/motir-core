@@ -1,4 +1,5 @@
 import type { DecisionDocumentViewDTO } from '@/lib/dto/decisionDocument';
+import type { WorkItemRefMap } from '@/lib/dto/workItems';
 import type { DecisionDocumentRead } from '@/lib/services/decisionDocumentService';
 
 // The decision port's read → its DTO (Story MOTIR-4907 · Subtask MOTIR-5678). Called by
@@ -11,9 +12,12 @@ export function decisionDocumentHostUrl(repo: string, ref: string, path: string)
 }
 
 /** `null` exactly when the card has nothing to ask about yet — no captured open pull
- *  request — which the port draws as no decision slot at all. */
+ *  request — which the port draws as no decision slot at all. `workItemRefs` is the
+ *  reader's resolution of the document's `motir:` links (bug MOTIR-10020), carried on
+ *  the two arms that draw Markdown. */
 export function toDecisionDocumentViewDTO(
   read: DecisionDocumentRead,
+  workItemRefs: WorkItemRefMap,
 ): DecisionDocumentViewDTO | null {
   const { identity, content } = read;
   if (!identity || !content) return null;
@@ -26,6 +30,7 @@ export function toDecisionDocumentViewDTO(
         versionNumber: content.versionNumber,
         title: content.title,
         markdown: content.markdown,
+        workItemRefs,
         pageUrl: `/pages/${content.pageId}`,
         versionUrl: `/pages/${content.pageId}?version=${content.versionNumber}`,
         compareUrl: `/pages/${content.pageId}?history=open&version=${content.versionNumber}`,
@@ -59,6 +64,7 @@ export function toDecisionDocumentViewDTO(
       blobSha: identity.blobSha,
       headSha: identity.headSha,
       markdown: content.markdown,
+      workItemRefs,
       hostUrl: decisionDocumentHostUrl(
         identity.repo,
         identity.headSha ?? identity.blobSha,

@@ -171,6 +171,7 @@ const DOCUMENT: DecisionDocumentViewDTO = {
   blobSha: 'b10b000',
   headSha: CORE_PR.headSha,
   markdown: '# ADR: Rate-limit the public API',
+  workItemRefs: {},
   hostUrl: `https://github.com/${CORE_PR.repo}/blob/${CORE_PR.headSha}/docs/decisions/rate-limit.md`,
 };
 

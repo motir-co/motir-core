@@ -153,6 +153,7 @@ const DOC: DecisionDocumentViewDTO = {
   blobSha: '3f9a2c1000000000000000000000000000000000',
   headSha: '7a9e0c1000000000000000000000000000000000',
   markdown: '# ADR\n\n## Decision\n\nStore the body as a Yjs document.',
+  workItemRefs: {},
   hostUrl: 'https://github.com/moooon/motir-core/blob/7a9e0c1/docs/decisions/page-body.md',
 };
 const DECISION_AWAITING: ApprovalGateDTO = {

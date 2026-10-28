@@ -567,6 +567,7 @@ describe('GET /api/work-items/approval-gate · the four subject answers', () => 
       blobSha: 'blob-1',
       headSha: 'head-1',
       markdown: '# ADR: Page body',
+      workItemRefs: {},
       hostUrl: 'https://github.com/acme/web/blob/head-1/docs/decisions/page-body.md',
     };
     const read = vi
@@ -599,6 +600,7 @@ describe('GET /api/work-items/approval-gate · the four subject answers', () => 
       versionNumber: 1,
       title: 'How a page stores its body',
       markdown: '# How a page stores its body',
+      workItemRefs: {},
       pageUrl: '/pages/page-1',
       versionUrl: '/pages/page-1?version=1',
       compareUrl: '/pages/page-1?history=open&version=1',
