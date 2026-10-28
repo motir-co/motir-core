@@ -22,6 +22,7 @@ import { ENVIRONMENTS, type EnvironmentName } from '@/lib/environmentConfig/voca
 import { toEnvironmentChangeDto } from '@/lib/mappers/environmentConfigMappers';
 import { SEED_SOURCE_ORGANIZATION } from '@/lib/projectRepos/vocabulary';
 import type { WorkspaceContext } from '@/lib/workspaces';
+import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { createTestUser } from '../fixtures';
 import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
@@ -220,7 +221,10 @@ describe('Story MOTIR-9795 — set a repository’s environment', () => {
     asAdmin();
     await put(repoId, 'production', 'PLAIN', { value: 'mine', isSecret: false });
 
-    const [who] = await db.$queryRaw<{ role: string }[]>`SELECT current_user AS role`;
+    const [who] = await withWorkspaceContext(
+      fx.ctx,
+      (tx) => tx.$queryRaw<{ role: string }[]>`SELECT current_user AS role`,
+    );
     expect(who?.role).toBe(TEST_APP_ROLE);
     expect(await resolve(fx, repoId, 'production')).toEqual([
       { name: 'PLAIN', value: 'mine', secret: false },

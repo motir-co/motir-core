@@ -33,7 +33,7 @@
 // wait for their GET. `beat()` / `chapter()` are pacing only. No `waitForTimeout`.
 import type { Page, Response } from '@playwright/test';
 import { test, expect } from './_helpers/acceptance-video';
-import { resetDatabase, db } from './_helpers/db-reset';
+import { resetDatabase, db, adminDb } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { seedEnvironmentRoom, type EnvironmentSeed } from './_helpers/environment-seed';
 import en from '@/messages/en.json';
@@ -100,7 +100,7 @@ const entryPut = (page: Page, environment: string, name: string) =>
 
 // ── The room ──────────────────────────────────────────────────────────────────
 
-const addRow = (page: Page) => page.getByTestId('environment-add');
+const addRow = (page: Page) => page.getByRole('main').getByTestId('environment-add');
 const entry = (page: Page, name: string) =>
   page.locator(`[data-testid="environment-entry"][data-name="${name}"]`);
 
@@ -232,7 +232,7 @@ test('an administrator sets a production secret and a preview value; the secret 
       await nameBox.fill(name);
       await row.getByLabel(t.column.value, { exact: true }).fill('nope');
       await row.getByRole('button', { name: t.add.save }).click();
-      const alert = page.getByTestId('environment-add-error');
+      const alert = page.getByRole('main').getByTestId('environment-add-error');
       await expect(alert).toHaveRole('alert');
       await expect(alert).toContainText(name);
       await expect(nameBox).toBeFocused();
@@ -260,7 +260,7 @@ test('an administrator sets a production secret and a preview value; the secret 
         { code: 'reserved_environment_name', name },
       );
     }
-    expect(await db.environmentConfigEntry.count()).toBe(3);
+    expect(await adminDb.environmentConfigEntry.count()).toBe(3);
   });
 
   await chapter(
@@ -292,7 +292,9 @@ test('an administrator sets a production secret and a preview value; the secret 
       // secret or a sealed value.
       expect(wire.some((r) => r.method === 'GET' && r.path.endsWith('/entries'))).toBe(true);
       expect(wire.some((r) => r.method === 'PUT')).toBe(true);
-      const [stored] = await db.environmentConfigEntry.findMany({ where: { name: 'API_KEY' } });
+      const [stored] = await adminDb.environmentConfigEntry.findMany({
+        where: { name: 'API_KEY' },
+      });
       expect(stored!.value.startsWith('v1.')).toBe(true);
       for (const r of wire) {
         expect(r.body, `${r.method} ${r.path}`).not.toContain(SECRET);
@@ -352,7 +354,9 @@ test('a customer repository is not offered, and its address answers not-found', 
   await page.keyboard.press('Escape');
 
   await page.goto(`${ROOM}?repository=${seed.customerRepoId}`);
-  await expect(page.getByTestId('environment-not-found')).toContainText(t.notFound.title);
+  await expect(page.getByRole('main').getByTestId('environment-not-found')).toContainText(
+    t.notFound.title,
+  );
   await expect(page.getByRole('tablist')).toHaveCount(0);
   await expect(page.getByRole('link', { name: t.notFound.back })).toHaveAttribute('href', ROOM);
 });

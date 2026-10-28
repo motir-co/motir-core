@@ -221,9 +221,12 @@ describe('resolveEnvironment', () => {
     const repoId = await addRepo(fx, 'app');
     await put(fx, repoId, 'production', 'PLAIN', 'mine');
 
-    // `@/lib/db` connects as the runtime role here; an unbound read would see zero
+    // The bound context connects as the runtime role here; an unbound read would see zero
     // rows, so a hit proves the bind, and every read is handed the bound tx.
-    const [who] = await db.$queryRaw<{ role: string }[]>`SELECT current_user AS role`;
+    const [who] = await withWorkspaceContext(
+      fx.ctx,
+      (tx) => tx.$queryRaw<{ role: string }[]>`SELECT current_user AS role`,
+    );
     expect(who?.role).toBe(TEST_APP_ROLE);
     const findById = vi.spyOn(projectRepoRepository, 'findById');
     const list = vi.spyOn(environmentConfigEntryRepository, 'listByRepositoryAndEnvironment');
