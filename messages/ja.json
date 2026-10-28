@@ -1958,6 +1958,7 @@
       "translation": "翻訳",
       "rules": "ルール",
       "repositories": "リポジトリ",
+      "environment": "環境",
       "monitoring": "監視",
       "approvals": "承認",
       "bugs": "バグ"
@@ -4156,7 +4157,8 @@
         "hosted-agent": "ホスト型の実行で使用するモデルは、このプロジェクトでホスト型の実行を開始できるユーザーに表示されます。確認が必要な場合はプロジェクト管理者に依頼してください。",
         "translation": "このプロジェクトの作業内容が読み手ごとに翻訳されるかどうかは、プロジェクトの作業項目を閲覧できる人に表示されます。確認が必要な場合は、プロジェクト管理者にお問い合わせください。",
         "automation": "プロジェクトの自動化はプロジェクト管理者が管理しています。ルールの変更が必要な場合は管理者に依頼してください。",
-        "monitoring": "このプロジェクトのエラー監視ツールとの接続は、連携を管理できるユーザーが管理しています。Sentry の接続や再接続が必要な場合はプロジェクト管理者に依頼してください。"
+        "monitoring": "このプロジェクトのエラー監視ツールとの接続は、連携を管理できるユーザーが管理しています。Sentry の接続や再接続が必要な場合はプロジェクト管理者に依頼してください。",
+        "environment": "リポジトリの環境値は、このプロジェクトを閲覧できる人に表示されます。確認が必要な場合は、プロジェクト管理者にお問い合わせください。"
       }
     },
     "organization": {
@@ -4227,6 +4229,101 @@
       "saveError": "問題が発生しました。もう一度お試しください。",
       "saveForbidden": "このプロジェクトのバグの登録先を変更する権限がなくなりました。",
       "folderGone": "そのフォルダーは存在しなくなりました。別のフォルダーを選択してください。"
+    },
+    "environment": {
+      "title": "環境",
+      "lede": "アプリが実行時に読み込む値です。環境ごとに一度設定すると、Motir が次回のデプロイ時にアプリへ渡します。",
+      "repositoryLabel": "リポジトリ",
+      "role": {
+        "web": "Web アプリ",
+        "api": "API",
+        "mobile": "モバイルアプリ",
+        "shared": "共有コード",
+        "infra": "インフラ",
+        "other": "その他"
+      },
+      "tablistLabel": "環境",
+      "tab": {
+        "production": "本番",
+        "preview": "プレビュー",
+        "release": "リリース"
+      },
+      "column": {
+        "name": "名前",
+        "value": "値"
+      },
+      "set": "設定済み",
+      "secretHidden": "シークレット · 値は非表示",
+      "edit": "編集",
+      "replace": "置き換え",
+      "delete": "削除",
+      "editAria": "{name} を編集",
+      "replaceAria": "{name} を置き換え",
+      "deleteAria": "{name} を削除",
+      "saving": "保存中",
+      "add": {
+        "heading": "値を追加",
+        "namePlaceholder": "NAME",
+        "valuePlaceholder": "値",
+        "secret": "シークレット",
+        "save": "保存",
+        "helper": "シークレットは置き換えや削除はできますが、二度と表示されません。あなたにも、ほかの誰にも。"
+      },
+      "error": {
+        "nameRequired": "名前を入力してください。",
+        "duplicate": "{name} は {environment} ですでに設定されています。一覧から編集してください。",
+        "invalidName": "英字、数字、アンダースコアを使用し、数字で始めないでください。",
+        "reserved": "{name} は予約されています。PORT、DATABASE_URL、MOTIR_* の名前は Motir が設定します。別の名前を選んでください。"
+      },
+      "saved": {
+        "secret": "{name} をシークレットとして保存しました。今後、値は表示されません。",
+        "plain": "{name} を保存しました。"
+      },
+      "replaceFlow": {
+        "placeholder": "新しい値",
+        "aria": "{name} の新しい値",
+        "helper": "現在の値は非表示のままです。保存すると、次回のデプロイで置き換わります。",
+        "cancel": "キャンセル"
+      },
+      "deleteDialog": {
+        "title": "{environment} から {name} を削除しますか？",
+        "body": "次回のデプロイから、アプリは {environment} で {name} を受け取らなくなります。{count, plural, other {{others} は独自の値を保持します。}}この操作は元に戻せません。",
+        "confirm": "削除",
+        "cancel": "キャンセル"
+      },
+      "empty": {
+        "title": "{environment} にはまだ値がありません",
+        "production": "本番のアプリがこれらを受け取ります。下から最初の値を追加してください。",
+        "preview": "各プルリクエストのプレビューがこれらを受け取ります。下から最初の値を追加してください。",
+        "release": "トレインがビルドするリリースがこれらを受け取ります。下から最初の値を追加してください。"
+      },
+      "loading": "値を読み込み中…",
+      "loadError": {
+        "title": "値を読み込めませんでした",
+        "body": "変更は行われていません。しばらくしてから再試行してください。"
+      },
+      "retry": "再試行",
+      "saveError": "{name} を保存できませんでした。変更は行われていません。",
+      "deleteError": "{name} を削除できませんでした。値は設定されたままです。",
+      "readOnly": {
+        "note": "これらの値は閲覧できます。変更できるのはプロジェクト管理者だけです。",
+        "tooltip": "環境値を変更できるのはプロジェクト管理者だけです。"
+      },
+      "changes": {
+        "heading": "最近の変更 · {environment}",
+        "added": "追加",
+        "replaced": "置き換え",
+        "deleted": "削除",
+        "secret": "シークレット",
+        "unknownActor": "以前のメンバー",
+        "loadError": "最近の変更を読み込めませんでした。",
+        "empty": "まだ変更はありません。この環境への変更はすべてここに表示されます。誰がいつ変更したかは表示されますが、値は表示されません。"
+      },
+      "notFound": {
+        "title": "リポジトリが見つかりません",
+        "body": "Motir はこのリポジトリの環境を保持していません。Motir がホストしているプロジェクトのリポジトリを選んでください。",
+        "back": "環境に戻る"
+      }
     },
     "workspaceAddress": {
       "door": {
@@ -10082,7 +10179,8 @@
       "navIdeas": "アイデア",
       "navRunModels": "ホスト型実行のモデル",
       "navFleetSettings": "フリート設定",
-      "navCapacity": "プロバイダーの容量"
+      "navCapacity": "プロバイダーの容量",
+      "navJobs": "ジョブ"
     },
     "nav": {
       "overview": "概要",
@@ -10304,6 +10402,9 @@
             "limits": {
               "edit": "プロバイダーモデルの容量上限を編集しました"
             }
+          },
+          "jobs": {
+            "dlq_replay": "デッドレターを再実行しました"
           }
         }
       }
@@ -12598,6 +12699,104 @@
         "unreachable": "ゲートウェイが応答しませんでした。何も保存されていません。もう一度お試しください。",
         "notPermitted": "あなたのロールでは上限を編集できないため、何も保存されていません。",
         "failed": "上限を保存できませんでした。何も変更されていません。もう一度お試しください。"
+      }
+    },
+    "jobs": {
+      "breadcrumb": "プラットフォーム · ジョブ",
+      "title": "ジョブ",
+      "subtitle": "プラットフォームが実行したすべてのバックグラウンドジョブ（ワークスペースの有無を問わず）と、再実行を待つすべてのデッドレターです。",
+      "tabsLabel": "ジョブ台帳の表示",
+      "tabs": {
+        "runs": "実行",
+        "dlq": "デッドレター",
+        "waiting": "{count} 件待機中"
+      },
+      "status": {
+        "label": "ステータス",
+        "all": "すべて",
+        "running": "実行中",
+        "succeeded": "成功",
+        "failed": "失敗",
+        "abandoned": "中断"
+      },
+      "columns": {
+        "function": "関数",
+        "event": "イベント",
+        "functionEvent": "関数 · イベント",
+        "workspace": "ワークスペース",
+        "status": "ステータス",
+        "attempt": "試行",
+        "attempts": "試行回数",
+        "started": "開始",
+        "duration": "所要時間",
+        "failure": "失敗内容",
+        "lastFailed": "最終失敗",
+        "replay": "再実行"
+      },
+      "runsCaption": "バックグラウンドジョブの実行",
+      "dlqCaption": "デッドレター",
+      "noWorkspace": "ワークスペースなし",
+      "pageLabel": "{page} ページ",
+      "pagerLabel": "実行のページ",
+      "previous": "前へ",
+      "next": "次へ",
+      "runsEmpty": {
+        "titleAll": "まだ実行はありません",
+        "bodyAll": "バックグラウンドジョブは実行されるとここに表示されます。",
+        "titleStatus": "このステータスの実行はありません",
+        "bodyStatus": "台帳にこのステータスのものはありません。すべての実行を見るには「すべて」を選択してください。"
+      },
+      "runsError": {
+        "title": "ジョブ台帳を読み込めませんでした"
+      },
+      "dlqError": {
+        "title": "デッドレターを読み込めませんでした"
+      },
+      "error": {
+        "body": "データベースが応答しませんでした。何も変更されていません。"
+      },
+      "retry": "再試行",
+      "loadingRuns": "実行を読み込んでいます",
+      "readOnly": "読み取り専用です。デッドレターを再実行するにはオペレーターのロールが必要です。",
+      "fn": {
+        "label": "関数",
+        "all": "すべての関数"
+      },
+      "waitingLine": "{waiting} 件待機中 · 過去 7 日間に {replayed} 件を再実行",
+      "capped": "{count} 件中 {shown} 件を表示しています。一覧には最新の 200 件が表示されます。",
+      "replay": "再実行",
+      "replayAria": "{function} のデッドレターを再実行",
+      "replayedAt": "{time}に再実行",
+      "toast": {
+        "replayedTitle": "デッドレターを再実行しました",
+        "replayedBody": "{function} を再送信しました。",
+        "alreadyTitle": "すでに再実行済みです",
+        "alreadyBody": "別のユーザーが先にこのデッドレターを再実行しました。再送信されたものはありません。",
+        "failedTitle": "再実行に失敗しました",
+        "failedBody": "何も送信されていません。もう一度お試しください。",
+        "notPermittedBody": "デッドレターを再実行するにはオペレーターのロールが必要です。",
+        "notFoundBody": "このデッドレターはもう存在しません。"
+      },
+      "replayAll": {
+        "button": "{count} 件をすべて再実行",
+        "title": "{function} の {count} 件のデッドレターを再実行しますか？",
+        "body": "それぞれ新しい実行として再送信され、プラットフォームの監査ログに記録されます。他のユーザーが先に再実行したデッドレターはスキップされます。",
+        "confirm": "{count} 件を再実行",
+        "cancel": "キャンセル",
+        "running": "再実行しています…",
+        "runningLine": "{count} 件のデッドレターを 50 件ずつ再実行しています。完了するまでこの画面を開いたままにしてください。",
+        "doneTitle": "再実行が完了しました",
+        "doneWithFailuresTitle": "一部失敗して再実行が完了しました",
+        "replayed": "{count} 件を再実行",
+        "already": "{count} 件は他のユーザーが再実行済み",
+        "nothingLeft": "0 件を再実行 — {count} 件はすべて再実行済みでした",
+        "failed": "{count} 件は再実行できませんでした。一覧に残っているので、1 件ずつ再実行してください。",
+        "error": "再実行を開始できませんでした。何も変更されていません。",
+        "close": "完了"
+      },
+      "dlqEmpty": {
+        "title": "待機中のものはありません",
+        "body": "試行回数を使い切ったジョブはありません。使い切るとここにデッドレターが表示されます。"
       }
     }
   },

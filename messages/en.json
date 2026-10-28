@@ -1958,6 +1958,7 @@
       "translation": "Translation",
       "rules": "Rules",
       "repositories": "Repositories",
+      "environment": "Environment",
       "monitoring": "Monitoring",
       "approvals": "Approvals",
       "bugs": "Bugs"
@@ -4156,7 +4157,8 @@
         "hosted-agent": "Which model a hosted run uses is shown to people who can start a hosted run on this project. Ask a project admin if you need to see it.",
         "translation": "Whether this project's work content is translated for each reader is shown to people who can read the project's work items. Ask a project admin if you need to see it.",
         "automation": "Project automation is managed by project admins. Ask an admin if you need a rule changed.",
-        "monitoring": "This project's error-monitor connection is managed by people who can manage integrations. Ask a project admin if Sentry needs connecting or reconnecting."
+        "monitoring": "This project's error-monitor connection is managed by people who can manage integrations. Ask a project admin if Sentry needs connecting or reconnecting.",
+        "environment": "A repository's environment values are shown to people who can browse this project. Ask a project admin if you need to see them."
       }
     },
     "organization": {
@@ -4227,6 +4229,101 @@
       "saveError": "Something went wrong. Try again.",
       "saveForbidden": "You can no longer change where this project's bugs are filed.",
       "folderGone": "That folder no longer exists. Choose another."
+    },
+    "environment": {
+      "title": "Environment",
+      "lede": "Values your app reads when it runs. Set them once per environment; Motir passes them to the app on its next deploy.",
+      "repositoryLabel": "Repository",
+      "role": {
+        "web": "Web app",
+        "api": "API",
+        "mobile": "Mobile app",
+        "shared": "Shared code",
+        "infra": "Infrastructure",
+        "other": "Other"
+      },
+      "tablistLabel": "Environment",
+      "tab": {
+        "production": "Production",
+        "preview": "Preview",
+        "release": "Release"
+      },
+      "column": {
+        "name": "Name",
+        "value": "Value"
+      },
+      "set": "Set",
+      "secretHidden": "Secret · value hidden",
+      "edit": "Edit",
+      "replace": "Replace",
+      "delete": "Delete",
+      "editAria": "Edit {name}",
+      "replaceAria": "Replace {name}",
+      "deleteAria": "Delete {name}",
+      "saving": "Saving",
+      "add": {
+        "heading": "Add a value",
+        "namePlaceholder": "NAME",
+        "valuePlaceholder": "Value",
+        "secret": "Secret",
+        "save": "Save",
+        "helper": "A secret can be replaced or deleted, never shown again — not to you, not to anyone."
+      },
+      "error": {
+        "nameRequired": "Enter a name.",
+        "duplicate": "{name} is already set in {environment}. Edit it in the list instead.",
+        "invalidName": "Use letters, digits and underscores, not starting with a digit.",
+        "reserved": "{name} is reserved: PORT, DATABASE_URL and MOTIR_* names are set by Motir. Choose another name."
+      },
+      "saved": {
+        "secret": "{name} saved as a secret. Its value is hidden from now on.",
+        "plain": "{name} saved."
+      },
+      "replaceFlow": {
+        "placeholder": "New value",
+        "aria": "New value for {name}",
+        "helper": "The current value stays hidden. Saving replaces it on the next deploy.",
+        "cancel": "Cancel"
+      },
+      "deleteDialog": {
+        "title": "Delete {name} from {environment}?",
+        "body": "The app stops receiving {name} in {environment} on its next deploy. {count, plural, one {{others} keeps its own value.} other {{others} keep their own values.}} This cannot be undone.",
+        "confirm": "Delete",
+        "cancel": "Cancel"
+      },
+      "empty": {
+        "title": "No values in {environment} yet",
+        "production": "Your live app gets these. Add the first one below.",
+        "preview": "Every pull request’s preview gets these. Add the first one below.",
+        "release": "The release your train builds gets these. Add the first one below."
+      },
+      "loading": "Loading values…",
+      "loadError": {
+        "title": "Couldn’t load the values",
+        "body": "Nothing was changed. Try again in a moment."
+      },
+      "retry": "Try again",
+      "saveError": "Couldn’t save {name}. Nothing was changed.",
+      "deleteError": "Couldn’t delete {name}. It is still set.",
+      "readOnly": {
+        "note": "You can read these values. Only project administrators can change them.",
+        "tooltip": "Only project administrators can change environment values."
+      },
+      "changes": {
+        "heading": "Recent changes · {environment}",
+        "added": "added",
+        "replaced": "replaced",
+        "deleted": "deleted",
+        "secret": "Secret",
+        "unknownActor": "A former member",
+        "loadError": "Couldn’t load the recent changes.",
+        "empty": "No changes yet. Each change to this environment is listed here — who made it and when, never the value."
+      },
+      "notFound": {
+        "title": "Repository not found",
+        "body": "Motir keeps no environment for this repository. Choose one of the project’s repositories that Motir hosts.",
+        "back": "Back to Environment"
+      }
     },
     "workspaceAddress": {
       "door": {
@@ -10082,7 +10179,8 @@
       "navIdeas": "Ideas",
       "navRunModels": "Hosted-run models",
       "navFleetSettings": "Fleet settings",
-      "navCapacity": "Provider capacity"
+      "navCapacity": "Provider capacity",
+      "navJobs": "Jobs"
     },
     "nav": {
       "overview": "Overview",
@@ -10304,6 +10402,9 @@
             "limits": {
               "edit": "Edited a provider model's capacity limits"
             }
+          },
+          "jobs": {
+            "dlq_replay": "Replayed a dead letter"
           }
         }
       }
@@ -12598,6 +12699,104 @@
         "unreachable": "The gateway did not answer. Nothing was saved; try again.",
         "notPermitted": "Your role cannot edit limits, so nothing was saved.",
         "failed": "The limits could not be saved. Nothing was changed; try again."
+      }
+    },
+    "jobs": {
+      "breadcrumb": "Platform · Jobs",
+      "title": "Jobs",
+      "subtitle": "Every background job the platform ran, in every workspace and in none, and every dead letter waiting for a replay.",
+      "tabsLabel": "Job ledger views",
+      "tabs": {
+        "runs": "Runs",
+        "dlq": "Dead letters",
+        "waiting": "{count} waiting"
+      },
+      "status": {
+        "label": "Status",
+        "all": "All",
+        "running": "Running",
+        "succeeded": "Succeeded",
+        "failed": "Failed",
+        "abandoned": "Abandoned"
+      },
+      "columns": {
+        "function": "Function",
+        "event": "Event",
+        "functionEvent": "Function · event",
+        "workspace": "Workspace",
+        "status": "Status",
+        "attempt": "Attempt",
+        "attempts": "Attempts",
+        "started": "Started",
+        "duration": "Duration",
+        "failure": "Failure",
+        "lastFailed": "Last failed",
+        "replay": "Replay"
+      },
+      "runsCaption": "Background job runs",
+      "dlqCaption": "Dead letters",
+      "noWorkspace": "No workspace",
+      "pageLabel": "Page {page}",
+      "pagerLabel": "Runs pages",
+      "previous": "Previous",
+      "next": "Next",
+      "runsEmpty": {
+        "titleAll": "No runs yet",
+        "bodyAll": "Background jobs appear here when they run.",
+        "titleStatus": "No runs with this status",
+        "bodyStatus": "Nothing in the ledger has this status. Choose All to see every run."
+      },
+      "runsError": {
+        "title": "The job ledger could not be read"
+      },
+      "dlqError": {
+        "title": "The dead letters could not be read"
+      },
+      "error": {
+        "body": "The database did not answer. Nothing was changed."
+      },
+      "retry": "Try again",
+      "loadingRuns": "Loading runs",
+      "readOnly": "Read-only. Replaying a dead letter needs the operator role.",
+      "fn": {
+        "label": "Function",
+        "all": "All functions"
+      },
+      "waitingLine": "{waiting} waiting · {replayed} replayed in the last 7 days",
+      "capped": "Showing {shown} of {count}. The list shows the newest 200.",
+      "replay": "Replay",
+      "replayAria": "Replay {function} dead letter",
+      "replayedAt": "Replayed {time}",
+      "toast": {
+        "replayedTitle": "Dead letter replayed",
+        "replayedBody": "{function} was sent again.",
+        "alreadyTitle": "Already replayed",
+        "alreadyBody": "Someone replayed this dead letter first. Nothing was sent again.",
+        "failedTitle": "The replay failed",
+        "failedBody": "Nothing was sent. Try again.",
+        "notPermittedBody": "Replaying a dead letter needs the operator role.",
+        "notFoundBody": "This dead letter no longer exists."
+      },
+      "replayAll": {
+        "button": "Replay all {count}",
+        "title": "Replay {count} dead letters of {function}?",
+        "body": "Each one is sent again as a new run and written to the platform audit log. A dead letter someone else replays first is skipped.",
+        "confirm": "Replay {count}",
+        "cancel": "Cancel",
+        "running": "Replaying…",
+        "runningLine": "Replaying {count} dead letters, 50 at a time. Keep this open until it finishes.",
+        "doneTitle": "Replay finished",
+        "doneWithFailuresTitle": "Replay finished with failures",
+        "replayed": "{count} replayed",
+        "already": "{count} already replayed by someone else",
+        "nothingLeft": "0 replayed — all {count} were already replayed",
+        "failed": "{count} could not be replayed. They stay in the list; replay them one by one.",
+        "error": "The replay could not run. Nothing was changed.",
+        "close": "Done"
+      },
+      "dlqEmpty": {
+        "title": "Nothing waiting",
+        "body": "No job has run out of attempts. Dead letters appear here when one does."
       }
     }
   },

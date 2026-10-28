@@ -288,6 +288,19 @@ describe('intra-plan item-link tokens (MOTIR-1418)', () => {
     expect(rewriteIntraPlanRefs(body, new Map()).body).toBe(body);
   });
 
+  it('rewrites a `motir:<planItemId>` link to a sibling add like the canonical token (MOTIR-9993)', () => {
+    const body =
+      'See [A](motir:piA), [B](motir-ref:planItem:piB), [C](motir:wiExisting), [D](motir:neither).';
+    const { body: out, unresolved } = rewriteIntraPlanRefs(body, resolve);
+    expect(out).toBe(
+      'See [A](motir:wiA), [B](motir:wiB), [C](motir:wiExisting), [D](motir:neither).',
+    );
+    // A `motir:` link naming no proposal is an ordinary item link, never a dangling ref.
+    expect(unresolved).toEqual([]);
+    // Idempotent: the rewritten body is not rewritten again.
+    expect(rewriteIntraPlanRefs(out, resolve).body).toBe(out);
+  });
+
   it('parseIntraPlanRefIds returns distinct planItem ids in first-seen order', () => {
     expect(
       parseIntraPlanRefIds(

@@ -1958,6 +1958,7 @@
       "translation": "Traduzione",
       "rules": "Regole",
       "repositories": "Repository",
+      "environment": "Ambiente",
       "monitoring": "Monitoraggio",
       "approvals": "Approvazioni",
       "bugs": "Bug"
@@ -4156,7 +4157,8 @@
         "hosted-agent": "Il modello usato da un’esecuzione ospitata è visibile a chi può avviare un’esecuzione ospitata in questo progetto. Chiedi a un amministratore del progetto se devi vederlo.",
         "translation": "Se i contenuti di lavoro di questo progetto vengono tradotti per ogni lettore è mostrato alle persone che possono leggere gli elementi di lavoro del progetto. Chiedi a un amministratore del progetto se hai bisogno di vederlo.",
         "automation": "L’automazione del progetto è gestita dagli amministratori del progetto. Chiedi a un amministratore se devi modificare una regola.",
-        "monitoring": "Il collegamento al sistema di monitoraggio degli errori di questo progetto è gestito da chi può gestire le integrazioni. Chiedi a un amministratore del progetto se Sentry va collegato o ricollegato."
+        "monitoring": "Il collegamento al sistema di monitoraggio degli errori di questo progetto è gestito da chi può gestire le integrazioni. Chiedi a un amministratore del progetto se Sentry va collegato o ricollegato.",
+        "environment": "I valori di ambiente di un repository sono mostrati alle persone che possono consultare questo progetto. Chiedi a un amministratore del progetto se hai bisogno di vederli."
       }
     },
     "organization": {
@@ -4227,6 +4229,101 @@
       "saveError": "Si è verificato un errore. Riprova.",
       "saveForbidden": "Non puoi più modificare dove vengono archiviati i bug di questo progetto.",
       "folderGone": "Quella cartella non esiste più. Scegline un’altra."
+    },
+    "environment": {
+      "title": "Ambiente",
+      "lede": "Valori che la tua app legge quando è in esecuzione. Impostali una volta per ambiente; Motir li passa all’app al suo prossimo deploy.",
+      "repositoryLabel": "Repository",
+      "role": {
+        "web": "App web",
+        "api": "API",
+        "mobile": "App mobile",
+        "shared": "Codice condiviso",
+        "infra": "Infrastruttura",
+        "other": "Altro"
+      },
+      "tablistLabel": "Ambiente",
+      "tab": {
+        "production": "Produzione",
+        "preview": "Anteprima",
+        "release": "Release"
+      },
+      "column": {
+        "name": "Nome",
+        "value": "Valore"
+      },
+      "set": "Impostato",
+      "secretHidden": "Segreto · valore nascosto",
+      "edit": "Modifica",
+      "replace": "Sostituisci",
+      "delete": "Elimina",
+      "editAria": "Modifica {name}",
+      "replaceAria": "Sostituisci {name}",
+      "deleteAria": "Elimina {name}",
+      "saving": "Salvataggio in corso",
+      "add": {
+        "heading": "Aggiungi un valore",
+        "namePlaceholder": "NOME",
+        "valuePlaceholder": "Valore",
+        "secret": "Segreto",
+        "save": "Salva",
+        "helper": "Un segreto può essere sostituito o eliminato, ma non viene mai più mostrato: né a te né a nessun altro."
+      },
+      "error": {
+        "nameRequired": "Inserisci un nome.",
+        "duplicate": "{name} è già impostato in {environment}. Modificalo nell’elenco.",
+        "invalidName": "Usa lettere, cifre e trattini bassi, senza iniziare con una cifra.",
+        "reserved": "{name} è riservato: PORT, DATABASE_URL e i nomi MOTIR_* sono impostati da Motir. Scegli un altro nome."
+      },
+      "saved": {
+        "secret": "{name} è stato salvato come segreto. Da ora il suo valore è nascosto.",
+        "plain": "{name} è stato salvato."
+      },
+      "replaceFlow": {
+        "placeholder": "Nuovo valore",
+        "aria": "Nuovo valore per {name}",
+        "helper": "Il valore attuale resta nascosto. Salvando, viene sostituito al prossimo deploy.",
+        "cancel": "Annulla"
+      },
+      "deleteDialog": {
+        "title": "Eliminare {name} da {environment}?",
+        "body": "Dal prossimo deploy l’app non riceve più {name} in {environment}. {count, plural, one {{others} mantiene il proprio valore.} other {{others} mantengono i propri valori.}} L’operazione non può essere annullata.",
+        "confirm": "Elimina",
+        "cancel": "Annulla"
+      },
+      "empty": {
+        "title": "Ancora nessun valore in {environment}",
+        "production": "La tua app in produzione li riceve. Aggiungi il primo qui sotto.",
+        "preview": "L’anteprima di ogni pull request li riceve. Aggiungi il primo qui sotto.",
+        "release": "La release costruita dal tuo train li riceve. Aggiungi il primo qui sotto."
+      },
+      "loading": "Caricamento dei valori…",
+      "loadError": {
+        "title": "Impossibile caricare i valori",
+        "body": "Non è stato modificato nulla. Riprova tra un momento."
+      },
+      "retry": "Riprova",
+      "saveError": "Impossibile salvare {name}. Non è stato modificato nulla.",
+      "deleteError": "Impossibile eliminare {name}. È ancora impostato.",
+      "readOnly": {
+        "note": "Puoi leggere questi valori. Solo gli amministratori del progetto possono modificarli.",
+        "tooltip": "Solo gli amministratori del progetto possono modificare i valori di ambiente."
+      },
+      "changes": {
+        "heading": "Modifiche recenti · {environment}",
+        "added": "ha aggiunto",
+        "replaced": "ha sostituito",
+        "deleted": "ha eliminato",
+        "secret": "Segreto",
+        "unknownActor": "Un ex membro",
+        "loadError": "Impossibile caricare le modifiche recenti.",
+        "empty": "Ancora nessuna modifica. Ogni modifica a questo ambiente è elencata qui: chi l’ha fatta e quando, mai il valore."
+      },
+      "notFound": {
+        "title": "Repository non trovato",
+        "body": "Motir non conserva alcun ambiente per questo repository. Scegli uno dei repository del progetto ospitati da Motir.",
+        "back": "Torna ad Ambiente"
+      }
     },
     "workspaceAddress": {
       "door": {
@@ -10085,7 +10182,8 @@
       "navIdeas": "Idee",
       "navRunModels": "Modelli delle esecuzioni ospitate",
       "navFleetSettings": "Impostazioni della flotta",
-      "navCapacity": "Capacità dei fornitori"
+      "navCapacity": "Capacità dei fornitori",
+      "navJobs": "Job"
     },
     "nav": {
       "overview": "Panoramica",
@@ -10307,6 +10405,9 @@
             "limits": {
               "edit": "Ha modificato i limiti di capacità di un modello di fornitore"
             }
+          },
+          "jobs": {
+            "dlq_replay": "Ha rieseguito una dead-letter"
           }
         }
       }
@@ -12601,6 +12702,104 @@
         "unreachable": "Il gateway non ha risposto. Non è stato salvato nulla; riprova.",
         "notPermitted": "Il tuo ruolo non può modificare i limiti, quindi non è stato salvato nulla.",
         "failed": "Non è stato possibile salvare i limiti. Non è stato modificato nulla; riprova."
+      }
+    },
+    "jobs": {
+      "breadcrumb": "Piattaforma · Job",
+      "title": "Job",
+      "subtitle": "Ogni job in background eseguito dalla piattaforma, in ogni area di lavoro o in nessuna, e ogni dead-letter in attesa di essere rieseguita.",
+      "tabsLabel": "Viste del registro dei job",
+      "tabs": {
+        "runs": "Esecuzioni",
+        "dlq": "Dead-letter",
+        "waiting": "{count} in attesa"
+      },
+      "status": {
+        "label": "Stato",
+        "all": "Tutti",
+        "running": "In esecuzione",
+        "succeeded": "Riuscito",
+        "failed": "Non riuscito",
+        "abandoned": "Abbandonato"
+      },
+      "columns": {
+        "function": "Funzione",
+        "event": "Evento",
+        "functionEvent": "Funzione · evento",
+        "workspace": "Area di lavoro",
+        "status": "Stato",
+        "attempt": "Tentativo",
+        "attempts": "Tentativi",
+        "started": "Avvio",
+        "duration": "Durata",
+        "failure": "Errore",
+        "lastFailed": "Ultimo errore",
+        "replay": "Riesegui"
+      },
+      "runsCaption": "Esecuzioni dei job in background",
+      "dlqCaption": "Dead-letter",
+      "noWorkspace": "Nessuna area di lavoro",
+      "pageLabel": "Pagina {page}",
+      "pagerLabel": "Pagine delle esecuzioni",
+      "previous": "Precedente",
+      "next": "Successiva",
+      "runsEmpty": {
+        "titleAll": "Ancora nessuna esecuzione",
+        "bodyAll": "I job in background compaiono qui quando vengono eseguiti.",
+        "titleStatus": "Nessuna esecuzione con questo stato",
+        "bodyStatus": "Nessun elemento del registro ha questo stato. Scegli Tutti per vedere ogni esecuzione."
+      },
+      "runsError": {
+        "title": "Impossibile leggere il registro dei job"
+      },
+      "dlqError": {
+        "title": "Impossibile leggere le dead-letter"
+      },
+      "error": {
+        "body": "Il database non ha risposto. Non è stato modificato nulla."
+      },
+      "retry": "Riprova",
+      "loadingRuns": "Caricamento delle esecuzioni",
+      "readOnly": "Sola lettura. Per rieseguire una dead-letter serve il ruolo di operatore.",
+      "fn": {
+        "label": "Funzione",
+        "all": "Tutte le funzioni"
+      },
+      "waitingLine": "{waiting} in attesa · {replayed} rieseguite negli ultimi 7 giorni",
+      "capped": "Visualizzate {shown} di {count}. L’elenco mostra le 200 più recenti.",
+      "replay": "Riesegui",
+      "replayAria": "Riesegui la dead-letter di {function}",
+      "replayedAt": "Rieseguita {time}",
+      "toast": {
+        "replayedTitle": "Dead-letter rieseguita",
+        "replayedBody": "{function} è stata inviata di nuovo.",
+        "alreadyTitle": "Già rieseguita",
+        "alreadyBody": "Qualcuno ha già rieseguito questa dead-letter. Non è stato inviato nulla di nuovo.",
+        "failedTitle": "La riesecuzione non è riuscita",
+        "failedBody": "Non è stato inviato nulla. Riprova.",
+        "notPermittedBody": "Per rieseguire una dead-letter serve il ruolo di operatore.",
+        "notFoundBody": "Questa dead-letter non esiste più."
+      },
+      "replayAll": {
+        "button": "Riesegui tutte e {count}",
+        "title": "Rieseguire {count} dead-letter di {function}?",
+        "body": "Ognuna viene inviata di nuovo come nuova esecuzione e registrata nel log di audit della piattaforma. Una dead-letter rieseguita prima da qualcun altro viene saltata.",
+        "confirm": "Riesegui {count}",
+        "cancel": "Annulla",
+        "running": "Riesecuzione in corso…",
+        "runningLine": "Riesecuzione di {count} dead-letter, 50 alla volta. Tieni aperta questa finestra finché non termina.",
+        "doneTitle": "Riesecuzione completata",
+        "doneWithFailuresTitle": "Riesecuzione completata con errori",
+        "replayed": "{count} rieseguite",
+        "already": "{count} già rieseguite da qualcun altro",
+        "nothingLeft": "0 rieseguite: tutte e {count} erano già state rieseguite",
+        "failed": "{count} non sono state rieseguite. Restano nell’elenco; rieseguile una alla volta.",
+        "error": "Impossibile avviare la riesecuzione. Non è stato modificato nulla.",
+        "close": "Fine"
+      },
+      "dlqEmpty": {
+        "title": "Niente in attesa",
+        "body": "Nessun job ha esaurito i tentativi. Le dead-letter compaiono qui quando succede."
       }
     }
   },

@@ -494,6 +494,19 @@ describe('the command line', () => {
     expect(() =>
       parseDeployCheckArgs(['database', '--target', 'aws', '--repository', 'cmrepo1']),
     ).toThrow(/database runs with --target serverless only/);
+    expect(() =>
+      parseDeployCheckArgs([
+        'deploy',
+        '--target',
+        'serverless',
+        '--workspace',
+        'ws1',
+        '--repository',
+        'repo1',
+        '--environment',
+        'production',
+      ]),
+    ).toThrow(/--workspace, --repository and --environment are for --target fly only/);
   });
 
   it('a serverless-only step dispatched to Fly is a usage error', async () => {
@@ -517,6 +530,18 @@ describe('the command line', () => {
         target: 'serverless',
       }),
     ).rejects.toThrow(/push runs with --target aws only/);
+  });
+
+  it('the Fly-only report step dispatched to serverless is a usage error', async () => {
+    const h = harness();
+    await expect(
+      runDeployCheckStep('report', h.deps, {
+        manifestPath: SERVERLESS_DEPLOY_CHECK_DEFAULT_MANIFEST,
+        appName: DEPLOY_CHECK_DEFAULT_NAME,
+        image: 'x',
+        target: 'serverless',
+      }),
+    ).rejects.toThrow(/report runs with --target fly only/);
   });
 
   it('without the serverless dependencies the target is not configured', async () => {

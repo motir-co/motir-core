@@ -515,6 +515,7 @@ every consumer builds to.
 | Move an **Enterprise request** through its states                | **MOTIR-7608** (Story MOTIR-7602) | `operator`   | yes (service)   | yes     |
 | The audit-log **VIEW**, searchable + tamper-evident (hash chain) | 10.3 MOTIR-751                    | `superadmin` | no              | yes     |
 | Grant / revoke `platformRole`                                    | 10.3 (no card yet — §6)           | `superadmin` | yes             | yes     |
+| Replay a dead letter, a workspace's or none, from `/admin/jobs`  | **MOTIR-9985** (Story MOTIR-9980) | `operator`   | yes (service)   | yes     |
 
 Every one of those writes reuses **this** gate and **this** `PlatformAuditLog`. The day-1
 rows are the plain append-only shape above; 10.3's hash chaining extends the same table

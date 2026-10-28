@@ -394,6 +394,8 @@ export async function runServerlessDeployCheckStep(
       return destroy(deps, options);
     case 'all':
       return all(deps, options);
+    case 'report':
+      throw new DeployCheckUsageError(`${step} runs with --target fly only.`);
     case 'converge':
     case 'push':
     case 'page':

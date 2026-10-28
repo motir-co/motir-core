@@ -1958,6 +1958,7 @@
       "translation": "Tradução",
       "rules": "Regras",
       "repositories": "Repositórios",
+      "environment": "Ambiente",
       "monitoring": "Monitoramento",
       "approvals": "Aprovações",
       "bugs": "Bugs"
@@ -4156,7 +4157,8 @@
         "hosted-agent": "O modelo que uma execução hospedada usa é exibido para quem pode iniciar uma execução hospedada neste projeto. Peça a um administrador do projeto se precisar vê-lo.",
         "translation": "Se o conteúdo de trabalho deste projeto é traduzido para cada leitor aparece para quem pode ler os itens de trabalho do projeto. Peça a um administrador do projeto se precisar ver.",
         "automation": "A automação do projeto é gerenciada pelos administradores do projeto. Peça a um administrador se precisar alterar uma regra.",
-        "monitoring": "A conexão deste projeto com o monitor de erros é gerenciada por quem pode gerenciar integrações. Peça a um administrador do projeto se o Sentry precisar ser conectado ou reconectado."
+        "monitoring": "A conexão deste projeto com o monitor de erros é gerenciada por quem pode gerenciar integrações. Peça a um administrador do projeto se o Sentry precisar ser conectado ou reconectado.",
+        "environment": "Os valores de ambiente de um repositório aparecem para quem pode navegar neste projeto. Peça a um administrador do projeto se precisar vê-los."
       }
     },
     "organization": {
@@ -4227,6 +4229,101 @@
       "saveError": "Algo deu errado. Tente novamente.",
       "saveForbidden": "Você não pode mais alterar onde os Bugs deste projeto são registrados.",
       "folderGone": "Essa Pasta não existe mais. Escolha outra."
+    },
+    "environment": {
+      "title": "Ambiente",
+      "lede": "Valores que seu app lê quando é executado. Defina-os uma vez por ambiente; o Motir os passa ao app no próximo deploy.",
+      "repositoryLabel": "Repositório",
+      "role": {
+        "web": "App web",
+        "api": "API",
+        "mobile": "App móvel",
+        "shared": "Código compartilhado",
+        "infra": "Infraestrutura",
+        "other": "Outro"
+      },
+      "tablistLabel": "Ambiente",
+      "tab": {
+        "production": "Produção",
+        "preview": "Prévia",
+        "release": "Release"
+      },
+      "column": {
+        "name": "Nome",
+        "value": "Valor"
+      },
+      "set": "Definido",
+      "secretHidden": "Secreto · valor oculto",
+      "edit": "Editar",
+      "replace": "Substituir",
+      "delete": "Excluir",
+      "editAria": "Editar {name}",
+      "replaceAria": "Substituir {name}",
+      "deleteAria": "Excluir {name}",
+      "saving": "Salvando",
+      "add": {
+        "heading": "Adicionar um valor",
+        "namePlaceholder": "NOME",
+        "valuePlaceholder": "Valor",
+        "secret": "Secreto",
+        "save": "Salvar",
+        "helper": "Um segredo pode ser substituído ou excluído, mas nunca é mostrado de novo — nem para você, nem para ninguém."
+      },
+      "error": {
+        "nameRequired": "Informe um nome.",
+        "duplicate": "{name} já está definido em {environment}. Edite-o na lista.",
+        "invalidName": "Use letras, dígitos e sublinhados, sem começar com um dígito.",
+        "reserved": "{name} é reservado: PORT, DATABASE_URL e nomes MOTIR_* são definidos pelo Motir. Escolha outro nome."
+      },
+      "saved": {
+        "secret": "{name} foi salvo como segredo. O valor fica oculto a partir de agora.",
+        "plain": "{name} foi salvo."
+      },
+      "replaceFlow": {
+        "placeholder": "Novo valor",
+        "aria": "Novo valor para {name}",
+        "helper": "O valor atual continua oculto. Ao salvar, ele é substituído no próximo deploy.",
+        "cancel": "Cancelar"
+      },
+      "deleteDialog": {
+        "title": "Excluir {name} de {environment}?",
+        "body": "O app deixa de receber {name} em {environment} no próximo deploy. {count, plural, one {{others} mantém o próprio valor.} other {{others} mantêm os próprios valores.}} Essa ação não pode ser desfeita.",
+        "confirm": "Excluir",
+        "cancel": "Cancelar"
+      },
+      "empty": {
+        "title": "Ainda não há valores em {environment}",
+        "production": "Seu app em produção recebe estes valores. Adicione o primeiro abaixo.",
+        "preview": "A prévia de cada pull request recebe estes valores. Adicione o primeiro abaixo.",
+        "release": "A release que seu trem gera recebe estes valores. Adicione o primeiro abaixo."
+      },
+      "loading": "Carregando valores…",
+      "loadError": {
+        "title": "Não foi possível carregar os valores",
+        "body": "Nada foi alterado. Tente novamente em instantes."
+      },
+      "retry": "Tentar novamente",
+      "saveError": "Não foi possível salvar {name}. Nada foi alterado.",
+      "deleteError": "Não foi possível excluir {name}. Ele continua definido.",
+      "readOnly": {
+        "note": "Você pode ler estes valores. Somente administradores do projeto podem alterá-los.",
+        "tooltip": "Somente administradores do projeto podem alterar valores de ambiente."
+      },
+      "changes": {
+        "heading": "Alterações recentes · {environment}",
+        "added": "adicionou",
+        "replaced": "substituiu",
+        "deleted": "excluiu",
+        "secret": "Secreto",
+        "unknownActor": "Um ex-membro",
+        "loadError": "Não foi possível carregar as alterações recentes.",
+        "empty": "Ainda não há alterações. Cada alteração neste ambiente aparece aqui — quem fez e quando, nunca o valor."
+      },
+      "notFound": {
+        "title": "Repositório não encontrado",
+        "body": "O Motir não mantém nenhum ambiente para este repositório. Escolha um dos repositórios do projeto que o Motir hospeda.",
+        "back": "Voltar para Ambiente"
+      }
     },
     "workspaceAddress": {
       "door": {
@@ -10085,7 +10182,8 @@
       "navIdeas": "Ideias",
       "navRunModels": "Modelos de execução hospedada",
       "navFleetSettings": "Configurações da frota",
-      "navCapacity": "Capacidade dos provedores"
+      "navCapacity": "Capacidade dos provedores",
+      "navJobs": "Jobs"
     },
     "nav": {
       "overview": "Visão geral",
@@ -10307,6 +10405,9 @@
             "limits": {
               "edit": "Editou os limites de capacidade de um modelo de provedor"
             }
+          },
+          "jobs": {
+            "dlq_replay": "Reprocessou uma dead-letter"
           }
         }
       }
@@ -12601,6 +12702,104 @@
         "unreachable": "O gateway não respondeu. Nada foi salvo; tente novamente.",
         "notPermitted": "Sua função não pode editar limites, então nada foi salvo.",
         "failed": "Não foi possível salvar os limites. Nada foi alterado; tente novamente."
+      }
+    },
+    "jobs": {
+      "breadcrumb": "Plataforma · Jobs",
+      "title": "Jobs",
+      "subtitle": "Todos os jobs em segundo plano que a plataforma executou, em qualquer espaço de trabalho ou em nenhum, e todas as dead-letters aguardando reprocessamento.",
+      "tabsLabel": "Visualizações do registro de jobs",
+      "tabs": {
+        "runs": "Execuções",
+        "dlq": "Dead-letters",
+        "waiting": "{count} aguardando"
+      },
+      "status": {
+        "label": "Status",
+        "all": "Todos",
+        "running": "Em execução",
+        "succeeded": "Concluído",
+        "failed": "Falhou",
+        "abandoned": "Abandonado"
+      },
+      "columns": {
+        "function": "Função",
+        "event": "Evento",
+        "functionEvent": "Função · evento",
+        "workspace": "Espaço de trabalho",
+        "status": "Status",
+        "attempt": "Tentativa",
+        "attempts": "Tentativas",
+        "started": "Início",
+        "duration": "Duração",
+        "failure": "Falha",
+        "lastFailed": "Última falha",
+        "replay": "Reprocessar"
+      },
+      "runsCaption": "Execuções de jobs em segundo plano",
+      "dlqCaption": "Dead-letters",
+      "noWorkspace": "Sem espaço de trabalho",
+      "pageLabel": "Página {page}",
+      "pagerLabel": "Páginas de execuções",
+      "previous": "Anterior",
+      "next": "Próxima",
+      "runsEmpty": {
+        "titleAll": "Ainda não há execuções",
+        "bodyAll": "Os jobs em segundo plano aparecem aqui quando são executados.",
+        "titleStatus": "Nenhuma execução com este status",
+        "bodyStatus": "Nada no registro tem este status. Escolha Todos para ver todas as execuções."
+      },
+      "runsError": {
+        "title": "Não foi possível ler o registro de jobs"
+      },
+      "dlqError": {
+        "title": "Não foi possível ler as dead-letters"
+      },
+      "error": {
+        "body": "O banco de dados não respondeu. Nada foi alterado."
+      },
+      "retry": "Tentar novamente",
+      "loadingRuns": "Carregando execuções",
+      "readOnly": "Somente leitura. Reprocessar uma dead-letter exige a função de operador.",
+      "fn": {
+        "label": "Função",
+        "all": "Todas as funções"
+      },
+      "waitingLine": "{waiting} aguardando · {replayed} reprocessadas nos últimos 7 dias",
+      "capped": "Mostrando {shown} de {count}. A lista mostra as 200 mais recentes.",
+      "replay": "Reprocessar",
+      "replayAria": "Reprocessar a dead-letter de {function}",
+      "replayedAt": "Reprocessada {time}",
+      "toast": {
+        "replayedTitle": "Dead-letter reprocessada",
+        "replayedBody": "{function} foi enviada novamente.",
+        "alreadyTitle": "Já reprocessada",
+        "alreadyBody": "Outra pessoa reprocessou esta dead-letter primeiro. Nada foi enviado novamente.",
+        "failedTitle": "O reprocessamento falhou",
+        "failedBody": "Nada foi enviado. Tente novamente.",
+        "notPermittedBody": "Reprocessar uma dead-letter exige a função de operador.",
+        "notFoundBody": "Esta dead-letter não existe mais."
+      },
+      "replayAll": {
+        "button": "Reprocessar todas as {count}",
+        "title": "Reprocessar {count} dead-letters de {function}?",
+        "body": "Cada uma é enviada novamente como uma nova execução e registrada no log de auditoria da plataforma. Uma dead-letter que outra pessoa reprocessar primeiro é ignorada.",
+        "confirm": "Reprocessar {count}",
+        "cancel": "Cancelar",
+        "running": "Reprocessando…",
+        "runningLine": "Reprocessando {count} dead-letters, 50 por vez. Mantenha isto aberto até terminar.",
+        "doneTitle": "Reprocessamento concluído",
+        "doneWithFailuresTitle": "Reprocessamento concluído com falhas",
+        "replayed": "{count} reprocessadas",
+        "already": "{count} já reprocessadas por outra pessoa",
+        "nothingLeft": "0 reprocessadas — todas as {count} já tinham sido reprocessadas",
+        "failed": "{count} não puderam ser reprocessadas. Elas continuam na lista; reprocesse-as uma a uma.",
+        "error": "Não foi possível reprocessar. Nada foi alterado.",
+        "close": "Concluir"
+      },
+      "dlqEmpty": {
+        "title": "Nada aguardando",
+        "body": "Nenhum job esgotou suas tentativas. As dead-letters aparecem aqui quando isso acontece."
       }
     }
   },

@@ -163,6 +163,9 @@ describe('CI Postgres container (MOTIR-1742)', () => {
       // MOTIR-9806's deploy-interface coverage lane (Story MOTIR-9791): the repo row's
       // hosting columns are written and read against a real database.
       'ci.yml:story-9791-coverage',
+      // MOTIR-9967's repository-environment coverage lane (Story MOTIR-9795): the story
+      // gate writes through the real doors and resolves under row-level security.
+      'ci.yml:story-9795-coverage',
       'ci.yml:test',
     ]);
   });

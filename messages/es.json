@@ -1958,6 +1958,7 @@
       "translation": "Traducción",
       "rules": "Reglas",
       "repositories": "Repositorios",
+      "environment": "Entorno",
       "monitoring": "Monitorización",
       "approvals": "Aprobaciones",
       "bugs": "Errores"
@@ -4156,7 +4157,8 @@
         "hosted-agent": "El modelo que usa una ejecución alojada se muestra a quienes pueden iniciar una ejecución alojada en este proyecto. Pide a un administrador del proyecto que te lo muestre si lo necesitas.",
         "translation": "Si el contenido de trabajo de este proyecto se traduce para cada lector se muestra a las personas que pueden leer los elementos de trabajo del proyecto. Pregunte a un administrador del proyecto si necesita verlo.",
         "automation": "La automatización del proyecto la gestionan los administradores del proyecto. Pide a un administrador que cambie una regla si lo necesitas.",
-        "monitoring": "La conexión del monitor de errores de este proyecto la gestionan las personas que pueden gestionar integraciones. Pide a un administrador del proyecto que conecte o vuelva a conectar Sentry si hace falta."
+        "monitoring": "La conexión del monitor de errores de este proyecto la gestionan las personas que pueden gestionar integraciones. Pide a un administrador del proyecto que conecte o vuelva a conectar Sentry si hace falta.",
+        "environment": "Los valores de entorno de un repositorio se muestran a las personas que pueden explorar este proyecto. Pregunte a un administrador del proyecto si necesita verlos."
       }
     },
     "organization": {
@@ -4227,6 +4229,101 @@
       "saveError": "Algo ha fallado. Vuelve a intentarlo.",
       "saveForbidden": "Ya no puedes cambiar dónde se registran los errores de este proyecto.",
       "folderGone": "Esa carpeta ya no existe. Elige otra."
+    },
+    "environment": {
+      "title": "Entorno",
+      "lede": "Valores que su aplicación lee al ejecutarse. Configúrelos una vez por entorno; Motir los pasa a la aplicación en su próximo despliegue.",
+      "repositoryLabel": "Repositorio",
+      "role": {
+        "web": "Aplicación web",
+        "api": "API",
+        "mobile": "Aplicación móvil",
+        "shared": "Código compartido",
+        "infra": "Infraestructura",
+        "other": "Otro"
+      },
+      "tablistLabel": "Entorno",
+      "tab": {
+        "production": "Producción",
+        "preview": "Vista previa",
+        "release": "Versión"
+      },
+      "column": {
+        "name": "Nombre",
+        "value": "Valor"
+      },
+      "set": "Definido",
+      "secretHidden": "Secreto · valor oculto",
+      "edit": "Editar",
+      "replace": "Reemplazar",
+      "delete": "Eliminar",
+      "editAria": "Editar {name}",
+      "replaceAria": "Reemplazar {name}",
+      "deleteAria": "Eliminar {name}",
+      "saving": "Guardando",
+      "add": {
+        "heading": "Añadir un valor",
+        "namePlaceholder": "NOMBRE",
+        "valuePlaceholder": "Valor",
+        "secret": "Secreto",
+        "save": "Guardar",
+        "helper": "Un secreto se puede reemplazar o eliminar, pero nunca se vuelve a mostrar: ni a usted ni a nadie."
+      },
+      "error": {
+        "nameRequired": "Introduzca un nombre.",
+        "duplicate": "{name} ya está definido en {environment}. Edítelo en la lista.",
+        "invalidName": "Use letras, dígitos y guiones bajos, sin empezar por un dígito.",
+        "reserved": "{name} está reservado: Motir define PORT, DATABASE_URL y los nombres MOTIR_*. Elija otro nombre."
+      },
+      "saved": {
+        "secret": "{name} se guardó como secreto. Su valor queda oculto a partir de ahora.",
+        "plain": "{name} se guardó."
+      },
+      "replaceFlow": {
+        "placeholder": "Nuevo valor",
+        "aria": "Nuevo valor para {name}",
+        "helper": "El valor actual sigue oculto. Al guardar, se reemplaza en el próximo despliegue.",
+        "cancel": "Cancelar"
+      },
+      "deleteDialog": {
+        "title": "¿Eliminar {name} de {environment}?",
+        "body": "La aplicación deja de recibir {name} en {environment} en su próximo despliegue. {count, plural, one {{others} conserva su propio valor.} other {{others} conservan sus propios valores.}} Esta acción no se puede deshacer.",
+        "confirm": "Eliminar",
+        "cancel": "Cancelar"
+      },
+      "empty": {
+        "title": "Aún no hay valores en {environment}",
+        "production": "Su aplicación en producción los recibe. Añada el primero abajo.",
+        "preview": "La vista previa de cada pull request los recibe. Añada el primero abajo.",
+        "release": "La versión que construye su tren los recibe. Añada el primero abajo."
+      },
+      "loading": "Cargando valores…",
+      "loadError": {
+        "title": "No se pudieron cargar los valores",
+        "body": "No se cambió nada. Vuelva a intentarlo en un momento."
+      },
+      "retry": "Reintentar",
+      "saveError": "No se pudo guardar {name}. No se cambió nada.",
+      "deleteError": "No se pudo eliminar {name}. Sigue definido.",
+      "readOnly": {
+        "note": "Puede leer estos valores. Solo los administradores del proyecto pueden cambiarlos.",
+        "tooltip": "Solo los administradores del proyecto pueden cambiar los valores de entorno."
+      },
+      "changes": {
+        "heading": "Cambios recientes · {environment}",
+        "added": "añadió",
+        "replaced": "reemplazó",
+        "deleted": "eliminó",
+        "secret": "Secreto",
+        "unknownActor": "Un antiguo miembro",
+        "loadError": "No se pudieron cargar los cambios recientes.",
+        "empty": "Aún no hay cambios. Cada cambio en este entorno aparece aquí: quién lo hizo y cuándo, nunca el valor."
+      },
+      "notFound": {
+        "title": "Repositorio no encontrado",
+        "body": "Motir no guarda ningún entorno para este repositorio. Elija uno de los repositorios del proyecto que aloja Motir.",
+        "back": "Volver a Entorno"
+      }
     },
     "workspaceAddress": {
       "door": {
@@ -10085,7 +10182,8 @@
       "navIdeas": "Ideas",
       "navRunModels": "Modelos de ejecuciones alojadas",
       "navFleetSettings": "Ajustes de la flota",
-      "navCapacity": "Capacidad de proveedores"
+      "navCapacity": "Capacidad de proveedores",
+      "navJobs": "Trabajos"
     },
     "nav": {
       "overview": "Resumen",
@@ -10307,6 +10405,9 @@
             "limits": {
               "edit": "Editó los límites de capacidad de un modelo de proveedor"
             }
+          },
+          "jobs": {
+            "dlq_replay": "Volvió a ejecutar un mensaje fallido"
           }
         }
       }
@@ -12601,6 +12702,104 @@
         "unreachable": "El gateway no respondió. No se guardó nada; inténtalo de nuevo.",
         "notPermitted": "Tu rol no puede editar límites, así que no se guardó nada.",
         "failed": "No se pudieron guardar los límites. No se cambió nada; inténtalo de nuevo."
+      }
+    },
+    "jobs": {
+      "breadcrumb": "Plataforma · Trabajos",
+      "title": "Trabajos",
+      "subtitle": "Todos los trabajos en segundo plano que ejecutó la plataforma, en cualquier espacio de trabajo o en ninguno, y todos los mensajes fallidos pendientes de volver a ejecutarse.",
+      "tabsLabel": "Vistas del registro de trabajos",
+      "tabs": {
+        "runs": "Ejecuciones",
+        "dlq": "Mensajes fallidos",
+        "waiting": "{count} pendientes"
+      },
+      "status": {
+        "label": "Estado",
+        "all": "Todos",
+        "running": "En ejecución",
+        "succeeded": "Correcto",
+        "failed": "Fallido",
+        "abandoned": "Abandonado"
+      },
+      "columns": {
+        "function": "Función",
+        "event": "Evento",
+        "functionEvent": "Función · evento",
+        "workspace": "Espacio de trabajo",
+        "status": "Estado",
+        "attempt": "Intento",
+        "attempts": "Intentos",
+        "started": "Inicio",
+        "duration": "Duración",
+        "failure": "Fallo",
+        "lastFailed": "Último fallo",
+        "replay": "Volver a ejecutar"
+      },
+      "runsCaption": "Ejecuciones de trabajos en segundo plano",
+      "dlqCaption": "Mensajes fallidos",
+      "noWorkspace": "Sin espacio de trabajo",
+      "pageLabel": "Página {page}",
+      "pagerLabel": "Páginas de ejecuciones",
+      "previous": "Anterior",
+      "next": "Siguiente",
+      "runsEmpty": {
+        "titleAll": "Aún no hay ejecuciones",
+        "bodyAll": "Los trabajos en segundo plano aparecen aquí cuando se ejecutan.",
+        "titleStatus": "No hay ejecuciones con este estado",
+        "bodyStatus": "Nada en el registro tiene este estado. Elige Todos para ver todas las ejecuciones."
+      },
+      "runsError": {
+        "title": "No se pudo leer el registro de trabajos"
+      },
+      "dlqError": {
+        "title": "No se pudieron leer los mensajes fallidos"
+      },
+      "error": {
+        "body": "La base de datos no respondió. No se cambió nada."
+      },
+      "retry": "Intentar de nuevo",
+      "loadingRuns": "Cargando ejecuciones",
+      "readOnly": "Solo lectura. Para volver a ejecutar un mensaje fallido se necesita el rol de operador.",
+      "fn": {
+        "label": "Función",
+        "all": "Todas las funciones"
+      },
+      "waitingLine": "{waiting} pendientes · {replayed} vueltos a ejecutar en los últimos 7 días",
+      "capped": "Se muestran {shown} de {count}. La lista muestra los 200 más recientes.",
+      "replay": "Volver a ejecutar",
+      "replayAria": "Volver a ejecutar el mensaje fallido de {function}",
+      "replayedAt": "Vuelto a ejecutar {time}",
+      "toast": {
+        "replayedTitle": "Mensaje fallido vuelto a ejecutar",
+        "replayedBody": "{function} se envió de nuevo.",
+        "alreadyTitle": "Ya se volvió a ejecutar",
+        "alreadyBody": "Otra persona volvió a ejecutar este mensaje fallido antes. No se envió nada de nuevo.",
+        "failedTitle": "No se pudo volver a ejecutar",
+        "failedBody": "No se envió nada. Inténtalo de nuevo.",
+        "notPermittedBody": "Para volver a ejecutar un mensaje fallido se necesita el rol de operador.",
+        "notFoundBody": "Este mensaje fallido ya no existe."
+      },
+      "replayAll": {
+        "button": "Volver a ejecutar los {count}",
+        "title": "¿Volver a ejecutar {count} mensajes fallidos de {function}?",
+        "body": "Cada uno se envía de nuevo como una ejecución nueva y se registra en el registro de auditoría de la plataforma. Se omite el mensaje fallido que otra persona vuelva a ejecutar antes.",
+        "confirm": "Volver a ejecutar {count}",
+        "cancel": "Cancelar",
+        "running": "Volviendo a ejecutar…",
+        "runningLine": "Volviendo a ejecutar {count} mensajes fallidos, de 50 en 50. Mantén esto abierto hasta que termine.",
+        "doneTitle": "Reejecución terminada",
+        "doneWithFailuresTitle": "Reejecución terminada con fallos",
+        "replayed": "{count} vueltos a ejecutar",
+        "already": "{count} ya vueltos a ejecutar por otra persona",
+        "nothingLeft": "0 vueltos a ejecutar: los {count} ya se habían vuelto a ejecutar",
+        "failed": "{count} no se pudieron volver a ejecutar. Siguen en la lista; vuelve a ejecutarlos uno a uno.",
+        "error": "No se pudo volver a ejecutar. No se cambió nada.",
+        "close": "Listo"
+      },
+      "dlqEmpty": {
+        "title": "No hay nada pendiente",
+        "body": "Ningún trabajo ha agotado sus intentos. Los mensajes fallidos aparecen aquí cuando ocurre."
       }
     }
   },

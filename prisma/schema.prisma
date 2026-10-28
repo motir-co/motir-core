@@ -468,6 +468,8 @@ model User {
   // The capacity alert share this person last set (Story MOTIR-9539 ·
   // MOTIR-9609). SetNull: removing the person keeps the setting.
   capacityAlertSettingsUpdated     CapacityAlertSetting[]              @relation("CapacityAlertSettingUpdater")
+  /// Environment-configuration changes this user made (MOTIR-9960). SetNull on delete.
+  environmentConfigChanges         EnvironmentConfigChange[]           @relation("EnvironmentConfigChangeActor")
 
   @@index([lastActiveProjectId])
   @@map("user")
@@ -1779,6 +1781,10 @@ model Workspace {
   // The repository SETS of this workspace's projects (Story MOTIR-1775 ·
   // MOTIR-1780). Workspace-scoped tenant data — cascade with the workspace.
   projectRepos                ProjectRepo[]
+  // A Motir repository's environment configuration and its change record (Story
+  // MOTIR-9795 · MOTIR-9960). Workspace-scoped tenant data — cascade with the workspace.
+  environmentConfigEntries    EnvironmentConfigEntry[]
+  environmentConfigChanges    EnvironmentConfigChange[]
   workItemRepos               WorkItemRepo[]
   workItemDeliveries          WorkItemDelivery[]
   /// The per-member collaborator records on this workspace's repositories
@@ -10337,9 +10343,9 @@ model ProjectRepo {
   createdAt             DateTime                  @default(now()) @map("created_at")
   updatedAt             DateTime                  @updatedAt @map("updated_at")
 
-  workspace  Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  project    Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  githubRepo GithubRepo?    @relation(fields: [githubRepoId], references: [id], onDelete: SetNull)
+  workspace                Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project                  Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  githubRepo               GithubRepo?               @relation(fields: [githubRepoId], references: [id], onDelete: SetNull)
   /// The WORK ITEMS pinned to this repository row (Story MOTIR-2732 · MOTIR-3039).
   /// Cascade on delete: removing a row from the project's set removes the cards'
   /// references to it, because the project no longer has that repository. `Restrict`
@@ -10347,7 +10353,11 @@ model ProjectRepo {
   /// `project-repository-set.md` §4.4 forbids. A pin's survival across a repository
   /// being DISCONNECTED is a different edge and is preserved by `githubRepoId`'s
   /// `SetNull` above. Modelled both sides per the FK-`@relation` rule.
-  workItems  WorkItemRepo[]
+  workItems                WorkItemRepo[]
+  /// The repository's environment configuration and its change record (Story
+  /// MOTIR-9795 · MOTIR-9960). Cascade: deleting the repository deletes both.
+  environmentConfigEntries EnvironmentConfigEntry[]
+  environmentConfigChanges EnvironmentConfigChange[]
 
   /// The first uniqueness guarantee: at most one row per `(project, name)`, so two
   /// rows can never race for one repo name. Enforced in the DATABASE — the service
@@ -15185,4 +15195,85 @@ model CapacityRaisedAlert {
 
   @@unique([provider, model, limitUnit])
   @@map("capacity_raised_alert")
+}
+
+/// Which of a Motir repository's environments an environment-configuration entry
+/// belongs to (Story MOTIR-9795 · MOTIR-9960). Mirrors `ENVIRONMENTS` in
+/// `lib/environmentConfig/vocabulary.ts`.
+enum AppEnvironment {
+  production
+  preview
+  release
+
+  @@map("app_environment")
+}
+
+/// What one environment-configuration change did (MOTIR-9960). Mirrors
+/// `ENVIRONMENT_CONFIG_ACTIONS` in `lib/environmentConfig/vocabulary.ts`.
+enum EnvironmentConfigAction {
+  added
+  replaced
+  deleted
+
+  @@map("environment_config_action")
+}
+
+/// ONE environment variable a Motir repository's app is given in one of its
+/// environments (Story MOTIR-9795 · MOTIR-9960): one row per (repository,
+/// environment, name).
+///
+/// A plain entry stores its value as written. A SECRET stores ONLY the `v1.`
+/// ciphertext `environmentConfigCrypto` produces (`lib/environmentConfig/crypto.ts`,
+/// a key of its own with no fallback), so a read of the stored row never holds the
+/// plain value; a CHECK refuses a secret whose value is not that form. A second
+/// CHECK refuses the names the platform owns — `PORT`, `DATABASE_URL` and any
+/// `MOTIR_*` (`isReservedEnvironmentName`) — so a path that bypasses the service
+/// still cannot store one. Workspace-scoped under row-level security
+/// (`environment_config_entry_active_workspace`).
+model EnvironmentConfigEntry {
+  id                  String         @id @default(cuid())
+  workspaceId         String         @map("workspace_id")
+  projectRepositoryId String         @map("project_repository_id")
+  environment         AppEnvironment
+  name                String
+  isSecret            Boolean        @default(false) @map("is_secret")
+  /// The plain value, or the `v1.<iv>.<tag>.<ct>` ciphertext when `isSecret`.
+  value               String
+  createdAt           DateTime       @default(now()) @map("created_at")
+  updatedAt           DateTime       @updatedAt @map("updated_at")
+
+  workspace         Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  projectRepository ProjectRepo @relation(fields: [projectRepositoryId], references: [id], onDelete: Cascade)
+
+  @@unique([projectRepositoryId, environment, name])
+  @@index([workspaceId])
+  @@map("environment_config_entry")
+}
+
+/// The append-only record of every environment-configuration change
+/// (MOTIR-9960): who added, replaced or deleted which name in which environment,
+/// and when. It has NO value column, so a change record cannot hold a value —
+/// secret or not. Its repository writes and lists; nothing updates or deletes a
+/// row except the cascade from its repository or workspace. Workspace-scoped
+/// under row-level security (`environment_config_change_active_workspace`).
+model EnvironmentConfigChange {
+  id                  String                  @id @default(cuid())
+  workspaceId         String                  @map("workspace_id")
+  projectRepositoryId String                  @map("project_repository_id")
+  environment         AppEnvironment
+  name                String
+  action              EnvironmentConfigAction
+  isSecret            Boolean                 @map("is_secret")
+  /// Who made the change. SetNull: a removed account leaves the history standing.
+  actorId             String?                 @map("actor_id")
+  createdAt           DateTime                @default(now()) @map("created_at")
+
+  workspace         Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  projectRepository ProjectRepo @relation(fields: [projectRepositoryId], references: [id], onDelete: Cascade)
+  actor             User?       @relation("EnvironmentConfigChangeActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([projectRepositoryId, environment, createdAt])
+  @@index([workspaceId])
+  @@index([actorId])
+  @@map("environment_config_change")
 }

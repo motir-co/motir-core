@@ -276,6 +276,9 @@ describe('the reason rule', () => {
     // The capacity limits edit (Story MOTIR-9539 · MOTIR-9613): a gateway write
     // audited in core, with a default reason when the screen gives none.
     'capacity.limits.edit': 'inherited',
+    // A dead letter replayed from /admin/jobs (Story MOTIR-9980 · MOTIR-9985):
+    // the screen has no reason field, so the service writes its default.
+    'jobs.dlq_replay': 'inherited',
   } as const;
 
   it('every action carries the policy the ADR allocates it', () => {
