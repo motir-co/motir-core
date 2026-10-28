@@ -312,7 +312,6 @@ test('a workspace owner claims, renames and releases its one public name', async
       expect(
         Math.abs(new Date(body.returnsAt).getTime() - (Date.now() + QUARANTINE_DAYS * DAY_MS)),
       ).toBeLessThan(DAY_MS);
-      globexReturnsAt = body.returnsAt;
 
       await expect(dialog(page)).toBeVisible();
       await expect(dialog(page).getByText(`globex.${BASE} stops answering now.`)).toBeVisible();
@@ -326,12 +325,15 @@ test('a workspace owner claims, renames and releases its one public name', async
       await dialog(page).getByRole('button', { name: copy.confirm.release }).click();
       const res = await released;
       expect(res.status(), await res.text()).toBe(200);
-      expect(((await res.json()) as { returnsAt: string }).returnsAt).toBe(body.returnsAt);
+      // The hold is stamped at the write, seconds after the preview: the same
+      // day, which is all the dialog promised.
+      globexReturnsAt = ((await res.json()) as { returnsAt: string }).returnsAt;
+      expect(longDate(globexReturnsAt)).toBe(longDate(body.returnsAt));
 
       const main = page.getByRole('main');
       await expect(
         main.getByText(
-          `globex.${BASE} was released. It is held until ${longDate(body.returnsAt)}, then anyone can claim it.`,
+          `globex.${BASE} was released. It is held until ${longDate(globexReturnsAt)}, then anyone can claim it.`,
         ),
       ).toBeVisible();
       await expect(main.getByText(/the next change is allowed on/)).toBeVisible();
