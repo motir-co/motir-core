@@ -6805,13 +6805,13 @@
       "loading": "Wczytywanie…",
       "label": {
         "agentRunsInParallel": "Równoległe uruchomienia agentów",
-        "agentsRunningInOrg": "Hostowane agenty na organizację",
+        "agentsInOrg": "Hostowane agenty na organizację",
         "agentsPerPerson": "Hostowane agenty na osobę",
         "ciJobsInFlight": "Trwające zadania CI"
       },
       "explain": {
         "agentRunsInParallel": "Zadania hostowanych agentów działające naraz. Kolejne czekają w kolejce.",
-        "agentsRunningInOrg": "Hostowane agenty działające naraz w całej organizacji. Powyżej limitu start jest odrzucany, a nie kolejkowany.",
+        "agentsInOrg": "Aktywne hostowane agenty w całej organizacji, działające lub uśpione. Powyżej limitu nowy jest odrzucany, a nie kolejkowany.",
         "agentsPerPerson": "Aktywne hostowane agenty, które może mieć jedna osoba. Powyżej limitu nowy jest odrzucany, a nie kolejkowany.",
         "ciJobsInFlight": "Zadania CI działające naraz na runnerach Motir. Kolejne czekają w kolejce."
       },
@@ -11813,8 +11813,8 @@
           "override": "nadpisanie"
         },
         "facts": {
-          "plan": "Plan <strong>{plan}</strong> · hostowane uruchomienia naraz: {runs} · agenci na osobę: {perUser} · działający agenci: {running} · zadania CI naraz: {ci}",
-          "planCiUnreadable": "Plan <strong>{plan}</strong> · hostowane uruchomienia naraz: {runs} · agenci na osobę: {perUser} · działający agenci: {running} · limit CI nieczytelny",
+          "plan": "Plan <strong>{plan}</strong> · hostowane uruchomienia naraz: {runs} · agenci na osobę: {perUser} · agenci: {agents} · zadania CI naraz: {ci}",
+          "planCiUnreadable": "Plan <strong>{plan}</strong> · hostowane uruchomienia naraz: {runs} · agenci na osobę: {perUser} · agenci: {agents} · limit CI nieczytelny",
           "planExempt": "Plan <strong>Brak limitu planu</strong>",
           "planExemptOverride": "Plan <strong>Brak limitu planu</strong> · zadania CI naraz: {ci} (nadpisanie)",
           "planUnknown": "Plan <strong>nieznany · {key}</strong> · nowe kontenery odrzucane",
@@ -12715,8 +12715,8 @@
       "creditsUnknown": "Motir nie mógł teraz sprawdzić kredytów Twojej organizacji. Spróbuj ponownie za chwilę.",
       "userCap": "Limit agentów na osobę w planie {plan} Twojej organizacji wynosi {limit, plural, other {#}}. Za przestrzeń dyskową każdego z nich naliczana jest codzienna opłata, nawet w uśpieniu. Usuń jednego, aby utworzyć kolejnego.",
       "userCapNoFigure": "Masz już tylu agentów, ilu plan Twojej organizacji pozwala mieć jednej osobie. Za przestrzeń dyskową każdego z nich naliczana jest codzienna opłata, nawet w uśpieniu. Usuń jednego, aby utworzyć kolejnego.",
-      "orgRunningLimit": "Limit jednocześnie działających agentów w planie {plan} Twojej organizacji wynosi {limit, plural, other {#}} i wszystkie już działają. Uśpij jednego, aby uruchomić kolejnego.",
-      "orgRunningLimitNoFigure": "W Twojej organizacji działa już tylu agentów naraz, ilu pozwala jej plan. Uśpij jednego, aby uruchomić kolejnego.",
+      "orgCap": "Limit agentów w organizacji, działających lub uśpionych, w planie {plan} Twojej organizacji wynosi {limit, plural, other {#}}. Za przestrzeń dyskową każdego z nich naliczana jest codzienna opłata, nawet w uśpieniu. Usuń jednego, aby utworzyć kolejnego.",
+      "orgCapNoFigure": "Twoja organizacja ma już tylu agentów, działających lub uśpionych, ilu pozwala jej plan. Za przestrzeń dyskową każdego z nich naliczana jest codzienna opłata, nawet w uśpieniu. Usuń jednego, aby utworzyć kolejnego.",
       "busy": "Motir uruchamia teraz tyle maszyn, ile może. Spróbuj ponownie za kilka minut.",
       "notOffered": "Ten agent kodujący nie jest oferowany: jego warunki nie pozwalają jeszcze platformie go hostować. Wybierz innego agenta kodującego.",
       "nameTaken": "Masz już w tym projekcie agenta o nazwie {name}.",
@@ -12730,7 +12730,7 @@
       "aiPlanUnknown": "Nie udało się sprawdzić planu AI",
       "credits": "Brak kredytów",
       "userCap": "Twój limit",
-      "orgRunningLimit": "Limit Twojej organizacji"
+      "orgCap": "Limit Twojej organizacji"
     },
     "lapse": {
       "bannerLead": "Plan AI Twojej organizacji wygasł.",

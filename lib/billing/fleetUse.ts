@@ -34,7 +34,7 @@ export function providerFor(
 /** The four figures of the Fleet use section. */
 export type FleetUseFigureKey =
   | 'agentRunsInParallel'
-  | 'agentsRunningInOrg'
+  | 'agentsInOrg'
   | 'agentsPerPerson'
   | 'ciJobsInFlight';
 

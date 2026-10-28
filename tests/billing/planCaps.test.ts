@@ -12,7 +12,7 @@ import {
 // plan key (MOTIR-9357 as corrected at its gate, CI raised 2026-10-26 — MOTIR-9668), and the totality that keeps the table in step with the catalog.
 
 function figures(c: PlanCaps | null): [number, number, number, number] | null {
-  return c ? [c.agentRunsInParallel, c.agentsPerUser, c.agentsRunningPerOrg, c.ciBurstCap] : null;
+  return c ? [c.agentRunsInParallel, c.agentsPerUser, c.agentsPerOrg, c.ciBurstCap] : null;
 }
 
 describe('capsForPlanKey — the table', () => {

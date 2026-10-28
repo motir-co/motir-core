@@ -363,7 +363,7 @@ describe('a paid AI plan, and storage in the words (MOTIR-6918, the MOTIR-6916 d
     fetchMock.mockResolvedValueOnce(
       json(429, {
         code: 'agent_instance_start_refused',
-        reason: 'org_running_cap',
+        reason: 'org_cap',
         limit: 50,
         planName: 'Max',
       }),
@@ -375,7 +375,7 @@ describe('a paid AI plan, and storage in the words (MOTIR-6918, the MOTIR-6916 d
     });
     const alert = within(screen.getByRole('dialog')).getByRole('alert');
     expect(alert.textContent).toBe(
-      'Your organization’s limitYour organization’s Max plan runs 50 agents at once, and all of them are running. Hibernate one to start another.',
+      'Your organization’s limitYour organization’s Max plan allows 50 agents in the organization, running or asleep. Each one is charged for its storage every day, even asleep. Delete one to create another.',
     );
     expect(alert.className).toContain('bg-(--el-tint-rose)');
   });
@@ -588,7 +588,7 @@ describe('the row menu', () => {
       .mockResolvedValueOnce(
         json(429, {
           code: 'agent_instance_start_refused',
-          reason: 'org_running_cap',
+          reason: 'org_cap',
           limit: 30,
           planName: 'Pro',
         }),
@@ -598,7 +598,7 @@ describe('the row menu', () => {
       fireEvent.click(within(menu).getByRole('menuitem', { name: 'Wake' }));
     });
     expect(screen.getByRole('alert').textContent).toBe(
-      'Your organization’s limitYour organization’s Pro plan runs 30 agents at once, and all of them are running. Hibernate one to start another.',
+      'Your organization’s limitYour organization’s Pro plan allows 30 agents in the organization, running or asleep. Each one is charged for its storage every day, even asleep. Delete one to create another.',
     );
   });
 
@@ -614,9 +614,9 @@ describe('the row menu', () => {
       'Your limitYou already have as many agents as your organization’s plan allows per person. Each one is charged for its storage every day, even asleep. Delete one to create another.',
     ],
     [
-      'org_running_cap',
+      'org_cap',
       {},
-      'Your organization’s limitYour organization is already running as many agents at once as its plan allows. Hibernate one to start another.',
+      'Your organization’s limitYour organization already has as many agents as its plan allows, running or asleep. Each one is charged for its storage every day, even asleep. Delete one to create another.',
     ],
   ])(
     'a %s refusal missing its figure or its plan (%j) names neither — no constant, no 0 (MOTIR-9376)',

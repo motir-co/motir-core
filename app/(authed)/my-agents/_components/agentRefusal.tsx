@@ -27,7 +27,7 @@ export interface AgentRefusal {
 interface RefusalBody {
   code?: string;
   reason?: string;
-  /** The figure a cap refusal applied (`user_cap`, `org_running_cap`). */
+  /** The figure a cap refusal applied (`user_cap`, `org_cap`). */
   limit?: number;
   /** The plan that figure is from, as motir-ai names it (MOTIR-9376). */
   planName?: string;
@@ -54,8 +54,8 @@ export function refusalKey(body: RefusalBody | null): string {
       return 'creditsUnknown';
     case 'user_cap':
       return 'userCap';
-    case 'org_running_cap':
-      return 'orgRunningLimit';
+    case 'org_cap':
+      return 'orgCap';
     case 'fleet_busy':
       return 'busy';
   }
@@ -82,13 +82,7 @@ export function refusalKey(body: RefusalBody | null): string {
 }
 
 /** The keys whose box opens with a title (the delta's table, MOTIR-6916). */
-const TITLED = new Set([
-  'aiPlanRequired',
-  'aiPlanUnknown',
-  'credits',
-  'userCap',
-  'orgRunningLimit',
-]);
+const TITLED = new Set(['aiPlanRequired', 'aiPlanUnknown', 'credits', 'userCap', 'orgCap']);
 
 /** The keys whose sentence carries a link to Billing & plans. */
 const BILLING_LINKED = new Set(['aiPlanRequired', 'credits']);
@@ -114,7 +108,7 @@ export function useAgentRefusal() {
   const tState = useTranslations('myAgents.state');
   // The Start bar shares this with the Visitor tree's item page (MOTIR-6888).
   const routes = useReaderRoutes();
-  const capWords = (key: 'userCap' | 'orgRunningLimit', values: ReturnType<typeof capValues>) =>
+  const capWords = (key: 'userCap' | 'orgCap', values: ReturnType<typeof capValues>) =>
     values ? t(key, values) : t(`${key}NoFigure`);
   return (
     body: RefusalBody | null,
@@ -173,7 +167,7 @@ export function useAgentRefusal() {
             </Link>
           ),
         })
-      : key === 'userCap' || key === 'orgRunningLimit'
+      : key === 'userCap' || key === 'orgCap'
         ? capWords(key, capValues(body))
         : key === 'nameTaken'
           ? t('nameTaken', { name: name ?? '' })

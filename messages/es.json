@@ -6805,13 +6805,13 @@
       "loading": "Cargando…",
       "label": {
         "agentRunsInParallel": "Ejecuciones de agente en paralelo",
-        "agentsRunningInOrg": "Agentes alojados por organización",
+        "agentsInOrg": "Agentes alojados por organización",
         "agentsPerPerson": "Agentes alojados por persona",
         "ciJobsInFlight": "Trabajos de CI en curso"
       },
       "explain": {
         "agentRunsInParallel": "Trabajos de agentes alojados que se ejecutan a la vez. Los que superan el límite esperan en la cola.",
-        "agentsRunningInOrg": "Agentes alojados activos a la vez en toda la organización. Por encima del límite, un inicio se rechaza, no se pone en cola.",
+        "agentsInOrg": "Agentes alojados activos en toda la organización, en marcha o dormidos. Por encima del límite, uno nuevo se rechaza, no se pone en cola.",
         "agentsPerPerson": "Agentes alojados activos que puede tener una persona. Por encima del límite, uno nuevo se rechaza, no se pone en cola.",
         "ciJobsInFlight": "Trabajos de CI que se ejecutan a la vez en los runners de Motir. Los que superan el límite esperan en la cola."
       },
@@ -11813,8 +11813,8 @@
           "override": "anulación"
         },
         "facts": {
-          "plan": "Plan <strong>{plan}</strong> · {runs} ejecuciones alojadas a la vez · {perUser} agentes por persona · {running} agentes en ejecución · {ci} trabajos de CI a la vez",
-          "planCiUnreadable": "Plan <strong>{plan}</strong> · {runs} ejecuciones alojadas a la vez · {perUser} agentes por persona · {running} agentes en ejecución · límite de CI ilegible",
+          "plan": "Plan <strong>{plan}</strong> · {runs} ejecuciones alojadas a la vez · {perUser} agentes por persona · {agents} agentes · {ci} trabajos de CI a la vez",
+          "planCiUnreadable": "Plan <strong>{plan}</strong> · {runs} ejecuciones alojadas a la vez · {perUser} agentes por persona · {agents} agentes · límite de CI ilegible",
           "planExempt": "Plan <strong>Sin límite de plan</strong>",
           "planExemptOverride": "Plan <strong>Sin límite de plan</strong> · {ci} trabajos de CI a la vez (anulación)",
           "planUnknown": "Plan <strong>desconocido · {key}</strong> · se rechazan contenedores nuevos",
@@ -12715,8 +12715,8 @@
       "creditsUnknown": "Motir no pudo comprobar los créditos de tu organización en este momento. Vuelve a intentarlo en un momento.",
       "userCap": "El plan {plan} de tu organización permite {limit, plural, one {# agente} other {# agentes}} por persona. A cada uno se le cobra su almacenamiento cada día, aunque esté dormido. Elimina uno para crear otro.",
       "userCapNoFigure": "Ya tienes tantos agentes como permite por persona el plan de tu organización. A cada uno se le cobra su almacenamiento cada día, aunque esté dormido. Elimina uno para crear otro.",
-      "orgRunningLimit": "El plan {plan} de tu organización ejecuta {limit, plural, one {# agente} other {# agentes}} a la vez, y ya están todos en marcha. Hiberna uno para iniciar otro.",
-      "orgRunningLimitNoFigure": "Tu organización ya está ejecutando tantos agentes a la vez como permite su plan. Hiberna uno para iniciar otro.",
+      "orgCap": "El plan {plan} de tu organización permite {limit, plural, one {# agente} other {# agentes}} en la organización, en marcha o dormidos. A cada uno se le cobra su almacenamiento cada día, aunque esté dormido. Elimina uno para crear otro.",
+      "orgCapNoFigure": "Tu organización ya tiene tantos agentes como permite su plan, en marcha o dormidos. A cada uno se le cobra su almacenamiento cada día, aunque esté dormido. Elimina uno para crear otro.",
       "busy": "Motir está ejecutando tantas máquinas como puede ahora mismo. Vuelve a intentarlo en unos minutos.",
       "notOffered": "Ese Agente de código no se ofrece: sus términos aún no permiten que una plataforma lo aloje. Elige otro Agente de código.",
       "nameTaken": "Ya tienes un Agente llamado {name} en este proyecto.",
@@ -12730,7 +12730,7 @@
       "aiPlanUnknown": "No se pudo comprobar tu plan de IA",
       "credits": "Sin créditos",
       "userCap": "Tu límite",
-      "orgRunningLimit": "El límite de tu organización"
+      "orgCap": "El límite de tu organización"
     },
     "lapse": {
       "bannerLead": "El plan de IA de tu organización terminó.",

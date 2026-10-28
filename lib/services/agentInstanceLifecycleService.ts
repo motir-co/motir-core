@@ -352,8 +352,8 @@ async function assertPaidAiPlan(organizationId: string): Promise<void> {
 interface AgentPlanLimits {
   /** `agentsPerUser`: live agents one person may hold, judged at create. */
   perUser: number | null;
-  /** `agentsRunningPerOrg`: agents the org may run at once, under the fleet lock. */
-  runningPerOrg: number | null;
+  /** `agentsPerOrg`: live agents the org may hold, judged at create under the fleet lock. */
+  perOrg: number | null;
   /** The plan the refusals name, as motir-ai sends it; `null` when exempt. */
   planName: string | null;
 }
@@ -369,7 +369,7 @@ interface AgentPlanLimits {
  */
 async function readAgentPlanLimits(organizationId: string): Promise<AgentPlanLimits> {
   const answer = await planCapsService.capsFor(organizationId);
-  if (answer.kind === 'exempt') return { perUser: null, runningPerOrg: null, planName: null };
+  if (answer.kind === 'exempt') return { perUser: null, perOrg: null, planName: null };
   if (answer.kind === 'plan_unknown') {
     console.error('[agentInstanceLifecycleService] the plan has no agent figures — refusing', {
       organizationId,
@@ -382,7 +382,7 @@ async function readAgentPlanLimits(organizationId: string): Promise<AgentPlanLim
   }
   return {
     perUser: answer.caps.agentsPerUser,
-    runningPerOrg: answer.caps.agentsRunningPerOrg,
+    perOrg: answer.caps.agentsPerOrg,
     planName: answer.planName,
   };
 }
@@ -439,11 +439,14 @@ async function assertCredits(organizationId: string): Promise<void> {
 }
 
 /**
- * Take a slot in the agents' OWN pool for one machine run, with the organisation's
- * running cap decided under the fleet admission lock (§6, AMENDMENTS 2 and 3). The
- * cap is the org's PLAN figure, `agentsRunningPerOrg` (MOTIR-9374), counted per
- * ORGANISATION, so one org at its limit never refuses another; an exempt org
- * (`runningPerOrg` null) has none.
+ * Take a slot in the agents' OWN pool for one machine run (§6, AMENDMENTS 2 and 3).
+ * At CREATE (`judgeOrgFigure`), the org's PLAN figure `agentsPerOrg` is decided
+ * here under the fleet admission lock: the org's LIVE agents, running or
+ * hibernating, against the figure (MOTIR-9954), counted per ORGANISATION, so one
+ * org at its figure never refuses another; an exempt org (`perOrg` null) has
+ * none. A WAKE is never judged by it — a hibernating agent already counts — so a
+ * wake reserves with no guard, bounded only by the operator's kill switch and,
+ * past this slot, by `agentRunsInParallel` and the shared pool.
  * The slot is keyed on the RUN (`runId`, the id of the run's first interval),
  * because the running charge splits one run into several intervals. Returns
  * whether THIS call took the slot (`reserved`) or found it held (`already_held`
@@ -456,8 +459,9 @@ async function reserveSlot(input: {
   organizationId: string;
   workspaceId: string;
   limits: AgentPlanLimits;
+  judgeOrgFigure: boolean;
 }): Promise<'reserved' | 'already_held'> {
-  const maxRunning = input.limits.runningPerOrg;
+  const perOrg = input.judgeOrgFigure ? input.limits.perOrg : null;
   const verdict = await fleetCeilingService.reserve({
     workload: 'agent_instance',
     ref: input.instanceId,
@@ -465,39 +469,35 @@ async function reserveSlot(input: {
     organizationId: input.organizationId,
     workspaceId: input.workspaceId,
     ttlSeconds: INSTANCE_SLOT_TTL_SECONDS,
-    ...(maxRunning === null
+    ...(perOrg === null
       ? {}
       : {
           guard: async (tx: Prisma.TransactionClient, now: Date) => {
-            // Running rows, plus the slots already taken for a create or wake
-            // whose row has not moved yet, counted in one statement under this
-            // lock, so two racers one below the figure cannot both pass (MOTIR-9374).
+            // Live rows, plus the slots already taken for a create whose row is
+            // not inserted yet, counted in one statement under this lock, so two
+            // racers one below the figure cannot both pass (MOTIR-9954).
             const held = await fleetInFlightSlotRepository.listLiveForOrganization(
               input.organizationId,
               'agent_instance',
               now,
               tx,
             );
-            const running = await agentInstanceRepository.countRunningOrAdmitting(
+            const live = await agentInstanceRepository.countLiveOrAdmitting(
               input.organizationId,
               held.map((slot) => slot.ref),
               tx,
             );
-            return running >= maxRunning ? ORG_RUNNING_CAP : null;
+            return live >= perOrg ? ORG_CAP : null;
           },
         }),
   });
   if (verdict.outcome !== 'deferred') return verdict.outcome;
-  if (
-    verdict.reason === 'workload_cap' &&
-    verdict.detail === ORG_RUNNING_CAP &&
-    maxRunning !== null
-  ) {
+  if (verdict.reason === 'workload_cap' && verdict.detail === ORG_CAP && perOrg !== null) {
     const planName = input.limits.planName ?? '';
     throw new AgentInstanceStartRefusedError(
-      'org_running_cap',
-      `Your organization’s ${planName} plan runs ${agentsWord(maxRunning)} at once, and ${maxRunning} ${maxRunning === 1 ? 'is' : 'are'} running. Hibernate one to start another.`,
-      maxRunning,
+      'org_cap',
+      `Your organization’s ${planName} plan allows ${agentsWord(perOrg)} in the organization, running or asleep, and it already has that many. Each one is charged for its storage every day, even asleep. Delete one to create another.`,
+      perOrg,
       planName,
     );
   }
@@ -509,8 +509,8 @@ async function reserveSlot(input: {
   );
 }
 
-/** The guard's answer when the organisation's running cap refuses. */
-const ORG_RUNNING_CAP = 'org_running_cap';
+/** The guard's answer when the organisation's agent figure refuses. */
+const ORG_CAP = 'org_cap';
 
 function releaseSlot(instanceId: string, runId: string): Promise<boolean> {
   return fleetCeilingService.release('agent_instance', instanceId, runId);
@@ -1352,6 +1352,7 @@ export const agentInstanceLifecycleService = {
       organizationId: project.organizationId,
       workspaceId: project.workspaceId,
       limits,
+      judgeOrgFigure: true,
     });
 
     const orchestrator = getPersistentOrchestrator();
@@ -1460,6 +1461,7 @@ export const agentInstanceLifecycleService = {
       organizationId: project.organizationId,
       workspaceId: project.workspaceId,
       limits,
+      judgeOrgFigure: false,
     });
 
     const now = agentInstanceClock.now();

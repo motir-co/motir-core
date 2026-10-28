@@ -540,7 +540,7 @@ describe('purchase, and a replayed pass', () => {
     }
     const floor = await caps(host.organizationId);
     expect([floor.agentRunsInParallel, floor.ciBurstCap]).toEqual([5, 20]);
-    expect([floor.agentsPerUser, floor.agentsRunningPerOrg]).toEqual([5, 20]);
+    expect([floor.agentsPerUser, floor.agentsPerOrg]).toEqual([5, 20]);
   });
 
   it('a replayed reconcile and state pass create nothing and move no time already set', async () => {
@@ -631,7 +631,7 @@ describe('an account granted', () => {
     // Live, the merged account lifts the plan's agents from the floor's 5 / 20 to
     // 10 / 50 (MOTIR-9668); what the grant holds stays the account's own bound.
     const lifted = await caps(host.organizationId);
-    expect([lifted.agentsPerUser, lifted.agentsRunningPerOrg]).toEqual([10, 50]);
+    expect([lifted.agentsPerUser, lifted.agentsPerOrg]).toEqual([10, 50]);
     const hoster = await row(host.organizationId, 'agent_instance');
 
     // No index running: 10 agents and no 11th — the index spots are not lent.

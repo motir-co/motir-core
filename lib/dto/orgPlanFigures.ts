@@ -21,7 +21,7 @@ export type OrgPlanFiguresDTO =
       planName: string;
       agentRunsInParallel: number;
       agentsPerUser: number;
-      agentsRunningPerOrg: number;
+      agentsPerOrg: number;
       /** What CI admission holds the org to — the plan's `ciBurstCap` or the staff
        *  override; null when the override could not be read (CI is refused). */
       ciBurstCap: number | null;
