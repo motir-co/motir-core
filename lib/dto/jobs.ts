@@ -133,3 +133,14 @@ export interface PlatformDlqListDTO {
   /** Dead letters replayed in the last seven days, within the selection. */
   replayedRecently: number;
 }
+
+/** What a Replay all of one function did (MOTIR-9986). */
+export interface ReplayAllResultDTO {
+  functionId: string;
+  /** Rows this run replayed — each has its own audit row. */
+  replayed: number;
+  /** Rows someone else replayed first; nothing was sent for them. */
+  alreadyReplayed: number;
+  /** Ids whose replay threw. They stay unreplayed unless the audit write was what failed. */
+  failed: string[];
+}
