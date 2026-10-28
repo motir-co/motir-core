@@ -5,7 +5,7 @@ import {
   AWS_FUNCTION_DEPLOY_ACTIONS,
   AwsTenantApiError,
   FUNCTION_TEMPLATE_VARIABLES,
-  FunctionTemplateMarkerMissingError,
+  ReleaseTemplateMarkerMissingError,
   FunctionUsageReadError,
   LAMBDA_ENVIRONMENT_LIMIT_BYTES,
   LIVE_ALIAS,
@@ -588,7 +588,7 @@ describe('secret delivery', () => {
       'a:\n    A: "#x: y"\n    Z: "q\\"\\n\\u2028"\nb: 1',
     );
     expect(renderFunctionTemplate(template, {})).toBe('a:\nb: 1');
-    expect(() => renderFunctionTemplate('a: 1', {})).toThrow(FunctionTemplateMarkerMissingError);
+    expect(() => renderFunctionTemplate('a: 1', {})).toThrow(ReleaseTemplateMarkerMissingError);
   });
 });
 

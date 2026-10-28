@@ -7,6 +7,12 @@ Description: >-
   listener rule on the network's shared listener that forwards only a request
   carrying the app's host AND its X-Motir-Origin-Secret header. It creates no
   load balancer and no listener: there is one per account, the network's.
+  The release's plain variables are task `environment` entries and its secret
+  ones task `secrets` entries, one per variable, reading the stack's own
+  environment secret at the version ConfigHash names; the caller writes both
+  lists into this template at the markers, and the secret's value. A first apply
+  with an empty ConfigHash creates no task definition and no service, so the
+  caller can write that value before a task starts.
 
 Parameters:
   OrganizationId:
@@ -73,18 +79,36 @@ Parameters:
     Type: String
     NoEcho: true
     Description: The app's origin secret, derived by the caller (deriveOriginSecret); never computed here.
-  EnvironmentSecretArn:
-    Type: String
-    Description: The release's environment secret (its variables as one JSON object).
   DatabaseSecretArn:
     Type: String
     Default: ''
     Description: The environment's database connection secret (key `url`), or empty.
+  ConfigHash:
+    Type: String
+    Default: ''
+    Description: >-
+      A hash of the release's variables, and the id of the environment secret's
+      version holding them; a change registers a new task definition revision.
+      Empty: no task definition or service yet.
 
 Conditions:
   HasDatabase: !Not [!Equals [!Ref DatabaseSecretArn, '']]
+  Published: !Not [!Equals [!Ref ConfigHash, '']]
 
 Resources:
+  # The release's secret variables as one JSON object; the caller writes the value.
+  EnvironmentSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub
+        - motir/${AppRef}/environment-${Suffix}
+        - Suffix: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]
+      Description: The release's secret environment variables.
+      SecretString: '{}'
+      Tags:
+        - { Key: 'motir:organization', Value: !Ref OrganizationId }
+        - { Key: 'motir:repository', Value: !Ref RepositoryId }
+
   LogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -132,8 +156,8 @@ Resources:
                 Action: secretsmanager:GetSecretValue
                 Resource: !If
                   - HasDatabase
-                  - [!Ref EnvironmentSecretArn, !Ref DatabaseSecretArn]
-                  - [!Ref EnvironmentSecretArn]
+                  - [!Ref EnvironmentSecret, !Ref DatabaseSecretArn]
+                  - [!Ref EnvironmentSecret]
       Tags:
         - { Key: 'motir:organization', Value: !Ref OrganizationId }
         - { Key: 'motir:repository', Value: !Ref RepositoryId }
@@ -156,6 +180,7 @@ Resources:
   # A replaced revision is RETAINED: the rollback target.
   TaskDefinition:
     Type: AWS::ECS::TaskDefinition
+    Condition: Published
     UpdateReplacePolicy: Retain
     Properties:
       Family: !Ref AppRef
@@ -178,12 +203,14 @@ Resources:
           Environment:
             - { Name: PORT, Value: !Ref Port }
             - { Name: MOTIR_ENVIRONMENT, Value: !Ref Environment }
+            # <release variables>
           # Secrets reach the task only as `secrets` entries, by ARN.
-          Secrets: !If
-            - HasDatabase
-            - - { Name: MOTIR_ENVIRONMENT_JSON, ValueFrom: !Ref EnvironmentSecretArn }
+          Secrets:
+            - !If
+              - HasDatabase
               - { Name: DATABASE_URL, ValueFrom: !Sub '${DatabaseSecretArn}:url::' }
-            - - { Name: MOTIR_ENVIRONMENT_JSON, ValueFrom: !Ref EnvironmentSecretArn }
+              - !Ref AWS::NoValue
+            # <release secrets>
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -229,6 +256,7 @@ Resources:
 
   Service:
     Type: AWS::ECS::Service
+    Condition: Published
     DependsOn: ListenerRule
     Properties:
       ServiceName: !Ref AppRef
@@ -260,10 +288,15 @@ Outputs:
   ClusterArn:
     Value: !GetAtt Cluster.Arn
   ServiceArn:
+    Condition: Published
     Value: !Ref Service
   ServiceName:
+    Condition: Published
     Value: !GetAtt Service.Name
   TaskDefinitionArn:
+    Condition: Published
     Value: !Ref TaskDefinition
   TargetGroupArn:
     Value: !Ref TargetGroup
+  EnvironmentSecretArn:
+    Value: !Ref EnvironmentSecret

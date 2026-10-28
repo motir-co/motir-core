@@ -13,6 +13,24 @@ import {
   type MetricDataResult,
 } from '@aws-sdk/client-cloudwatch';
 import {
+  DeregisterTaskDefinitionCommand,
+  DescribeServicesCommand,
+  DescribeTasksCommand,
+  ECSClient,
+  ListTaskDefinitionsCommand,
+  ListTasksCommand,
+  UpdateServiceCommand,
+  type Service,
+  type Task,
+} from '@aws-sdk/client-ecs';
+import {
+  DescribeRulesCommand,
+  DescribeTargetHealthCommand,
+  ElasticLoadBalancingV2Client,
+  type Rule,
+  type TargetHealthDescription,
+} from '@aws-sdk/client-elastic-load-balancing-v2';
+import {
   GetAliasCommand,
   GetFunctionConfigurationCommand,
   LambdaClient,
@@ -26,6 +44,13 @@ import {
   PutSecretValueCommand,
   SecretsManagerClient,
 } from '@aws-sdk/client-secrets-manager';
+import {
+  AddTagsToResourceCommand,
+  DeleteParameterCommand,
+  GetParameterCommand,
+  PutParameterCommand,
+  SSMClient,
+} from '@aws-sdk/client-ssm';
 import type { AwsSdkClient } from '../management';
 import type {
   TenantCloudFormation,
@@ -35,6 +60,14 @@ import type {
   TenantStack,
   TenantStackWrite,
 } from './clients';
+import type {
+  TenantEcs,
+  TenantEcsDeployment,
+  TenantEcsTask,
+  TenantElb,
+  TenantSsm,
+  TenantTargetHealth,
+} from './container/ecsClient';
 import { AwsTenantApiError, TenantRoleUnavailableError } from './errors';
 import type { TenantCloudWatch, TenantFunctionState, TenantLambda } from './function/lambdaClient';
 
@@ -50,6 +83,13 @@ import type { TenantCloudWatch, TenantFunctionState, TenantLambda } from './func
 //   https://docs.aws.amazon.com/lambda/latest/api/API_GetAlias.html, API_UpdateAlias.html,
 //   API_ListVersionsByFunction.html, API_GetFunctionConfiguration.html
 //   https://docs.aws.amazon.com/AmazonCloudWatch/latest/APIReference/API_GetMetricData.html
+//   https://docs.aws.amazon.com/AmazonECS/latest/APIReference/API_DescribeServices.html,
+//   API_UpdateService.html, API_ListTaskDefinitions.html, API_DeregisterTaskDefinition.html,
+//   API_ListTasks.html, API_DescribeTasks.html
+//   https://docs.aws.amazon.com/elasticloadbalancing/latest/APIReference/API_DescribeTargetHealth.html,
+//   API_DescribeRules.html
+//   https://docs.aws.amazon.com/systems-manager/latest/APIReference/API_GetParameter.html,
+//   API_PutParameter.html, API_AddTagsToResource.html, API_DeleteParameter.html
 
 /** The services a tenant client bundle builds. Later cards add theirs. */
 export type TenantSdkService =
@@ -57,7 +97,10 @@ export type TenantSdkService =
   | 'rds-data'
   | 'secretsmanager'
   | 'lambda'
-  | 'cloudwatch';
+  | 'cloudwatch'
+  | 'ecs'
+  | 'elasticloadbalancing'
+  | 'ssm';
 
 /** Temporary credentials, as the SDK's credential provider answers them. */
 export interface TenantSdkCredentials {
@@ -87,6 +130,12 @@ export const createTenantSdkClient: TenantSdkClientFactory = (service, config) =
       return new LambdaClient(config);
     case 'cloudwatch':
       return new CloudWatchClient(config);
+    case 'ecs':
+      return new ECSClient(config);
+    case 'elasticloadbalancing':
+      return new ElasticLoadBalancingV2Client(config);
+    case 'ssm':
+      return new SSMClient(config);
   }
 };
 
@@ -392,6 +441,199 @@ export function sdkTenantCloudWatch(client: AwsSdkClient): TenantCloudWatch {
         throw tenantApiError('cloudwatch', err);
       }
       return total;
+    },
+  };
+}
+
+/** One SDK call, its failure carried as AWS's code only. */
+function sender(service: string, client: AwsSdkClient) {
+  return async <T>(command: unknown): Promise<T> => {
+    try {
+      return (await client.send(command)) as T;
+    } catch (err) {
+      throw tenantApiError(service, err);
+    }
+  };
+}
+
+const named = (err: unknown, ...names: string[]) =>
+  err instanceof AwsTenantApiError && names.includes(err.awsCode);
+
+function deploymentOf(d: NonNullable<Service['deployments']>[number]): TenantEcsDeployment {
+  return {
+    taskDefinition: d.taskDefinition ?? '',
+    status: d.status ?? '',
+    rolloutState: (d.rolloutState ?? 'IN_PROGRESS') as TenantEcsDeployment['rolloutState'],
+  };
+}
+
+function taskOf(t: Task): TenantEcsTask {
+  return {
+    taskArn: t.taskArn ?? '',
+    taskDefinition: t.taskDefinitionArn ?? '',
+    lastStatus: t.lastStatus ?? '',
+    startedAt: t.pullStartedAt ?? t.startedAt ?? null,
+    stoppedAt: t.stoppedAt ?? null,
+    cpu: Number(t.cpu ?? 0),
+    memory: Number(t.memory ?? 0),
+  };
+}
+
+/** `TenantEcs` over an SDK client. */
+export function sdkTenantEcs(client: AwsSdkClient): TenantEcs {
+  const send = sender('ecs', client);
+  return {
+    async describeService(cluster, service) {
+      let services: Service[];
+      try {
+        ({ services = [] } = await send<{ services?: Service[] }>(
+          new DescribeServicesCommand({ cluster, services: [service] }),
+        ));
+      } catch (err) {
+        if (named(err, 'ClusterNotFoundException')) return null;
+        throw err;
+      }
+      const found = services.find((s) => s.status !== 'INACTIVE');
+      if (!found) return null;
+      return {
+        taskDefinition: found.taskDefinition ?? '',
+        desiredCount: found.desiredCount ?? 0,
+        runningCount: found.runningCount ?? 0,
+        deployments: (found.deployments ?? []).map(deploymentOf),
+      };
+    },
+
+    async updateService(cluster, service, taskDefinition) {
+      await send(new UpdateServiceCommand({ cluster, service, taskDefinition }));
+    },
+
+    async listTaskDefinitions(family) {
+      const arns: string[] = [];
+      let nextToken: string | undefined;
+      do {
+        const page = await send<{ taskDefinitionArns?: string[]; nextToken?: string }>(
+          new ListTaskDefinitionsCommand({
+            familyPrefix: family,
+            status: 'ACTIVE',
+            sort: 'ASC',
+            ...(nextToken ? { nextToken } : {}),
+          }),
+        );
+        // The prefix also matches longer families (`mh-x` and `mh-x-pr1`).
+        arns.push(...(page.taskDefinitionArns ?? []).filter((a) => a.includes(`/${family}:`)));
+        nextToken = page.nextToken;
+      } while (nextToken);
+      return arns;
+    },
+
+    async deregisterTaskDefinition(taskDefinition) {
+      await send(new DeregisterTaskDefinitionCommand({ taskDefinition }));
+    },
+
+    async listTasks(cluster, service) {
+      const arns: string[] = [];
+      try {
+        for (const desiredStatus of ['RUNNING', 'STOPPED'] as const) {
+          let nextToken: string | undefined;
+          do {
+            const page = await send<{ taskArns?: string[]; nextToken?: string }>(
+              new ListTasksCommand({
+                cluster,
+                serviceName: service,
+                desiredStatus,
+                ...(nextToken ? { nextToken } : {}),
+              }),
+            );
+            arns.push(...(page.taskArns ?? []));
+            nextToken = page.nextToken;
+          } while (nextToken);
+        }
+      } catch (err) {
+        if (named(err, 'ClusterNotFoundException', 'ServiceNotFoundException')) return [];
+        throw err;
+      }
+      const tasks: TenantEcsTask[] = [];
+      for (let i = 0; i < arns.length; i += 100) {
+        const { tasks: page = [] } = await send<{ tasks?: Task[] }>(
+          new DescribeTasksCommand({ cluster, tasks: arns.slice(i, i + 100) }),
+        );
+        tasks.push(...page.map(taskOf));
+      }
+      return tasks;
+    },
+  };
+}
+
+/** `TenantElb` over an SDK client. */
+export function sdkTenantElb(client: AwsSdkClient): TenantElb {
+  const send = sender('elasticloadbalancing', client);
+  return {
+    async describeTargetHealth(targetGroupArn) {
+      const { TargetHealthDescriptions = [] } = await send<{
+        TargetHealthDescriptions?: TargetHealthDescription[];
+      }>(new DescribeTargetHealthCommand({ TargetGroupArn: targetGroupArn }));
+      return TargetHealthDescriptions.map(
+        (d) => (d.TargetHealth?.State ?? 'unavailable') as TenantTargetHealth,
+      );
+    },
+
+    async listRulePriorities(listenerArn) {
+      const priorities: number[] = [];
+      let marker: string | undefined;
+      do {
+        const page = await send<{ Rules?: Rule[]; NextMarker?: string }>(
+          new DescribeRulesCommand({
+            ListenerArn: listenerArn,
+            ...(marker ? { Marker: marker } : {}),
+          }),
+        );
+        for (const rule of page.Rules ?? []) {
+          const priority = Number(rule.Priority);
+          if (Number.isInteger(priority)) priorities.push(priority);
+        }
+        marker = page.NextMarker;
+      } while (marker);
+      return priorities;
+    },
+  };
+}
+
+/** `TenantSsm` over an SDK client. A parameter is a plain String: it holds
+ *  usage numbers, never a secret. */
+export function sdkTenantSsm(client: AwsSdkClient): TenantSsm {
+  const send = sender('ssm', client);
+  return {
+    async getParameter(name) {
+      try {
+        const { Parameter } = await send<{ Parameter?: { Value?: string } }>(
+          new GetParameterCommand({ Name: name }),
+        );
+        return Parameter?.Value ?? null;
+      } catch (err) {
+        if (named(err, 'ParameterNotFound')) return null;
+        throw err;
+      }
+    },
+
+    async putParameter(name, value, tags) {
+      await send(
+        new PutParameterCommand({ Name: name, Value: value, Type: 'String', Overwrite: true }),
+      );
+      await send(
+        new AddTagsToResourceCommand({
+          ResourceType: 'Parameter',
+          ResourceId: name,
+          Tags: Object.entries(tags).map(([Key, Value]) => ({ Key, Value })),
+        }),
+      );
+    },
+
+    async deleteParameter(name) {
+      try {
+        await send(new DeleteParameterCommand({ Name: name }));
+      } catch (err) {
+        if (!named(err, 'ParameterNotFound')) throw err;
+      }
     },
   };
 }

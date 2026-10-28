@@ -34,12 +34,3 @@ export class ReleaseVariableInvalidError extends Error {
     this.name = 'ReleaseVariableInvalidError';
   }
 }
-
-/** `function-release.yaml` lost the marker the release's variables go at. */
-export class FunctionTemplateMarkerMissingError extends Error {
-  readonly code = 'AWS_FUNCTION_TEMPLATE_MARKER_MISSING' as const;
-  constructor(readonly marker: string) {
-    super(`function-release.yaml has no ${marker} line.`);
-    this.name = 'FunctionTemplateMarkerMissingError';
-  }
-}

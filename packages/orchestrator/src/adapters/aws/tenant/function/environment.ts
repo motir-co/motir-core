@@ -1,6 +1,6 @@
-import { createHash } from 'node:crypto';
 import type { ReleaseEnvVar } from '../../../../hosting/types';
-import { FunctionTemplateMarkerMissingError, ReleaseVariableInvalidError } from './errors';
+import { replaceMarkerLine, yamlString, type ReleaseVariableSplit } from '../releaseTemplate';
+import { ReleaseVariableInvalidError } from './errors';
 
 // THE SPLIT of a release's variables (MOTIR-10008). Lambda allows 4 KB of
 // environment in aggregate. A plain variable goes into the function's own
@@ -41,13 +41,6 @@ const lambdaReserved = (name: string) =>
   (name.startsWith('AWS_') && !name.startsWith('AWS_LWA_')) ||
   name.startsWith('LAMBDA_') ||
   name.startsWith('_');
-
-export interface ReleaseVariableSplit {
-  /** Into the function's environment, by name. */
-  readonly plain: Readonly<Record<string, string>>;
-  /** Into the environment secret, as one JSON object. */
-  readonly secret: Readonly<Record<string, string>>;
-}
 
 /** The bytes one variable takes in the environment, measured as JSON — an upper
  *  bound on what Lambda counts. */
@@ -92,42 +85,13 @@ export function splitReleaseVariables(
   return { plain, secret };
 }
 
-/**
- * The hash of the release's variables: the `ConfigHash` that publishes a new
- * version when any of them changes, and the id of the secret version that holds
- * the secret ones. Every name and value goes in, so no value can be read back
- * from it alone.
- */
-export function releaseConfigHash(split: ReleaseVariableSplit): string {
-  const entries = (record: Readonly<Record<string, string>>) =>
-    Object.keys(record)
-      .sort()
-      .map((k) => [k, record[k]]);
-  return createHash('sha256')
-    .update(JSON.stringify([entries(split.plain), entries(split.secret)]))
-    .digest('hex');
-}
-
-/** A JSON string, which YAML reads as a double-quoted scalar — with the
- *  characters YAML 1.1 parsers take for line breaks escaped too. */
-const yamlString = (value: string) =>
-  JSON.stringify(value).replace(
-    /[\u0085\u2028\u2029]/g,
-    (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`,
-  );
-
 /** The template with the plain variables written in at the marker. */
 export function renderFunctionTemplate(
   template: string,
   plain: Readonly<Record<string, string>>,
 ): string {
-  const lines = template.split('\n');
-  const at = lines.findIndex((line) => line.trim() === RELEASE_VARIABLES_MARKER);
-  if (at < 0) throw new FunctionTemplateMarkerMissingError(RELEASE_VARIABLES_MARKER);
-  const indent = lines[at]!.slice(0, lines[at]!.indexOf('#'));
-  const rendered = Object.keys(plain)
+  const lines = Object.keys(plain)
     .sort()
-    .map((name) => `${indent}${name}: ${yamlString(plain[name]!)}`);
-  lines.splice(at, 1, ...rendered);
-  return lines.join('\n');
+    .map((name) => `${name}: ${yamlString(plain[name]!)}`);
+  return replaceMarkerLine(template, RELEASE_VARIABLES_MARKER, lines);
 }

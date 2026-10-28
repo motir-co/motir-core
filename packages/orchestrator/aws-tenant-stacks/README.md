@@ -78,13 +78,13 @@ the existing provider must be removed or imported first.
   `preview-database.yaml`) is created holding a generated `password`; the hosting
   adapter adds the connection URL under the key `url`. A container receives it as
   the `DATABASE_URL` secret entry; a function receives its ARN.
-- A release's own variables: a container's live in ONE environment secret, a
-  JSON object, passed by ARN (`EnvironmentSecretArn`). A function's plain ones
-  are in its environment (the hosting adapter writes them into the template at
-  `# <release variables>`), and its secret ones, with any over Lambda's 4 KB,
-  are in the release stack's own environment secret, at the secret version
-  `ConfigHash` names, so each published version reads the variables it was
-  released with.
+- A release's own variables: the plain ones are in the function's environment
+  or the task's `environment` (the hosting adapter writes them into the template
+  at `# <release variables>`); the secret ones (and, for a function, any over
+  Lambda's 4 KB) are in the release stack's own environment secret, at the
+  secret version `ConfigHash` names, so each release reads the variables it was
+  released with. A container gets each as a task `secrets` entry (written at
+  `# <release secrets>`); a function's entrypoint loads the secret by ARN.
 - Secret names carry the stack id's unique suffix, so a re-created stack never
   collides with a secret still scheduled for deletion.
 

@@ -9,6 +9,14 @@ import type {
   TenantStackWrite,
   TenantStatement,
 } from './clients';
+import type {
+  TenantEcs,
+  TenantEcsDeployment,
+  TenantEcsTask,
+  TenantElb,
+  TenantSsm,
+  TenantTargetHealth,
+} from './container/ecsClient';
 import { AwsTenantApiError } from './errors';
 import type {
   TenantCloudWatch,
@@ -600,12 +608,333 @@ export function createFakeTenantCloudWatch(): FakeTenantCloudWatch {
   };
 }
 
+// ── ECS, ELB and SSM (MOTIR-10009) ──────────────────────────────────────────
+
+export interface FakeEcsTask extends TenantEcsTask {
+  readonly service: string;
+  lastStatus: string;
+  stoppedAt: Date | null;
+}
+
+export interface FakeEcsService {
+  taskDefinition: string;
+  desiredCount: number;
+  deployments: TenantEcsDeployment[];
+  /** Describes left before the rollout in progress settles. */
+  pendingPolls: number;
+  /** The rollout in progress ends FAILED. */
+  failing: boolean;
+}
+
+export interface FakeTaskDefinition {
+  readonly family: string;
+  readonly revision: number;
+  active: boolean;
+  readonly cpu: number;
+  readonly memory: number;
+}
+
+export type FakeEcsOperation = keyof TenantEcs;
+
+export interface FakeTenantEcs extends TenantEcs {
+  readonly services: Map<string, FakeEcsService>;
+  readonly taskDefinitions: Map<string, FakeTaskDefinition>;
+  /** Tasks still listed. */
+  readonly tasks: FakeEcsTask[];
+  readonly calls: string[];
+  failAt(operation: FakeEcsOperation, n: number, when?: 'before' | 'after'): void;
+  /** How many describes a rollout lasts (default 0: done at once). */
+  rolloutPolls: number;
+  /** The next rollout of the service ends FAILED. */
+  failNextRollout(service: string): void;
+  /** ECS drops stopped tasks from its listing after a while. */
+  forgetStoppedTasks(): void;
+  /** Stop a running task, as a crash would — ECS starts no replacement here. */
+  stopTask(taskArn: string): void;
+  applyReleaseStack(
+    parameters: Readonly<Record<string, string>>,
+    generation: number,
+  ): Record<string, string>;
+  removeService(appRef: string): void;
+}
+
+export function createFakeTenantEcs(
+  accountId: string,
+  region: string,
+  now: () => Date,
+): FakeTenantEcs {
+  const services = new Map<string, FakeEcsService>();
+  const taskDefinitions = new Map<string, FakeTaskDefinition>();
+  const tasks: FakeEcsTask[] = [];
+  const calls: string[] = [];
+  const counter = faultCounter('ecs');
+  const failing = new Set<string>();
+  /** What each release stack last registered: its revision and its inputs. */
+  const stackState = new Map<string, { key: string; taskDefinition: string }>();
+  let taskSerial = 0;
+
+  async function call<T>(operation: FakeEcsOperation, name: string, act: () => T): Promise<T> {
+    calls.push(`${operation}:${name}`);
+    const lost = counter.enter(operation);
+    const answer = act();
+    if (lost) throw counter.injected();
+    return answer;
+  }
+
+  function startTask(service: string, taskDefinition: string): void {
+    const def = taskDefinitions.get(taskDefinition)!;
+    taskSerial += 1;
+    tasks.push({
+      service,
+      taskArn: `arn:aws:ecs:${region}:${accountId}:task/${service}/t${String(taskSerial).padStart(4, '0')}`,
+      taskDefinition,
+      lastStatus: 'RUNNING',
+      startedAt: now(),
+      stoppedAt: null,
+      cpu: def.cpu,
+      memory: def.memory,
+    });
+  }
+
+  function stop(task: FakeEcsTask): void {
+    task.lastStatus = 'STOPPED';
+    task.stoppedAt = now();
+  }
+
+  const running = (service: string) =>
+    tasks.filter((t) => t.service === service && t.lastStatus !== 'STOPPED');
+
+  /** Move the service onto `taskDefinition` with `desired` tasks. */
+  function rollOut(name: string, svc: FakeEcsService, taskDefinition: string, desired: number) {
+    const old = svc.deployments.find((d) => d.status === 'PRIMARY');
+    svc.taskDefinition = taskDefinition;
+    svc.desiredCount = desired;
+    svc.failing = failing.delete(name);
+    svc.deployments = [
+      { taskDefinition, status: 'PRIMARY', rolloutState: 'IN_PROGRESS' },
+      ...(old ? [{ ...old, status: 'ACTIVE' }] : []),
+    ];
+    if (desired > 0) startTask(name, taskDefinition);
+    svc.pendingPolls = fake.rolloutPolls;
+    if (svc.pendingPolls <= 0) settle(name, svc);
+  }
+
+  function settle(name: string, svc: FakeEcsService): void {
+    const primary = svc.deployments[0]!;
+    if (svc.failing) {
+      for (const t of running(name)) if (t.taskDefinition === primary.taskDefinition) stop(t);
+      svc.deployments = [{ ...primary, rolloutState: 'FAILED' }, ...svc.deployments.slice(1)];
+      return;
+    }
+    for (const t of running(name)) if (t.taskDefinition !== primary.taskDefinition) stop(t);
+    svc.deployments = [{ ...primary, rolloutState: 'COMPLETED' }];
+  }
+
+  const fake: FakeTenantEcs = {
+    services,
+    taskDefinitions,
+    tasks,
+    calls,
+    rolloutPolls: 0,
+    failAt: (operation, n, when) => counter.failAt(operation, n, when),
+    failNextRollout(service) {
+      failing.add(service);
+    },
+    forgetStoppedTasks() {
+      for (let i = tasks.length - 1; i >= 0; i -= 1) {
+        if (tasks[i]!.lastStatus === 'STOPPED') tasks.splice(i, 1);
+      }
+    },
+    stopTask(taskArn) {
+      const task = tasks.find((t) => t.taskArn === taskArn);
+      if (task) stop(task);
+    },
+
+    applyReleaseStack(parameters, generation) {
+      const name = parameters['AppRef']!;
+      const outputs: Record<string, string> = {
+        ClusterArn: `arn:aws:ecs:${region}:${accountId}:cluster/${name}`,
+        TargetGroupArn: `arn:aws:elasticloadbalancing:${region}:${accountId}:targetgroup/${name}/g${generation}`,
+        EnvironmentSecretArn: `arn:aws:secretsmanager:${region}:${accountId}:secret:motir/${name}/environment-g${generation}`,
+      };
+      // Unpublished: no task definition, no service.
+      if (!parameters['ConfigHash']) return outputs;
+      const key = ['ImageUri', 'TaskCpu', 'TaskMemory', 'Port', 'ConfigHash']
+        .map((k) => parameters[k] ?? '')
+        .join('|');
+      const state = stackState.get(name);
+      let taskDefinition = state?.taskDefinition ?? '';
+      if (key !== state?.key) {
+        const revision = [...taskDefinitions.values()].filter((d) => d.family === name).length + 1;
+        taskDefinition = `arn:aws:ecs:${region}:${accountId}:task-definition/${name}:${revision}`;
+        taskDefinitions.set(taskDefinition, {
+          family: name,
+          revision,
+          active: true,
+          cpu: Number(parameters['TaskCpu']),
+          memory: Number(parameters['TaskMemory']),
+        });
+      }
+      let svc = services.get(name);
+      if (!svc) {
+        svc = { taskDefinition, desiredCount: 0, deployments: [], pendingPolls: 0, failing: false };
+        services.set(name, svc);
+        rollOut(name, svc, taskDefinition, 1);
+      } else if (taskDefinition !== state?.taskDefinition) {
+        rollOut(name, svc, taskDefinition, 1);
+      }
+      stackState.set(name, { key, taskDefinition });
+      return {
+        ...outputs,
+        ServiceArn: `arn:aws:ecs:${region}:${accountId}:service/${name}/${name}`,
+        ServiceName: name,
+        TaskDefinitionArn: taskDefinition,
+      };
+    },
+    removeService(appRef) {
+      for (const t of running(appRef)) stop(t);
+      services.delete(appRef);
+      const state = stackState.get(appRef);
+      // The stack deletes its current revision; the replaced ones it retained stay.
+      if (state) taskDefinitions.get(state.taskDefinition)!.active = false;
+      stackState.delete(appRef);
+    },
+
+    describeService: (cluster, service) =>
+      call('describeService', service, () => {
+        const svc = services.get(service);
+        if (!svc || cluster !== service) return null;
+        if (svc.deployments[0]?.rolloutState === 'IN_PROGRESS') {
+          if (svc.pendingPolls <= 0) settle(service, svc);
+          else svc.pendingPolls -= 1;
+        }
+        return {
+          taskDefinition: svc.taskDefinition,
+          desiredCount: svc.desiredCount,
+          runningCount: running(service).filter((t) => t.taskDefinition === svc.taskDefinition)
+            .length,
+          deployments: svc.deployments.map((d) => ({ ...d })),
+        };
+      }),
+    updateService: (_cluster, service, taskDefinition) =>
+      call('updateService', service, () => {
+        const svc = services.get(service);
+        if (!svc || !taskDefinitions.get(taskDefinition)?.active) {
+          throw new AwsTenantApiError('ecs', 'InvalidParameterException', 400);
+        }
+        rollOut(service, svc, taskDefinition, svc.desiredCount);
+      }),
+    listTaskDefinitions: (family) =>
+      call('listTaskDefinitions', family, () =>
+        [...taskDefinitions.entries()]
+          .filter(([, d]) => d.family === family && d.active)
+          .sort(([, a], [, b]) => a.revision - b.revision)
+          .map(([arn]) => arn),
+      ),
+    deregisterTaskDefinition: (taskDefinition) =>
+      call('deregisterTaskDefinition', taskDefinition, () => {
+        const def = taskDefinitions.get(taskDefinition);
+        if (def) def.active = false;
+      }),
+    listTasks: (_cluster, service) =>
+      call('listTasks', service, () =>
+        tasks
+          .filter((t) => t.service === service)
+          .map(({ service: _service, ...task }) => ({ ...task })),
+      ),
+  };
+  return fake;
+}
+
+export interface FakeTenantElb extends TenantElb {
+  /** Each release's listener rule priority, by app. */
+  readonly rules: Map<string, number>;
+  /** Apps whose targets fail their health check. */
+  readonly unhealthy: Set<string>;
+  readonly calls: string[];
+  failAt(operation: keyof TenantElb, n: number, when?: 'before' | 'after'): void;
+}
+
+/** Target health follows the fake ECS: a running task of the service's current
+ *  revision is a target, `initial` while its rollout is in progress. */
+export function createFakeTenantElb(ecs: FakeTenantEcs): FakeTenantElb {
+  const rules = new Map<string, number>();
+  const unhealthy = new Set<string>();
+  const calls: string[] = [];
+  const counter = faultCounter('elasticloadbalancing');
+  async function call<T>(operation: keyof TenantElb, name: string, act: () => T): Promise<T> {
+    calls.push(`${operation}:${name}`);
+    const lost = counter.enter(operation);
+    const answer = act();
+    if (lost) throw counter.injected();
+    return answer;
+  }
+  return {
+    rules,
+    unhealthy,
+    calls,
+    failAt: (operation, n, when) => counter.failAt(operation, n, when),
+    describeTargetHealth: (targetGroupArn) =>
+      call('describeTargetHealth', targetGroupArn, () => {
+        const app = targetGroupArn.split('/')[1]!;
+        const svc = ecs.services.get(app);
+        if (!svc) throw new AwsTenantApiError('elasticloadbalancing', 'TargetGroupNotFound', 400);
+        const settling = svc.deployments[0]?.rolloutState === 'IN_PROGRESS';
+        return ecs.tasks
+          .filter((t) => t.service === app && t.lastStatus !== 'STOPPED')
+          .filter((t) => t.taskDefinition === svc.taskDefinition)
+          .map<TenantTargetHealth>(() =>
+            settling ? 'initial' : unhealthy.has(app) ? 'unhealthy' : 'healthy',
+          );
+      }),
+    listRulePriorities: (listenerArn) =>
+      call('listRulePriorities', listenerArn, () => [...rules.values()]),
+  };
+}
+
+export interface FakeTenantSsm extends TenantSsm {
+  readonly parameters: Map<string, { value: string; tags: Record<string, string> }>;
+  readonly calls: string[];
+  failAt(operation: keyof TenantSsm, n: number, when?: 'before' | 'after'): void;
+}
+
+export function createFakeTenantSsm(): FakeTenantSsm {
+  const parameters = new Map<string, { value: string; tags: Record<string, string> }>();
+  const calls: string[] = [];
+  const counter = faultCounter('ssm');
+  async function call<T>(operation: keyof TenantSsm, name: string, act: () => T): Promise<T> {
+    calls.push(`${operation}:${name}`);
+    const lost = counter.enter(operation);
+    const answer = act();
+    if (lost) throw counter.injected();
+    return answer;
+  }
+  return {
+    parameters,
+    calls,
+    failAt: (operation, n, when) => counter.failAt(operation, n, when),
+    getParameter: (name) => call('getParameter', name, () => parameters.get(name)?.value ?? null),
+    putParameter: (name, value, tags) =>
+      call('putParameter', name, () => {
+        parameters.set(name, { value, tags: { ...parameters.get(name)?.tags, ...tags } });
+      }),
+    deleteParameter: (name) =>
+      call('deleteParameter', name, () => {
+        parameters.delete(name);
+      }),
+  };
+}
+
+/** A container release stack: the release template's parameters. */
+const isContainerRelease = (name: string, parameters: Readonly<Record<string, string>>) =>
+  name.startsWith('motir-release-') && 'TaskCpu' in parameters;
+
 /** A function release stack: the release template's parameters. */
 const isFunctionRelease = (name: string, parameters: Readonly<Record<string, string>>) =>
   name.startsWith('motir-release-') && 'InvokePrincipalArn' in parameters;
 
-/** A tenant account's clients, all fakes. A function release stack's outputs
- *  come from the fake Lambda, which it creates, publishes and deletes. */
+/** A tenant account's clients, all fakes. A release stack's outputs come from
+ *  the fake Lambda or ECS, which it creates, publishes and deletes. */
 export function createFakeTenantClients(
   options: FakeTenantCloudFormationOptions & { accountId?: string; region?: string } = {},
 ): TenantClients & {
@@ -614,10 +943,16 @@ export function createFakeTenantClients(
   readonly secretsManager: FakeTenantSecretsManager;
   readonly lambda: FakeTenantLambda;
   readonly cloudwatch: FakeTenantCloudWatch;
+  readonly ecs: FakeTenantEcs;
+  readonly elb: FakeTenantElb;
+  readonly ssm: FakeTenantSsm;
 } {
   const accountId = options.accountId ?? '210987654321';
   const region = options.region ?? 'us-east-1';
+  const now = options.now ?? (() => new Date());
   const lambda = createFakeTenantLambda(accountId, region);
+  const ecs = createFakeTenantEcs(accountId, region, now);
+  const elb = createFakeTenantElb(ecs);
   const templates = fakeTenantStackOutputs(accountId, region);
   return {
     accountId,
@@ -625,19 +960,32 @@ export function createFakeTenantClients(
     cloudformation: createFakeTenantCloudFormation({
       outputs:
         options.outputs ??
-        ((name, parameters, generation) =>
-          isFunctionRelease(name, parameters)
-            ? lambda.applyReleaseStack(parameters, generation)
-            : templates(name, parameters, generation)),
+        ((name, parameters, generation) => {
+          if (isFunctionRelease(name, parameters)) {
+            return lambda.applyReleaseStack(parameters, generation);
+          }
+          if (isContainerRelease(name, parameters)) {
+            elb.rules.set(parameters['AppRef']!, Number(parameters['ListenerRulePriority']));
+            return ecs.applyReleaseStack(parameters, generation);
+          }
+          return templates(name, parameters, generation);
+        }),
       onDeleted: (name) => {
         options.onDeleted?.(name);
-        if (name.startsWith('motir-release-')) lambda.removeFunction(name.slice(14));
+        if (!name.startsWith('motir-release-')) return;
+        const appRef = name.slice('motir-release-'.length);
+        lambda.removeFunction(appRef);
+        if (ecs.services.has(appRef)) ecs.removeService(appRef);
+        elb.rules.delete(appRef);
       },
-      ...(options.now ? { now: options.now } : {}),
+      now,
     }),
     rdsData: createFakeTenantRdsData(),
     secretsManager: createFakeTenantSecretsManager(),
     lambda,
     cloudwatch: createFakeTenantCloudWatch(),
+    ecs,
+    elb,
+    ssm: createFakeTenantSsm(),
   };
 }

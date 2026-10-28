@@ -56,6 +56,7 @@ export interface ApplyStackResult {
 
 export interface DescribedStack {
   readonly status: string;
+  readonly parameters: Readonly<Record<string, string>>;
   readonly outputs: Readonly<Record<string, string>>;
   /** When it was created, when known — where a release's usage starts. */
   readonly createdAt?: Date;
@@ -174,6 +175,7 @@ export function createStackRunner(
       if (!stack || stack.status === 'DELETE_COMPLETE') return null;
       return {
         status: stack.status,
+        parameters: stack.parameters,
         outputs: stack.outputs,
         ...(stack.createdAt ? { createdAt: stack.createdAt } : {}),
       };

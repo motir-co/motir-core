@@ -237,15 +237,22 @@
           "required": true
         },
         {
-          "name": "EnvironmentSecretArn",
-          "required": true
+          "name": "DatabaseSecretArn",
+          "required": false
         },
         {
-          "name": "DatabaseSecretArn",
+          "name": "ConfigHash",
           "required": false
         }
       ],
-      "outputs": ["ClusterArn", "ServiceArn", "ServiceName", "TaskDefinitionArn", "TargetGroupArn"]
+      "outputs": [
+        "ClusterArn",
+        "ServiceArn",
+        "ServiceName",
+        "TaskDefinitionArn",
+        "TargetGroupArn",
+        "EnvironmentSecretArn"
+      ]
     }
   }
 }

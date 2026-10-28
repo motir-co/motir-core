@@ -4,9 +4,12 @@ import {
   createTenantSdkClient,
   sdkTenantCloudFormation,
   sdkTenantCloudWatch,
+  sdkTenantEcs,
+  sdkTenantElb,
   sdkTenantLambda,
   sdkTenantRdsData,
   sdkTenantSecretsManager,
+  sdkTenantSsm,
   type TenantSdkClientFactory,
 } from './sdk';
 import { tenantDeploySession } from './session';
@@ -41,6 +44,9 @@ export function createTenantClients(options: TenantClientsOptions): TenantClient
     secretsManager: sdkTenantSecretsManager(factory('secretsmanager', config)),
     lambda: sdkTenantLambda(factory('lambda', config)),
     cloudwatch: sdkTenantCloudWatch(factory('cloudwatch', config)),
+    ecs: sdkTenantEcs(factory('ecs', config)),
+    elb: sdkTenantElb(factory('elasticloadbalancing', config)),
+    ssm: sdkTenantSsm(factory('ssm', config)),
   };
 }
 

@@ -476,6 +476,7 @@ describe('the stack runner', () => {
     await runner.applyStack(INPUT);
     expect(await runner.describeStack(INPUT.stackName)).toEqual({
       status: 'CREATE_COMPLETE',
+      parameters: INPUT.parameters,
       outputs: { StackName: INPUT.stackName, RepositoryId: 'cmrepo1' },
       createdAt: expect.any(Date),
     });

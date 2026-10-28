@@ -10,9 +10,12 @@ export {
   createTenantSdkClient,
   sdkTenantCloudFormation,
   sdkTenantCloudWatch,
+  sdkTenantEcs,
+  sdkTenantElb,
   sdkTenantLambda,
   sdkTenantRdsData,
   sdkTenantSecretsManager,
+  sdkTenantSsm,
   tenantApiError,
   type TenantSdkClientFactory,
   type TenantSdkCredentials,
@@ -21,4 +24,6 @@ export {
 export * from './registry';
 export * from './network';
 export * from './database';
+export * from './releaseTemplate';
 export * from './function';
+export * from './container';

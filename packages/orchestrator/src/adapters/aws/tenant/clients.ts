@@ -3,6 +3,7 @@
 // type appears here; `sdk.ts` implements them over the SDK. A later card adds
 // its service to `TenantClients` and to the fake beside it.
 
+import type { TenantEcs, TenantElb, TenantSsm } from './container/ecsClient';
 import type { TenantCloudWatch, TenantLambda } from './function/lambdaClient';
 
 /** A stack as the runner reads it. */
@@ -73,4 +74,8 @@ export interface TenantClients {
   /** The function shape's (MOTIR-10008). */
   readonly lambda: TenantLambda;
   readonly cloudwatch: TenantCloudWatch;
+  /** The container shape's (MOTIR-10009). */
+  readonly ecs: TenantEcs;
+  readonly elb: TenantElb;
+  readonly ssm: TenantSsm;
 }

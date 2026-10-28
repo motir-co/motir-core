@@ -13,11 +13,11 @@ import { AwsTenantApiError } from '../errors';
 import { stackOutput, type TenantAccountContext, type TenantNetwork } from '../network';
 import { TAG_ORGANIZATION, TAG_REPOSITORY } from '../stackRunner';
 import {
+  previousReleaseNumber,
   releaseConfigHash,
-  renderFunctionTemplate,
-  splitReleaseVariables,
   type ReleaseVariableSplit,
-} from './environment';
+} from '../releaseTemplate';
+import { renderFunctionTemplate, splitReleaseVariables } from './environment';
 import { FunctionUsageReadError, NoPreviousFunctionVersionError } from './errors';
 import { FUNCTION_DURATION_METRIC, functionComputeUsage } from './usage';
 
@@ -44,10 +44,7 @@ import { FUNCTION_DURATION_METRIC, functionComputeUsage } from './usage';
 //   4. `live` is put on the stack's version even when the apply changed nothing,
 //      so a deploy after a rollback makes the stack's release live again.
 //
-// The PREVIOUS version needs no state of its own: while `live` is the newest
-// version, it is the newest one below it; after a rollback `live` is older than
-// the newest, and the newest — the release the rollback replaced — is the one a
-// further rollback restores.
+// The PREVIOUS version needs no state of its own (`previousReleaseNumber`).
 
 export * from './lambdaClient';
 export * from './environment';
@@ -117,13 +114,8 @@ export function previousFunctionVersion(
   versions: readonly string[],
   live: string | null,
 ): string | null {
-  const numbers = versions.map(Number).filter((n) => Number.isInteger(n) && n > 0);
-  if (live === null || numbers.length === 0) return null;
-  const current = Number(live);
-  const newest = Math.max(...numbers);
-  if (current < newest) return String(newest);
-  const below = numbers.filter((n) => n < current);
-  return below.length > 0 ? String(Math.max(...below)) : null;
+  const previous = previousReleaseNumber(versions.map(Number), live === null ? null : Number(live));
+  return previous === null ? null : String(previous);
 }
 
 function releaseTags(account: TenantAccountContext, repositoryId: string) {
