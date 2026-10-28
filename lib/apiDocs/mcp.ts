@@ -1235,9 +1235,12 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // planner starts knowing the problem. That is read AFTER a caller has chosen
     // this tool: it changes how you call it, never whether this is the call. The
     // line still says what the tool is for, and it is the only thing it owes.
+    // Re-pinned for MOTIR-9878, summary UNCHANGED: the description now says the
+    // `requirement` and `targetKeys` are input the planner settles from; the call
+    // is still the one that hands the conversation's intent to the planner.
     summary: "Send the conversation's accumulated intent to the planner as one change set.",
     // Regenerated from a live `tools/list` handshake, never from the source.
-    descriptionFingerprint: 'da07e05ffb16',
+    descriptionFingerprint: '2fe93c5a3739',
   },
   link_work_items: {
     summary:

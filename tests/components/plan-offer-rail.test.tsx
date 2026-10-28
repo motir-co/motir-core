@@ -497,13 +497,8 @@ describe('the requirement page link and the cannot-save line', () => {
     expect(line.textContent).toBe('Saved as Export the board in Requirements Docs.');
   });
 
-  it('draws no link line without a saved page, on a targeted offer or on a bug offer', () => {
+  it('draws no link line without a saved page, or on a bug offer', () => {
     renderRail({ session: offered(confirmed()) });
-    expect(screen.queryByTestId('plan-offer-requirement-page')).toBeNull();
-    cleanup();
-    renderRail({
-      session: offered(confirmed({ targetKey: 'ACME-40', requirementPage: PAGE })),
-    });
     expect(screen.queryByTestId('plan-offer-requirement-page')).toBeNull();
     cleanup();
     renderRail({
@@ -528,12 +523,21 @@ describe('the requirement page link and the cannot-save line', () => {
     expect(onConfirmPlanOffer).toHaveBeenCalledWith('t1');
   });
 
-  it('draws no cannot-save line on a targeted offer or a plain pending one', () => {
-    renderRail({ session: offered(offer({ requirementSaveFailed: true })) });
-    expect(screen.queryByTestId('plan-offer-requirement-not-saved')).toBeNull();
-    cleanup();
+  it('draws no cannot-save line on a plain pending one', () => {
     renderRail({ session: offered(offer({ targetKey: null })) });
     expect(screen.queryByTestId('plan-offer-requirement-not-saved')).toBeNull();
+  });
+
+  // MOTIR-9878: a targeted offer carries the requirement too, so its saved page and its
+  // failed save are drawn exactly as on a no-target offer.
+  it('draws the link line and the cannot-save line on a targeted offer too', () => {
+    renderRail({
+      session: offered(confirmed({ targetKey: 'ACME-40', requirementPage: PAGE })),
+    });
+    expect(screen.queryByTestId('plan-offer-requirement-page')).not.toBeNull();
+    cleanup();
+    renderRail({ session: offered(offer({ requirementSaveFailed: true })) });
+    expect(screen.queryByTestId('plan-offer-requirement-not-saved')).not.toBeNull();
   });
 
   it('a real refusal still replaces both buttons, even beside a failed save', () => {
