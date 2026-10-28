@@ -258,19 +258,12 @@ export default defineConfig({
         MOTIR_AI_SHARPEN_CONTROL_PATH,
         CORE_CALLBACK_SECRET: E2E_CORE_CALLBACK_SECRET,
         MOTIR_PUBLIC_SITE_URL: 'https://public.motir.e2e',
-        // ⚠️ THE TENANT BASE DOMAIN, and WITHOUT IT `cloud-public-address-release`
-        // CANNOT REACH THE STATES IT ASSERTS (Story MOTIR-4451 · MOTIR-4457).
-        // The Public address pane renders an operator explanation and NO claim
-        // field when this is unset, so the spec would walk that instead of the
-        // room — `plan-rules/type-test.md` tell (d), a lane that cannot reach the
-        // asserted state. It is armed here for the same reason
-        // `playwright.acceptance.config.ts` arms it, and with the same value, so
-        // the two lanes agree about what `<base>` is.
-        //
-        // The certificate + DNS fakes the acceptance lane also arms are NOT
-        // needed here: the release walk never touches a custom domain, and a
-        // workspace subdomain is covered by the wildcard `*.<base>` (ADR §6), so
-        // claiming one issues no certificate and releasing one withdraws none.
+        // THE TENANT BASE DOMAIN (Story MOTIR-4451 · MOTIR-4457). Without it the
+        // Public address pane renders an operator explanation and NO claim field.
+        // The release walk that needed it here moved to the acceptance lane's
+        // `acceptance-workspace-address` (Story MOTIR-4528 · MOTIR-9518); it stays
+        // armed, with the acceptance lane's value, so the two lanes agree about
+        // what `<base>` is for any cloud spec that reaches the pane.
         MOTIR_PUBLIC_TENANT_DOMAIN: 'motir.e2e',
         // The configured legal manifest (MOTIR-4015) — the same value the runner
         // above reads, from the same module, so the two cannot drift. Its URLs

@@ -2707,43 +2707,6 @@
         "title": "Nenhum namespace público está configurado",
         "description": "Esta implantação não tem um domínio base de tenant definido, então ainda não é possível reivindicar um subdomínio. Um operador define MOTIR_PUBLIC_TENANT_DOMAIN."
       },
-      "subdomain": {
-        "title": "Subdomínio do espaço de trabalho",
-        "subtitle": "Um endereço para todo o espaço de trabalho. Cada projeto público nele responde abaixo desse endereço.",
-        "label": "Subdomínio",
-        "helper": "Seus projetos ficarão em {preview}. Letras minúsculas, dígitos e hífens; de 3 a 63 caracteres.",
-        "claim": "Reivindicar subdomínio",
-        "claimable": "Ele pode ser renomeado depois, um número limitado de vezes.",
-        "active": "Ativo",
-        "alias": "Redireciona para cá",
-        "aliasShort": "Redireciona",
-        "copy": "Copiar endereço",
-        "copied": "Endereço copiado",
-        "open": "Abrir em uma nova aba",
-        "rename": "Renomear",
-        "renamesLeft": "{count, plural, =0 {Não restam renomeações.} one {Resta # renomeação.} other {Restam # renomeações.}}",
-        "readOnly": "Gerenciado por um proprietário ou administrador do espaço de trabalho.",
-        "none": "Nenhum subdomínio reivindicado ainda."
-      },
-      "rename": {
-        "title": "Renomear este subdomínio?",
-        "warningTitle": "O endereço antigo continua funcionando e nunca é liberado.",
-        "warningBody": "{old} redirecionará para cá permanentemente e não poderá ser reivindicado por mais ninguém — nem por você, depois.",
-        "remaining": "Você terá {count, plural, one {# renomeação restante} other {# renomeações restantes}} depois desta.",
-        "cancel": "Cancelar",
-        "confirm": "Renomear"
-      },
-      "release": {
-        "remove": "Remover",
-        "title": "Remover {hostname}?",
-        "lead": "{count, plural, one {Este endereço deixará de responder:} other {Estes # endereços deixarão de responder:}}",
-        "warningTitle": "{count, plural, one {Este nome fica reservado para sempre. Ninguém pode reivindicá-lo novamente — nem você.} other {Estes nomes ficam reservados para sempre. Ninguém pode reivindicá-los novamente — nem você.}}",
-        "warningBody": "O Motir mantém todo nome liberado fora do namespace permanentemente, para que nenhum outro espaço de trabalho herde links que apontavam para o seu.",
-        "renamesAfter": "Você terá {count, plural, =0 {nenhuma renomeação restante} one {# renomeação restante} other {# renomeações restantes}} se reivindicar um subdomínio novamente — liberar não as devolve.",
-        "fallback": "Seus projetos públicos voltam para {url} e aparecem em {site} novamente.",
-        "cancel": "Cancelar",
-        "confirm": "Remover subdomínio"
-      },
       "domains": {
         "title": "Seu próprio domínio",
         "subtitle": "Sirva este projeto a partir de um domínio seu.",
@@ -2832,17 +2795,6 @@
         },
         "lastChecked": "Última verificação {when}",
         "error": "Não deu certo. Tente novamente em instantes."
-      },
-      "error": {
-        "reserved": "{label} está reservado. O Motir mantém um pequeno conjunto de nomes para os próprios hosts e para nomes que um leitor poderia confundir com eles.",
-        "structurallyReserved": "{label} está reservado. Nomes que começam com sublinhado, xn-- ou motir- pertencem ao Motir ou ao próprio DNS.",
-        "tooShort": "Curto demais — um subdomínio tem pelo menos 3 caracteres.",
-        "tooLong": "Longo demais — um subdomínio tem no máximo 63 caracteres.",
-        "badGrammar": "Apenas letras minúsculas, dígitos e hífens, começando e terminando com uma letra ou dígito.",
-        "taken": "{label} já está em uso. Um subdomínio que foi renomeado também mantém o nome, então este pode pertencer a um espaço de trabalho que não responde mais nele.",
-        "capReached": "Você usou todas as renomeações deste espaço de trabalho. O endereço não pode ser alterado novamente.",
-        "forbidden": "Somente um proprietário ou administrador do espaço de trabalho pode alterar este endereço.",
-        "generic": "Não deu certo. Tente novamente em instantes."
       }
     },
     "codeAccess": {

@@ -2707,43 +2707,6 @@
         "title": "Nessuno spazio dei nomi pubblico configurato",
         "description": "Questo deployment non ha un dominio base per i tenant, quindi non è ancora possibile richiedere un sottodominio. Un operatore deve impostare MOTIR_PUBLIC_TENANT_DOMAIN."
       },
-      "subdomain": {
-        "title": "Sottodominio dell’area di lavoro",
-        "subtitle": "Un unico indirizzo per l’intera area di lavoro. Ogni progetto pubblico al suo interno risponde sotto di esso.",
-        "label": "Sottodominio",
-        "helper": "I tuoi progetti saranno su {preview}. Lettere minuscole, cifre e trattini; da 3 a 63 caratteri.",
-        "claim": "Richiedi sottodominio",
-        "claimable": "Potrai rinominarlo in seguito, un numero limitato di volte.",
-        "active": "Attivo",
-        "alias": "Reindirizza qui",
-        "aliasShort": "Reindirizza",
-        "copy": "Copia indirizzo",
-        "copied": "Indirizzo copiato",
-        "open": "Apri in una nuova scheda",
-        "rename": "Rinomina",
-        "renamesLeft": "{count, plural, =0 {Nessuna ridenominazione rimasta.} one {# ridenominazione rimasta.} other {# ridenominazioni rimaste.}}",
-        "readOnly": "Gestito da un proprietario o amministratore dell’area di lavoro.",
-        "none": "Ancora nessun sottodominio richiesto."
-      },
-      "rename": {
-        "title": "Rinominare questo sottodominio?",
-        "warningTitle": "Il vecchio indirizzo continua a funzionare e non viene mai rilasciato.",
-        "warningBody": "{old} reindirizzerà qui in modo permanente e non potrà essere richiesto da nessun altro, nemmeno da te in futuro.",
-        "remaining": "Dopo questa ti {count, plural, one {resterà # ridenominazione} other {resteranno # ridenominazioni}}.",
-        "cancel": "Annulla",
-        "confirm": "Rinomina"
-      },
-      "release": {
-        "remove": "Rimuovi",
-        "title": "Rimuovere {hostname}?",
-        "lead": "{count, plural, one {Questo indirizzo smetterà di rispondere:} other {Questi # indirizzi smetteranno di rispondere:}}",
-        "warningTitle": "{count, plural, one {Questo nome resta riservato per sempre. Nessuno potrà richiederlo di nuovo, nemmeno tu.} other {Questi nomi restano riservati per sempre. Nessuno potrà richiederli di nuovo, nemmeno tu.}}",
-        "warningBody": "Motir esclude in modo permanente dal proprio spazio dei nomi ogni nome rilasciato, così nessun’altra area di lavoro può ereditare i link che puntavano alla tua.",
-        "renamesAfter": "Se richiederai di nuovo un sottodominio, ti {count, plural, =0 {non resteranno ridenominazioni} one {resterà # ridenominazione} other {resteranno # ridenominazioni}}: il rilascio non le restituisce.",
-        "fallback": "I tuoi progetti pubblici tornano su {url} e compaiono di nuovo su {site}.",
-        "cancel": "Annulla",
-        "confirm": "Rimuovi sottodominio"
-      },
       "domains": {
         "title": "Il tuo dominio",
         "subtitle": "Pubblica questo progetto da un dominio di tua proprietà.",
@@ -2832,17 +2795,6 @@
         },
         "lastChecked": "Ultima verifica {when}",
         "error": "Operazione non riuscita. Riprova tra poco."
-      },
-      "error": {
-        "reserved": "{label} è riservato. Motir riserva un piccolo insieme di nomi per i propri host e per nomi che un lettore potrebbe confondere con essi.",
-        "structurallyReserved": "{label} è riservato. I nomi che iniziano con un trattino basso, xn-- o motir- appartengono a Motir o al DNS stesso.",
-        "tooShort": "Troppo corto: un sottodominio deve avere almeno 3 caratteri.",
-        "tooLong": "Troppo lungo: un sottodominio può avere al massimo 63 caratteri.",
-        "badGrammar": "Solo lettere minuscole, cifre e trattini, con inizio e fine costituiti da una lettera o una cifra.",
-        "taken": "{label} è già in uso. Anche un sottodominio rinominato mantiene il proprio nome, quindi questo potrebbe appartenere a un’area di lavoro che non risponde più a quell’indirizzo.",
-        "capReached": "Hai usato tutte le ridenominazioni disponibili per questa area di lavoro. L’indirizzo non può più essere cambiato.",
-        "forbidden": "Solo un proprietario o amministratore dell’area di lavoro può modificare questo indirizzo.",
-        "generic": "Operazione non riuscita. Riprova tra poco."
       }
     },
     "codeAccess": {

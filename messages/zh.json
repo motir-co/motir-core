@@ -2707,43 +2707,6 @@
         "title": "尚未配置公开命名空间",
         "description": "此部署未设置租户基础域名，因此暂时无法认领子域名。请由运维人员设置 MOTIR_PUBLIC_TENANT_DOMAIN。"
       },
-      "subdomain": {
-        "title": "工作区子域名",
-        "subtitle": "整个工作区共用一个地址，其中每个公开项目都在它下面提供访问。",
-        "label": "子域名",
-        "helper": "你的项目将位于 {preview}。仅限小写字母、数字和连字符；3–63 个字符。",
-        "claim": "认领子域名",
-        "claimable": "之后可以重命名，但次数有限。",
-        "active": "使用中",
-        "alias": "重定向至此",
-        "aliasShort": "重定向",
-        "copy": "复制地址",
-        "copied": "地址已复制",
-        "open": "在新标签页中打开",
-        "rename": "重命名",
-        "renamesLeft": "{count, plural, =0 {没有剩余的重命名次数。} other {还可重命名 # 次。}}",
-        "readOnly": "由工作区所有者或管理员管理。",
-        "none": "尚未认领子域名。"
-      },
-      "rename": {
-        "title": "要重命名此子域名吗？",
-        "warningTitle": "旧地址将继续有效，并且永不释放。",
-        "warningBody": "{old} 将永久重定向到此处，任何人都无法再认领它——包括你自己。",
-        "remaining": "此次之后你还可重命名 {count, plural, other {#}} 次。",
-        "cancel": "取消",
-        "confirm": "重命名"
-      },
-      "release": {
-        "remove": "移除",
-        "title": "要移除 {hostname} 吗？",
-        "lead": "{count, plural, other {以下 # 个地址将停止提供访问：}}",
-        "warningTitle": "{count, plural, other {这些名称将被永久保留，任何人都无法再认领它们——包括你自己。}}",
-        "warningBody": "Motir 会把每个已释放的名称永久排除在命名空间之外，因此其他工作区无法继承指向你的链接。",
-        "renamesAfter": "若你再次认领子域名，将只剩 {count, plural, =0 {0} other {#}} 次重命名机会——释放不会把它们还给你。",
-        "fallback": "你的公开项目将回到 {url}，并重新出现在 {site} 上。",
-        "cancel": "取消",
-        "confirm": "移除子域名"
-      },
       "domains": {
         "title": "你自己的域名",
         "subtitle": "使用你拥有的域名来提供此项目。",
@@ -2832,17 +2795,6 @@
         },
         "lastChecked": "上次检查：{when}",
         "error": "操作未成功，请稍后重试。"
-      },
-      "error": {
-        "reserved": "{label} 是保留名称。Motir 保留了一小组名称，用于自己的主机以及读者可能误认的名称。",
-        "structurallyReserved": "{label} 是保留名称。以下划线、xn-- 或 motir- 开头的名称属于 Motir 或 DNS 本身。",
-        "tooShort": "太短——子域名至少需要 3 个字符。",
-        "tooLong": "太长——子域名最多 63 个字符。",
-        "badGrammar": "仅限小写字母、数字和连字符，且需以字母或数字开头和结尾。",
-        "taken": "{label} 已被使用。被重命名后的子域名同样会保留其名称，因此它可能属于一个已不再使用它的工作区。",
-        "capReached": "此工作区的重命名次数已用完，地址无法再更改。",
-        "forbidden": "只有工作区所有者或管理员才能更改此地址。",
-        "generic": "操作未成功，请稍后重试。"
       }
     },
     "codeAccess": {

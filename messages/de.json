@@ -2707,43 +2707,6 @@
         "title": "Kein öffentlicher Namensraum konfiguriert",
         "description": "Für diese Bereitstellung ist keine Mandanten-Basisdomain festgelegt, daher kann noch keine Subdomain beansprucht werden. Ein Betreiber legt MOTIR_PUBLIC_TENANT_DOMAIN fest."
       },
-      "subdomain": {
-        "title": "Subdomain des Arbeitsbereichs",
-        "subtitle": "Eine Adresse für den gesamten Arbeitsbereich. Jedes öffentliche Projekt darin ist darunter erreichbar.",
-        "label": "Subdomain",
-        "helper": "Ihre Projekte sind unter {preview} erreichbar. Kleinbuchstaben, Ziffern und Bindestriche; 3–63 Zeichen.",
-        "claim": "Subdomain beanspruchen",
-        "claimable": "Sie kann später umbenannt werden, allerdings nur begrenzt oft.",
-        "active": "Aktiv",
-        "alias": "Leitet hierher weiter",
-        "aliasShort": "Weiterleitung",
-        "copy": "Adresse kopieren",
-        "copied": "Adresse kopiert",
-        "open": "In neuem Tab öffnen",
-        "rename": "Umbenennen",
-        "renamesLeft": "{count, plural, =0 {Keine Umbenennungen mehr übrig.} one {# Umbenennung übrig.} other {# Umbenennungen übrig.}}",
-        "readOnly": "Wird von einem Inhaber oder Administrator des Arbeitsbereichs verwaltet.",
-        "none": "Noch keine Subdomain beansprucht."
-      },
-      "rename": {
-        "title": "Diese Subdomain umbenennen?",
-        "warningTitle": "Die alte Adresse funktioniert weiterhin und wird nie freigegeben.",
-        "warningBody": "{old} leitet dauerhaft hierher weiter und kann von niemand anderem beansprucht werden – auch nicht später von Ihnen.",
-        "remaining": "Nach dieser bleiben Ihnen {count, plural, one {# Umbenennung} other {# Umbenennungen}}.",
-        "cancel": "Abbrechen",
-        "confirm": "Umbenennen"
-      },
-      "release": {
-        "remove": "Entfernen",
-        "title": "{hostname} entfernen?",
-        "lead": "{count, plural, one {Diese Adresse ist dann nicht mehr erreichbar:} other {Diese # Adressen sind dann nicht mehr erreichbar:}}",
-        "warningTitle": "{count, plural, one {Dieser Name bleibt für immer gesperrt. Niemand kann ihn erneut beanspruchen – auch Sie nicht.} other {Diese Namen bleiben für immer gesperrt. Niemand kann sie erneut beanspruchen – auch Sie nicht.}}",
-        "warningBody": "Motir hält jeden freigegebenen Namen dauerhaft aus seinem Namensraum heraus, damit kein anderer Arbeitsbereich Links übernehmen kann, die auf Ihren verwiesen haben.",
-        "renamesAfter": "Wenn Sie erneut eine Subdomain beanspruchen, bleiben Ihnen {count, plural, =0 {keine Umbenennungen} one {# Umbenennung} other {# Umbenennungen}} – durch die Freigabe erhalten Sie keine zurück.",
-        "fallback": "Ihre öffentlichen Projekte sind dann wieder unter {url} erreichbar und erscheinen wieder auf {site}.",
-        "cancel": "Abbrechen",
-        "confirm": "Subdomain entfernen"
-      },
       "domains": {
         "title": "Ihre eigene Domain",
         "subtitle": "Stellen Sie dieses Projekt unter einer Domain bereit, die Ihnen gehört.",
@@ -2832,17 +2795,6 @@
         },
         "lastChecked": "Zuletzt geprüft {when}",
         "error": "Das hat nicht funktioniert. Versuchen Sie es gleich noch einmal."
-      },
-      "error": {
-        "reserved": "{label} ist reserviert. Motir behält sich eine kleine Anzahl von Namen für eigene Hosts vor sowie für Namen, die man damit verwechseln könnte.",
-        "structurallyReserved": "{label} ist reserviert. Namen, die mit einem Unterstrich, xn-- oder motir- beginnen, gehören Motir oder dem DNS selbst.",
-        "tooShort": "Zu kurz – eine Subdomain hat mindestens 3 Zeichen.",
-        "tooLong": "Zu lang – eine Subdomain hat höchstens 63 Zeichen.",
-        "badGrammar": "Nur Kleinbuchstaben, Ziffern und Bindestriche; Anfang und Ende müssen ein Buchstabe oder eine Ziffer sein.",
-        "taken": "{label} wird bereits verwendet. Eine umbenannte Subdomain behält ihren Namen ebenfalls, daher kann diese zu einem Arbeitsbereich gehören, der darunter nicht mehr erreichbar ist.",
-        "capReached": "Sie haben alle Umbenennungen für diesen Arbeitsbereich aufgebraucht. Die Adresse kann nicht mehr geändert werden.",
-        "forbidden": "Nur ein Inhaber oder Administrator des Arbeitsbereichs kann diese Adresse ändern.",
-        "generic": "Das hat nicht funktioniert. Versuchen Sie es gleich noch einmal."
       }
     },
     "codeAccess": {

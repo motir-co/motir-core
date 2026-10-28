@@ -2707,43 +2707,6 @@
         "title": "No hay ningún espacio de nombres público configurado",
         "description": "Esta implementación no tiene configurado un dominio base para inquilinos, así que todavía no se puede reclamar un subdominio. Un operador debe establecer MOTIR_PUBLIC_TENANT_DOMAIN."
       },
-      "subdomain": {
-        "title": "Subdominio del espacio de trabajo",
-        "subtitle": "Una dirección para todo el espacio de trabajo. Todos sus proyectos públicos responden debajo de ella.",
-        "label": "Subdominio",
-        "helper": "Tus proyectos estarán en {preview}. Letras minúsculas, dígitos y guiones; de 3 a 63 caracteres.",
-        "claim": "Reclamar subdominio",
-        "claimable": "Se puede renombrar más adelante un número limitado de veces.",
-        "active": "Activo",
-        "alias": "Redirige aquí",
-        "aliasShort": "Redirige",
-        "copy": "Copiar dirección",
-        "copied": "Dirección copiada",
-        "open": "Abrir en una pestaña nueva",
-        "rename": "Renombrar",
-        "renamesLeft": "{count, plural, =0 {No quedan cambios de nombre.} one {Queda # cambio de nombre.} other {Quedan # cambios de nombre.}}",
-        "readOnly": "Lo gestiona un propietario o administrador del espacio de trabajo.",
-        "none": "Aún no se ha reclamado ningún subdominio."
-      },
-      "rename": {
-        "title": "¿Renombrar este subdominio?",
-        "warningTitle": "La dirección antigua sigue funcionando y nunca se libera.",
-        "warningBody": "{old} redirigirá aquí de forma permanente y nadie más podrá reclamarla, ni siquiera tú más adelante.",
-        "remaining": "Te {count, plural, one {quedará # cambio de nombre} other {quedarán # cambios de nombre}} después de este.",
-        "cancel": "Cancelar",
-        "confirm": "Renombrar"
-      },
-      "release": {
-        "remove": "Quitar",
-        "title": "¿Quitar {hostname}?",
-        "lead": "{count, plural, one {Esta dirección dejará de responder:} other {Estas # direcciones dejarán de responder:}}",
-        "warningTitle": "{count, plural, one {Este nombre queda reservado para siempre. Nadie podrá volver a reclamarlo, ni siquiera tú.} other {Estos nombres quedan reservados para siempre. Nadie podrá volver a reclamarlos, ni siquiera tú.}}",
-        "warningBody": "Motir mantiene fuera de su espacio de nombres todos los nombres liberados de forma permanente, para que ningún otro espacio de trabajo herede enlaces que apuntaban al tuyo.",
-        "renamesAfter": "Te {count, plural, =0 {quedarán cero cambios de nombre} one {quedará # cambio de nombre} other {quedarán # cambios de nombre}} si vuelves a reclamar un subdominio: liberarlo no los devuelve.",
-        "fallback": "Tus proyectos públicos vuelven a {url} y aparecen de nuevo en {site}.",
-        "cancel": "Cancelar",
-        "confirm": "Quitar subdominio"
-      },
       "domains": {
         "title": "Tu propio dominio",
         "subtitle": "Sirve este proyecto desde un dominio de tu propiedad.",
@@ -2832,17 +2795,6 @@
         },
         "lastChecked": "Última comprobación: {when}",
         "error": "No ha funcionado. Vuelve a intentarlo en un momento."
-      },
-      "error": {
-        "reserved": "{label} está reservado. Motir guarda un pequeño conjunto de nombres para sus propios hosts y para nombres que un lector podría confundir con ellos.",
-        "structurallyReserved": "{label} está reservado. Los nombres que empiezan por guion bajo, xn-- o motir- pertenecen a Motir o al propio DNS.",
-        "tooShort": "Demasiado corto: un subdominio tiene al menos 3 caracteres.",
-        "tooLong": "Demasiado largo: un subdominio tiene como máximo 63 caracteres.",
-        "badGrammar": "Solo letras minúsculas, dígitos y guiones, empezando y terminando por una letra o un dígito.",
-        "taken": "{label} ya está en uso. Un subdominio cuyo nombre se ha cambiado también conserva su nombre, así que este puede pertenecer a un espacio de trabajo que ya no responde en él.",
-        "capReached": "Has usado todos los cambios de nombre de este espacio de trabajo. La dirección ya no se puede volver a cambiar.",
-        "forbidden": "Solo un propietario o administrador del espacio de trabajo puede cambiar esta dirección.",
-        "generic": "No ha funcionado. Vuelve a intentarlo en un momento."
       }
     },
     "codeAccess": {

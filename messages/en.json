@@ -2707,43 +2707,6 @@
         "title": "No public namespace is configured",
         "description": "This deployment has no tenant base domain set, so a subdomain cannot be claimed yet. An operator sets MOTIR_PUBLIC_TENANT_DOMAIN."
       },
-      "subdomain": {
-        "title": "Workspace subdomain",
-        "subtitle": "One address for the whole workspace. Every public project in it answers underneath.",
-        "label": "Subdomain",
-        "helper": "Your projects will be at {preview}. Lowercase letters, digits and hyphens; 3–63 characters.",
-        "claim": "Claim subdomain",
-        "claimable": "This can be renamed later, a limited number of times.",
-        "active": "Active",
-        "alias": "Redirects here",
-        "aliasShort": "Redirects",
-        "copy": "Copy address",
-        "copied": "Address copied",
-        "open": "Open in a new tab",
-        "rename": "Rename",
-        "renamesLeft": "{count, plural, =0 {No renames left.} one {# rename left.} other {# renames left.}}",
-        "readOnly": "Managed by a workspace owner or admin.",
-        "none": "No subdomain claimed yet."
-      },
-      "rename": {
-        "title": "Rename this subdomain?",
-        "warningTitle": "The old address keeps working, and is never released.",
-        "warningBody": "{old} will redirect here permanently and cannot be claimed by anyone else — including you, later.",
-        "remaining": "You have {count, plural, one {# rename} other {# renames}} left after this one.",
-        "cancel": "Cancel",
-        "confirm": "Rename"
-      },
-      "release": {
-        "remove": "Remove",
-        "title": "Remove {hostname}?",
-        "lead": "{count, plural, one {This address will stop answering:} other {These # addresses will stop answering:}}",
-        "warningTitle": "{count, plural, one {This name is held for ever. Nobody can claim it again — including you.} other {These names are held for ever. Nobody can claim them again — including you.}}",
-        "warningBody": "Motir keeps every released name out of its namespace permanently, so no other workspace can inherit links that pointed at yours.",
-        "renamesAfter": "You will have {count, plural, =0 {no renames} one {# rename} other {# renames}} left if you claim a subdomain again — releasing does not give them back.",
-        "fallback": "Your public projects go back to {url}, and appear on {site} again.",
-        "cancel": "Cancel",
-        "confirm": "Remove subdomain"
-      },
       "domains": {
         "title": "Your own domain",
         "subtitle": "Serve this project from a domain you own.",
@@ -2832,17 +2795,6 @@
         },
         "lastChecked": "Last checked {when}",
         "error": "That did not work. Try again in a moment."
-      },
-      "error": {
-        "reserved": "{label} is reserved. Motir keeps a small set of names for its own hosts and for names a reader could mistake for one.",
-        "structurallyReserved": "{label} is reserved. Names beginning with an underscore, xn-- or motir- belong to Motir or to the DNS itself.",
-        "tooShort": "Too short — a subdomain is at least 3 characters.",
-        "tooLong": "Too long — a subdomain is at most 63 characters.",
-        "badGrammar": "Lowercase letters, digits and hyphens only, starting and ending with a letter or digit.",
-        "taken": "{label} is already in use. A subdomain that has been renamed away from also keeps its name, so this one may belong to a workspace that no longer answers on it.",
-        "capReached": "You have used every rename for this workspace. The address cannot be changed again.",
-        "forbidden": "Only a workspace owner or admin can change this address.",
-        "generic": "That did not work. Try again in a moment."
       }
     },
     "codeAccess": {

@@ -2707,43 +2707,6 @@
         "title": "Er is geen openbare namespace geconfigureerd",
         "description": "Voor deze installatie is geen basisdomein voor tenants ingesteld, dus er kan nog geen subdomein worden geclaimd. Een beheerder stelt MOTIR_PUBLIC_TENANT_DOMAIN in."
       },
-      "subdomain": {
-        "title": "Subdomein van de werkruimte",
-        "subtitle": "Eén adres voor de hele werkruimte. Elk openbaar project erin is daaronder bereikbaar.",
-        "label": "Subdomein",
-        "helper": "Je projecten komen op {preview}. Kleine letters, cijfers en koppeltekens; 3–63 tekens.",
-        "claim": "Subdomein claimen",
-        "claimable": "Dit kan later nog een beperkt aantal keer worden hernoemd.",
-        "active": "Actief",
-        "alias": "Verwijst hierheen door",
-        "aliasShort": "Verwijst door",
-        "copy": "Adres kopiëren",
-        "copied": "Adres gekopieerd",
-        "open": "Openen in een nieuw tabblad",
-        "rename": "Hernoemen",
-        "renamesLeft": "{count, plural, =0 {Geen hernoemingen meer over.} one {Nog # hernoeming over.} other {Nog # hernoemingen over.}}",
-        "readOnly": "Beheerd door een eigenaar of beheerder van de werkruimte.",
-        "none": "Nog geen subdomein geclaimd."
-      },
-      "rename": {
-        "title": "Dit subdomein hernoemen?",
-        "warningTitle": "Het oude adres blijft werken en wordt nooit vrijgegeven.",
-        "warningBody": "{old} verwijst voorgoed hierheen door en kan door niemand anders worden geclaimd — ook later niet door jou.",
-        "remaining": "Na deze heb je nog {count, plural, one {# hernoeming} other {# hernoemingen}} over.",
-        "cancel": "Annuleren",
-        "confirm": "Hernoemen"
-      },
-      "release": {
-        "remove": "Verwijderen",
-        "title": "{hostname} verwijderen?",
-        "lead": "{count, plural, one {Dit adres is dan niet meer bereikbaar:} other {Deze # adressen zijn dan niet meer bereikbaar:}}",
-        "warningTitle": "{count, plural, one {Deze naam blijft voor altijd vastgehouden. Niemand kan hem opnieuw claimen — ook jij niet.} other {Deze namen blijven voor altijd vastgehouden. Niemand kan ze opnieuw claimen — ook jij niet.}}",
-        "warningBody": "Motir houdt elke vrijgegeven naam permanent buiten de namespace, zodat geen andere werkruimte links kan erven die naar de jouwe verwezen.",
-        "renamesAfter": "Als je opnieuw een subdomein claimt, heb je nog {count, plural, =0 {geen hernoemingen} one {# hernoeming} other {# hernoemingen}} over — vrijgeven geeft ze niet terug.",
-        "fallback": "Je openbare projecten gaan terug naar {url} en verschijnen weer op {site}.",
-        "cancel": "Annuleren",
-        "confirm": "Subdomein verwijderen"
-      },
       "domains": {
         "title": "Je eigen domein",
         "subtitle": "Dit project aanbieden vanaf een domein dat je bezit.",
@@ -2832,17 +2795,6 @@
         },
         "lastChecked": "Laatst gecontroleerd {when}",
         "error": "Dat is niet gelukt. Probeer het zo opnieuw."
-      },
-      "error": {
-        "reserved": "{label} is gereserveerd. Motir houdt een kleine set namen vrij voor zijn eigen hosts en voor namen die een lezer daarmee zou kunnen verwarren.",
-        "structurallyReserved": "{label} is gereserveerd. Namen die beginnen met een underscore, xn-- of motir- horen bij Motir of bij DNS zelf.",
-        "tooShort": "Te kort — een subdomein heeft minstens 3 tekens.",
-        "tooLong": "Te lang — een subdomein heeft maximaal 63 tekens.",
-        "badGrammar": "Alleen kleine letters, cijfers en koppeltekens, beginnend en eindigend met een letter of cijfer.",
-        "taken": "{label} is al in gebruik. Een subdomein dat is hernoemd, houdt ook zijn naam vast, dus deze kan horen bij een werkruimte die er niet meer op bereikbaar is.",
-        "capReached": "Je hebt alle hernoemingen voor deze werkruimte gebruikt. Het adres kan niet meer worden gewijzigd.",
-        "forbidden": "Alleen een eigenaar of beheerder van de werkruimte kan dit adres wijzigen.",
-        "generic": "Dat is niet gelukt. Probeer het zo opnieuw."
       }
     },
     "codeAccess": {

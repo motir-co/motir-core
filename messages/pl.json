@@ -2707,43 +2707,6 @@
         "title": "Nie skonfigurowano publicznej przestrzeni nazw",
         "description": "To wdrożenie nie ma ustawionej domeny bazowej dzierżawców, więc nie można jeszcze zarezerwować subdomeny. Operator ustawia MOTIR_PUBLIC_TENANT_DOMAIN."
       },
-      "subdomain": {
-        "title": "Subdomena obszaru roboczego",
-        "subtitle": "Jeden adres dla całego obszaru roboczego. Każdy publiczny projekt w nim jest dostępny pod tym adresem.",
-        "label": "Subdomena",
-        "helper": "Twoje projekty będą dostępne pod adresem {preview}. Małe litery, cyfry i myślniki; 3–63 znaki.",
-        "claim": "Zarezerwuj subdomenę",
-        "claimable": "Nazwę można później zmienić ograniczoną liczbę razy.",
-        "active": "Aktywna",
-        "alias": "Przekierowuje tutaj",
-        "aliasShort": "Przekierowuje",
-        "copy": "Kopiuj adres",
-        "copied": "Skopiowano adres",
-        "open": "Otwórz w nowej karcie",
-        "rename": "Zmień nazwę",
-        "renamesLeft": "{count, plural, =0 {Nie pozostały żadne zmiany nazwy.} one {Pozostała # zmiana nazwy.} few {Pozostały # zmiany nazwy.} many {Pozostało # zmian nazwy.} other {Pozostało # zmiany nazwy.}}",
-        "readOnly": "Zarządzane przez właściciela lub administratora obszaru roboczego.",
-        "none": "Nie zarezerwowano jeszcze subdomeny."
-      },
-      "rename": {
-        "title": "Zmienić nazwę tej subdomeny?",
-        "warningTitle": "Stary adres nadal działa i nigdy nie zostanie zwolniony.",
-        "warningBody": "{old} będzie trwale przekierowywać tutaj i nikt inny nie będzie mógł go zarezerwować — nawet Twój obszar roboczy w przyszłości.",
-        "remaining": "Po tej zmianie {count, plural, one {pozostanie # zmiana nazwy} few {pozostaną # zmiany nazwy} many {pozostanie # zmian nazwy} other {pozostanie # zmiany nazwy}}.",
-        "cancel": "Anuluj",
-        "confirm": "Zmień nazwę"
-      },
-      "release": {
-        "remove": "Usuń",
-        "title": "Usunąć {hostname}?",
-        "lead": "{count, plural, one {Ten adres przestanie działać:} few {Te # adresy przestaną działać:} many {Tych # adresów przestanie działać:} other {Te # adresu przestaną działać:}}",
-        "warningTitle": "{count, plural, one {Ta nazwa jest zablokowana na zawsze. Nikt nie może jej ponownie zarezerwować — nawet Twój obszar roboczy.} few {Te nazwy są zablokowane na zawsze. Nikt nie może ich ponownie zarezerwować — nawet Twój obszar roboczy.} many {Te nazwy są zablokowane na zawsze. Nikt nie może ich ponownie zarezerwować — nawet Twój obszar roboczy.} other {Te nazwy są zablokowane na zawsze. Nikt nie może ich ponownie zarezerwować — nawet Twój obszar roboczy.}}",
-        "warningBody": "Motir trwale wyklucza każdą zwolnioną nazwę ze swojej przestrzeni nazw, aby żaden inny obszar roboczy nie przejął linków, które wskazywały na Twój.",
-        "renamesAfter": "Jeśli ponownie zarezerwujesz subdomenę, {count, plural, =0 {nie pozostaną żadne zmiany nazwy} one {pozostanie # zmiana nazwy} few {pozostaną # zmiany nazwy} many {pozostanie # zmian nazwy} other {pozostanie # zmiany nazwy}} — zwolnienie ich nie przywraca.",
-        "fallback": "Twoje publiczne projekty wrócą pod adres {url} i ponownie pojawią się w {site}.",
-        "cancel": "Anuluj",
-        "confirm": "Usuń subdomenę"
-      },
       "domains": {
         "title": "Własna domena",
         "subtitle": "Udostępniaj ten projekt z domeny, która należy do Ciebie.",
@@ -2832,17 +2795,6 @@
         },
         "lastChecked": "Ostatnio sprawdzono {when}",
         "error": "To się nie udało. Spróbuj ponownie za chwilę."
-      },
-      "error": {
-        "reserved": "{label} jest zarezerwowana. Motir zachowuje niewielki zestaw nazw dla własnych hostów oraz nazw, które czytelnik mógłby z nimi pomylić.",
-        "structurallyReserved": "{label} jest zarezerwowana. Nazwy zaczynające się od podkreślenia, xn-- lub motir- należą do Motir lub samego DNS.",
-        "tooShort": "Za krótka — subdomena ma co najmniej 3 znaki.",
-        "tooLong": "Za długa — subdomena ma maksymalnie 63 znaki.",
-        "badGrammar": "Tylko małe litery, cyfry i myślniki; musi zaczynać się i kończyć literą lub cyfrą.",
-        "taken": "{label} jest już używana. Subdomena, której nazwę zmieniono, również zachowuje swoją nazwę, więc ta może należeć do obszaru roboczego, który już pod nią nie odpowiada.",
-        "capReached": "Wykorzystano wszystkie zmiany nazwy dla tego obszaru roboczego. Adresu nie można już zmienić.",
-        "forbidden": "Tylko właściciel lub administrator obszaru roboczego może zmienić ten adres.",
-        "generic": "To się nie udało. Spróbuj ponownie za chwilę."
       }
     },
     "codeAccess": {
