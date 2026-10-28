@@ -8,11 +8,15 @@ import type { OrchestratorProvider } from './types';
 // `repoProvisioning.ts` and `runnerGroups.ts` hold: a status and a short detail
 // is what a log needs, and a raw body is how a token ends up in one.
 
+/** The providers an API failure can come from: the fleet's, and the hosted
+ *  apps' database provider (MOTIR-9973), which is no orchestrator of its own. */
+export type OrchestratorApiProvider = OrchestratorProvider | 'neon';
+
 /** Any provider refusal or transport failure while managing a container. */
 export class OrchestratorApiError extends Error {
   readonly code = 'ORCHESTRATOR_API_FAILED' as const;
   constructor(
-    readonly provider: OrchestratorProvider,
+    readonly provider: OrchestratorApiProvider,
     readonly status: number | null,
     detail: string,
   ) {

@@ -1140,3 +1140,4 @@ export const recordContainerAccrual = usageSink.recordContainerAccrual;
 // moving a symbol across the boundary later is not a change at every call site.
 export * from '@motir/orchestrator';
 export * from './hosting';
+export * from './database';
