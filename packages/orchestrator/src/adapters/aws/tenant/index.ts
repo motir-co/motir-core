@@ -29,3 +29,4 @@ export * from './function';
 export * from './container';
 export * from './releaseIds';
 export * from './hostingAdapter';
+export * from './sigv4Fetch';

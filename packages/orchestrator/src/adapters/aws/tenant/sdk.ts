@@ -637,3 +637,15 @@ export function sdkTenantSsm(client: AwsSdkClient): TenantSsm {
     },
   };
 }
+
+/** The default credential chain's credentials (environment, profile, SSO,
+ *  instance role), resolved the way an SDK client in `region` resolves them —
+ *  for a caller that signs its own requests (`sigv4Fetch.ts`). */
+export function defaultChainCredentials(region: string): () => Promise<{
+  readonly accessKeyId: string;
+  readonly secretAccessKey: string;
+  readonly sessionToken?: string;
+}> {
+  const client = new LambdaClient({ region });
+  return () => client.config.credentials();
+}
