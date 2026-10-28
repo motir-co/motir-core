@@ -4,6 +4,7 @@ import {
   type AwsManagementApi,
   type AwsOrganizationAccount,
   type AwsPolicyDocument,
+  type AwsQuotaTarget,
   type AwsSessionCredentials,
 } from '@motir/orchestrator';
 import { vi } from 'vitest';
@@ -93,6 +94,16 @@ export function installAddShardGithub(github: GithubWorld, installationToken: st
   );
 }
 
+/** A step the fake can be cut off after, once (MOTIR-9940 · MOTIR-9941). */
+export type FakeOrganizationStep =
+  | 'createOrganizationAccount'
+  | 'ensureOrganizationalUnit'
+  | 'moveAccountToOu'
+  | 'tenantRoleCreated'
+  | 'tenantRolePolicyPut'
+  | 'accountTagged'
+  | 'quotaRaiseFiled';
+
 /** An in-memory AWS organization: accounts by name, CreateAccount requests, quotas
  *  and IAM users, with every call recorded by name. */
 export class FakeOrganization implements AwsManagementApi {
@@ -122,8 +133,25 @@ export class FakeOrganization implements AwsManagementApi {
   readonly runnerRoles = new Map<string, string>();
   /** Per member account: the error assuming its runner role throws. */
   readonly runnerAssumeFailures = new Map<string, Error>();
+  /** Organizational units under the root, by name to id (MOTIR-9940). */
+  readonly organizationalUnits = new Map<string, string>();
+  /** Each account's parent (the root unless moved), by account id. */
+  readonly accountParents = new Map<string, string>();
+  /** Per step: an error thrown ONCE after the step's effect lands, as a pass cut
+   *  off after AWS answered would see it (MOTIR-9940). */
+  readonly failAfter = new Map<FakeOrganizationStep, Error>();
+  /** Per member account: the tenant deploy role's policy, null before it is put
+   *  (MOTIR-9941). */
+  readonly tenantRoles = new Map<string, string | null>();
+  /** Per account: its Organizations tags. */
+  readonly accountTags = new Map<string, Map<string, string>>();
+  /** Per `<account>:<quotaCode>`: the applied value (0 when unset). */
+  readonly appliedQuotas = new Map<string, number>();
+  /** Per `<account>:<quotaCode>`: the open raise's desired value. */
+  readonly openQuotaRaises = new Map<string, number>();
   private seq = 0;
   private requestSeq = 0;
+  private ouSeq = 0;
   /** Which member account each answered session is for. */
   private readonly sessionAccount = new WeakMap<AwsSessionCredentials, string>();
 
@@ -153,6 +181,7 @@ export class FakeOrganization implements AwsManagementApi {
     this.usedEmails.add(input.email);
     const account = { accountId: this.nextAccountId(), name: input.name, status: 'ACTIVE' };
     this.accounts.set(input.name, account);
+    this.failOnceAfter('createOrganizationAccount');
     return account;
   }
 
@@ -262,5 +291,75 @@ export class FakeOrganization implements AwsManagementApi {
     if (this.iamUsers.has(JSON.stringify(policy))) return { created: [] };
     this.iamUsers.add(JSON.stringify(policy));
     return { created: ['iam-user:motir-fleet-runner', 'iam-policy:motir-fleet-runner-ec2'] };
+  }
+
+  private failOnceAfter(step: FakeOrganizationStep) {
+    const failure = this.failAfter.get(step);
+    if (!failure) return;
+    this.failAfter.delete(step);
+    throw failure;
+  }
+
+  async ensureOrganizationalUnit(name: string) {
+    this.calls.push(`ensureOrganizationalUnit:${name}`);
+    const existing = this.organizationalUnits.get(name);
+    if (existing) return { ouId: existing, created: false };
+    this.ouSeq += 1;
+    const ouId = `ou-fake-${this.ouSeq}`;
+    this.organizationalUnits.set(name, ouId);
+    this.failOnceAfter('ensureOrganizationalUnit');
+    return { ouId, created: true };
+  }
+
+  async moveAccountToOu(accountId: string, ouId: string) {
+    this.calls.push(`moveAccountToOu:${accountId}`);
+    if ((this.accountParents.get(accountId) ?? 'r-root') === ouId) return { moved: false };
+    this.accountParents.set(accountId, ouId);
+    this.failOnceAfter('moveAccountToOu');
+    return { moved: true };
+  }
+
+  async ensureTenantDeployRole(credentials: AwsSessionCredentials, policy: AwsPolicyDocument) {
+    const accountId = this.sessionAccount.get(credentials) ?? 'unknown';
+    this.calls.push(`ensureTenantDeployRole:${accountId}`);
+    let created = false;
+    if (!this.tenantRoles.has(accountId)) {
+      this.tenantRoles.set(accountId, null);
+      created = true;
+      this.failOnceAfter('tenantRoleCreated');
+    }
+    const wanted = JSON.stringify(policy);
+    if (this.tenantRoles.get(accountId) !== wanted) {
+      this.tenantRoles.set(accountId, wanted);
+      this.failOnceAfter('tenantRolePolicyPut');
+    }
+    return { created };
+  }
+
+  async ensureAccountTag(accountId: string, key: string, value: string) {
+    this.calls.push(`ensureAccountTag:${accountId}:${key}`);
+    const tags = this.accountTags.get(accountId) ?? new Map<string, string>();
+    this.accountTags.set(accountId, tags);
+    if (tags.get(key) === value) return { tagged: false };
+    tags.set(key, value);
+    this.failOnceAfter('accountTagged');
+    return { tagged: true };
+  }
+
+  async ensureQuotaRaise(
+    credentials: AwsSessionCredentials,
+    _regionId: string,
+    target: AwsQuotaTarget,
+  ) {
+    const accountId = this.sessionAccount.get(credentials) ?? 'unknown';
+    this.calls.push(`ensureQuotaRaise:${accountId}:${target.quotaCode}`);
+    const key = `${accountId}:${target.quotaCode}`;
+    if ((this.appliedQuotas.get(key) ?? 0) >= target.desiredValue) {
+      return { filed: false, pending: false };
+    }
+    if (this.openQuotaRaises.has(key)) return { filed: false, pending: true };
+    this.openQuotaRaises.set(key, target.desiredValue);
+    this.failOnceAfter('quotaRaiseFiled');
+    return { filed: true, pending: true };
   }
 }

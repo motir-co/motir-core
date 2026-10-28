@@ -7,6 +7,7 @@ import type {
   QuotaRequestSlowError,
   ShardHeadroomExceededError,
   SustainedDeferralError,
+  TenantAccountRefusedError,
 } from '@/lib/ciFleet/headroomErrors';
 
 export type FleetHeadroomAlert =
@@ -19,7 +20,9 @@ export type FleetHeadroomAlert =
   | QuotaRequestSlowError
   | QuotaRequestDeniedError
   // The Host account reconcile's (MOTIR-9582): one issue per (organisation, slot).
-  | HostAccountRefusedError;
+  | HostAccountRefusedError
+  // The tenant account reconcile's (MOTIR-9942): one issue per organisation.
+  | TenantAccountRefusedError;
 
 /**
  * Tell the platform admin a fleet account, GitHub org or fleet kind is near its
@@ -44,7 +47,13 @@ export function alertFleetShardHeadroom(error: FleetHeadroomAlert): void {
 }
 
 function describe(error: FleetHeadroomAlert): {
-  subjectTag: 'fleet_shard' | 'github_org' | 'fleet_kind' | 'fleet_quota_request' | 'host_account';
+  subjectTag:
+    | 'fleet_shard'
+    | 'github_org'
+    | 'fleet_kind'
+    | 'fleet_quota_request'
+    | 'host_account'
+    | 'tenant_account';
   subject: string;
   limit: string;
 } {
@@ -79,6 +88,14 @@ function describe(error: FleetHeadroomAlert): {
         subjectTag: 'host_account',
         subject: `${e.organizationId}:${e.slot}`,
         limit: 'host_account_refused',
+      };
+    }
+    case 'TenantAccountRefusedError': {
+      const e = error as TenantAccountRefusedError;
+      return {
+        subjectTag: 'tenant_account',
+        subject: e.organizationId,
+        limit: 'tenant_account_refused',
       };
     }
     default: {

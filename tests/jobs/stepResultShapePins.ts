@@ -472,6 +472,12 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ failures: number; organizations: Array<{ host: boolean; organizationId: string; slots: { agent_runner?: "already" | "backing_off" | "created" | "failed" | "no_primary" | "raise_failed" | "refused" | undefined; ci_runner?: "already" | "backing_off" | "created" | "failed" | "no_primary" | "raise_failed" | "refused" | undefined; merged?: "already" | "backing_off" | "created" | "failed" | "no_primary" | "raise_failed" | "refused" | undefined } }>; ran: boolean }',
   },
+  // Story MOTIR-9792 · MOTIR-9942 — the tenant account reconcile.
+  'hosting-tenant-account-reconcile': {
+    file: 'lib/jobs/definitions/hostingTenantAccountReconcile.ts',
+    shape:
+      '{ failures: number; organizations: Array<{ organizationId: string; outcome: "already_ready" | "backing_off" | "failed" | "not_requested" | "ready" | "refused" }>; ran: boolean }',
+  },
   // Story MOTIR-9365 · MOTIR-9585 — the Host account state pass.
   'host-account-state': {
     file: 'lib/jobs/definitions/hostAccountState.ts',

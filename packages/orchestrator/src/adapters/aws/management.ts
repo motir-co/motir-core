@@ -11,12 +11,23 @@ import {
 } from '@aws-sdk/client-iam';
 import {
   CreateAccountCommand,
+  CreateOrganizationalUnitCommand,
   DescribeCreateAccountStatusCommand,
   ListAccountsCommand,
   ListCreateAccountStatusCommand,
+  ListOrganizationalUnitsForParentCommand,
+  ListParentsCommand,
+  ListRootsCommand,
+  ListTagsForResourceCommand,
+  MoveAccountCommand,
   OrganizationsClient,
+  TagResourceCommand,
   type Account,
   type CreateAccountStatus,
+  type OrganizationalUnit,
+  type Parent,
+  type Root,
+  type Tag,
 } from '@aws-sdk/client-organizations';
 import {
   GetAWSDefaultServiceQuotaCommand,
@@ -74,6 +85,10 @@ export const AWS_RUNNER_IAM_USER = 'motir-fleet-runner';
 export const AWS_RUNNER_IAM_ROLE = 'motir-fleet-runner';
 export const AWS_RUNNER_IAM_POLICY = 'motir-fleet-runner-ec2';
 
+/** The role an enterprise tenant's deploys run as, in its own account, trusted
+ *  only by the management role (MOTIR-9941); its inline policy shares the name. */
+export const AWS_TENANT_DEPLOY_ROLE = 'motir-tenant-deploy';
+
 /** Organizations, STS and IAM are global; their endpoints answer in us-east-1. */
 const GLOBAL_REGION = 'us-east-1';
 /** How long an assumed session lasts. 15 minutes is STS's minimum, and a run of
@@ -84,6 +99,8 @@ const SESSION_NAME = 'motir-add-shard';
  *  through the credential provider before it lapses. */
 const RUNNER_SESSION_SECONDS = 3600;
 const RUNNER_SESSION_NAME = 'motir-fleet-runner';
+/** A deploy session in a tenant account: an hour, long enough for one deploy. */
+const TENANT_DEPLOY_SESSION_SECONDS = 3600;
 /** CreateAccount is asynchronous; AWS documents it as taking minutes. */
 export const AWS_CREATE_ACCOUNT_TIMEOUT_MS = 10 * 60_000;
 const CREATE_ACCOUNT_POLL_MS = 5_000;
@@ -230,6 +247,39 @@ export interface AwsManagementApi {
     credentials: AwsSessionCredentials,
     policyDocument: AwsPolicyDocument,
   ): Promise<{ created: string[] }>;
+  /** The organizational unit `name` directly under the Organization root,
+   *  created only when absent (MOTIR-9940). */
+  ensureOrganizationalUnit(name: string): Promise<AwsOrganizationalUnitResult>;
+  /** Move `accountId` under `ouId` unless it already sits there. */
+  moveAccountToOu(accountId: string, ouId: string): Promise<{ moved: boolean }>;
+  /** The tenant deploy role and its inline policy, trusting only the management
+   *  role (MOTIR-9941); `created` when the role was made by this call. */
+  ensureTenantDeployRole(
+    credentials: AwsSessionCredentials,
+    policyDocument: AwsPolicyDocument,
+  ): Promise<{ created: boolean }>;
+  /** `key=value` on the account in Organizations, written only when it differs. */
+  ensureAccountTag(accountId: string, key: string, value: string): Promise<{ tagged: boolean }>;
+  /** A quota at `target.desiredValue` or above: nothing filed when it already is,
+   *  or when a raise of it is open (`pending`); else a raise is filed. */
+  ensureQuotaRaise(
+    credentials: AwsSessionCredentials,
+    regionId: string,
+    target: AwsQuotaTarget,
+  ): Promise<{ filed: boolean; pending: boolean }>;
+}
+
+/** One Service Quotas quota and the value wanted for it. */
+export interface AwsQuotaTarget {
+  serviceCode: string;
+  quotaCode: string;
+  desiredValue: number;
+}
+
+/** What `ensureOrganizationalUnit` found or made. */
+export interface AwsOrganizationalUnitResult {
+  ouId: string;
+  created: boolean;
 }
 
 interface SdkErrorShape {
@@ -413,6 +463,153 @@ export function createAwsManagementApi(
     }
   }
 
+  async function organizationRootId(orgs: AwsSdkClient): Promise<string> {
+    const { Roots: roots } = await call<{ Roots?: Root[] }>(
+      'organizations',
+      orgs,
+      new ListRootsCommand({}),
+    );
+    return required(roots?.[0]?.Id, 'Roots[0].Id');
+  }
+
+  async function findOrganizationalUnit(
+    orgs: AwsSdkClient,
+    parentId: string,
+    name: string,
+  ): Promise<string | null> {
+    let nextToken: string | undefined;
+    do {
+      const page = await call<{ OrganizationalUnits?: OrganizationalUnit[]; NextToken?: string }>(
+        'organizations',
+        orgs,
+        new ListOrganizationalUnitsForParentCommand({
+          ParentId: parentId,
+          ...(nextToken ? { NextToken: nextToken } : {}),
+        }),
+      );
+      const match = (page.OrganizationalUnits ?? []).find((ou) => ou.Name === name);
+      if (match) return required(match.Id, 'OrganizationalUnit.Id');
+      nextToken = page.NextToken ?? undefined;
+    } while (nextToken);
+    return null;
+  }
+
+  /** An IAM role trusting the management role, with one inline policy that
+   *  converges on `policyDocument`. Each half reads before it writes. */
+  async function ensureRoleWithPolicy(
+    credentials: AwsSessionCredentials,
+    role: {
+      roleName: string;
+      policyName: string;
+      policyDocument: AwsPolicyDocument;
+      maxSessionSeconds: number;
+      tag: string;
+    },
+  ): Promise<{ roleCreated: boolean; policyPut: boolean }> {
+    const iam = client('iam', credentials);
+    let roleCreated = false;
+    try {
+      await call('iam', iam, new GetRoleCommand({ RoleName: role.roleName }));
+    } catch (err) {
+      if (!iamAbsent(err)) throw err;
+      try {
+        await call(
+          'iam',
+          iam,
+          new CreateRoleCommand({
+            RoleName: role.roleName,
+            AssumeRolePolicyDocument: JSON.stringify(awsRunnerTrustPolicy(management.roleArn)),
+            MaxSessionDuration: role.maxSessionSeconds,
+            Tags: [{ Key: 'motir-role', Value: role.tag }],
+          }),
+        );
+        roleCreated = true;
+      } catch (createErr) {
+        // A concurrent pass made it between the read and the create.
+        if (
+          !(createErr instanceof AwsManagementApiError) ||
+          createErr.awsCode !== 'EntityAlreadyExists'
+        ) {
+          throw createErr;
+        }
+      }
+    }
+    const wanted = JSON.stringify(role.policyDocument);
+    let current: string | null = null;
+    try {
+      const answer = await call<{ PolicyDocument?: string }>(
+        'iam',
+        iam,
+        new GetRolePolicyCommand({ RoleName: role.roleName, PolicyName: role.policyName }),
+      );
+      current = answer.PolicyDocument ? decodeURIComponent(answer.PolicyDocument) : null;
+    } catch (err) {
+      if (!iamAbsent(err)) throw err;
+    }
+    if (current !== null && samePolicy(current, wanted)) return { roleCreated, policyPut: false };
+    await call(
+      'iam',
+      iam,
+      new PutRolePolicyCommand({
+        RoleName: role.roleName,
+        PolicyName: role.policyName,
+        PolicyDocument: wanted,
+      }),
+    );
+    return { roleCreated, policyPut: true };
+  }
+
+  /** A quota's applied value; an account whose quota was never changed may have
+   *  no applied value yet, and the default is then what applies. */
+  async function appliedQuota(
+    quotas: AwsSdkClient,
+    serviceCode: string,
+    quotaCode: string,
+  ): Promise<number> {
+    const input = { ServiceCode: serviceCode, QuotaCode: quotaCode };
+    let value: number | undefined;
+    try {
+      const answer = await call<{ Quota?: { Value?: number } }>(
+        'service-quotas',
+        quotas,
+        new GetServiceQuotaCommand(input),
+      );
+      value = answer.Quota?.Value;
+    } catch (err) {
+      if (!(err instanceof AwsManagementApiError) || err.awsCode !== 'NoSuchResourceException') {
+        throw err;
+      }
+      const answer = await call<{ Quota?: { Value?: number } }>(
+        'service-quotas',
+        quotas,
+        new GetAWSDefaultServiceQuotaCommand(input),
+      );
+      value = answer.Quota?.Value;
+    }
+    return Math.floor(required(value, 'Quota.Value'));
+  }
+
+  async function openQuotaRequest(
+    quotas: AwsSdkClient,
+    serviceCode: string,
+    quotaCode: string,
+  ): Promise<AwsQuotaIncreaseRequest | null> {
+    for (const status of OPEN_QUOTA_REQUEST_STATUSES) {
+      const answer = await call<{ RequestedQuotas?: RequestedQuotaShape[] }>(
+        'service-quotas',
+        quotas,
+        new ListRequestedServiceQuotaChangeHistoryByQuotaCommand({
+          ServiceCode: serviceCode,
+          QuotaCode: quotaCode,
+          Status: status,
+        }),
+      );
+      const open = answer.RequestedQuotas?.[0];
+      if (open) return quotaRequestOf(open);
+    }
+    return null;
+  }
+
   return {
     async findOrganizationAccount(name) {
       const orgs = await organizations();
@@ -475,79 +672,27 @@ export function createAwsManagementApi(
     },
 
     async ensureRunnerRole(credentials, policyDocument) {
-      const iam = client('iam', credentials);
-      const created: string[] = [];
-      try {
-        await call('iam', iam, new GetRoleCommand({ RoleName: AWS_RUNNER_IAM_ROLE }));
-      } catch (err) {
-        if (!iamAbsent(err)) throw err;
-        await call(
-          'iam',
-          iam,
-          new CreateRoleCommand({
-            RoleName: AWS_RUNNER_IAM_ROLE,
-            AssumeRolePolicyDocument: JSON.stringify(awsRunnerTrustPolicy(management.roleArn)),
-            MaxSessionDuration: RUNNER_SESSION_SECONDS,
-            Tags: [{ Key: 'motir-role', Value: 'fleet-runner' }],
-          }),
-        );
-        created.push(`iam-role:${AWS_RUNNER_IAM_ROLE}`);
-      }
-      const wanted = JSON.stringify(policyDocument);
-      let current: string | null = null;
-      try {
-        const answer = await call<{ PolicyDocument?: string }>(
-          'iam',
-          iam,
-          new GetRolePolicyCommand({
-            RoleName: AWS_RUNNER_IAM_ROLE,
-            PolicyName: AWS_RUNNER_IAM_POLICY,
-          }),
-        );
-        current = answer.PolicyDocument ? decodeURIComponent(answer.PolicyDocument) : null;
-      } catch (err) {
-        if (!iamAbsent(err)) throw err;
-      }
-      if (current === null || !samePolicy(current, wanted)) {
-        await call(
-          'iam',
-          iam,
-          new PutRolePolicyCommand({
-            RoleName: AWS_RUNNER_IAM_ROLE,
-            PolicyName: AWS_RUNNER_IAM_POLICY,
-            PolicyDocument: wanted,
-          }),
-        );
-        created.push(`iam-role-policy:${AWS_RUNNER_IAM_POLICY}`);
-      }
-      return { created };
+      const { roleCreated, policyPut } = await ensureRoleWithPolicy(credentials, {
+        roleName: AWS_RUNNER_IAM_ROLE,
+        policyName: AWS_RUNNER_IAM_POLICY,
+        policyDocument,
+        maxSessionSeconds: RUNNER_SESSION_SECONDS,
+        tag: 'fleet-runner',
+      });
+      return {
+        created: [
+          ...(roleCreated ? [`iam-role:${AWS_RUNNER_IAM_ROLE}`] : []),
+          ...(policyPut ? [`iam-role-policy:${AWS_RUNNER_IAM_POLICY}`] : []),
+        ],
+      };
     },
 
     async readVcpuQuota(credentials, regionId) {
-      const quotas = client('service-quotas', credentials, regionId);
-      const input = { ServiceCode: 'ec2', QuotaCode: AWS_EC2_VCPU_QUOTA_CODE };
-      let value: number | undefined;
-      try {
-        const answer = await call<{ Quota?: { Value?: number } }>(
-          'service-quotas',
-          quotas,
-          new GetServiceQuotaCommand(input),
-        );
-        value = answer.Quota?.Value;
-      } catch (err) {
-        // An account whose quota was never changed may have no applied value
-        // yet; the default is then what applies.
-        if (!(err instanceof AwsManagementApiError) || err.awsCode !== 'NoSuchResourceException') {
-          throw err;
-        }
-        const answer = await call<{ Quota?: { Value?: number } }>(
-          'service-quotas',
-          quotas,
-          new GetAWSDefaultServiceQuotaCommand(input),
-        );
-        value = answer.Quota?.Value;
-      }
-      return Math.floor(required(value, 'Quota.Value'));
+      return appliedQuota(
+        client('service-quotas', credentials, regionId),
+        'ec2',
+        AWS_EC2_VCPU_QUOTA_CODE,
+      );
     },
 
     async requestVcpuQuotaIncrease(credentials, regionId, desired, quotaCode) {
@@ -575,21 +720,127 @@ export function createAwsManagementApi(
     },
 
     async findOpenQuotaRequest(credentials, regionId, quotaCode) {
-      const quotas = client('service-quotas', credentials, regionId);
-      for (const status of OPEN_QUOTA_REQUEST_STATUSES) {
-        const answer = await call<{ RequestedQuotas?: RequestedQuotaShape[] }>(
-          'service-quotas',
-          quotas,
-          new ListRequestedServiceQuotaChangeHistoryByQuotaCommand({
-            ServiceCode: 'ec2',
-            QuotaCode: quotaCode ?? AWS_EC2_VCPU_QUOTA_CODE,
-            Status: status,
+      return openQuotaRequest(
+        client('service-quotas', credentials, regionId),
+        'ec2',
+        quotaCode ?? AWS_EC2_VCPU_QUOTA_CODE,
+      );
+    },
+
+    async ensureOrganizationalUnit(name) {
+      const orgs = await organizations();
+      const rootId = await organizationRootId(orgs);
+      const found = await findOrganizationalUnit(orgs, rootId, name);
+      if (found) return { ouId: found, created: false };
+      try {
+        const { OrganizationalUnit: ou } = await call<{ OrganizationalUnit?: OrganizationalUnit }>(
+          'organizations',
+          orgs,
+          new CreateOrganizationalUnitCommand({ ParentId: rootId, Name: name }),
+        );
+        return { ouId: required(ou?.Id, 'OrganizationalUnit.Id'), created: true };
+      } catch (err) {
+        // A concurrent pass created it between the list and the create: answer
+        // that one, never a second OU.
+        if (
+          !(err instanceof AwsManagementApiError) ||
+          err.awsCode !== 'DuplicateOrganizationalUnitException'
+        ) {
+          throw err;
+        }
+        const raced = await findOrganizationalUnit(orgs, rootId, name);
+        if (!raced) throw err;
+        return { ouId: raced, created: false };
+      }
+    },
+
+    async moveAccountToOu(accountId, ouId) {
+      const orgs = await organizations();
+      const { Parents: parents } = await call<{ Parents?: Parent[] }>(
+        'organizations',
+        orgs,
+        new ListParentsCommand({ ChildId: accountId }),
+      );
+      const parentId = required(parents?.[0]?.Id, 'Parents[0].Id');
+      if (parentId === ouId) return { moved: false };
+      await call(
+        'organizations',
+        orgs,
+        new MoveAccountCommand({
+          AccountId: accountId,
+          SourceParentId: parentId,
+          DestinationParentId: ouId,
+        }),
+      );
+      return { moved: true };
+    },
+
+    async ensureTenantDeployRole(credentials, policyDocument) {
+      const { roleCreated } = await ensureRoleWithPolicy(credentials, {
+        roleName: AWS_TENANT_DEPLOY_ROLE,
+        policyName: AWS_TENANT_DEPLOY_ROLE,
+        policyDocument,
+        maxSessionSeconds: TENANT_DEPLOY_SESSION_SECONDS,
+        tag: 'tenant-deploy',
+      });
+      return { created: roleCreated };
+    },
+
+    async ensureAccountTag(accountId, key, value) {
+      const orgs = await organizations();
+      let nextToken: string | undefined;
+      do {
+        const page = await call<{ Tags?: Tag[]; NextToken?: string }>(
+          'organizations',
+          orgs,
+          new ListTagsForResourceCommand({
+            ResourceId: accountId,
+            ...(nextToken ? { NextToken: nextToken } : {}),
           }),
         );
-        const open = answer.RequestedQuotas?.[0];
-        if (open) return quotaRequestOf(open);
+        if ((page.Tags ?? []).some((t) => t.Key === key && t.Value === value)) {
+          return { tagged: false };
+        }
+        nextToken = page.NextToken ?? undefined;
+      } while (nextToken);
+      await call(
+        'organizations',
+        orgs,
+        new TagResourceCommand({ ResourceId: accountId, Tags: [{ Key: key, Value: value }] }),
+      );
+      return { tagged: true };
+    },
+
+    async ensureQuotaRaise(credentials, regionId, target) {
+      const quotas = client('service-quotas', credentials, regionId);
+      const { serviceCode, quotaCode, desiredValue } = target;
+      if ((await appliedQuota(quotas, serviceCode, quotaCode)) >= desiredValue) {
+        return { filed: false, pending: false };
       }
-      return null;
+      if (await openQuotaRequest(quotas, serviceCode, quotaCode)) {
+        return { filed: false, pending: true };
+      }
+      try {
+        await call(
+          'service-quotas',
+          quotas,
+          new RequestServiceQuotaIncreaseCommand({
+            ServiceCode: serviceCode,
+            QuotaCode: quotaCode,
+            DesiredValue: desiredValue,
+          }),
+        );
+      } catch (err) {
+        // A raise filed between the read and the request: it is the open one.
+        if (
+          !(err instanceof AwsManagementApiError) ||
+          err.awsCode !== 'ResourceAlreadyExistsException'
+        ) {
+          throw err;
+        }
+        return { filed: false, pending: true };
+      }
+      return { filed: true, pending: true };
     },
 
     async ensureRunnerIamUser(credentials, policyDocument) {

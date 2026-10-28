@@ -1561,6 +1561,8 @@ model Organization {
   /// three (MOTIR-9581). Restrict on the account's side.
   ownedFleetShards            FleetShard[]                 @relation("FleetShardOwner")
   hostAccountAttempts         HostAccountAttempt[]
+  /// Its one AWS hosting account, when a project of it targets AWS (MOTIR-9939).
+  hostingTenantAccount        HostingTenantAccount?
   /// Its asks for more capacity on its own accounts (MOTIR-9583).
   fleetCapacityRequests       FleetCapacityRequest[]
 
@@ -11903,6 +11905,34 @@ model HostAccountAttempt {
 
   @@unique([organizationId, slot])
   @@map("host_account_attempt")
+}
+
+/// An organisation's ONE AWS hosting account — the enterprise tenant's account in
+/// Motir's AWS Organization, under the `Tenants` OU (Story MOTIR-9792 · MOTIR-9939).
+/// Never a `fleet_shard` row and no relation to one, so admission, headroom, pool
+/// growth and plan caps cannot see it. Counts, times, ids and a state only: no
+/// column holds a credential or the member email (`hostingTenantAccountPlan`
+/// derives the email on demand). Platform-only, as `fleet_shard`.
+model HostingTenantAccount {
+  id             String       @id @default(cuid())
+  organizationId String       @unique @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  /// Null until the create-or-find step finds or creates the account.
+  awsAccountId   String?      @map("aws_account_id")
+  /// `requested` | `creating` | `bootstrapping` | `ready` | `refused`
+  /// (`HostingTenantAccountState`, `lib/ciFleet/hostingTenantAccounts.ts`).
+  state          String       @default("requested")
+  /// Consecutive `CreateAccount` refusals — the reconcile's backoff reads it, so
+  /// a restart never resets the wait.
+  refusedCount   Int          @default(0) @map("refused_count")
+  lastRefusedAt  DateTime?    @map("last_refused_at")
+  /// The `Tenants` organisational unit the account sits under, once known.
+  ouId           String?      @map("ou_id")
+  region         String
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  @@map("hosting_tenant_account")
 }
 
 /// Where a Host organisation's ask for more capacity stands (MOTIR-9583). Whether
