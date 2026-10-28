@@ -7,6 +7,13 @@ Description: >-
   replaced versions RETAINED so a rollback can point `live` back at one; a
   function URL on `live` that only the forwarder's principal may invoke (IAM,
   SigV4); provisioned concurrency 1 on `live` when the idle policy is always_on.
+  The release's plain variables are in the function's environment (the caller
+  writes them into this template's Variables at the marker); its secret ones,
+  and any over Lambda's 4 KB, live in ONE environment secret, this stack's own,
+  whose value the caller writes as the secret version ConfigHash names. A first
+  apply with an empty ConfigHash creates the function unpublished, so the caller
+  can write that value before any version (and its provisioned concurrency)
+  starts.
 
 Parameters:
   OrganizationId:
@@ -45,9 +52,6 @@ Parameters:
   AppSecurityGroupId:
     Type: String
     Description: The network stack's AppSecurityGroupId output.
-  EnvironmentSecretArn:
-    Type: String
-    Description: The release's environment secret (its variables as one JSON object).
   DatabaseSecretArn:
     Type: String
     Default: ''
@@ -55,16 +59,34 @@ Parameters:
   ConfigHash:
     Type: String
     Default: ''
-    Description: A hash of the environment secret's values; a change publishes a new version.
+    Description: >-
+      A hash of the release's variables, and the id of the environment secret's
+      version holding them; a change publishes a new version, which reads that
+      secret version. Empty: the function is not published yet (no version,
+      alias or URL).
   InvokePrincipalArn:
     Type: String
     Description: The forwarder's IAM principal, the only one allowed to invoke the URL.
 
 Conditions:
   AlwaysOn: !Equals [!Ref IdlePolicy, always_on]
+  Published: !Not [!Equals [!Ref ConfigHash, '']]
   HasDatabase: !Not [!Equals [!Ref DatabaseSecretArn, '']]
 
 Resources:
+  # The release's variables as one JSON object; the caller writes the value.
+  EnvironmentSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub
+        - motir/${AppRef}/environment-${Suffix}
+        - Suffix: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]
+      Description: The release's environment variables.
+      SecretString: '{}'
+      Tags:
+        - { Key: 'motir:organization', Value: !Ref OrganizationId }
+        - { Key: 'motir:repository', Value: !Ref RepositoryId }
+
   LogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -97,8 +119,8 @@ Resources:
                 Action: secretsmanager:GetSecretValue
                 Resource: !If
                   - HasDatabase
-                  - [!Ref EnvironmentSecretArn, !Ref DatabaseSecretArn]
-                  - [!Ref EnvironmentSecretArn]
+                  - [!Ref EnvironmentSecret, !Ref DatabaseSecretArn]
+                  - [!Ref EnvironmentSecret]
               # The function's network interfaces in the private subnets.
               - Effect: Allow
                 Action:
@@ -134,9 +156,10 @@ Resources:
           AWS_LWA_PORT: !Ref Port
           AWS_LWA_READINESS_CHECK_PATH: !Ref HealthCheckPath
           MOTIR_ENVIRONMENT: !Ref Environment
-          MOTIR_ENVIRONMENT_SECRET_ARN: !Ref EnvironmentSecretArn
+          MOTIR_ENVIRONMENT_SECRET_ARN: !Ref EnvironmentSecret
           MOTIR_DATABASE_SECRET_ARN: !Ref DatabaseSecretArn
-          MOTIR_CONFIG_HASH: !Ref ConfigHash
+          MOTIR_ENVIRONMENT_SECRET_VERSION: !Ref ConfigHash
+          # <release variables>
       Tags:
         - { Key: 'motir:organization', Value: !Ref OrganizationId }
         - { Key: 'motir:repository', Value: !Ref RepositoryId }
@@ -146,6 +169,7 @@ Resources:
   # is RETAINED, the rollback target.
   Version:
     Type: AWS::Lambda::Version
+    Condition: Published
     UpdateReplacePolicy: Retain
     DeletionPolicy: Retain
     Properties:
@@ -154,6 +178,7 @@ Resources:
 
   LiveAlias:
     Type: AWS::Lambda::Alias
+    Condition: Published
     Properties:
       FunctionName: !Ref Function
       Name: live
@@ -165,6 +190,7 @@ Resources:
 
   FunctionUrl:
     Type: AWS::Lambda::Url
+    Condition: Published
     DependsOn: LiveAlias
     Properties:
       TargetFunctionArn: !Ref Function
@@ -173,6 +199,7 @@ Resources:
 
   ForwarderInvoke:
     Type: AWS::Lambda::Permission
+    Condition: Published
     Properties:
       Action: lambda:InvokeFunctionUrl
       FunctionName: !Ref LiveAlias
@@ -184,7 +211,11 @@ Outputs:
     Value: !Ref Function
   FunctionArn:
     Value: !GetAtt Function.Arn
+  EnvironmentSecretArn:
+    Value: !Ref EnvironmentSecret
   FunctionUrl:
+    Condition: Published
     Value: !GetAtt FunctionUrl.FunctionUrl
   LiveVersion:
+    Condition: Published
     Value: !GetAtt Version.Version

@@ -145,10 +145,6 @@
           "required": true
         },
         {
-          "name": "EnvironmentSecretArn",
-          "required": true
-        },
-        {
           "name": "DatabaseSecretArn",
           "required": false
         },
@@ -161,7 +157,13 @@
           "required": true
         }
       ],
-      "outputs": ["FunctionName", "FunctionArn", "FunctionUrl", "LiveVersion"]
+      "outputs": [
+        "FunctionName",
+        "FunctionArn",
+        "EnvironmentSecretArn",
+        "FunctionUrl",
+        "LiveVersion"
+      ]
     },
     "container-release.yaml": {
       "stackName": "motir-release-<appRef>",

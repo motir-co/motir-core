@@ -477,6 +477,7 @@ describe('the stack runner', () => {
     expect(await runner.describeStack(INPUT.stackName)).toEqual({
       status: 'CREATE_COMPLETE',
       outputs: { StackName: INPUT.stackName, RepositoryId: 'cmrepo1' },
+      createdAt: expect.any(Date),
     });
     await runner.deleteStack(INPUT.stackName);
     expect(cfn.stacks.has(INPUT.stackName)).toBe(false);

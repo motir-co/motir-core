@@ -10,6 +10,12 @@ import type {
   TenantStatement,
 } from './clients';
 import { AwsTenantApiError } from './errors';
+import type {
+  TenantCloudWatch,
+  TenantFunctionState,
+  TenantLambda,
+  TenantMetricSum,
+} from './function/lambdaClient';
 
 // The FAULT-INJECTING FAKE of a tenant account (MOTIR-10004): CloudFormation held
 // in memory by stack name, with the state machine's in-progress states, and a
@@ -31,6 +37,7 @@ export interface FakeStackRecord {
   settlesTo: string;
   /** What the stack becomes when it settles. */
   next: TenantStackWrite | null;
+  createdAt: Date;
 }
 
 export interface FakeTenantCloudFormation extends TenantCloudFormation {
@@ -56,12 +63,17 @@ export interface FakeTenantCloudFormationOptions {
     parameters: Readonly<Record<string, string>>,
     generation: number,
   ) => Record<string, string>;
+  /** Told when a stack's delete completes. */
+  readonly onDeleted?: (name: string) => void;
+  /** The clock a create is stamped with. */
+  readonly now?: () => Date;
 }
 
 export function createFakeTenantCloudFormation(
   options: FakeTenantCloudFormationOptions = {},
 ): FakeTenantCloudFormation {
   const outputsOf = options.outputs ?? ((name, parameters) => ({ StackName: name, ...parameters }));
+  const now = options.now ?? (() => new Date());
   const stacks = new Map<string, FakeStackRecord>();
   const calls: string[] = [];
   const faults: Array<{ operation: string; at: number; when: 'before' | 'after' }> = [];
@@ -96,6 +108,7 @@ export function createFakeTenantCloudFormation(
       parameters: { ...record.parameters },
       tags: { ...record.tags },
       outputs: { ...record.outputs },
+      createdAt: record.createdAt,
     };
   }
 
@@ -103,6 +116,7 @@ export function createFakeTenantCloudFormation(
     record.status = record.settlesTo;
     if (record.status === 'DELETE_COMPLETE') {
       stacks.delete(name);
+      options.onDeleted?.(name);
       return;
     }
     const next = record.next;
@@ -171,6 +185,7 @@ export function createFakeTenantCloudFormation(
         pendingPolls: fake.pollsToSettle,
         settlesTo: fails ? 'ROLLBACK_COMPLETE' : 'CREATE_COMPLETE',
         next: fails ? null : input,
+        createdAt: now(),
       });
       if (lost) throw injected();
     },
@@ -343,6 +358,8 @@ export interface FakeTenantSecretsManager extends TenantSecretsManager {
   /** Secret values by ARN. A secret a stack generated reads as
    *  `{"password":…}` the first time it is asked for. */
   readonly values: Map<string, string>;
+  /** Values put under a version id, by `<arn>@<versionId>`. */
+  readonly versions: Map<string, string>;
   readonly calls: string[];
   failAt(
     operation: 'getSecretValue' | 'putSecretValue',
@@ -358,10 +375,12 @@ export function fakeGeneratedPassword(secretArn: string): string {
 
 export function createFakeTenantSecretsManager(): FakeTenantSecretsManager {
   const values = new Map<string, string>();
+  const versions = new Map<string, string>();
   const calls: string[] = [];
   const counter = faultCounter('secretsmanager');
   return {
     values,
+    versions,
     calls,
     failAt: (operation, n, when) => counter.failAt(operation, n, when),
     async getSecretValue(secretId) {
@@ -376,9 +395,18 @@ export function createFakeTenantSecretsManager(): FakeTenantSecretsManager {
       if (lost) throw counter.injected();
       return values.get(secretId)!;
     },
-    async putSecretValue(secretId, value) {
+    async putSecretValue(secretId, value, versionId) {
       calls.push(`putSecretValue:${secretId}`);
       const lost = counter.enter('putSecretValue');
+      if (versionId) {
+        const key = `${secretId}@${versionId}`;
+        const held = versions.get(key);
+        // AWS ignores the same value under the same id, and refuses another.
+        if (held !== undefined && held !== value) {
+          throw new AwsTenantApiError('secretsmanager', 'ResourceExistsException', 400);
+        }
+        versions.set(key, value);
+      }
       values.set(secretId, value);
       if (lost) throw counter.injected();
     },
@@ -428,23 +456,188 @@ export function fakeTenantStackOutputs(
   };
 }
 
-/** A tenant account's clients, all fakes. */
+// ── Lambda and CloudWatch (MOTIR-10008) ─────────────────────────────────────
+
+/** One function, as the release stack made it. */
+export interface FakeFunction {
+  /** Published versions and the description each was published with. */
+  readonly versions: Map<string, string>;
+  /** The version the stack's own Version resource holds. */
+  stackVersion: string | null;
+  stackDescription: string | null;
+  /** Where `live` points, which a rollback moves outside the stack. */
+  alias: string | null;
+  readonly url: string;
+  readonly arn: string;
+}
+
+export type FakeLambdaOperation = keyof TenantLambda;
+
+export interface FakeTenantLambda extends TenantLambda {
+  readonly functions: Map<string, FakeFunction>;
+  /** Every call made, in order: `operation:functionName`. */
+  readonly calls: string[];
+  /** A version's state; every version is `active` unless set. */
+  setState(functionName: string, version: string, state: TenantFunctionState): void;
+  failAt(operation: FakeLambdaOperation, n: number, when?: 'before' | 'after'): void;
+  /** What the release stack does to the function when it settles: create it,
+   *  publish a version when the image or config hash changed, point `live` at
+   *  the stack's version. Answers the stack's outputs. */
+  applyReleaseStack(
+    parameters: Readonly<Record<string, string>>,
+    generation: number,
+  ): Record<string, string>;
+  /** The release stack's delete removes the function and every version. */
+  removeFunction(functionName: string): void;
+}
+
+export function createFakeTenantLambda(accountId: string, region: string): FakeTenantLambda {
+  const functions = new Map<string, FakeFunction>();
+  const states = new Map<string, TenantFunctionState>();
+  const calls: string[] = [];
+  const counter = faultCounter('lambda');
+  const missing = () => new AwsTenantApiError('lambda', 'ResourceNotFoundException', 404);
+
+  async function call<T>(operation: FakeLambdaOperation, name: string, act: () => T): Promise<T> {
+    calls.push(`${operation}:${name}`);
+    const lost = counter.enter(operation);
+    const answer = act();
+    if (lost) throw counter.injected();
+    return answer;
+  }
+
+  return {
+    functions,
+    calls,
+    setState(functionName, version, state) {
+      states.set(`${functionName}:${version}`, state);
+    },
+    failAt: (operation, n, when) => counter.failAt(operation, n, when),
+
+    applyReleaseStack(parameters, generation) {
+      const name = parameters['AppRef']!;
+      let fn = functions.get(name);
+      if (!fn) {
+        const id = createHash('sha256').update(`${name}:${generation}`).digest('hex').slice(0, 32);
+        fn = {
+          versions: new Map(),
+          stackVersion: null,
+          stackDescription: null,
+          alias: null,
+          url: `https://${id}.lambda-url.${region}.on.aws/`,
+          arn: `arn:aws:lambda:${region}:${accountId}:function:${name}`,
+        };
+        functions.set(name, fn);
+      }
+      const outputs: Record<string, string> = {
+        FunctionName: name,
+        FunctionArn: fn.arn,
+        EnvironmentSecretArn: `arn:aws:secretsmanager:${region}:${accountId}:secret:motir/${name}/environment-g${generation}`,
+      };
+      const hash = parameters['ConfigHash'] ?? '';
+      if (!hash) return outputs;
+      const description = `${parameters['ImageUri']} ${hash}`;
+      if (description !== fn.stackDescription) {
+        const version = String(fn.versions.size + 1);
+        fn.versions.set(version, description);
+        fn.stackVersion = version;
+        fn.stackDescription = description;
+      }
+      fn.alias = fn.stackVersion;
+      return { ...outputs, FunctionUrl: fn.url, LiveVersion: fn.stackVersion! };
+    },
+    removeFunction(functionName) {
+      functions.delete(functionName);
+    },
+
+    getAlias: (functionName) =>
+      call('getAlias', functionName, () => functions.get(functionName)?.alias ?? null),
+    updateAlias: (functionName, _alias, version) =>
+      call('updateAlias', functionName, () => {
+        const fn = functions.get(functionName);
+        if (!fn || !fn.versions.has(version)) throw missing();
+        fn.alias = version;
+      }),
+    listVersions: (functionName) =>
+      call('listVersions', functionName, () => {
+        const fn = functions.get(functionName);
+        if (!fn) throw missing();
+        return [...fn.versions.keys()];
+      }),
+    getFunctionState: (functionName, version) =>
+      call('getFunctionState', functionName, () => {
+        if (!functions.get(functionName)?.versions.has(version)) return null;
+        return states.get(`${functionName}:${version}`) ?? 'active';
+      }),
+  };
+}
+
+export interface FakeTenantCloudWatch extends TenantCloudWatch {
+  /** The `Duration` sum (ms) each function answers, whatever the window. */
+  readonly durationSums: Map<string, number>;
+  readonly queries: TenantMetricSum[];
+  failAt(operation: 'sumMetric', n: number, when?: 'before' | 'after'): void;
+}
+
+export function createFakeTenantCloudWatch(): FakeTenantCloudWatch {
+  const durationSums = new Map<string, number>();
+  const queries: TenantMetricSum[] = [];
+  const counter = faultCounter('cloudwatch');
+  return {
+    durationSums,
+    queries,
+    failAt: (operation, n, when) => counter.failAt(operation, n, when),
+    async sumMetric(query) {
+      const lost = counter.enter('sumMetric');
+      queries.push(query);
+      const sum =
+        query.metricName === 'Duration'
+          ? (durationSums.get(query.dimensions['FunctionName'] ?? '') ?? 0)
+          : 0;
+      if (lost) throw counter.injected();
+      return sum;
+    },
+  };
+}
+
+/** A function release stack: the release template's parameters. */
+const isFunctionRelease = (name: string, parameters: Readonly<Record<string, string>>) =>
+  name.startsWith('motir-release-') && 'InvokePrincipalArn' in parameters;
+
+/** A tenant account's clients, all fakes. A function release stack's outputs
+ *  come from the fake Lambda, which it creates, publishes and deletes. */
 export function createFakeTenantClients(
   options: FakeTenantCloudFormationOptions & { accountId?: string; region?: string } = {},
 ): TenantClients & {
   readonly cloudformation: FakeTenantCloudFormation;
   readonly rdsData: FakeTenantRdsData;
   readonly secretsManager: FakeTenantSecretsManager;
+  readonly lambda: FakeTenantLambda;
+  readonly cloudwatch: FakeTenantCloudWatch;
 } {
   const accountId = options.accountId ?? '210987654321';
   const region = options.region ?? 'us-east-1';
+  const lambda = createFakeTenantLambda(accountId, region);
+  const templates = fakeTenantStackOutputs(accountId, region);
   return {
     accountId,
     region,
     cloudformation: createFakeTenantCloudFormation({
-      outputs: options.outputs ?? fakeTenantStackOutputs(accountId, region),
+      outputs:
+        options.outputs ??
+        ((name, parameters, generation) =>
+          isFunctionRelease(name, parameters)
+            ? lambda.applyReleaseStack(parameters, generation)
+            : templates(name, parameters, generation)),
+      onDeleted: (name) => {
+        options.onDeleted?.(name);
+        if (name.startsWith('motir-release-')) lambda.removeFunction(name.slice(14));
+      },
+      ...(options.now ? { now: options.now } : {}),
     }),
     rdsData: createFakeTenantRdsData(),
     secretsManager: createFakeTenantSecretsManager(),
+    lambda,
+    cloudwatch: createFakeTenantCloudWatch(),
   };
 }

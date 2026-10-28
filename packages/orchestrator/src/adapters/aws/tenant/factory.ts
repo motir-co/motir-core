@@ -3,6 +3,8 @@ import type { TenantClients } from './clients';
 import {
   createTenantSdkClient,
   sdkTenantCloudFormation,
+  sdkTenantCloudWatch,
+  sdkTenantLambda,
   sdkTenantRdsData,
   sdkTenantSecretsManager,
   type TenantSdkClientFactory,
@@ -37,6 +39,8 @@ export function createTenantClients(options: TenantClientsOptions): TenantClient
     cloudformation: sdkTenantCloudFormation(factory('cloudformation', config)),
     rdsData: sdkTenantRdsData(factory('rds-data', config)),
     secretsManager: sdkTenantSecretsManager(factory('secretsmanager', config)),
+    lambda: sdkTenantLambda(factory('lambda', config)),
+    cloudwatch: sdkTenantCloudWatch(factory('cloudwatch', config)),
   };
 }
 

@@ -7,6 +7,19 @@ import {
   UpdateStackCommand,
   type Stack,
 } from '@aws-sdk/client-cloudformation';
+import {
+  CloudWatchClient,
+  GetMetricDataCommand,
+  type MetricDataResult,
+} from '@aws-sdk/client-cloudwatch';
+import {
+  GetAliasCommand,
+  GetFunctionConfigurationCommand,
+  LambdaClient,
+  ListVersionsByFunctionCommand,
+  UpdateAliasCommand,
+  type FunctionConfiguration,
+} from '@aws-sdk/client-lambda';
 import { ExecuteStatementCommand, RDSDataClient, type Field } from '@aws-sdk/client-rds-data';
 import {
   GetSecretValueCommand,
@@ -23,6 +36,7 @@ import type {
   TenantStackWrite,
 } from './clients';
 import { AwsTenantApiError, TenantRoleUnavailableError } from './errors';
+import type { TenantCloudWatch, TenantFunctionState, TenantLambda } from './function/lambdaClient';
 
 // The SDK-backed tenant clients (MOTIR-10004). The only file of the seam that
 // imports an AWS SDK package; what it exports speaks only `clients.ts`'s types.
@@ -33,9 +47,17 @@ import { AwsTenantApiError, TenantRoleUnavailableError } from './errors';
 //   https://docs.aws.amazon.com/rdsdataservice/latest/APIReference/API_ExecuteStatement.html
 //   https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_GetSecretValue.html,
 //   API_PutSecretValue.html
+//   https://docs.aws.amazon.com/lambda/latest/api/API_GetAlias.html, API_UpdateAlias.html,
+//   API_ListVersionsByFunction.html, API_GetFunctionConfiguration.html
+//   https://docs.aws.amazon.com/AmazonCloudWatch/latest/APIReference/API_GetMetricData.html
 
 /** The services a tenant client bundle builds. Later cards add theirs. */
-export type TenantSdkService = 'cloudformation' | 'rds-data' | 'secretsmanager';
+export type TenantSdkService =
+  | 'cloudformation'
+  | 'rds-data'
+  | 'secretsmanager'
+  | 'lambda'
+  | 'cloudwatch';
 
 /** Temporary credentials, as the SDK's credential provider answers them. */
 export interface TenantSdkCredentials {
@@ -61,6 +83,10 @@ export const createTenantSdkClient: TenantSdkClientFactory = (service, config) =
       return new RDSDataClient(config);
     case 'secretsmanager':
       return new SecretsManagerClient(config);
+    case 'lambda':
+      return new LambdaClient(config);
+    case 'cloudwatch':
+      return new CloudWatchClient(config);
   }
 };
 
@@ -116,6 +142,7 @@ function stackOf(name: string, stack: Stack): TenantStack {
     outputs: Object.fromEntries(
       (stack.Outputs ?? []).map((o) => [o.OutputKey ?? '', o.OutputValue ?? '']),
     ),
+    ...(stack.CreationTime ? { createdAt: stack.CreationTime } : {}),
   };
 }
 
@@ -233,12 +260,138 @@ export function sdkTenantSecretsManager(client: AwsSdkClient): TenantSecretsMana
         throw tenantApiError('secretsmanager', err);
       }
     },
-    async putSecretValue(secretId, value) {
+    async putSecretValue(secretId, value, versionId) {
       try {
-        await client.send(new PutSecretValueCommand({ SecretId: secretId, SecretString: value }));
+        await client.send(
+          new PutSecretValueCommand({
+            SecretId: secretId,
+            SecretString: value,
+            ...(versionId ? { ClientRequestToken: versionId } : {}),
+          }),
+        );
       } catch (err) {
         throw tenantApiError('secretsmanager', err);
       }
+    },
+  };
+}
+
+const notFound = (err: unknown) => shapeOf(err).name === 'ResourceNotFoundException';
+
+/** `TenantLambda` over an SDK client. */
+export function sdkTenantLambda(client: AwsSdkClient): TenantLambda {
+  async function send<T>(command: unknown): Promise<T> {
+    try {
+      return (await client.send(command)) as T;
+    } catch (err) {
+      throw tenantApiError('lambda', err);
+    }
+  }
+
+  return {
+    async getAlias(functionName, alias) {
+      try {
+        const { FunctionVersion } = (await client.send(
+          new GetAliasCommand({ FunctionName: functionName, Name: alias }),
+        )) as { FunctionVersion?: string };
+        return FunctionVersion ?? null;
+      } catch (err) {
+        if (notFound(err)) return null;
+        throw tenantApiError('lambda', err);
+      }
+    },
+
+    async updateAlias(functionName, alias, version) {
+      await send(
+        new UpdateAliasCommand({
+          FunctionName: functionName,
+          Name: alias,
+          FunctionVersion: version,
+        }),
+      );
+    },
+
+    async listVersions(functionName) {
+      const versions: string[] = [];
+      let marker: string | undefined;
+      do {
+        const page = await send<{ Versions?: FunctionConfiguration[]; NextMarker?: string }>(
+          new ListVersionsByFunctionCommand({
+            FunctionName: functionName,
+            ...(marker ? { Marker: marker } : {}),
+          }),
+        );
+        for (const v of page.Versions ?? []) {
+          if (v.Version && v.Version !== '$LATEST') versions.push(v.Version);
+        }
+        marker = page.NextMarker;
+      } while (marker);
+      return versions;
+    },
+
+    async getFunctionState(functionName, version) {
+      try {
+        const { State } = (await client.send(
+          new GetFunctionConfigurationCommand({ FunctionName: functionName, Qualifier: version }),
+        )) as { State?: string };
+        return (State?.toLowerCase() ?? 'pending') as TenantFunctionState;
+      } catch (err) {
+        if (notFound(err)) return null;
+        throw tenantApiError('lambda', err);
+      }
+    },
+  };
+}
+
+/** The coarsest period CloudWatch serves at every age (an hour, past 63 days),
+ *  stretched to the window, so the sum is one datapoint per page. */
+function sumPeriodSeconds(start: Date, end: Date): number {
+  const seconds = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / 1000));
+  return Math.ceil(seconds / 3600) * 3600;
+}
+
+/** `TenantCloudWatch` over an SDK client. */
+export function sdkTenantCloudWatch(client: AwsSdkClient): TenantCloudWatch {
+  return {
+    async sumMetric(query) {
+      let total = 0;
+      let nextToken: string | undefined;
+      try {
+        do {
+          const page = (await client.send(
+            new GetMetricDataCommand({
+              StartTime: query.start,
+              EndTime: query.end,
+              MetricDataQueries: [
+                {
+                  Id: 'sum',
+                  ReturnData: true,
+                  MetricStat: {
+                    Metric: {
+                      Namespace: query.namespace,
+                      MetricName: query.metricName,
+                      Dimensions: Object.entries(query.dimensions).map(([Name, Value]) => ({
+                        Name,
+                        Value,
+                      })),
+                    },
+                    Period: sumPeriodSeconds(query.start, query.end),
+                    Stat: 'Sum',
+                  },
+                },
+              ],
+              ...(nextToken ? { NextToken: nextToken } : {}),
+            }),
+          )) as { MetricDataResults?: MetricDataResult[]; NextToken?: string };
+          for (const result of page.MetricDataResults ?? []) {
+            for (const value of result.Values ?? []) total += value;
+          }
+          nextToken = page.NextToken;
+        } while (nextToken);
+      } catch (err) {
+        throw tenantApiError('cloudwatch', err);
+      }
+      return total;
     },
   };
 }

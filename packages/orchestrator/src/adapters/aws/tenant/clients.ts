@@ -3,6 +3,8 @@
 // type appears here; `sdk.ts` implements them over the SDK. A later card adds
 // its service to `TenantClients` and to the fake beside it.
 
+import type { TenantCloudWatch, TenantLambda } from './function/lambdaClient';
+
 /** A stack as the runner reads it. */
 export interface TenantStack {
   readonly name: string;
@@ -10,6 +12,8 @@ export interface TenantStack {
   readonly parameters: Readonly<Record<string, string>>;
   readonly tags: Readonly<Record<string, string>>;
   readonly outputs: Readonly<Record<string, string>>;
+  /** When the stack was created, when CloudFormation says. */
+  readonly createdAt?: Date;
 }
 
 export interface TenantStackWrite {
@@ -54,7 +58,9 @@ export interface TenantRdsData {
  *  secret is a stack's resource. */
 export interface TenantSecretsManager {
   getSecretValue(secretId: string): Promise<string>;
-  putSecretValue(secretId: string, value: string): Promise<void>;
+  /** With `versionId`, the value is that version of the secret: putting the same
+   *  value under the same id again is a no change (MOTIR-10008). */
+  putSecretValue(secretId: string, value: string, versionId?: string): Promise<void>;
 }
 
 /** Every client of one tenant account, all under its deploy role. */
@@ -64,4 +70,7 @@ export interface TenantClients {
   readonly cloudformation: TenantCloudFormation;
   readonly rdsData: TenantRdsData;
   readonly secretsManager: TenantSecretsManager;
+  /** The function shape's (MOTIR-10008). */
+  readonly lambda: TenantLambda;
+  readonly cloudwatch: TenantCloudWatch;
 }

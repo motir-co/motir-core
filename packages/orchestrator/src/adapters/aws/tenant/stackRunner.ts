@@ -57,6 +57,8 @@ export interface ApplyStackResult {
 export interface DescribedStack {
   readonly status: string;
   readonly outputs: Readonly<Record<string, string>>;
+  /** When it was created, when known — where a release's usage starts. */
+  readonly createdAt?: Date;
 }
 
 export interface StackRunner {
@@ -170,7 +172,11 @@ export function createStackRunner(
     async describeStack(stackName) {
       const stack = await cfn.describeStack(stackName);
       if (!stack || stack.status === 'DELETE_COMPLETE') return null;
-      return { status: stack.status, outputs: stack.outputs };
+      return {
+        status: stack.status,
+        outputs: stack.outputs,
+        ...(stack.createdAt ? { createdAt: stack.createdAt } : {}),
+      };
     },
   };
 }
