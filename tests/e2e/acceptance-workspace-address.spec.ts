@@ -5,7 +5,6 @@ import { signIn } from './_helpers/shell-session';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
-import { publicSubdomainService } from '@/lib/services/publicSubdomainService';
 import { projectAccessData } from '@/tests/helpers/projectAccess';
 import { CHANGE_INTERVAL_DAYS, GRACE_HOURS, QUARANTINE_DAYS } from '@/lib/publicAddresses/nameHold';
 import en from '@/messages/en.json';
@@ -120,10 +119,16 @@ test.beforeAll(async () => {
   const b = await seedOwner(OWNER_B, 'Ben Owner', 'Globex', 'GLOBE');
   workspaceB = b.workspace.id;
   identifierB = b.project.identifier;
-  await publicSubdomainService.claim(b.workspace.id, 'globex', b.owner.id);
-  await adminDb.publicAddress.update({
-    where: { hostname: `globex.${BASE}` },
-    data: { createdAt: new Date(Date.now() - (GRACE_HOURS + 1) * HOUR_MS) },
+  // Written as the row a claim writes, not through the service: the base
+  // domain is the SERVER's environment, and this seed runs in the test process.
+  await adminDb.publicAddress.create({
+    data: {
+      workspaceId: b.workspace.id,
+      hostname: `globex.${BASE}`,
+      kind: 'workspace_subdomain',
+      status: 'active',
+      createdAt: new Date(Date.now() - (GRACE_HOURS + 1) * HOUR_MS),
+    },
   });
 
   const c = await seedOwner(OWNER_C, 'Cy Owner', 'Initech', 'INIT');
