@@ -7922,16 +7922,35 @@ model PlanNarrationSession {
 /// precedent): the OAuth callback persists under `withUserContext`, so a member
 /// only ever reads/writes their own identity.
 model GithubIdentity {
-  id                   String   @id @default(cuid())
-  userId               String   @unique @map("user_id")
-  githubUserId         String   @unique @map("github_user_id")
-  githubLogin          String   @map("github_login")
-  avatarUrl            String?  @map("avatar_url")
+  id                    String    @id @default(cuid())
+  userId                String    @unique @map("user_id")
+  githubUserId          String    @unique @map("github_user_id")
+  githubLogin           String    @map("github_login")
+  avatarUrl             String?   @map("avatar_url")
   /// The GitHub user access token, encrypted at rest (never plaintext). Only
   /// lib/github/tokenCrypto.ts + githubIdentityService ever read/write it.
-  accessTokenEncrypted String   @map("access_token_encrypted")
-  createdAt            DateTime @default(now()) @map("created_at")
-  updatedAt            DateTime @updatedAt @map("updated_at")
+  accessTokenEncrypted  String    @map("access_token_encrypted")
+  /// The rotating refresh token GitHub issues beside an EXPIRING user token
+  /// (Motir Integration has "Expire user authorization tokens" on — MOTIR-6522),
+  /// encrypted with the same tokenCrypto (Bug MOTIR-10021). Null on a row linked
+  /// before MOTIR-10021, or from an App that does not expire user tokens: such a
+  /// token is returned as stored and never renewed.
+  refreshTokenEncrypted String?   @map("refresh_token_encrypted")
+  /// When the access token stops working (`expires_in` from GitHub, ~8 hours).
+  tokenExpiresAt        DateTime? @map("token_expires_at")
+  /// When the refresh token itself stops working (`refresh_token_expires_in`,
+  /// ~6 months). Past it, only a reconnect helps.
+  refreshTokenExpiresAt DateTime? @map("refresh_token_expires_at")
+  /// The single-flight renewal LEASE: set under a row lock before the refresh
+  /// grant is spent, cleared when the rotated pair is stored. A live lease makes
+  /// every other caller wait rather than spend the same refresh token.
+  refreshLeaseUntil     DateTime? @map("refresh_lease_until")
+  /// When GitHub REFUSED the refresh token (`bad_refresh_token` — expired or
+  /// revoked). The identity is dead until the member reconnects, and no further
+  /// renewal is attempted. Cleared by a reconnect.
+  refreshRefusedAt      DateTime? @map("refresh_refused_at")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

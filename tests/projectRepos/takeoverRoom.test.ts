@@ -7,6 +7,7 @@ import { projectsService } from '@/lib/services/projectsService';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { userOrgsClient, GithubUserOrgsError } from '@/lib/github/userOrgs';
 import { encryptToken } from '@/lib/github/tokenCrypto';
+import { GithubIdentityRefusedError } from '@/lib/github/errors';
 import { decodeInstallStateResult } from '@/lib/github/installState';
 import { ORGANIZATION_ROLE } from '@/lib/organizations/roles';
 import { GET as getOrganizations } from '@/app/api/github/organizations/route';
@@ -191,6 +192,20 @@ describe('GET /api/github/organizations', () => {
     // that state unreachable, which is the whole degradation the design rests on.
     expect(res.status).toBe(502);
     expect(await res.json()).toEqual({ code: 'GITHUB_ORGS_UNAVAILABLE' });
+  });
+
+  it('answers a dead GitHub sign-in with the reconnect code, not "couldn\'t reach" (Bug MOTIR-10021)', async () => {
+    const fx = await makeWorkItemFixture();
+    signIn(fx);
+    // The renewal was refused (`bad_refresh_token`): retrying cannot work, so it
+    // is the same 409 the organisation connect routes answer it with.
+    vi.spyOn(githubIdentityService, 'listOrganizations').mockRejectedValue(
+      new GithubIdentityRefusedError(),
+    );
+
+    const res = await getOrganizations();
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ code: 'github_identity_refused' });
   });
 
   it('does NOT swallow an unexpected failure as a degraded picker', async () => {
