@@ -210,7 +210,7 @@ test('platform staff read the whole job ledger, and an operator replays one row,
       await expect(options.nth(3)).toContainText('100');
       await beat();
       await options.nth(2).click();
-      await expect(page).toHaveURL(new RegExp(`fn=${METER.replace(/\./g, '\\.')}`));
+      await expect(page).toHaveURL((url) => url.searchParams.get('fn') === METER);
       // All 109, though every one is older than the newest 200 overall.
       await expect(bodyRows).toHaveCount(109);
       await expect(waitingLine(109, 0)).toBeVisible();
