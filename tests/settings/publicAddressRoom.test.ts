@@ -156,11 +156,7 @@ describe('the card renders the design, and the refusals come from CODES', () => 
     ]) {
       expect(src, `no copy for the ${refusal} refusal`).toContain(refusal);
     }
-    for (const codeName of [
-      'HOSTNAME_TAKEN',
-      'SUBDOMAIN_RENAME_CAP_REACHED',
-      'SUBDOMAIN_FORBIDDEN',
-    ]) {
+    for (const codeName of ['HOSTNAME_TAKEN', 'SUBDOMAIN_FORBIDDEN']) {
       expect(src, `no arm for ${codeName}`).toContain(codeName);
     }
   });
@@ -175,18 +171,14 @@ describe('the card renders the design, and the refusals come from CODES', () => 
     expect(src).toContain("useTranslations('settings.publicAddress')");
   });
 
-  it('the rename confirm carries the never-released promise and the count', () => {
-    // ADR §8 in the customer's words. The count is drawn because a cap the
-    // customer cannot see is a cap they meet as a refusal.
+  it("the rename confirm carries the decision in the customer's words", () => {
     expect(src).toContain('rename.warningTitle');
     expect(src).toContain('rename.warningBody');
-    expect(src).toContain('rename.remaining');
   });
 
   it('re-reads after a write instead of patching local state', () => {
-    // `renamesLeft` and the alias list are DERIVED server-side (the alias rows
-    // are the count), so optimism here would mean re-deriving the cap in the
-    // browser.
+    // The DTO's fields are DERIVED server-side, so optimism here would mean
+    // re-deriving them in the browser.
     expect(src).toContain('router.refresh()');
   });
 });

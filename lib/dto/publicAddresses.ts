@@ -1,15 +1,12 @@
 // The DTOs the public-address surfaces return — Story MOTIR-3878 · MOTIR-4215.
 // Services return these, never raw Prisma rows (`CLAUDE.md`'s 4-layer rule).
 
-/** One retired subdomain, kept for ever as a redirect (ADR §8). */
-export interface RetiredSubdomainDto {
-  readonly hostname: string;
-  readonly retiredAt: string;
-}
-
 /**
  * A workspace's tenant subdomain, or the shape a workspace that has none reads
  * as (`null` from the service).
+ *
+ * One name and nothing else (§8 Amendment 3 rule 1): a workspace has no aliases,
+ * and there is no rename cap to count down.
  */
 export interface PublicSubdomainDto {
   /** The label alone, e.g. `acme` — what the settings field edits. */
@@ -20,17 +17,34 @@ export interface PublicSubdomainDto {
   readonly url: string;
   readonly claimedAt: string;
   /**
-   * Every previous label, still redirecting. Present even when empty, so the
-   * pane renders the same shape before and after a first rename.
+   * When the workspace may next rename or release its subdomain (rule 4), or
+   * `null` when it may do so now. Sent because a limit the customer cannot see
+   * is a limit they meet as a refusal.
    */
-  readonly aliases: readonly RetiredSubdomainDto[];
-  /**
-   * How many renames remain (ADR §8's cap minus those used).
-   *
-   * Sent because a cap the customer cannot see is a cap they meet as a refusal.
-   * Derived rather than stored: the alias rows ARE the count.
-   */
-  readonly renamesLeft: number;
+  readonly nextChangeAllowedAt: string | null;
+}
+
+/**
+ * What renaming or releasing the subdomain would do RIGHT NOW — the confirm
+ * dialog's dated preview (rule 5). Computed by the same pure functions the write
+ * applies, so the date the dialog shows is the date the write stores. Advice,
+ * never authority: the write re-checks under the workspace lock.
+ */
+export interface SubdomainChangePreviewDto {
+  /** The hostname that would stop being served. */
+  readonly host: string;
+  /** `return_now` frees the name at once; `quarantine` holds it until `returnsAt`. */
+  readonly outcome: 'return_now' | 'quarantine';
+  readonly returnsAt: string | null;
+  /** Whether the 30-day limit allows a change now. */
+  readonly changeAllowed: boolean;
+  /** When a change is next allowed, or `null` when one is allowed now. */
+  readonly nextChangeAllowedAt: string | null;
+}
+
+/** What a release returns: when the released name returns to the pool, or `null` if it already has. */
+export interface SubdomainReleaseDto {
+  readonly returnsAt: string | null;
 }
 
 // ── Host resolution (MOTIR-4217) ───────────────────────────────────────────

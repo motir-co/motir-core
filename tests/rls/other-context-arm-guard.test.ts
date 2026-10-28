@@ -70,15 +70,14 @@ type Verdict =
   | 'blind-carded';
 
 /**
- * The §8 hostname reservation (Bug MOTIR-4366) — one verdict, FIVE sites.
+ * The §8 hostname reservation (Bug MOTIR-4366) — one verdict, FOUR sites.
  *
  * Written once and shared, because the findings are not separate judgements:
  * they are the same table, the same policy and the same argument, reached from
  * the two services that touch it. It was three sites until Story MOTIR-4451
- * added `release` and gave `getForWorkspace` a reason to read the table
- * (Amendment 2 counts the rename cap over names BURNT, so the reservation count
- * is now an input to the DTO). Neither is a new argument — they are the same
- * table reached from two more doors.
+ * added `release` and gave `getForWorkspace` a reason to read the table (the
+ * Amendment 2 rename cap); §8 Amendment 3 removed the cap and that read with it.
+ * None is a new argument — they are the same table reached from more doors.
  */
 const HOSTNAME_RESERVATION_WHY =
   '`public_hostname_reservation_read` is `FOR SELECT USING (true)` and reads NO GUC, so an ' +
@@ -103,8 +102,7 @@ const HOSTNAME_RESERVATION_WHY =
   '`tests/publicAddresses/publicSubdomainService.test.ts` and ' +
   '`tests/publicAddresses/subdomainReleaseGate.test.ts` are 62/62. Those tests are the ' +
   'instrument: a blind SELECT makes `assertNotReserved` find nothing and every refusal case ' +
-  'admits the claim, a blind COUNT hands every workspace a fresh rename cap after a release ' +
-  '(the unbounded name burn Amendment 2 exists to stop), and a wrong INSERT `WITH CHECK` ' +
+  'admits the claim (a quarantined name claimed by anyone), and a wrong INSERT `WITH CHECK` ' +
   'writes zero reservations — each of those takes a majority of that set red rather than ' +
   'passing quietly.';
 
@@ -129,19 +127,14 @@ const DELIBERATELY_UNARMED: Record<string, { verdict: Verdict; why: string }> = 
     verdict: 'guc-less-arm',
     why: HOSTNAME_RESERVATION_WHY,
   },
-  // The two doors Story MOTIR-4451 opened onto the same table. `release` writes
-  // the reservations and deletes the addresses in one transaction;
-  // `getForWorkspace` only COUNTS, because Amendment 2 measures the rename cap
-  // over names BURNT rather than over alias rows.
+  // The door Story MOTIR-4451 opened onto the same table: `release` writes the
+  // reservation and deletes the address in one transaction. (`getForWorkspace`
+  // read it too while the rename cap counted reserved names; the cap is gone, §8
+  // Amendment 3, and so is that read.)
   'workspace-user::lib/services/publicSubdomainService.ts#release :: publicHostnameReservation': {
     verdict: 'guc-less-arm',
     why: HOSTNAME_RESERVATION_WHY,
   },
-  'workspace-user::lib/services/publicSubdomainService.ts#getForWorkspace :: publicHostnameReservation':
-    {
-      verdict: 'guc-less-arm',
-      why: HOSTNAME_RESERVATION_WHY,
-    },
   'workspace-user::lib/services/workspacesService.ts#deleteWorkspaceCascade :: publicHostnameReservation':
     {
       verdict: 'guc-less-arm',

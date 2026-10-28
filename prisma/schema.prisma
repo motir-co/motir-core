@@ -13524,9 +13524,9 @@ model PublicHostnameReservation {
   /// DELETION retired it", which was true when `workspacesService.deleteWorkspace`
   /// was the only writer. A workspace may now RELEASE its own subdomain, which
   /// writes this column while the workspace is very much alive — so the id here
-  /// is an orphan only on the delete path, and the count of a LIVING workspace's
-  /// rows is what §8's rename cap reads
-  /// (`publicHostnameReservationRepository.countForWorkspaceInTx`).
+  /// is an orphan only on the delete path. (Amendment 2's rename cap counted a
+  /// living workspace's rows; Amendment 3 removed the cap, and nothing counts
+  /// them now.)
   retiredFromWorkspaceId String @map("retired_from_workspace_id")
 
   retiredAt DateTime @default(now()) @map("retired_at")

@@ -44,7 +44,8 @@ vi.mock('@/lib/publicAddresses/providers', () => ({
 
 const { db } = await import('@/lib/db');
 const { publicSubdomainService } = await import('@/lib/services/publicSubdomainService');
-const { publicAddressesService } = await import('@/lib/services/publicAddressesService');
+const { publicAddressesService, PublicHostNotFoundError } =
+  await import('@/lib/services/publicAddressesService');
 const { customDomainService } = await import('@/lib/services/customDomainService');
 const { createTestWorkspace } = await import('../fixtures');
 
@@ -123,7 +124,7 @@ async function onAPaidTier(): Promise<void> {
   });
 }
 
-/* ── seam (a): claim → the host contract resolves it; rename → an alias ───── */
+/* ── seam (a): claim → the host contract resolves it; rename → it stops ───── */
 
 describe('seam (a) — a claim written by one service is read by the public contract', () => {
   it('resolves the claimed host to the workspace and its public projects', async () => {
@@ -136,19 +137,16 @@ describe('seam (a) — a claim written by one service is read by the public cont
     expect(resolved.projects.map((p) => p.identifier)).toContain('ACME');
   });
 
-  it('and after a RENAME the old host resolves as an alias pointing at the new one', async () => {
-    // ⚠️ THE PROMISE THE WHOLE §8 DECISION TURNS ON, end to end: the retirement
-    // and the new claim are one transaction, and the old hostname keeps
-    // answering afterwards — not as a 404, and not as the workspace, but as a
-    // redirect that NAMES where it goes.
+  it('and after a RENAME the old host stops resolving at once, with no redirect', async () => {
+    // §8 Amendment 3 rules 1 and 2, end to end: the rename deletes the old row
+    // in its own transaction, so the public contract answers nothing for the old
+    // hostname — not an alias, and not the workspace.
     await publicSubdomainService.claim(acme.workspaceId, 'acme', acme.ownerId);
     await publicSubdomainService.rename(acme.workspaceId, 'acme-inc', acme.ownerId);
 
-    const alias = await publicAddressesService.resolveHost(`acme.${BASE}`);
-    expect(alias.kind).toBe('alias');
-    if (alias.kind !== 'alias') throw new Error('unreachable');
-    expect(alias.redirectTo).toBe(`acme-inc.${BASE}`);
-
+    await expect(publicAddressesService.resolveHost(`acme.${BASE}`)).rejects.toBeInstanceOf(
+      PublicHostNotFoundError,
+    );
     const live = await publicAddressesService.resolveHost(`acme-inc.${BASE}`);
     expect(live.kind).toBe('workspace');
   });
@@ -371,10 +369,8 @@ describe('seam (c) — the cap holds when two adds race', () => {
 
 describe('seam (d) — a live address is a legitimate origin; an alias is not', () => {
   it('admits the live host and refuses the retired one, from the store', async () => {
-    // ⚠️ THE ALIAS ARM IS THE ONE WORTH HAVING. A retired subdomain still has a
-    // row, so a membership test written as "is there a row for this host" would
-    // admit it — and a permanent redirect is not a place to hand a session back
-    // to.
+    // A renamed-away-from host has no row any more (§8 Amendment 3), so the
+    // store must refuse it as an origin the moment the rename commits.
     await publicSubdomainService.claim(acme.workspaceId, 'acme', acme.ownerId);
     await publicSubdomainService.rename(acme.workspaceId, 'acme-inc', acme.ownerId);
 

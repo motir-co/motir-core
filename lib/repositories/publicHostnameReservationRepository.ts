@@ -50,27 +50,23 @@ export const publicHostnameReservationRepository = {
   },
 
   /**
-   * How many hostnames a workspace has RETIRED into the reservation table — the
-   * second half of ADR §8's rename-cap input (Amendment 2, MOTIR-4454).
+   * When this digest's hold ends, or `null` if nothing holds it at `now`.
    *
-   * The cap used to read `countAliasesForWorkspace` alone, which is a count of
-   * live alias ROWS. A release deletes those rows, so a cap that reads only them
-   * is handed back in full on every release and
-   * `claim → rename ×5 → release`, repeated, burns names out of a shared
-   * namespace without bound. Amendment 2 therefore measures the cap over names
-   * BURNT — aliases held PLUS hostnames this workspace has reserved — and this
-   * is that second term. For a workspace that has never released it is `0`, so
-   * the generalisation returns exactly the old number.
-   *
-   * ⚠️ `retired_from_workspace_id` is NOT only a deleted workspace's id any
-   * more. Amendment 1 wrote it from the workspace delete (`deleteWorkspaceCascade`), where
-   * the workspace was on its way out; a release writes it while the workspace is
-   * alive, which is what makes this count answerable at all.
+   * The claim path's refusal needs the DATE, because story rule 5 tells a
+   * claimer when a quarantined name returns. The date is all that leaves this
+   * method: `retired_from_workspace_id` is never selected, so the answer carries
+   * no provenance.
    */
-  async countForWorkspaceInTx(workspaceId: string, tx: Prisma.TransactionClient): Promise<number> {
-    return tx.publicHostnameReservation.count({
-      where: { retiredFromWorkspaceId: workspaceId },
+  async findActiveExpiryInTx(
+    hostnameHash: string,
+    now: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<Date | null> {
+    const row = await tx.publicHostnameReservation.findFirst({
+      where: { hostnameHash, expiresAt: { gt: now } },
+      select: { expiresAt: true },
     });
+    return row?.expiresAt ?? null;
   },
 
   /**

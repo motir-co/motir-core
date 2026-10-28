@@ -198,28 +198,27 @@ test('a project admin gives their public project an address of its own', async (
     await beat();
   });
 
-  await chapter('Renaming the subdomain — and the old one never goes away', async () => {
-    await page.getByRole('button', { name: 'Rename' }).click();
-    await expect(page.getByText(/never released/)).toBeVisible();
-    await expect(page.getByText(/renames left after this one/)).toBeVisible();
-    await beat();
+  await chapter(
+    'Renaming the subdomain — the old one stops answering, nothing redirects',
+    async () => {
+      await page.getByRole('button', { name: 'Rename' }).click();
+      await expect(page.getByText(/never released/)).toBeVisible();
+      await beat();
 
-    await page.getByRole('textbox', { name: 'Subdomain' }).last().fill('acme-inc');
-    // Same shape as the domain add above: `PublicSubdomainCard` refreshes rather
-    // than patching, and says why in as many words — `renamesLeft` and the alias
-    // rows are derived server-side, so optimism would mean re-deriving the cap in
-    // the browser. The spec waits on the refresh (MOTIR-4399, disposition (c)).
-    const renamed = pageRefresh(page, PANE);
-    await page.getByRole('button', { name: 'Rename', exact: true }).last().click();
-    await renamed;
+      await page.getByRole('textbox', { name: 'Subdomain' }).last().fill('acme-inc');
+      // Same shape as the domain add above: `PublicSubdomainCard` refreshes rather
+      // than patching, because the DTO's fields are derived server-side. The spec
+      // waits on the refresh (MOTIR-4399, disposition (c)).
+      const renamed = pageRefresh(page, PANE);
+      await page.getByRole('button', { name: 'Rename', exact: true }).last().click();
+      await renamed;
 
-    await expect(page.getByText(`acme-inc.${BASE}/${identifier}`)).toBeVisible();
-    // ⚠️ THE PROMISE THE WHOLE §8 DECISION TURNS ON, on screen: the old address
-    // is still listed, and it says what it now does.
-    await expect(page.getByText(`acme.${BASE}`)).toBeVisible();
-    // `exact`, because the primary row's consequence line ends in the same
-    // three words — *Every other address redirects here.*
-    await expect(page.getByText('Redirects here', { exact: true })).toBeVisible();
-    await beat();
-  });
+      await expect(page.getByText(`acme-inc.${BASE}/${identifier}`)).toBeVisible();
+      // §8 Amendment 3: one name per workspace. The old address is not listed and
+      // nothing says it redirects. `exact`, because the primary row's consequence
+      // line ends in the same three words — *Every other address redirects here.*
+      await expect(page.getByText('Redirects here', { exact: true })).toHaveCount(0);
+      await beat();
+    },
+  );
 });

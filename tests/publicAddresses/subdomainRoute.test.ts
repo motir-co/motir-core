@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   HostnameTakenError,
+  NameQuarantinedError,
   NoSubdomainClaimedError,
   ReservedLabelError,
+  SubdomainChangeLimitError,
   SubdomainForbiddenError,
   SubdomainNotFoundError,
-  SubdomainRenameCapReachedError,
   WorkspaceNotVisibleError,
 } from '@/lib/publicAddresses/errors';
 import { TenantDomainNotConfiguredError } from '@/lib/publicAddresses/tenantDomain';
@@ -49,8 +50,7 @@ const DTO = {
   hostname: 'acme.motir.site',
   url: 'https://acme.motir.site',
   claimedAt: '2026-09-01T00:00:00.000Z',
-  aliases: [],
-  renamesLeft: 5,
+  nextChangeAllowedAt: null,
 };
 
 beforeEach(() => {
@@ -127,7 +127,8 @@ describe('the mapper, on this surface', () => {
     [new HostnameTakenError('acme.motir.site'), 409],
     [new NoSubdomainClaimedError(), 409],
     [new ReservedLabelError('admin', 'reserved'), 422],
-    [new SubdomainRenameCapReachedError(5, 5), 422],
+    [new NameQuarantinedError('acme.motir.site', new Date('2027-01-01T00:00:00Z')), 409],
+    [new SubdomainChangeLimitError(new Date('2026-11-01T00:00:00Z')), 409],
     // An OPERATOR problem, never the caller's — and the one case here where
     // retrying later may work.
     [new TenantDomainNotConfiguredError(), 503],
@@ -147,11 +148,23 @@ describe('the mapper, on this surface', () => {
     expect(await res.json()).toMatchObject({ code: 'RESERVED_LABEL', refusal: 'bad_grammar' });
   });
 
-  it('and the CAP refusal carries the numbers the pane shows', async () => {
-    getForWorkspace.mockRejectedValue(new SubdomainRenameCapReachedError(5, 5));
+  it('and the two DATED refusals carry their dates as ISO strings', async () => {
+    // A refusal that ends on a known date says when (§8 Amendment 3). Dropping
+    // the date at the route would leave the pane able to say only "no".
+    getForWorkspace.mockRejectedValue(
+      new NameQuarantinedError('acme.motir.site', new Date('2027-01-01T00:00:00Z')),
+    );
     expect(await (await GET(new Request('https://app.motir.co/x'), params)).json()).toMatchObject({
-      used: 5,
-      cap: 5,
+      code: 'NAME_QUARANTINED',
+      hostname: 'acme.motir.site',
+      returnsAt: '2027-01-01T00:00:00.000Z',
+    });
+    getForWorkspace.mockRejectedValue(
+      new SubdomainChangeLimitError(new Date('2026-11-01T00:00:00Z')),
+    );
+    expect(await (await GET(new Request('https://app.motir.co/x'), params)).json()).toMatchObject({
+      code: 'SUBDOMAIN_CHANGE_LIMIT',
+      nextAllowedAt: '2026-11-01T00:00:00.000Z',
     });
   });
 

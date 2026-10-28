@@ -1,7 +1,6 @@
 import { test, expect } from './_helpers/promoted-regression';
 import { resetDatabase, adminDb } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
-import { pageRefresh } from './_helpers/authoritative-signal';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -29,8 +28,9 @@ import { projectAccessData } from '@/tests/helpers/projectAccess';
  *
  * `regression-public-address.spec.ts` (MOTIR-4225) walks claim → add a custom
  * domain → certificate states → make primary → rename, with the old address
- * still redirecting. This spec is the step it could not reach because it did not
- * exist: **release**, and the reservation that outlives it.
+ * This spec is the step it could not reach because it did not exist: **release**.
+ * §8 Amendment 3 (Story MOTIR-4528) reshaped it: one name per workspace, and a
+ * name held under a day returns to the pool at once.
  *
  * ── ⚠️ WHY A NEW SPEC RATHER THAN FOUR MORE CHAPTERS IN THAT ONE ───────────
  *
@@ -118,7 +118,7 @@ test.beforeAll(async () => {
   });
 });
 
-test('an owner releases the workspace subdomain, and the names stay held for ever', async ({
+test('an owner releases the workspace subdomain, and a name held under a day returns at once', async ({
   page,
   chapter,
   beat,
@@ -140,54 +140,23 @@ test('an owner releases the workspace subdomain, and the names stay held for eve
     await beat();
   });
 
-  await chapter(
-    'A rename, so a retained alias exists — the alias is what makes release interesting',
-    async () => {
-      await page.getByRole('button', { name: 'Rename' }).click();
-      await page.getByRole('textbox', { name: 'Subdomain' }).last().fill('acme-inc');
-      // `PublicSubdomainCard` repaints on `router.refresh()` and cannot patch in
-      // place — `renamesLeft` is server-derived (ADR §8 Amendment 2 counts names
-      // BURNT, so a browser cannot re-derive it even in principle). Wait on the
-      // refresh rather than spend the assertion's budget on it (MOTIR-4399,
-      // disposition (c)).
-      const renamed = pageRefresh(page, PANE);
-      await page.getByRole('button', { name: 'Rename', exact: true }).last().click();
-      await renamed;
+  await chapter('The Remove confirm says what it is about to take', async () => {
+    await page.getByRole('button', { name: 'Remove' }).click();
 
-      await expect(pane.getByText(`acme-inc.${BASE}/${identifier}`)).toBeVisible();
-      await expect(pane.getByText(`acme.${BASE}`, { exact: true })).toBeVisible();
-      await beat();
-    },
-  );
-
-  await chapter(
-    'The Remove confirm says what it is about to take — BOTH hostnames, separately',
-    async () => {
-      await page.getByRole('button', { name: 'Remove' }).click();
-
-      // ⚠️ THE POINT OF THIS SPEC. A component test can be made to pass while the
-      // assembled page renders a summary, so both hostnames are asserted as
-      // SEPARATE visible strings — and the assertion fails if the confirm ever
-      // collapses them into "and any previous addresses".
-      const confirm = page.getByRole('dialog');
-      await expect(confirm.getByText('These 2 addresses will stop answering:')).toBeVisible();
-      await expect(confirm.getByText(`acme-inc.${BASE}`, { exact: true })).toBeVisible();
-      await expect(confirm.getByText(`acme.${BASE}`, { exact: true })).toBeVisible();
-
-      // The promise the whole amendment turns on, in the customer's words.
-      await expect(confirm.getByText(/held for ever/)).toBeVisible();
-      await expect(confirm.getByText(/Nobody can claim them again/)).toBeVisible();
-      // And the half that makes the action worth performing.
-      await expect(confirm.getByText(/Your public projects go back to/)).toBeVisible();
-      await beat();
-    },
-  );
+    // A workspace holds one name (§8 Amendment 3), so the confirm lists one
+    // hostname — asserted as a visible string, not as a count.
+    const confirm = page.getByRole('dialog');
+    await expect(confirm.getByText('This address will stop answering:')).toBeVisible();
+    await expect(confirm.getByText(`acme.${BASE}`, { exact: true })).toBeVisible();
+    // And the half that makes the action worth performing.
+    await expect(confirm.getByText(/Your public projects go back to/)).toBeVisible();
+    await beat();
+  });
 
   await chapter('Cancel changes nothing — the classic defect only a browser sees', async () => {
     await page.getByRole('button', { name: 'Cancel' }).click();
     await expect(page.getByRole('dialog')).toBeHidden();
-    // Still claimed, still the same two rows.
-    await expect(pane.getByText(`acme-inc.${BASE}/${identifier}`)).toBeVisible();
+    await expect(pane.getByText(`acme.${BASE}/${identifier}`)).toBeVisible();
     await expect(pane.getByText('Active')).toBeVisible();
     await beat();
   });
@@ -197,43 +166,21 @@ test('an owner releases the workspace subdomain, and the names stay held for eve
     await page.getByRole('button', { name: 'Remove subdomain' }).click();
 
     // The unclaimed state IS the claim field coming back, with no address rows
-    // and no trace of the released label (the asset's decision: the reservation
-    // holds a digest, so there is no hostname left to show).
+    // and no trace of the released label.
     await expect(page.getByRole('button', { name: 'Claim subdomain' })).toBeVisible();
-    await expect(pane.getByText(`acme-inc.${BASE}/${identifier}`)).toBeHidden();
+    await expect(pane.getByText(`acme.${BASE}/${identifier}`)).toBeHidden();
     await expect(page.getByRole('button', { name: 'Remove' })).toBeHidden();
     await beat();
   });
 
-  await chapter(
-    'The released label is REFUSED on re-claim — the reservation, made visible',
-    async () => {
-      // ⚠️ THE OTHER POINT OF THIS SPEC. This is the only place the reservation is
-      // observable to a person, and it closes the loop the ADR amendment opened.
-      // The refusal must be RENDERED, not merely returned.
-      await page.getByRole('textbox', { name: 'Subdomain' }).fill('acme-inc');
-      await page.getByRole('button', { name: 'Claim subdomain' }).click();
-      await expect(pane.getByText(/is already in use/)).toBeVisible();
-
-      // The retired ALIAS label too — the case a kind-filter mistake would let
-      // through, and the one a customer is likeliest to try.
-      await page.getByRole('textbox', { name: 'Subdomain' }).fill('acme');
-      await page.getByRole('button', { name: 'Claim subdomain' }).click();
-      await expect(pane.getByText(/is already in use/)).toBeVisible();
-      await beat();
-    },
-  );
-
-  await chapter('A DIFFERENT label is still claimable, so the refusal is specific', async () => {
-    await page.getByRole('textbox', { name: 'Subdomain' }).fill('acme-two');
+  await chapter('A name held under a day returns at once — it is claimable again', async () => {
+    // §8 Amendment 3 rule 3: the label was held for seconds, so the release
+    // wrote no hold, and a first claim is not a change, so the 30-day limit does
+    // not refuse it either.
+    await page.getByRole('textbox', { name: 'Subdomain' }).fill('acme');
     await page.getByRole('button', { name: 'Claim subdomain' }).click();
-    await expect(pane.getByText(`acme-two.${BASE}/${identifier}`)).toBeVisible();
+    await expect(pane.getByText(`acme.${BASE}/${identifier}`)).toBeVisible();
     await expect(pane.getByText('Active')).toBeVisible();
-
-    // ⚠️ AND THE CAP DID NOT RESET. Two names were burnt by the release, so the
-    // fresh claim starts at three of five — ADR §8 Amendment 2, read off the
-    // surface a customer actually sees rather than out of the DTO.
-    await expect(pane.getByText('3 renames left.')).toBeVisible();
     await beat();
   });
 

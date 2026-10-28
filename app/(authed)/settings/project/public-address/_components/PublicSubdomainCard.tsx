@@ -22,8 +22,8 @@ import type { PublicSubdomainDto } from '@/lib/dto/publicAddresses';
  *
  * ADR §8 **Amendment 2**: never-released is a rule about who may take a name
  * NEXT, not about who must keep SERVING it, so a workspace may un-claim its own.
- * `DELETE` on the same route (MOTIR-4454) takes the live label AND every retained
- * alias, reserving each for ever. It is a separate verb rather than a
+ * `DELETE` on the same route (MOTIR-4454) takes the live label; how long its name
+ * is held is §8 Amendment 3's rule, not this component's. It is a separate verb rather than a
  * `PUT { label: null }` because release is not a kind of naming.
  *
  * ── ⚠️ ONE FIELD, TWO ACTS, BECAUSE THE ROUTE IS ONE VERB ─────────────────
@@ -107,18 +107,11 @@ export function PublicSubdomainCard({
   const preview = `${label || 'acme'}.${baseDomain}/${projectIdentifier}`;
 
   /**
-   * Every hostname a release takes — the live label FIRST, then every retained
-   * alias, in the order the card already draws them.
-   *
-   * The live one leads because it is the name in the modal's own title, and a
-   * list whose first row is not the name the reader just read is a list they
-   * have to search.
+   * The hostname a release takes. A workspace holds one name and no aliases
+   * (§8 Amendment 3), so this is the live label alone.
    */
   const releasedHostnames: ReadonlyArray<{ hostname: string; live: boolean }> = subdomain
-    ? [
-        { hostname: subdomain.hostname, live: true },
-        ...subdomain.aliases.map((a) => ({ hostname: a.hostname, live: false })),
-      ]
+    ? [{ hostname: subdomain.hostname, live: true }]
     : [];
 
   async function submit(next: string): Promise<void> {
@@ -138,9 +131,8 @@ export function PublicSubdomainCard({
       setRenaming(false);
       toast({ variant: 'success', title: t('subdomain.title') });
       // ⚠️ REFRESH RATHER THAN PATCH LOCAL STATE. A claim produces a DTO whose
-      // aliases and `renamesLeft` are derived server-side (the alias rows ARE
-      // the count), so re-reading is the only way the pane and the store agree.
-      // Optimism here would mean re-deriving the cap in the browser.
+      // fields are derived server-side, so re-reading is the only way the pane
+      // and the store agree.
       router.refresh();
     } catch {
       setError(t('error.generic'));
@@ -155,7 +147,6 @@ export function PublicSubdomainCard({
       return key ? t(`error.${key}`, { label }) : t('error.generic');
     }
     if (body.code === 'HOSTNAME_TAKEN') return t('error.taken', { label });
-    if (body.code === 'SUBDOMAIN_RENAME_CAP_REACHED') return t('error.capReached');
     if (body.code === 'SUBDOMAIN_FORBIDDEN') return t('error.forbidden');
     return t('error.generic');
   }
@@ -199,12 +190,7 @@ export function PublicSubdomainCard({
       // (MOTIR-4457); no component test sees it, because none of them remounts.
       setLabel('');
       setError(null);
-      // ⚠️ REFRESH, NEVER PATCH — the same rule the claim path's comment states,
-      // and release is the case it bites hardest on: it empties BOTH
-      // server-derived fields at once (`aliases` and `renamesLeft`), and
-      // `renamesLeft` is no longer a function of the alias rows at all (ADR §8
-      // Amendment 2 counts names BURNT), so a browser cannot re-derive it even
-      // in principle.
+      // ⚠️ REFRESH, NEVER PATCH — the same rule the claim path's comment states.
       router.refresh();
     } catch {
       setReleaseError(t('error.generic'));
@@ -286,8 +272,8 @@ export function PublicSubdomainCard({
       )}
 
       {/* The rename confirm — panel 2's right stage. It carries the ADR §8
-          decision in the customer's words, and the remaining count, because a
-          cap the customer cannot see is a cap they meet as a refusal. */}
+          decision in the customer's words. The dated hold and the 30-day limit
+          (§8 Amendment 3) are the workspace-settings control's (MOTIR-9514). */}
       <Modal
         open={renaming}
         onOpenChange={(open) => {
@@ -319,8 +305,7 @@ export function PublicSubdomainCard({
               {t('rename.warningTitle')}
             </span>
             <span className="font-sans text-[13px] leading-[1.6] text-(--el-text-strong)">
-              {t('rename.warningBody', { old: subdomain?.hostname ?? '' })}{' '}
-              {t('rename.remaining', { count: Math.max((subdomain?.renamesLeft ?? 1) - 1, 0) })}
+              {t('rename.warningBody', { old: subdomain?.hostname ?? '' })}
             </span>
           </div>
           <div className="flex justify-end gap-2">
@@ -375,14 +360,7 @@ export function PublicSubdomainCard({
               {t('release.warningTitle', { count: releasedHostnames.length })}
             </span>
             <span className="font-sans text-[13px] leading-[1.6] text-(--el-text-strong)">
-              {t('release.warningBody')}{' '}
-              {/* ⚠️ THE CAP SENTENCE, AND ITS NUMBER COMES OFF THE DTO. ADR §8
-                  Amendment 2 counts names BURNT (aliases held PLUS hostnames
-                  reserved), so `renamesLeft` is no longer a function of the alias
-                  rows and cannot be re-derived here. Dropping this sentence would
-                  leave the confirm promising permanence while omitting the half a
-                  customer meets later as a refusal. */}
-              {t('release.renamesAfter', { count: subdomain?.renamesLeft ?? 0 })}
+              {t('release.warningBody')}
             </span>
           </div>
 
@@ -460,48 +438,20 @@ function ClaimedRows({
         }
       />
 
-      {/* ⚠️ EVERY RETIRED LABEL IS DRAWN, not summarised as a count. ADR §8's
-          promise is that each one keeps redirecting for ever, and a customer
-          deciding whether to rename again is deciding about these exact
-          hostnames. */}
-      {subdomain.aliases.map((alias) => (
-        <AddressRow
-          key={alias.hostname}
-          host={alias.hostname}
-          pill={
-            <Pill status="planned">
-              {/* The narrow frame drops the deictic (design panel 13): at 390 px
-                  "here" costs a line and points at a row directly above it. */}
-              <span className="hidden sm:inline">{t('subdomain.alias')}</span>
-              <span className="sm:hidden">{t('subdomain.aliasShort')}</span>
-            </Pill>
-          }
-        />
-      ))}
-
       {canManage ? (
-        /* ⚠️ REMOVE JOINS THE RIGHT-HAND GROUP, IT DOES NOT BECOME A THIRD
-           COLUMN. A three-way `justify-between` would push the count, the quiet
-           action and the ordinary action to three edges and read as three peers.
+        /* ⚠️ REMOVE JOINS THE RIGHT-HAND GROUP, beside Rename rather than at
+           the opposite edge, so the two read as one pair of actions on the row.
            And Remove sits LEFT of Rename so the pointer travelling to the
            ordinary action never passes over the destructive one (design panel
            10). `ghost` is the weight `CustomDomainsSection` already gives its own
            Remove — one product, one weight for one act — and the danger colour
            belongs in the confirm, not on the trigger. */
-        <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
-          <span className="font-sans text-[13px] text-(--el-text-secondary)">
-            {t('subdomain.renamesLeft', { count: subdomain.renamesLeft })}
-          </span>
+        <div className="mt-2 flex flex-wrap items-center justify-end gap-3">
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" onClick={onRelease}>
               {t('release.remove')}
             </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={onRename}
-              disabled={subdomain.renamesLeft === 0}
-            >
+            <Button variant="secondary" size="sm" onClick={onRename}>
               {t('subdomain.rename')}
             </Button>
           </div>
