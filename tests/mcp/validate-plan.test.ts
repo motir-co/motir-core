@@ -565,11 +565,49 @@ describe('validate_plan — the MISLABELLED-LINK advisory beside the verdict (MO
         label: meant.identifier,
         targetId: opened.id,
         targetKey: opened.identifier,
+        field: 'descriptionMd',
       },
     ]);
     expect(text(res)).toContain('is VALID');
     expect(text(res)).toContain(
-      `${addRef} links "${meant.identifier}" to motir:${opened.id}, which is ${opened.identifier}.`,
+      `${addRef} links "${meant.identifier}" to motir:${opened.id} in its descriptionMd, which is ${opened.identifier}.`,
+    );
+    await client.close();
+  });
+
+  it('reports a link in a PROPOSED explanation, naming `explanationMd` (MOTIR-9938)', async () => {
+    const fx = await makeWorkItemFixture();
+    const planId = await freshPlan(fx);
+    const plan = await addProposals(fx, planId, [
+      {
+        op: 'add',
+        proposedFields: {
+          title: 'Explained card',
+          kind: 'task',
+          type: 'code',
+          descriptionMd: 'Nothing linked.',
+          explanationMd: 'Matters because of [PROD-404](motir:cl_dead).',
+        },
+      },
+    ]);
+    await plansService.markPlanned(planId, fx.ctx);
+    const addRef = `planItem:${itemIdByTitle(plan, 'Explained card')}`;
+
+    const client = await connectClient(fx.ctx);
+    const res = await call(client, 'validate_plan', { planId });
+    expect(struct(res).advisories).toEqual([
+      {
+        kind: 'shape',
+        item: addRef,
+        severity: 'likely-mislabelled-link',
+        label: 'PROD-404',
+        targetId: 'cl_dead',
+        targetKey: null,
+        field: 'explanationMd',
+      },
+    ]);
+    expect(text(res)).toContain(
+      `${addRef} links "PROD-404" to motir:cl_dead in its explanationMd, which opens NO work item.`,
     );
     await client.close();
   });
