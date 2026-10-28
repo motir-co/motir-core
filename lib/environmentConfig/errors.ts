@@ -60,3 +60,37 @@ export class InvalidEnvironmentNameError extends Error {
     this.name = 'InvalidEnvironmentNameError';
   }
 }
+
+// ── The resolver's failures (MOTIR-9962) ─────────────────────────────────────
+
+/** No repository of that id in the bound workspace — unknown, or another
+ *  workspace's. */
+export class EnvironmentRepositoryNotFoundError extends Error {
+  readonly code = 'ENVIRONMENT_REPOSITORY_NOT_FOUND' as const;
+  constructor(readonly projectRepositoryId: string) {
+    super(`Repository ${projectRepositoryId} was not found.`);
+    this.name = 'EnvironmentRepositoryNotFoundError';
+  }
+}
+
+/** The deploying code asked for a customer repository's environment; Motir holds
+ *  none for it (D1 of MOTIR-5769). */
+export class CustomerRepositoryEnvironmentError extends Error {
+  readonly code = 'ENVIRONMENT_CUSTOMER_REPOSITORY' as const;
+  constructor(readonly projectRepositoryId: string) {
+    super(
+      `Repository ${projectRepositoryId} is a customer repository: Motir resolves no environment for it.`,
+    );
+    this.name = 'CustomerRepositoryEnvironmentError';
+  }
+}
+
+/** A stored secret could not be decrypted (corrupt, or sealed with another key).
+ *  Carries the entry's name only — never the ciphertext or a value. */
+export class EnvironmentSecretUndecryptableError extends Error {
+  readonly code = 'ENVIRONMENT_SECRET_UNDECRYPTABLE' as const;
+  constructor(readonly entryName: string) {
+    super(`The secret ${entryName} could not be decrypted.`);
+    this.name = 'EnvironmentSecretUndecryptableError';
+  }
+}
