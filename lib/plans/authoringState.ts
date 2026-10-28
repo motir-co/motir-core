@@ -25,24 +25,53 @@
 // `modify` always has one. The test is the one both planners use to decide whether
 // a card still needs its author session — plan.py's `author_gaps`: both bodies,
 // no `validate_plan` section finding for the card's kind × type, and, on a
-// childless leaf, its type, executor, sizing pair and difficulty. A `modify` is
-// appended complete (only an `add` is deepened), so it is complete.
+// childless leaf, its type, executor, sizing pair and difficulty.
+//
+// COMMITTED CARDS (MOTIR-10001) are answered apart from the proposals, because the
+// question differs. A committed card the walk RE-AUTHORS — one the lay listed (a
+// `modify` that changes its title, or a card the driver recorded on the plan's
+// `plannerRecord.walkListed`), one a `modify` rewrote the body of, or one an author
+// step has targeted — races exactly as a proposal does and reads the same three
+// states. Every OTHER committed card is `not_in_walk`: no session of this plan will
+// ever rewrite its body, so an edge drawn onto it is legal only where that body
+// already rests on the blocker — a rule the corpus states, not this read.
 //
 // PURE: no DB, no `tx`. The service hands in the plan's items, its step rows, its
-// narration-session rows and the section findings.
+// narration-session rows, the section findings and the committed cards' identities.
 
 import type { PlanItemDto } from '@/lib/dto/plans';
 import type { SectionFindingDto } from '@/lib/dto/workItems';
 
 export type PlanAuthoringState = 'not_started' | 'authoring' | 'authored';
 
+/** A committed card's state: the three above when the walk re-authors it, else `not_in_walk`. */
+export type CommittedAuthoringState = PlanAuthoringState | 'not_in_walk';
+
 /** One proposal's state, as the read answers it. */
 export interface PlanAuthoringStateRow {
-  /** `planItem:<id>` for an `add`; the target work item's id for a `modify`. */
+  /** `planItem:<id>` — the `add` proposal's ref. */
   ref: string;
-  op: 'add' | 'modify';
+  op: 'add';
   title: string | null;
   state: PlanAuthoringState;
+}
+
+/** One committed card's state, as the read answers it (MOTIR-10001). */
+export interface CommittedAuthoringStateRow {
+  /** The work item's id. */
+  ref: string;
+  key: string | null;
+  title: string | null;
+  /** True when this plan's walk re-authors the card (it was listed, rewritten or opened). */
+  inWalk: boolean;
+  state: CommittedAuthoringState;
+}
+
+/** A committed card's identity, resolved by the service. */
+export interface CommittedCard {
+  id: string;
+  key: string | null;
+  title: string | null;
 }
 
 /** The step and session facts the derivation reads — the two rows' shared fields. */
@@ -87,9 +116,19 @@ export function proposalComplete(
   return true;
 }
 
+/** The author-step targets among `facts` (a `lay` or a `settle` never starts a card). */
+function authorTargets(facts: readonly AuthorSessionFact[]): Set<string> {
+  return new Set(
+    facts
+      .filter((f) => f.kind === 'author' && f.targetRef !== null)
+      .map((f) => f.targetRef as string),
+  );
+}
+
 /**
- * Every `add` and `modify` on the plan with its authoring state, in the plan's own
- * order. A `remove` is never authored and is left out.
+ * Every `add` on the plan with its authoring state, in the plan's own order. A
+ * `modify` targets a committed card and is answered by {@link deriveCommittedStates};
+ * a `remove` is never authored.
  */
 export function deriveAuthoringStates(
   items: readonly PlanItemDto[],
@@ -97,20 +136,14 @@ export function deriveAuthoringStates(
   sessions: readonly AuthorSessionFact[],
   findings: readonly Pick<SectionFindingDto, 'item'>[],
 ): PlanAuthoringStateRow[] {
-  const authorTargets = (facts: readonly AuthorSessionFact[]): Set<string> =>
-    new Set(
-      facts
-        .filter((f) => f.kind === 'author' && f.targetRef !== null)
-        .map((f) => f.targetRef as string),
-    );
   const live = authorTargets(liveSteps);
   const ever = authorTargets(sessions);
   const findingRefs = new Set(findings.map((f) => f.item));
 
   const rows: PlanAuthoringStateRow[] = [];
   for (const item of items) {
-    const ref = proposalRef(item);
-    if (ref === null || (item.op !== 'add' && item.op !== 'modify')) continue;
+    if (item.op !== 'add') continue;
+    const ref = `planItem:${item.id}`;
     const state: PlanAuthoringState = live.has(ref)
       ? 'authoring'
       : ever.has(ref) || proposalComplete(item, items, findingRefs)
@@ -119,10 +152,73 @@ export function deriveAuthoringStates(
     const title = (item.proposedFields as { title?: unknown } | null)?.title;
     rows.push({
       ref,
-      op: item.op,
+      op: 'add',
       title: typeof title === 'string' ? title : null,
       state,
     });
+  }
+  return rows;
+}
+
+/** The ids of the committed cards this plan's walk re-authors, and which of them a `modify` already rewrote. */
+export function committedWalkSet(
+  items: readonly PlanItemDto[],
+  listed: readonly string[],
+  sessions: readonly AuthorSessionFact[],
+): { inWalk: Set<string>; rewritten: Set<string> } {
+  const inWalk = new Set(listed);
+  const rewritten = new Set<string>();
+  for (const item of items) {
+    if (item.op !== 'modify' || item.workItemId === null) continue;
+    const patch = (item.patch ?? {}) as Record<string, unknown>;
+    // A TITLE change lists the card for re-authoring in both planners (MOTIR-8644):
+    // the title says what the card IS, and its body was written against the old one.
+    if ('title' in patch) inWalk.add(item.workItemId);
+    if (filled(patch.descriptionMd)) {
+      inWalk.add(item.workItemId);
+      rewritten.add(item.workItemId);
+    }
+  }
+  for (const ref of authorTargets(sessions)) {
+    if (!ref.startsWith('planItem:')) inWalk.add(ref);
+  }
+  return { inWalk, rewritten };
+}
+
+/**
+ * Every committed card the read answers, each with its state (MOTIR-10001): the
+ * cards the walk re-authors and every card the caller asked about, in that order.
+ *
+ *   - authoring   — a LIVE author step targets it;
+ *   - authored    — an ENDED author session targeted it, or a `modify` already
+ *                   carries its new body;
+ *   - not_started — the walk re-authors it and no session has opened on it yet;
+ *   - not_in_walk — no session of this plan will rewrite its body.
+ */
+export function deriveCommittedStates(
+  items: readonly PlanItemDto[],
+  liveSteps: readonly AuthorSessionFact[],
+  sessions: readonly AuthorSessionFact[],
+  listed: readonly string[],
+  cards: readonly CommittedCard[],
+): CommittedAuthoringStateRow[] {
+  const { inWalk, rewritten } = committedWalkSet(items, listed, sessions);
+  const live = authorTargets(liveSteps);
+  const ever = authorTargets(sessions);
+  const rows: CommittedAuthoringStateRow[] = [];
+  const seen = new Set<string>();
+  for (const card of cards) {
+    if (seen.has(card.id)) continue;
+    seen.add(card.id);
+    const walked = inWalk.has(card.id);
+    const state: CommittedAuthoringState = !walked
+      ? 'not_in_walk'
+      : live.has(card.id)
+        ? 'authoring'
+        : ever.has(card.id) || rewritten.has(card.id)
+          ? 'authored'
+          : 'not_started';
+    rows.push({ ref: card.id, key: card.key, title: card.title, inWalk: walked, state });
   }
   return rows;
 }

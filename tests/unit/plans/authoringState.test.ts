@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { PlanItemDto } from '@/lib/dto/plans';
-import { deriveAuthoringStates, proposalComplete } from '@/lib/plans/authoringState';
+import {
+  deriveAuthoringStates,
+  deriveCommittedStates,
+  proposalComplete,
+} from '@/lib/plans/authoringState';
 
 // MOTIR-9821 — the derivation behind `get_plan_authoring_state`. Pure, so every
 // state is asserted here without a database; the read through the real transport
@@ -34,8 +38,8 @@ function add(id: string, fields: Record<string, unknown>, parentRef: string | nu
   } as unknown as PlanItemDto;
 }
 
-const modify = (id: string, workItemId: string) =>
-  ({ ...add(id, {}), op: 'modify', workItemId, proposedFields: null, patch: {} }) as PlanItemDto;
+const modify = (id: string, workItemId: string, patch: Record<string, unknown> = {}) =>
+  ({ ...add(id, {}), op: 'modify', workItemId, proposedFields: null, patch }) as PlanItemDto;
 const remove = (id: string, workItemId: string) =>
   ({ ...modify(id, workItemId), op: 'remove' }) as PlanItemDto;
 
@@ -125,8 +129,76 @@ describe('what counts as COMPLETE', () => {
     expect(proposalComplete(parentTask, items, new Set())).toBe(true);
   });
 
-  it('a `modify` is complete and keyed by its work item id; a `remove` is not listed', () => {
-    const rows = deriveAuthoringStates([modify('m', 'wi_1'), remove('r', 'wi_2')], [], [], []);
-    expect(rows).toEqual([{ ref: 'wi_1', op: 'modify', title: null, state: 'authored' }]);
+  it('`proposals` holds the `add`s alone: a `modify` is a committed card, a `remove` is never authored', () => {
+    const rows = deriveAuthoringStates(
+      [add('a', { title: 'T', kind: 'subtask' }), modify('m', 'wi_1'), remove('r', 'wi_2')],
+      [],
+      [],
+      [],
+    );
+    expect(rows.map((r) => r.ref)).toEqual(['planItem:a']);
+  });
+});
+
+// MOTIR-10001 — the committed half: a card the walk re-authors reads the three states,
+// every other committed card reads `not_in_walk`.
+describe('committed cards', () => {
+  const card = (id: string) => ({ id, key: `PROD-${id}`, title: `Card ${id}` });
+  const stateIn = (rows: ReturnType<typeof deriveCommittedStates>, id: string) =>
+    rows.find((r) => r.ref === id)?.state;
+
+  it('a lay-listed card (a title-changing `modify`) with no session reads `not_started`', () => {
+    const rows = deriveCommittedStates(
+      [modify('m', 'wi_1', { title: 'Renamed' })],
+      [],
+      [],
+      [],
+      [card('wi_1')],
+    );
+    expect(rows).toEqual([
+      { ref: 'wi_1', key: 'PROD-wi_1', title: 'Card wi_1', inWalk: true, state: 'not_started' },
+    ]);
+  });
+
+  it('a card the driver recorded in `walkListed` reads `not_started`, then `authoring`, then `authored`', () => {
+    const cards = [card('wi_2')];
+    expect(stateIn(deriveCommittedStates([], [], [], ['wi_2'], cards), 'wi_2')).toBe('not_started');
+    const live = [{ kind: 'author', targetRef: 'wi_2' }];
+    expect(stateIn(deriveCommittedStates([], live, live, ['wi_2'], cards), 'wi_2')).toBe(
+      'authoring',
+    );
+    expect(stateIn(deriveCommittedStates([], [], live, ['wi_2'], cards), 'wi_2')).toBe('authored');
+  });
+
+  it('an author session on a committed card puts it in the walk even when nothing listed it', () => {
+    const ended = [{ kind: 'author', targetRef: 'wi_3' }];
+    expect(stateIn(deriveCommittedStates([], [], ended, [], [card('wi_3')]), 'wi_3')).toBe(
+      'authored',
+    );
+  });
+
+  it('a `modify` carrying a new body is `authored` with no session', () => {
+    const rows = deriveCommittedStates(
+      [modify('m', 'wi_4', { descriptionMd: 'rewritten' })],
+      [],
+      [],
+      [],
+      [card('wi_4')],
+    );
+    expect(stateIn(rows, 'wi_4')).toBe('authored');
+  });
+
+  it('a card the walk does not re-author — a surgical edge `modify`, or one only asked about — is `not_in_walk`', () => {
+    const rows = deriveCommittedStates(
+      [modify('m', 'wi_5', { blockedByAdd: ['planItem:a'] })],
+      [],
+      [{ kind: 'lay', targetRef: 'wi_6' }],
+      [],
+      [card('wi_5'), card('wi_6'), card('wi_5')],
+    );
+    expect(rows.map((r) => [r.ref, r.inWalk, r.state])).toEqual([
+      ['wi_5', false, 'not_in_walk'],
+      ['wi_6', false, 'not_in_walk'],
+    ]);
   });
 });
