@@ -10333,6 +10333,17 @@ model ProjectRepo {
   /// not a lost plan — the role + name + seed source survive so the row can be
   /// re-established.
   githubRepoId          String?                   @map("github_repo_id")
+  /// The default-branch HEAD the repository had when Motir finished seeding it
+  /// (MOTIR-4589) — the template's commit, plus any commit Motir wrote while
+  /// seeding (the CI stub on an initialised repo). Until the default branch moves
+  /// past it, the repository holds only what its seed already says, so its code
+  /// graph would be the template's graph: the index waits for a commit of the
+  /// project's own (`lib/projectRepos/seedHead.ts`).
+  ///
+  /// NULL on a `connected` row (the user's repository has history of its own),
+  /// on every row created before this column existed, and on a created row whose
+  /// head could not be read at creation — each of which indexes as it always did.
+  seedHeadSha           String?                   @map("seed_head_sha")
   /// ORDER within the set, and it is MEANINGFUL: the first row is the project's
   /// PRIMARY repo (ADR §1.3) — what a single-repo project's one row is, and the
   /// deterministic tie-break anywhere the set needs one. Order carries NO dispatch

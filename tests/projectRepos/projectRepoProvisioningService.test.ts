@@ -73,6 +73,8 @@ let calls: Call[];
 let existingRepos: Map<string, number>;
 /** Repo names the fake GitHub refuses to create, and with which status. */
 let refusals: Map<string, number>;
+/** Repo names whose default-branch head the fake GitHub will not serve. */
+let unreadableHeads: Set<string>;
 let nextRepoId: number;
 /** The project's own GitHub runner group (MOTIR-1972) — establishing a
  *  repository now syncs it, so this suite's GitHub serves those endpoints too. */
@@ -153,6 +155,16 @@ function installGitHub(): void {
         existingRepos.set(name, id);
         return json(201, { id, name, owner: { login: MOTIR_ORG } });
       }
+      // The default branch's head once seeding finished (MOTIR-4589) — the seed
+      // head the row records. `unreadableHeads` stages a head GitHub will not serve.
+      const branch = /\/repos\/[^/]+\/([^/]+)\/branches\/[^/]+$/.exec(u);
+      if (method === 'GET' && branch) {
+        const name = branch[1]!;
+        if (!existingRepos.has(name) || unreadableHeads.has(name)) {
+          return json(404, { message: 'Branch not found' });
+        }
+        return json(200, { name: 'main', commit: { sha: `seed-${name}` } });
+      }
       if (method === 'GET' && u.includes(`/repos/${MOTIR_ORG}/`)) {
         const name = u.split('/').pop()!;
         const id = existingRepos.get(name);
@@ -196,6 +208,7 @@ beforeEach(async () => {
   calls = [];
   existingRepos = new Map();
   refusals = new Map();
+  unreadableHeads = new Set();
   nextRepoId = 900_001;
   actionsVariables = createActionsVariableFake(MOTIR_ORG);
   runnerGroups = createRunnerGroupFake(MOTIR_ORG);
@@ -528,28 +541,63 @@ describe('the fleet runner variable (MOTIR-2015)', () => {
 });
 
 describe('the shipped chain is used, not extended', () => {
-  it('enqueues the index job per repo through the EXISTING chokepoint', async () => {
+  it('indexes NOTHING at creation — a created repo holds only its seed (MOTIR-4589)', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
     const fx = await makeWorkItemFixture();
-    await addRow(fx, 'web', 'acme-web');
-    await addRow(fx, 'api', 'acme-api');
+    const webId = await addRow(fx, 'web', 'acme-web');
+    const apiId = await addRow(fx, 'api', 'acme-api');
 
     await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
 
-    // The job the reconcile/bind paths send, one per created repo, carrying the
-    // OWNING workspace — the same event name and payload shape
-    // `enqueueNewlyAddedRepos` produces. Nothing new was added to the chain.
+    // A repository Motir just seeded holds exactly its template, so its graph
+    // would be the template's graph. No index is enqueued for either row...
     const send = vi.mocked(jobDispatcher.dispatchEventToEngine);
-    expect(send).toHaveBeenCalledTimes(2);
-    const sent = dispatchedEvents(send);
-    expect(sent.map((e) => e.name)).toEqual(['system.code-graph-index', 'system.code-graph-index']);
-    expect(sent.map((e) => (e.data as { repoName: string }).repoName)).toEqual([
-      'acme-web',
-      'acme-api',
+    expect(dispatchedEvents(send).map((e) => e.name)).not.toContain('system.code-graph-index');
+    // ...and each row records the head its seed left, which is what a later push
+    // is compared with. Read AFTER the CI stub, so the stub counts as seed.
+    const rows = await adminDb.projectRepo.findMany({
+      where: { id: { in: [webId, apiId] } },
+      orderBy: { name: 'asc' },
+      select: { name: true, seedHeadSha: true },
+    });
+    expect(rows).toEqual([
+      { name: 'acme-api', seedHeadSha: 'seed-acme-api' },
+      { name: 'acme-web', seedHeadSha: 'seed-acme-web' },
     ]);
+    const stubAt = calls.findIndex((c) => c.method === 'PUT' && c.url.includes('acme-api'));
+    const headAt = calls.findIndex((c) =>
+      c.url.endsWith('/repos/motir-projects/acme-api/branches/main'),
+    );
+    expect(stubAt).toBeGreaterThanOrEqual(0);
+    expect(headAt).toBeGreaterThan(stubAt);
+    // The skip is legible: "not indexed yet", never an index failure.
+    expect(vi.mocked(console.warn)).toHaveBeenCalledWith(
+      expect.stringContaining('not indexed yet: no commit beyond the template'),
+      `${MOTIR_ORG}/acme-web`,
+      'seed-acme-web',
+    );
+  });
+
+  it('enqueues the index through the EXISTING chokepoint when the seed head is unknown', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const fx = await makeWorkItemFixture();
+    const rowId = await addRow(fx, 'web', 'acme-web');
+    unreadableHeads.add('acme-web');
+
+    await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
+
+    // Unknown is never a reason to withhold an index: the row records no seed
+    // head and the repository indexes as every repository did before MOTIR-4589 —
+    // the same event name and payload shape `enqueueNewlyAddedRepos` produces.
+    const row = await adminDb.projectRepo.findUniqueOrThrow({ where: { id: rowId } });
+    expect(row.seedHeadSha).toBeNull();
+    const sent = dispatchedEvents(vi.mocked(jobDispatcher.dispatchEventToEngine));
+    expect(sent.map((e) => e.name)).toEqual(['system.code-graph-index']);
     expect(sent[0]!.data).toMatchObject({
       installationId: INSTALLATION_ID,
       workspaceId: fx.workspaceId,
       repoOwner: MOTIR_ORG,
+      repoName: 'acme-web',
       defaultBranch: 'main',
     });
   });

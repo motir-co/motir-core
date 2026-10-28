@@ -64,6 +64,7 @@ interface JoinedRow {
   failureReason: string | null;
   proposalSignal: string | null;
   githubRepoId: string | null;
+  seedHeadSha: string | null;
   position: string;
   createdAt: Date;
   updatedAt: Date;
@@ -151,6 +152,7 @@ function toNested(r: JoinedRow): ProjectRepoWithRealized {
     hostingTarget: r.hostingTarget,
     hostingUseCase: r.hostingUseCase,
     hostingSize: r.hostingSize,
+    seedHeadSha: r.seedHeadSha,
     // Zero or one record — the mapper then picks the `admin` one out of it, which
     // is exactly what the JOIN already selected. Keeping the shape a LIST (rather
     // than a nullable field) means this read and the Prisma-`include` reads below
@@ -266,6 +268,7 @@ export const projectRepoRepository = {
         pr."hosting_target"    AS "hostingTarget",
         pr."hosting_use_case"  AS "hostingUseCase",
         pr."hosting_size"      AS "hostingSize",
+        pr."seed_head_sha"     AS "seedHeadSha",
         oc."github_login"      AS "ownerLogin",
         oc."permission"        AS "ownerPermission",
         oc."invited_at"        AS "ownerInvitedAt",

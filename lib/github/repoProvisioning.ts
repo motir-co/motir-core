@@ -195,6 +195,15 @@ export interface ProvisionedRepo {
    * already claims it before attaching — see the service.
    */
   adopted: boolean;
+  /**
+   * The default-branch head once seeding finished (MOTIR-4589) — the template's
+   * commit, or the initialised commit plus the CI stub. The project row records
+   * it, and the repository's first index waits until the branch moves past it.
+   * NULL on an ADOPTED repository (this call did not seed it, so it cannot say
+   * what the seed was) and when the head could not be read: either way the
+   * repository indexes as it always has.
+   */
+  seedHeadSha: string | null;
 }
 
 // ── Configuration + the installation id ─────────────────────────────────────
@@ -567,7 +576,7 @@ export const repoProvisioningClient = {
         // one we can claim.
         const existing = await readRepository(org, input.name, token);
         if (!existing) throw new RepoNameTakenOnHostError(input.name);
-        return { installationId, ...existing, adopted: true };
+        return { installationId, ...existing, adopted: true, seedHeadSha: null };
       }
       throw new RepoProvisioningApiError(res.status, errorDetail(body));
     }
@@ -583,7 +592,9 @@ export const repoProvisioningClient = {
     // would turn a cosmetic gap into a lost artifact.
     if (!templated) await seedCiStub(org, ready.name, token, ready.defaultBranch);
 
-    return { installationId, ...ready, adopted: false };
+    // Read AFTER every seeding write, so the stub's commit counts as seed too.
+    const seedHeadSha = await readBranchHead(org, ready.name, token, ready.defaultBranch);
+    return { installationId, ...ready, adopted: false, seedHeadSha };
   },
 };
 
@@ -661,6 +672,33 @@ async function awaitReady(org: string, name: string, token: string): Promise<Rea
     if (last && last.defaultBranch.length > 0) return last;
   }
   throw new RepoNotReadyError(name);
+}
+
+/** The head commit of one branch, or null when it cannot be read. Best-effort by
+ *  contract: a missing seed head only means the repository is indexed at once,
+ *  as every repository was before MOTIR-4589 — never a failed row. */
+async function readBranchHead(
+  org: string,
+  name: string,
+  token: string,
+  branch: string,
+): Promise<string | null> {
+  try {
+    const res = await request(
+      `${GITHUB_API}/repos/${encodeURIComponent(org)}/${encodeURIComponent(name)}` +
+        `/branches/${encodeURIComponent(branch)}`,
+      { method: 'GET', headers: { authorization: `Bearer ${token}` } },
+    );
+    if (!res.ok) return null;
+    const sha = asRecord(asRecord(await readJson(res))?.['commit'])?.['sha'];
+    return typeof sha === 'string' && sha.length > 0 ? sha : null;
+  } catch (err) {
+    console.error(
+      `[repoProvisioning] seed head not read for ${org}/${name}:`,
+      err instanceof Error ? err.message : 'unknown',
+    );
+    return null;
+  }
 }
 
 /** Commit the CI stub into a freshly initialised repository. A NEW file, so no

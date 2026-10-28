@@ -404,19 +404,35 @@ async function establishRow(
     // repository belongs to the ORGANISATION, so two projects using one is the
     // ordinary case. The backstop is now `(project_id, github_repo_id)`, and it
     // catches the mistake that is still a mistake.
-    const settled = await projectRepoSetService.attachRealizedRepo(row.id, mirrored.id, ctx);
-
-    // POST-COMMIT, BEST-EFFORT — the existing chokepoint, per repo (MOTIR-1500).
-    // Nothing is added to the webhook → reconcile → index chain; this is the same
-    // function `enqueueNewlyAddedRepos` calls for a newly-selected repo. A dropped
-    // enqueue self-heals: the job is idempotent and a later push re-triggers it.
-    await enqueueCodeGraphIndex({
-      installationId: provisioned.installationId,
-      workspaceId: ctx.workspaceId,
-      repoOwner: mirrored.owner,
-      repoName: mirrored.name,
-      defaultBranch: mirrored.defaultBranch,
+    const settled = await projectRepoSetService.attachRealizedRepo(row.id, mirrored.id, ctx, {
+      seedHeadSha: provisioned.seedHeadSha,
     });
+
+    // ⚠️ A REPOSITORY MOTIR JUST SEEDED IS NOT INDEXED YET (MOTIR-4589). It holds
+    // exactly its seed, so its graph would be the template's graph — a whole-tree
+    // build attributed to the organisation for nothing the planner cannot be told
+    // for free. Its first index comes from its first push past the seed
+    // (`githubWebhookService.handlePush`), and the reconcile's has-no-graph gate
+    // still offers it every time, so a push that was missed is not a repository
+    // that stays code-blind. Only when the seed head is UNKNOWN (an adopted
+    // repository, an unreadable head) does it index now, as it always did —
+    // POST-COMMIT, best-effort, through the existing chokepoint (MOTIR-1500).
+    if (provisioned.seedHeadSha !== null) {
+      console.warn(
+        '[projectRepoProvisioningService] code graph not indexed yet: no commit beyond the ' +
+          'template. The first push past the seed indexes it. repo / seed head:',
+        `${mirrored.owner}/${mirrored.name}`,
+        provisioned.seedHeadSha,
+      );
+    } else {
+      await enqueueCodeGraphIndex({
+        installationId: provisioned.installationId,
+        workspaceId: ctx.workspaceId,
+        repoOwner: mirrored.owner,
+        repoName: mirrored.name,
+        defaultBranch: mirrored.defaultBranch,
+      });
+    }
 
     return {
       rowId: row.id,

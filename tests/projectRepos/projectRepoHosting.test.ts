@@ -157,6 +157,7 @@ describe('toProjectRepoDto hosting fields', () => {
     proposalSignal: null,
     githubRepoId: null,
     position: 'a0',
+    seedHeadSha: null,
     ciActionsDisabled: false,
     ciActionsIntentAt: null,
     ciActionsAppliedAt: null,

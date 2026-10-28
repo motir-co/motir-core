@@ -1,5 +1,4 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { JobTestEngine } from '../helpers/jobs';
 import { db } from '@/lib/db';
 import { projectsService } from '@/lib/services/projectsService';
 import { codeGraphIndex } from '@/lib/jobs/definitions/codeGraphIndex';
@@ -20,6 +19,7 @@ import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { createStepApi } from '@/lib/jobs/engine/step';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
+import { dispatchedEvents, JobTestEngine, spyOnJobDispatch } from '../helpers/jobs';
 import {
   containerExitsWith,
   INDEX_REPO_REF,
@@ -607,6 +607,119 @@ describe('a GitLab repo is REFUSED before dispatch, not dead-lettered five times
 
     expect(result).toMatchObject({ indexed: true, repoRef: REPO_REF });
     expect(fakeOrchestrator.provisioned.length).toBeGreaterThan(0);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// A REPO MOTIR CREATED WAITS FOR A COMMIT OF ITS OWN (MOTIR-4589) — at run time,
+// in the same resolve step every trigger passes through.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('a created repository that holds only its seed is not indexed yet (MOTIR-4589)', () => {
+  const SEED = 'f'.repeat(40);
+
+  /** Turn the fixture's connected rows into rows Motir CREATED and seeded at `SEED`,
+   *  with the default branch at `head` (null: no push observed since creation). */
+  async function seededAt(workspaceId: string, head: string | null): Promise<void> {
+    await adminDb.projectRepo.updateMany({
+      where: { workspaceId },
+      data: { state: 'created', seedHeadSha: SEED },
+    });
+    await adminDb.githubRepo.updateMany({
+      where: { workspaceId },
+      data: { defaultBranchHeadSha: head },
+    });
+  }
+
+  it('resolves to no_commit_beyond_template, boots NOTHING, and records it on the ledger', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { workspaceId, installationId } = await seedWorkspace('cgi-seed-only', 1);
+    await seededAt(workspaceId, null);
+    stubIndexFleet();
+
+    const engine = new JobTestEngine({ function: codeGraphIndex });
+    const { result } = await engine.execute({
+      events: [indexEvent(installationId, workspaceId)],
+    });
+
+    expect(result).toEqual({ indexed: false, reason: 'no_commit_beyond_template' });
+    expect(fakeOrchestrator.provisioned).toHaveLength(0);
+    // A succeeded row that claims no repoRef: "not indexed YET", never a failure,
+    // and never read by the enqueue gate as an indexed repository.
+    const runs = await indexRuns();
+    expect(runs.map((r) => r.status)).toEqual(['succeeded']);
+    expect(runs[0]!.output).toEqual({ indexed: false, reason: 'no_commit_beyond_template' });
+    expect(vi.mocked(console.warn)).toHaveBeenCalledWith(
+      expect.stringContaining('not indexed yet: no commit beyond the template'),
+      REPO_REF,
+    );
+  });
+
+  it('a push of Motir’s OWN seeding (head still the seed) is held too — the refresh path', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { workspaceId, installationId } = await seedWorkspace('cgi-seed-stub', 1);
+    await seededAt(workspaceId, SEED);
+    stubIndexFleet();
+
+    const engine = new JobTestEngine({ function: codeGraphRefresh });
+    const { result } = await engine.execute({
+      events: [refreshEventFor({ installationId, workspaceId, eventId: 'evt-seed-stub' })],
+    });
+
+    expect(result).toEqual({ indexed: false, reason: 'no_commit_beyond_template' });
+    expect(fakeOrchestrator.provisioned).toHaveLength(0);
+  });
+
+  it('SELF-HEAL: a created repo with commits past its seed but no graph is picked up by the next reconcile', async () => {
+    // The case this card could plausibly break (MOTIR-1961): its push happened,
+    // the index was dropped, and no further push is coming. The reconcile's
+    // has-no-graph gate still offers it, and the run-time gate lets it through.
+    const { workspaceId, installationId } = await seedWorkspace('cgi-seed-heal', 1);
+    await seededAt(workspaceId, 'e'.repeat(40));
+    const send = spyOnJobDispatch();
+    send.mockClear();
+    const repo = await adminDb.githubRepo.findFirstOrThrow({ where: { workspaceId } });
+
+    await codeGraphIndexService.enqueueFirstIndexForRepos({
+      installationId,
+      workspaceId,
+      repos: [
+        {
+          providerRepoId: repo.repoId,
+          owner: repo.owner,
+          name: repo.name,
+          defaultBranch: repo.defaultBranch,
+          archived: false,
+        },
+      ],
+    });
+    const enqueued = dispatchedEvents(send).filter((e) => e.name === 'system.code-graph-index');
+    expect(enqueued).toHaveLength(1);
+
+    stubIndexFleet();
+    containerExitsWith(0);
+    const engine = new JobTestEngine({ function: codeGraphIndex });
+    const { result } = await engine.execute({
+      events: [indexEvent(installationId, workspaceId)],
+    });
+    expect(result).toMatchObject({ indexed: true, repoRef: REPO_REF });
+    expect(fakeOrchestrator.provisioned.length).toBeGreaterThan(0);
+  });
+
+  it('a CONNECTED repository is never held, whatever its head', async () => {
+    const { workspaceId, installationId } = await seedWorkspace('cgi-seed-conn', 1);
+    await adminDb.githubRepo.updateMany({
+      where: { workspaceId },
+      data: { defaultBranchHeadSha: null },
+    });
+    stubIndexFleet();
+    containerExitsWith(0);
+
+    const engine = new JobTestEngine({ function: codeGraphIndex });
+    const { result } = await engine.execute({
+      events: [indexEvent(installationId, workspaceId)],
+    });
+    expect(result).toMatchObject({ indexed: true, repoRef: REPO_REF });
   });
 });
 

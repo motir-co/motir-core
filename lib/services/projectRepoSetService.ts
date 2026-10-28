@@ -838,8 +838,9 @@ export const projectRepoSetService = {
     rowId: string,
     githubRepoId: string,
     ctx: ServiceContext,
+    seed: { seedHeadSha?: string | null } = {},
   ): Promise<ProjectRepoDto> {
-    const attached = await this.attachRealizedRepoRow(rowId, githubRepoId, ctx);
+    const attached = await this.attachRealizedRepoRow(rowId, githubRepoId, ctx, seed);
     // ⚠️ MOTIR-1913's PIN RESOLUTION PASS USED TO RUN HERE, AND IT IS GONE
     // (Story MOTIR-2732 · MOTIR-3040, ADR `work-item-repository-set.md`
     // "Amendment 2026-08-18" §A3's RETIRE branch).
@@ -995,6 +996,7 @@ export const projectRepoSetService = {
     rowId: string,
     githubRepoId: string,
     ctx: ServiceContext,
+    seed: { seedHeadSha?: string | null } = {},
   ): Promise<ProjectRepoDto> {
     return inLockedRow(rowId, ctx, async (row, tx) => {
       const target: ProjectRepoState = row.state === 'creating' ? 'created' : 'connected';
@@ -1025,9 +1027,12 @@ export const projectRepoSetService = {
         throw new RealizedRepoAlreadyClaimedError(githubRepoId);
       }
       try {
+        // Only a repository Motir CREATED has a seed head (MOTIR-4589); a
+        // connected one is the user's, with history of its own.
+        const seedHeadSha = target === 'created' ? (seed.seedHeadSha ?? null) : null;
         const updated = await projectRepoRepository.update(
           rowId,
-          { githubRepoId, state: target, failureReason: null },
+          { githubRepoId, state: target, failureReason: null, seedHeadSha },
           tx,
         );
         // The `created` / `connected` hop may be what ESTABLISHES the set (MOTIR-5178).

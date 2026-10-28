@@ -42,6 +42,7 @@ function row(over: Partial<ProjectRepoWithRealized> = {}): ProjectRepoWithRealiz
     failureReason: null,
     proposalSignal: null,
     githubRepoId: 'gr-1',
+    seedHeadSha: null,
     hostingTarget: null,
     hostingUseCase: null,
     hostingSize: null,
