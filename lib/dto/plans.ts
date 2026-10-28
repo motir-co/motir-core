@@ -1412,14 +1412,24 @@ export type CorrectProposalKey = (typeof CORRECT_PROPOSAL_KEYS)[number];
 export interface CorrectPlanBriefInput {
   title?: string | null;
   summary?: string | null;
+  /**
+   * The PLANNER's own record (MOTIR-9978) — a JSON object the authoring agent
+   * keeps on the plan between runs, replaced whole; `null` clears it. Not part
+   * of the heading a reviewer reads: it is never on {@link PlanDto}, and a write
+   * of it alone puts nothing on the plan's timeline.
+   */
+  plannerRecord?: Record<string, unknown> | null;
 }
+
+/** The largest planner record `update_plan` stores, in bytes of its JSON (MOTIR-9978). */
+export const PLANNER_RECORD_MAX_BYTES = 64 * 1024;
 
 /**
  * The keys {@link CorrectPlanBriefInput} declares — the same DECLARED-SOURCE
  * discipline the two constants above are held to, and for the same reason: a key
  * on the input that no transport reads is invisible from both ends.
  */
-export const CORRECT_PLAN_BRIEF_KEYS = ['title', 'summary'] as const;
+export const CORRECT_PLAN_BRIEF_KEYS = ['title', 'summary', 'plannerRecord'] as const;
 
 export type CorrectPlanBriefKey = (typeof CORRECT_PLAN_BRIEF_KEYS)[number];
 

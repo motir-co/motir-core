@@ -4781,11 +4781,12 @@ had the most expensive remedy in this surface: withdraw every proposal (which EN
 proposal with every `planItem:` ref rebuilt, re-close it. One wrong sentence cost the
 whole plan.
 
-| Input     | Type           | Required | Notes                                                        |
-| --------- | -------------- | -------- | ------------------------------------------------------------ |
-| `planId`  | string         | yes      | The id `create_plan` returned.                               |
-| `title`   | string \| null | no       | The plan's own short label. `null` clears it.                |
-| `summary` | string \| null | no       | The Markdown summary shown above the tree. `null` clears it. |
+| Input           | Type           | Required | Notes                                                                          |
+| --------------- | -------------- | -------- | ------------------------------------------------------------------------------ |
+| `planId`        | string         | yes      | The id `create_plan` returned.                                                 |
+| `title`         | string \| null | no       | The plan's own short label. `null` clears it.                                  |
+| `summary`       | string \| null | no       | The Markdown summary shown above the tree. `null` clears it.                   |
+| `plannerRecord` | object \| null | no       | YOUR machine state on the plan (MOTIR-9978). Replaced whole; `null` clears it. |
 
 **Sparse, and a call that sends neither is refused.** An omitted field is left
 exactly as it was; an explicit `null` clears it. `INVALID_PROPOSAL` for a call that
@@ -4806,6 +4807,15 @@ and model that made it. That is a decision rather than a side effect: a `planned
 is a thing a person is deciding about, and silently rewriting the sentence they are
 reading would trade one honesty problem for another. It is deliberately not the
 `edited` verb, which means _a proposal changed_ and renders as a proposal count.
+
+**`plannerRecord` is the AUTHOR's own record, kept as data (MOTIR-9978).** Machine
+state an agent keeps on a plan between its runs — plan.py's targets and how each walk
+left them — belongs here, never in `summary`: the summary is prose a person reads and
+may correct, and the review rail renders it as Markdown, so a JSON fence there is drawn
+as a code block and a person's edit can break the next resume. A JSON object of at most
+64 KiB, replaced whole. `get_plan` returns it as `plannerRecord` (`null` when the plan
+keeps none); it is on no plan DTO, so neither `/api/v1` nor the review surface receives
+it, and a call that writes only the record puts nothing on the timeline.
 
 ```jsonc
 // The summary said the org was the billing unit for code indexing. It is not.

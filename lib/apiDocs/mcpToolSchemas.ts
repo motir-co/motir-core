@@ -3373,6 +3373,11 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         description:
           'The longer summary (Markdown) shown to the reviewer above the tree — the sentence they read before any card. `null` clears it. Omit it to leave it exactly as it is.',
       },
+      plannerRecord: {
+        anyOf: [{ type: 'object', additionalProperties: {} }, { type: 'null' }],
+        description:
+          'YOUR OWN record on the plan, as data — machine state you keep between runs (e.g. the targets you settled and how each walk left them), which a reviewer never sees. A JSON object of at most 65536 bytes, REPLACED WHOLE; `null` clears it. `get_plan` returns it as `plannerRecord`. Keep it out of `summary`: the summary is prose a person reads and may correct. Omit it to leave it exactly as it is.',
+      },
     },
     required: ['planId'],
     additionalProperties: false,

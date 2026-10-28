@@ -245,6 +245,7 @@ import type {
 import {
   PLAN_ITEM_REASON_MAX,
   PLAN_STATUS_DTO_VALUES,
+  PLANNER_RECORD_MAX_BYTES,
   WORK_ITEM_PENDING_PLAN_STATUSES,
 } from '@/lib/dto/plans';
 import {
@@ -664,6 +665,33 @@ async function verdictAgainst(
 function validateProposedSizing(pf: PlanItemProposedFields): void {
   validateStoryPoints(pf.storyPoints ?? null);
   validateEstimateMinutes(pf.estimateMinutes ?? null);
+}
+
+/** A stored JSON value that is an object — the only shape a planner record takes (MOTIR-9978). */
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * The column value for a planner record (MOTIR-9978): `null` clears it, an object
+ * is stored whole. Refused, naming the field, when it is not an object or its JSON
+ * is over {@link PLANNER_RECORD_MAX_BYTES} — the record is a planner's bookkeeping,
+ * not a store for anything a plan's size should be paying for.
+ */
+function plannerRecordValue(
+  record: Record<string, unknown> | null,
+): Prisma.InputJsonValue | typeof Prisma.DbNull {
+  if (record === null) return Prisma.DbNull;
+  if (!isJsonObject(record)) {
+    throw new InvalidProposalError('`plannerRecord` must be a JSON object, or null to clear it.');
+  }
+  const bytes = Buffer.byteLength(JSON.stringify(record), 'utf8');
+  if (bytes > PLANNER_RECORD_MAX_BYTES) {
+    throw new InvalidProposalError(
+      `\`plannerRecord\` is ${bytes} bytes of JSON; the most a plan stores is ${PLANNER_RECORD_MAX_BYTES}.`,
+    );
+  }
+  return record as Prisma.InputJsonValue;
 }
 
 /**
@@ -6685,9 +6713,16 @@ export const plansService = {
       data.summary = normalizeSelfReported(input.summary);
       touched.push('summary');
     }
+    if (input.plannerRecord !== undefined) {
+      data.plannerRecord = plannerRecordValue(input.plannerRecord);
+      touched.push('plannerRecord');
+    }
     if (touched.length === 0) {
       throw new InvalidProposalError('A correction must change something.');
     }
+    // The planner's record is not part of the heading a reviewer reads, so a
+    // write of it alone is not a `brief_edited` on the timeline (MOTIR-9978).
+    const briefFields = touched.filter((key) => key !== 'plannerRecord');
 
     const { row, items } = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
@@ -6711,21 +6746,37 @@ export const plansService = {
         // verbatim: this method exists precisely so an AGENT can reach a
         // `planned` plan, and a reviewer must be able to see WHICH harness and
         // model rewrote the sentence they were reading.
-        await planRevisionsService.recordRevision(
-          {
-            planId,
-            changeKind: 'brief_edited',
-            ...generationActor(fresh, ctx),
-            diff: { fields: touched, correction: true },
-          },
-          tx,
-        );
+        if (briefFields.length > 0) {
+          await planRevisionsService.recordRevision(
+            {
+              planId,
+              changeKind: 'brief_edited',
+              ...generationActor(fresh, ctx),
+              diff: { fields: briefFields, correction: true },
+            },
+            tx,
+          );
+        }
         // The plan's activity stamp (MOTIR-7822).
         await stampPlanActivity(fresh, new Date(), tx);
         return { row: updated, items: await planItemRepository.findByPlan(planId, tx) };
       },
     );
     return toPlanWithItemsDto(row, items);
+  },
+
+  /**
+   * The PLANNER's own record on a plan (MOTIR-9978) — what `get_plan` hands the
+   * authoring agent beside the plan, and the only read of it: no `PlanDto`
+   * carries it, so the review surface never receives it. Admits the reader
+   * exactly as {@link getPlanForReader} does; `null` when the plan carries none.
+   */
+  async getPlannerRecord(
+    planId: string,
+    ctx: ServiceContext,
+  ): Promise<Record<string, unknown> | null> {
+    const plan = await plansService.admitPlanReader(planId, ctx);
+    return isJsonObject(plan.plannerRecord) ? plan.plannerRecord : null;
   },
 
   /**
