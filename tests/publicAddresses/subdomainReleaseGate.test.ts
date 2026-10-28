@@ -229,16 +229,17 @@ describe('what the rest of the system then says — through the SERVICES, never 
   it('returns the projects to the motir.co path, and reports no host for them', async () => {
     // A row read would pass while the resolution disagreed, and the resolution
     // is the thing a visitor meets.
+    // Since the address decision (MOTIR-9790) a workspace subdomain serves no
+    // project: the project already answers at its motir.co path while the name
+    // is held, and the release must leave it exactly there.
     await claimAndRename('acme');
-    expect(
-      (
-        await publicAddressesService.addressesForProject(
-          fx.projectId,
-          fx.workspaceId,
-          fx.identifier,
-        )
-      ).primary,
-    ).toBe(`https://acme.${BASE}/${fx.identifier}`);
+    const before = await publicAddressesService.addressesForProject(
+      fx.projectId,
+      fx.workspaceId,
+      fx.identifier,
+    );
+    expect(before.primary).toBe(`${publicSiteOrigin()}${publicProjectPath(fx.identifier)}`);
+    expect(before.alternates).toEqual([]);
 
     expect((await DELETE(req('DELETE'), params(fx.workspaceId))).status).toBe(200);
 
