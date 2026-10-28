@@ -122,8 +122,19 @@ export class FakeOrganization implements AwsManagementApi {
   readonly runnerRoles = new Map<string, string>();
   /** Per member account: the error assuming its runner role throws. */
   readonly runnerAssumeFailures = new Map<string, Error>();
+  /** Organizational units under the root, by name to id (MOTIR-9940). */
+  readonly organizationalUnits = new Map<string, string>();
+  /** Each account's parent (the root unless moved), by account id. */
+  readonly accountParents = new Map<string, string>();
+  /** Per step: an error thrown ONCE after the step's effect lands, as a pass cut
+   *  off after AWS answered would see it (MOTIR-9940). */
+  readonly failAfter = new Map<
+    'createOrganizationAccount' | 'ensureOrganizationalUnit' | 'moveAccountToOu',
+    Error
+  >();
   private seq = 0;
   private requestSeq = 0;
+  private ouSeq = 0;
   /** Which member account each answered session is for. */
   private readonly sessionAccount = new WeakMap<AwsSessionCredentials, string>();
 
@@ -153,6 +164,7 @@ export class FakeOrganization implements AwsManagementApi {
     this.usedEmails.add(input.email);
     const account = { accountId: this.nextAccountId(), name: input.name, status: 'ACTIVE' };
     this.accounts.set(input.name, account);
+    this.failOnceAfter('createOrganizationAccount');
     return account;
   }
 
@@ -262,5 +274,33 @@ export class FakeOrganization implements AwsManagementApi {
     if (this.iamUsers.has(JSON.stringify(policy))) return { created: [] };
     this.iamUsers.add(JSON.stringify(policy));
     return { created: ['iam-user:motir-fleet-runner', 'iam-policy:motir-fleet-runner-ec2'] };
+  }
+
+  private failOnceAfter(
+    step: 'createOrganizationAccount' | 'ensureOrganizationalUnit' | 'moveAccountToOu',
+  ) {
+    const failure = this.failAfter.get(step);
+    if (!failure) return;
+    this.failAfter.delete(step);
+    throw failure;
+  }
+
+  async ensureOrganizationalUnit(name: string) {
+    this.calls.push(`ensureOrganizationalUnit:${name}`);
+    const existing = this.organizationalUnits.get(name);
+    if (existing) return { ouId: existing, created: false };
+    this.ouSeq += 1;
+    const ouId = `ou-fake-${this.ouSeq}`;
+    this.organizationalUnits.set(name, ouId);
+    this.failOnceAfter('ensureOrganizationalUnit');
+    return { ouId, created: true };
+  }
+
+  async moveAccountToOu(accountId: string, ouId: string) {
+    this.calls.push(`moveAccountToOu:${accountId}`);
+    if ((this.accountParents.get(accountId) ?? 'r-root') === ouId) return { moved: false };
+    this.accountParents.set(accountId, ouId);
+    this.failOnceAfter('moveAccountToOu');
+    return { moved: true };
   }
 }

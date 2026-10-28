@@ -11,12 +11,20 @@ import {
 } from '@aws-sdk/client-iam';
 import {
   CreateAccountCommand,
+  CreateOrganizationalUnitCommand,
   DescribeCreateAccountStatusCommand,
   ListAccountsCommand,
   ListCreateAccountStatusCommand,
+  ListOrganizationalUnitsForParentCommand,
+  ListParentsCommand,
+  ListRootsCommand,
+  MoveAccountCommand,
   OrganizationsClient,
   type Account,
   type CreateAccountStatus,
+  type OrganizationalUnit,
+  type Parent,
+  type Root,
 } from '@aws-sdk/client-organizations';
 import {
   GetAWSDefaultServiceQuotaCommand,
@@ -230,6 +238,17 @@ export interface AwsManagementApi {
     credentials: AwsSessionCredentials,
     policyDocument: AwsPolicyDocument,
   ): Promise<{ created: string[] }>;
+  /** The organizational unit `name` directly under the Organization root,
+   *  created only when absent (MOTIR-9940). */
+  ensureOrganizationalUnit(name: string): Promise<AwsOrganizationalUnitResult>;
+  /** Move `accountId` under `ouId` unless it already sits there. */
+  moveAccountToOu(accountId: string, ouId: string): Promise<{ moved: boolean }>;
+}
+
+/** What `ensureOrganizationalUnit` found or made. */
+export interface AwsOrganizationalUnitResult {
+  ouId: string;
+  created: boolean;
 }
 
 interface SdkErrorShape {
@@ -413,6 +432,37 @@ export function createAwsManagementApi(
     }
   }
 
+  async function organizationRootId(orgs: AwsSdkClient): Promise<string> {
+    const { Roots: roots } = await call<{ Roots?: Root[] }>(
+      'organizations',
+      orgs,
+      new ListRootsCommand({}),
+    );
+    return required(roots?.[0]?.Id, 'Roots[0].Id');
+  }
+
+  async function findOrganizationalUnit(
+    orgs: AwsSdkClient,
+    parentId: string,
+    name: string,
+  ): Promise<string | null> {
+    let nextToken: string | undefined;
+    do {
+      const page = await call<{ OrganizationalUnits?: OrganizationalUnit[]; NextToken?: string }>(
+        'organizations',
+        orgs,
+        new ListOrganizationalUnitsForParentCommand({
+          ParentId: parentId,
+          ...(nextToken ? { NextToken: nextToken } : {}),
+        }),
+      );
+      const match = (page.OrganizationalUnits ?? []).find((ou) => ou.Name === name);
+      if (match) return required(match.Id, 'OrganizationalUnit.Id');
+      nextToken = page.NextToken ?? undefined;
+    } while (nextToken);
+    return null;
+  }
+
   return {
     async findOrganizationAccount(name) {
       const orgs = await organizations();
@@ -590,6 +640,54 @@ export function createAwsManagementApi(
         if (open) return quotaRequestOf(open);
       }
       return null;
+    },
+
+    async ensureOrganizationalUnit(name) {
+      const orgs = await organizations();
+      const rootId = await organizationRootId(orgs);
+      const found = await findOrganizationalUnit(orgs, rootId, name);
+      if (found) return { ouId: found, created: false };
+      try {
+        const { OrganizationalUnit: ou } = await call<{ OrganizationalUnit?: OrganizationalUnit }>(
+          'organizations',
+          orgs,
+          new CreateOrganizationalUnitCommand({ ParentId: rootId, Name: name }),
+        );
+        return { ouId: required(ou?.Id, 'OrganizationalUnit.Id'), created: true };
+      } catch (err) {
+        // A concurrent pass created it between the list and the create: answer
+        // that one, never a second OU.
+        if (
+          !(err instanceof AwsManagementApiError) ||
+          err.awsCode !== 'DuplicateOrganizationalUnitException'
+        ) {
+          throw err;
+        }
+        const raced = await findOrganizationalUnit(orgs, rootId, name);
+        if (!raced) throw err;
+        return { ouId: raced, created: false };
+      }
+    },
+
+    async moveAccountToOu(accountId, ouId) {
+      const orgs = await organizations();
+      const { Parents: parents } = await call<{ Parents?: Parent[] }>(
+        'organizations',
+        orgs,
+        new ListParentsCommand({ ChildId: accountId }),
+      );
+      const parentId = required(parents?.[0]?.Id, 'Parents[0].Id');
+      if (parentId === ouId) return { moved: false };
+      await call(
+        'organizations',
+        orgs,
+        new MoveAccountCommand({
+          AccountId: accountId,
+          SourceParentId: parentId,
+          DestinationParentId: ouId,
+        }),
+      );
+      return { moved: true };
     },
 
     async ensureRunnerIamUser(credentials, policyDocument) {

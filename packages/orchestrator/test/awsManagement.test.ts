@@ -753,6 +753,118 @@ describe('awsAgentHosterPolicyDocument', () => {
   });
 });
 
+describe('the Tenants organizational unit (MOTIR-9940)', () => {
+  const ROOT = { Roots: [{ Id: 'r-root' }] };
+
+  it('finds an existing OU by name under the root, paging, and creates nothing', async () => {
+    const { api, calls } = harness({
+      AssumeRoleCommand: assume,
+      ListRootsCommand: () => ROOT,
+      ListOrganizationalUnitsForParentCommand: (input) =>
+        input['NextToken']
+          ? { OrganizationalUnits: [{ Id: 'ou-tenants', Name: 'Tenants' }] }
+          : { OrganizationalUnits: [{ Id: 'ou-other', Name: 'Other' }], NextToken: 'p2' },
+    });
+
+    expect(await api.ensureOrganizationalUnit('Tenants')).toEqual({
+      ouId: 'ou-tenants',
+      created: false,
+    });
+    expect(
+      calls.find((c) => c.command === 'ListOrganizationalUnitsForParentCommand')!.input,
+    ).toEqual({ ParentId: 'r-root' });
+    expect(calls.map((c) => c.command)).not.toContain('CreateOrganizationalUnitCommand');
+    expect(
+      calls
+        .filter((c) => c.service === 'organizations')
+        .every((c) => c.sessionToken === 'token-MGMT'),
+    ).toBe(true);
+  });
+
+  it('creates the OU under the root only when absent', async () => {
+    const { api, calls } = harness({
+      AssumeRoleCommand: assume,
+      ListRootsCommand: () => ROOT,
+      ListOrganizationalUnitsForParentCommand: () => ({ OrganizationalUnits: [] }),
+      CreateOrganizationalUnitCommand: () => ({
+        OrganizationalUnit: { Id: 'ou-new', Name: 'Tenants' },
+      }),
+    });
+
+    expect(await api.ensureOrganizationalUnit('Tenants')).toEqual({
+      ouId: 'ou-new',
+      created: true,
+    });
+    const creates = calls.filter((c) => c.command === 'CreateOrganizationalUnitCommand');
+    expect(creates.map((c) => c.input)).toEqual([{ ParentId: 'r-root', Name: 'Tenants' }]);
+  });
+
+  it('answers the racing OU when AWS says DuplicateOrganizationalUnitException', async () => {
+    let lists = 0;
+    const { api, calls } = harness({
+      AssumeRoleCommand: assume,
+      ListRootsCommand: () => ROOT,
+      ListOrganizationalUnitsForParentCommand: () =>
+        (lists += 1) === 1
+          ? { OrganizationalUnits: [] }
+          : { OrganizationalUnits: [{ Id: 'ou-raced', Name: 'Tenants' }] },
+      CreateOrganizationalUnitCommand: () => {
+        throw sdkError('DuplicateOrganizationalUnitException');
+      },
+    });
+
+    expect(await api.ensureOrganizationalUnit('Tenants')).toEqual({
+      ouId: 'ou-raced',
+      created: false,
+    });
+    expect(calls.filter((c) => c.command === 'CreateOrganizationalUnitCommand')).toHaveLength(1);
+  });
+
+  it('surfaces any other create failure as a coded error', async () => {
+    const { api } = harness({
+      AssumeRoleCommand: assume,
+      ListRootsCommand: () => ROOT,
+      ListOrganizationalUnitsForParentCommand: () => ({ OrganizationalUnits: [] }),
+      CreateOrganizationalUnitCommand: () => {
+        throw sdkError('AccessDeniedException', 403);
+      },
+    });
+
+    await expect(api.ensureOrganizationalUnit('Tenants')).rejects.toMatchObject({
+      name: 'AwsManagementApiError',
+      awsCode: 'AccessDeniedException',
+    });
+  });
+
+  it('moves an account from its parent into the OU', async () => {
+    const { api, calls } = harness({
+      AssumeRoleCommand: assume,
+      ListParentsCommand: () => ({ Parents: [{ Id: 'r-root', Type: 'ROOT' }] }),
+      MoveAccountCommand: () => ({}),
+    });
+
+    expect(await api.moveAccountToOu('123456789012', 'ou-tenants')).toEqual({ moved: true });
+    expect(calls.find((c) => c.command === 'ListParentsCommand')!.input).toEqual({
+      ChildId: '123456789012',
+    });
+    expect(calls.find((c) => c.command === 'MoveAccountCommand')!.input).toEqual({
+      AccountId: '123456789012',
+      SourceParentId: 'r-root',
+      DestinationParentId: 'ou-tenants',
+    });
+  });
+
+  it('moves nothing when the account already sits in the OU', async () => {
+    const { api, calls } = harness({
+      AssumeRoleCommand: assume,
+      ListParentsCommand: () => ({ Parents: [{ Id: 'ou-tenants', Type: 'ORGANIZATIONAL_UNIT' }] }),
+    });
+
+    expect(await api.moveAccountToOu('123456789012', 'ou-tenants')).toEqual({ moved: false });
+    expect(calls.map((c) => c.command)).not.toContain('MoveAccountCommand');
+  });
+});
+
 describe('the default client factory', () => {
   it('builds each service’s real SDK client, without calling AWS', () => {
     const config = { region: 'us-east-1', credentials: { accessKeyId: 'a', secretAccessKey: 's' } };
