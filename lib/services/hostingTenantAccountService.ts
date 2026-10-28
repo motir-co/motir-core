@@ -13,7 +13,11 @@ import {
 } from '@/lib/monitoring/fleetShardHeadroomAlert';
 import { fleetGrowthPassLeaseRepository } from '@/lib/repositories/fleetGrowthPassLeaseRepository';
 import { hostingTenantAccountRepository } from '@/lib/repositories/hostingTenantAccountRepository';
-import { bootstrapTenantAccount } from '@/lib/services/hostingTenantAccountBootstrapService';
+import {
+  bootstrapTenantAccount,
+  convergeTenantDeployPolicy,
+  type TenantDeployPolicyConvergence,
+} from '@/lib/services/hostingTenantAccountBootstrapService';
 import { createOrFindTenantAccount } from '@/lib/services/hostingTenantAccountProvisioningService';
 import { withSystemContext } from '@/lib/workspaces/context';
 
@@ -92,6 +96,34 @@ export interface TenantReconcileDeps {
   create?: (organizationId: string) => Promise<{ accountId: string }>;
   /** Bootstrap the account; the default reaches AWS. */
   bootstrap?: (organizationId: string) => Promise<unknown>;
+}
+
+/** What converging one organisation's deploy-role policy did (MOTIR-10005). */
+export type DeployPolicyOutcome =
+  /** The live policy differed and was rewritten. */
+  | 'changed'
+  /** The live policy already matched; nothing was written. */
+  | 'unchanged'
+  /** The organisation has no `ready` tenant account; nothing was called. */
+  | 'not_ready'
+  /** A step failed; the policy is as it was. */
+  | 'failed';
+
+export interface DeployPolicyConvergence {
+  organizationId: string;
+  outcome: DeployPolicyOutcome;
+}
+
+export interface DeployPolicyConvergeSummary {
+  organizations: DeployPolicyConvergence[];
+  changed: number;
+  unchanged: number;
+  failures: number;
+}
+
+export interface DeployPolicyConvergeDeps {
+  /** Converge one account; the default reaches AWS. */
+  converge?: (organizationId: string) => Promise<TenantDeployPolicyConvergence>;
 }
 
 function errorName(err: unknown): string {
@@ -247,6 +279,54 @@ export const hostingTenantAccountService = {
       }
     });
     if (ran === null) return { ...summary, ran: false };
+    return summary;
+  },
+
+  /** Converge one organisation's deploy-role policy, when its account is
+   *  `ready`. Never throws; the outcome carries no credential. */
+  async convergeDeployPolicy(
+    organizationId: string,
+    deps: DeployPolicyConvergeDeps = {},
+  ): Promise<DeployPolicyConvergence> {
+    const converge = deps.converge ?? ((id: string) => convergeTenantDeployPolicy(id));
+    try {
+      const row = await withSystemContext((tx) =>
+        hostingTenantAccountRepository.findByOrganizationId(organizationId, tx),
+      );
+      if (row?.state !== 'ready') return { organizationId, outcome: 'not_ready' };
+      const { policyChanged } = await converge(organizationId);
+      return { organizationId, outcome: policyChanged ? 'changed' : 'unchanged' };
+    } catch (err) {
+      console.error(`${LOG} an organisation's deploy-policy convergence failed`, {
+        organizationId,
+        error: errorName(err),
+      });
+      return { organizationId, outcome: 'failed' };
+    }
+  },
+
+  /** Converge every `ready` account's deploy-role policy, one organisation's
+   *  failure never stopping the rest. On demand only — the operator command. */
+  async convergeReadyAccounts(
+    deps: DeployPolicyConvergeDeps = {},
+  ): Promise<DeployPolicyConvergeSummary> {
+    const rows = await withSystemContext((tx) => hostingTenantAccountRepository.listReadyInTx(tx));
+    const summary: DeployPolicyConvergeSummary = {
+      organizations: [],
+      changed: 0,
+      unchanged: 0,
+      failures: 0,
+    };
+    for (const row of rows) {
+      const result = await hostingTenantAccountService.convergeDeployPolicy(
+        row.organizationId,
+        deps,
+      );
+      summary.organizations.push(result);
+      if (result.outcome === 'changed') summary.changed += 1;
+      if (result.outcome === 'unchanged') summary.unchanged += 1;
+      if (result.outcome === 'failed') summary.failures += 1;
+    }
     return summary;
   },
 };

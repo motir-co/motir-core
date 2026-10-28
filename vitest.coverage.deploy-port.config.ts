@@ -69,6 +69,8 @@ export default defineConfig({
       'tests/hosting/manifest.test.ts',
       'tests/hosting/hostingDeployPort.test.ts',
       'tests/hosting/deployCheck.test.ts',
+      // MOTIR-10011 — the deploy check on the AWS target.
+      'tests/hosting/deployCheckAws.test.ts',
       'tests/hosting/hostingGuard.test.ts',
       'tests/hosting/deployPortCoverageLane.test.ts',
       'tests/projectRepos/projectRepoHosting.test.ts',

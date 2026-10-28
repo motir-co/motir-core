@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "targets": ["aws"],
+  "port": 8080,
+  "healthCheck": { "path": "/health" },
+  "startCommand": "node server.mjs",
+  "buildCommand": "echo prebuilt",
+  "requires": { "websockets": false, "backgroundWork": false },
+  "database": { "kind": "postgres", "migrateCommand": "true" }
+}

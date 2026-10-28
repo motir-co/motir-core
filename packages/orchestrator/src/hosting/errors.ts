@@ -57,3 +57,41 @@ export class ReleaseRuntimeRefusedError extends Error {
     this.name = 'ReleaseRuntimeRefusedError';
   }
 }
+
+/** A release for a target that needs a shape (AWS: `function` or `container`)
+ *  arrived without one. Refused by name before anything is created — the shape
+ *  is the repository's recorded hosting decision, never inferred. */
+export class ReleaseShapeRequiredError extends Error {
+  readonly code = 'HOSTING_SHAPE_REQUIRED' as const;
+  constructor(readonly target: string) {
+    super(
+      `The ${target} target needs a release shape ("function" or "container"); none was given.`,
+    );
+    this.name = 'ReleaseShapeRequiredError';
+  }
+}
+
+/** The repository is a customer repository (its seed source is the
+ *  organisation's own, D1). No hosting adapter deploys one. */
+export class CustomerRepositoryRefusedError extends Error {
+  readonly code = 'HOSTING_CUSTOMER_REPOSITORY_REFUSED' as const;
+  constructor(readonly repositoryId: string) {
+    super(`Repository ${repositoryId} is a customer repository; Motir does not host it.`);
+    this.name = 'CustomerRepositoryRefusedError';
+  }
+}
+
+/** The idle policy cannot be honoured by this target's shape — on AWS, a
+ *  container is `always_on` only (MOTIR-5769 §4). Refused before any provider
+ *  call. */
+export class IdlePolicyUnsupportedError extends Error {
+  readonly code = 'HOSTING_IDLE_POLICY_UNSUPPORTED' as const;
+  constructor(
+    readonly target: string,
+    readonly shape: string,
+    readonly mode: string,
+  ) {
+    super(`The ${target} ${shape} shape cannot run with the "${mode}" idle policy.`);
+    this.name = 'IdlePolicyUnsupportedError';
+  }
+}

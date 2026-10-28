@@ -234,6 +234,38 @@ describe('the model self-report', () => {
     expect(many.discrepancy).toHaveLength(20);
   });
 
+  it('reads the `decisions` the agent made, on the points’ terms (MOTIR-10000)', async () => {
+    const good = { planSaid: ' nothing ', chose: 'cursor pages', why: 'the repo pages this way' };
+    const result = await runAgent({
+      command: reportingAgent(
+        JSON.stringify({
+          model: 'm-1',
+          decisions: [
+            good,
+            { ...good, alternatives: ' offset pages ' },
+            { ...good, alternatives: '   ' },
+            { planSaid: 'a', chose: 'b' },
+            'x',
+          ],
+        }),
+      ),
+      prompt: PROMPT,
+      cwd: work,
+    });
+    const clean = { planSaid: 'nothing', chose: 'cursor pages', why: 'the repo pages this way' };
+    expect(result.decisions).toEqual([clean, { ...clean, alternatives: 'offset pages' }, clean]);
+    for (const body of ['{"decisions":[]}', '{"decisions":{}}', '{"model":"m-1"}']) {
+      const none = await runAgent({ command: reportingAgent(body), prompt: PROMPT, cwd: work });
+      expect(none.decisions, body).toBeNull();
+    }
+    const many = await runAgent({
+      command: reportingAgent(JSON.stringify({ decisions: Array(25).fill(good) })),
+      prompt: PROMPT,
+      cwd: work,
+    });
+    expect(many.decisions).toHaveLength(20);
+  });
+
   it('reads a STOP: its comment falls back to the `unbuildable` text, the brief is kept (MOTIR-8722)', async () => {
     const result = await runAgent({
       command: reportingAgent(
@@ -416,6 +448,7 @@ describe('the injected spawn seam covers what a real child cannot show', () => {
       model: null,
       unbuildableReason: null,
       discrepancy: null,
+      decisions: null,
       stop: null,
     });
   });

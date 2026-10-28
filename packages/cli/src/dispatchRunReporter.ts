@@ -6,7 +6,7 @@ import type {
   DispatchStopReason,
   MotirClient,
 } from './client.js';
-import type { AgentStopReport } from './agentRun.js';
+import type { AgentDecisionPoint, AgentStopReport } from './agentRun.js';
 
 // THE DISPATCH RUN REPORTER (Story MOTIR-1789 · MOTIR-1794) — what turns a local
 // run into a watchable object, built to `docs/decisions/dispatch-run-record.md`.
@@ -144,12 +144,14 @@ export interface DispatchRunReporter {
    */
   reportUnbuildable?(targetKey: string, reason: string): Promise<void>;
   /**
-   * Record the agent's BUILD-THROUGH points on `key` (MOTIR-8722), with the run's own
-   * credential. Awaited, never throws, a no-op when no run is held. OPTIONAL, as above.
+   * Record the agent's BUILD-THROUGH points on `key` (MOTIR-8722), and the decisions it made
+   * where the plan was silent (MOTIR-10000), with the run's own credential. Awaited, never
+   * throws, a no-op when no run is held. OPTIONAL, as above.
    */
   reportDiscrepancy?(
     key: string,
     points: { planAsked: string; built: string; why: string }[],
+    decisions?: AgentDecisionPoint[],
   ): Promise<void>;
   /**
    * Make the agent's STOP writes on `key` (MOTIR-8722) — its comment and, with
@@ -457,12 +459,17 @@ export function createDispatchRunReporter(deps: DispatchRunReporterDeps): Dispat
     // The agent's other two writes (MOTIR-8722), on the same terms as the report above: not
     // telemetry, so neither through `attempt` nor gated on `offline`, and swallowed with one
     // warning, because a write that cannot land never changes what the run did.
-    async reportDiscrepancy(key, points) {
+    async reportDiscrepancy(key, points, decisions = []) {
       const id = runId;
       const client = deps.client;
       if (id === null || closed || client.recordDispatchRunDiscrepancy === undefined) return;
       try {
-        await client.recordDispatchRunDiscrepancy({ runId: id, key, points });
+        await client.recordDispatchRunDiscrepancy({
+          runId: id,
+          key,
+          points,
+          ...(decisions.length > 0 ? { decisions } : {}),
+        });
       } catch {
         warn(`motir: could not record the discrepancies on ${key} in Motir. The run continues.`);
       }

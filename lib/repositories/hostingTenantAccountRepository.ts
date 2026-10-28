@@ -47,6 +47,15 @@ export const hostingTenantAccountRepository = {
     });
   },
 
+  /** Every `ready` row, oldest first — what the deploy-policy convergence walks
+   *  (MOTIR-10005). */
+  async listReadyInTx(tx: Prisma.TransactionClient): Promise<HostingTenantAccount[]> {
+    return tx.hostingTenantAccount.findMany({
+      where: { state: 'ready' },
+      orderBy: { createdAt: 'asc' },
+    });
+  },
+
   async setStateInTx(
     organizationId: string,
     state: HostingTenantAccountState,
