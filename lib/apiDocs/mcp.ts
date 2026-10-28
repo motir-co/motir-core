@@ -620,8 +620,8 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   },
   read_file: {
     summary:
-      "One file's text from a repository in the project's set, at a ref — capped and line-ranged like the hosted planner's read, every absence a named outcome.",
-    descriptionFingerprint: '8cca00253741',
+      "One file's text, or a directory's immediate entries, from a repository in the project's set, at a ref — capped and line-ranged like the hosted planner's read, every absence a named outcome.",
+    descriptionFingerprint: '8c24af03ed4e',
   },
   code_explore: {
     summary:

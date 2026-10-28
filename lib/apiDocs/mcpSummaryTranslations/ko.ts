@@ -363,9 +363,9 @@ export const ko: McpSummaryTranslations = {
   },
   read_file: {
     summary:
-      '프로젝트 세트에 속한 리포지토리의 파일 하나의 텍스트를 ref 기준으로 읽습니다 — 호스팅된 계획자의 읽기처럼 크기가 제한되고 줄 범위를 지정하며, 모든 부재는 이름이 있는 outcome으로 표시됩니다.',
+      '프로젝트 세트에 속한 리포지토리의 파일 하나의 텍스트 또는 디렉터리의 바로 아래 항목을 ref 기준으로 읽습니다 — 호스팅된 계획자의 읽기처럼 크기가 제한되고 줄 범위를 지정하며, 모든 부재는 이름이 있는 outcome으로 표시됩니다.',
     source:
-      "One file's text from a repository in the project's set, at a ref — capped and line-ranged like the hosted planner's read, every absence a named outcome.",
+      "One file's text, or a directory's immediate entries, from a repository in the project's set, at a ref — capped and line-ranged like the hosted planner's read, every absence a named outcome.",
   },
   record_plan_revision_reason: {
     summary:

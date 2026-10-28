@@ -371,9 +371,9 @@ export const es: McpSummaryTranslations = {
   },
   read_file: {
     summary:
-      'El texto de un archivo de un repositorio del conjunto del Proyecto, en una ref: con límite y por rangos de líneas como la lectura del planificador alojado, con cada ausencia como un resultado con nombre.',
+      'El texto de un archivo, o las entradas inmediatas de un directorio, de un repositorio del conjunto del Proyecto, en una ref: con límite y por rangos de líneas como la lectura del planificador alojado, con cada ausencia como un resultado con nombre.',
     source:
-      "One file's text from a repository in the project's set, at a ref — capped and line-ranged like the hosted planner's read, every absence a named outcome.",
+      "One file's text, or a directory's immediate entries, from a repository in the project's set, at a ref — capped and line-ranged like the hosted planner's read, every absence a named outcome.",
   },
   record_plan_revision_reason: {
     summary:

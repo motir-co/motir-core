@@ -451,4 +451,24 @@ describe('read_file — every other outcome is named, non-error and distinct', (
     expect(structured).toEqual({ outcome: 'quarantined', repoRef: 'acme/alpha' });
     expect(summary).toContain('"quarantined"');
   });
+
+  // MOTIR-9868 — a listing the host cut at the cap says so, and tells the
+  // reader an unlisted file is not thereby absent.
+  it('a truncated directory listing ends in the TRUNCATED sentence', () => {
+    const { summary, structured } = renderReadFile({
+      outcome: 'directory',
+      repoRef: 'acme/alpha',
+      path: 'vendor',
+      ref: 'main',
+      entries: [
+        { name: 'current', type: 'symlink' },
+        { name: 'lib', type: 'dir' },
+      ],
+      truncated: true,
+    });
+    expect(structured).toMatchObject({ outcome: 'directory', truncated: true });
+    expect(summary).toContain('current (symlink)\nlib/');
+    expect(summary).toContain('[TRUNCATED — the host listed only the first 2 entries.');
+    expect(summary).toContain('do NOT conclude a file is absent');
+  });
 });

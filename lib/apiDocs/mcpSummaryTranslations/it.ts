@@ -372,9 +372,9 @@ export const it: McpSummaryTranslations = {
   },
   read_file: {
     summary:
-      'Il testo di un file di un repository dell’insieme del Progetto, a un ref, con limiti di dimensione e intervalli di righe come la lettura del planner ospitato, con ogni assenza come esito nominato.',
+      'Il testo di un file, o le voci immediate di una directory, di un repository dell’insieme del Progetto, a un ref, con limiti di dimensione e intervalli di righe come la lettura del planner ospitato, con ogni assenza come esito nominato.',
     source:
-      "One file's text from a repository in the project's set, at a ref — capped and line-ranged like the hosted planner's read, every absence a named outcome.",
+      "One file's text, or a directory's immediate entries, from a repository in the project's set, at a ref — capped and line-ranged like the hosted planner's read, every absence a named outcome.",
   },
   record_plan_revision_reason: {
     summary:
