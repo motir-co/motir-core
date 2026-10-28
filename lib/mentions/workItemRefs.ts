@@ -272,6 +272,15 @@ export function parseIntraPlanRefIds(text: string): string[] {
   return ids;
 }
 
+/**
+ * A link a plan body may use to name a SIBLING `add`, in either spelling:
+ * the canonical `[label](motir-ref:planItem:<id>)`, or the ordinary
+ * `[label](motir:<id>)` written with the sibling's planItem id (MOTIR-9993).
+ * Group 1 = the label; group 2 = the scheme (`motir-ref:planItem:` or `motir:`);
+ * group 3 = the id. The label class excludes `[` as `INTRA_PLAN_REF_TOKEN_RE`'s does.
+ */
+const PLAN_BODY_ITEM_LINK_RE = /\[([^\]\[]*)\]\((motir-ref:planItem:|motir:)([A-Za-z0-9_-]+)\)/g;
+
 /** The rewritten body + the temp-ref ids that did NOT resolve (left inert). */
 export interface IntraPlanRewriteResult {
   body: string;
@@ -285,23 +294,35 @@ export interface IntraPlanRewriteResult {
  * (a planItem id → created work-item id map — the SAME map materialize already
  * builds for `parentRef` / edge refs). A token whose id does NOT resolve (a
  * dangling ref) is left VERBATIM — inert text, never a half-token or crash — and
- * its id is reported in `unresolved` so the caller can surface it. Existing
- * `motir:<id>` tokens and bare keys are untouched (the `motir-ref:planItem:`
- * prefix matches neither). Pure string work — no Prisma, no IO. Non-destructive
- * and idempotent: a body with no intra-plan token returns unchanged.
+ * its id is reported in `unresolved` so the caller can surface it.
+ *
+ * A `[label](motir:<id>)` link whose id is a key of `resolve` names a sibling
+ * `add` by its planItem id rather than through the canonical token, and is
+ * rewritten exactly the same way (MOTIR-9993): planning-time validation resolves
+ * it against the plan's projection, so it reads as valid until approve, where it
+ * would otherwise point at an id no work item holds. Any other `motir:<id>` — an
+ * existing work item, or an id that is neither — is untouched and never reported,
+ * and so are bare keys. Pure string work — no Prisma, no IO. One pass, so a
+ * rewritten link is never looked up a second time; idempotent, and a body with no
+ * intra-plan link returns unchanged.
  */
 export function rewriteIntraPlanRefs(
   text: string,
   resolve: ReadonlyMap<string, string>,
 ): IntraPlanRewriteResult {
   const unresolved: string[] = [];
-  const body = text.replace(INTRA_PLAN_REF_TOKEN_RE, (match, label: string, planItemId: string) => {
-    const id = resolve.get(planItemId);
-    if (!id) {
-      unresolved.push(planItemId);
-      return match; // dangling temp-ref → left inert
-    }
-    return `[${label}](motir:${id})`;
-  });
+  const body = text.replace(
+    PLAN_BODY_ITEM_LINK_RE,
+    (match, label: string, scheme: string, planItemId: string) => {
+      const id = resolve.get(planItemId);
+      if (!id) {
+        // A dangling temp-ref is left inert and reported; a `motir:` link that
+        // names no proposal is an ordinary item link and is left alone.
+        if (scheme !== 'motir:') unresolved.push(planItemId);
+        return match;
+      }
+      return `[${label}](motir:${id})`;
+    },
+  );
   return { body, unresolved };
 }
