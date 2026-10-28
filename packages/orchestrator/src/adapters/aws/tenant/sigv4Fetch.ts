@@ -7,7 +7,7 @@ import { defaultChainCredentials } from './sdk';
 // (MOTIR-5769 §4). The operator deploy check reads a function release's page
 // through it. It signs with the default credential chain unless given
 // credentials, and nothing it exports names an AWS SDK type, so `lib/` and
-// `scripts/` reach it without importing `@aws-sdk/*`.
+// `scripts/` reach it without importing an AWS SDK package.
 //
 // Reference, read 2026-10-28:
 //   https://docs.aws.amazon.com/lambda/latest/dg/urls-auth.html

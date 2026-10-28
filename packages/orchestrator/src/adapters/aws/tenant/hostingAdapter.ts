@@ -20,6 +20,7 @@ import type {
 } from '../../../hosting/types';
 import {
   NoPreviousTaskDefinitionError,
+  containerReleaseNames,
   containerUsageSince,
   deployContainerRelease,
   describeContainerRelease,
@@ -214,8 +215,10 @@ export function createAwsHostingDeployPort(deps: AwsHostingDeps): HostingDeployP
     return toReleaseDescription(shape, appRef, description);
   }
 
-  /** Destroy the environment's release through its shape, then a preview's
-   *  database. Usage comes back first, whatever is already gone. */
+  /** Destroy a preview's database, then the environment's release through its
+   *  shape. The release goes LAST: a destroy cut off after it was gone would be
+   *  replayed with no release to measure, and its usage lost (MOTIR-10012's
+   *  cut-off sweep). Usage comes back whatever is already gone. */
   async function destroyOn(
     account: TenantAccountContext,
     parsed: ParsedAppRef,
@@ -224,11 +227,6 @@ export function createAwsHostingDeployPort(deps: AwsHostingDeps): HostingDeployP
     releaseId: string,
   ): Promise<ReleaseUsage> {
     const input = { ...target(account, parsed), releaseId };
-    let usage: ReleaseUsage;
-    if (shape === 'function') usage = await destroyFunctionRelease({ ...input, now });
-    else if (shape === 'container') usage = await destroyContainerRelease({ ...input, ...rollout });
-    else usage = zeroUsage(appRef, releaseId, now());
-    log('release destroyed', appRef, shape ?? 'absent');
     if (parsed.environment.kind === 'preview') {
       await dropPreviewDatabase(
         account,
@@ -237,6 +235,11 @@ export function createAwsHostingDeployPort(deps: AwsHostingDeps): HostingDeployP
       );
       log('preview database dropped', appRef);
     }
+    let usage: ReleaseUsage;
+    if (shape === 'function') usage = await destroyFunctionRelease({ ...input, now });
+    else if (shape === 'container') usage = await destroyContainerRelease({ ...input, ...rollout });
+    else usage = zeroUsage(appRef, releaseId, now());
+    log('release destroyed', appRef, shape ?? 'absent');
     return usage;
   }
 
@@ -421,19 +424,28 @@ export function createAwsHostingDeployPort(deps: AwsHostingDeps): HostingDeployP
     async destroyApp({ appRef }) {
       const { parsed, account, shape } = await locate(appRef);
       if (!account) return [];
-      const usages: ReleaseUsage[] = [];
-      if (shape) {
-        const live = await describeOn(account, parsed, shape, appRef);
-        const releaseId = live.releaseId ?? awsReleaseId(appRef, FIRST_RELEASE_NUMBER);
-        usages.push(await destroyOn(account, parsed, shape, appRef, releaseId));
-      } else if (parsed.environment.kind === 'preview') {
-        await destroyOn(account, parsed, null, appRef, awsReleaseId(appRef, FIRST_RELEASE_NUMBER));
-      }
+      // The application database first and the release last, as in `destroyOn`:
+      // a replay after the release went would have no usage to return.
       if (parsed.environment.kind === 'production') {
         await destroyApplicationDatabase(account, { repositoryId: parsed.repositoryId });
         log('application database destroyed', appRef);
       }
-      return usages;
+      const first = awsReleaseId(appRef, FIRST_RELEASE_NUMBER);
+      if (shape) {
+        const live = await describeOn(account, parsed, shape, appRef);
+        return [await destroyOn(account, parsed, shape, appRef, live.releaseId ?? first)];
+      }
+      // A container destroy cut off after its stack went has left its measured
+      // total in SSM; finishing it reports that usage. The release is no longer
+      // there to name, so the record carries the environment's first id.
+      const recorded = await account.clients.ssm.getParameter(
+        containerReleaseNames(parsed.repositoryId, parsed.environment).usageParameter,
+      );
+      if (recorded !== null) return [await destroyOn(account, parsed, 'container', appRef, first)];
+      if (parsed.environment.kind === 'preview') {
+        await destroyOn(account, parsed, null, appRef, first);
+      }
+      return [];
     },
 
     async listReleases({ appRef }): Promise<ReleaseSummary[]> {

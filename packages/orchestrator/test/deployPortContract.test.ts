@@ -15,6 +15,12 @@ import {
   type ReleaseShape,
   type ReleaseUsage,
 } from '../src/index';
+import {
+  AWS_ACCOUNT,
+  AWS_CUSTOMER,
+  AWS_REGION,
+  awsAdapterHarness,
+} from './contract/awsHostingHarness';
 import { createHostingFlySim, flyJson } from './contract/hostingFlySim';
 
 // THE HOSTING DEPLOY PORT'S CONTRACT (Story MOTIR-9791 · MOTIR-9806) — one case
@@ -29,6 +35,13 @@ import { createHostingFlySim, flyJson } from './contract/hostingFlySim';
 // it deploys, the idle policy that shape accepts (a container is always on) and
 // the origin credential its releases answer with. `AWS_ADAPTERS` adds the cases
 // only a target with shapes has — the refusals, the account wait, compute usage.
+//
+// The REAL AWS adapter (MOTIR-10012) joins as `aws function` and `aws container`:
+// `createAwsHostingDeployPort` over the fake tenant account
+// (`contract/awsHostingHarness.ts`), its motir-core lookups answered there. The
+// case list holds for it unchanged; what differs per entry is only what the
+// harness says — where a release answers, with which credential, and the image
+// reference its provider pulls (AWS pulls the tenant registry's copy).
 
 interface ProviderRuntime {
   readonly image: string;
@@ -38,6 +51,10 @@ interface ProviderRuntime {
 
 interface HostingHarness {
   readonly port: HostingDeployPort;
+  /** How the address of a release of `appRef` reads. */
+  upstream(appRef: string): RegExp;
+  /** The image reference the provider runs for `IMAGE` in `R`'s production. */
+  readonly runsImage: string;
   /** The AWS shape every release in this run takes; absent off AWS. */
   readonly shape?: ReleaseShape;
   /** The idle policy this harness's releases ask for. */
@@ -61,6 +78,8 @@ function fakeHarness(): HostingHarness {
   const fake = createFakeHostingDeployPort({ appPrefix: PREFIX, start: new Date(START) });
   return {
     port: fake,
+    upstream: namedHost,
+    runsImage: PINNED_IMAGE,
     idle: SUSPEND,
     originCredential: 'origin_secret',
     advanceSeconds: (s) => fake.advanceSeconds(s),
@@ -92,6 +111,8 @@ function fakeAwsHarness(shape: ReleaseShape): FakeAwsHarness {
   });
   return {
     port: fake,
+    upstream: namedHost,
+    runsImage: PINNED_IMAGE,
     fake,
     shape,
     idle: shape === 'container' ? { mode: 'always_on' } : SUSPEND,
@@ -129,6 +150,8 @@ function flyHarness(): HostingHarness {
   );
   return {
     port,
+    upstream: namedHost,
+    runsImage: PINNED_IMAGE,
     idle: SUSPEND,
     originCredential: 'origin_secret',
     advanceSeconds: (s) => {
@@ -164,11 +187,44 @@ function flyHarness(): HostingHarness {
   };
 }
 
+/** The real AWS adapter on the fake tenant account, deploying one shape. A
+ *  provider destroy failure is the release (or database) stack's delete
+ *  refused once, before anything is deleted. */
+function awsHarness(shape: ReleaseShape): HostingHarness {
+  const h = awsAdapterHarness({ start: new Date(START) });
+  return {
+    port: h.port,
+    shape,
+    idle: shape === 'container' ? { mode: 'always_on' } : SUSPEND,
+    originCredential: shape === 'function' ? 'aws_sigv4' : 'origin_secret',
+    // A function URL is a host AWS generates; a container answers on the
+    // account's load balancer.
+    upstream: () =>
+      shape === 'function'
+        ? new RegExp(`^https://[0-9a-f]{32}\\.lambda-url\\.${AWS_REGION}\\.on\\.aws/$`)
+        : new RegExp(`^https?://motir-tenant-1\\.${AWS_REGION}\\.elb\\.amazonaws\\.com`),
+    runsImage: `${AWS_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com/mh/${R}/production@${IMAGE.digest}`,
+    advanceSeconds: (s) => h.advanceSeconds(s),
+    failNextDestroy: () => h.fakes.cloudformation.failAt('deleteStack', 1),
+    runtimeOf(appRef) {
+      const parameters = h.fakes.cloudformation.stacks.get(`motir-release-${appRef}`)?.parameters;
+      if (!parameters?.['ConfigHash']) return null;
+      return {
+        image: parameters['ImageUri']!,
+        port: Number(parameters['Port']),
+        healthCheckPath: parameters['HealthCheckPath']!,
+      };
+    },
+  };
+}
+
 const ADAPTERS: ReadonlyArray<readonly [string, () => HostingHarness]> = [
   ['fake', fakeHarness],
   ['fly', flyHarness],
   ['fake-aws-function', () => fakeAwsHarness('function')],
   ['fake-aws-container', () => fakeAwsHarness('container')],
+  ['aws function', () => awsHarness('function')],
+  ['aws container', () => awsHarness('container')],
 ];
 
 /** Adapters with shapes, and how a test holds their tenant account back. */
@@ -187,11 +243,17 @@ const AWS_ADAPTERS: ReadonlyArray<readonly [string, () => AwsHarness]> = (
   },
 ]);
 
-const CUSTOMER = 'cmcustomer1';
+const CUSTOMER = AWS_CUSTOMER;
 const R = 'cmrepo1';
 const PRODUCTION: HostingEnvironment = { kind: 'production' };
 const PREVIEW: HostingEnvironment = { kind: 'preview', pullRequest: 7 };
 const IMAGE = { ref: 'docker.io/traefik/whoami', digest: 'sha256:abc' };
+const PINNED_IMAGE = `${IMAGE.ref}@${IMAGE.digest}`;
+
+/** Fly's and the fake's address: the app's own name under the target's host. */
+function namedHost(appRef: string): RegExp {
+  return new RegExp(`^https://${appRef}\\.`);
+}
 
 function release(
   h: Pick<HostingHarness, 'shape' | 'idle'>,
@@ -237,20 +299,20 @@ describe.each(ADAPTERS)('the hosting deploy port contract — %s', (_name, make)
 
   it('deploys release A, gives an address, and describes A running with the manifest’s runtime', async () => {
     const a = await h.port.deploy(release(h, prod, PRODUCTION, 'A'));
-    expect(a).toMatchObject({ appRef: prod, environment: PRODUCTION, releaseId: 'rel-1' });
+    expect(a).toMatchObject({ appRef: prod, environment: PRODUCTION });
     const description = await h.port.describe(a);
     expect(description).toMatchObject({
       state: 'healthy',
-      releaseId: 'rel-1',
+      releaseId: a.releaseId,
       previousReleaseId: null,
       // Every release is reached only through its target and shape's credential:
       // Fly's guard and an AWS container's listener rule take the origin secret,
       // an AWS function URL a SigV4 signature.
       originCredential: h.originCredential,
     });
-    expect(description.upstreamAddress).toMatch(new RegExp(`^https://${prod}\\.`));
+    expect(description.upstreamAddress).toMatch(h.upstream(prod));
     expect(h.runtimeOf(prod)).toEqual({
-      image: `${IMAGE.ref}@${IMAGE.digest}`,
+      image: h.runsImage,
       port: 8080,
       healthCheckPath: '/health',
     });
@@ -259,7 +321,15 @@ describe.each(ADAPTERS)('the hosting deploy port contract — %s', (_name, make)
   it('keeps a preview and production side by side; destroying the preview leaves production', async () => {
     const pr = await h.port.ensureApp({ repositoryId: R, environment: PREVIEW });
     expect(pr.appRef).toBe(`${prod}-pr7`);
-    expect(pr.pushNamespace).toBe(`${prod}-pv`);
+    // One preview namespace for every pull request of the repository, and
+    // never production's (MOTIR-5769 §4).
+    const productionApp = await h.port.ensureApp({ repositoryId: R, environment: PRODUCTION });
+    const other = await h.port.ensureApp({
+      repositoryId: R,
+      environment: { kind: 'preview', pullRequest: 8 },
+    });
+    expect(pr.pushNamespace).not.toBe(productionApp.pushNamespace);
+    expect(other.pushNamespace).toBe(pr.pushNamespace);
     const preview = await h.port.deploy(release(h, pr.appRef, PREVIEW, 'P'));
     const production = await h.port.deploy(release(h, prod, PRODUCTION, 'A'));
 

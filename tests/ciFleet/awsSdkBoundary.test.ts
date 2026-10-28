@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
+import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 import { stripComments } from '../helpers/importGraph';
 
@@ -66,6 +67,16 @@ describe('the AWS SDK boundary (MOTIR-9280)', () => {
     );
   });
 
+  it('covers the tenant adapter and the hosting composition root', () => {
+    expect(FILES).toEqual(
+      expect.arrayContaining([
+        join(ADAPTER_DIR, 'tenant', 'hostingAdapter.ts'),
+        join(ADAPTER_DIR, 'tenant', 'sdk.ts'),
+        join('lib', 'orchestrator', 'hosting.ts'),
+      ]),
+    );
+  });
+
   it('every @aws-sdk/* import is under packages/orchestrator/src/adapters/aws/', () => {
     const leaks = FILES.filter((file) => !within(file, ADAPTER_DIR)).flatMap((file) =>
       sdkImportsOf(file)
@@ -84,4 +95,32 @@ describe('the AWS SDK boundary (MOTIR-9280)', () => {
     );
     expect(readers).toEqual([]);
   });
+
+  it('the @motir/orchestrator barrel exports no AWS SDK name, type or value', () => {
+    const entry = join(ROOT, 'packages', 'orchestrator', 'src', 'index.ts');
+    const config = ts.getParsedCommandLineOfConfigFile(
+      join(ROOT, 'packages', 'orchestrator', 'tsconfig.json'),
+      {},
+      { ...ts.sys, onUnRecoverableConfigFileDiagnostic: () => undefined },
+    );
+    const program = ts.createProgram([entry], { ...config?.options, noEmit: true });
+    const checker = program.getTypeChecker();
+    const fromSdk = (file: string) => /node_modules[\\/](?:@aws-sdk|@smithy)[\\/]/.test(file);
+    // The SDK's declarations are in the program, so a leak would be seen.
+    expect(program.getSourceFiles().some((file) => fromSdk(file.fileName))).toBe(true);
+
+    const barrel = checker.getSymbolAtLocation(program.getSourceFile(entry)!)!;
+    const exported = checker.getExportsOfModule(barrel);
+    expect(exported.map((symbol) => symbol.name)).toEqual(
+      expect.arrayContaining(['createAwsHostingDeployPort', 'createSigV4Fetch', 'TenantClients']),
+    );
+    const leaks = exported
+      .filter((symbol) => {
+        const target =
+          symbol.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol;
+        return (target.declarations ?? []).some((d) => fromSdk(d.getSourceFile().fileName));
+      })
+      .map((symbol) => symbol.name);
+    expect(leaks).toEqual([]);
+  }, 120_000);
 });
