@@ -397,6 +397,17 @@ export const PLATFORM_AUDIT_ACTIONS = {
    * writes a default reason when the screen supplies none.
    */
   'capacity.limits.edit': { kind: 'write', reason: 'inherited' },
+  /**
+   * A DEAD LETTER was replayed from the platform job ledger at /admin/jobs
+   * (Story MOTIR-9980 · MOTIR-9985), by an `operator` or above — a workspace's
+   * row or a workspace-less one. `targetKind: 'platform'`, `targetId` the
+   * dead-letter id, `targetLabel` its function id, `metadata`
+   * `{ dlqId, functionId, eventName, hasWorkspace, workspaceId }`. Written after
+   * the replay commits and only when it replayed (an already-replayed row writes
+   * none). `inherited`: the screen has no per-row reason field, so the service
+   * writes _Dead letter replayed from /admin/jobs_.
+   */
+  'jobs.dlq_replay': { kind: 'write', reason: 'inherited' },
 } as const satisfies Record<
   string,
   { kind: PlatformAuditActionKind; reason: PlatformAuditReasonPolicy }
