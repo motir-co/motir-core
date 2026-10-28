@@ -88,15 +88,16 @@ export async function POST(req: Request): Promise<Response> {
     // A SYSTEM caller (MOTIR-6330): motir-ai validating a plan its own job
     // wrote, so the Plans room's reader scope does not apply — browse only.
     const opts = { caller: 'system' } as const;
-    const [result, advisories] = await Promise.all([
-      planValidityService.validateProjectedPlan(
-        planId,
-        auth.ctx,
-        condition as ValidityCondition | undefined,
-        opts,
-      ),
-      planValidityService.projectedLinkAdvisories(planId, auth.ctx, opts),
-    ]);
+    // In turn, not `Promise.all`: an unknown plan rejects the verdict while the
+    // advisories read still holds a transaction open, and the 404 would answer
+    // before that read settled.
+    const result = await planValidityService.validateProjectedPlan(
+      planId,
+      auth.ctx,
+      condition as ValidityCondition | undefined,
+      opts,
+    );
+    const advisories = await planValidityService.projectedLinkAdvisories(planId, auth.ctx, opts);
     return NextResponse.json({ ...result, advisories });
   } catch (err) {
     if (err instanceof PlanNotFoundError) {
