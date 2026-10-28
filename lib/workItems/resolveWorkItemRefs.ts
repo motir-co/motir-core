@@ -9,7 +9,7 @@ import {
   toWorkItemRefAssigneeDto,
   toWorkItemRefSummaryDto,
 } from '@/lib/mappers/workItemMappers';
-import type { WorkItemRefs } from '@/lib/mentions/workItemRefs';
+import { parseWorkItemTokenIds, type WorkItemRefs } from '@/lib/mentions/workItemRefs';
 import type { WorkItemRefMap } from '@/lib/dto/workItems';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
@@ -108,6 +108,35 @@ export async function resolveWorkItemRefSummaries(
     map[row.identifier] = summary;
   }
   return map;
+}
+
+/** No bare keys are resolved, so no project is consulted. */
+const NO_BARE_KEY_PROJECT = '';
+
+/**
+ * The work-item chips of ONE stored Markdown body (bug MOTIR-10020): every
+ * `[KEY](motir:<id>)` in it, resolved for the reader through
+ * {@link resolveWorkItemRefSummaries} — so a live card is a live chip, a deleted
+ * one is absent (struck through) and one the reader cannot browse is the no-access
+ * chip. A body that links nothing answers `{}` with no query.
+ *
+ * ⚠️ A SURFACE THAT HANDS `MarkdownView` A STORED BODY OWES IT THIS MAP. Without
+ * one every chip in the body draws as deleted — the defect fixed one surface at a
+ * time by MOTIR-9138 (page version view), MOTIR-9355 (proposal peek), MOTIR-9697
+ * (plan summary) and MOTIR-10020 (decision port). A new surface calls this.
+ */
+export async function resolveMarkdownWorkItemRefs(
+  markdown: string,
+  ctx: ServiceContext | VisitorReadContext,
+): Promise<WorkItemRefMap> {
+  // Token ids only: a `motir:<id>` is resolved across the reader's workspace, so no
+  // project scopes it — the active project scopes BARE keys alone, and a stored body's
+  // chips are its tokens (the render layer chips nothing else).
+  return resolveWorkItemRefSummaries(
+    { ids: parseWorkItemTokenIds(markdown), keys: [] },
+    NO_BARE_KEY_PROJECT,
+    ctx,
+  );
 }
 
 /**

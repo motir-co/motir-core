@@ -56,16 +56,19 @@ describe('toDecisionDocumentViewDTO — what crosses to the browser', () => {
   };
 
   it('a resolved document carries its Markdown and a PAGE link at the head it was read at', () => {
-    const view = toDecisionDocumentViewDTO({
-      identity,
-      content: {
-        outcome: 'resolved',
-        repo: 'acme/web',
-        path: identity.path,
-        blobSha: 'blob-1',
-        markdown: '# Page body',
+    const view = toDecisionDocumentViewDTO(
+      {
+        identity,
+        content: {
+          outcome: 'resolved',
+          repo: 'acme/web',
+          path: identity.path,
+          blobSha: 'blob-1',
+          markdown: '# Page body',
+        },
       },
-    });
+      {},
+    );
     expect(view).toEqual({
       outcome: 'resolved',
       repo: 'acme/web',
@@ -74,6 +77,7 @@ describe('toDecisionDocumentViewDTO — what crosses to the browser', () => {
       blobSha: 'blob-1',
       headSha: 'head-1',
       markdown: '# Page body',
+      workItemRefs: {},
       hostUrl: 'https://github.com/acme/web/blob/head-1/docs/decisions/page-body.md',
     });
     expect(JSON.stringify(view)).not.toMatch(/api\.github\.com|token/i);
@@ -83,10 +87,13 @@ describe('toDecisionDocumentViewDTO — what crosses to the browser', () => {
     expect(decisionDocumentHostUrl('acme/web', 'blob-1', 'docs/decisions/a.md')).toBe(
       'https://github.com/acme/web/blob/blob-1/docs/decisions/a.md',
     );
-    const view = toDecisionDocumentViewDTO({
-      identity: { ...identity, headSha: null },
-      content: { outcome: 'unresolvable', reason: 'too_large' },
-    });
+    const view = toDecisionDocumentViewDTO(
+      {
+        identity: { ...identity, headSha: null },
+        content: { outcome: 'unresolvable', reason: 'too_large' },
+      },
+      {},
+    );
     expect(view).toMatchObject({
       outcome: 'unresolvable',
       reason: 'too_large',
@@ -97,17 +104,20 @@ describe('toDecisionDocumentViewDTO — what crosses to the browser', () => {
 
   it('an unresolvable CAPTURE names its documents for `several`, and links nowhere', () => {
     expect(
-      toDecisionDocumentViewDTO({
-        identity: {
-          resolvable: false,
-          reason: 'several',
-          repo: 'acme/web',
-          number: 7,
-          headSha: 'head-1',
-          paths: ['docs/decisions/a.md', 'docs/decisions/b.md'],
+      toDecisionDocumentViewDTO(
+        {
+          identity: {
+            resolvable: false,
+            reason: 'several',
+            repo: 'acme/web',
+            number: 7,
+            headSha: 'head-1',
+            paths: ['docs/decisions/a.md', 'docs/decisions/b.md'],
+          },
+          content: { outcome: 'unresolvable', reason: 'several' },
         },
-        content: { outcome: 'unresolvable', reason: 'several' },
-      }),
+        {},
+      ),
     ).toEqual({
       outcome: 'unresolvable',
       reason: 'several',
@@ -121,6 +131,6 @@ describe('toDecisionDocumentViewDTO — what crosses to the browser', () => {
   });
 
   it('nothing captured is no port read at all', () => {
-    expect(toDecisionDocumentViewDTO({ identity: null, content: null })).toBeNull();
+    expect(toDecisionDocumentViewDTO({ identity: null, content: null }, {})).toBeNull();
   });
 });

@@ -415,7 +415,7 @@ describe('what the port and the page History draw (MOTIR-7436)', () => {
       latestVersionNumber: publication.versionNumber,
     });
     expect(before.content?.outcome === 'page' && before.content.savedAt).toBeTruthy();
-    const beforeDto = toDecisionDocumentViewDTO(before);
+    const beforeDto = toDecisionDocumentViewDTO(before, {});
     expect(beforeDto).toMatchObject({
       outcome: 'page',
       changedSince: false,
@@ -433,7 +433,10 @@ describe('what the port and the page History draw (MOTIR-7436)', () => {
       latestVersionNumber: publication.versionNumber + 1,
       markdown: '# Page model\n\nA tree of pages.',
     });
-    expect(toDecisionDocumentViewDTO(after)).toMatchObject({ frozen: true, changedSince: true });
+    expect(toDecisionDocumentViewDTO(after, {})).toMatchObject({
+      frozen: true,
+      changedSince: true,
+    });
   });
 
   it('History tags the version published, then frozen, naming the card', async () => {
