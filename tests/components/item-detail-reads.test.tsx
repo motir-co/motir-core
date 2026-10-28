@@ -204,6 +204,8 @@ vi.mock('@/lib/services/plansService', () => ({
 vi.mock('@/lib/services/workItemTodosService', () => ({
   workItemTodosService: {
     listTodos: deferred('todoList', { items: [], progress: { done: 0, total: 0 } }, 'tierTwo'),
+    // The notes' card links (bug MOTIR-10023), resolved off the list read: no note links here.
+    resolveNotesRefs: async () => ({}),
   },
 }));
 // The reader's TRANSLATION OFFER (Story MOTIR-7735 · MOTIR-8121) — built from the
