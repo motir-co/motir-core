@@ -7588,7 +7588,8 @@
       "install_error": "We konden het instellen van de GitHub-app niet afronden. Probeer opnieuw te installeren.",
       "select_repos": "De Motir GitHub App is geïnstalleerd. Kies welke repository's van het account deze organisatie koppelt.",
       "repo_unavailable": "Die repository is al gekoppeld aan een andere organisatie en is daarom hier niet toegevoegd. Verder is er niets veranderd.",
-      "installation_not_accessible": "Je kunt dat GitHub-account niet zien op GitHub, dus het is niet aan deze organisatie gekoppeld. Er is niets gewijzigd."
+      "installation_not_accessible": "Je kunt dat GitHub-account niet zien op GitHub, dus het is niet aan deze organisatie gekoppeld. Er is niets gewijzigd.",
+      "identity_refused": "GitHub accepteert je GitHub-aanmelding niet meer, dus Motir kon het koppelen van de app niet afronden. Verbreek in Instellingen → Account → Git-accounts de verbinding met je account, verbind het opnieuw en probeer het daarna nog eens."
     },
     "connect": {
       "title": "GitHub koppelen",
@@ -7986,7 +7987,9 @@
       "identity": {
         "title": "Verbind eerst je GitHub-account",
         "body": "Motir toont de GitHub-accounts die je via je eigen GitHub-identiteit kunt zien. Verbind die in Instellingen → Account → Git-accounts en kom daarna hier terug.",
-        "action": "Naar Git-accounts"
+        "action": "Naar Git-accounts",
+        "refusedTitle": "Verbind je GitHub-account opnieuw",
+        "refusedBody": "GitHub accepteert de aanmelding die Motir voor je heeft niet meer: die is ingetrokken of verlopen. Verbreek in Instellingen → Account → Git-accounts de verbinding, verbind opnieuw en kom daarna hier terug. Er is niets gewijzigd."
       },
       "cancel": "Annuleren",
       "back": "Alle accounts",

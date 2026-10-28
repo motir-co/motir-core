@@ -53,6 +53,7 @@ const PAGE: Extract<DecisionDocumentViewDTO, { outcome: 'page' }> = {
   versionNumber: 3,
   title: 'How a page stores its body',
   markdown: '# How a page stores its body\n\nStore the body as a Yjs document.',
+  workItemRefs: {},
   pageUrl: '/pages/page-1',
   versionUrl: '/pages/page-1?version=3',
   compareUrl: '/pages/page-1?history=open&version=3',

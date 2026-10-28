@@ -7588,7 +7588,8 @@
       "install_error": "Die Einrichtung der GitHub App konnte nicht abgeschlossen werden. Bitte versuchen Sie die Installation erneut.",
       "select_repos": "Die Motir GitHub App ist installiert. Wählen Sie, welche Repositorys des Kontos diese Organisation verbindet.",
       "repo_unavailable": "Dieses Repository ist bereits mit einer anderen Organisation verbunden und wurde daher hier nicht hinzugefügt. Sonst wurde nichts geändert.",
-      "installation_not_accessible": "Sie können dieses GitHub-Konto auf GitHub nicht sehen, daher wurde es nicht mit dieser Organisation verknüpft. Es wurde nichts geändert."
+      "installation_not_accessible": "Sie können dieses GitHub-Konto auf GitHub nicht sehen, daher wurde es nicht mit dieser Organisation verknüpft. Es wurde nichts geändert.",
+      "identity_refused": "GitHub akzeptiert Ihre GitHub-Anmeldung nicht mehr, daher konnte Motir die Verbindung der App nicht abschließen. Trennen Sie Ihr Konto unter Einstellungen → Konto → Git-Konten, verbinden Sie es erneut und versuchen Sie es dann noch einmal."
     },
     "connect": {
       "title": "GitHub verbinden",
@@ -7986,7 +7987,9 @@
       "identity": {
         "title": "Verbinden Sie zuerst Ihr GitHub-Konto",
         "body": "Motir listet die GitHub-Konten auf, die Sie über Ihre eigene GitHub-Identität sehen können. Verbinden Sie sie unter Einstellungen → Konto → Git-Konten und kehren Sie dann hierher zurück.",
-        "action": "Zu Git-Konten"
+        "action": "Zu Git-Konten",
+        "refusedTitle": "Verbinden Sie Ihr GitHub-Konto erneut",
+        "refusedBody": "GitHub akzeptiert die Anmeldung, die Motir für Sie hat, nicht mehr: Sie wurde widerrufen oder ist abgelaufen. Trennen Sie sie unter Einstellungen → Konto → Git-Konten, verbinden Sie sie erneut und kehren Sie dann hierher zurück. Es wurde nichts geändert."
       },
       "cancel": "Abbrechen",
       "back": "Alle Konten",

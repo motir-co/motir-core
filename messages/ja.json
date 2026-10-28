@@ -7585,7 +7585,8 @@
       "install_error": "GitHub App のセットアップを完了できませんでした。もう一度インストールしてください。",
       "select_repos": "Motir GitHub App はインストール済みです。この組織が接続する、このアカウントのリポジトリを選択してください。",
       "repo_unavailable": "そのリポジトリは既に別の組織に接続されているため、ここには追加されませんでした。ほかには何も変更されていません。",
-      "installation_not_accessible": "GitHub 上でその GitHub アカウントを表示できないため、この組織にリンクされませんでした。何も変更されていません。"
+      "installation_not_accessible": "GitHub 上でその GitHub アカウントを表示できないため、この組織にリンクされませんでした。何も変更されていません。",
+      "identity_refused": "GitHub があなたの GitHub サインインを受け付けなくなったため、Motir は App の接続を完了できませんでした。「設定 → アカウント → Git アカウント」でアカウントの接続を解除してから再接続し、もう一度お試しください。"
     },
     "connect": {
       "title": "GitHub を接続",
@@ -7983,7 +7984,9 @@
       "identity": {
         "title": "まず GitHub アカウントを接続してください",
         "body": "Motir は、あなた自身の GitHub ID を通じて閲覧できる GitHub アカウントを一覧表示します。「設定 → アカウント → Git アカウント」で接続してから、ここに戻ってください。",
-        "action": "Git アカウントへ移動"
+        "action": "Git アカウントへ移動",
+        "refusedTitle": "GitHub アカウントを再接続してください",
+        "refusedBody": "Motir が保持しているあなたのサインインを GitHub が受け付けなくなりました。取り消されたか、有効期限が切れています。「設定 → アカウント → Git アカウント」で接続を解除してから再接続し、ここに戻ってください。何も変更されていません。"
       },
       "cancel": "キャンセル",
       "back": "すべてのアカウント",

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import {
+  GithubIdentityRefusedError,
   InstallationNotAccessibleError,
   InstallationNotLinkableError,
   RepoSelectionRequiredError,
@@ -32,6 +33,11 @@ export function mapGithubLinkError(err: unknown): NextResponse | null {
     err instanceof InstallationNotLinkableError
   ) {
     return NextResponse.json({ code: 'installation_not_accessible' }, { status: 403 });
+  }
+  // The actor's own GitHub sign-in is dead (Bug MOTIR-8984): a fact about the
+  // person, not the account, so it is told apart from the 403 above by its code.
+  if (err instanceof GithubIdentityRefusedError) {
+    return NextResponse.json({ code: 'github_identity_refused' }, { status: 409 });
   }
   return null;
 }

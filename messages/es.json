@@ -7588,7 +7588,8 @@
       "install_error": "No pudimos terminar de configurar la GitHub App. Vuelve a intentar la instalación.",
       "select_repos": "La Motir GitHub App está instalada. Elige qué repositorios de la cuenta conecta esta organización.",
       "repo_unavailable": "Ese repositorio ya está conectado a otra organización, así que no se ha añadido aquí. No ha cambiado nada más.",
-      "installation_not_accessible": "No puedes ver esa cuenta de GitHub en GitHub, así que no se ha vinculado a esta organización. No se ha cambiado nada."
+      "installation_not_accessible": "No puedes ver esa cuenta de GitHub en GitHub, así que no se ha vinculado a esta organización. No se ha cambiado nada.",
+      "identity_refused": "GitHub ya no acepta tu inicio de sesión de GitHub, así que Motir no pudo terminar de conectar la App. En Configuración → Cuenta → Cuentas de Git, desconecta tu cuenta y vuelve a conectarla; luego inténtalo de nuevo."
     },
     "connect": {
       "title": "Conectar GitHub",
@@ -7986,7 +7987,9 @@
       "identity": {
         "title": "Primero conecta tu cuenta de GitHub",
         "body": "Motir muestra las cuentas de GitHub que puedes ver a través de tu propia identidad de GitHub. Conéctala en Configuración → Cuenta → Cuentas de Git y luego vuelve aquí.",
-        "action": "Ir a Cuentas de Git"
+        "action": "Ir a Cuentas de Git",
+        "refusedTitle": "Vuelve a conectar tu cuenta de GitHub",
+        "refusedBody": "GitHub ya no acepta el inicio de sesión que Motir tiene para ti: se revocó o ha caducado. En Configuración → Cuenta → Cuentas de Git, desconéctalo y vuelve a conectarlo; luego vuelve aquí. No se ha cambiado nada."
       },
       "cancel": "Cancelar",
       "back": "Todas las cuentas",

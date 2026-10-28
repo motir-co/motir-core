@@ -119,7 +119,7 @@ describe('the DTO over a page', () => {
     });
 
   it('links the page, the version and the compare view', () => {
-    expect(toDecisionDocumentViewDTO({ identity: PAGE, content: content(3) })).toMatchObject({
+    expect(toDecisionDocumentViewDTO({ identity: PAGE, content: content(3) }, {})).toMatchObject({
       outcome: 'page',
       pageUrl: '/pages/page-1',
       versionUrl: '/pages/page-1?version=3',
@@ -129,20 +129,25 @@ describe('the DTO over a page', () => {
   });
 
   it('says the page changed since only when a newer version exists', () => {
-    expect(toDecisionDocumentViewDTO({ identity: PAGE, content: content(4) })).toMatchObject({
+    expect(toDecisionDocumentViewDTO({ identity: PAGE, content: content(4) }, {})).toMatchObject({
       changedSince: true,
     });
-    expect(toDecisionDocumentViewDTO({ identity: PAGE, content: content(null) })).toMatchObject({
-      changedSince: false,
-    });
+    expect(toDecisionDocumentViewDTO({ identity: PAGE, content: content(null) }, {})).toMatchObject(
+      {
+        changedSince: false,
+      },
+    );
   });
 
   it('an unreadable version keeps its reason and links the page', () => {
     expect(
-      toDecisionDocumentViewDTO({
-        identity: PAGE,
-        content: { outcome: 'unresolvable', reason: 'gone_at_head' },
-      }),
+      toDecisionDocumentViewDTO(
+        {
+          identity: PAGE,
+          content: { outcome: 'unresolvable', reason: 'gone_at_head' },
+        },
+        {},
+      ),
     ).toEqual({
       outcome: 'unresolvable',
       reason: 'gone_at_head',
@@ -157,16 +162,19 @@ describe('the DTO over a page', () => {
 
   it('a file’s content under a page identity is unreadable, never a file view', () => {
     expect(
-      toDecisionDocumentViewDTO({
-        identity: PAGE,
-        content: {
-          outcome: 'resolved',
-          repo: 'acme/web',
-          path: 'docs/decisions/x.md',
-          blobSha: 'b1',
-          markdown: 'File.',
+      toDecisionDocumentViewDTO(
+        {
+          identity: PAGE,
+          content: {
+            outcome: 'resolved',
+            repo: 'acme/web',
+            path: 'docs/decisions/x.md',
+            blobSha: 'b1',
+            markdown: 'File.',
+          },
         },
-      }),
+        {},
+      ),
     ).toMatchObject({ outcome: 'unresolvable', reason: 'unreadable', hostUrl: '/pages/page-1' });
   });
 });
