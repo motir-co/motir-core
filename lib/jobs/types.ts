@@ -757,6 +757,11 @@ export interface JobEventDataMap {
    *  over any that now conflict. Emitted by the push webhook after its own write. */
   'pull-request/base-moved': PullRequestBaseMovedData;
   'pull-request/head-moved': PullRequestHeadMovedData;
+  /** A Motir repository's environment configuration changed (Story MOTIR-9795 ·
+   *  MOTIR-9961): one entry added, replaced or deleted. Emitted by
+   *  `environmentConfigService` AFTER the change commits; carries no value. The
+   *  deploying stories subscribe to it to redeploy that environment. */
+  'environment.config.changed': EnvironmentConfigChangedData;
   /** The monitor-issue reconciler's TICK (Story MOTIR-4929 · MOTIR-5581) — cron
    *  triggered and cross-tenant: it discovers every binding and fans out. */
   'system.monitor-issue-reconcile': SystemScheduledData;
@@ -836,6 +841,20 @@ export interface PullRequestBaseMovedData {
  * request's OWN branch asks about that one, because a head pushed onto a base that has
  * already moved past it conflicts with no event on the base at all.
  */
+/**
+ * The `environment.config.changed` event payload (Story MOTIR-9795 · MOTIR-9961)
+ * — one per add, replace or delete of an environment entry. It names the entry
+ * and never carries its value, secret or not.
+ */
+export interface EnvironmentConfigChangedData {
+  workspaceId: string;
+  projectRepositoryId: string;
+  environment: 'production' | 'preview' | 'release';
+  name: string;
+  action: 'added' | 'replaced' | 'deleted';
+  actorId: string;
+}
+
 export interface PullRequestHeadMovedData {
   /** The repository's tenant — `github_repo.workspace_id`. */
   workspaceId: string;
