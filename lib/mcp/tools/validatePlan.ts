@@ -179,9 +179,10 @@ export function registerValidatePlan(server: McpServer, resolveContext: McpConte
         'nothing of is not this plan’s finding — `validate_work_item` without a `planId` still ' +
         'reports it. Beside the verdict, never part of it, `advisories` lists every ' +
         '`likely-mislabelled-link` in a body the plan PROPOSES (an `add`, or a `modify` that ' +
-        'rewrites the body): a `[label](motir:<id>)` link whose label names a different key ' +
-        'than the card the id opens, or whose id opens no card (`targetKey: null`) — fix the ' +
-        'id before sealing, or every reader follows the link to the wrong card. Returns ' +
+        'rewrites the description or the explanation): a `[label](motir:<id>)` link whose label ' +
+        'names a different key than the card the id opens, or whose id opens no card ' +
+        '(`targetKey: null`), with the `field` it sits in (`descriptionMd` or `explanationMd`) — ' +
+        'fix the id before sealing, or every reader follows the link to the wrong card. Returns ' +
         '`{ planId, valid, rejections: [...], blockers: [...], invalidEdges: [...], ' +
         'crossLevelEdges: [...], sectionFindings: [...], advisories: [...] }`; an item named ' +
         '`planItem:<id>` is a PROPOSAL in this plan, not a work item. ' +

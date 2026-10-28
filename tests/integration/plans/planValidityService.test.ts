@@ -1213,6 +1213,8 @@ describe('the MISLABELLED-LINK advisory on a PROPOSED body (MOTIR-9007)', () => 
           label: 'PROD-404',
           targetId: 'cl_no_such_card',
           targetKey: null,
+
+          field: 'descriptionMd',
         },
         {
           kind: 'shape',
@@ -1221,6 +1223,7 @@ describe('the MISLABELLED-LINK advisory on a PROPOSED body (MOTIR-9007)', () => 
           label: meant.identifier,
           targetId: opened.id,
           targetKey: opened.identifier,
+          field: 'descriptionMd',
         },
       ]),
     );
@@ -1235,6 +1238,39 @@ describe('the MISLABELLED-LINK advisory on a PROPOSED body (MOTIR-9007)', () => 
     const stored = await workItemsService.validateWorkItem(fx.projectId, story.identifier, fx.ctx);
     expect(stored.advisories.filter(isMislabelledLinkAdvisory)).toEqual([]);
     expect(await adminDb.workItem.count({ where: { projectId: fx.projectId } })).toBe(4);
+  });
+
+  it('a `modify` that rewrites ONLY the explanation is scanned, and the advisory names `explanationMd` (MOTIR-9938)', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await mk(fx, 'Story', 'story');
+    const child = await mk(fx, 'Child', 'subtask', story.id);
+    const meant = await mk(fx, 'Meant', 'task');
+    const opened = await mk(fx, 'Opened', 'task');
+
+    const planId = await freshPlan(fx);
+    await addProposal(fx, planId, {
+      op: 'modify',
+      workItemId: child.id,
+      patch: { explanationMd: `Why: ${refToken(meant.identifier, opened.id)}.` },
+    });
+    await plansService.markPlanned(planId, fx.ctx);
+
+    const expected = {
+      kind: 'shape',
+      item: child.identifier,
+      severity: 'likely-mislabelled-link',
+      label: meant.identifier,
+      targetId: opened.id,
+      targetKey: opened.identifier,
+      field: 'explanationMd',
+    };
+    const subtree = await planValidityService.validateProjectedWorkItem(
+      planId,
+      story.identifier,
+      fx.ctx,
+    );
+    expect(subtree.advisories.filter(isMislabelledLinkAdvisory)).toEqual([expected]);
+    expect(await planValidityService.projectedLinkAdvisories(planId, fx.ctx)).toEqual([expected]);
   });
 
   it('the whole-plan check scans PROPOSED bodies only — an untouched committed card is not the plan’s finding', async () => {
