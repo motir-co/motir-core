@@ -1,3 +1,8 @@
+import {
+  AWS_TENANT_DEPLOY_ROLE,
+  type AwsPolicyDocument,
+  type AwsQuotaTarget,
+} from '@motir/orchestrator';
 import { orgSegment } from '@/lib/ciFleet/hostAccounts';
 import {
   memberAccountEmail,
@@ -75,6 +80,95 @@ export function hostingTenantAccountPlan(
     memberEmail: usable ? memberAccountEmail(memberEmailTemplate, name) : null,
     region: TENANT_ACCOUNT_REGION,
     ouName: TENANT_OU_NAME,
+  };
+}
+
+/** The role a tenant's deploys run as in its account (MOTIR-9941), trusted only by
+ *  Motir's management role. */
+export const TENANT_DEPLOY_ROLE_NAME = AWS_TENANT_DEPLOY_ROLE;
+
+/** The cost-allocation tag on a tenant account: `motir:organization=<id>`. */
+export const TENANT_ORGANIZATION_TAG_KEY = 'motir:organization';
+
+/** A quota raise the bootstrap files in a new tenant account. */
+export interface TenantQuotaTarget extends AwsQuotaTarget {
+  /** What the quota is, for outcomes and logs. */
+  name: string;
+}
+
+/** The pre-launch quota targets of a tenant account (Story MOTIR-9792); the AWS
+ *  adapter story may change them here. */
+export const TENANT_QUOTA_TARGETS: readonly TenantQuotaTarget[] = [
+  {
+    name: 'fargate-on-demand-vcpu',
+    serviceCode: 'fargate',
+    quotaCode: 'L-3032A538',
+    desiredValue: 64,
+  },
+  {
+    name: 'lambda-concurrent-executions',
+    serviceCode: 'lambda',
+    quotaCode: 'L-B99A9384',
+    desiredValue: 1000,
+  },
+];
+
+/**
+ * The deploy role's permissions: the services the AWS adapter deploys a tenant's
+ * applications with, in the tenant region only. Broad on purpose until the
+ * adapter (MOTIR-9794) narrows it; it never grants IAM user or key management,
+ * Organizations, or billing.
+ */
+export function tenantDeployPolicyDocument(): AwsPolicyDocument {
+  const inRegion = { StringEquals: { 'aws:RequestedRegion': TENANT_ACCOUNT_REGION } };
+  return {
+    Version: '2012-10-17',
+    Statement: [
+      {
+        Sid: 'DeployServices',
+        Effect: 'Allow',
+        Action: [
+          'ecs:*',
+          'ecr:*',
+          'lambda:*',
+          'logs:*',
+          'elasticloadbalancing:*',
+          'ec2:*',
+          's3:*',
+          'cloudformation:*',
+          'ssm:GetParameter*',
+          'secretsmanager:*',
+          'acm:*',
+          'application-autoscaling:*',
+          'cloudwatch:*',
+        ],
+        Resource: '*',
+        Condition: inRegion,
+      },
+      {
+        Sid: 'ServiceRoles',
+        Effect: 'Allow',
+        Action: [
+          'iam:GetRole',
+          'iam:PassRole',
+          'iam:CreateRole',
+          'iam:DeleteRole',
+          'iam:PutRolePolicy',
+          'iam:DeleteRolePolicy',
+          'iam:AttachRolePolicy',
+          'iam:DetachRolePolicy',
+          'iam:TagRole',
+          'iam:CreateServiceLinkedRole',
+        ],
+        Resource: '*',
+      },
+      {
+        Sid: 'NeverTheDeployRoleItself',
+        Effect: 'Deny',
+        Action: 'iam:*',
+        Resource: `arn:aws:iam::*:role/${TENANT_DEPLOY_ROLE_NAME}`,
+      },
+    ],
   };
 }
 

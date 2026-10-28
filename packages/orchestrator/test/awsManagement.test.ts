@@ -10,6 +10,7 @@ import {
   AWS_RUNNER_IAM_POLICY,
   AWS_RUNNER_IAM_ROLE,
   AWS_RUNNER_IAM_USER,
+  AWS_TENANT_DEPLOY_ROLE,
   AwsAccountCreationRefusedError,
   AwsManagementApiError,
   OrchestratorNotConfiguredError,
@@ -862,6 +863,174 @@ describe('the Tenants organizational unit (MOTIR-9940)', () => {
 
     expect(await api.moveAccountToOu('123456789012', 'ou-tenants')).toEqual({ moved: false });
     expect(calls.map((c) => c.command)).not.toContain('MoveAccountCommand');
+  });
+});
+
+describe('the tenant account bootstrap calls (MOTIR-9941)', () => {
+  const POLICY = {
+    Version: '2012-10-17' as const,
+    Statement: [{ Effect: 'Allow', Action: 'ecs:*' }],
+  };
+  const FARGATE = { serviceCode: 'fargate', quotaCode: 'L-3032A538', desiredValue: 64 };
+
+  it('creates the deploy role trusting only the management role, with its policy', async () => {
+    const { api, calls } = harness({
+      GetRoleCommand: () => {
+        throw sdkError('NoSuchEntity', 404);
+      },
+      CreateRoleCommand: () => ({}),
+      GetRolePolicyCommand: () => {
+        throw sdkError('NoSuchEntity', 404);
+      },
+      PutRolePolicyCommand: () => ({}),
+    });
+
+    expect(await api.ensureTenantDeployRole(MEMBER, POLICY)).toEqual({ created: true });
+    const create = calls.find((c) => c.command === 'CreateRoleCommand')!;
+    expect(create).toMatchObject({ service: 'iam', accessKeyId: MEMBER.accessKeyId });
+    expect(create.input['RoleName']).toBe(AWS_TENANT_DEPLOY_ROLE);
+    const trust = JSON.parse(String(create.input['AssumeRolePolicyDocument'])) as {
+      Statement: Array<{ Principal: unknown }>;
+    };
+    expect(trust.Statement.map((s) => s.Principal)).toEqual([{ AWS: MANAGEMENT.roleArn }]);
+    expect(calls.find((c) => c.command === 'PutRolePolicyCommand')!.input).toEqual({
+      RoleName: AWS_TENANT_DEPLOY_ROLE,
+      PolicyName: AWS_TENANT_DEPLOY_ROLE,
+      PolicyDocument: JSON.stringify(POLICY),
+    });
+  });
+
+  it('finds the role and its policy in place and writes nothing', async () => {
+    const { api, calls } = harness({
+      GetRoleCommand: () => ({ Role: { RoleName: AWS_TENANT_DEPLOY_ROLE } }),
+      GetRolePolicyCommand: () => ({ PolicyDocument: encodeURIComponent(JSON.stringify(POLICY)) }),
+    });
+
+    expect(await api.ensureTenantDeployRole(MEMBER, POLICY)).toEqual({ created: false });
+    expect(calls.map((c) => c.command)).toEqual(['GetRoleCommand', 'GetRolePolicyCommand']);
+  });
+
+  it('treats EntityAlreadyExists on create as found, and still converges the policy', async () => {
+    const { api, calls } = harness({
+      GetRoleCommand: () => {
+        throw sdkError('NoSuchEntity', 404);
+      },
+      CreateRoleCommand: () => {
+        throw sdkError('EntityAlreadyExists', 409);
+      },
+      GetRolePolicyCommand: () => ({ PolicyDocument: encodeURIComponent('{"old":true}') }),
+      PutRolePolicyCommand: () => ({}),
+    });
+
+    expect(await api.ensureTenantDeployRole(MEMBER, POLICY)).toEqual({ created: false });
+    expect(calls.map((c) => c.command)).toContain('PutRolePolicyCommand');
+  });
+
+  it('tags the account only when the value differs', async () => {
+    const tagged = harness({
+      AssumeRoleCommand: assume,
+      ListTagsForResourceCommand: () => ({ Tags: [{ Key: 'motir:organization', Value: 'old' }] }),
+      TagResourceCommand: () => ({}),
+    });
+    expect(await tagged.api.ensureAccountTag('123', 'motir:organization', 'org_1')).toEqual({
+      tagged: true,
+    });
+    expect(tagged.calls.find((c) => c.command === 'TagResourceCommand')).toMatchObject({
+      service: 'organizations',
+      sessionToken: 'token-MGMT',
+      input: { ResourceId: '123', Tags: [{ Key: 'motir:organization', Value: 'org_1' }] },
+    });
+
+    const already = harness({
+      AssumeRoleCommand: assume,
+      ListTagsForResourceCommand: (input) =>
+        input['NextToken']
+          ? { Tags: [{ Key: 'motir:organization', Value: 'org_1' }] }
+          : { Tags: [], NextToken: 'p2' },
+    });
+    expect(await already.api.ensureAccountTag('123', 'motir:organization', 'org_1')).toEqual({
+      tagged: false,
+    });
+    expect(already.calls.map((c) => c.command)).not.toContain('TagResourceCommand');
+  });
+
+  it('files a quota raise below target with none open', async () => {
+    const { api, calls } = harness({
+      GetServiceQuotaCommand: () => ({ Quota: { Value: 6 } }),
+      ListRequestedServiceQuotaChangeHistoryByQuotaCommand: () => ({ RequestedQuotas: [] }),
+      RequestServiceQuotaIncreaseCommand: () => ({
+        RequestedQuota: { Id: 'q-1', Status: 'PENDING', DesiredValue: 64 },
+      }),
+    });
+
+    expect(await api.ensureQuotaRaise(MEMBER, 'us-east-1', FARGATE)).toEqual({
+      filed: true,
+      pending: true,
+    });
+    const request = calls.find((c) => c.command === 'RequestServiceQuotaIncreaseCommand')!;
+    expect(request).toMatchObject({ region: 'us-east-1', accessKeyId: MEMBER.accessKeyId });
+    expect(request.input).toEqual({
+      ServiceCode: 'fargate',
+      QuotaCode: 'L-3032A538',
+      DesiredValue: 64,
+    });
+  });
+
+  it('files nothing for a quota at target, read from the default when never changed', async () => {
+    const { api, calls } = harness({
+      GetServiceQuotaCommand: () => {
+        throw sdkError('NoSuchResourceException');
+      },
+      GetAWSDefaultServiceQuotaCommand: () => ({ Quota: { Value: 64 } }),
+    });
+
+    expect(await api.ensureQuotaRaise(MEMBER, 'us-east-1', FARGATE)).toEqual({
+      filed: false,
+      pending: false,
+    });
+    expect(calls.map((c) => c.command)).not.toContain('RequestServiceQuotaIncreaseCommand');
+  });
+
+  it('files nothing and reports pending when a raise is already open', async () => {
+    const { api, calls } = harness({
+      GetServiceQuotaCommand: () => ({ Quota: { Value: 6 } }),
+      ListRequestedServiceQuotaChangeHistoryByQuotaCommand: (input) =>
+        input['Status'] === 'CASE_OPENED'
+          ? { RequestedQuotas: [{ Id: 'q-0', Status: 'CASE_OPENED', DesiredValue: 64 }] }
+          : { RequestedQuotas: [] },
+    });
+
+    expect(await api.ensureQuotaRaise(MEMBER, 'us-east-1', FARGATE)).toEqual({
+      filed: false,
+      pending: true,
+    });
+    expect(calls.map((c) => c.command)).not.toContain('RequestServiceQuotaIncreaseCommand');
+  });
+
+  it('answers a raise filed concurrently as pending, and surfaces other errors by code', async () => {
+    const raced = harness({
+      GetServiceQuotaCommand: () => ({ Quota: { Value: 6 } }),
+      ListRequestedServiceQuotaChangeHistoryByQuotaCommand: () => ({ RequestedQuotas: [] }),
+      RequestServiceQuotaIncreaseCommand: () => {
+        throw sdkError('ResourceAlreadyExistsException');
+      },
+    });
+    expect(await raced.api.ensureQuotaRaise(MEMBER, 'us-east-1', FARGATE)).toEqual({
+      filed: false,
+      pending: true,
+    });
+
+    const denied = harness({
+      GetServiceQuotaCommand: () => ({ Quota: { Value: 6 } }),
+      ListRequestedServiceQuotaChangeHistoryByQuotaCommand: () => ({ RequestedQuotas: [] }),
+      RequestServiceQuotaIncreaseCommand: () => {
+        throw sdkError('AccessDeniedException', 403);
+      },
+    });
+    await expect(denied.api.ensureQuotaRaise(MEMBER, 'us-east-1', FARGATE)).rejects.toMatchObject({
+      name: 'AwsManagementApiError',
+      awsCode: 'AccessDeniedException',
+    });
   });
 });
 
