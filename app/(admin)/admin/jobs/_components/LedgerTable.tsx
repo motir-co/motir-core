@@ -3,8 +3,8 @@ import { cn } from '@/lib/utils/cn';
 
 /**
  * The ledger's table anatomy — design `platform-admin` AMENDMENT 2026-10-28
- * § Jobs, which reuses the workspace ledger's ROW ANATOMY without importing
- * `JobsDashboard.tsx` (the staff ledger does not fork the tenant dashboard).
+ * § Jobs, which reused the workspace ledger's ROW ANATOMY without importing the
+ * tenant dashboard component (that dashboard was retired by Story MOTIR-9982).
  *
  * The header ink is `--el-text-secondary`, not `--el-text-muted`: the header row
  * is painted `--el-surface`, where muted measures 4.17:1 (MOTIR-3523).

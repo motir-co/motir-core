@@ -7,6 +7,7 @@ import {
   DLQ_REPLAY_AUDIT_REASON,
 } from '@/lib/services/platformJobReplayService';
 import { platformAuditService } from '@/lib/services/platformAuditService';
+import { jobEventRepository } from '@/lib/repositories/jobEventRepository';
 import { DlqEntryNotFoundError, SystemReplayForbiddenError } from '@/lib/jobs/errors';
 import type { PlatformPrincipal } from '@/lib/platform/auth';
 // Side-effect import: `email.send` declares an idempotency template, so its
@@ -163,6 +164,24 @@ describe('platformJobReplayService.replayOne', () => {
     expect((await adminDb.jobRunDlq.findUnique({ where: { id: dlqId } }))!.replayedAt).toBeNull();
     expect(await adminDb.jobEvent.count()).toBe(0);
     expect(await adminDb.platformAuditLog.count()).toBe(0);
+  });
+
+  it('stamps replayedAt only when the event was actually published', async () => {
+    // The ordering lib/jobs/dlq.ts promises, held through THIS door (moved here
+    // from the retired System tab door's suite, MOTIR-10044): if the re-emit
+    // throws, the system transaction rolls back and the row is still
+    // un-replayed, so "replayed" never records a send that did not happen.
+    const dlqId = await seedDlq({ workspaceId: null });
+    vi.spyOn(jobEventRepository, 'create').mockRejectedValueOnce(new Error('publish failed'));
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await expect(
+      platformJobReplayService.replayOne({ dlqId, principal: operator }),
+    ).rejects.toThrow('publish failed');
+
+    expect((await adminDb.jobRunDlq.findUnique({ where: { id: dlqId } }))!.replayedAt).toBeNull();
+    expect(await adminDb.jobEvent.count()).toBe(0);
+    expect(await replayRows()).toHaveLength(0);
   });
 
   it('answers not-found for an unknown id and writes no audit row', async () => {

@@ -18,9 +18,10 @@ import { RUN_STATUSES, StatusFilter } from './_components/StatusFilter';
  * the platform ran, in every workspace and in none, and every dead letter
  * waiting; an operator replays them one at a time or a whole function at once.
  *
- * ⚠️ NO FORK OF `/settings/workspace/jobs`. The workspace manager's ledger is
- * untouched; this page reads through its own staff-gated services and copies
- * only the row anatomy.
+ * ⚠️ NO FORK OF THE TENANT LEDGER. This page was built beside the workspace
+ * manager's Job runs page, reading through its own staff-gated services and
+ * copying only the row anatomy; that tenant page was then retired (Story
+ * MOTIR-9982), so this is the one ledger.
  *
  * ⚠️ THE ROLE DECIDES WHAT IS DRAWN, NOT WHAT IS ALLOWED. Support sees every row
  * and no replay control; the actions and the services refuse below operator

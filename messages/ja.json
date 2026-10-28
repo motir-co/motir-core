@@ -737,9 +737,6 @@
       "pickProjectFirst": "先にプロジェクトを選択してください。",
       "unknownRelationship": "不明な関係です。",
       "pickIssueToLink": "リンクする作業項目を選択してください。",
-      "missingDlqId": "デッドレター ID がありません。",
-      "ownerOnlyReplay": "ジョブを再実行できるのはワークスペースのマネージャーだけです。",
-      "dlqGone": "そのデッドレターエントリは存在しなくなりました。",
       "workspaceNameEmpty": "ワークスペース名を空にすることはできません。",
       "useLeaveToRemoveSelf": "自分を削除するには「退出」を使用してください。",
       "cannotRemoveLastMember": "最後のメンバーは削除できません。",
@@ -765,9 +762,7 @@
       "workspaceSecurityForbidden": "ワークスペースのセキュリティ設定を変更できるのは、そのワークスペースのオーナーと管理者だけです。",
       "refused": "処理できませんでした: {reason}",
       "organizationClosing": "この組織は削除が予定されているため、閲覧のみになっています。削除を取り消せるのはオーナーだけです。",
-      "memberProjectsFailed": "このメンバーのプロジェクトを読み込めませんでした。",
-      "systemReplayWorkspaceRow": "そのデッドレターはワークスペースに属しています。そのワークスペースの「デッドレター」タブから再実行してください。",
-      "systemReplayOperatorOnly": "システムのデッドレターを再実行できるのはプラットフォーム運用者のみです。"
+      "memberProjectsFailed": "このメンバーのプロジェクトを読み込めませんでした。"
     },
     "links": {
       "notFound": "その作業項目は存在しなくなりました。",
@@ -2066,13 +2061,11 @@
       "nav": {
         "group": {
           "general": "一般",
-          "access": "アクセス",
-          "operations": "運用"
+          "access": "アクセス"
         },
         "workspace": "ワークスペース",
         "security": "セキュリティ",
         "roles": "ロールと権限",
-        "jobs": "ジョブの実行",
         "publicAddress": "公開アドレス"
       }
     },
@@ -2971,86 +2964,6 @@
       "heroOverviewSubheading": "公開ページで訪問者に表示されるキャッチコピー、タグ、README です。",
       "editOnPublicPage": "公開ページを編集",
       "heroOverviewNote": "「設定」›「公開ページ」が開きます。プロジェクトを公開する前に書いておくこともできます。"
-    },
-    "jobs": {
-      "title": "ジョブの実行",
-      "subtitle": "このワークスペースのバックグラウンドジョブです（招待やパスワードリセットの配信、スケジュールされた処理など）。失敗したジョブはデッドレターキューに入り、オーナーが再実行できます。",
-      "tab": {
-        "runs": "最近の実行",
-        "dlq": "デッドレター",
-        "system": "システム"
-      },
-      "tabNavLabel": "ジョブ実行の表示",
-      "dlqBadgeLabel": "デッドレターキューに {count} 件",
-      "filterGroupLabel": "ステータスで絞り込む",
-      "filter": {
-        "all": "すべて",
-        "succeeded": "成功",
-        "failed": "失敗",
-        "running": "実行中",
-        "abandoned": "中止"
-      },
-      "runsTableCaption": "バックグラウンドジョブの実行",
-      "col": {
-        "status": "ステータス",
-        "delivery": "配信",
-        "function": "関数",
-        "event": "イベント",
-        "attempts": "試行回数",
-        "started": "開始",
-        "duration": "所要時間",
-        "failure": "失敗内容",
-        "details": "詳細",
-        "firstFailed": "初回失敗",
-        "lastFailed": "最終失敗",
-        "replayed": "再実行",
-        "actions": "操作"
-      },
-      "view": "表示",
-      "runDetailTitle": "実行の詳細",
-      "dlqTableCaption": "デッドレターキュー",
-      "replay": "再実行",
-      "replayTooltip": "ジョブを再実行できるのはワークスペースのマネージャーだけです",
-      "alreadyReplayedToastTitle": "すでに再実行済みです",
-      "alreadyReplayedToastDesc": "このエントリは以前に再実行されています。新たにキューに追加されたものはありません。",
-      "replayedToastTitle": "ジョブを再実行しました",
-      "replayedToastDesc": "元のイベントを再送信しました。",
-      "replayErrorTitle": "再実行できませんでした",
-      "dlqDetailTitle": "デッドレターの詳細",
-      "dlqDetailDesc": "失敗内容と元のイベントのペイロード（そのまま再実行可能）です。",
-      "failureHeading": "失敗内容",
-      "eventPayloadHeading": "イベントのペイロード",
-      "pageLabel": "{page} ページ",
-      "previous": "前へ",
-      "next": "次へ",
-      "refresh": "更新",
-      "dlqEmptyTitle": "デッドレターキューは空です",
-      "dlqEmptyDesc": "すべてのジョブが成功したか、再試行中です。",
-      "runsEmptyTitle": "ジョブの実行はまだありません",
-      "runsEmptyDesc": "バックグラウンドジョブが実行されると、ここに表示されます。",
-      "delivery": {
-        "accepted": "受付済み",
-        "delivered": "配信済み",
-        "bounced": "バウンス",
-        "complained": "苦情",
-        "delayed": "遅延"
-      },
-      "deliveryNone": "配信記録なし",
-      "deliveryDetail": {
-        "heading": "配信",
-        "state": "状態",
-        "messageId": "メッセージ ID",
-        "recipient": "受信者",
-        "template": "テンプレート",
-        "lastEvent": "最終イベント",
-        "never": "プロバイダーからのイベントはまだありません"
-      },
-      "systemDlqTitle": "ワークスペースのないデッドレター",
-      "systemDlqSummary": "{waiting} 件が再実行待ち · 過去 7 日間に {replayed} 件を再実行",
-      "systemDlqTableCaption": "システムのデッドレター",
-      "systemDlqEmptyTitle": "システムのデッドレターはありません",
-      "systemDlqEmptyDesc": "ワークスペースのないジョブはすべて成功したか、まだ再試行中です。",
-      "systemRunsTitle": "システム実行"
     },
     "account": {
       "eyebrow": "アカウント設定",
@@ -4227,10 +4140,6 @@
         "security": "セキュリティ",
         "usage": "使用量とコスト",
         "billing": "請求とプラン"
-      },
-      "jobRunsFoldIn": {
-        "title": "ジョブの実行",
-        "subtitle": "このワークスペースのバックグラウンド処理です。実行されたもの、失敗したもの、デッドレターキューで待機しているものを確認できます。"
       }
     },
     "gitAccounts": {

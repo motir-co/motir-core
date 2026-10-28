@@ -106,7 +106,7 @@ function worker(id: string): JobWorker {
 
 describe('§1 the emit→run seam, end to end', () => {
   it('drives sendEvent → job_event → job_queue → worker claim → the DTO', async () => {
-    const { workspaceId, userId } = await makeWorkspace();
+    const { workspaceId } = await makeWorkspace();
     const jobId = 'test.gate-seam';
     const handled: unknown[] = [];
     // ⚠️ ITS OWN TRIGGER, NOT A REAL EVENT (MOTIR-3418). The probe used to share
@@ -131,13 +131,10 @@ describe('§1 the emit→run seam, end to end', () => {
 
     // ⚠️ ASSERTED THROUGH THE DTO, NOT THE TABLE. A key that drifts between the
     // ledger's write and the operator surface's read is precisely what the
-    // per-subtask units cannot see, because each side mocks the other.
-    const runs = await jobsDashboardService.listJobRuns({
-      workspaceId,
-      userId,
-      limit: 50,
-      offset: 0,
-    });
+    // per-subtask units cannot see, because each side mocks the other. The
+    // surface is /admin/jobs's runs read since the tenant dashboard was retired
+    // (MOTIR-10044); the run's own `workspaceId` is asserted below.
+    const runs = await jobsDashboardService.listSystemRuns({ limit: 50, offset: 0 });
     const dto = runs.find((r) => r.functionId === jobId);
     expect(dto, 'the run never reached the operator surface').toBeDefined();
     expect(dto!.status).toBe('succeeded');
@@ -147,7 +144,7 @@ describe('§1 the emit→run seam, end to end', () => {
   });
 
   it('proves the IDEMPOTENCY seam through that same DTO — two events, one delivery', async () => {
-    const { workspaceId, userId } = await makeWorkspace();
+    const { workspaceId } = await makeWorkspace();
     const jobId = 'test.gate-idempotency';
     let deliveries = 0;
     defineJob(
@@ -174,12 +171,7 @@ describe('§1 the emit→run seam, end to end', () => {
     await w.settled();
 
     expect(deliveries).toBe(1);
-    const runs = await jobsDashboardService.listJobRuns({
-      workspaceId,
-      userId,
-      limit: 50,
-      offset: 0,
-    });
+    const runs = await jobsDashboardService.listSystemRuns({ limit: 50, offset: 0 });
     expect(runs.filter((r) => r.functionId === jobId)).toHaveLength(1);
   });
 });

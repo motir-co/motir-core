@@ -544,7 +544,7 @@ describe('projectSettingsNav registry — isProjectSettingsPath', () => {
 
   it('does NOT match workspace settings or other routes', () => {
     expect(isProjectSettingsPath('/settings/workspace')).toBe(false);
-    expect(isProjectSettingsPath('/settings/workspace/jobs')).toBe(false);
+    expect(isProjectSettingsPath('/settings/workspace/security')).toBe(false);
     expect(isProjectSettingsPath('/dashboard')).toBe(false);
     // not a false prefix match
     expect(isProjectSettingsPath('/settings/project-other')).toBe(false);

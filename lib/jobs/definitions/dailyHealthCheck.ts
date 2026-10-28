@@ -161,10 +161,10 @@ import type { HostedRunProbeVerdictDTO } from '@/lib/dto/hostedRunProbe';
 // `retryPolicy: 'none'` (run at most once): a health check is a point-in-time
 // probe — retrying it minutes later would record a stale verdict, so a failed
 // tick dead-letters immediately rather than retrying. That is also what makes
-// the failure LOUD: the DLQ tab of the 1.6.5 operator dashboard gets a row
-// naming every overdue job, instead of a queue that quietly consumes nothing.
-// THE DLQ ROW IS THE SURFACE — `/settings/workspace/jobs` → DLQ, whose badge
-// counts it and whose detail panel renders the failure message. That is why
+// the failure LOUD: the operator ledger's Dead letters tab gets a row naming
+// every overdue job, instead of a queue that quietly consumes nothing.
+// THE DLQ ROW IS THE SURFACE — `/admin/jobs` → Dead letters, which counts it
+// and renders the failure message. That is why
 // every error thrown here writes its diagnosis into its MESSAGE: the message is
 // the whole of what a human reads, and no operator should have to open
 // orchestrator logs to learn which image the registry refused.

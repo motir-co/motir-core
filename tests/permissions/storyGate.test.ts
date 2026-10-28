@@ -127,16 +127,12 @@ const POLICY_OWNERS = [
  */
 const ALLOWED_DERIVATIONS: { file: string; why: string }[] = [
   {
-    file: 'lib/services/jobsDashboardService.ts',
-    why: 'a WORKSPACE-level jobs dashboard, gated on the workspace role. No project is resolved, so no project permission can govern it (the `repository:connect` argument, MOTIR-2294)',
-  },
-  {
     file: 'lib/services/publicSubdomainService.ts',
-    why: "a WORKSPACE's public address (MOTIR-4221), gated on the workspace role — the Manager (Story MOTIR-6168 · MOTIR-6462; it was a `['owner','admin']` set before, which the patterns could not see). The address names the whole workspace, so no project permission can govern it — the `jobsDashboardService` argument",
+    why: "a WORKSPACE's public address (MOTIR-4221), gated on the workspace role — the Manager (Story MOTIR-6168 · MOTIR-6462; it was a `['owner','admin']` set before, which the patterns could not see). The address names the whole workspace, so no project permission can govern it — the `repository:connect` argument (MOTIR-2294)",
   },
   {
     file: 'lib/services/twoFactorPolicyService.ts',
-    why: 'a WORKSPACE-level and ORGANIZATION-level security policy (Story MOTIR-1215 · MOTIR-3645), gated on the workspace / org role. It resolves no project, so no project permission can govern it — the `jobsDashboardService` argument. Reading the policy needs no role at all; only SETTING it is gated, and that gate is the tier admin',
+    why: 'a WORKSPACE-level and ORGANIZATION-level security policy (Story MOTIR-1215 · MOTIR-3645), gated on the workspace / org role. It resolves no project, so no project permission can govern it — the `repository:connect` argument (MOTIR-2294). Reading the policy needs no role at all; only SETTING it is gated, and that gate is the tier admin',
   },
 ];
 
@@ -187,22 +183,12 @@ const UI_AFFORDANCE_DERIVATIONS = [
   // they were found, and it is exactly the worklist behaviour its author
   // intended.
   //
-  // Workspace-level, so no project permission could govern it either way — the
-  // same argument MOTIR-2294 made about `repository:connect`. It is the only
-  // survivor, and it is not MOTIR-2258's to remove.
-  //
-  // ⚠️ IT MOVED FILE, AND DID NOT MULTIPLY (Story MOTIR-4843 · MOTIR-4849). The
-  // derivation was `jobs/page.tsx`'s; the jobs dashboard now has TWO doors — its
-  // own route above the workspace-tier reveal, and `JobRunsFoldInSection` on
-  // `/settings/organization` below it — and the reads that feed it, this
-  // `isOwnerRole` among them, are SHARED in `JobsPane` rather than copied. So
-  // the pin follows the derivation to its new home and the list stays at three:
-  // had the fold-in grown a second copy instead, this guard would have caught
-  // it, which is the worklist behaviour its author intended.
-  'app/(authed)/settings/workspace/jobs/_components/JobsPane.tsx',
+  // The jobs dashboard's `isOwnerRole` was the one survivor of that sweep,
+  // pinned in the tenant jobs pane; it LEFT with the tenant Job runs surface (Story
+  // MOTIR-9982 · MOTIR-10043), which retired the page rather than fixing it.
   // ⚠️ Story MOTIR-1215 · Subtask MOTIR-3647 — the require-2FA switch, at the
   // workspace tier and in its organization-tier fold-in. Both derive
-  // `isWorkspaceManager` for the SAME reason the jobs page above does, and the
+  // `isWorkspaceManager` for the reason the retired jobs page did, and the
   // same reason keeps them out of MOTIR-2258's reach: the question is a
   // WORKSPACE-tier role, so no project permission could govern it either way.
   //
