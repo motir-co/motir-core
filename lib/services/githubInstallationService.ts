@@ -617,6 +617,36 @@ export const githubInstallationService = {
   },
 
   /**
+   * The signed install URL for a project Repositories room's `Connect a new one`
+   * (Bug MOTIR-9828). The state names this organisation, so the callback takes
+   * the ORG branch and refreshes the installation's repositories, and it names
+   * the PROJECT and returns to its room, so the callback then links the
+   * repositories this round trip connected into that project — the
+   * "organisation connection AND the project link in one act" the picker
+   * promises. Null when the App is not configured on this deployment.
+   *
+   * ORG-ADMIN, like `installUrlForOrganization`: connecting a repository to the
+   * organisation and linking it into a project are both org-admin acts, and a
+   * link is never minted for an actor the callback would refuse.
+   */
+  async installUrlForProjectRepositories(ctx: {
+    organizationId: string;
+    actorUserId: string;
+    workspaceId: string;
+    projectKey: string;
+  }): Promise<string | null> {
+    await authoriseOrgAdmin(ctx.actorUserId, ctx.organizationId);
+    const workspaceId = await workspaceForOrganization(ctx.organizationId, ctx.workspaceId, true);
+    return mintInstallUrl({
+      workspaceId,
+      userId: ctx.actorUserId,
+      organizationId: ctx.organizationId,
+      origin: 'projectRepositories',
+      projectKey: ctx.projectKey,
+    });
+  },
+
+  /**
    * The signed install URL the onboarding Connect step starts from (Story
    * MOTIR-8241 · MOTIR-8471): the state returns to `/onboarding/migrate` and
    * carries the step's own query (`context`, already narrowed by

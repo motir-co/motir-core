@@ -427,9 +427,26 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
                 },
                 blockedByAdd: {
                   type: 'array',
-                  items: { type: 'string' },
+                  items: {
+                    anyOf: [
+                      { type: 'string' },
+                      {
+                        type: 'object',
+                        properties: {
+                          ref: { type: 'string' },
+                          reason: {
+                            type: 'string',
+                            description:
+                              'ONE short line (at most 120 characters) saying what the waiting card CONSUMES from this blocker — and when it consumes an INTERFACE, the interface itself: the secret names, the permissions, the endpoint, the file or the symbol the two cards must agree on (e.g. "consumes: the `AWS_ORG_ADMIN_*` secrets").',
+                          },
+                        },
+                        required: ['ref', 'reason'],
+                        additionalProperties: false,
+                      },
+                    ],
+                  },
                   description:
-                    'Dependency edges to ADD — work-item keys ("ACME-7"), real work-item ids, or `planItem:<id>` refs. Each joins the target to an item on the SAME LEVEL — the same depth below their nearest common ancestor — under any parent; a cross-level edge is refused `cross_level`. An epic is blocked only by another epic.',
+                    'Dependency edges to ADD — work-item keys ("ACME-7"), real work-item ids, or `planItem:<id>` refs. Each joins the target to an item on the SAME LEVEL — the same depth below their nearest common ancestor — under any parent; a cross-level edge is refused `cross_level`. An epic is blocked only by another epic. Each entry may be `{ ref, reason }` instead of a bare ref: the reason is one short line saying what the waiting card consumes from that blocker. It is shown on the plan and written onto the link at approve, so the card says why it waits.',
                 },
                 blockedByRemove: {
                   type: 'array',
@@ -483,9 +500,26 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
             },
             blockedByRefs: {
               type: 'array',
-              items: { type: 'string' },
+              items: {
+                anyOf: [
+                  { type: 'string' },
+                  {
+                    type: 'object',
+                    properties: {
+                      ref: { type: 'string' },
+                      reason: {
+                        type: 'string',
+                        description:
+                          'ONE short line (at most 120 characters) saying what the waiting card CONSUMES from this blocker — and when it consumes an INTERFACE, the interface itself: the secret names, the permissions, the endpoint, the file or the symbol the two cards must agree on (e.g. "consumes: the `AWS_ORG_ADMIN_*` secrets").',
+                      },
+                    },
+                    required: ['ref', 'reason'],
+                    additionalProperties: false,
+                  },
+                ],
+              },
               description:
-                'Dependency edges, in the same three forms as `parentRef`: work-item keys ("ACME-7"), real work-item ids, or `planItem:<id>` refs into this plan. A `folder:<id>` ref is refused here — a folder is a placement, it blocks nothing. An edge joins two items on the SAME LEVEL — the same depth below their nearest common ancestor, a folder adding none — and may cross parents; one between two levels is refused `INVALID_PLAN_REF_GRAPH` / `cross_level`. An epic is blocked only by another epic — an edge with an epic at either end is cross-level unless both ends are epics.',
+                'Dependency edges, in the same three forms as `parentRef`: work-item keys ("ACME-7"), real work-item ids, or `planItem:<id>` refs into this plan. A `folder:<id>` ref is refused here — a folder is a placement, it blocks nothing. An edge joins two items on the SAME LEVEL — the same depth below their nearest common ancestor, a folder adding none — and may cross parents; one between two levels is refused `INVALID_PLAN_REF_GRAPH` / `cross_level`. An epic is blocked only by another epic — an edge with an epic at either end is cross-level unless both ends are epics. Each entry may be `{ ref, reason }` instead of a bare ref: the reason is one short line saying what the waiting card consumes from that blocker. It is shown on the plan and written onto the link at approve, so the card says why it waits.',
             },
             supersedesRefs: {
               type: 'array',
@@ -3104,7 +3138,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         },
         additionalProperties: false,
         description:
-          'OPTIONAL. WHAT you want built, as six named fields instead of prose — the planner reads this INSTEAD of asking you what is wrong. Supply as much as you actually know: nothing here is validated, and a partial requirement submits fine. Three fields (`outcome`, `behaviour`, `acceptance`) must be present and non-empty for the planner to treat the requirement as settled; short of that it simply opens the conversation, which is the same thing it does when you omit this argument entirely.',
+          'OPTIONAL. WHAT you want built, as six named fields instead of prose. It is INPUT: the planner reads it beside the thread, then settles the targets and writes the requirement it plans against itself. Supply as much as you actually know: nothing here is validated, and a partial requirement submits fine. Three fields (`outcome`, `behaviour`, `acceptance`) must be present and non-empty for the planner to read it; short of that it is ignored, which is the same as omitting this argument.',
       },
     },
     required: ['projectKey'],
@@ -3601,12 +3635,33 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       blockedByRefs: {
         type: 'array',
         items: {
-          type: 'string',
-          description:
-            'A work-item KEY ("ACME-7", the identifier every other tool takes, case-insensitive); a real work-item id; or a `planItem:<id>` ref naming another `add` on THIS plan. A key is resolved to its id by this call, exactly as `add_plan_items` resolves one, so the three are interchangeable (MOTIR-3934).',
+          anyOf: [
+            {
+              type: 'string',
+              description:
+                'A work-item KEY ("ACME-7", the identifier every other tool takes, case-insensitive); a real work-item id; or a `planItem:<id>` ref naming another `add` on THIS plan. A key is resolved to its id by this call, exactly as `add_plan_items` resolves one, so the three are interchangeable (MOTIR-3934).',
+            },
+            {
+              type: 'object',
+              properties: {
+                ref: {
+                  type: 'string',
+                  description:
+                    'A work-item KEY ("ACME-7", the identifier every other tool takes, case-insensitive); a real work-item id; or a `planItem:<id>` ref naming another `add` on THIS plan. A key is resolved to its id by this call, exactly as `add_plan_items` resolves one, so the three are interchangeable (MOTIR-3934).',
+                },
+                reason: {
+                  type: 'string',
+                  description:
+                    'ONE short line (at most 120 characters) saying what the waiting card CONSUMES from this blocker — and when it consumes an INTERFACE, the interface itself: the secret names, the permissions, the endpoint, the file or the symbol the two cards must agree on (e.g. "consumes: the `AWS_ORG_ADMIN_*` secrets").',
+                },
+              },
+              required: ['ref', 'reason'],
+              additionalProperties: false,
+            },
+          ],
         },
         description:
-          'REPLACES the dependency edges wholesale — a list has no sparse edit, so send the set you want and `[]` to clear it. Same ref rules and same re-validation as `parentRef`.',
+          'REPLACES the dependency edges wholesale — a list has no sparse edit, so send the set you want and `[]` to clear it. Same ref rules and same re-validation as `parentRef`. The edges’ reasons are replaced with them. Each entry may be `{ ref, reason }` instead of a bare ref: the reason is one short line saying what the waiting card consumes from that blocker. It is shown on the plan and written onto the link at approve, so the card says why it waits.',
       },
       supersedesRefs: {
         type: 'array',
@@ -3792,9 +3847,26 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
               },
               blockedByAdd: {
                 type: 'array',
-                items: { type: 'string' },
+                items: {
+                  anyOf: [
+                    { type: 'string' },
+                    {
+                      type: 'object',
+                      properties: {
+                        ref: { type: 'string' },
+                        reason: {
+                          type: 'string',
+                          description:
+                            'ONE short line (at most 120 characters) saying what the waiting card CONSUMES from this blocker — and when it consumes an INTERFACE, the interface itself: the secret names, the permissions, the endpoint, the file or the symbol the two cards must agree on (e.g. "consumes: the `AWS_ORG_ADMIN_*` secrets").',
+                        },
+                      },
+                      required: ['ref', 'reason'],
+                      additionalProperties: false,
+                    },
+                  ],
+                },
                 description:
-                  'Dependency edges to ADD — work-item keys ("ACME-7"), real work-item ids, or `planItem:<id>` refs. Each joins the target to an item on the SAME LEVEL — the same depth below their nearest common ancestor — under any parent; a cross-level edge is refused `cross_level`. An epic is blocked only by another epic.',
+                  'Dependency edges to ADD — work-item keys ("ACME-7"), real work-item ids, or `planItem:<id>` refs. Each joins the target to an item on the SAME LEVEL — the same depth below their nearest common ancestor — under any parent; a cross-level edge is refused `cross_level`. An epic is blocked only by another epic. Each entry may be `{ ref, reason }` instead of a bare ref: the reason is one short line saying what the waiting card consumes from that blocker. It is shown on the plan and written onto the link at approve, so the card says why it waits.',
               },
               blockedByRemove: {
                 type: 'array',

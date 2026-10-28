@@ -3719,6 +3719,11 @@ model WorkItemLink {
   // distinguishes an auto-related edge from a hand-made one. Additive with a
   // `manual` default so every pre-5.8.3 row reads as a manual link.
   source      WorkItemLinkSource @default(manual)
+  /// WHY the edge exists (MOTIR-9827): one short line saying what the waiting
+  /// card consumes from its blocker. Written only on an `is_blocked_by` row an
+  /// approved plan created from an edge that carried a reason; null on every
+  /// other row and on every edge drawn before reasons existed.
+  reason      String?
   createdById String
   createdAt   DateTime           @default(now())
 
@@ -7638,6 +7643,12 @@ model PlanItem {
   /// `add` / edge changes: blocked-by refs, each a real workItemId or an
   /// intra-plan temp-ref, resolved at materialize.
   blockedByRefs  String[]   @map("blocked_by_refs")
+  /// WHY each edge this proposal draws exists (MOTIR-9827): a map from a ref to
+  /// one short line saying what the waiting card consumes from that blocker.
+  /// Keyed by the refs of `blockedByRefs` on an `add` and of `patch.blockedByAdd`
+  /// on a `modify`; a ref with no entry was drawn without a reason. Written onto
+  /// the `work_item_link.reason` of the edge approve creates.
+  edgeReasons    Json       @default("{}") @map("edge_reasons")
   /// `add` only: the OLDER work items the created card SUPERSEDES (Story
   /// MOTIR-6577 · MOTIR-6630), each a real workItemId or an intra-plan temp-ref,
   /// resolved at materialize and written as one `supersedes` link each (from =

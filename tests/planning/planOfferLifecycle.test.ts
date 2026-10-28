@@ -370,7 +370,7 @@ describe('land — the offer rides the answer’s own append', () => {
   );
 
   it(
-    'keeps the composed requirement on a no-target offer and drops it on a targeted one',
+    'keeps the composed requirement on a no-target offer and on a targeted one (MOTIR-9878)',
     T,
     async () => {
       const requirement = {
@@ -399,10 +399,10 @@ describe('land — the offer rides the answer’s own append', () => {
       );
       const offer = lastAnswer(targeted.session.turns).offer!;
       expect(offer.targetKey).toBe(target.identifier);
-      expect('requirement' in offer).toBe(false);
+      expect(offer).toMatchObject({ requirement });
 
-      // A target that does not resolve for the caller lands with no target, and still
-      // stores no requirement: it was composed for a targeted offer.
+      // A target that does not resolve for the caller lands with no target and keeps the
+      // requirement: the target was only a reference, the requirement is the planner's.
       const unresolved = await turn(
         owner(),
         'Plan the other one',
@@ -410,7 +410,7 @@ describe('land — the offer rides the answer’s own append', () => {
       );
       const lost = lastAnswer(unresolved.session.turns).offer!;
       expect(lost.targetKey).toBeNull();
-      expect('requirement' in lost).toBe(false);
+      expect(lost).toMatchObject({ requirement });
     },
   );
 

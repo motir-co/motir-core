@@ -442,6 +442,10 @@ export interface RelationshipLinkDto {
   /** The `work_item_link.id` of THIS edge — what `unlinkWorkItems` deletes. */
   linkId: string;
   item: WorkItemSummaryDto;
+  /** WHY the edge exists (MOTIR-9827) — the one line an approved plan's
+   *  `blocked_by` carried, saying what the waiting card consumes. Present only on
+   *  an edge that has one. */
+  reason?: string;
 }
 
 /**
@@ -1898,7 +1902,9 @@ export interface SectionFindingDto {
   missing: string[];
   /** Sections found but unreadable into their shape, with why. */
   invalid: { section: string; message: string }[];
-  /** Headings the body carries that the registry does not define for this cell. */
+  /** Headings the body carries that the registry does not define for this cell —
+   *  allowed `otherSections`, listed as information. They never make a finding on
+   *  their own (MOTIR-9835): a card is reported only for `missing` / `invalid`. */
   otherHeadings: string[];
   /** The parser's diagnostics (`empty`, `no-headings`, `quoted-gutter`, …). */
   signals: string[];

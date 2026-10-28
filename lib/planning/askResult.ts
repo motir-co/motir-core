@@ -95,8 +95,8 @@ export interface AskPlanOffer {
    *  stores no offer. A missing or non-boolean value reads `false`. */
   immediate: boolean;
   /** The six-field requirement the answering session composed (MOTIR-9432), present
-   *  only when the envelope carried one that reads. The landing keeps it on a
-   *  no-target offer alone. */
+   *  only when the envelope carried one that reads. The landing keeps it on every
+   *  stored plan offer, target or not (MOTIR-9878). */
   requirement?: SubmittedRequirement;
 }
 

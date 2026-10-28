@@ -136,25 +136,21 @@ function toAnswerOfferDto(value: unknown): PlanAnswerOfferDto | null {
   // A `log_bug` offer is only as good as its bug: one that does not read is no offer.
   const bug = v.kind === 'log_bug' ? toLogBugOfferDto(v.bug) : null;
   if (v.kind === 'log_bug' && !bug) return null;
-  // The composed requirement (MOTIR-9432) rides a no-target `plan` offer alone. One
-  // that does not read is dropped; the offer itself still reads.
-  const requirement =
-    v.kind === 'plan' && fields.targetKey === null
-      ? narrowSharpenedRequirement(v.requirement)
-      : undefined;
+  // The composed requirement (MOTIR-9432) rides a `plan` offer — with no target, or
+  // with one whose description does not state the WHAT (MOTIR-9878). One that does not
+  // read is dropped; the offer itself still reads.
+  const plan = v.kind === 'plan';
+  const requirement = plan ? narrowSharpenedRequirement(v.requirement) : undefined;
   // The saved page and the failed-save flag (MOTIR-9436) ride the same offers, each
   // dropped alone when it does not read.
-  const noTargetPlan = v.kind === 'plan' && fields.targetKey === null;
-  const requirementPage = noTargetPlan ? toRequirementPageRef(v.requirementPage) : undefined;
+  const requirementPage = plan ? toRequirementPageRef(v.requirementPage) : undefined;
   return {
     kind: v.kind as AnswerOfferKindDto,
     requestMd: v.requestMd,
     ...(fields as { [K in keyof typeof fields]: string | null }),
     ...(requirement ? { requirement } : {}),
     ...(requirementPage ? { requirementPage } : {}),
-    ...(noTargetPlan && v.requirementSaveFailed === true
-      ? { requirementSaveFailed: true as const }
-      : {}),
+    ...(plan && v.requirementSaveFailed === true ? { requirementSaveFailed: true as const } : {}),
     ...(bug ? { bug } : {}),
   };
 }

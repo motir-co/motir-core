@@ -318,7 +318,7 @@ export function PlanReviewRail({
               track is measured from. */}
           {review.summary ? (
             <div className="min-w-0 text-sm wrap-anywhere text-(--el-text-secondary)">
-              <MarkdownView value={review.summary} />
+              <MarkdownView value={review.summary} workItemRefs={review.summaryRefs ?? {}} />
             </div>
           ) : null}
           <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-(--el-text-secondary)">
