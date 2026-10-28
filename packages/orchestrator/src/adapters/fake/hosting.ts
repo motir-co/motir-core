@@ -213,7 +213,9 @@ export function createFakeHostingDeployPort(
         releaseId: app.live.releaseId,
         previousReleaseId: app.previous?.releaseId ?? null,
         upstreamAddress: `https://${app.appRef}.fake.invalid`,
-        originCredential: 'none',
+        // As the real adapters: a Fly release sits behind the origin-secret
+        // guard (MOTIR-9947); the other targets' credentials are their adapters'.
+        originCredential: target === 'fly' ? 'origin_secret' : 'none',
       };
     },
 

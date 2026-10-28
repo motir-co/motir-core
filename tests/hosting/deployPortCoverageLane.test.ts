@@ -39,7 +39,14 @@ describe('the deploy-port coverage lane', () => {
   it('floors per file at 90 on all four measures, and leaves the port to its package', () => {
     expect(config).toContain('perFile: true');
     expect(config).toContain('statements: 90, functions: 90, branches: 90, lines: 90');
-    for (const file of [...measured, ...shared]) expect(file).not.toMatch(/^packages\//);
+    // The orchestrator port is floored by its own package suite. The hosting
+    // guard (MOTIR-9947) has no package suite — its tests are root ones that run
+    // the server against a local upstream — so it is floored HERE, and is the
+    // one package file allowed.
+    for (const file of [...measured, ...shared]) {
+      expect(file).not.toMatch(/^packages\/(?!hosting-guard\/)/);
+    }
+    expect(measured).toContain('packages/hosting-guard/src/guard.ts');
   });
 
   it('is run by its package.json script and by its own CI job', () => {

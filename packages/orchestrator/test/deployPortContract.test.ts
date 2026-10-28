@@ -63,7 +63,14 @@ function flyHarness(): HostingHarness {
   const sim = createHostingFlySim(() => clock);
   vi.stubGlobal('fetch', sim.fetch);
   const port = createFlyHostingDeployPort(
-    { token: 'hosting-token', org: 'motir-hosting', region: 'iad', appPrefix: PREFIX },
+    {
+      token: 'hosting-token',
+      org: 'motir-hosting',
+      region: 'iad',
+      appPrefix: PREFIX,
+      guardImage: 'registry.fly.io/motir-hosting-guard@sha256:guard',
+      originSecretKey: 'origin-key',
+    },
     { now: () => new Date(clock), newReleaseId: () => `rel-${(ids += 1)}` },
   );
   return {
@@ -86,11 +93,15 @@ function flyHarness(): HostingHarness {
     runtimeOf(appRef) {
       const config = sim.apps.get(appRef)?.[0]?.config;
       if (!config) return null;
-      const service = (config['services'] as Array<Record<string, unknown>>)[0]!;
+      // The app container and the port its guard forwards to: the service
+      // itself is the guard's (MOTIR-9947), never the app's.
+      const containers = config['containers'] as Array<Record<string, unknown>>;
+      const app = containers.find((c) => c['name'] === 'app')!;
+      const guard = containers.find((c) => c['name'] === 'guard')!;
       const health = (config['checks'] as Record<string, Record<string, unknown>>)['health']!;
       return {
-        image: String(config['image']),
-        port: Number(service['internal_port']),
+        image: String(app['image']),
+        port: Number((guard['env'] as Record<string, string>)['MOTIR_GUARD_APP_PORT']),
         healthCheckPath: String(health['path']),
       };
     },
@@ -155,6 +166,8 @@ describe.each(ADAPTERS)('the hosting deploy port contract — %s', (_name, make)
       state: 'healthy',
       releaseId: 'rel-1',
       previousReleaseId: null,
+      // Every Fly release is reached only through its origin-secret guard.
+      originCredential: 'origin_secret',
     });
     expect(description.upstreamAddress).toMatch(new RegExp(`^https://${prod}\\.`));
     expect(h.runtimeOf(prod)).toEqual({

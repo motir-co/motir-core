@@ -49,5 +49,6 @@ export * from './hosting/types';
 export * from './hosting/errors';
 export * from './hosting/names';
 export * from './hosting/usage';
+export * from './hosting/originSecret';
 export * from './adapters/fake/hosting';
 export * from './adapters/fly/hosting';

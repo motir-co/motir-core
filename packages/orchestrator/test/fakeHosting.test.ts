@@ -70,7 +70,8 @@ describe('the fake hosting deploy port', () => {
       releaseId: second.releaseId,
       previousReleaseId: first.releaseId,
       upstreamAddress: `https://${appRef}.fake.invalid`,
-      originCredential: 'none',
+      // As the Fly adapter: a `fly` release is behind the origin-secret guard.
+      originCredential: 'origin_secret',
     });
     expect(await port.listReleases({ appRef })).toEqual([{ handle: second, state: 'healthy' }]);
     expect(port.app(appRef)?.live?.image).toBe('img@sha256:1');
@@ -146,6 +147,9 @@ describe('the fake hosting deploy port', () => {
     expect((await port.ensureApp({ repositoryId: 'r', environment: PRODUCTION })).appRef).toBe(
       'x-r',
     );
+    // Another target's origin credential is its own adapter's, not the guard's.
+    const handle = await port.deploy(input('x-r', PRODUCTION));
+    expect((await port.describe(handle)).originCredential).toBe('none');
   });
 });
 

@@ -6,7 +6,9 @@ import {
   OrchestratorNotConfiguredError,
   ReleaseArtifactUnsupportedError,
   ReleaseNotFoundError,
+  ReleaseRuntimeRefusedError,
   createFlyHostingDeployPort,
+  deriveOriginSecret,
   flyHostingConfig,
   releaseStateOf,
   type DeployReleaseInput,
@@ -31,7 +33,10 @@ const CONFIG: FlyHostingConfig = {
   org: 'motir-hosting',
   region: 'iad',
   appPrefix: 'mh-',
+  guardImage: 'registry.fly.io/motir-hosting-guard@sha256:guard1',
+  originSecretKey: 'origin-key',
 };
+const GUARD_SECRET = deriveOriginSecret('origin-key', 'mh-cmrepo1');
 const RID = 'cmrepo1';
 const PROD = 'mh-cmrepo1';
 
@@ -65,6 +70,15 @@ function port(): HostingDeployPort {
   });
 }
 
+/** The named container of a written Machine config. */
+function container(config: Record<string, unknown>, name: string): Record<string, unknown> {
+  const found = (config['containers'] as Array<Record<string, unknown>>).find(
+    (c) => c['name'] === name,
+  );
+  if (!found) throw new Error(`no ${name} container`);
+  return found;
+}
+
 const writes = () =>
   calls.filter((c) => c.method === 'POST' && /\/machines(\/[^/]+)?$/.test(c.path));
 
@@ -82,6 +96,11 @@ afterEach(() => {
 });
 
 describe('flyHostingConfig', () => {
+  beforeEach(() => {
+    vi.stubEnv('MOTIR_HOSTING_GUARD_IMAGE', 'registry.fly.io/motir-hosting-guard@sha256:g');
+    vi.stubEnv('MOTIR_HOSTING_ORIGIN_SECRET_KEY', 'k');
+  });
+
   it('reads MOTIR_HOSTING_FLY_* with the decision’s defaults', () => {
     vi.stubEnv('MOTIR_HOSTING_FLY_API_TOKEN', 't');
     vi.stubEnv('MOTIR_HOSTING_FLY_ORG', '');
@@ -92,6 +111,8 @@ describe('flyHostingConfig', () => {
       org: 'motir-hosting',
       region: 'iad',
       appPrefix: 'mh-',
+      guardImage: 'registry.fly.io/motir-hosting-guard@sha256:g',
+      originSecretKey: 'k',
     });
     vi.stubEnv('MOTIR_HOSTING_FLY_ORG', 'o');
     vi.stubEnv('MOTIR_HOSTING_FLY_REGION', 'ams');
@@ -101,6 +122,8 @@ describe('flyHostingConfig', () => {
       org: 'o',
       region: 'ams',
       appPrefix: 'motir-deploy-check-',
+      guardImage: 'registry.fly.io/motir-hosting-guard@sha256:g',
+      originSecretKey: 'k',
     });
   });
 
@@ -109,6 +132,17 @@ describe('flyHostingConfig', () => {
     expect(() => flyHostingConfig()).toThrow(OrchestratorNotConfiguredError);
     expect(() => flyHostingConfig()).toThrow(/MOTIR_HOSTING_FLY_API_TOKEN/);
   });
+
+  it.each(['MOTIR_HOSTING_GUARD_IMAGE', 'MOTIR_HOSTING_ORIGIN_SECRET_KEY'])(
+    'fails closed, naming %s, when the guard cannot be configured — and calls no API',
+    (name) => {
+      vi.stubEnv('MOTIR_HOSTING_FLY_API_TOKEN', 't');
+      vi.stubEnv(name, ' ');
+      expect(() => flyHostingConfig()).toThrow(OrchestratorNotConfiguredError);
+      expect(() => flyHostingConfig()).toThrow(new RegExp(name));
+      expect(calls).toEqual([]);
+    },
+  );
 });
 
 describe('ensureApp', () => {
@@ -181,7 +215,7 @@ describe('deploy, describe, rollback', () => {
     apps.set(PROD, []);
   });
 
-  it('creates one Machine from the manifest: port, health check, digest-pinned image, idle suspend', async () => {
+  it('creates one Machine of two containers, the guard in front of the app: port, health check, digest-pinned images, idle suspend', async () => {
     const handle = await port().deploy(input());
     expect(handle).toEqual({
       target: 'fly',
@@ -194,15 +228,31 @@ describe('deploy, describe, rollback', () => {
     expect(create.path).toBe(`/apps/${PROD}/machines`);
     expect(create.body).toMatchObject({ name: 'release', region: 'iad' });
     const config = create.body!['config'] as Record<string, unknown>;
+    expect(config['containers']).toEqual([
+      {
+        name: 'guard',
+        image: 'registry.fly.io/motir-hosting-guard@sha256:guard1',
+        env: { MOTIR_GUARD_ORIGIN_SECRET: GUARD_SECRET, MOTIR_GUARD_APP_PORT: '8080' },
+      },
+      {
+        name: 'app',
+        image: 'docker.io/traefik/whoami@sha256:abc',
+        exec: ['/whoami'],
+        env: { WHOAMI_NAME: 'release-1' },
+      },
+    ]);
+    // Each container runs its own image; nothing runs at the Machine level.
+    expect(config).not.toHaveProperty('image');
+    expect(config).not.toHaveProperty('init');
+    expect(config).not.toHaveProperty('env');
+    // One service, on the GUARD's port — the app's port is never a service.
+    expect(config['services']).toHaveLength(1);
     expect(config).toMatchObject({
-      image: 'docker.io/traefik/whoami@sha256:abc',
-      init: { exec: ['/whoami'] },
       guest: { cpu_kind: 'shared', cpus: 1, memory_mb: 1024 },
-      env: { WHOAMI_NAME: 'release-1' },
       services: [
         {
           protocol: 'tcp',
-          internal_port: 8080,
+          internal_port: 9180,
           autostop: 'suspend',
           autostart: true,
           min_machines_running: 0,
@@ -218,6 +268,25 @@ describe('deploy, describe, rollback', () => {
     expect(config).not.toHaveProperty('auto_destroy');
   });
 
+  it('derives each app’s own secret, never the key itself', async () => {
+    apps.set('mh-cmrepo1-pr7', []);
+    await port().deploy(
+      input({ appRef: 'mh-cmrepo1-pr7', environment: { kind: 'preview', pullRequest: 7 } }),
+    );
+    const guard = container(writes()[0]!.body!['config'] as Record<string, unknown>, 'guard');
+    const secret = (guard['env'] as Record<string, string>)['MOTIR_GUARD_ORIGIN_SECRET'];
+    expect(secret).toBe(deriveOriginSecret('origin-key', 'mh-cmrepo1-pr7'));
+    expect(secret).not.toBe(GUARD_SECRET);
+    expect(JSON.stringify(calls)).not.toContain('origin-key');
+  });
+
+  it('refuses a release on the guard’s port by name, before any API call', async () => {
+    const refusal = port().deploy(input({ runtime: { ...input().runtime, port: 9180 } }));
+    await expect(refusal).rejects.toBeInstanceOf(ReleaseRuntimeRefusedError);
+    await expect(refusal).rejects.toMatchObject({ field: 'port' });
+    expect(writes()).toEqual([]);
+  });
+
   it('keeps an always-on release running and sizes production from the row', async () => {
     await port().deploy(
       input({
@@ -229,7 +298,8 @@ describe('deploy, describe, rollback', () => {
     const config = writes()[0]!.body!['config'] as Record<string, unknown>;
     const service = (config['services'] as Array<Record<string, unknown>>)[0]!;
     expect(service).toMatchObject({ autostop: 'off', min_machines_running: 1 });
-    expect(config).toMatchObject({ image: 'img:1', guest: { cpus: 4, memory_mb: 4096 } });
+    expect(config).toMatchObject({ guest: { cpus: 4, memory_mb: 4096 } });
+    expect(container(config, 'app')['image']).toBe('img:1');
   });
 
   it('runs a preview at the preview size and records its pull request', async () => {
@@ -273,7 +343,7 @@ describe('deploy, describe, rollback', () => {
       releaseId: 'rel-2',
       previousReleaseId: 'rel-1',
       upstreamAddress: `https://${PROD}.fly.dev`,
-      originCredential: 'none',
+      originCredential: 'origin_secret',
     });
   });
 
@@ -289,9 +359,16 @@ describe('deploy, describe, rollback', () => {
     const back = await p.rollback({ appRef: PROD, environment: { kind: 'production' } });
     expect(back).toMatchObject({ releaseId: 'rel-1', providerRef: 'm-1' });
     const live = apps.get(PROD)![0]!.config;
-    expect(live).toMatchObject({
+    expect(container(live, 'app')).toMatchObject({
       image: 'docker.io/traefik/whoami@sha256:abc',
       env: { WHOAMI_NAME: 'release-1' },
+    });
+    // Restored WITH its guard: still two containers, still only the guard's port.
+    expect(container(live, 'guard')).toEqual(
+      container(writes()[0]!.body!['config'] as Record<string, unknown>, 'guard'),
+    );
+    expect(live).toMatchObject({
+      services: [{ internal_port: 9180 }],
       metadata: {
         [HOSTING_RELEASE_METADATA.releaseId]: 'rel-1',
         [HOSTING_RELEASE_METADATA.previousReleaseId]: 'rel-2',
@@ -302,6 +379,54 @@ describe('deploy, describe, rollback', () => {
       previousReleaseId: 'rel-2',
     });
     expect(apps.get(PROD)).toHaveLength(1);
+  });
+
+  it('rollback runs the kept app under TODAY’s guard: a new guard image and a rotated key apply', async () => {
+    await port().deploy(input());
+    await port().deploy(input({ artifact: { kind: 'image', ref: 'img:2' } }));
+    const rotated = createFlyHostingDeployPort(
+      {
+        ...CONFIG,
+        guardImage: 'registry.fly.io/motir-hosting-guard@sha256:guard2',
+        originSecretKey: 'rotated',
+      },
+      { now: () => new Date(clock), newReleaseId: () => `rel-${(ids += 1)}` },
+    );
+    await rotated.rollback({ appRef: PROD, environment: { kind: 'production' } });
+    const live = apps.get(PROD)![0]!.config;
+    expect(container(live, 'guard')).toEqual({
+      name: 'guard',
+      image: 'registry.fly.io/motir-hosting-guard@sha256:guard2',
+      env: {
+        MOTIR_GUARD_ORIGIN_SECRET: deriveOriginSecret('rotated', PROD),
+        MOTIR_GUARD_APP_PORT: '8080',
+      },
+    });
+    expect(container(live, 'app')['image']).toBe('docker.io/traefik/whoami@sha256:abc');
+  });
+
+  it('rollback refuses a kept version with no guarded app rather than restore it unguarded', async () => {
+    const p = port();
+    await p.deploy(input());
+    await p.deploy(input());
+    // A version written before the guard: one image, no containers.
+    const machine = apps.get(PROD)![0]!;
+    const first = machine.versions[0]!.user_config;
+    machine.versions[0]!.user_config = { image: 'old', metadata: first['metadata'] };
+    await expect(
+      p.rollback({ appRef: PROD, environment: { kind: 'production' } }),
+    ).rejects.toBeInstanceOf(NoPreviousReleaseError);
+    // Containers, but a guard that names no app port.
+    machine.versions[0]!.user_config = {
+      ...first,
+      containers: [
+        { name: 'guard', env: {} },
+        { name: 'app', image: 'x' },
+      ],
+    };
+    await expect(
+      p.rollback({ appRef: PROD, environment: { kind: 'production' } }),
+    ).rejects.toBeInstanceOf(NoPreviousReleaseError);
   });
 
   it('rollback with no previous release, or no release, is refused by type', async () => {

@@ -11,22 +11,38 @@ import {
   DEPLOY_CHECK_IMAGE,
   deployCheckApp,
   DeployCheckNameRefusedError,
+  fakeGuardedFetch,
   imageArtifact,
   parseDeployCheckArgs,
   runDeployCheck,
   type DeployCheckDeps,
 } from '@/lib/hosting/deployCheck';
-import { getHostingDeployPort, resetHostingFakes } from '@/lib/orchestrator/hosting';
-import { createFakeHostingDeployPort, type HostingDeployPort } from '@/lib/orchestrator';
+import {
+  getHostingDeployPort,
+  hostingOriginSecretKey,
+  resetHostingFakes,
+} from '@/lib/orchestrator/hosting';
+import {
+  createFakeHostingDeployPort,
+  deriveOriginSecret,
+  OrchestratorNotConfiguredError,
+  type HostingDeployPort,
+  type HostingDeployTarget,
+} from '@/lib/orchestrator';
 
 const INVALID_NO_PORT = 'tests/fixtures/hosting/motir.hosting.invalid-no-port.json';
 const APP = 'motir-deploy-check-default';
+const KEY = 'probe-origin-key';
+const SECRET = deriveOriginSecret(KEY, APP);
 
 type Block = { label: string; fields: Record<string, unknown> };
 
 /** The fake, with the check's prefix, behind a spy that counts every port call. */
-function harness() {
-  const fake = createFakeHostingDeployPort({ appPrefix: DEPLOY_CHECK_APP_PREFIX });
+function harness(options: { target?: HostingDeployTarget; fetch?: DeployCheckDeps['fetch'] } = {}) {
+  const fake = createFakeHostingDeployPort({
+    appPrefix: DEPLOY_CHECK_APP_PREFIX,
+    ...(options.target ? { target: options.target } : {}),
+  });
   const calls: string[] = [];
   const port = new Proxy(fake, {
     get(target, prop, receiver) {
@@ -40,6 +56,8 @@ function harness() {
   }) as HostingDeployPort;
   const out: Block[] = [];
   const reads: string[] = [];
+  const requests: Array<{ url: string; headers: Record<string, string> }> = [];
+  const guarded = options.fetch ?? fakeGuardedFetch(KEY);
   const deps: DeployCheckDeps = {
     port: () => port,
     readManifest: (path) => {
@@ -51,10 +69,15 @@ function harness() {
       }
     },
     print: (label, fields) => out.push({ label, fields }),
+    fetch: (url, init) => {
+      requests.push({ url, headers: init.headers });
+      return guarded(url, init);
+    },
+    originSecretKey: () => KEY,
   };
   const run = (...argv: string[]) => runDeployCheck(argv, deps);
   const block = (label: string) => out.findLast((b) => b.label === label)?.fields;
-  return { fake, port, calls, out, reads, deps, run, block };
+  return { fake, port, calls, out, reads, requests, deps, run, block };
 }
 
 afterEach(() => {
@@ -178,11 +201,92 @@ describe('all', () => {
       'release2',
       'rollback',
       'status',
+      'probe',
       'destroy',
       'destroyApp',
     ]);
     expect(h.block('status')).toMatchObject({ servingReleaseId: 'rel-1' });
     expect(h.fake.app(APP)).toBeUndefined();
+  });
+});
+
+describe('probe (MOTIR-9947)', () => {
+  it('prints the status with the derived header and without it — and never the secret', async () => {
+    const h = harness();
+    await h.run('deploy');
+    expect(await h.run('probe')).toBe(0);
+    expect(h.block('probe')).toEqual({
+      app: APP,
+      url: `https://${APP}.fake.invalid/health`,
+      originCredential: 'origin_secret',
+      withSecret: '200 OK',
+      withoutSecret: '403 Forbidden',
+    });
+    // The secret went on the wire once, under the header, and nowhere else.
+    expect(h.requests.map((r) => r.headers)).toEqual([{ 'X-Motir-Origin-Secret': SECRET }, {}]);
+    expect(JSON.stringify(h.out)).not.toContain(SECRET);
+    expect(JSON.stringify(h.out)).not.toContain(KEY);
+  });
+
+  it('fails when the release answers without the secret — an unguarded upstream', async () => {
+    const h = harness({ fetch: async () => new Response('hi', { status: 200 }) });
+    await h.run('deploy');
+    expect(await h.run('probe')).toBe(1);
+    expect(h.block('probe')).toMatchObject({ withSecret: '200', withoutSecret: '200' });
+    expect(h.block('refused')).toMatchObject({
+      error: 'DEPLOY_CHECK_PROBE_FAILED',
+      message: expect.stringMatching(/without the secret it answered 200/),
+    });
+  });
+
+  it('fails when the release refuses even with the secret', async () => {
+    const h = harness({ fetch: async () => new Response(null, { status: 403 }) });
+    await h.run('deploy');
+    expect(await h.run('probe')).toBe(1);
+    expect(h.block('refused')).toMatchObject({
+      message: expect.stringMatching(/with the secret it answered 403/),
+    });
+  });
+
+  it('fails, sending no secret, when the release has no origin-secret guard', async () => {
+    const h = harness({ target: 'aws' });
+    await h.run('deploy');
+    expect(await h.run('probe')).toBe(1);
+    expect(h.block('probe')).toMatchObject({ originCredential: 'none' });
+    expect(h.requests.map((r) => r.headers)).toEqual([{}, {}]);
+    expect(h.block('refused')).toMatchObject({
+      message: expect.stringMatching(/origin credential is none/),
+    });
+  });
+
+  it('fails when nothing is served, without calling the release', async () => {
+    const h = harness();
+    expect(await h.run('probe')).toBe(1);
+    expect(h.block('probe')).toEqual({ app: APP, state: 'none' });
+    expect(h.requests).toEqual([]);
+    expect(h.block('refused')).toMatchObject({ error: 'DEPLOY_CHECK_PROBE_FAILED' });
+  });
+
+  it('fakeGuardedFetch answers as the guard: 200 for the app’s own secret only', async () => {
+    const guard = fakeGuardedFetch(KEY);
+    const url = `https://${APP}.fake.invalid/health`;
+    expect((await guard(url, { headers: { 'X-Motir-Origin-Secret': SECRET } })).status).toBe(200);
+    const other = deriveOriginSecret(KEY, 'motir-deploy-check-other');
+    expect((await guard(url, { headers: { 'X-Motir-Origin-Secret': other } })).status).toBe(403);
+    expect((await guard(url, { headers: {} })).status).toBe(403);
+  });
+});
+
+describe('hostingOriginSecretKey', () => {
+  it('reads MOTIR_HOSTING_ORIGIN_SECRET_KEY, stands in under the fake, and names it otherwise', () => {
+    vi.stubEnv('MOTIR_HOSTING_ORIGIN_SECRET_KEY', ' k1 ');
+    expect(hostingOriginSecretKey()).toBe('k1');
+    vi.stubEnv('MOTIR_HOSTING_ORIGIN_SECRET_KEY', '');
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fake');
+    expect(hostingOriginSecretKey()).toBe('fake-origin-secret-key');
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', '');
+    expect(() => hostingOriginSecretKey()).toThrow(OrchestratorNotConfiguredError);
+    expect(() => hostingOriginSecretKey()).toThrow(/MOTIR_HOSTING_ORIGIN_SECRET_KEY/);
   });
 });
 

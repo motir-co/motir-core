@@ -11,14 +11,21 @@
 // argv around `runDeployCheck`. Nothing here names a provider: the target is
 // reached through the composition-root accessor alone.
 //
+// The `probe` step (MOTIR-9947) proves the release's origin guard: it GETs the
+// health path once WITH the app's derived `X-Motir-Origin-Secret` and once
+// without, prints both status lines — never the secret — and fails unless the
+// first is 2xx and the second 403.
+//
 // State between steps lives on the platform, not in a local file: each step finds
 // the check's app by its fixed name and asks the port which release it serves.
 
 import { HostingManifestInvalidError, HostingManifestMissingError } from '@/lib/hosting/errors';
 import { parseHostingManifest, type HostingManifest } from '@/lib/hosting/manifest';
 import {
+  deriveOriginSecret,
   hostingAppNames,
   HostingAppNameInvalidError,
+  ORIGIN_SECRET_HEADER,
   type HostingDeployPort,
   type HostingEnvironment,
   type ReleaseArtifact,
@@ -45,6 +52,7 @@ export const DEPLOY_CHECK_STEPS = [
   'release2',
   'rollback',
   'status',
+  'probe',
   'destroy',
   'all',
 ] as const;
@@ -63,6 +71,16 @@ export class DeployCheckNameRefusedError extends Error {
         `${DEPLOY_CHECK_APP_PREFIX}<name>.`,
     );
     this.name = 'DeployCheckNameRefusedError';
+  }
+}
+
+/** The probe did not see a guarded release: no 2xx with the secret, or
+ *  anything but 403 without it. */
+export class DeployCheckProbeFailedError extends Error {
+  readonly code = 'DEPLOY_CHECK_PROBE_FAILED' as const;
+  constructor(detail: string) {
+    super(`The origin guard probe failed: ${detail}.`);
+    this.name = 'DeployCheckProbeFailedError';
   }
 }
 
@@ -97,6 +115,25 @@ export interface DeployCheckDeps {
   readonly readManifest: (path: string) => string | null;
   /** One labelled block of output. */
   readonly print: (label: string, fields: Record<string, unknown>) => void;
+  /** The HTTP client `probe` calls the release with. */
+  readonly fetch: (url: string, init: { headers: Record<string, string> }) => Promise<Response>;
+  /** The key app origin secrets are derived from; read only by `probe`, and only
+   *  for a release whose origin credential is the secret. */
+  readonly originSecretKey: () => string;
+}
+
+/** A stand-in for a guarded release over HTTP, for runs against the fake port,
+ *  whose addresses resolve nowhere: 200 when the request carries the secret the
+ *  app's guard would hold, 403 otherwise — the guard's contract
+ *  (`packages/hosting-guard`). */
+export function fakeGuardedFetch(key: string): DeployCheckDeps['fetch'] {
+  return async (url, init) => {
+    const appRef = new URL(url).hostname.split('.')[0]!;
+    const given = init.headers[ORIGIN_SECRET_HEADER];
+    return given === deriveOriginSecret(key, appRef)
+      ? new Response('ok', { status: 200, statusText: 'OK' })
+      : new Response(null, { status: 403, statusText: 'Forbidden' });
+  };
 }
 
 /** The check's app, from `--name`, refused unless it carries the prefix and is a
@@ -199,6 +236,45 @@ async function status(deps: DeployCheckDeps, options: DeployCheckOptions): Promi
   });
 }
 
+const statusLine = (res: Response): string => `${res.status} ${res.statusText}`.trim();
+
+async function probe(deps: DeployCheckDeps, options: DeployCheckOptions): Promise<void> {
+  const manifest = readManifest(deps, options.manifestPath);
+  const { appRef } = deployCheckApp(options.appName);
+  const port = deps.port();
+  const handle = await servingHandle(port, appRef);
+  const description = handle ? await port.describe(handle) : null;
+  if (!description?.upstreamAddress) {
+    deps.print('probe', { app: appRef, state: description?.state ?? 'none' });
+    throw new DeployCheckProbeFailedError(`${appRef} serves no release`);
+  }
+  const url = new URL(manifest.healthCheck.path, description.upstreamAddress).toString();
+  const guarded = description.originCredential === 'origin_secret';
+  const secret = guarded ? deriveOriginSecret(deps.originSecretKey(), appRef) : null;
+  const withSecret = await deps.fetch(url, {
+    headers: secret ? { [ORIGIN_SECRET_HEADER]: secret } : {},
+  });
+  const withoutSecret = await deps.fetch(url, { headers: {} });
+  deps.print('probe', {
+    app: appRef,
+    url,
+    originCredential: description.originCredential,
+    withSecret: statusLine(withSecret),
+    withoutSecret: statusLine(withoutSecret),
+  });
+  if (!guarded) {
+    throw new DeployCheckProbeFailedError(
+      `the release's origin credential is ${description.originCredential}, not the origin secret`,
+    );
+  }
+  if (!withSecret.ok) {
+    throw new DeployCheckProbeFailedError(`with the secret it answered ${withSecret.status}`);
+  }
+  if (withoutSecret.status !== 403) {
+    throw new DeployCheckProbeFailedError(`without the secret it answered ${withoutSecret.status}`);
+  }
+}
+
 async function destroy(deps: DeployCheckDeps, options: DeployCheckOptions): Promise<void> {
   const { appRef } = deployCheckApp(options.appName);
   const port = deps.port();
@@ -234,6 +310,8 @@ export async function runDeployCheckStep(
       return rollback(deps, options);
     case 'status':
       return status(deps, options);
+    case 'probe':
+      return probe(deps, options);
     case 'destroy':
       return destroy(deps, options);
     case 'all':
@@ -245,6 +323,7 @@ export async function runDeployCheckStep(
       await deployRelease(deps, options, 2);
       await rollback(deps, options);
       await status(deps, options);
+      await probe(deps, options);
       return destroy(deps, options);
   }
 }

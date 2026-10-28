@@ -34,6 +34,13 @@ describe('getHostingDeployPort', () => {
     expect(() => getHostingDeployPort('fly')).toThrow(OrchestratorNotConfiguredError);
     expect(() => getHostingDeployPort('fly')).toThrow(/MOTIR_HOSTING_FLY_API_TOKEN/);
     vi.stubEnv('MOTIR_HOSTING_FLY_API_TOKEN', 'token');
+    // Fail closed (MOTIR-9947): no guard image or origin-secret key, no adapter.
+    vi.stubEnv('MOTIR_HOSTING_GUARD_IMAGE', '');
+    expect(() => getHostingDeployPort('fly')).toThrow(/MOTIR_HOSTING_GUARD_IMAGE/);
+    vi.stubEnv('MOTIR_HOSTING_GUARD_IMAGE', 'registry.fly.io/motir-hosting-guard@sha256:g');
+    vi.stubEnv('MOTIR_HOSTING_ORIGIN_SECRET_KEY', '');
+    expect(() => getHostingDeployPort('fly')).toThrow(/MOTIR_HOSTING_ORIGIN_SECRET_KEY/);
+    vi.stubEnv('MOTIR_HOSTING_ORIGIN_SECRET_KEY', 'k');
     expect(getHostingDeployPort('fly').target).toBe('fly');
   });
 
@@ -61,6 +68,8 @@ describe('getHostingDeployPort', () => {
     expect(factory).toHaveBeenCalledWith({ appPrefix: 'motir-deploy-check-' });
 
     vi.stubEnv('MOTIR_HOSTING_FLY_API_TOKEN', 'token');
+    vi.stubEnv('MOTIR_HOSTING_GUARD_IMAGE', 'registry.fly.io/motir-hosting-guard@sha256:g');
+    vi.stubEnv('MOTIR_HOSTING_ORIGIN_SECRET_KEY', 'k');
     expect(getHostingDeployPort('fly', { appPrefix: 'motir-deploy-check-' }).target).toBe('fly');
   });
 });

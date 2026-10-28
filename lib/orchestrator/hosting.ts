@@ -73,6 +73,19 @@ export function getHostingDeployPort(
   throw new OrchestratorNotConfiguredError(`no ${target} hosting adapter is registered`);
 }
 
+const ORIGIN_SECRET_KEY_ENV = 'MOTIR_HOSTING_ORIGIN_SECRET_KEY';
+
+/** The key hosted apps' origin secrets are derived from (MOTIR-9947), for a
+ *  caller that must send the secret — a forwarder, or the deploy check's
+ *  `probe`. Under the fake an unset key is a fixed stand-in, so a fake run needs
+ *  no secret; otherwise unset is the typed not-configured error naming it. */
+export function hostingOriginSecretKey(): string {
+  const key = process.env[ORIGIN_SECRET_KEY_ENV]?.trim();
+  if (key) return key;
+  if (selectedOrchestratorProvider() === 'fake') return 'fake-origin-secret-key';
+  throw new OrchestratorNotConfiguredError(`set ${ORIGIN_SECRET_KEY_ENV}`);
+}
+
 /** Drop the per-target fakes — for tests. */
 export function resetHostingFakes(): void {
   hostingFakes.clear();

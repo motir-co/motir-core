@@ -3,8 +3,10 @@ import {
   NoPreviousReleaseError,
   ReleaseArtifactUnsupportedError,
   ReleaseNotFoundError,
+  ReleaseRuntimeRefusedError,
 } from '../../hosting/errors';
 import { hostingAppNames } from '../../hosting/names';
+import { deriveOriginSecret } from '../../hosting/originSecret';
 import type {
   DeployCredential,
   DeployReleaseInput,
@@ -45,6 +47,14 @@ import { flyAppProvisioning } from './persistent';
 // config versions (`GET …/versions`), which is what rollback restores — image,
 // env and all — rather than a second Machine.
 //
+// ⚠️ EVERY RELEASE RUNS BEHIND THE GUARD (MOTIR-9947, decision §4 and D-5). The
+// Machine runs TWO containers: `motir-hosting-guard` on the service's port 9180,
+// which answers 403 to any request without the app's origin secret and proxies
+// the rest to the app on 127.0.0.1, and the app itself, whose own port is never
+// a service. The guard image and the key the secret is derived from are read
+// with the token, and an unset one refuses to build the adapter at all, so no
+// release is ever deployed unguarded.
+//
 // Reused, not copied: the bounded `flyRequest`, its error helpers and the
 // machine parser (`./flyMachines`), and app creation and public addresses
 // (`./persistent`'s `flyAppProvisioning`). The single-use `createMachine` of the
@@ -56,17 +66,37 @@ export interface FlyHostingConfig {
   readonly org: string;
   readonly region: string;
   readonly appPrefix: string;
+  /** The guard image, pinned by digest (`registry.fly.io/motir-hosting-guard@sha256:…`). */
+  readonly guardImage: string;
+  /** The key every app's origin secret is derived from (`deriveOriginSecret`). */
+  readonly originSecretKey: string;
 }
 
 const TOKEN_ENV = 'MOTIR_HOSTING_FLY_API_TOKEN';
+const GUARD_IMAGE_ENV = 'MOTIR_HOSTING_GUARD_IMAGE';
+const ORIGIN_SECRET_KEY_ENV = 'MOTIR_HOSTING_ORIGIN_SECRET_KEY';
+
+/** The port the guard listens on in every Machine; a release may not take it. */
+export const HOSTING_GUARD_PORT = 9180;
+
+function requiredEnv(name: string): string {
+  const value = process.env[name]?.trim();
+  if (!value) throw new OrchestratorNotConfiguredError(`set ${name}`);
+  return value;
+}
 
 /** The hosting lane's configuration, read at call time, or the typed
- *  not-configured error naming the token variable. */
+ *  not-configured error naming the first variable that is unset: the token, the
+ *  guard image or the origin-secret key. Fail closed — without the guard there is
+ *  no adapter. */
 export function flyHostingConfig(): FlyHostingConfig {
-  const token = process.env[TOKEN_ENV];
-  if (!token) throw new OrchestratorNotConfiguredError(`set ${TOKEN_ENV}`);
+  const token = requiredEnv(TOKEN_ENV);
+  const guardImage = requiredEnv(GUARD_IMAGE_ENV);
+  const originSecretKey = requiredEnv(ORIGIN_SECRET_KEY_ENV);
   return {
     token,
+    guardImage,
+    originSecretKey,
     org: process.env['MOTIR_HOSTING_FLY_ORG']?.trim() || 'motir-hosting',
     region: process.env['MOTIR_HOSTING_FLY_REGION']?.trim() || 'iad',
     appPrefix: process.env['MOTIR_HOSTING_FLY_APP_PREFIX']?.trim() || 'mh-',
@@ -144,23 +174,61 @@ function argvOf(command: string): string[] {
   return command.trim().split(/\s+/);
 }
 
+/** The container names in a release Machine. */
+export const HOSTING_CONTAINERS = { guard: 'guard', app: 'app' } as const;
+
+/** The guard container for `appRef`: its image by digest, the app's derived
+ *  origin secret and the port it forwards to. Rebuilt on every write — deploy
+ *  and rollback alike — so a rotated key or a new guard image applies at once. */
+function guardContainer(
+  config: FlyHostingConfig,
+  appRef: string,
+  appPort: number,
+): Record<string, unknown> {
+  return {
+    name: HOSTING_CONTAINERS.guard,
+    image: config.guardImage,
+    env: {
+      MOTIR_GUARD_ORIGIN_SECRET: deriveOriginSecret(config.originSecretKey, appRef),
+      MOTIR_GUARD_APP_PORT: String(appPort),
+    },
+  };
+}
+
 function machineConfig(
+  config: FlyHostingConfig,
   input: DeployReleaseInput,
   metadata: Record<string, string>,
 ): Record<string, unknown> {
   const { runtime } = input;
+  if (runtime.port === HOSTING_GUARD_PORT) {
+    throw new ReleaseRuntimeRefusedError(
+      'fly',
+      'port',
+      `${HOSTING_GUARD_PORT} is the hosting guard's port`,
+    );
+  }
   return {
-    image: imageOf(input),
-    init: { exec: argvOf(runtime.startCommand) },
+    // No top-level image: a Machine with `containers` runs each from its own.
+    containers: [
+      guardContainer(config, input.appRef, runtime.port),
+      {
+        name: HOSTING_CONTAINERS.app,
+        image: imageOf(input),
+        exec: argvOf(runtime.startCommand),
+        env: Object.fromEntries(input.env.map((v) => [v.name, v.value])),
+      },
+    ],
     guest:
       input.environment.kind === 'preview'
         ? PREVIEW_GUEST
         : PRODUCTION_GUEST[input.size ?? 'small'],
-    env: Object.fromEntries(input.env.map((v) => [v.name, v.value])),
     services: [
       {
         protocol: 'tcp',
-        internal_port: runtime.port,
+        // The GUARD's port: the app's own port is never a service, so Fly's
+        // proxy can reach the app only through the guard.
+        internal_port: HOSTING_GUARD_PORT,
         ...idleService(input.idle),
         ports: [
           { port: 80, handlers: ['http'], force_https: true },
@@ -168,6 +236,9 @@ function machineConfig(
         ],
       },
     ],
+    // A Machine-level check, run by Fly against the app's port inside the
+    // Machine — not through the service, so the guard never has to let an
+    // unauthenticated probe through.
     checks: {
       health: {
         type: 'http',
@@ -181,6 +252,20 @@ function machineConfig(
     },
     metadata,
   };
+}
+
+/** The app container of a kept config version and the port its guard forwards
+ *  to, or null for a version with no guarded app (one written before the guard),
+ *  which rollback refuses rather than restore unguarded. */
+function keptAppContainer(
+  kept: Record<string, unknown> | null | undefined,
+): { container: Record<string, unknown>; port: number } | null {
+  const raw = kept?.['containers'];
+  const containers = (Array.isArray(raw) ? raw : []).map(asRecord);
+  const app = containers.find((c) => c?.['name'] === HOSTING_CONTAINERS.app);
+  const guard = containers.find((c) => c?.['name'] === HOSTING_CONTAINERS.guard);
+  const port = Number(asRecord(guard?.['env'])?.['MOTIR_GUARD_APP_PORT']);
+  return app && Number.isInteger(port) && port > 0 ? { container: app, port } : null;
 }
 
 /** The raw machine fields `toFlyMachine` does not keep: the config version and
@@ -381,7 +466,7 @@ export function createFlyHostingDeployPort(
       const id = await writeMachine(
         input.appRef,
         current ? { id: current.id, version: versionOf(currentRaw?.body) } : null,
-        machineConfig(input, metadata),
+        machineConfig(config, input, metadata),
         input.region ?? config.region,
       );
       return {
@@ -410,9 +495,8 @@ export function createFlyHostingDeployPort(
         releaseId: machine.metadata[HOSTING_RELEASE_METADATA.releaseId] ?? null,
         previousReleaseId: machine.metadata[HOSTING_RELEASE_METADATA.previousReleaseId] ?? null,
         upstreamAddress: `https://${handle.appRef}.fly.dev`,
-        // The guard container that checks X-Motir-Origin-Secret is not built
-        // yet (MOTIR-5769 §4); until it is, a Fly upstream answers directly.
-        originCredential: 'none',
+        // Every Fly release runs behind the guard (`machineConfig`).
+        originCredential: 'origin_secret',
       };
     },
 
@@ -435,10 +519,15 @@ export function createFlyHostingDeployPort(
         .find(
           (c) => asRecord(c?.['metadata'])?.[HOSTING_RELEASE_METADATA.releaseId] === previousId,
         );
-      if (!kept) throw new NoPreviousReleaseError(appRef);
+      const keptApp = keptAppContainer(kept);
+      if (!kept || !keptApp) throw new NoPreviousReleaseError(appRef);
       const currentId = current.metadata[HOSTING_RELEASE_METADATA.releaseId] ?? '';
+      // The kept release's app, under TODAY's guard: its image and secret are
+      // re-derived rather than restored, so a rotated key or a replaced guard
+      // image is never rolled back with the release.
       const restored = {
         ...kept,
+        containers: [guardContainer(config, appRef, keptApp.port), keptApp.container],
         metadata: {
           ...(asRecord(kept['metadata']) ?? {}),
           [HOSTING_RELEASE_METADATA.previousReleaseId]: currentId,

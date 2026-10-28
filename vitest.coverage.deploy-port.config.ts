@@ -36,6 +36,9 @@ const MEASURED = [
   'lib/orchestrator/provider.ts',
   // MOTIR-9805 — the operator deploy check.
   'lib/hosting/deployCheck.ts',
+  // MOTIR-9947 — the guard image's server. Its process entry (`main.ts`) runs
+  // only in a child process the guard suite spawns, out of v8's reach here.
+  'packages/hosting-guard/src/guard.ts',
 ];
 
 /**
@@ -66,6 +69,7 @@ export default defineConfig({
       'tests/hosting/manifest.test.ts',
       'tests/hosting/hostingDeployPort.test.ts',
       'tests/hosting/deployCheck.test.ts',
+      'tests/hosting/hostingGuard.test.ts',
       'tests/hosting/deployPortCoverageLane.test.ts',
       'tests/projectRepos/projectRepoHosting.test.ts',
     ],

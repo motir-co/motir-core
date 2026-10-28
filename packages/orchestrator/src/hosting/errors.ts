@@ -43,3 +43,17 @@ export class ReleaseArtifactUnsupportedError extends Error {
     this.name = 'ReleaseArtifactUnsupportedError';
   }
 }
+
+/** The release's runtime asks for something the target reserves — on Fly, the
+ *  guard container's port. Refused by the field's name before any API call. */
+export class ReleaseRuntimeRefusedError extends Error {
+  readonly code = 'HOSTING_RUNTIME_REFUSED' as const;
+  constructor(
+    readonly target: string,
+    readonly field: string,
+    readonly reason: string,
+  ) {
+    super(`The ${target} target refuses the release's ${field}: ${reason}.`);
+    this.name = 'ReleaseRuntimeRefusedError';
+  }
+}
