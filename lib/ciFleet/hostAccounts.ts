@@ -64,8 +64,9 @@ export interface HostAccountPlan {
   raiseTargetVcpu: number;
 }
 
-/** The organisation id as a name segment: lower case, `[a-z0-9-]` only. */
-function orgSegment(organizationId: string): string {
+/** The organisation id as a name segment: lower case, `[a-z0-9-]` only. Shared
+ *  with the tenant hosting account's name (`hostingTenantAccounts.ts`). */
+export function orgSegment(organizationId: string): string {
   return organizationId
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
