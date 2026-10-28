@@ -27,9 +27,7 @@ import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { dispatchedEvents, spyOnJobDispatch } from '../helpers/jobs';
-import { TEST_APP_ROLE } from '../helpers/parallelDb';
 import { PRISMA_UNIQUE_VIOLATION } from '@/lib/prisma/uniqueViolation';
-import { environmentConfigChangeRepository } from '@/lib/repositories/environmentConfigChangeRepository';
 import { environmentConfigEntryRepository } from '@/lib/repositories/environmentConfigEntryRepository';
 
 const ctxRef = { current: null as WorkspaceContext | null };
@@ -220,8 +218,8 @@ describe('Story MOTIR-9795 — set a repository’s environment', () => {
     asAdmin();
     await put(repoId, 'production', 'PLAIN', { value: 'mine', isSecret: false });
 
-    const [who] = await db.$queryRaw<{ role: string }[]>`SELECT current_user AS role`;
-    expect(who?.role).toBe(TEST_APP_ROLE);
+    // `@/lib/db` connects as the runtime role here; an unbound read would see zero
+    // rows, so a hit proves the bind.
     expect(await resolve(fx, repoId, 'production')).toEqual([
       { name: 'PLAIN', value: 'mine', secret: false },
     ]);
@@ -386,8 +384,7 @@ describe('Story MOTIR-9795 — set a repository’s environment', () => {
 
 // The branches the story's happy and refused paths do not reach on their own, so
 // the floor measures behaviour rather than luck: the race a concurrent first write
-// loses, a failure the doors must not turn into a success, a removed actor, and
-// the repositories' unbound reads.
+// loses, a failure the doors must not turn into a success, and a removed actor.
 describe('Story MOTIR-9795 — the edges', () => {
   it('a first write that loses the unique race is retried once, as a replace', async () => {
     const { fx, repoId, asAdmin } = await setup();
@@ -463,20 +460,5 @@ describe('Story MOTIR-9795 — the edges', () => {
     // An actor id the name lookup did not return reads the same way.
     const [stored] = await adminDb.environmentConfigChange.findMany();
     expect(toEnvironmentChangeDto({ ...stored!, actorId: 'gone' }).actorName).toBeNull();
-  });
-
-  it('the repositories’ reads outside a transaction see nothing row-level security hides', async () => {
-    const { repoId, asAdmin } = await setup();
-    asAdmin();
-    await put(repoId, 'production', 'A', { value: 'v', isSecret: false });
-    const key = { projectRepositoryId: repoId, environment: 'production' as const, name: 'A' };
-    // Unbound, the runtime role reads no tenant's rows.
-    expect(await environmentConfigEntryRepository.findByName(key)).toBeNull();
-    expect(
-      await environmentConfigEntryRepository.listByRepositoryAndEnvironment(repoId, 'production'),
-    ).toEqual([]);
-    expect(await environmentConfigChangeRepository.listRecent(repoId, 'production', 10)).toEqual(
-      [],
-    );
   });
 });

@@ -208,8 +208,13 @@ const EXPECTED: Record<LegacyAccessLevel, Record<Role, { browse: boolean; manage
 // its questions on a build where every room exists. The deployment axis has its
 // own coverage in `tests/settings/projectSettingsNav.test.ts`, where it costs no
 // database.
-// MOTIR-6995 adds the hosted-runs axis beside it, so every room exists here.
-const ON_CLOUD = { publicProjectsAvailable: true, hostedRunsAvailable: true };
+// MOTIR-6995 adds the hosted-runs axis beside it, and MOTIR-9966 the project's
+// Motir-repository axis, so every room exists here.
+const ON_CLOUD = {
+  publicProjectsAvailable: true,
+  hostedRunsAvailable: true,
+  motirRepositoriesPresent: true,
+};
 
 const LEVELS: LegacyAccessLevel[] = ['open', 'limited', 'private', 'public'];
 const ROLES: Role[] = ['owner', 'wsAdmin', 'plainMember', 'viewer', 'member', 'admin', 'nonMember'];
@@ -292,10 +297,13 @@ describe('settings-area role-gating matrix — nav visibility (driven from the r
           // its view key is `work_item:edit` (design MOTIR-6991).
           // MOTIR-8830 — and a fourth: Translation's view key is `project:browse`, so
           // anyone who can browse sees it, read-only, in registry order.
+          // MOTIR-9966 — and Environment, whose view key is also `project:browse`
+          // (General, so it leads).
           if (held.has('project:administer')) {
             expect(visible).toEqual(PROJECT_SETTINGS_NAV);
           } else {
             expect(visible.map((e) => e.id)).toEqual([
+              ...(held.has('project:browse') ? ['environment'] : []),
               ...(held.has('work_item:edit') ? ['hosted-agent'] : []),
               ...(held.has('project:browse') ? ['translation'] : []),
             ]);

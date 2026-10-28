@@ -1,4 +1,4 @@
-import { db } from './db-reset';
+import { adminDb } from './db-reset';
 import { SEED_SOURCE_ORGANIZATION } from '@/lib/projectRepos/vocabulary';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -65,7 +65,7 @@ export async function seedEnvironmentRoom(slug: string): Promise<EnvironmentSeed
     { role: 'api', name: 'their-billing-api' },
     ownerCtx,
   );
-  await db.projectRepo.update({
+  await adminDb.projectRepo.update({
     where: { id: customer.id },
     data: { seedSource: SEED_SOURCE_ORGANIZATION },
   });
@@ -78,11 +78,11 @@ export async function seedEnvironmentRoom(slug: string): Promise<EnvironmentSeed
       name: label === 'admin' ? 'Ada Admin' : 'Max Member',
     });
     await workspacesService.addMember({ userId: user.id, workspaceId: workspace.id });
-    await db.projectMembership.create({
+    await adminDb.projectMembership.create({
       data: { userId: user.id, projectId: project.id, workspaceId: workspace.id },
     });
     await setWorkspaceRoleFor(user.id, workspace.id, role);
-    await db.workspaceMembership.update({
+    await adminDb.workspaceMembership.update({
       where: { userId_workspaceId: { userId: user.id, workspaceId: workspace.id } },
       data: { activeProjectId: project.id },
     });

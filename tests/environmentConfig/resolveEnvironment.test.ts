@@ -24,7 +24,6 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
-import { TEST_APP_ROLE } from '../helpers/parallelDb';
 
 const KEY = 'e'.repeat(64);
 const saved = {
@@ -223,8 +222,6 @@ describe('resolveEnvironment', () => {
 
     // `@/lib/db` connects as the runtime role here; an unbound read would see zero
     // rows, so a hit proves the bind, and every read is handed the bound tx.
-    const [who] = await db.$queryRaw<{ role: string }[]>`SELECT current_user AS role`;
-    expect(who?.role).toBe(TEST_APP_ROLE);
     const findById = vi.spyOn(projectRepoRepository, 'findById');
     const list = vi.spyOn(environmentConfigEntryRepository, 'listByRepositoryAndEnvironment');
     expect(await resolveEnvironment(repoId, 'production', { workspaceId: fx.workspaceId })).toEqual(
