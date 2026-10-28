@@ -5,6 +5,7 @@ import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import type { HostingManifest } from '@/lib/hosting/manifest';
 import {
   OrchestratorNotConfiguredError,
+  awsHostingAdapter,
   createFakeHostingDeployPort,
   getHostingDeployPort,
   registerHostingAdapter,
@@ -15,9 +16,20 @@ import {
 
 afterEach(() => {
   vi.unstubAllEnvs();
-  unregisterHostingAdapter('aws');
+  registerHostingAdapter('aws', awsHostingAdapter);
   resetHostingFakes();
 });
+
+/** Every variable the real `aws` adapter reads, set to a stand-in. */
+function stubAwsEnv() {
+  vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', '');
+  vi.stubEnv('MOTIR_HOSTING_ORIGIN_SECRET_KEY', 'k');
+  vi.stubEnv('MOTIR_HOSTING_AWS_FORWARDER_PRINCIPAL_ARN', 'arn:aws:iam::1:role/forwarder');
+  vi.stubEnv('MOTIR_HOSTING_AWS_APP_DOMAIN', 'apps.motir.test');
+  vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', 'arn:aws:iam::1:role/motir-org-admin');
+  vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', '');
+  vi.stubEnv('AWS_ORG_ADMIN_SECRET_ACCESS_KEY', '');
+}
 
 describe('getHostingDeployPort', () => {
   it('returns one fake per target while the fake is selected', () => {
@@ -44,8 +56,27 @@ describe('getHostingDeployPort', () => {
     expect(getHostingDeployPort('fly').target).toBe('fly');
   });
 
+  it('registers the AWS adapter, built from its configuration at call time (MOTIR-10010)', () => {
+    stubAwsEnv();
+    const aws = getHostingDeployPort('aws');
+    expect(aws.target).toBe('aws');
+    expect(aws).not.toBe(getHostingDeployPort('aws'));
+    for (const name of [
+      'MOTIR_HOSTING_AWS_FORWARDER_PRINCIPAL_ARN',
+      'MOTIR_HOSTING_AWS_APP_DOMAIN',
+      'MOTIR_HOSTING_ORIGIN_SECRET_KEY',
+    ]) {
+      vi.stubEnv(name, '');
+      expect(() => getHostingDeployPort('aws')).toThrow(new RegExp(name));
+      stubAwsEnv();
+    }
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fake');
+    expect(getHostingDeployPort('aws')).toBe(getHostingDeployPort('aws'));
+  });
+
   it('refuses a target with no registered adapter, and uses one once registered', () => {
     vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', '');
+    unregisterHostingAdapter('aws');
     expect(() => getHostingDeployPort('aws')).toThrow(OrchestratorNotConfiguredError);
     expect(() => getHostingDeployPort('serverless')).toThrow(/no serverless hosting adapter/);
     const aws = createFakeHostingDeployPort({ target: 'aws' });

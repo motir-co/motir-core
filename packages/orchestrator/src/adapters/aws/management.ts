@@ -125,6 +125,7 @@ const RUNNER_SESSION_SECONDS = 3600;
 const RUNNER_SESSION_NAME = 'motir-fleet-runner';
 /** A deploy session in a tenant account: an hour, long enough for one deploy. */
 const TENANT_DEPLOY_SESSION_SECONDS = 3600;
+const TENANT_DEPLOY_SESSION_NAME = 'motir-tenant-deploy';
 /** CreateAccount is asynchronous; AWS documents it as taking minutes. */
 export const AWS_CREATE_ACCOUNT_TIMEOUT_MS = 10 * 60_000;
 const CREATE_ACCOUNT_POLL_MS = 5_000;
@@ -291,6 +292,9 @@ export interface AwsManagementApi {
   ): Promise<{ created: string[] }>;
   /** A runner session in the member account, from the management role. */
   assumeRunnerRole(accountId: string): Promise<AwsSessionCredentials>;
+  /** A deploy session in a tenant account (MOTIR-10004): `motir-tenant-deploy`,
+   *  assumed from the management session, the only principal it trusts. */
+  assumeTenantDeployRole(accountId: string): Promise<AwsSessionCredentials>;
   /** Put the account under `organizationalUnitId`; a no-op when it is there. */
   moveAccountToOrganizationalUnit(
     accountId: string,
@@ -310,11 +314,13 @@ export interface AwsManagementApi {
    *  created only when absent (MOTIR-9940). */
   ensureOrganizationalUnit(name: string): Promise<AwsOrganizationalUnitResult>;
   /** The tenant deploy role and its inline policy, trusting only the management
-   *  role (MOTIR-9941); `created` when the role was made by this call. */
+   *  role (MOTIR-9941); `created` when the role was made by this call,
+   *  `policyChanged` when the inline policy was written because it differed
+   *  (MOTIR-10005). */
   ensureTenantDeployRole(
     credentials: AwsSessionCredentials,
     policyDocument: AwsPolicyDocument,
-  ): Promise<{ created: boolean }>;
+  ): Promise<{ created: boolean; policyChanged: boolean }>;
   /** `key=value` on the account in Organizations, written only when it differs. */
   ensureAccountTag(accountId: string, key: string, value: string): Promise<{ tagged: boolean }>;
   /** A quota at `target.desiredValue` or above: nothing filed when it already is,
@@ -477,7 +483,12 @@ export function createAwsManagementApi(
     const command = new AssumeRoleCommand({
       RoleArn: `arn:aws:iam::${accountId}:role/${roleName}`,
       RoleSessionName: sessionName,
-      DurationSeconds: roleName === AWS_RUNNER_IAM_ROLE ? RUNNER_SESSION_SECONDS : SESSION_SECONDS,
+      DurationSeconds:
+        roleName === AWS_RUNNER_IAM_ROLE
+          ? RUNNER_SESSION_SECONDS
+          : roleName === AWS_TENANT_DEPLOY_ROLE
+            ? TENANT_DEPLOY_SESSION_SECONDS
+            : SESSION_SECONDS,
     });
     for (let attempt = 1; ; attempt += 1) {
       try {
@@ -820,6 +831,10 @@ export function createAwsManagementApi(
       return assumeInMember(accountId, AWS_RUNNER_IAM_ROLE, RUNNER_SESSION_NAME);
     },
 
+    async assumeTenantDeployRole(accountId) {
+      return assumeInMember(accountId, AWS_TENANT_DEPLOY_ROLE, TENANT_DEPLOY_SESSION_NAME);
+    },
+
     async ensureRunnerRole(credentials, policyDocument) {
       const { roleCreated, policyPut } = await ensureRoleWithPolicy(credentials, {
         roleName: AWS_RUNNER_IAM_ROLE,
@@ -904,14 +919,14 @@ export function createAwsManagementApi(
     },
 
     async ensureTenantDeployRole(credentials, policyDocument) {
-      const { roleCreated } = await ensureRoleWithPolicy(credentials, {
+      const { roleCreated, policyPut } = await ensureRoleWithPolicy(credentials, {
         roleName: AWS_TENANT_DEPLOY_ROLE,
         policyName: AWS_TENANT_DEPLOY_ROLE,
         policyDocument,
         maxSessionSeconds: TENANT_DEPLOY_SESSION_SECONDS,
         tag: 'tenant-deploy',
       });
-      return { created: roleCreated };
+      return { created: roleCreated, policyChanged: policyPut };
     },
 
     async ensureAccountTag(accountId, key, value) {

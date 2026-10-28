@@ -878,7 +878,10 @@ describe('the tenant account bootstrap calls (MOTIR-9941)', () => {
       PutRolePolicyCommand: () => ({}),
     });
 
-    expect(await api.ensureTenantDeployRole(MEMBER, POLICY)).toEqual({ created: true });
+    expect(await api.ensureTenantDeployRole(MEMBER, POLICY)).toEqual({
+      created: true,
+      policyChanged: true,
+    });
     const create = calls.find((c) => c.command === 'CreateRoleCommand')!;
     expect(create).toMatchObject({ service: 'iam', accessKeyId: MEMBER.accessKeyId });
     expect(create.input['RoleName']).toBe(AWS_TENANT_DEPLOY_ROLE);
@@ -899,7 +902,10 @@ describe('the tenant account bootstrap calls (MOTIR-9941)', () => {
       GetRolePolicyCommand: () => ({ PolicyDocument: encodeURIComponent(JSON.stringify(POLICY)) }),
     });
 
-    expect(await api.ensureTenantDeployRole(MEMBER, POLICY)).toEqual({ created: false });
+    expect(await api.ensureTenantDeployRole(MEMBER, POLICY)).toEqual({
+      created: false,
+      policyChanged: false,
+    });
     expect(calls.map((c) => c.command)).toEqual(['GetRoleCommand', 'GetRolePolicyCommand']);
   });
 
@@ -915,7 +921,10 @@ describe('the tenant account bootstrap calls (MOTIR-9941)', () => {
       PutRolePolicyCommand: () => ({}),
     });
 
-    expect(await api.ensureTenantDeployRole(MEMBER, POLICY)).toEqual({ created: false });
+    expect(await api.ensureTenantDeployRole(MEMBER, POLICY)).toEqual({
+      created: false,
+      policyChanged: true,
+    });
     expect(calls.map((c) => c.command)).toContain('PutRolePolicyCommand');
   });
 
