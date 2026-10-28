@@ -27,6 +27,7 @@ import {
   PINNED_CATEGORIES_ANSWER,
   PINNED_ESTIMATE_ANSWER,
 } from '../fixtures/calculatorPinnedVector';
+import { exampleModels } from '@/lib/billing/modelExamples';
 
 // The picker names at most this many models per category (CalculatorView's
 // CATEGORY_MODEL_EXAMPLES).
@@ -315,10 +316,10 @@ test.describe('The Calculator on Billing & plans', () => {
           const b = pickerButton(page, c.key);
           await expect(b).toContainText(
             t('calculator.inputs.categoryExamples', {
-              models: c.models
-                .slice(0, CATEGORY_MODEL_EXAMPLES)
-                .map((m) => m.id)
-                .join(', '),
+              models: exampleModels(
+                c.models.map((m) => m.id),
+                CATEGORY_MODEL_EXAMPLES,
+              ).join(', '),
             }),
           );
         }
@@ -568,7 +569,11 @@ test.describe('The Calculator on Billing & plans', () => {
       'A category with no live model cannot be picked; a withdrawn model drops off',
       async () => {
         const emptied = KEYS[KEYS.length - 1]!;
-        const withdrawn = CATEGORIES.categories[0]!.models[0]!.id;
+        // A model the picker NAMES, so its dropping off is visible.
+        const withdrawn = exampleModels(
+          CATEGORIES.categories[0]!.models.map((m) => m.id),
+          CATEGORY_MODEL_EXAMPLES,
+        )[0]!;
         stub.categories = () =>
           ok({
             ...CATEGORIES,

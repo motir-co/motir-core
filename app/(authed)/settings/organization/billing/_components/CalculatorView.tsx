@@ -30,6 +30,7 @@ import { largerPoolRefusalFor, type LargerPoolRefusal } from '@/lib/billing/larg
 import { UpgradeDialog, type PlanNames } from './PlanChangeDialog';
 import { RungEntitlements, isOnSaleRung } from './RungEntitlements';
 import { fmt } from './billingFormat';
+import { exampleModels } from '@/lib/billing/modelExamples';
 
 // The Calculator view on Billing & plans (Story MOTIR-8381 · MOTIR-8639 · MOTIR-9224 ·
 // MOTIR-8997) — the fourth view of the page. It computes nothing: the categories, the
@@ -491,10 +492,10 @@ function CategoryGroup({
                   {empty
                     ? t('calculator.categories.empty')
                     : t('calculator.inputs.categoryExamples', {
-                        models: category.models
-                          .slice(0, CATEGORY_MODEL_EXAMPLES)
-                          .map((m) => m.id)
-                          .join(', '),
+                        models: exampleModels(
+                          category.models.map((m) => m.id),
+                          CATEGORY_MODEL_EXAMPLES,
+                        ).join(', '),
                       })}
                 </span>
               </button>
