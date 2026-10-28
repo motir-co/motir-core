@@ -154,9 +154,13 @@ describe('with MOTIR_FAKE_AWS_STATE_PATH unset, nothing routes differently', () 
     expect(inventoryForShard(fly)).toBeNull();
 
     vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
-    // The real aws case still demands the account's key and the AMI.
-    expect(() => orchestratorForShard(aws)).toThrow(/AWS_SEAM_ACCOUNT_ACCESS_KEY_ID/);
-    expect(() => inventoryForShard(aws)).toThrow(/AWS_SEAM_ACCOUNT_ACCESS_KEY_ID/);
+    // The real aws case still demands the management credential (which assumes
+    // the account's runner role) and the AMI.
+    vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', '');
+    vi.stubEnv('AWS_ORG_ADMIN_SECRET_ACCESS_KEY', '');
+    vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', '');
+    expect(() => orchestratorForShard(aws)).toThrow(/AWS_ORG_ADMIN_ROLE_ARN/);
+    expect(() => inventoryForShard(aws)).toThrow(/AWS_ORG_ADMIN_ROLE_ARN/);
     expect(inventoryForShard(fly)).toBeNull();
   });
 
@@ -170,6 +174,7 @@ describe('with MOTIR_FAKE_AWS_STATE_PATH unset, nothing routes differently', () 
 describe('with the seam on, an aws account runs the real adapter over the state file', () => {
   it('boots a hosted run into that account with real user-data and tags; fly stays fake', async () => {
     await seamOn();
+    vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', '');
     const aws = await account(AWS_ACCOUNT);
     const fly = await account(FLY_ACCOUNT);
 
@@ -177,8 +182,9 @@ describe('with the seam on, an aws account runs the real adapter over the state 
     expect(orchestrator.provider).toBe('aws');
     expect(orchestratorForShard(fly).provider).toBe('fake');
 
-    // No key and no AMI in the env: the seam satisfies both.
-    expect(process.env['AWS_SEAM_ACCOUNT_ACCESS_KEY_ID']).toBeUndefined();
+    // No credential and no AMI in the env: the seam satisfies both, ahead of
+    // any credential read.
+    expect(process.env['AWS_ORG_ADMIN_ROLE_ARN']).toBe('');
     expect(process.env[AWS_RUNNER_AMI_ENV_VAR]).toBeUndefined();
 
     const handle = await orchestrator.provision(hostedSpec('run-1'));

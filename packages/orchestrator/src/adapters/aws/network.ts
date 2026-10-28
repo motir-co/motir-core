@@ -6,38 +6,29 @@ import type {
   Ec2RouteTable,
   Ec2SecurityGroup,
   Ec2Subnet,
-  Ec2Tag,
   Ec2Vpc,
 } from './ec2Client';
 import { createEc2Api } from './ec2Client';
 
-// An AWS shard's NETWORK (Story MOTIR-9270 · MOTIR-9273), provisioned idempotently.
+// An AWS shard's NETWORK (Story MOTIR-9270 · MOTIR-9273), READ AND CHECKED.
 //
-// One function leaves a region holding exactly what the AWS adapter (MOTIR-9276)
-// discovers by tag at boot: a VPC, an internet gateway attached to it, a public
+// The network is built by the pool-account definition (motir-infra's StackSet,
+// MOTIR-9708), never by code: a VPC, an internet gateway attached to it, a public
 // route table whose default route is that gateway, one public subnet per zone
 // (`MapPublicIpOnLaunch`, so every runner gets a public IPv4 address at boot), and
-// one security group with NO inbound rule. Every resource carries
-// `motir-shard=<shardTag>`, written in the create call itself.
+// one security group with NO inbound rule, every resource tagged
+// `motir-shard=<shardTag>`. This module finds that network by its tag — what the
+// AWS adapter (MOTIR-9276) discovers at boot — and refuses when a resource is
+// missing or doubled. It creates, modifies and deletes nothing.
 //
 // ⚠️ NO NAT GATEWAY, NO ELASTIC IP, NO VPC ENDPOINT. Runners only dial out
 // (GitHub, `ghcr.io`), so a public address per runner behind a no-inbound group is
 // egress enough, and a NAT gateway charges per GB processed in both directions —
 // at fleet scale many times the compute (the CI runner hosting comparison page,
 // sections 2.3 and 9). The hourly public IPv4 charge is the accepted cost.
-//
-// FIND BEFORE CREATE, AT EVERY STEP, so a run that died halfway resumes: each
-// resource is looked up by its tag first and created only when absent, and
-// `created` names only what THIS call made. Nothing here deletes anything.
 
 /** The tag every shard resource carries, and the adapter's discovery key. */
 export const AWS_SHARD_TAG_KEY = 'motir-shard';
-
-/** The VPC's address range when the caller names none. */
-export const AWS_SHARD_VPC_CIDR = '10.40.0.0/16';
-
-/** How many zones a shard spreads across when the caller names none. */
-export const AWS_SHARD_MAX_ZONES = 3;
 
 /** The security group's name — unique per VPC, so derived from the tag. */
 export function awsShardSecurityGroupName(shardTag: string): string {
@@ -61,15 +52,24 @@ export class AwsShardNetworkConflictError extends Error {
   }
 }
 
-export interface EnsureAwsShardNetworkInput {
-  /** The account and region to build in. Ignored when `ec2` is given. */
-  readonly credentials: Omit<AwsCredentialsConfig, 'region'>;
+/** A resource of the shard's network carries no `motir-shard=<tag>` tag:
+ *  the network was never built, or was changed by hand. */
+export class AwsShardNetworkMissingError extends Error {
+  readonly code = 'AWS_SHARD_NETWORK_MISSING' as const;
+  constructor(
+    readonly shardTag: string,
+    readonly resource: string,
+  ) {
+    super(`No ${resource} carries ${AWS_SHARD_TAG_KEY}=${shardTag}.`);
+    this.name = 'AwsShardNetworkMissingError';
+  }
+}
+
+export interface ReadAwsShardNetworkInput {
+  /** The account and region to read in. Ignored when `ec2` is given. */
+  readonly credentials?: Omit<AwsCredentialsConfig, 'region'>;
   readonly regionId: string;
   readonly shardTag: string;
-  /** The zones to use, else the region's available zones (sorted, at most three). */
-  readonly zones?: readonly string[];
-  /** The VPC range, `10.40.0.0/16` by default. */
-  readonly vpcCidr?: string;
   /** An EC2 surface to use instead of building one from `credentials` — the test seam. */
   readonly ec2?: Ec2Api;
 }
@@ -78,29 +78,23 @@ export interface AwsShardNetwork {
   readonly vpcId: string;
   readonly internetGatewayId: string;
   readonly routeTableId: string;
+  /** One public subnet per zone, sorted by zone. */
   readonly subnets: ReadonlyArray<{ readonly zoneId: string; readonly subnetId: string }>;
   readonly securityGroupId: string;
-  /** What this call created, as `<kind>:<id>` — empty on a second call. */
-  readonly created: string[];
-}
-
-interface Step {
-  readonly ec2: Ec2Api;
-  readonly shardTag: string;
-  readonly tags: readonly Ec2Tag[];
-  readonly created: string[];
 }
 
 function tagFilter(shardTag: string): Ec2Filter {
   return { name: `tag:${AWS_SHARD_TAG_KEY}`, values: [shardTag] };
 }
 
-/** The one tagged resource, none, or a refusal naming every id. */
-function single<T>(step: Step, resource: string, found: T[], idOf: (t: T) => string): T | null {
+/** The one tagged resource, else a refusal: none is missing, two are a conflict. */
+function single<T>(shardTag: string, resource: string, found: T[], idOf: (t: T) => string): T {
   if (found.length > 1) {
-    throw new AwsShardNetworkConflictError(step.shardTag, resource, found.map(idOf));
+    throw new AwsShardNetworkConflictError(shardTag, resource, found.map(idOf));
   }
-  return found[0] ?? null;
+  const [only] = found;
+  if (only === undefined) throw new AwsShardNetworkMissingError(shardTag, resource);
+  return only;
 }
 
 /**
@@ -118,180 +112,75 @@ export function zoneCidrs(vpcCidr: string, zones: readonly string[]): Map<string
   return new Map(sorted.map((zone, i) => [zone, `${octets[0]}.${octets[1]}.${i * 16}.0/20`]));
 }
 
-async function resolveZones(ec2: Ec2Api, zones: readonly string[] | undefined): Promise<string[]> {
-  if (zones && zones.length > 0) return [...zones].sort();
-  const available = await ec2.describeAvailabilityZones([{ name: 'state', values: ['available'] }]);
-  return available
-    .map((z) => z.zoneName)
-    .sort()
-    .slice(0, AWS_SHARD_MAX_ZONES);
+function ec2For(input: ReadAwsShardNetworkInput): Ec2Api {
+  if (input.ec2) return input.ec2;
+  if (!input.credentials)
+    throw new Error('readAwsShardNetwork needs credentials or an ec2 surface.');
+  return createEc2Api({ ...input.credentials, region: input.regionId });
 }
 
-async function ensureVpc(step: Step, cidrBlock: string): Promise<string> {
-  const found = single<Ec2Vpc>(
-    step,
-    'VPC',
-    await step.ec2.describeVpcs([tagFilter(step.shardTag)]),
-    (v) => v.vpcId,
-  );
-  if (found) return found.vpcId;
-  const { vpcId } = await step.ec2.createVpc({ cidrBlock, tags: step.tags });
-  step.created.push(`vpc:${vpcId}`);
-  return vpcId;
-}
-
-async function ensureInternetGateway(step: Step, vpcId: string): Promise<string> {
-  const found = single<Ec2InternetGateway>(
-    step,
-    'internet gateway',
-    await step.ec2.describeInternetGateways([tagFilter(step.shardTag)]),
-    (g) => g.internetGatewayId,
-  );
-  let internetGatewayId = found?.internetGatewayId;
-  if (!internetGatewayId) {
-    ({ internetGatewayId } = await step.ec2.createInternetGateway({ tags: step.tags }));
-    step.created.push(`internet-gateway:${internetGatewayId}`);
-  }
-  // A gateway created by a run that died before attaching it is attached now.
-  if (!found?.attachedVpcIds.includes(vpcId)) {
-    await step.ec2.attachInternetGateway({ internetGatewayId, vpcId });
-  }
-  return internetGatewayId;
-}
-
-async function ensureRouteTable(
-  step: Step,
-  vpcId: string,
-  internetGatewayId: string,
-): Promise<Ec2RouteTable | { routeTableId: string; associatedSubnetIds: string[] }> {
-  const found = single<Ec2RouteTable>(
-    step,
-    'route table',
-    await step.ec2.describeRouteTables([
-      tagFilter(step.shardTag),
-      { name: 'vpc-id', values: [vpcId] },
-    ]),
-    (t) => t.routeTableId,
-  );
-  let routeTableId = found?.routeTableId;
-  if (!routeTableId) {
-    ({ routeTableId } = await step.ec2.createRouteTable({ vpcId, tags: step.tags }));
-    step.created.push(`route-table:${routeTableId}`);
-  }
-  const hasDefaultRoute = (found?.routes ?? []).some(
-    (r) => r.destinationCidrBlock === '0.0.0.0/0' && r.gatewayId === internetGatewayId,
-  );
-  if (!hasDefaultRoute) {
-    await step.ec2.createRoute({
-      routeTableId,
-      destinationCidrBlock: '0.0.0.0/0',
-      gatewayId: internetGatewayId,
-    });
-    step.created.push(`route:${routeTableId}:0.0.0.0/0`);
-  }
-  return found ?? { routeTableId, associatedSubnetIds: [] };
-}
-
-async function ensureSubnets(
-  step: Step,
-  vpcId: string,
-  cidrs: Map<string, string>,
-): Promise<Array<{ zoneId: string; subnetId: string }>> {
-  const existing = await step.ec2.describeSubnets([
-    tagFilter(step.shardTag),
-    { name: 'vpc-id', values: [vpcId] },
-  ]);
-  const subnets: Array<{ zoneId: string; subnetId: string }> = [];
-  for (const [zone, cidrBlock] of cidrs) {
-    const found = single<Ec2Subnet>(
-      step,
-      `subnet in ${zone}`,
-      existing.filter((s) => s.availabilityZone === zone),
-      (s) => s.subnetId,
-    );
-    let subnetId = found?.subnetId;
-    if (!subnetId) {
-      ({ subnetId } = await step.ec2.createSubnet({
-        vpcId,
-        cidrBlock,
-        availabilityZone: zone,
-        tags: step.tags,
-      }));
-      step.created.push(`subnet:${subnetId}`);
-    }
-    // Set on create, re-asserted on find: cheap, and it heals a hand-edited subnet.
-    // Only a CHANGE is a call, so a second run makes none.
-    if (!found?.mapPublicIpOnLaunch) {
-      await step.ec2.modifySubnetAttribute({ subnetId, mapPublicIpOnLaunch: true });
-    }
-    subnets.push({ zoneId: zone, subnetId });
-  }
-  return subnets;
-}
-
-async function ensureSecurityGroup(step: Step, vpcId: string): Promise<string> {
-  const found = single<Ec2SecurityGroup>(
-    step,
-    'security group',
-    await step.ec2.describeSecurityGroups([
-      tagFilter(step.shardTag),
-      { name: 'vpc-id', values: [vpcId] },
-    ]),
-    (g) => g.groupId,
-  );
-  if (found) return found.groupId;
-  // Created with no inbound rule, and nothing in this package ever adds one: a
-  // runner is reached by nobody, it only dials out.
-  const { groupId } = await step.ec2.createSecurityGroup({
-    groupName: awsShardSecurityGroupName(step.shardTag),
-    description: `Motir CI runners of shard ${step.shardTag}: no inbound, all outbound`,
-    vpcId,
-    tags: step.tags,
-  });
-  step.created.push(`security-group:${groupId}`);
-  return groupId;
+/** Whether any VPC carries the shard's tag — a network, whole or partial, exists. */
+export async function awsShardVpcExists(input: ReadAwsShardNetworkInput): Promise<boolean> {
+  return (await ec2For(input).describeVpcs([tagFilter(input.shardTag)])).length > 0;
 }
 
 /**
- * Leave the region holding the shard's network, creating only what is missing.
- * A second call with the same `shardTag` creates, attaches, associates and
- * modifies nothing, and returns the same ids with `created` empty.
+ * The shard's network, found by its tag: the VPC, its internet gateway, route
+ * table and security group, and its subnets one per zone. Throws
+ * `AwsShardNetworkMissingError` naming an absent resource and
+ * `AwsShardNetworkConflictError` on two of a kind. Reads only.
  */
-export async function ensureAwsShardNetwork(
-  input: EnsureAwsShardNetworkInput,
+export async function readAwsShardNetwork(
+  input: ReadAwsShardNetworkInput,
 ): Promise<AwsShardNetwork> {
-  const ec2 = input.ec2 ?? createEc2Api({ ...input.credentials, region: input.regionId });
-  const step: Step = {
-    ec2,
-    shardTag: input.shardTag,
-    tags: [
-      { key: AWS_SHARD_TAG_KEY, value: input.shardTag },
-      { key: 'Name', value: `motir-shard-${input.shardTag}` },
-    ],
-    created: [],
-  };
-  const zones = await resolveZones(ec2, input.zones);
-  if (zones.length === 0) {
-    throw new Error(`No available zone in ${input.regionId} to place the shard network in.`);
-  }
-  const cidrs = zoneCidrs(input.vpcCidr ?? AWS_SHARD_VPC_CIDR, zones);
+  const ec2 = ec2For(input);
+  const tag = input.shardTag;
+  const vpcId = single<Ec2Vpc>(
+    tag,
+    'VPC',
+    await ec2.describeVpcs([tagFilter(tag)]),
+    (v) => v.vpcId,
+  ).vpcId;
+  const inVpc: Ec2Filter[] = [tagFilter(tag), { name: 'vpc-id', values: [vpcId] }];
 
-  const vpcId = await ensureVpc(step, input.vpcCidr ?? AWS_SHARD_VPC_CIDR);
-  const internetGatewayId = await ensureInternetGateway(step, vpcId);
-  const routeTable = await ensureRouteTable(step, vpcId, internetGatewayId);
-  const subnets = await ensureSubnets(step, vpcId, cidrs);
-  for (const { subnetId } of subnets) {
-    if (routeTable.associatedSubnetIds.includes(subnetId)) continue;
-    await ec2.associateRouteTable({ routeTableId: routeTable.routeTableId, subnetId });
+  const gateway = single<Ec2InternetGateway>(
+    tag,
+    'internet gateway',
+    await ec2.describeInternetGateways([tagFilter(tag)]),
+    (g) => g.internetGatewayId,
+  );
+  if (!gateway.attachedVpcIds.includes(vpcId)) {
+    throw new AwsShardNetworkMissingError(tag, `internet gateway attached to ${vpcId}`);
   }
-  const securityGroupId = await ensureSecurityGroup(step, vpcId);
+  const routeTable = single<Ec2RouteTable>(
+    tag,
+    'route table',
+    await ec2.describeRouteTables(inVpc),
+    (t) => t.routeTableId,
+  );
+  const securityGroup = single<Ec2SecurityGroup>(
+    tag,
+    'security group',
+    await ec2.describeSecurityGroups(inVpc),
+    (g) => g.groupId,
+  );
+
+  const byZone = new Map<string, Ec2Subnet[]>();
+  for (const subnet of await ec2.describeSubnets(inVpc)) {
+    byZone.set(subnet.availabilityZone, [...(byZone.get(subnet.availabilityZone) ?? []), subnet]);
+  }
+  if (byZone.size === 0) throw new AwsShardNetworkMissingError(tag, 'subnet');
+  const subnets = [...byZone.keys()].sort().map((zone) => ({
+    zoneId: zone,
+    subnetId: single<Ec2Subnet>(tag, `subnet in ${zone}`, byZone.get(zone) ?? [], (s) => s.subnetId)
+      .subnetId,
+  }));
 
   return {
     vpcId,
-    internetGatewayId,
+    internetGatewayId: gateway.internetGatewayId,
     routeTableId: routeTable.routeTableId,
     subnets,
-    securityGroupId,
-    created: step.created,
+    securityGroupId: securityGroup.groupId,
   };
 }

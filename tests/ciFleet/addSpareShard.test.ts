@@ -28,15 +28,19 @@ import { truncateAuthTables } from '../helpers/db';
 import {
   ADD_SHARD_ENTERPRISE_SLUG as SLUG,
   FakeOrganization,
+  buildStacksInto,
+  stubPoolDefinitionEnv,
   installAddShardGithub,
   newGithubWorld,
   type GithubWorld,
 } from '../helpers/addShardFakes';
+import { TEST_MANAGEMENT_KEY, stubAwsManagementCredential } from '../helpers/awsRunnerRoleFake';
 
 // THE UNATTENDED ADD-SHARD (Story MOTIR-9362 · MOTIR-9460), against a real
 // database for the rows and the audit entry, GitHub stubbed at `fetch`, the AWS
 // management calls behind an in-memory organization and the network built by
-// the REAL `ensureAwsShardNetwork` over the in-memory EC2.
+// the pool-account definition's stack instance, seeded into the in-memory EC2
+// and read back by the REAL `readAwsShardNetwork` (MOTIR-9845).
 
 const ec2FakePath = '../../packages/orchestrator/test/contract/awsEc2Fake';
 interface Ec2Fake extends Ec2Api {
@@ -48,8 +52,8 @@ const ORG = 'motir-fleet-use1-1';
 const TEMPLATE = 'aws+{name}@motir.co';
 const SECRETS = {
   installation: 'ghs_INSTALL_SECRET_never_printed',
-  managementKey: 'AKIA_MANAGEMENT_never_printed',
-  managementSecret: 'MANAGEMENT_SECRET_never_printed',
+  managementKey: TEST_MANAGEMENT_KEY.accessKeyId,
+  managementSecret: TEST_MANAGEMENT_KEY.secretAccessKey,
   sessionKeyId: 'ASIA_SESSION_never_printed',
   sessionSecret: 'SESSION_SECRET_never_printed',
   sessionToken: 'SESSION_TOKEN_never_printed',
@@ -103,14 +107,14 @@ beforeEach(async () => {
   vi.stubEnv('GITHUB_STUDIO_APP_ID', '4445390');
   vi.stubEnv('GITHUB_STUDIO_APP_PRIVATE_KEY', privateKey);
   vi.stubEnv('GITHUB_ENTERPRISE_SLUG', SLUG);
-  vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', SECRETS.managementKey);
-  vi.stubEnv('AWS_ORG_ADMIN_SECRET_ACCESS_KEY', SECRETS.managementSecret);
-  vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', 'arn:aws:iam::576360162297:role/motir-add-shard');
+  stubAwsManagementCredential();
+  stubPoolDefinitionEnv();
   _resetInstallationTokenCache();
   _resetProvisioningInstallationCache();
   github = newGithubWorld();
   github.orgs.add(ORG);
   organization = new FakeOrganization(SESSION);
+  buildStacksInto(organization, () => ec2);
   organization.quota = 5; // a new account's AWS default
   ec2 = new AwsEc2Fake();
   installAddShardGithub(github, SECRETS.installation);
@@ -174,11 +178,14 @@ describe('addSpareShard, given only a fleet kind', () => {
     );
     const accountId = result.shard.aws!.accountId;
 
-    expect(organization.calls).toContain(`ensureRunnerRole:${accountId}`);
+    // The pool-account definition's stack built the role (MOTIR-9845); the
+    // step only confirms it by assuming it.
+    expect(organization.calls).toContain(`ensureStackInstance:${accountId}`);
+    expect(organization.calls).not.toContain(`ensureRunnerRole:${accountId}`);
     expect(organization.calls).toContain(`assumeRunnerRole:${accountId}`);
     expect(organization.calls).not.toContain('ensureRunnerIamUser');
     expect(result.steps.find((s) => s.step === 'runtime_credential')).toMatchObject({
-      outcome: 'done',
+      outcome: 'already',
     });
   });
 
@@ -241,7 +248,7 @@ describe('addSpareShard, given only a fleet kind', () => {
 
 describe('resuming', () => {
   it('after an interruption following CreateAccount, finds the account and creates nothing twice', async () => {
-    ec2.failNext('createVpc', 'RequestLimitExceeded', 503);
+    organization.stackInstanceFailure = new Error('the run died waiting for CURRENT');
     await expect(
       fleetShardProvisioningService.addSpareShard({ fleetKind: 'ci_runner' }, deps()),
     ).rejects.toBeTruthy();
@@ -254,6 +261,7 @@ describe('resuming', () => {
     );
 
     expect(creates()).toHaveLength(1);
+    expect(organization.stackInstances.size).toBe(1);
     expect(result.shard.name).toBe('ci-runner-pool-1');
     expect(result.steps.find((s) => s.step === 'provider_account')!.outcome).toBe('already');
     expect(await spareRows()).toHaveLength(1);

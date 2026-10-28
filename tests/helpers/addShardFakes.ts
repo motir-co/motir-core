@@ -1,13 +1,18 @@
 import {
   AwsAccountCreationRefusedError,
   AwsManagementApiError,
+  AwsStackOutputsMissingError,
+  awsAgentHosterPolicyDocument,
+  awsRunnerPolicyDocument,
   type AwsManagementApi,
   type AwsOrganizationAccount,
   type AwsPolicyDocument,
   type AwsQuotaTarget,
   type AwsSessionCredentials,
+  type AwsStackInstanceTarget,
 } from '@motir/orchestrator';
 import { vi } from 'vitest';
+import { AWS_POOL_DEFINITION_ENV, awsPoolUnitEnvName } from '@/lib/fleetShards/awsPoolDefinition';
 import { SHARD_VCPU_QUOTA_TARGET } from '@/lib/ciFleet/shardTargets';
 
 // The fakes `fleet-admin add-shard --provider aws` runs against (MOTIR-9278),
@@ -98,7 +103,7 @@ export function installAddShardGithub(github: GithubWorld, installationToken: st
 export type FakeOrganizationStep =
   | 'createOrganizationAccount'
   | 'ensureOrganizationalUnit'
-  | 'moveAccountToOu'
+  | 'moveAccountToOrganizationalUnit'
   | 'tenantRoleCreated'
   | 'tenantRolePolicyPut'
   | 'accountTagged'
@@ -110,7 +115,6 @@ export class FakeOrganization implements AwsManagementApi {
   readonly calls: string[] = [];
   readonly accounts = new Map<string, AwsOrganizationAccount>();
   readonly inProgress = new Map<string, string>();
-  readonly iamUsers = new Set<string>();
   quota = SHARD_VCPU_QUOTA_TARGET - 1_000;
   /** Per member account: its granted quota, else `quota` (MOTIR-9458). */
   readonly quotaByAccount = new Map<string, number>();
@@ -133,10 +137,27 @@ export class FakeOrganization implements AwsManagementApi {
   readonly runnerRoles = new Map<string, string>();
   /** Per member account: the error assuming its runner role throws. */
   readonly runnerAssumeFailures = new Map<string, Error>();
+  /** Each account's organisational unit (MOTIR-9844); absent means the root. */
+  readonly accountUnits = new Map<string, string>();
+  /** The pool StackSet's instances, keyed `<stack set>/<account>/<region>`. */
+  readonly stackInstances = new Map<
+    string,
+    { unitId: string; overrides: Record<string, string>; outputs: Record<string, string> }
+  >();
+  /** The outputs a newly created instance answers. */
+  stackOutputs: Record<string, string> = {};
+  /** What creating an instance builds, answering its outputs — `buildStacksInto`
+   *  seeds the tagged network in the in-memory EC2. Null: `stackOutputs`. */
+  stackBuilder:
+    | ((
+        input: AwsStackInstanceTarget & { parameterOverrides: Record<string, string> },
+      ) => Record<string, string>)
+    | null = null;
+  /** Thrown once by the next `ensureStackInstance` AFTER it records the
+   *  instance — a run that dies while waiting for CURRENT. */
+  stackInstanceFailure: Error | null = null;
   /** Organizational units under the root, by name to id (MOTIR-9940). */
   readonly organizationalUnits = new Map<string, string>();
-  /** Each account's parent (the root unless moved), by account id. */
-  readonly accountParents = new Map<string, string>();
   /** Per step: an error thrown ONCE after the step's effect lands, as a pass cut
    *  off after AWS answered would see it (MOTIR-9940). */
   readonly failAfter = new Map<FakeOrganizationStep, Error>();
@@ -286,11 +307,51 @@ export class FakeOrganization implements AwsManagementApi {
     return { ...this.session };
   }
 
-  async ensureRunnerIamUser(_credentials: AwsSessionCredentials, policy: AwsPolicyDocument) {
-    this.calls.push('ensureRunnerIamUser');
-    if (this.iamUsers.has(JSON.stringify(policy))) return { created: [] };
-    this.iamUsers.add(JSON.stringify(policy));
-    return { created: ['iam-user:motir-fleet-runner', 'iam-policy:motir-fleet-runner-ec2'] };
+  async moveAccountToOrganizationalUnit(accountId: string, organizationalUnitId: string) {
+    this.calls.push(`moveAccountToOrganizationalUnit:${accountId}:${organizationalUnitId}`);
+    if (this.accountUnits.get(accountId) === organizationalUnitId) return { moved: false };
+    this.accountUnits.set(accountId, organizationalUnitId);
+    this.failOnceAfter('moveAccountToOrganizationalUnit');
+    return { moved: true };
+  }
+
+  async ensureStackInstance(
+    input: AwsStackInstanceTarget & {
+      organizationalUnitId: string;
+      parameterOverrides: Readonly<Record<string, string>>;
+    },
+  ) {
+    this.calls.push(`ensureStackInstance:${input.accountId}`);
+    const key = stackInstanceKey(input);
+    const existing = this.stackInstances.get(key);
+    const overrides = { ...input.parameterOverrides };
+    if (!existing) {
+      const outputs = this.stackBuilder
+        ? this.stackBuilder({ ...input, parameterOverrides: overrides })
+        : { ...this.stackOutputs };
+      this.stackInstances.set(key, { unitId: input.organizationalUnitId, overrides, outputs });
+      // The stack builds the runner role, with the policy its parameters pick.
+      this.runnerRoles.set(input.accountId, stackRunnerPolicy(input.region, overrides));
+      if (this.stackInstanceFailure) {
+        const failure = this.stackInstanceFailure;
+        this.stackInstanceFailure = null;
+        throw failure;
+      }
+      return { action: 'created' as const };
+    }
+    if (JSON.stringify(existing.overrides) === JSON.stringify(overrides)) {
+      return { action: 'none' as const };
+    }
+    existing.overrides = overrides;
+    this.runnerRoles.set(input.accountId, stackRunnerPolicy(input.region, overrides));
+    return { action: 'updated' as const };
+  }
+
+  async readStackInstanceOutputs(target: AwsStackInstanceTarget) {
+    this.calls.push(`readStackInstanceOutputs:${target.accountId}`);
+    const instance = this.stackInstances.get(stackInstanceKey(target));
+    if (!instance) throw new AwsStackOutputsMissingError(target, 'stack instance');
+    return { ...instance.outputs };
   }
 
   private failOnceAfter(step: FakeOrganizationStep) {
@@ -309,14 +370,6 @@ export class FakeOrganization implements AwsManagementApi {
     this.organizationalUnits.set(name, ouId);
     this.failOnceAfter('ensureOrganizationalUnit');
     return { ouId, created: true };
-  }
-
-  async moveAccountToOu(accountId: string, ouId: string) {
-    this.calls.push(`moveAccountToOu:${accountId}`);
-    if ((this.accountParents.get(accountId) ?? 'r-root') === ouId) return { moved: false };
-    this.accountParents.set(accountId, ouId);
-    this.failOnceAfter('moveAccountToOu');
-    return { moved: true };
   }
 
   async ensureTenantDeployRole(credentials: AwsSessionCredentials, policy: AwsPolicyDocument) {
@@ -362,4 +415,85 @@ export class FakeOrganization implements AwsManagementApi {
     this.failOnceAfter('quotaRaiseFiled');
     return { filed: true, pending: true };
   }
+}
+
+/** The runner role's policy the stack applies, chosen by its parameters as the
+ *  template's condition chooses it (motir-infra `lib/pool-account/stack.ts`). */
+function stackRunnerPolicy(region: string, overrides: Record<string, string>): string {
+  const build =
+    overrides['RunnerPolicy'] === 'hoster' ? awsAgentHosterPolicyDocument : awsRunnerPolicyDocument;
+  return JSON.stringify(
+    build({
+      shardTag: overrides['ShardTag'] ?? '',
+      regionId: region,
+      reapUntagged: overrides['ReapUntagged'] === 'true',
+    }),
+  );
+}
+
+function stackInstanceKey(target: AwsStackInstanceTarget): string {
+  return `${target.stackSetName}/${target.accountId}/${target.region}`;
+}
+
+// THE POOL-ACCOUNT DEFINITION IN THE FAKES (MOTIR-9845): add-shard builds a new
+// account by applying the pool StackSet's instance. `stubPoolDefinitionEnv` sets
+// the deployment configuration it reads; `buildStacksInto` makes a created
+// instance seed the tagged network in the in-memory EC2, as the stack would.
+
+/** The configured StackSet and units; never a real account's. */
+export const POOL_DEFINITION = {
+  stackSetName: 'motir-test-pool-account',
+  requestedVcpuQuota: '640',
+  unitId: (fleetKind: string) => `ou-test-${fleetKind.replaceAll('_', '-')}`,
+} as const;
+
+const FLEET_KINDS = ['ci_runner', 'code_graph_index', 'hosted_agent', 'agent_instance'];
+
+export function stubPoolDefinitionEnv(): void {
+  vi.stubEnv(AWS_POOL_DEFINITION_ENV.stackSetName, POOL_DEFINITION.stackSetName);
+  vi.stubEnv(AWS_POOL_DEFINITION_ENV.requestedVcpuQuota, POOL_DEFINITION.requestedVcpuQuota);
+  for (const kind of FLEET_KINDS)
+    vi.stubEnv(awsPoolUnitEnvName(kind), POOL_DEFINITION.unitId(kind));
+}
+
+/** The in-memory EC2's seeding surface (`packages/orchestrator/test/contract/awsEc2Fake.ts`). */
+interface SeedableEc2 {
+  zones?: readonly { zoneName: string }[] | readonly string[];
+  seedShardNetwork(
+    shardTag: string,
+    zones?: readonly string[],
+  ): {
+    vpcId: string;
+    internetGatewayId: string;
+    routeTableId: string;
+    groupId: string;
+    subnetIds: string[];
+  };
+}
+
+function zonesOf(ec2: SeedableEc2, region: string): string[] {
+  const listed = (ec2.zones ?? []).map((z) => (typeof z === 'string' ? z : z.zoneName));
+  const inRegion = listed.filter((zone) => zone.startsWith(region));
+  return (inRegion.length > 0 ? inRegion : [`${region}a`, `${region}b`]).sort().slice(0, 3);
+}
+
+/** A created instance seeds its network in `ec2Of()` and answers the template's outputs. */
+export function buildStacksInto(organization: FakeOrganization, ec2Of: () => unknown): void {
+  organization.stackBuilder = (input) => {
+    const ec2 = ec2Of() as SeedableEc2;
+    const shardTag = input.parameterOverrides['ShardTag'] ?? '';
+    const zones = zonesOf(ec2, input.region);
+    const built = ec2.seedShardNetwork(shardTag, zones);
+    return {
+      VpcId: built.vpcId,
+      InternetGatewayId: built.internetGatewayId,
+      RouteTableId: built.routeTableId,
+      SecurityGroupId: built.groupId,
+      ...Object.fromEntries(
+        zones.map((zone, i) => [`SubnetId${zone.slice(-1).toUpperCase()}`, built.subnetIds[i]]),
+      ),
+      RunnerRoleArn: `arn:aws:iam::${input.accountId}:role/motir-fleet-runner`,
+      TrailArn: `arn:aws:cloudtrail:${input.region}:${input.accountId}:trail/motir-pool`,
+    };
+  };
 }

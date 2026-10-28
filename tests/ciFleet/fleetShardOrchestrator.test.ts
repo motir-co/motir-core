@@ -36,6 +36,7 @@ import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomInt, randomToken } from '../helpers/random';
+import { TEST_MANAGEMENT_ROLE_ARN } from '../helpers/awsRunnerRoleFake';
 
 // ONE ORCHESTRATOR PER FLEET ACCOUNT (Story MOTIR-8953 · MOTIR-8964), against real
 // Postgres: an account row becomes its own adapter in the composition root, every
@@ -44,6 +45,13 @@ import { randomInt, randomToken } from '../helpers/random';
 //
 // The Fly cases select the real Fly adapter and stub `fetch`, so the assertion is
 // on WHICH app a call reaches — the one thing that distinguishes two accounts.
+
+/** No management credential at all: the runner role cannot be assumed. */
+function stubNoManagementCredential(): void {
+  vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', '');
+  vi.stubEnv('AWS_ORG_ADMIN_SECRET_ACCESS_KEY', '');
+  vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', '');
+}
 
 const ACCOUNT: CreateFleetShardInput = {
   name: 'ci-runner-a',
@@ -176,10 +184,9 @@ describe('orchestratorForShard — the account row becomes its own adapter', () 
       limits: { vcpuQuota: 640 },
     };
 
-    it('builds an AWS orchestrator from the row when its key and the AMI are set', async () => {
+    it('builds an AWS orchestrator from the row when the management role and the AMI are set', async () => {
       vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
-      vi.stubEnv('FLEET_SHARD_CI_RUNNER_USE1_1_ACCESS_KEY_ID', 'AKIAEXAMPLE');
-      vi.stubEnv('FLEET_SHARD_CI_RUNNER_USE1_1_SECRET_ACCESS_KEY', 'secret-example');
+      vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', TEST_MANAGEMENT_ROLE_ARN);
       vi.stubEnv('MOTIR_AWS_RUNNER_AMI_ID', 'ami-0123456789abcdef0');
       const account = await createAccount(AWS_ACCOUNT);
 
@@ -191,8 +198,7 @@ describe('orchestratorForShard — the account row becomes its own adapter', () 
 
     it('names EVERY missing variable at once', async () => {
       vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
-      vi.stubEnv('FLEET_SHARD_CI_RUNNER_USE1_1_ACCESS_KEY_ID', '');
-      vi.stubEnv('FLEET_SHARD_CI_RUNNER_USE1_1_SECRET_ACCESS_KEY', '');
+      stubNoManagementCredential();
       vi.stubEnv('MOTIR_AWS_RUNNER_AMI_ID', '');
       const account = await createAccount(AWS_ACCOUNT);
 
@@ -204,23 +210,19 @@ describe('orchestratorForShard — the account row becomes its own adapter', () 
         }
       })();
       expect(thrown).toBeInstanceOf(OrchestratorNotConfiguredError);
-      for (const name of [
-        'FLEET_SHARD_CI_RUNNER_USE1_1_ACCESS_KEY_ID',
-        'FLEET_SHARD_CI_RUNNER_USE1_1_SECRET_ACCESS_KEY',
-        'MOTIR_AWS_RUNNER_AMI_ID',
-      ]) {
+      for (const name of ['AWS_ORG_ADMIN_ROLE_ARN', 'MOTIR_AWS_RUNNER_AMI_ID']) {
         expect(thrown!.message).toContain(name);
       }
+      // No per-account runner key exists to name (MOTIR-9847).
+      expect(thrown!.message).not.toContain('FLEET_SHARD_CI_RUNNER_USE1_1_ACCESS_KEY_ID');
     });
 
-    it('with no key, assumes the runner role from the management credential (MOTIR-9460)', async () => {
+    it('assumes the runner role from the management credential (MOTIR-9460)', async () => {
       vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
-      vi.stubEnv('FLEET_SHARD_CI_RUNNER_USE1_1_ACCESS_KEY_ID', '');
-      vi.stubEnv('FLEET_SHARD_CI_RUNNER_USE1_1_SECRET_ACCESS_KEY', '');
       vi.stubEnv('MOTIR_AWS_RUNNER_AMI_ID', 'ami-0123456789abcdef0');
       vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', 'AKIAMANAGEMENT');
       vi.stubEnv('AWS_ORG_ADMIN_SECRET_ACCESS_KEY', 'management-secret');
-      vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', 'arn:aws:iam::576360162297:role/motir-add-shard');
+      vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', TEST_MANAGEMENT_ROLE_ARN);
       const account = await createAccount(AWS_ACCOUNT);
 
       // Built without a call: the session is assumed when the SDK first signs.
@@ -251,16 +253,14 @@ describe('orchestratorForShard — the account row becomes its own adapter', () 
       expect(assumeRunnerRole).toHaveBeenCalledTimes(2);
     });
 
-    it('with neither a key nor the management credential, names both ways', async () => {
+    it('with no management credential, names it and the role it assumes', async () => {
       vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
-      vi.stubEnv('FLEET_SHARD_CI_RUNNER_USE1_1_ACCESS_KEY_ID', '');
-      vi.stubEnv('FLEET_SHARD_CI_RUNNER_USE1_1_SECRET_ACCESS_KEY', '');
+      stubNoManagementCredential();
       vi.stubEnv('MOTIR_AWS_RUNNER_AMI_ID', 'ami-0123456789abcdef0');
-      vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', '');
       const account = await createAccount(AWS_ACCOUNT);
 
       expect(() => orchestratorForShard(account)).toThrow(
-        /FLEET_SHARD_CI_RUNNER_USE1_1_ACCESS_KEY_ID.*AWS_ORG_ADMIN_ACCESS_KEY_ID.*motir-fleet-runner/,
+        /set AWS_ORG_ADMIN_ROLE_ARN \(the management credential, .*, assumes motir-fleet-runner\)\.$/,
       );
     });
 
@@ -489,8 +489,7 @@ describe('persistentOrchestratorForShard — where an account’s agent instance
   it('builds an AWS persistent orchestrator from an aws row, naming every missing variable', async () => {
     vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
     const account = await createAccount(HOSTER);
-    vi.stubEnv('FLEET_SHARD_AGENT_HOSTER_USE1_1_ACCESS_KEY_ID', '');
-    vi.stubEnv('FLEET_SHARD_AGENT_HOSTER_USE1_1_SECRET_ACCESS_KEY', '');
+    stubNoManagementCredential();
     vi.stubEnv('MOTIR_AWS_HOSTER_AMI_ID', '');
     for (const name of HOSTER_TLS_VARS) vi.stubEnv(name, '');
     const thrown = (() => {
@@ -501,17 +500,11 @@ describe('persistentOrchestratorForShard — where an account’s agent instance
       }
     })();
     expect(thrown).toBeInstanceOf(OrchestratorNotConfiguredError);
-    for (const name of [
-      'FLEET_SHARD_AGENT_HOSTER_USE1_1_ACCESS_KEY_ID',
-      'FLEET_SHARD_AGENT_HOSTER_USE1_1_SECRET_ACCESS_KEY',
-      'MOTIR_AWS_HOSTER_AMI_ID',
-      ...HOSTER_TLS_VARS,
-    ]) {
+    for (const name of ['AWS_ORG_ADMIN_ROLE_ARN', 'MOTIR_AWS_HOSTER_AMI_ID', ...HOSTER_TLS_VARS]) {
       expect(thrown!.message).toContain(name);
     }
 
-    vi.stubEnv('FLEET_SHARD_AGENT_HOSTER_USE1_1_ACCESS_KEY_ID', 'AKIAEXAMPLE');
-    vi.stubEnv('FLEET_SHARD_AGENT_HOSTER_USE1_1_SECRET_ACCESS_KEY', 'secret-example');
+    vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', TEST_MANAGEMENT_ROLE_ARN);
     vi.stubEnv('MOTIR_AWS_HOSTER_AMI_ID', 'ami-0fedcba9876543210');
     stubHosterTls();
     const persistent = persistentOrchestratorForShard(account);
@@ -520,11 +513,10 @@ describe('persistentOrchestratorForShard — where an account’s agent instance
     expect(persistent.defaultRegion()).toBe('us-east-1');
   });
 
-  it('the relay’s endpoint on an aws row reads the key and the client pair, never the AMI or the CA key', async () => {
+  it('the relay’s endpoint on an aws row reads the management credential and the client pair, never the AMI or the CA key', async () => {
     vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
     const account = await createAccount(HOSTER);
-    vi.stubEnv('FLEET_SHARD_AGENT_HOSTER_USE1_1_ACCESS_KEY_ID', '');
-    vi.stubEnv('FLEET_SHARD_AGENT_HOSTER_USE1_1_SECRET_ACCESS_KEY', '');
+    stubNoManagementCredential();
     vi.stubEnv('MOTIR_AWS_HOSTER_AMI_ID', '');
     for (const name of HOSTER_TLS_VARS) vi.stubEnv(name, '');
     const handle = {
@@ -539,8 +531,7 @@ describe('persistentOrchestratorForShard — where an account’s agent instance
     expect(thrown).toBeInstanceOf(OrchestratorNotConfiguredError);
     const message = (thrown as Error).message;
     for (const name of [
-      'FLEET_SHARD_AGENT_HOSTER_USE1_1_ACCESS_KEY_ID',
-      'FLEET_SHARD_AGENT_HOSTER_USE1_1_SECRET_ACCESS_KEY',
+      'AWS_ORG_ADMIN_ROLE_ARN',
       'MOTIR_HOSTER_CA_CERT',
       'MOTIR_HOSTER_CLIENT_CERT',
       'MOTIR_HOSTER_CLIENT_KEY',

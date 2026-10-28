@@ -100,7 +100,7 @@ describe('createOrFindTenantAccount', () => {
     const ouId = organization.organizationalUnits.get(TENANT_OU_NAME)!;
     expect(first).toEqual({ accountId: account.accountId, ouId, created: true, moved: true });
     expect(countOf(organization.calls, 'createOrganizationAccount')).toBe(1);
-    expect(organization.accountParents.get(account.accountId)).toBe(ouId);
+    expect(organization.accountUnits.get(account.accountId)).toBe(ouId);
     expect(await recordOf(org.id)).toMatchObject({
       awsAccountId: account.accountId,
       ouId,
@@ -133,9 +133,14 @@ describe('createOrFindTenantAccount', () => {
     [
       'the record was written',
       () =>
-        void vi.spyOn(organization, 'moveAccountToOu').mockRejectedValueOnce(new Error('cut off')),
+        void vi
+          .spyOn(organization, 'moveAccountToOrganizationalUnit')
+          .mockRejectedValueOnce(new Error('cut off')),
     ],
-    ['the move', () => organization.failAfter.set('moveAccountToOu', new Error('cut off'))],
+    [
+      'the move',
+      () => organization.failAfter.set('moveAccountToOrganizationalUnit', new Error('cut off')),
+    ],
   ];
 
   it.each(cutOffs)('a pass cut off after %s is finished by the next one', async (_, cut) => {
@@ -149,7 +154,7 @@ describe('createOrFindTenantAccount', () => {
     expect(organization.accounts.size).toBe(1);
     expect(organization.organizationalUnits.size).toBe(1);
     expect(countOf(organization.calls, 'createOrganizationAccount')).toBe(1);
-    expect(organization.accountParents.get(account.accountId)).toBe(result.ouId);
+    expect(organization.accountUnits.get(account.accountId)).toBe(result.ouId);
     expect(await adminDb.hostingTenantAccount.count()).toBe(1);
     expect(await recordOf(org.id)).toMatchObject({
       awsAccountId: account.accountId,
@@ -204,7 +209,9 @@ describe('createOrFindTenantAccount', () => {
     });
     await expect(run(org.id)).rejects.toBeInstanceOf(FleetShardProvisioningRefusedError);
     expect(await recordOf(org.id)).toMatchObject({ awsAccountId: '999999999999', ouId: 'ou-x' });
-    expect(organization.calls.filter((c) => c.startsWith('moveAccountToOu'))).toEqual([]);
+    expect(
+      organization.calls.filter((c) => c.startsWith('moveAccountToOrganizationalUnit')),
+    ).toEqual([]);
   });
 
   it('reaches none of the fleet shard services or repository', () => {

@@ -11,6 +11,7 @@ import {
   type UsageAttribution,
 } from '@motir/orchestrator';
 import { db } from '@/lib/db';
+import type { FleetShardDTO } from '@/lib/dto/fleetShard';
 import { createAwsShardProvisioningProvider } from '@/lib/fleetShards/awsProvisioningProvider';
 import { registerShardProvisioningProvider } from '@/lib/fleetShards/provisioningProviders';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
@@ -24,9 +25,12 @@ import { truncateAuthTables } from '../helpers/db';
 import {
   ADD_SHARD_ENTERPRISE_SLUG,
   FakeOrganization,
+  buildStacksInto,
+  stubPoolDefinitionEnv,
   installAddShardGithub,
   newGithubWorld,
 } from '../helpers/addShardFakes';
+import { runnerRole } from '../helpers/awsRunnerRoleFake';
 
 // THE STORY'S SEAM (Story MOTIR-9270 · MOTIR-9280): add-shard writes an `aws`
 // row, `orchestratorForShard` turns that row into the AWS adapter, and the
@@ -35,9 +39,10 @@ import {
 // the region, the `credentialRef` suffixes and the AMI variable one card writes
 // are the ones the next card reads.
 //
-// One in-memory EC2 is the member account: add-shard's network step builds into
-// it with the assumed-role session, and the adapter boots into it with the
-// runtime key — `createEc2Api` answers it for both, recording which key asked.
+// One in-memory EC2 is the member account: add-shard's network step reads it
+// with the member account's assumed-role session, and the adapter boots into it
+// with a session of the account's runner ROLE (MOTIR-9847) — `createEc2Api`
+// answers it for both, recording which key asked.
 //
 // ⚠️ `@motir/orchestrator` RESOLVES TO THE PACKAGE SOURCE in this file, as in
 // `awsPoolDeferral.test.ts`: the EC2 fake throws the source's `Ec2ApiError`, and
@@ -65,10 +70,12 @@ vi.mock('@motir/orchestrator', async () => {
   )) as typeof import('@motir/orchestrator');
   return {
     ...source,
-    createEc2Api: (config: { accessKeyId: string }) => {
-      world.keys.push(config.accessKeyId);
-      return world.ec2;
-    },
+    createAwsManagementApi: () => runnerRole.management(),
+    createEc2Api: (config: Parameters<typeof runnerRole.ec2For>[0]) =>
+      runnerRole.ec2For(config, (keyId) => {
+        world.keys.push(keyId);
+        return world.ec2 as object;
+      }),
   };
 });
 
@@ -86,7 +93,7 @@ const SESSION = {
   sessionToken: 'member-session-token',
   expiration: null,
 };
-const RUNTIME_KEY = { id: 'AKIA_RUNTIME_KEY', secret: 'runtime-secret' };
+const RUNNER_ROLE_KEY = 'ASIA_RUNNER_ROLE_SESSION';
 
 const SPEC: ContainerSpec = {
   orgId: 'org-seam',
@@ -149,9 +156,9 @@ async function addShard(): Promise<{ code: number; out: string }> {
   return { code, out: out.join('\n') };
 }
 
-function setRuntime(): void {
-  vi.stubEnv(`${PREFIX}_ACCESS_KEY_ID`, RUNTIME_KEY.id);
-  vi.stubEnv(`${PREFIX}_SECRET_ACCESS_KEY`, RUNTIME_KEY.secret);
+/** What the adapter needs to boot into `shard`'s account: its runner role and the AMI. */
+function setRuntime(shard: FleetShardDTO): void {
+  runnerRole.grant(shard.aws!.accountId, RUNNER_ROLE_KEY);
   vi.stubEnv(AWS_RUNNER_AMI_ENV_VAR, AMI);
 }
 
@@ -175,17 +182,18 @@ beforeEach(async () => {
   vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', 'AKIA_MANAGEMENT');
   vi.stubEnv('AWS_ORG_ADMIN_SECRET_ACCESS_KEY', 'management-secret');
   vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', 'arn:aws:iam::576360162297:role/motir-add-shard');
+  stubPoolDefinitionEnv();
   // The deployment's own selection, so the row resolves through its `aws` case.
   vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', '');
-  vi.stubEnv(`${PREFIX}_ACCESS_KEY_ID`, '');
-  vi.stubEnv(`${PREFIX}_SECRET_ACCESS_KEY`, '');
   vi.stubEnv(AWS_RUNNER_AMI_ENV_VAR, '');
   _resetInstallationTokenCache();
   _resetProvisioningInstallationCache();
   installAddShardGithub(newGithubWorld(), 'ghs_installation');
   world.ec2 = new AwsEc2Fake();
   world.keys = [];
+  runnerRole.reset();
   organization = new FakeOrganization(SESSION);
+  buildStacksInto(organization, () => ec2());
   // The real provider; only its management API is the in-memory organization.
   // Its EC2 goes through the package's `createEc2Api`, the same seam the adapter
   // resolves through.
@@ -227,16 +235,18 @@ describe('add-shard → account row → adapter', () => {
       credentialRef: PREFIX,
       aws: { region: REGION },
     });
-    expect(ec2().count('createSubnet')).toBeGreaterThan(0);
+    // Built by the pool-account definition's stack, not by add-shard (MOTIR-9845).
+    expect(ec2().count('createSubnet')).toBe(0);
     const subnets = await ec2().describeSubnets([{ name: 'tag:motir-shard', values: [NAME] }]);
+    expect(subnets.length).toBeGreaterThan(0);
     const groups = await ec2().describeSecurityGroups([
       { name: 'tag:motir-shard', values: [NAME] },
     ]);
     expect(groups).toHaveLength(1);
-    // The network was built with the member account's assumed-role session.
+    // The network was read back with the member account's assumed-role session.
     expect(world.keys).toEqual([SESSION.accessKeyId]);
 
-    setRuntime();
+    setRuntime(shard);
     world.keys = [];
     const orchestrator = orchestratorForShard(shard);
     const handle = await orchestrator.provision(SPEC);
@@ -247,22 +257,41 @@ describe('add-shard → account row → adapter', () => {
     expect(request.securityGroupIds).toEqual([groups[0]!.groupId]);
     expect(request.imageId).toBe(AMI);
     expect(request.tags).toContainEqual({ key: 'motir-shard', value: NAME });
-    // …and booted with the runtime key under the row's credentialRef.
-    expect(world.keys).toEqual([RUNTIME_KEY.id]);
+    // …and booted on a session of the account's runner role.
+    expect(world.keys).toEqual([RUNNER_ROLE_KEY]);
+    expect(runnerRole.assumed).toEqual([shard.aws!.accountId]);
   });
 
-  it('with the runtime key, the management credential and the AMI unset, names every missing variable and launches nothing', async () => {
+  it('a stray key under the row’s credentialRef is never read: the client signs with the role (MOTIR-9847)', async () => {
     await addShard();
     const shard = (await fleetShardService.findShardByName(NAME))!;
-    // With the management credential set, a keyless account assumes its runner
-    // role instead (MOTIR-9460); without it, nothing can reach the account.
+    setRuntime(shard);
+    vi.stubEnv(`${PREFIX}_ACCESS_KEY_ID`, 'AKIA_STRAY_KEY');
+    vi.stubEnv(`${PREFIX}_SECRET_ACCESS_KEY`, 'stray-secret');
+    world.keys = [];
+
+    await orchestratorForShard(shard).provision(SPEC);
+
+    expect(ec2().count('runInstances')).toBe(1);
+    expect(world.keys).toEqual([RUNNER_ROLE_KEY]);
+    expect(world.keys).not.toContain('AKIA_STRAY_KEY');
+    expect(runnerRole.assumed).toEqual([shard.aws!.accountId]);
+  });
+
+  it('with the management credential and the AMI unset, names every missing variable and launches nothing', async () => {
+    await addShard();
+    const shard = (await fleetShardService.findShardByName(NAME))!;
+    // The runner role is assumed from the management credential; without it,
+    // nothing can reach the account — and no per-account key is offered instead.
     vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', '');
+    vi.stubEnv('AWS_ORG_ADMIN_SECRET_ACCESS_KEY', '');
+    vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', '');
 
     expect(() => orchestratorForShard(shard)).toThrow(
       new OrchestratorNotConfiguredError(
-        `set ${PREFIX}_ACCESS_KEY_ID, ${PREFIX}_SECRET_ACCESS_KEY, ${AWS_RUNNER_AMI_ENV_VAR} ` +
-          '(or AWS_ORG_ADMIN_ACCESS_KEY_ID, AWS_ORG_ADMIN_SECRET_ACCESS_KEY, AWS_ORG_ADMIN_ROLE_ARN ' +
-          'to assume motir-fleet-runner)',
+        `set AWS_ORG_ADMIN_ROLE_ARN, ${AWS_RUNNER_AMI_ENV_VAR} ` +
+          '(the management credential, AWS_ORG_ADMIN_ACCESS_KEY_ID, AWS_ORG_ADMIN_SECRET_ACCESS_KEY, ' +
+          'AWS_ORG_ADMIN_ROLE_ARN, assumes motir-fleet-runner)',
       ),
     );
     expect(ec2().count('runInstances')).toBe(0);
@@ -280,7 +309,7 @@ describe('add-shard → account row → adapter', () => {
       awsRegion: REGION,
       credentialRef: PREFIX,
     });
-    setRuntime();
+    setRuntime(shard);
 
     const err = await orchestratorForShard(shard)
       .provision(SPEC)
@@ -294,7 +323,7 @@ describe('add-shard → account row → adapter', () => {
   it('reap for one shard terminates its own instance and never another shard’s', async () => {
     await addShard();
     const shard = (await fleetShardService.findShardByName(NAME))!;
-    setRuntime();
+    setRuntime(shard);
     const orchestrator = orchestratorForShard(shard);
     const ours = await orchestrator.provision(SPEC);
     const theirs = ec2().plantInstance({
@@ -311,7 +340,7 @@ describe('add-shard → account row → adapter', () => {
   it('a VcpuLimitExceeded refusal is a quota capacity error, and no instance exists', async () => {
     await addShard();
     const shard = (await fleetShardService.findShardByName(NAME))!;
-    setRuntime();
+    setRuntime(shard);
     ec2().failNextRunInstances({ code: 'VcpuLimitExceeded' });
 
     const err = await orchestratorForShard(shard)
