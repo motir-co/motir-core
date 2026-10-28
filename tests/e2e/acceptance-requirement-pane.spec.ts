@@ -417,7 +417,12 @@ test('a targeted offer carrying a requirement shows it, saves one page, and plan
   const sent = planEntries()[0]!;
   expect(sent.requirement).toEqual(REQUIREMENT);
   expect(sent.requirementPage?.pageId).toBe(pages[0]!.id);
-  await expect(byId(page, 'plan-offer-requirement-page')).toBeVisible();
+  // A targeted confirm hands the overlay to the card's own planning session, so the
+  // saved-page line is not on screen here: the offer that drew it records the page.
+  const offerRows = await adminDb.planChangeTurn.findMany({
+    where: { answerOffer: { path: ['requirementPage', 'pageId'], equals: pages[0]!.id } },
+  });
+  expect(offerRows).toHaveLength(1);
 });
 
 test('a save that fails starts nothing, keeps Confirm, and succeeds once the account is back', async ({
