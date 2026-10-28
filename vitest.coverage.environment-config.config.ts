@@ -25,19 +25,7 @@ import baseConfig from './vitest.config';
 
 const FLOOR = { statements: 90, functions: 90, branches: 90, lines: 90 } as const;
 
-/**
- * The two repositories' one uncovered arm each is `tx ?? dbRead`: the read with NO
- * transaction. Every caller passes one, and the RLS call-site guard
- * (`tests/rls/test-call-site-guard.test.ts`) forbids a test from making the
- * unbound read, so the arm is unreachable from a test by design. Their branches
- * are held at the measured 50; their other three measures stay at {@link FLOOR}.
- */
-const BRANCH_HELD = new Set([
-  'lib/repositories/environmentConfigEntryRepository.ts',
-  'lib/repositories/environmentConfigChangeRepository.ts',
-]);
-
-/** Every file below is held to {@link FLOOR}, whole-file, except {@link BRANCH_HELD}. */
+/** Every file below is held to {@link FLOOR}, whole-file. */
 const MEASURED = [
   // MOTIR-9960 — the vocabulary, the reserved names and the secret crypto.
   'lib/environmentConfig/vocabulary.ts',
@@ -95,16 +83,9 @@ export default defineConfig({
       reportsDirectory: 'coverage/environment-config',
       all: true,
       include: MEASURED,
-      // Per file, each MEASURED name its own key: a top-level floor would also
-      // bind the two BRANCH_HELD files, which Vitest checks against both.
       thresholds: {
         perFile: true,
-        ...Object.fromEntries(
-          MEASURED.map((file) => [
-            file,
-            BRANCH_HELD.has(file) ? { ...FLOOR, branches: 50 } : FLOOR,
-          ]),
-        ),
+        ...FLOOR,
       },
     },
   },
