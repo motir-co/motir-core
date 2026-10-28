@@ -34,6 +34,9 @@ export const GITHUB_BANNER_STATUSES = [
   'select_repos',
   'repo_unavailable',
   'installation_not_accessible',
+  // GitHub refused the actor's own linked sign-in (Bug MOTIR-8984) — revoked,
+  // replaced or expired. Not "couldn't reach GitHub": the remedy is reconnecting.
+  'identity_refused',
 ] as const;
 
 export type GithubBannerStatus = (typeof GITHUB_BANNER_STATUSES)[number];
@@ -66,6 +69,7 @@ export const GITHUB_BANNER_TONE: Record<GithubBannerStatus, GithubBannerTone> = 
   select_repos: 'info',
   repo_unavailable: 'danger',
   installation_not_accessible: 'danger',
+  identity_refused: 'danger',
 };
 
 /** The outcomes in which the operation SUCCEEDED or simply needs restarting —

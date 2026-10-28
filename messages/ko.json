@@ -7531,7 +7531,8 @@
       "install_error": "GitHub App 설정을 마치지 못했습니다. 다시 설치해 보세요.",
       "select_repos": "Motir GitHub App이 설치되었습니다. 이 조직이 연결할 계정의 리포지토리를 선택하세요.",
       "repo_unavailable": "해당 리포지토리는 이미 다른 조직에 연결되어 있어 여기에 추가되지 않았습니다. 다른 변경 사항은 없습니다.",
-      "installation_not_accessible": "GitHub에서 해당 GitHub 계정을 볼 수 없어 이 조직에 연결되지 않았습니다. 변경된 내용은 없습니다."
+      "installation_not_accessible": "GitHub에서 해당 GitHub 계정을 볼 수 없어 이 조직에 연결되지 않았습니다. 변경된 내용은 없습니다.",
+      "identity_refused": "GitHub가 회원님의 GitHub 로그인을 더 이상 허용하지 않아 Motir가 App 연결을 마치지 못했습니다. 설정 → 계정 → Git 계정에서 계정 연결을 해제한 뒤 다시 연결하고, 다시 시도하세요."
     },
     "connect": {
       "title": "GitHub 연결",
@@ -7929,7 +7930,9 @@
       "identity": {
         "title": "먼저 GitHub 계정을 연결하십시오",
         "body": "Motir는 회원님의 GitHub ID를 통해 볼 수 있는 GitHub 계정을 표시합니다. 설정 → 계정 → Git 계정에서 연결한 다음 여기로 돌아오십시오.",
-        "action": "Git 계정으로 이동"
+        "action": "Git 계정으로 이동",
+        "refusedTitle": "GitHub 계정을 다시 연결하십시오",
+        "refusedBody": "GitHub가 Motir에 저장된 회원님의 로그인을 더 이상 허용하지 않습니다. 취소되었거나 만료되었습니다. 설정 → 계정 → Git 계정에서 연결을 해제한 뒤 다시 연결하고 여기로 돌아오십시오. 변경된 내용은 없습니다."
       },
       "cancel": "취소",
       "back": "모든 계정",

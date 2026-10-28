@@ -7534,7 +7534,8 @@
       "install_error": "We couldn't finish setting up the GitHub App. Please try installing again.",
       "select_repos": "The Motir GitHub App is installed. Choose which of the account's repositories this organisation connects.",
       "repo_unavailable": "That repository is already connected to another organisation, so it wasn't added here. Nothing else changed.",
-      "installation_not_accessible": "You can't see that GitHub account on GitHub, so it wasn't linked to this organisation. Nothing was changed."
+      "installation_not_accessible": "You can't see that GitHub account on GitHub, so it wasn't linked to this organisation. Nothing was changed.",
+      "identity_refused": "GitHub no longer accepts your GitHub sign-in, so Motir couldn't finish connecting the App. In Settings → Account → Git accounts, disconnect your account and connect it again, then try again."
     },
     "connect": {
       "title": "Connect GitHub",
@@ -7932,7 +7933,9 @@
       "identity": {
         "title": "Connect your GitHub account first",
         "body": "Motir lists the GitHub accounts you can see through your own GitHub identity. Connect it in Settings → Account → Git accounts, then come back here.",
-        "action": "Go to Git accounts"
+        "action": "Go to Git accounts",
+        "refusedTitle": "Reconnect your GitHub account",
+        "refusedBody": "GitHub no longer accepts the sign-in Motir has for you: it was revoked or has expired. In Settings → Account → Git accounts, disconnect it and connect it again, then come back here. Nothing was changed."
       },
       "cancel": "Cancel",
       "back": "All accounts",

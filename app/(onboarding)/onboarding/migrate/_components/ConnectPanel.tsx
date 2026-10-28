@@ -125,6 +125,10 @@ const REPORT_OF_STATUS: Record<
   repo_unavailable: 'repo_unavailable',
   installation_not_accessible: 'installation_not_accessible',
   not_configured: 'not_configured',
+  // GitHub refused the person's own sign-in (Bug MOTIR-8984). The accounts read
+  // answers `identity_required` for the same dead token, so the existing
+  // accounts list already draws the sign-in prompt — the one remedy.
+  identity_refused: 'read',
 };
 
 /** A report the step holds until the person acts or the read shows something

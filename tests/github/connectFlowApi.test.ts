@@ -6,7 +6,8 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { encryptToken } from '@/lib/github/tokenCrypto';
-import { encodeInstallState } from '@/lib/github/installState';
+import { encodeInstallState, type InstallState } from '@/lib/github/installState';
+import { GithubUserInstallationsError } from '@/lib/github/userInstallations';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
@@ -55,6 +56,10 @@ const setupRoute = await import('@/app/api/github/setup/route');
 
 /** Installations each user token can see on GitHub, by token. */
 let userInstallations: Record<string, { id: number; login: string }[]> = {};
+/** How GitHub answers `GET /user/installations` for a token it does not serve
+ *  normally (Bug MOTIR-8984): a status it answers with, or `network` for a
+ *  transport failure. */
+let userInstallationsFailure: Record<string, number | 'network'> = {};
 
 function stubGithub(): void {
   const { privateKey } = generateKeyPairSync('rsa', {
@@ -77,6 +82,16 @@ function stubGithub(): void {
       if (url.includes('/user/installations')) {
         const auth = new Headers(init?.headers).get('authorization') ?? '';
         const token = auth.replace(/^Bearer /, '');
+        const failure = userInstallationsFailure[token];
+        if (failure === 'network') throw new TypeError('fetch failed');
+        if (failure !== undefined) {
+          return new Response(
+            JSON.stringify({
+              message: failure === 401 ? 'Bad credentials' : 'Service Unavailable',
+            }),
+            { status: failure, headers: { 'content-type': 'application/json' } },
+          );
+        }
         return json({
           installations: (userInstallations[token] ?? []).map((i) => ({
             id: i.id,
@@ -191,6 +206,7 @@ beforeEach(async () => {
     gho_x: [{ id: 4242, login: 'acme' }],
     gho_y: [{ id: 4242, login: 'acme' }],
   };
+  userInstallationsFailure = {};
   await githubInstallationService.linkInstallationToOrganization({
     workspaceId: x.workspaceId,
     installationId: INSTALLATION,
@@ -478,5 +494,98 @@ describe('the setup round trip', () => {
     const state = encodeInstallState({ workspaceId: y.workspaceId, userId: y.ownerId });
     expect((await setup(state)).searchParams.get('github')).toBe('installed');
     expect(await ownedBy(y.organizationId)).toEqual(['1', '2', '3', '4', '5']);
+  });
+});
+
+// Bug MOTIR-8984 — GitHub REFUSES the actor's stored user token (401 Bad
+// credentials: revoked, replaced or expired). That is a dead sign-in, so every
+// door answers "reconnect", never a 500 the modal draws as "Couldn't reach
+// GitHub". A network failure or a 5xx is still that, because it is true.
+describe('a refused GitHub sign-in (Bug MOTIR-8984)', () => {
+  function orgState(org: Org, extra: Partial<InstallState> = {}): string {
+    return encodeInstallState({
+      workspaceId: org.workspaceId,
+      userId: org.ownerId,
+      organizationId: org.organizationId,
+      origin: 'organizationGit',
+      ...extra,
+    });
+  }
+
+  beforeEach(() => {
+    userInstallationsFailure['gho_y'] = 401;
+  });
+
+  it('GET accounts answers 200 identity_required with reason refused, not a 500', async () => {
+    signIn(y);
+    const res = await getAccounts(y.organizationId);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ state: 'identity_required', reason: 'refused' });
+  });
+
+  it.each([
+    ['a 5xx', 503 as const],
+    ['a network failure', 'network' as const],
+  ])('GET accounts still fails as unreachable on %s', async (_label, failure) => {
+    userInstallationsFailure['gho_y'] = failure;
+    signIn(y);
+    const err = await getAccounts(y.organizationId).then(
+      () => null,
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(GithubUserInstallationsError);
+    expect((err as GithubUserInstallationsError).status).toBe(failure === 503 ? 503 : null);
+  });
+
+  it('a 403 from GitHub is not read as a dead sign-in', async () => {
+    userInstallationsFailure['gho_y'] = 403;
+    signIn(y);
+    await expect(getAccounts(y.organizationId)).rejects.toBeInstanceOf(
+      GithubUserInstallationsError,
+    );
+  });
+
+  it('GET repositories answers 409 github_identity_refused', async () => {
+    signIn(y);
+    const res = await getRepos(y.organizationId);
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ code: 'github_identity_refused' });
+  });
+
+  it('POST installations answers 409 github_identity_refused and writes nothing', async () => {
+    signIn(y);
+    const res = await postLink(y.organizationId, { installationId: INSTALLATION, repoIds: ['3'] });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ code: 'github_identity_refused' });
+    expect(await ownedBy(y.organizationId)).toEqual([]);
+    expect(
+      await adminDb.githubInstallationOrgLink.count({
+        where: { organizationId: y.organizationId },
+      }),
+    ).toBe(0);
+  });
+
+  it('the install return lands on identity_refused, not install_provider_error, writing nothing', async () => {
+    signIn(y);
+    const to = await setup(orgState(y));
+    expect(to.searchParams.get('github')).toBe('identity_refused');
+    expect(
+      await adminDb.githubInstallationOrgLink.count({
+        where: { organizationId: y.organizationId },
+      }),
+    ).toBe(0);
+  });
+
+  it('so does the project Repositories room’s install return', async () => {
+    signIn(y);
+    const to = await setup(orgState(y, { origin: 'projectRepositories', projectKey: 'ROOM' }));
+    expect(to.searchParams.get('github')).toBe('identity_refused');
+  });
+
+  it('an actor with NO identity keeps the install return’s bounded relaxation', async () => {
+    await adminDb.githubInstallation.deleteMany({});
+    await adminDb.githubIdentity.deleteMany({ where: { userId: y.ownerId } });
+    signIn(y);
+    expect((await setup(orgState(y))).searchParams.get('github')).toBe('installed');
   });
 });
