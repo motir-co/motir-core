@@ -10085,7 +10085,8 @@
       "navIdeas": "Ideas",
       "navRunModels": "Modelos de ejecuciones alojadas",
       "navFleetSettings": "Ajustes de la flota",
-      "navCapacity": "Capacidad de proveedores"
+      "navCapacity": "Capacidad de proveedores",
+      "navJobs": "Trabajos"
     },
     "nav": {
       "overview": "Resumen",
@@ -10307,6 +10308,9 @@
             "limits": {
               "edit": "Editó los límites de capacidad de un modelo de proveedor"
             }
+          },
+          "jobs": {
+            "dlq_replay": "Volvió a ejecutar un mensaje fallido"
           }
         }
       }
@@ -12601,6 +12605,104 @@
         "unreachable": "El gateway no respondió. No se guardó nada; inténtalo de nuevo.",
         "notPermitted": "Tu rol no puede editar límites, así que no se guardó nada.",
         "failed": "No se pudieron guardar los límites. No se cambió nada; inténtalo de nuevo."
+      }
+    },
+    "jobs": {
+      "breadcrumb": "Plataforma · Trabajos",
+      "title": "Trabajos",
+      "subtitle": "Todos los trabajos en segundo plano que ejecutó la plataforma, en cualquier espacio de trabajo o en ninguno, y todos los mensajes fallidos pendientes de volver a ejecutarse.",
+      "tabsLabel": "Vistas del registro de trabajos",
+      "tabs": {
+        "runs": "Ejecuciones",
+        "dlq": "Mensajes fallidos",
+        "waiting": "{count} pendientes"
+      },
+      "status": {
+        "label": "Estado",
+        "all": "Todos",
+        "running": "En ejecución",
+        "succeeded": "Correcto",
+        "failed": "Fallido",
+        "abandoned": "Abandonado"
+      },
+      "columns": {
+        "function": "Función",
+        "event": "Evento",
+        "functionEvent": "Función · evento",
+        "workspace": "Espacio de trabajo",
+        "status": "Estado",
+        "attempt": "Intento",
+        "attempts": "Intentos",
+        "started": "Inicio",
+        "duration": "Duración",
+        "failure": "Fallo",
+        "lastFailed": "Último fallo",
+        "replay": "Volver a ejecutar"
+      },
+      "runsCaption": "Ejecuciones de trabajos en segundo plano",
+      "dlqCaption": "Mensajes fallidos",
+      "noWorkspace": "Sin espacio de trabajo",
+      "pageLabel": "Página {page}",
+      "pagerLabel": "Páginas de ejecuciones",
+      "previous": "Anterior",
+      "next": "Siguiente",
+      "runsEmpty": {
+        "titleAll": "Aún no hay ejecuciones",
+        "bodyAll": "Los trabajos en segundo plano aparecen aquí cuando se ejecutan.",
+        "titleStatus": "No hay ejecuciones con este estado",
+        "bodyStatus": "Nada en el registro tiene este estado. Elige Todos para ver todas las ejecuciones."
+      },
+      "runsError": {
+        "title": "No se pudo leer el registro de trabajos"
+      },
+      "dlqError": {
+        "title": "No se pudieron leer los mensajes fallidos"
+      },
+      "error": {
+        "body": "La base de datos no respondió. No se cambió nada."
+      },
+      "retry": "Intentar de nuevo",
+      "loadingRuns": "Cargando ejecuciones",
+      "readOnly": "Solo lectura. Para volver a ejecutar un mensaje fallido se necesita el rol de operador.",
+      "fn": {
+        "label": "Función",
+        "all": "Todas las funciones"
+      },
+      "waitingLine": "{waiting} pendientes · {replayed} vueltos a ejecutar en los últimos 7 días",
+      "capped": "Se muestran {shown} de {count}. La lista muestra los 200 más recientes.",
+      "replay": "Volver a ejecutar",
+      "replayAria": "Volver a ejecutar el mensaje fallido de {function}",
+      "replayedAt": "Vuelto a ejecutar {time}",
+      "toast": {
+        "replayedTitle": "Mensaje fallido vuelto a ejecutar",
+        "replayedBody": "{function} se envió de nuevo.",
+        "alreadyTitle": "Ya se volvió a ejecutar",
+        "alreadyBody": "Otra persona volvió a ejecutar este mensaje fallido antes. No se envió nada de nuevo.",
+        "failedTitle": "No se pudo volver a ejecutar",
+        "failedBody": "No se envió nada. Inténtalo de nuevo.",
+        "notPermittedBody": "Para volver a ejecutar un mensaje fallido se necesita el rol de operador.",
+        "notFoundBody": "Este mensaje fallido ya no existe."
+      },
+      "replayAll": {
+        "button": "Volver a ejecutar los {count}",
+        "title": "¿Volver a ejecutar {count} mensajes fallidos de {function}?",
+        "body": "Cada uno se envía de nuevo como una ejecución nueva y se registra en el registro de auditoría de la plataforma. Se omite el mensaje fallido que otra persona vuelva a ejecutar antes.",
+        "confirm": "Volver a ejecutar {count}",
+        "cancel": "Cancelar",
+        "running": "Volviendo a ejecutar…",
+        "runningLine": "Volviendo a ejecutar {count} mensajes fallidos, de 50 en 50. Mantén esto abierto hasta que termine.",
+        "doneTitle": "Reejecución terminada",
+        "doneWithFailuresTitle": "Reejecución terminada con fallos",
+        "replayed": "{count} vueltos a ejecutar",
+        "already": "{count} ya vueltos a ejecutar por otra persona",
+        "nothingLeft": "0 vueltos a ejecutar: los {count} ya se habían vuelto a ejecutar",
+        "failed": "{count} no se pudieron volver a ejecutar. Siguen en la lista; vuelve a ejecutarlos uno a uno.",
+        "error": "No se pudo volver a ejecutar. No se cambió nada.",
+        "close": "Listo"
+      },
+      "dlqEmpty": {
+        "title": "No hay nada pendiente",
+        "body": "Ningún trabajo ha agotado sus intentos. Los mensajes fallidos aparecen aquí cuando ocurre."
       }
     }
   },

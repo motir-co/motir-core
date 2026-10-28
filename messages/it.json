@@ -10085,7 +10085,8 @@
       "navIdeas": "Idee",
       "navRunModels": "Modelli delle esecuzioni ospitate",
       "navFleetSettings": "Impostazioni della flotta",
-      "navCapacity": "Capacità dei fornitori"
+      "navCapacity": "Capacità dei fornitori",
+      "navJobs": "Job"
     },
     "nav": {
       "overview": "Panoramica",
@@ -10307,6 +10308,9 @@
             "limits": {
               "edit": "Ha modificato i limiti di capacità di un modello di fornitore"
             }
+          },
+          "jobs": {
+            "dlq_replay": "Ha rieseguito una dead-letter"
           }
         }
       }
@@ -12601,6 +12605,104 @@
         "unreachable": "Il gateway non ha risposto. Non è stato salvato nulla; riprova.",
         "notPermitted": "Il tuo ruolo non può modificare i limiti, quindi non è stato salvato nulla.",
         "failed": "Non è stato possibile salvare i limiti. Non è stato modificato nulla; riprova."
+      }
+    },
+    "jobs": {
+      "breadcrumb": "Piattaforma · Job",
+      "title": "Job",
+      "subtitle": "Ogni job in background eseguito dalla piattaforma, in ogni area di lavoro o in nessuna, e ogni dead-letter in attesa di essere rieseguita.",
+      "tabsLabel": "Viste del registro dei job",
+      "tabs": {
+        "runs": "Esecuzioni",
+        "dlq": "Dead-letter",
+        "waiting": "{count} in attesa"
+      },
+      "status": {
+        "label": "Stato",
+        "all": "Tutti",
+        "running": "In esecuzione",
+        "succeeded": "Riuscito",
+        "failed": "Non riuscito",
+        "abandoned": "Abbandonato"
+      },
+      "columns": {
+        "function": "Funzione",
+        "event": "Evento",
+        "functionEvent": "Funzione · evento",
+        "workspace": "Area di lavoro",
+        "status": "Stato",
+        "attempt": "Tentativo",
+        "attempts": "Tentativi",
+        "started": "Avvio",
+        "duration": "Durata",
+        "failure": "Errore",
+        "lastFailed": "Ultimo errore",
+        "replay": "Riesegui"
+      },
+      "runsCaption": "Esecuzioni dei job in background",
+      "dlqCaption": "Dead-letter",
+      "noWorkspace": "Nessuna area di lavoro",
+      "pageLabel": "Pagina {page}",
+      "pagerLabel": "Pagine delle esecuzioni",
+      "previous": "Precedente",
+      "next": "Successiva",
+      "runsEmpty": {
+        "titleAll": "Ancora nessuna esecuzione",
+        "bodyAll": "I job in background compaiono qui quando vengono eseguiti.",
+        "titleStatus": "Nessuna esecuzione con questo stato",
+        "bodyStatus": "Nessun elemento del registro ha questo stato. Scegli Tutti per vedere ogni esecuzione."
+      },
+      "runsError": {
+        "title": "Impossibile leggere il registro dei job"
+      },
+      "dlqError": {
+        "title": "Impossibile leggere le dead-letter"
+      },
+      "error": {
+        "body": "Il database non ha risposto. Non è stato modificato nulla."
+      },
+      "retry": "Riprova",
+      "loadingRuns": "Caricamento delle esecuzioni",
+      "readOnly": "Sola lettura. Per rieseguire una dead-letter serve il ruolo di operatore.",
+      "fn": {
+        "label": "Funzione",
+        "all": "Tutte le funzioni"
+      },
+      "waitingLine": "{waiting} in attesa · {replayed} rieseguite negli ultimi 7 giorni",
+      "capped": "Visualizzate {shown} di {count}. L’elenco mostra le 200 più recenti.",
+      "replay": "Riesegui",
+      "replayAria": "Riesegui la dead-letter di {function}",
+      "replayedAt": "Rieseguita {time}",
+      "toast": {
+        "replayedTitle": "Dead-letter rieseguita",
+        "replayedBody": "{function} è stata inviata di nuovo.",
+        "alreadyTitle": "Già rieseguita",
+        "alreadyBody": "Qualcuno ha già rieseguito questa dead-letter. Non è stato inviato nulla di nuovo.",
+        "failedTitle": "La riesecuzione non è riuscita",
+        "failedBody": "Non è stato inviato nulla. Riprova.",
+        "notPermittedBody": "Per rieseguire una dead-letter serve il ruolo di operatore.",
+        "notFoundBody": "Questa dead-letter non esiste più."
+      },
+      "replayAll": {
+        "button": "Riesegui tutte e {count}",
+        "title": "Rieseguire {count} dead-letter di {function}?",
+        "body": "Ognuna viene inviata di nuovo come nuova esecuzione e registrata nel log di audit della piattaforma. Una dead-letter rieseguita prima da qualcun altro viene saltata.",
+        "confirm": "Riesegui {count}",
+        "cancel": "Annulla",
+        "running": "Riesecuzione in corso…",
+        "runningLine": "Riesecuzione di {count} dead-letter, 50 alla volta. Tieni aperta questa finestra finché non termina.",
+        "doneTitle": "Riesecuzione completata",
+        "doneWithFailuresTitle": "Riesecuzione completata con errori",
+        "replayed": "{count} rieseguite",
+        "already": "{count} già rieseguite da qualcun altro",
+        "nothingLeft": "0 rieseguite: tutte e {count} erano già state rieseguite",
+        "failed": "{count} non sono state rieseguite. Restano nell’elenco; rieseguile una alla volta.",
+        "error": "Impossibile avviare la riesecuzione. Non è stato modificato nulla.",
+        "close": "Fine"
+      },
+      "dlqEmpty": {
+        "title": "Niente in attesa",
+        "body": "Nessun job ha esaurito i tentativi. Le dead-letter compaiono qui quando succede."
       }
     }
   },

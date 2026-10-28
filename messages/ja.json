@@ -10082,7 +10082,8 @@
       "navIdeas": "アイデア",
       "navRunModels": "ホスト型実行のモデル",
       "navFleetSettings": "フリート設定",
-      "navCapacity": "プロバイダーの容量"
+      "navCapacity": "プロバイダーの容量",
+      "navJobs": "ジョブ"
     },
     "nav": {
       "overview": "概要",
@@ -10304,6 +10305,9 @@
             "limits": {
               "edit": "プロバイダーモデルの容量上限を編集しました"
             }
+          },
+          "jobs": {
+            "dlq_replay": "デッドレターを再実行しました"
           }
         }
       }
@@ -12598,6 +12602,104 @@
         "unreachable": "ゲートウェイが応答しませんでした。何も保存されていません。もう一度お試しください。",
         "notPermitted": "あなたのロールでは上限を編集できないため、何も保存されていません。",
         "failed": "上限を保存できませんでした。何も変更されていません。もう一度お試しください。"
+      }
+    },
+    "jobs": {
+      "breadcrumb": "プラットフォーム · ジョブ",
+      "title": "ジョブ",
+      "subtitle": "プラットフォームが実行したすべてのバックグラウンドジョブ（ワークスペースの有無を問わず）と、再実行を待つすべてのデッドレターです。",
+      "tabsLabel": "ジョブ台帳の表示",
+      "tabs": {
+        "runs": "実行",
+        "dlq": "デッドレター",
+        "waiting": "{count} 件待機中"
+      },
+      "status": {
+        "label": "ステータス",
+        "all": "すべて",
+        "running": "実行中",
+        "succeeded": "成功",
+        "failed": "失敗",
+        "abandoned": "中断"
+      },
+      "columns": {
+        "function": "関数",
+        "event": "イベント",
+        "functionEvent": "関数 · イベント",
+        "workspace": "ワークスペース",
+        "status": "ステータス",
+        "attempt": "試行",
+        "attempts": "試行回数",
+        "started": "開始",
+        "duration": "所要時間",
+        "failure": "失敗内容",
+        "lastFailed": "最終失敗",
+        "replay": "再実行"
+      },
+      "runsCaption": "バックグラウンドジョブの実行",
+      "dlqCaption": "デッドレター",
+      "noWorkspace": "ワークスペースなし",
+      "pageLabel": "{page} ページ",
+      "pagerLabel": "実行のページ",
+      "previous": "前へ",
+      "next": "次へ",
+      "runsEmpty": {
+        "titleAll": "まだ実行はありません",
+        "bodyAll": "バックグラウンドジョブは実行されるとここに表示されます。",
+        "titleStatus": "このステータスの実行はありません",
+        "bodyStatus": "台帳にこのステータスのものはありません。すべての実行を見るには「すべて」を選択してください。"
+      },
+      "runsError": {
+        "title": "ジョブ台帳を読み込めませんでした"
+      },
+      "dlqError": {
+        "title": "デッドレターを読み込めませんでした"
+      },
+      "error": {
+        "body": "データベースが応答しませんでした。何も変更されていません。"
+      },
+      "retry": "再試行",
+      "loadingRuns": "実行を読み込んでいます",
+      "readOnly": "読み取り専用です。デッドレターを再実行するにはオペレーターのロールが必要です。",
+      "fn": {
+        "label": "関数",
+        "all": "すべての関数"
+      },
+      "waitingLine": "{waiting} 件待機中 · 過去 7 日間に {replayed} 件を再実行",
+      "capped": "{count} 件中 {shown} 件を表示しています。一覧には最新の 200 件が表示されます。",
+      "replay": "再実行",
+      "replayAria": "{function} のデッドレターを再実行",
+      "replayedAt": "{time}に再実行",
+      "toast": {
+        "replayedTitle": "デッドレターを再実行しました",
+        "replayedBody": "{function} を再送信しました。",
+        "alreadyTitle": "すでに再実行済みです",
+        "alreadyBody": "別のユーザーが先にこのデッドレターを再実行しました。再送信されたものはありません。",
+        "failedTitle": "再実行に失敗しました",
+        "failedBody": "何も送信されていません。もう一度お試しください。",
+        "notPermittedBody": "デッドレターを再実行するにはオペレーターのロールが必要です。",
+        "notFoundBody": "このデッドレターはもう存在しません。"
+      },
+      "replayAll": {
+        "button": "{count} 件をすべて再実行",
+        "title": "{function} の {count} 件のデッドレターを再実行しますか？",
+        "body": "それぞれ新しい実行として再送信され、プラットフォームの監査ログに記録されます。他のユーザーが先に再実行したデッドレターはスキップされます。",
+        "confirm": "{count} 件を再実行",
+        "cancel": "キャンセル",
+        "running": "再実行しています…",
+        "runningLine": "{count} 件のデッドレターを 50 件ずつ再実行しています。完了するまでこの画面を開いたままにしてください。",
+        "doneTitle": "再実行が完了しました",
+        "doneWithFailuresTitle": "一部失敗して再実行が完了しました",
+        "replayed": "{count} 件を再実行",
+        "already": "{count} 件は他のユーザーが再実行済み",
+        "nothingLeft": "0 件を再実行 — {count} 件はすべて再実行済みでした",
+        "failed": "{count} 件は再実行できませんでした。一覧に残っているので、1 件ずつ再実行してください。",
+        "error": "再実行を開始できませんでした。何も変更されていません。",
+        "close": "完了"
+      },
+      "dlqEmpty": {
+        "title": "待機中のものはありません",
+        "body": "試行回数を使い切ったジョブはありません。使い切るとここにデッドレターが表示されます。"
       }
     }
   },

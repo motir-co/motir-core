@@ -73,6 +73,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
         navTenants: t('nav.tenants'),
         navUsers: t('nav.users'),
         navMonitoring: t('nav.monitoring'),
+        navJobs: t('shell.navJobs'),
         navFleetSettings: t('shell.navFleetSettings'),
         navCapacity: t('shell.navCapacity'),
         navAiPlanning: t('shell.navAiPlanning'),

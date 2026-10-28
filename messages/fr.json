@@ -10085,7 +10085,8 @@
       "navIdeas": "Idées",
       "navRunModels": "Modèles des exécutions hébergées",
       "navFleetSettings": "Paramètres de la flotte",
-      "navCapacity": "Capacité des fournisseurs"
+      "navCapacity": "Capacité des fournisseurs",
+      "navJobs": "Tâches"
     },
     "nav": {
       "overview": "Vue d'ensemble",
@@ -10307,6 +10308,9 @@
             "limits": {
               "edit": "Limites de capacité d’un modèle de fournisseur modifiées"
             }
+          },
+          "jobs": {
+            "dlq_replay": "A rejoué une lettre morte"
           }
         }
       }
@@ -12601,6 +12605,104 @@
         "unreachable": "La passerelle n’a pas répondu. Rien n’a été enregistré ; réessayez.",
         "notPermitted": "Votre rôle ne permet pas de modifier les limites, rien n’a donc été enregistré.",
         "failed": "Les limites n’ont pas pu être enregistrées. Rien n’a été modifié ; réessayez."
+      }
+    },
+    "jobs": {
+      "breadcrumb": "Plateforme · Tâches",
+      "title": "Tâches",
+      "subtitle": "Chaque tâche d’arrière-plan exécutée par la plateforme, dans chaque espace de travail ou dans aucun, et chaque lettre morte en attente d’être rejouée.",
+      "tabsLabel": "Vues du registre des tâches",
+      "tabs": {
+        "runs": "Exécutions",
+        "dlq": "Lettres mortes",
+        "waiting": "{count} en attente"
+      },
+      "status": {
+        "label": "Statut",
+        "all": "Toutes",
+        "running": "En cours",
+        "succeeded": "Réussie",
+        "failed": "Échouée",
+        "abandoned": "Abandonnée"
+      },
+      "columns": {
+        "function": "Fonction",
+        "event": "Événement",
+        "functionEvent": "Fonction · événement",
+        "workspace": "Espace de travail",
+        "status": "Statut",
+        "attempt": "Tentative",
+        "attempts": "Tentatives",
+        "started": "Début",
+        "duration": "Durée",
+        "failure": "Échec",
+        "lastFailed": "Dernier échec",
+        "replay": "Rejouer"
+      },
+      "runsCaption": "Exécutions de tâches d’arrière-plan",
+      "dlqCaption": "Lettres mortes",
+      "noWorkspace": "Aucun espace de travail",
+      "pageLabel": "Page {page}",
+      "pagerLabel": "Pages des exécutions",
+      "previous": "Précédent",
+      "next": "Suivant",
+      "runsEmpty": {
+        "titleAll": "Aucune exécution pour l’instant",
+        "bodyAll": "Les tâches d’arrière-plan apparaissent ici lorsqu’elles s’exécutent.",
+        "titleStatus": "Aucune exécution avec ce statut",
+        "bodyStatus": "Rien dans le registre n’a ce statut. Choisissez Toutes pour voir chaque exécution."
+      },
+      "runsError": {
+        "title": "Le registre des tâches n’a pas pu être lu"
+      },
+      "dlqError": {
+        "title": "Les lettres mortes n’ont pas pu être lues"
+      },
+      "error": {
+        "body": "La base de données n’a pas répondu. Rien n’a été modifié."
+      },
+      "retry": "Réessayer",
+      "loadingRuns": "Chargement des exécutions",
+      "readOnly": "Lecture seule. Rejouer une lettre morte nécessite le rôle d’opérateur.",
+      "fn": {
+        "label": "Fonction",
+        "all": "Toutes les fonctions"
+      },
+      "waitingLine": "{waiting} en attente · {replayed} rejouées au cours des 7 derniers jours",
+      "capped": "{shown} sur {count} affichées. La liste montre les 200 plus récentes.",
+      "replay": "Rejouer",
+      "replayAria": "Rejouer la lettre morte de {function}",
+      "replayedAt": "Rejouée {time}",
+      "toast": {
+        "replayedTitle": "Lettre morte rejouée",
+        "replayedBody": "{function} a été renvoyée.",
+        "alreadyTitle": "Déjà rejouée",
+        "alreadyBody": "Quelqu’un a rejoué cette lettre morte en premier. Rien n’a été renvoyé.",
+        "failedTitle": "Le rejeu a échoué",
+        "failedBody": "Rien n’a été envoyé. Réessayez.",
+        "notPermittedBody": "Rejouer une lettre morte nécessite le rôle d’opérateur.",
+        "notFoundBody": "Cette lettre morte n’existe plus."
+      },
+      "replayAll": {
+        "button": "Rejouer les {count}",
+        "title": "Rejouer {count} lettres mortes de {function} ?",
+        "body": "Chacune est renvoyée comme une nouvelle exécution et inscrite au journal d’audit de la plateforme. Une lettre morte rejouée d’abord par quelqu’un d’autre est ignorée.",
+        "confirm": "Rejouer {count}",
+        "cancel": "Annuler",
+        "running": "Rejeu en cours…",
+        "runningLine": "Rejeu de {count} lettres mortes, 50 à la fois. Laissez cette fenêtre ouverte jusqu’à la fin.",
+        "doneTitle": "Rejeu terminé",
+        "doneWithFailuresTitle": "Rejeu terminé avec des échecs",
+        "replayed": "{count} rejouées",
+        "already": "{count} déjà rejouées par quelqu’un d’autre",
+        "nothingLeft": "0 rejouée — les {count} avaient déjà été rejouées",
+        "failed": "{count} n’ont pas pu être rejouées. Elles restent dans la liste ; rejouez-les une par une.",
+        "error": "Le rejeu n’a pas pu s’exécuter. Rien n’a été modifié.",
+        "close": "Terminé"
+      },
+      "dlqEmpty": {
+        "title": "Rien en attente",
+        "body": "Aucune tâche n’a épuisé ses tentatives. Les lettres mortes apparaissent ici lorsque cela arrive."
       }
     }
   },
