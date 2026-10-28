@@ -704,6 +704,10 @@ export interface JobEventDataMap {
    *  account's state and entry times. Cross-tenant by design: it walks every
    *  Host org's accounts. */
   'system.host-account-state': SystemScheduledData;
+  /** The tenant account reconcile (Story MOTIR-9792 · MOTIR-9942) — every
+   *  enterprise tenant AWS account not yet ready is created or found, then
+   *  bootstrapped. Cross-tenant by design: it walks every requested account. */
+  'system.hosting-tenant-account-reconcile': SystemScheduledData;
   'system.billing-seat-sync': BillingSeatSyncData;
   /** A settled fleet container's usage-and-cost report to motir-ai (MOTIR-5286). */
   'system.platform-meter-report': PlatformMeterReportData;

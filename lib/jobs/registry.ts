@@ -49,6 +49,7 @@ import { capacityAlertEvaluation } from './definitions/capacityAlertEvaluation';
 import { fleetPoolGrowth } from './definitions/fleetPoolGrowth';
 import { hostAccountReconcile } from './definitions/hostAccountReconcile';
 import { hostAccountState } from './definitions/hostAccountState';
+import { hostingTenantAccountReconcile } from './definitions/hostingTenantAccountReconcile';
 import { hostedRunAdmit } from './definitions/hostedRunAdmit';
 import { hostedRunSupervise } from './definitions/hostedRunSupervise';
 import {
@@ -160,6 +161,7 @@ export const jobDefinitions = [
   fleetPoolGrowth,
   hostAccountReconcile,
   hostAccountState,
+  hostingTenantAccountReconcile,
   hostedRunAdmit,
   hostedRunSupervise,
   planDriftOnTransitioned,
