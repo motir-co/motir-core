@@ -235,7 +235,14 @@ class PlayedContainer {
     baseURL: string | undefined,
   ): Promise<PlayedContainer> {
     const played = new PlayedContainer(await ingestContext(token, origin(baseURL)), runId, itemKey);
-    await appendEvents(played.api, runId, [{ kind: 'agent_started', workItemKey: itemKey }]);
+    // The first post is the one a credential is judged on. When it is refused, the
+    // failure names what became of the run, so a refusal says WHICH way it was lost.
+    const res = await played.api.post(`/api/v1/dispatch-runs/${runId}/events`, {
+      data: { events: [{ kind: 'agent_started', workItemKey: itemKey }] },
+    });
+    const text = await res.text();
+    const why = res.status() === 200 ? '' : ` · ${await runEndDiagnosis(runId)}`;
+    expect(res.status(), `append → ${text.slice(0, 400)}${why}`).toBe(200);
     played.timer = setInterval(() => {
       void played.api
         .post(`/api/v1/dispatch-runs/${runId}/events`, {
@@ -274,8 +281,80 @@ class PlayedContainer {
   }
 }
 
+/**
+ * What became of a run whose credential was refused: its status, how it ended, its
+ * closing line, and whether any token bound to it is left. A run that was ENDED
+ * before its container spoke has had its credential revoked; a live run with a
+ * refused token never held the token the spec presented.
+ */
+async function runEndDiagnosis(dispatchRunId: string): Promise<string> {
+  const run = await adminDb.dispatchRun.findUnique({ where: { id: dispatchRunId } });
+  const lastLog = await adminDb.dispatchRunEvent.findFirst({
+    where: { dispatchRunId, kind: 'log' },
+    orderBy: { createdAt: 'desc' },
+  });
+  const tokens = await adminDb.apiToken.count({ where: { dispatchRunId } });
+  return [
+    `run ${dispatchRunId}: status ${run?.status ?? 'missing'}`,
+    `stopReason ${run?.stopReason ?? 'none'}`,
+    `endedAt ${run?.endedAt?.toISOString() ?? 'open'}`,
+    `last log ${JSON.stringify((lastLog?.body ?? '').trimEnd().slice(0, 200))}`,
+    `run-bound api tokens ${tokens}`,
+  ].join(' · ');
+}
+
+/** How often a watcher reads the fake EC2 state for a self-boot. */
+const BOOT_WATCH_MS = 250;
+
 let containers: PlayedContainer[] = [];
 let openRuns: string[] = [];
+let bootWatchers: (() => void)[] = [];
+
+/**
+ * Play a run's container THE MOMENT ITS INSTANCE BOOTS, as a real container
+ * starts reporting at boot (MOTIR-10022). A waiting run boots whenever the admit
+ * job's 30 s retry next runs after an account frees — often inside the chapter
+ * that frees it — and the supervisor's stall read counts the lane's 25 s window
+ * from that boot. A container first played a chapter later was measured 57 s after
+ * its boot: the run had been ended `timed_out` (stall) 9 s earlier and its
+ * credential revoked, so its first post was a 401.
+ *
+ * It reads the fake EC2 state, as `awsBootOf` does; `stop()` ends the watch when
+ * the test is over before the boot came.
+ */
+function playOnBoot(
+  dispatchRunId: string,
+  itemKey: string,
+  baseURL: string | undefined,
+): Promise<PlayedContainer> {
+  let stopped = false;
+  bootWatchers.push(() => {
+    stopped = true;
+  });
+  const played = (async () => {
+    const deadline = Date.now() + SELF_BOOT_MS;
+    while (!stopped && Date.now() < deadline) {
+      if (fakeAwsInstanceForRun(dispatchRunId)) {
+        const container = await PlayedContainer.boot(
+          fakeAwsRunTokenFor(dispatchRunId),
+          dispatchRunId,
+          itemKey,
+          baseURL,
+        );
+        containers.push(container);
+        return container;
+      }
+      await new Promise((resolve) => setTimeout(resolve, BOOT_WATCH_MS));
+    }
+    throw new Error(
+      `dispatch run ${dispatchRunId} did not boot on fake AWS within ${SELF_BOOT_MS} ms`,
+    );
+  })();
+  // Awaited by the chapter that needs it; a test that fails first leaves no
+  // unhandled rejection behind.
+  played.catch(() => undefined);
+  return played;
+}
 
 /** Two agent-runner AWS accounts with a ceiling of one run each, A the lower id. */
 async function seedAccounts(): Promise<{ a: FleetShardDTO; b: FleetShardDTO }> {
@@ -317,9 +396,12 @@ test.beforeEach(async () => {
   resetHostedRunJournal();
   containers = [];
   openRuns = [];
+  bootWatchers = [];
 });
 
 test.afterEach(async ({ page }) => {
+  for (const stop of bootWatchers) stop();
+  bootWatchers = [];
   for (const c of containers) await c.dispose();
   containers = [];
   // Cancel what is still open, so the job worker tears its machines down and no
@@ -362,6 +444,7 @@ test('a hosted run boots on the agent-runner AWS pool, moves when an account is 
   let c2: PlayedContainer;
   let c3: PlayedContainer;
   let c4: PlayedContainer;
+  let played4: Promise<PlayedContainer> | undefined;
   let vm2 = '';
   let vm3 = '';
   let vm4 = '';
@@ -442,6 +525,8 @@ test('a hosted run boots on the agent-runner AWS pool, moves when an account is 
     };
     run4 = await runHosted(page, card4.identifier);
     openRuns.push(run4);
+    // From here on run 4 may boot by itself, so its container is ready to talk.
+    played4 = playOnBoot(run4, card4.identifier, baseURL);
 
     // Authoritative: the waiting line is written, the run is open, the card is
     // claimed by this person, and nothing booted anywhere.
@@ -534,10 +619,10 @@ test('a hosted run boots on the agent-runner AWS pool, moves when an account is 
     expect(liveOn(b).map((i) => i.instanceId)).toEqual([vm3]);
     await expect.poll(async () => (await runRow(run4)).fleetShardId).toBe(a.id);
 
-    // The credential from run 4's own new instance is accepted by the ingest:
-    // `appendEvents` asserts each post's 2xx.
-    c4 = await PlayedContainer.boot(fakeAwsRunTokenFor(run4), run4, card4.identifier, baseURL);
-    containers.push(c4);
+    // The credential from run 4's own new instance is accepted by the ingest: the
+    // container was played the moment the instance booted, and its first post
+    // asserted the 2xx.
+    c4 = await played4!;
     await c4.say('opencode: started after waiting for room…');
     await expectAgentRunning(page);
 
