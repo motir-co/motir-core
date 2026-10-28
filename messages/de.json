@@ -1958,6 +1958,7 @@
       "translation": "Übersetzung",
       "rules": "Regeln",
       "repositories": "Repositorys",
+      "environment": "Umgebung",
       "monitoring": "Monitoring",
       "approvals": "Genehmigungen",
       "bugs": "Bugs"
@@ -4156,7 +4157,8 @@
         "hosted-agent": "Welches Modell ein gehosteter Lauf verwendet, sehen Personen, die in diesem Projekt einen gehosteten Lauf starten können. Wenden Sie sich an einen Projektadministrator, wenn Sie es sehen müssen.",
         "translation": "Ob die Arbeitsinhalte dieses Projekts für jede lesende Person übersetzt werden, sehen Personen, die die Arbeitselemente des Projekts lesen können. Fragen Sie einen Projektadministrator, wenn Sie es sehen müssen.",
         "automation": "Die Projektautomatisierung wird von Projektadministratoren verwaltet. Wenden Sie sich an einen Administrator, wenn eine Regel geändert werden muss.",
-        "monitoring": "Die Verbindung dieses Projekts zum Fehlermonitor wird von Personen verwaltet, die Integrationen verwalten dürfen. Wenden Sie sich an einen Projektadministrator, wenn Sentry verbunden oder neu verbunden werden muss."
+        "monitoring": "Die Verbindung dieses Projekts zum Fehlermonitor wird von Personen verwaltet, die Integrationen verwalten dürfen. Wenden Sie sich an einen Projektadministrator, wenn Sentry verbunden oder neu verbunden werden muss.",
+        "environment": "Die Umgebungswerte eines Repositorys sehen Personen, die dieses Projekt durchsuchen können. Fragen Sie einen Projektadministrator, wenn Sie sie sehen müssen."
       }
     },
     "organization": {
@@ -4227,6 +4229,101 @@
       "saveError": "Ein Fehler ist aufgetreten. Versuchen Sie es erneut.",
       "saveForbidden": "Sie können nicht mehr ändern, wo die Bugs dieses Projekts abgelegt werden.",
       "folderGone": "Dieser Ordner existiert nicht mehr. Wählen Sie einen anderen."
+    },
+    "environment": {
+      "title": "Umgebung",
+      "lede": "Werte, die Ihre App beim Ausführen liest. Legen Sie sie einmal pro Umgebung fest; Motir übergibt sie der App beim nächsten Deployment.",
+      "repositoryLabel": "Repository",
+      "role": {
+        "web": "Web-App",
+        "api": "API",
+        "mobile": "Mobile App",
+        "shared": "Gemeinsamer Code",
+        "infra": "Infrastruktur",
+        "other": "Sonstiges"
+      },
+      "tablistLabel": "Umgebung",
+      "tab": {
+        "production": "Produktion",
+        "preview": "Vorschau",
+        "release": "Release"
+      },
+      "column": {
+        "name": "Name",
+        "value": "Wert"
+      },
+      "set": "Gesetzt",
+      "secretHidden": "Geheim · Wert verborgen",
+      "edit": "Bearbeiten",
+      "replace": "Ersetzen",
+      "delete": "Löschen",
+      "editAria": "{name} bearbeiten",
+      "replaceAria": "{name} ersetzen",
+      "deleteAria": "{name} löschen",
+      "saving": "Wird gespeichert",
+      "add": {
+        "heading": "Wert hinzufügen",
+        "namePlaceholder": "NAME",
+        "valuePlaceholder": "Wert",
+        "secret": "Geheim",
+        "save": "Speichern",
+        "helper": "Ein Geheimnis kann ersetzt oder gelöscht, aber nie wieder angezeigt werden – weder Ihnen noch sonst jemandem."
+      },
+      "error": {
+        "nameRequired": "Geben Sie einen Namen ein.",
+        "duplicate": "{name} ist in {environment} bereits gesetzt. Bearbeiten Sie den Eintrag stattdessen in der Liste.",
+        "invalidName": "Verwenden Sie Buchstaben, Ziffern und Unterstriche, ohne mit einer Ziffer zu beginnen.",
+        "reserved": "{name} ist reserviert: PORT, DATABASE_URL und Namen mit MOTIR_* setzt Motir. Wählen Sie einen anderen Namen."
+      },
+      "saved": {
+        "secret": "{name} wurde als Geheimnis gespeichert. Sein Wert ist ab jetzt verborgen.",
+        "plain": "{name} wurde gespeichert."
+      },
+      "replaceFlow": {
+        "placeholder": "Neuer Wert",
+        "aria": "Neuer Wert für {name}",
+        "helper": "Der aktuelle Wert bleibt verborgen. Beim Speichern wird er mit dem nächsten Deployment ersetzt.",
+        "cancel": "Abbrechen"
+      },
+      "deleteDialog": {
+        "title": "{name} aus {environment} löschen?",
+        "body": "Die App erhält {name} in {environment} ab dem nächsten Deployment nicht mehr. {count, plural, one {Für {others} bleibt der eigene Wert erhalten.} other {Für {others} bleiben die eigenen Werte erhalten.}} Dies kann nicht rückgängig gemacht werden.",
+        "confirm": "Löschen",
+        "cancel": "Abbrechen"
+      },
+      "empty": {
+        "title": "Noch keine Werte in {environment}",
+        "production": "Ihre Live-App erhält diese Werte. Fügen Sie unten den ersten hinzu.",
+        "preview": "Die Vorschau jedes Pull Requests erhält diese Werte. Fügen Sie unten den ersten hinzu.",
+        "release": "Das Release, das Ihr Train baut, erhält diese Werte. Fügen Sie unten den ersten hinzu."
+      },
+      "loading": "Werte werden geladen…",
+      "loadError": {
+        "title": "Die Werte konnten nicht geladen werden",
+        "body": "Es wurde nichts geändert. Versuchen Sie es gleich noch einmal."
+      },
+      "retry": "Erneut versuchen",
+      "saveError": "{name} konnte nicht gespeichert werden. Es wurde nichts geändert.",
+      "deleteError": "{name} konnte nicht gelöscht werden. Der Wert ist weiterhin gesetzt.",
+      "readOnly": {
+        "note": "Sie können diese Werte lesen. Nur Projektadministratoren können sie ändern.",
+        "tooltip": "Nur Projektadministratoren können Umgebungswerte ändern."
+      },
+      "changes": {
+        "heading": "Letzte Änderungen · {environment}",
+        "added": "hat hinzugefügt",
+        "replaced": "hat ersetzt",
+        "deleted": "hat gelöscht",
+        "secret": "Geheim",
+        "unknownActor": "Ein ehemaliges Mitglied",
+        "loadError": "Die letzten Änderungen konnten nicht geladen werden.",
+        "empty": "Noch keine Änderungen. Jede Änderung an dieser Umgebung wird hier aufgeführt – wer sie wann vorgenommen hat, nie der Wert."
+      },
+      "notFound": {
+        "title": "Repository nicht gefunden",
+        "body": "Motir führt für dieses Repository keine Umgebung. Wählen Sie eines der Repositorys des Projekts, die Motir hostet.",
+        "back": "Zurück zu Umgebung"
+      }
     },
     "workspaceAddress": {
       "door": {

@@ -12,6 +12,7 @@ import {
   E2E_GITHUB_CLIENT_ID,
   E2E_GITHUB_CLIENT_SECRET,
   E2E_GITHUB_TOKEN_ENCRYPTION_KEY,
+  E2E_ENVIRONMENT_CONFIG_ENCRYPTION_KEY,
   E2E_PROVISIONING_ORG,
   E2E_STUDIO_APP_ID,
 } from './tests/e2e/_helpers/github-const';
@@ -644,6 +645,9 @@ export default defineConfig({
         // The identity/installation the seed binds are read back on this surface;
         // the App slug is what the settings pane the step hands off to renders.
         GITHUB_TOKEN_ENCRYPTION_KEY: E2E_GITHUB_TOKEN_ENCRYPTION_KEY,
+        // A repository's environment secrets (Story MOTIR-9795 · MOTIR-9968) are
+        // sealed under their OWN key, which never falls back to the GitHub one.
+        ENVIRONMENT_CONFIG_ENCRYPTION_KEY: E2E_ENVIRONMENT_CONFIG_ENCRYPTION_KEY,
         // The hosted-run gateway/motir-ai/GitHub seams (Story MOTIR-683 ·
         // MOTIR-6452) — see the "HOSTED RUN seams" block above this config for
         // why each of these exists.

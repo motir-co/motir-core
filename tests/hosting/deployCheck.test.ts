@@ -8,9 +8,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   DEPLOY_CHECK_APP_PREFIX,
   DEPLOY_CHECK_DEFAULT_MANIFEST,
+  DEPLOY_CHECK_ENV_REPORT_IMAGE,
+  DEPLOY_CHECK_ENV_REPORT_MANIFEST,
   DEPLOY_CHECK_IMAGE,
+  DEPLOY_CHECK_STEPS,
+  DEPLOY_CHECK_USAGE,
   deployCheckApp,
   DeployCheckNameRefusedError,
+  DeployCheckUsageError,
   fakeGuardedFetch,
   imageArtifact,
   parseDeployCheckArgs,
@@ -25,6 +30,7 @@ import {
 import {
   createFakeHostingDeployPort,
   deriveOriginSecret,
+  ORIGIN_SECRET_HEADER,
   OrchestratorNotConfiguredError,
   type HostingDeployPort,
   type HostingDeployTarget,
@@ -38,7 +44,13 @@ const SECRET = deriveOriginSecret(KEY, APP);
 type Block = { label: string; fields: Record<string, unknown> };
 
 /** The fake, with the check's prefix, behind a spy that counts every port call. */
-function harness(options: { target?: HostingDeployTarget; fetch?: DeployCheckDeps['fetch'] } = {}) {
+function harness(
+  options: {
+    target?: HostingDeployTarget;
+    fetch?: DeployCheckDeps['fetch'];
+    resolveEnvironment?: DeployCheckDeps['resolveEnvironment'];
+  } = {},
+) {
   // The AWS check names its app `mh-<repositoryId>`, the AWS adapter's own name.
   const fake = createFakeHostingDeployPort(
     options.target === 'aws'
@@ -62,6 +74,7 @@ function harness(options: { target?: HostingDeployTarget; fetch?: DeployCheckDep
   const out: Block[] = [];
   const reads: string[] = [];
   const requests: Array<{ url: string; headers: Record<string, string> }> = [];
+  const resolves: Array<Parameters<NonNullable<DeployCheckDeps['resolveEnvironment']>>> = [];
   const guarded = options.fetch ?? fakeGuardedFetch(KEY);
   const deps: DeployCheckDeps = {
     port: () => port,
@@ -79,10 +92,16 @@ function harness(options: { target?: HostingDeployTarget; fetch?: DeployCheckDep
       return guarded(url, init);
     },
     originSecretKey: () => KEY,
+    resolveEnvironment: (...args) => {
+      resolves.push(args);
+      return options.resolveEnvironment
+        ? options.resolveEnvironment(...args)
+        : Promise.reject(new Error('resolveEnvironment was not expected'));
+    },
   };
   const run = (...argv: string[]) => runDeployCheck(argv, deps);
   const block = (label: string) => out.findLast((b) => b.label === label)?.fields;
-  return { fake, port, calls, out, reads, requests, deps, run, block };
+  return { fake, port, calls, out, reads, requests, resolves, deps, run, block };
 }
 
 afterEach(() => {
@@ -207,6 +226,7 @@ describe('all', () => {
       'rollback',
       'status',
       'probe',
+      'report',
       'destroy',
       'destroyApp',
     ]);
@@ -446,5 +466,164 @@ describe('helpers', () => {
         image: DEPLOY_CHECK_IMAGE,
       },
     });
+  });
+});
+
+// ── a stored environment (Story MOTIR-9795 · MOTIR-9965) ──────────────────────
+
+const STORED = ['--workspace', 'ws1', '--repository', 'repo1', '--environment', 'production'];
+const RESOLVED = [
+  { name: 'API_KEY', value: 's3cret', secret: true },
+  { name: 'GREETING', value: 'hello-prod', secret: false },
+];
+
+describe('the stored-environment flags', () => {
+  it('parses all three, defaulting to the env-reporting fixture and its image', () => {
+    expect(parseDeployCheckArgs(['deploy', ...STORED])).toEqual({
+      step: 'deploy',
+      options: {
+        manifestPath: DEPLOY_CHECK_ENV_REPORT_MANIFEST,
+        appName: APP,
+        image: DEPLOY_CHECK_ENV_REPORT_IMAGE,
+        stored: { workspaceId: 'ws1', repositoryId: 'repo1', environment: 'production' },
+      },
+    });
+    expect(
+      parseDeployCheckArgs(['deploy', ...STORED, '--manifest', 'm.json', '--image', 'a/b:1'])
+        .options,
+    ).toMatchObject({ manifestPath: 'm.json', image: 'a/b:1' });
+  });
+
+  it('refuses an unknown environment, naming the allowed ones', () => {
+    expect(() =>
+      parseDeployCheckArgs([
+        'deploy',
+        '--workspace',
+        'w',
+        '--repository',
+        'r',
+        '--environment',
+        'staging',
+      ]),
+    ).toThrow(/staging.*production, preview, release/);
+    expect(() =>
+      parseDeployCheckArgs([
+        'deploy',
+        '--workspace',
+        'w',
+        '--repository',
+        'r',
+        '--environment',
+        'staging',
+      ]),
+    ).toThrow(DeployCheckUsageError);
+  });
+
+  it('refuses one or two of the three without the rest', () => {
+    const pairs = [
+      ['--workspace', 'w'],
+      ['--repository', 'r'],
+      ['--environment', 'production'],
+      ['--workspace', 'w', '--repository', 'r'],
+      ['--workspace', 'w', '--environment', 'preview'],
+      ['--repository', 'r', '--environment', 'release'],
+    ];
+    for (const flags of pairs) {
+      expect(() => parseDeployCheckArgs(['deploy', ...flags])).toThrow(DeployCheckUsageError);
+    }
+  });
+
+  it('without them, the options and the deployed environment are exactly today’s', async () => {
+    expect(parseDeployCheckArgs(['deploy']).options).not.toHaveProperty('stored');
+    const h = harness();
+    expect(await h.run('deploy')).toBe(0);
+    expect(h.resolves).toEqual([]);
+    expect(h.fake.app(APP)?.live?.env).toEqual({
+      MOTIR_DEPLOY_CHECK_RELEASE: '1',
+      WHOAMI_NAME: `${APP} release 1`,
+      WHOAMI_PORT_NUMBER: '8080',
+    });
+  });
+
+  it('deploy resolves once and deploys the stored pairs plus the release marker', async () => {
+    const h = harness({ resolveEnvironment: async () => RESOLVED });
+    const deploy = vi.spyOn(h.fake, 'deploy');
+    expect(await h.run('deploy', ...STORED)).toBe(0);
+    expect(h.resolves).toEqual([['repo1', 'production', { workspaceId: 'ws1' }]]);
+    expect(deploy).toHaveBeenCalledTimes(1);
+    const input = deploy.mock.calls[0]![0];
+    expect(input.env).toEqual([
+      ...RESOLVED,
+      { name: 'MOTIR_DEPLOY_CHECK_RELEASE', value: '1', secret: false },
+    ]);
+    expect(input.artifact).toEqual(imageArtifact(DEPLOY_CHECK_ENV_REPORT_IMAGE));
+    expect(h.reads).toEqual([DEPLOY_CHECK_ENV_REPORT_MANIFEST]);
+  });
+
+  it('prints each entry’s name and secret flag, and never a value', async () => {
+    const h = harness({ resolveEnvironment: async () => RESOLVED });
+    expect(await h.run('all', ...STORED)).toBe(0);
+    expect(h.block('environment')).toEqual({
+      repository: 'repo1',
+      environment: 'production',
+      entries: 2,
+      API_KEY: 'secret',
+      GREETING: 'plain',
+    });
+    expect(JSON.stringify(h.out)).not.toContain('s3cret');
+  });
+
+  it('a resolver refusal is printed with its code, exits 1 and deploys nothing', async () => {
+    const refusal = Object.assign(new Error('Repository repo1 is a customer repository.'), {
+      code: 'ENVIRONMENT_CUSTOMER_REPOSITORY',
+    });
+    const h = harness({ resolveEnvironment: async () => Promise.reject(refusal) });
+    expect(await h.run('deploy', ...STORED)).toBe(1);
+    expect(h.block('refused')).toMatchObject({ error: 'ENVIRONMENT_CUSTOMER_REPOSITORY' });
+    expect(h.calls).not.toContain('deploy');
+    expect(h.calls).not.toContain('ensureApp');
+  });
+});
+
+describe('report (MOTIR-9965)', () => {
+  const answer =
+    (status: number, body: string): DeployCheckDeps['fetch'] =>
+    async () =>
+      new Response(body, { status });
+
+  it('prints the lines the serving release answers, with the origin secret, and exits 0', async () => {
+    const h = harness({ fetch: answer(200, 'GREETING=hello-prod\nAPI_KEY: present\n') });
+    await h.run('deploy');
+    expect(await h.run('report')).toBe(0);
+    expect(h.block('report')).toMatchObject({
+      app: APP,
+      url: `https://${APP}.fake.invalid/`,
+      status: '200',
+      line1: 'GREETING=hello-prod',
+      line2: 'API_KEY: present',
+    });
+    expect(h.requests.at(-1)?.headers).toEqual({ [ORIGIN_SECRET_HEADER]: SECRET });
+    expect(JSON.stringify(h.block('report'))).not.toContain(SECRET);
+  });
+
+  it('exits 1 with a refusal when the app answers non-2xx', async () => {
+    const h = harness({ fetch: answer(500, 'boom') });
+    await h.run('deploy');
+    expect(await h.run('report')).toBe(1);
+    expect(h.block('refused')).toMatchObject({ error: 'DEPLOY_CHECK_REPORT_FAILED' });
+  });
+
+  it('exits 1 when nothing is served, without calling the release', async () => {
+    const h = harness();
+    expect(await h.run('report')).toBe(1);
+    expect(h.block('refused')).toMatchObject({ error: 'DEPLOY_CHECK_REPORT_FAILED' });
+    expect(h.requests).toEqual([]);
+  });
+
+  it('is a listed step, and the usage names it and the three flags', () => {
+    expect(DEPLOY_CHECK_STEPS).toContain('report');
+    for (const text of ['report', '--workspace', '--repository', '--environment']) {
+      expect(DEPLOY_CHECK_USAGE).toContain(text);
+    }
   });
 });

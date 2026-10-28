@@ -97,6 +97,7 @@ export type PersonalDataDelegate =
   | 'dataExportRequest'
   | 'projectMembership'
   | 'projectAutoTranslateChange'
+  | 'environmentConfigChange'
   | 'notification'
   | 'savedFilter'
   | 'savedFilterStar'
@@ -376,6 +377,17 @@ export const PERSONAL_DATA_SECTIONS: readonly PersonalDataSection[] = [
     // redacted.
     basis: "Flips of a project's auto-translate switch the reader made.",
     where: (userId) => ({ changedByUserId: userId }),
+  },
+  {
+    table: 'environment_config_change',
+    model: 'environmentConfigChange',
+    tier: 'tenant',
+    // `actor_id` attributes a change to a repository's stored environment to the
+    // person who made it (Story MOTIR-9795). The table's policy keys on
+    // `app.workspace_id`, so it is read per workspace. The row records a NAME and
+    // an action, never a value, so nothing is redacted.
+    basis: "Changes to a repository's environment entries the reader made.",
+    where: (userId) => ({ actorId: userId }),
   },
   {
     table: 'role_migration_report',

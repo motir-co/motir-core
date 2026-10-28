@@ -1958,6 +1958,7 @@
       "translation": "翻译设置",
       "rules": "规则",
       "repositories": "代码仓库",
+      "environment": "环境",
       "monitoring": "监控",
       "approvals": "审批",
       "bugs": "缺陷"
@@ -4156,7 +4157,8 @@
         "hosted-agent": "托管运行使用哪个模型，只向能在此项目上发起托管运行的人显示。如需查看，请联系项目管理员。",
         "translation": "此项目工作内容是否为每位读者翻译，仅向可以查看项目工作项的人显示。如需查看，请联系项目管理员。",
         "automation": "项目自动化由项目管理员管理。如需修改规则，请联系管理员。",
-        "monitoring": "本项目的错误监控连接由可管理集成的成员负责。如需连接或重新连接 Sentry，请联系项目管理员。"
+        "monitoring": "本项目的错误监控连接由可管理集成的成员负责。如需连接或重新连接 Sentry，请联系项目管理员。",
+        "environment": "代码仓库的环境值仅向可以浏览此项目的人显示。如需查看，请联系项目管理员。"
       }
     },
     "organization": {
@@ -4227,6 +4229,101 @@
       "saveError": "出错了，请重试。",
       "saveForbidden": "你已无法更改此项目缺陷的归档位置。",
       "folderGone": "该文件夹已不存在，请选择其他文件夹。"
+    },
+    "environment": {
+      "title": "环境",
+      "lede": "应用运行时读取的值。每个环境设置一次；Motir 会在下次部署时将它们传给应用。",
+      "repositoryLabel": "代码仓库",
+      "role": {
+        "web": "Web 应用",
+        "api": "API",
+        "mobile": "移动应用",
+        "shared": "共享代码",
+        "infra": "基础设施",
+        "other": "其他"
+      },
+      "tablistLabel": "环境",
+      "tab": {
+        "production": "生产",
+        "preview": "预览",
+        "release": "发布"
+      },
+      "column": {
+        "name": "名称",
+        "value": "值"
+      },
+      "set": "已设置",
+      "secretHidden": "密钥 · 值已隐藏",
+      "edit": "编辑",
+      "replace": "替换",
+      "delete": "删除",
+      "editAria": "编辑 {name}",
+      "replaceAria": "替换 {name}",
+      "deleteAria": "删除 {name}",
+      "saving": "正在保存",
+      "add": {
+        "heading": "添加值",
+        "namePlaceholder": "NAME",
+        "valuePlaceholder": "值",
+        "secret": "密钥",
+        "save": "保存",
+        "helper": "密钥可以替换或删除，但永远不会再次显示——对你、对任何人都不会。"
+      },
+      "error": {
+        "nameRequired": "请输入名称。",
+        "duplicate": "{name} 已在{environment}中设置。请在列表中编辑。",
+        "invalidName": "请使用字母、数字和下划线，且不能以数字开头。",
+        "reserved": "{name} 是保留名称：PORT、DATABASE_URL 和 MOTIR_* 名称由 Motir 设置。请换一个名称。"
+      },
+      "saved": {
+        "secret": "{name} 已保存为密钥。从现在起其值将被隐藏。",
+        "plain": "{name} 已保存。"
+      },
+      "replaceFlow": {
+        "placeholder": "新值",
+        "aria": "{name} 的新值",
+        "helper": "当前值保持隐藏。保存后将在下次部署时替换。",
+        "cancel": "取消"
+      },
+      "deleteDialog": {
+        "title": "从{environment}中删除 {name}？",
+        "body": "从下次部署起，应用将不再在{environment}中收到 {name}。{count, plural, other {{others}保留各自的值。}}此操作无法撤销。",
+        "confirm": "删除",
+        "cancel": "取消"
+      },
+      "empty": {
+        "title": "{environment}中还没有值",
+        "production": "线上应用会收到这些值。请在下方添加第一个。",
+        "preview": "每个拉取请求的预览都会收到这些值。请在下方添加第一个。",
+        "release": "发布列车构建的版本会收到这些值。请在下方添加第一个。"
+      },
+      "loading": "正在加载值…",
+      "loadError": {
+        "title": "无法加载这些值",
+        "body": "未做任何更改。请稍后重试。"
+      },
+      "retry": "重试",
+      "saveError": "无法保存 {name}。未做任何更改。",
+      "deleteError": "无法删除 {name}。它仍处于设置状态。",
+      "readOnly": {
+        "note": "你可以查看这些值。只有项目管理员可以更改。",
+        "tooltip": "只有项目管理员可以更改环境值。"
+      },
+      "changes": {
+        "heading": "最近更改 · {environment}",
+        "added": "添加了",
+        "replaced": "替换了",
+        "deleted": "删除了",
+        "secret": "密钥",
+        "unknownActor": "前成员",
+        "loadError": "无法加载最近的更改。",
+        "empty": "还没有更改。对此环境的每次更改都会列在这里——谁在何时更改，但从不显示值。"
+      },
+      "notFound": {
+        "title": "未找到代码仓库",
+        "body": "Motir 不为此代码仓库保存任何环境。请选择该项目中由 Motir 托管的代码仓库之一。",
+        "back": "返回环境"
+      }
     },
     "workspaceAddress": {
       "door": {

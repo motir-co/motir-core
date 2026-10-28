@@ -29,8 +29,20 @@
 // the convergence and the SigV4 fetch are injected like the port, so Vitest runs
 // all of it against the fake with no Docker, AWS or network. `--target fly` (the
 // default) is the check as it was.
+//
+// With `--workspace`, `--repository` and `--environment` on the Fly target (Story
+// MOTIR-9795 · MOTIR-9965) the deploying steps take their environment from the
+// entries an administrator stored for that repository and environment, through
+// the injected `resolveEnvironment`, and default to the env-reporting fixture app;
+// the `report` step prints what that app says it received. Only entry NAMES and
+// their secret flag are printed — never a value.
 
 import { TENANT_ACCOUNT_REGION } from '@/lib/ciFleet/hostingTenantAccounts';
+import {
+  ENVIRONMENTS,
+  isEnvironmentName,
+  type EnvironmentName,
+} from '@/lib/environmentConfig/vocabulary';
 import { HostingManifestInvalidError, HostingManifestMissingError } from '@/lib/hosting/errors';
 import { parseHostingManifest, type HostingManifest } from '@/lib/hosting/manifest';
 import {
@@ -44,6 +56,7 @@ import {
   type HostingEnvironment,
   type ReleaseArtifact,
   type ReleaseDescription,
+  type ReleaseEnvVar,
   type ReleaseHandle,
   type ReleaseShape,
 } from '@motir/orchestrator';
@@ -63,6 +76,20 @@ export const DEPLOY_CHECK_IMAGE =
 /** The committed fixture manifest the check deploys by default. */
 export const DEPLOY_CHECK_DEFAULT_MANIFEST = 'tests/fixtures/hosting/motir.hosting.json';
 
+/** The env-reporting fixture app (MOTIR-9965), deployed by default when the check
+ *  resolves a stored environment. It runs on the public Node image below through
+ *  the manifest's start command — an inline `node -e` program, the same server as
+ *  `tests/fixtures/hosting/envReporter/server.mjs` — so no image is published.
+ *  `GET /` answers `GREETING=<value>` and `API_KEY: present|absent`: the secret's
+ *  presence, never its value. */
+export const DEPLOY_CHECK_ENV_REPORT_MANIFEST =
+  'tests/fixtures/hosting/motir.hosting.env-report.json';
+
+/** `node:22-alpine`, pinned by its multi-arch index digest (read from Docker Hub
+ *  2026-10-28, tag last pushed 2026-10-22). */
+export const DEPLOY_CHECK_ENV_REPORT_IMAGE =
+  'docker.io/library/node@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914';
+
 /** The AWS check's fixture manifest, the default under `--target aws`. */
 export const DEPLOY_CHECK_AWS_MANIFEST = 'tests/fixtures/hosting/motir.hosting.aws.json';
 
@@ -81,6 +108,7 @@ export const DEPLOY_CHECK_STEPS = [
   'rollback',
   'status',
   'probe',
+  'report',
   'destroy',
   'all',
   'converge',
@@ -125,6 +153,15 @@ export class DeployCheckProbeFailedError extends Error {
   }
 }
 
+/** The `report` step did not get a 2xx answer from a serving release. */
+export class DeployCheckReportFailedError extends Error {
+  readonly code = 'DEPLOY_CHECK_REPORT_FAILED' as const;
+  constructor(detail: string) {
+    super(`The report failed: ${detail}.`);
+    this.name = 'DeployCheckReportFailedError';
+  }
+}
+
 /** `page` did not read the release: no 2xx health, or no row. */
 export class DeployCheckPageFailedError extends Error {
   readonly code = 'DEPLOY_CHECK_PAGE_FAILED' as const;
@@ -165,8 +202,10 @@ export const DEPLOY_CHECK_USAGE = [
   'Usage: pnpm hosting:deploy-check <step> [--manifest <path>] [--name <app>] [--image <ref>]',
   '       pnpm hosting:deploy-check <step> --target aws --repository <id> [--shape <function|container>]',
   '                                 [--organization <id>] [--aws-profile <profile>] [--image <ref>]',
+  '       pnpm hosting:deploy-check <step> --workspace <workspaceId> --repository <projectRepositoryId> --environment <env>',
   `  steps: ${DEPLOY_CHECK_STEPS.join(', ')}`,
   `  ${AWS_ONLY_STEPS.join(', ')}: --target aws only`,
+  '  report      GETs / on the serving release and prints what the app answers',
   `  --target    ${DEPLOY_CHECK_TARGETS.join(' or ')}; defaults to fly`,
   `  --manifest  defaults to ${DEPLOY_CHECK_DEFAULT_MANIFEST} (aws: ${DEPLOY_CHECK_AWS_MANIFEST})`,
   `  --name      defaults to ${DEPLOY_CHECK_DEFAULT_NAME}; must start with ${DEPLOY_CHECK_APP_PREFIX} (fly only)`,
@@ -175,6 +214,9 @@ export const DEPLOY_CHECK_USAGE = [
   '  --shape         aws: function or container; absent, the port refuses the deploy',
   '  --organization  aws: the organisation converge brings onto the deploy policy',
   '  --aws-profile   aws: the operator profile push logs Docker in to the registry with',
+  '  --workspace     fly, with --repository and --environment (all three or none): deploy with',
+  '  --environment   the environment stored for that repository, read from the database; the',
+  `                  manifest and image then default to the env-reporting fixture. env: ${ENVIRONMENTS.join(', ')}`,
 ].join('\n');
 
 /** What `--target aws` adds. */
@@ -188,12 +230,21 @@ export interface DeployCheckAwsOptions {
   readonly image: string | null;
 }
 
+/** Which stored environment the deploying steps resolve (all three flags given). */
+export interface DeployCheckStoredEnvironment {
+  readonly workspaceId: string;
+  readonly repositoryId: string;
+  readonly environment: EnvironmentName;
+}
+
 export interface DeployCheckOptions {
   readonly manifestPath: string;
   readonly appName: string;
   readonly image: string;
   /** Set when the target is `aws`; absent is the Fly check. */
   readonly aws?: DeployCheckAwsOptions;
+  /** Fly only. Absent: the check's own fixed environment, as before MOTIR-9965. */
+  readonly stored?: DeployCheckStoredEnvironment;
 }
 
 /** One command run, with what it printed. */
@@ -230,10 +281,17 @@ export interface DeployCheckDeps {
   readonly signedFetch?: (url: string) => Promise<Response>;
   /** Waits between `page` attempts; absent is a timer. */
   readonly sleep?: (ms: number) => Promise<void>;
+  /** A repository's stored environment in the deploy port's shape
+   *  (`lib/environmentConfig/resolveEnvironment.ts`); called only with `stored`. */
+  readonly resolveEnvironment?: (
+    repositoryId: string,
+    environment: EnvironmentName,
+    options: { workspaceId: string },
+  ) => Promise<readonly ReleaseEnvVar[]>;
 }
 
 /** The injected dependency a step needs, or a refusal naming it. */
-function wired<K extends 'exec' | 'converge' | 'signedFetch'>(
+function wired<K extends 'exec' | 'converge' | 'signedFetch' | 'resolveEnvironment'>(
   deps: DeployCheckDeps,
   key: K,
 ): NonNullable<DeployCheckDeps[K]> {
@@ -323,6 +381,8 @@ async function deployRelease(
   // Parse FIRST: a refused manifest makes no port call at all.
   const manifest = readManifest(deps, options.manifestPath);
   const { repositoryId, appRef } = deployCheckApp(options.appName);
+  // Resolve before the port too: a refused repository deploys nothing.
+  const env = await releaseEnvironment(deps, options, appRef, manifest, release);
   const port = deps.port('fly');
   if (release === 1) await port.ensureApp({ repositoryId, environment: ENVIRONMENT });
   const handle = await port.deploy({
@@ -330,11 +390,7 @@ async function deployRelease(
     environment: ENVIRONMENT,
     artifact: imageArtifact(options.image),
     runtime: manifest,
-    env: [
-      { name: 'MOTIR_DEPLOY_CHECK_RELEASE', value: String(release), secret: false },
-      { name: 'WHOAMI_NAME', value: `${appRef} release ${release}`, secret: false },
-      { name: 'WHOAMI_PORT_NUMBER', value: String(manifest.port), secret: false },
-    ],
+    env,
     size: 'small',
     idle: { mode: 'suspend', idleSeconds: 300 },
   });
@@ -346,6 +402,38 @@ async function deployRelease(
     state: description.state,
     address: description.upstreamAddress,
   });
+}
+
+/** The release's environment: the stored entries plus the check's release marker
+ *  when `stored` is given (the resolver refuses `MOTIR_*` names, so the two cannot
+ *  collide), the check's own fixed three otherwise. */
+async function releaseEnvironment(
+  deps: DeployCheckDeps,
+  options: DeployCheckOptions,
+  appRef: string,
+  manifest: HostingManifest,
+  release: 1 | 2,
+): Promise<ReleaseEnvVar[]> {
+  const marker = { name: 'MOTIR_DEPLOY_CHECK_RELEASE', value: String(release), secret: false };
+  if (!options.stored) {
+    return [
+      marker,
+      { name: 'WHOAMI_NAME', value: `${appRef} release ${release}`, secret: false },
+      { name: 'WHOAMI_PORT_NUMBER', value: String(manifest.port), secret: false },
+    ];
+  }
+  const { workspaceId, repositoryId, environment } = options.stored;
+  const resolved = await wired(deps, 'resolveEnvironment')(repositoryId, environment, {
+    workspaceId,
+  });
+  // Names and the secret flag only — never a value.
+  deps.print('environment', {
+    repository: repositoryId,
+    environment,
+    entries: resolved.length,
+    ...Object.fromEntries(resolved.map((v) => [v.name, v.secret ? 'secret' : 'plain'])),
+  });
+  return [...resolved, marker];
 }
 
 /** An AWS release: the shape as given (none when none was), `always_on` (the
@@ -459,6 +547,34 @@ async function probe(deps: DeployCheckDeps, options: DeployCheckOptions): Promis
   if (withoutSecret.status !== 403) {
     throw new DeployCheckProbeFailedError(`without the secret it answered ${withoutSecret.status}`);
   }
+}
+
+/** GET `/` on the serving release (with the origin secret when the release is
+ *  guarded) and print the lines the app answers — for the env-reporting fixture,
+ *  `GREETING=<value>` and `API_KEY: present|absent`. */
+async function report(deps: DeployCheckDeps, options: DeployCheckOptions): Promise<void> {
+  const { appRef } = checkApp(options);
+  const port = portOf(deps, options);
+  const handle = await servingHandle(port, appRef);
+  const description = handle ? await port.describe(handle) : null;
+  if (!description?.upstreamAddress) {
+    deps.print('report', { app: appRef, state: description?.state ?? 'none' });
+    throw new DeployCheckReportFailedError(`${appRef} serves no release`);
+  }
+  const url = new URL('/', description.upstreamAddress).toString();
+  const secret =
+    description.originCredential === 'origin_secret'
+      ? deriveOriginSecret(deps.originSecretKey(), appRef)
+      : null;
+  const res = await deps.fetch(url, { headers: secret ? { [ORIGIN_SECRET_HEADER]: secret } : {} });
+  const lines = (await res.text()).split('\n').filter((line) => line.trim() !== '');
+  deps.print('report', {
+    app: appRef,
+    url,
+    status: statusLine(res),
+    ...Object.fromEntries(lines.map((line, i) => [`line${i + 1}`, line])),
+  });
+  if (!res.ok) throw new DeployCheckReportFailedError(`the app answered ${res.status}`);
 }
 
 async function destroy(deps: DeployCheckDeps, options: DeployCheckOptions): Promise<void> {
@@ -703,6 +819,8 @@ export async function runDeployCheckStep(
       return status(deps, options);
     case 'probe':
       return probe(deps, options);
+    case 'report':
+      return report(deps, options);
     case 'destroy':
       return destroy(deps, options);
     case 'all':
@@ -716,6 +834,7 @@ export async function runDeployCheckStep(
       await rollback(deps, options);
       await status(deps, options);
       await probe(deps, options);
+      await report(deps, options);
       return destroy(deps, options);
   }
 }
@@ -756,12 +875,14 @@ export function parseDeployCheckArgs(argv: readonly string[]): {
     | 'shape'
     | 'repository'
     | 'organization'
-    | 'aws-profile';
+    | 'aws-profile'
+    | 'workspace'
+    | 'environment';
   const flags: Partial<Record<Flag, string>> = {};
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i]!;
     const flag =
-      /^--(manifest|name|image|target|shape|repository|organization|aws-profile)(?:=(.*))?$/.exec(
+      /^--(manifest|name|image|target|shape|repository|organization|aws-profile|workspace|environment)(?:=(.*))?$/.exec(
         arg,
       );
     if (flag) {
@@ -781,6 +902,9 @@ export function parseDeployCheckArgs(argv: readonly string[]): {
     throw new DeployCheckUsageError(`--target is ${DEPLOY_CHECK_TARGETS.join(' or ')}.`);
   }
   if (target === 'aws') {
+    for (const only of ['workspace', 'environment'] as const) {
+      if (flags[only]) throw new DeployCheckUsageError(`--${only} is for --target fly only.`);
+    }
     if (flags.name) throw new DeployCheckUsageError('--name is refused with --target aws.');
     if (!flags.repository) throw new DeployCheckUsageError('--target aws needs --repository.');
     if (flags.shape && !SHAPES.includes(flags.shape)) {
@@ -802,17 +926,51 @@ export function parseDeployCheckArgs(argv: readonly string[]): {
       },
     };
   }
-  for (const only of ['shape', 'repository', 'organization', 'aws-profile'] as const) {
+  for (const only of ['shape', 'organization', 'aws-profile'] as const) {
     if (flags[only]) throw new DeployCheckUsageError(`--${only} is for --target aws only.`);
   }
+  // On Fly, `--repository` names the repository whose stored environment the
+  // check deploys, and comes with `--workspace` and `--environment`.
+  const stored = parseStoredEnvironment(flags);
   return {
     step,
     options: {
-      manifestPath: flags.manifest ?? DEPLOY_CHECK_DEFAULT_MANIFEST,
+      manifestPath:
+        flags.manifest ??
+        (stored ? DEPLOY_CHECK_ENV_REPORT_MANIFEST : DEPLOY_CHECK_DEFAULT_MANIFEST),
       appName: flags.name ?? DEPLOY_CHECK_DEFAULT_NAME,
-      image: flags.image ?? DEPLOY_CHECK_IMAGE,
+      image: flags.image ?? (stored ? DEPLOY_CHECK_ENV_REPORT_IMAGE : DEPLOY_CHECK_IMAGE),
+      ...(stored ? { stored } : {}),
     },
   };
+}
+
+/** All three of `--workspace`, `--repository`, `--environment`, or none. */
+function parseStoredEnvironment(flags: {
+  workspace?: string;
+  repository?: string;
+  environment?: string;
+}): DeployCheckStoredEnvironment | undefined {
+  const { workspace, repository, environment } = flags;
+  if (workspace === undefined && repository === undefined && environment === undefined) {
+    return undefined;
+  }
+  if (workspace === undefined && environment === undefined) {
+    throw new DeployCheckUsageError(
+      '--repository is for --target aws only, or goes with --workspace and --environment.',
+    );
+  }
+  if (workspace === undefined || repository === undefined || environment === undefined) {
+    throw new DeployCheckUsageError(
+      '--workspace, --repository and --environment go together: give all three or none.',
+    );
+  }
+  if (!isEnvironmentName(environment)) {
+    throw new DeployCheckUsageError(
+      `Unknown environment ${environment}: use one of ${ENVIRONMENTS.join(', ')}.`,
+    );
+  }
+  return { workspaceId: workspace, repositoryId: repository, environment };
 }
 
 /** The whole command: parse argv, run the step, print a refusal as one block.

@@ -1958,6 +1958,7 @@
       "translation": "Traduction",
       "rules": "Règles",
       "repositories": "Dépôts",
+      "environment": "Environnement",
       "monitoring": "Surveillance",
       "approvals": "Approbations",
       "bugs": "Bugs"
@@ -4156,7 +4157,8 @@
         "hosted-agent": "Le modèle qu’utilise une exécution hébergée est affiché aux personnes qui peuvent lancer une exécution hébergée sur ce projet. Adressez-vous à un administrateur du projet si vous avez besoin de le voir.",
         "translation": "Le fait que le contenu de travail de ce projet soit traduit pour chaque lecteur est visible par les personnes qui peuvent lire les éléments de travail du projet. Contactez un administrateur du projet si vous avez besoin de le voir.",
         "automation": "L’automatisation du projet est gérée par les administrateurs du projet. Adressez-vous à un administrateur si une règle doit être modifiée.",
-        "monitoring": "La connexion de ce projet à un outil de surveillance des erreurs est gérée par les personnes qui peuvent gérer les intégrations. Adressez-vous à un administrateur du projet si Sentry doit être connecté ou reconnecté."
+        "monitoring": "La connexion de ce projet à un outil de surveillance des erreurs est gérée par les personnes qui peuvent gérer les intégrations. Adressez-vous à un administrateur du projet si Sentry doit être connecté ou reconnecté.",
+        "environment": "Les valeurs d’environnement d’un dépôt sont visibles par les personnes qui peuvent parcourir ce projet. Contactez un administrateur du projet si vous avez besoin de les voir."
       }
     },
     "organization": {
@@ -4227,6 +4229,101 @@
       "saveError": "Une erreur s’est produite. Réessayez.",
       "saveForbidden": "Vous ne pouvez plus modifier l’endroit où sont classés les Bugs de ce projet.",
       "folderGone": "Ce dossier n’existe plus. Choisissez-en un autre."
+    },
+    "environment": {
+      "title": "Environnement",
+      "lede": "Les valeurs que votre application lit à l’exécution. Définissez-les une fois par environnement ; Motir les transmet à l’application lors de son prochain déploiement.",
+      "repositoryLabel": "Dépôt",
+      "role": {
+        "web": "Application web",
+        "api": "API",
+        "mobile": "Application mobile",
+        "shared": "Code partagé",
+        "infra": "Infrastructure",
+        "other": "Autre"
+      },
+      "tablistLabel": "Environnement",
+      "tab": {
+        "production": "Production",
+        "preview": "Aperçu",
+        "release": "Version"
+      },
+      "column": {
+        "name": "Nom",
+        "value": "Valeur"
+      },
+      "set": "Défini",
+      "secretHidden": "Secret · valeur masquée",
+      "edit": "Modifier",
+      "replace": "Remplacer",
+      "delete": "Supprimer",
+      "editAria": "Modifier {name}",
+      "replaceAria": "Remplacer {name}",
+      "deleteAria": "Supprimer {name}",
+      "saving": "Enregistrement",
+      "add": {
+        "heading": "Ajouter une valeur",
+        "namePlaceholder": "NOM",
+        "valuePlaceholder": "Valeur",
+        "secret": "Secret",
+        "save": "Enregistrer",
+        "helper": "Un secret peut être remplacé ou supprimé, mais jamais réaffiché — ni à vous, ni à personne."
+      },
+      "error": {
+        "nameRequired": "Saisissez un nom.",
+        "duplicate": "{name} est déjà défini dans {environment}. Modifiez-le plutôt dans la liste.",
+        "invalidName": "Utilisez des lettres, des chiffres et des tirets bas, sans commencer par un chiffre.",
+        "reserved": "{name} est réservé : PORT, DATABASE_URL et les noms MOTIR_* sont définis par Motir. Choisissez un autre nom."
+      },
+      "saved": {
+        "secret": "{name} est enregistré comme secret. Sa valeur est désormais masquée.",
+        "plain": "{name} est enregistré."
+      },
+      "replaceFlow": {
+        "placeholder": "Nouvelle valeur",
+        "aria": "Nouvelle valeur pour {name}",
+        "helper": "La valeur actuelle reste masquée. L’enregistrement la remplace au prochain déploiement.",
+        "cancel": "Annuler"
+      },
+      "deleteDialog": {
+        "title": "Supprimer {name} de {environment} ?",
+        "body": "L’application ne reçoit plus {name} dans {environment} à partir de son prochain déploiement. {count, plural, one {{others} conserve sa propre valeur.} other {{others} conservent leurs propres valeurs.}} Cette action est irréversible.",
+        "confirm": "Supprimer",
+        "cancel": "Annuler"
+      },
+      "empty": {
+        "title": "Aucune valeur dans {environment} pour l’instant",
+        "production": "Votre application en production les reçoit. Ajoutez la première ci-dessous.",
+        "preview": "L’aperçu de chaque pull request les reçoit. Ajoutez la première ci-dessous.",
+        "release": "La version construite par votre train les reçoit. Ajoutez la première ci-dessous."
+      },
+      "loading": "Chargement des valeurs…",
+      "loadError": {
+        "title": "Impossible de charger les valeurs",
+        "body": "Rien n’a été modifié. Réessayez dans un instant."
+      },
+      "retry": "Réessayer",
+      "saveError": "Impossible d’enregistrer {name}. Rien n’a été modifié.",
+      "deleteError": "Impossible de supprimer {name}. La valeur est toujours définie.",
+      "readOnly": {
+        "note": "Vous pouvez lire ces valeurs. Seuls les administrateurs du projet peuvent les modifier.",
+        "tooltip": "Seuls les administrateurs du projet peuvent modifier les valeurs d’environnement."
+      },
+      "changes": {
+        "heading": "Modifications récentes · {environment}",
+        "added": "a ajouté",
+        "replaced": "a remplacé",
+        "deleted": "a supprimé",
+        "secret": "Secret",
+        "unknownActor": "Un ancien membre",
+        "loadError": "Impossible de charger les modifications récentes.",
+        "empty": "Aucune modification pour l’instant. Chaque modification de cet environnement apparaît ici — qui l’a faite et quand, jamais la valeur."
+      },
+      "notFound": {
+        "title": "Dépôt introuvable",
+        "body": "Motir ne conserve aucun environnement pour ce dépôt. Choisissez l’un des dépôts du projet hébergés par Motir.",
+        "back": "Retour à Environnement"
+      }
     },
     "workspaceAddress": {
       "door": {
