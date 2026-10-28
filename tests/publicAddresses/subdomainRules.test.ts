@@ -356,22 +356,24 @@ describe('rule 4 — one change per 30 days', () => {
     });
     const before = await snapshot();
 
-    const attempts: Array<[Promise<unknown>, unknown]> = [
+    // Thunks, not promises: each attempt starts only after the one before it was
+    // judged, so none runs concurrently and none rejects before it is awaited.
+    const attempts: Array<[() => Promise<unknown>, unknown]> = [
       [
-        publicSubdomainService.rename(acme.workspaceId, 'other', acme.ownerId, at(free, -MS)),
+        () => publicSubdomainService.rename(acme.workspaceId, 'other', acme.ownerId, at(free, -MS)),
         SubdomainChangeLimitError,
       ],
       [
-        publicSubdomainService.rename(acme.workspaceId, 'taken', acme.ownerId, free),
+        () => publicSubdomainService.rename(acme.workspaceId, 'taken', acme.ownerId, free),
         HostnameTakenError,
       ],
       [
-        publicSubdomainService.rename(acme.workspaceId, 'quar', acme.ownerId, free),
+        () => publicSubdomainService.rename(acme.workspaceId, 'quar', acme.ownerId, free),
         NameQuarantinedError,
       ],
     ];
     for (const [attempt, kind] of attempts) {
-      expect(await refusal(attempt)).toBeInstanceOf(kind as new () => Error);
+      expect(await refusal(attempt())).toBeInstanceOf(kind as new () => Error);
       expect(await snapshot()).toEqual(before);
     }
   });
