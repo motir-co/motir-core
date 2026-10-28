@@ -3,7 +3,8 @@
 - **Status:** Accepted (2026-09-03)
 - **Story / Subtask:** MOTIR-3878 (Customer-owned addresses for a public project) ·
   Subtask MOTIR-4206
-- **Supersedes / superseded by:** none. It **closes** `public-surface-hosts.md`
+- **Supersedes / superseded by:** none. **§6 (Q5) is AMENDED 2026-10-28 — see
+  its AMENDMENT 1:** the `motir-marketing` Fly app it names no longer exists. It **closes** `public-surface-hosts.md`
   §4's reversal condition (AMENDMENT 6 of that record, written by this card) and
   is the record `public-surface-hosts.md` §9 named as owning per-tenant and
   custom domains.
@@ -65,7 +66,7 @@ see Q7, which is the one place that happened.
 | **Q2**  | What does a subdomain NAME?                            | The **WORKSPACE**. `acme.<base>/<identifier>`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | **Q3**  | What does a customer domain name?                      | **ONE public project, at the domain's root.**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | **Q4**  | Which customer hostnames, and how is ownership proven? | **Any hostname the customer can point** — `CNAME` for a subdomain, `A`/`AAAA` for an apex. Ownership proven by a **`TXT` record** at `_motir-verify.<host>` BEFORE a certificate is requested.                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| **Q5**  | Who issues and renews the certificate?                 | **Fly**, per hostname, on the **`motir-marketing`** app, driven from `motir-core` over Fly's REST certificates API. One **wildcard** `*.<base>` covers every tenant subdomain.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| **Q5**  | Who issues and renews the certificate?                 | ⚠️ **The APP is SUPERSEDED by AMENDMENT 1 (§6): `motir-marketing` left Fly on 2026-10-27 and its Fly app is destroyed; the hosted-applications epic names the app.** **Fly**, per hostname, on the **`motir-marketing`** app, driven from `motir-core` over Fly's REST certificates API. One **wildcard** `*.<base>` covers every tenant subdomain.                                                                                                                                                                                                                                                                                                           |
 | **Q6**  | The canonical rule                                     | **Exactly one PRIMARY address per project.** Every other address `301`s to it; `canonical`, `og:url`, JSON-LD `@id`, the sitemap and the Atom feed all name the primary.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | **Q7**  | Rename, release, and the reserved set                  | ⚠️ **SUPERSEDED by AMENDMENT 3 (§8).** Public project pages are served from `motir.co/p/<identifier>`, not a tenant subdomain, so this question no longer applies to them. `motir.site` subdomains are RETAINED for hosted applications and deferred to MOTIR-4527 / MOTIR-4528, under six rules: one name per workspace, no aliases, rename and release both stop serving at once, under 24h back to the pool and longer a **90-day quarantine**, one change per workspace per 30 days, **no cap**. The superseded wording — _never released, capped at 5_ — is preserved inside Amendment 3. The reserved-name set is a constant in code, enumerated in §8. |
 | **Q8**  | The tier gate                                          | A new `EntitlementKind` **`custom_domains`** and **`maxCustomDomains`** on `PmEntitlements`, read through `entitlementsService`. **Tenant subdomains are free on every tier; custom domains are gated.**                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
@@ -472,6 +473,32 @@ becomes something the customer sees rather than something a visitor discovers.
 | **A single wildcard covering customer domains too**   | Not expressible — a wildcard is scoped to one registrable domain, and customer domains are by definition domains we do not control. One certificate per customer hostname is not a choice.                                                                                                                                                                                          |
 
 ---
+
+### ⚠️ AMENDMENT 1 (2026-10-28) — the certificates no longer live on `motir-marketing`; the hosted-applications epic places them
+
+**Fly still issues per hostname over its REST certificates API, and one
+wildcard still covers the tenant subdomains. What is retired is the APP this
+section put them on.**
+
+- **`motir-marketing` left Fly.** `motir.co` is served by Vercel since
+  2026-10-27 (`marketing-site-hosting.md` AMENDMENT 3), and the Fly app
+  `motir-marketing` was destroyed on 2026-10-28 — with it the `motir.site` and
+  `*.motir.site` certificates and the app's IPs. `motir.site` serves nothing
+  today.
+- **Nothing this record governs is served by the marketing site any more.**
+  Public project pages are `motir.co/p/<identifier>` (§8 AMENDMENT 3), and
+  `motir.site` subdomains AND customer-owned domains are addresses of **hosted
+  applications** — Epic MOTIR-4527 — not of `motir.co`.
+- **What that epic decides:** which Fly app (or host) terminates `*.motir.site`
+  and the customer domains, and therefore the value of `motir-core`'s
+  `FLY_CERTS_APP` / `FLY_CERTS_TOKEN` secrets. Until then a certificate request
+  through `lib/publicAddresses/adapters/fly/flyCertificates.ts` fails if those
+  secrets still name `motir-marketing`. The pointing records customers are shown
+  (`pointingRecords.ts`) follow that same app.
+
+The adapter, the store, the lifecycle and the TXT-before-certificate rule of §5
+are unchanged; only their target moves, and the code comments that name
+`motir-marketing` describe the retired placement.
 
 ## §7 — Q6: the canonical rule
 
