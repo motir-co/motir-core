@@ -215,6 +215,7 @@ function releaseOf(
       healthCheck: { path: '/health' },
       startCommand: '/whoami',
       database: { kind: 'none' },
+      requires: { websockets: false, backgroundWork: false },
     },
     env: [{ name: 'WHOAMI_NAME', value: marker, secret: false }],
     idle: { mode: 'suspend', idleSeconds: 300 },

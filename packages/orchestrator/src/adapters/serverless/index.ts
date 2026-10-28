@@ -17,6 +17,7 @@ import {
 } from './client';
 import type { ServerlessHostingConfig } from './config';
 import { lambdaEnvironment } from './env';
+import { applyIdlePolicy } from './idle';
 import {
   SERVERLESS_LIVE_ALIAS,
   SERVERLESS_TAGS,
@@ -36,6 +37,8 @@ export * from './config';
 export * from './sign';
 export { SERVERLESS_TAGS, SERVERLESS_LIVE_ALIAS } from './names';
 export { LAMBDA_ENV_LIMIT_BYTES, SERVERLESS_ENV_SECRET_VAR } from './env';
+export { SERVERLESS_WARM_INSTANCES } from './idle';
+export { parseStartCommand, type ParsedStartCommand } from './startCommand';
 export type {
   ServerlessAwsService,
   ServerlessClientDeps,
@@ -87,11 +90,6 @@ export function serverlessReleaseState(state: string, lastUpdateStatus: string):
   if (state === 'Inactive') return 'stopped';
   if (state === 'Active' && lastUpdateStatus === 'Successful') return 'healthy';
   return 'deploying';
-}
-
-/** The start command as the image's argv — no shell, like the Fly target. */
-function argvOf(command: string): string[] {
-  return command.trim().split(/\s+/);
 }
 
 const DESTROYED: ReleaseDescription = {
@@ -208,7 +206,7 @@ export function createServerlessHostingDeployPort(
     },
 
     async deploy(input) {
-      const imageUri = assertServerlessRunnable(input, config);
+      const { imageUri, command } = assertServerlessRunnable(input, config);
       const name = input.appRef;
       const secretName = overflowSecretName(name);
       const environment = lambdaEnvironment(input, secretName);
@@ -219,7 +217,7 @@ export function createServerlessHostingDeployPort(
         roleArn: execRoleArn(config.accountId),
         memoryMb: SERVERLESS_MEMORY_MB,
         timeoutSeconds: SERVERLESS_TIMEOUT_SECONDS,
-        command: argvOf(input.runtime.startCommand),
+        command,
         variables: environment.variables,
       };
 
@@ -245,6 +243,8 @@ export function createServerlessHostingDeployPort(
         await api.putAlias(name, SERVERLESS_LIVE_ALIAS, version, live !== null);
       }
       await api.ensureFunctionUrl(name, SERVERLESS_LIVE_ALIAS);
+      // Last, and also on a retry that found its version already live.
+      await applyIdlePolicy(api, name, input.idle, sleep);
       return handleOf(fn, version);
     },
 

@@ -6,7 +6,6 @@ import {
   OrchestratorApiError,
   ReleaseArtifactUnsupportedError,
   ReleaseNotFoundError,
-  ReleaseRuntimeRefusedError,
   SERVERLESS_ENV_SECRET_VAR,
   createServerlessHostingDeployPort,
   serverlessReleaseState,
@@ -68,6 +67,7 @@ function release(
       healthCheck: { path: '/api/health' },
       startCommand: 'node  server.js',
       database: { kind: 'none' },
+      requires: { websockets: false, backgroundWork: false },
     },
     env,
     idle: { mode: 'suspend', idleSeconds: 300 },
@@ -416,16 +416,6 @@ describe('the serverless adapter', () => {
   ])('refuses %s before any provider call', async (_label, artifact, error) => {
     const { port, sim } = setup();
     await expect(port.deploy(release('mh-r1', { artifact }))).rejects.toBeInstanceOf(error);
-    expect(sim.calls).toEqual([]);
-  });
-
-  it('refuses always-on by the field’s name before any provider call', async () => {
-    const { port, sim } = setup();
-    const refused = port.deploy(release('mh-r1', { idle: { mode: 'always_on' } }));
-    await expect(refused).rejects.toBeInstanceOf(ReleaseRuntimeRefusedError);
-    await expect(
-      port.deploy(release('mh-r1', { idle: { mode: 'always_on' } })),
-    ).rejects.toMatchObject({ field: 'idle', target: 'serverless' });
     expect(sim.calls).toEqual([]);
   });
 

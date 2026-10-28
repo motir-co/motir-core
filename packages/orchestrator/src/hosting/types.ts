@@ -57,6 +57,13 @@ export interface ReleaseRuntime {
   readonly healthCheck: { readonly path: string };
   readonly startCommand: string;
   readonly database: { readonly kind: 'none' | 'postgres' };
+  /**
+   * What the release needs beyond answering HTTP (MOTIR-9974). Optional so a
+   * target that runs anything (Fly) and older callers compile unchanged; the
+   * serverless target REFUSES a release without it, because it cannot run one
+   * it could not check. A parsed manifest always carries it.
+   */
+  readonly requires?: { readonly websockets: boolean; readonly backgroundWork: boolean };
 }
 
 /** One environment variable of a release. `secret` values are never logged or

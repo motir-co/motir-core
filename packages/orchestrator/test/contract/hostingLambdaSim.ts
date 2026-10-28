@@ -41,6 +41,8 @@ export interface SimLambdaFunction {
   versions: Array<{ version: string; snapshot: Snapshot }>;
   aliases: Map<string, string>;
   urls: Map<string, string>;
+  /** Provisioned concurrency per alias, with its status. */
+  provisioned: Map<string, { instances: number; status: string }>;
 }
 
 export interface LambdaSim {
@@ -68,6 +70,10 @@ export interface LambdaSim {
   invoke(url: string, headers: Record<string, string>): number;
   /** The release `live` serves in `name`: its image, port and health path. */
   liveSnapshot(name: string): Snapshot | null;
+  /** Provisioned concurrency that is put from now on reports FAILED. */
+  failProvisioning: boolean;
+  /** How many commands the account has answered or refused. */
+  callCount(): number;
 }
 
 export const SIM_ACCOUNT = '212859366014';
@@ -161,6 +167,7 @@ export function createLambdaSim(clock: () => number): LambdaSim {
         versions: [],
         aliases: new Map(),
         urls: new Map(),
+        provisioned: new Map(),
       };
       functions.set(name, f);
       logGroups.add(`/aws/lambda/${name}`);
@@ -229,6 +236,31 @@ export function createLambdaSim(clock: () => number): LambdaSim {
     },
     DeleteFunctionCommand(input) {
       functions.delete(fn(input).name);
+      return {};
+    },
+    PutProvisionedConcurrencyConfigCommand(input) {
+      const f = fn(input);
+      const qualifier = asString(input['Qualifier']);
+      if (!f.aliases.has(qualifier)) throw simError('ResourceNotFoundException', 404);
+      f.provisioned.set(qualifier, {
+        instances: Number(input['ProvisionedConcurrentExecutions']),
+        status: 'IN_PROGRESS',
+      });
+      return { Status: 'IN_PROGRESS' };
+    },
+    GetProvisionedConcurrencyConfigCommand(input) {
+      const config = fn(input).provisioned.get(asString(input['Qualifier']));
+      if (!config) throw simError('ProvisionedConcurrencyConfigNotFoundException', 404);
+      const reported = config.status;
+      // Ready (or failed) one read after it was put — the clock tick.
+      if (config.status === 'IN_PROGRESS')
+        config.status = sim.failProvisioning ? 'FAILED' : 'READY';
+      return { Status: reported, RequestedProvisionedConcurrentExecutions: config.instances };
+    },
+    DeleteProvisionedConcurrencyConfigCommand(input) {
+      if (!fn(input).provisioned.delete(asString(input['Qualifier']))) {
+        throw simError('ProvisionedConcurrencyConfigNotFoundException', 404);
+      }
       return {};
     },
     ListFunctionsCommand(input) {
@@ -365,7 +397,7 @@ export function createLambdaSim(clock: () => number): LambdaSim {
     };
   };
 
-  return {
+  const sim: LambdaSim = {
     calls,
     functions,
     repositories,
@@ -400,5 +432,8 @@ export function createLambdaSim(clock: () => number): LambdaSim {
       const version = f?.aliases.get('live');
       return f?.versions.find((v) => v.version === version)?.snapshot ?? null;
     },
+    failProvisioning: false,
+    callCount: () => calls.length,
   };
+  return sim;
 }

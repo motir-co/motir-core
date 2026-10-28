@@ -225,6 +225,7 @@ describe('the serverless adapter’s defaults', () => {
         healthCheck: { path: '/' },
         startCommand: 'serve',
         database: { kind: 'none' },
+        requires: { websockets: false, backgroundWork: false },
       },
       env: [],
       idle: { mode: 'suspend', idleSeconds: 60 },

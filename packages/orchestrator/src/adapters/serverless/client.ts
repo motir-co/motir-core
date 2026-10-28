@@ -6,12 +6,15 @@ import {
   CreateFunctionCommand,
   CreateFunctionUrlConfigCommand,
   DeleteFunctionCommand,
+  DeleteProvisionedConcurrencyConfigCommand,
   GetAliasCommand,
   GetFunctionCommand,
   GetFunctionUrlConfigCommand,
+  GetProvisionedConcurrencyConfigCommand,
   LambdaClient,
   ListFunctionsCommand,
   PublishVersionCommand,
+  PutProvisionedConcurrencyConfigCommand,
   TagResourceCommand,
   UpdateAliasCommand,
   UpdateFunctionCodeCommand,
@@ -125,6 +128,7 @@ const NOT_FOUND: ReadonlySet<string> = new Set([
   'ResourceNotFoundException',
   'RepositoryNotFoundException',
   'NotFoundException',
+  'ProvisionedConcurrencyConfigNotFoundException',
 ]);
 
 const EXISTS = Symbol('exists');
@@ -241,6 +245,12 @@ export interface ServerlessAwsApi {
     until: Date,
     period: number,
   ): Promise<LambdaMetricSums>;
+  putProvisionedConcurrency(name: string, alias: string, instances: number): Promise<void>;
+  /** The alias's provisioned-concurrency status (`IN_PROGRESS`, `READY`,
+   *  `FAILED`), or null when it has none. */
+  getProvisionedConcurrency(name: string, alias: string): Promise<{ status: string } | null>;
+  /** Removes the alias's provisioned concurrency; none is success. */
+  deleteProvisionedConcurrency(name: string, alias: string): Promise<void>;
 }
 
 export function createServerlessAwsApi(
@@ -509,6 +519,36 @@ export function createServerlessAwsApi(
         token = page.NextToken;
       } while (token);
       return { durationMs: sums.duration, invocations: sums.invocations };
+    },
+
+    async putProvisionedConcurrency(name, alias, instances) {
+      await send(
+        'lambda',
+        new PutProvisionedConcurrencyConfigCommand({
+          FunctionName: name,
+          Qualifier: alias,
+          ProvisionedConcurrentExecutions: instances,
+        }),
+      );
+    },
+
+    async getProvisionedConcurrency(name, alias) {
+      const response = await sendOr<{ Status?: string }, null>(
+        'lambda',
+        new GetProvisionedConcurrencyConfigCommand({ FunctionName: name, Qualifier: alias }),
+        NOT_FOUND,
+        null,
+      );
+      return response ? { status: response.Status ?? 'IN_PROGRESS' } : null;
+    },
+
+    async deleteProvisionedConcurrency(name, alias) {
+      await sendOr(
+        'lambda',
+        new DeleteProvisionedConcurrencyConfigCommand({ FunctionName: name, Qualifier: alias }),
+        NOT_FOUND,
+        undefined,
+      );
     },
   };
   return api;
