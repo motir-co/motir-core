@@ -35,6 +35,7 @@ import {
   fleetAttributionService,
 } from '@/lib/services/fleetAttributionService';
 import { installFakeAwsSeam } from '@/lib/test-fake-aws';
+import { hostedRunDispatchId } from '@/lib/hostedRuns/ids';
 import type { FleetShardDTO } from '@/lib/dto/fleetShard';
 import en from '@/messages/en.json';
 
@@ -594,11 +595,17 @@ test('a hosted run boots on the agent-runner AWS pool, moves when an account is 
           { timeout: SETTLE_MS },
         )
         .toBe(true);
-      // The slot on A is free.
+      // Run 2's slot on A is free. Run 4 may already hold A's only slot: the admit
+      // job's retry can self-boot it on A inside this chapter (MOTIR-10022), so
+      // the count leaves run 4's own slot out.
       await expect
-        .poll(() => adminDb.fleetInFlightSlot.count({ where: { fleetShardId: a.id } }), {
-          timeout: SETTLE_MS,
-        })
+        .poll(
+          () =>
+            adminDb.fleetInFlightSlot.count({
+              where: { fleetShardId: a.id, ref: { not: hostedRunDispatchId(run4) } },
+            }),
+          { timeout: SETTLE_MS },
+        )
         .toBe(0);
 
       await expect(main(page).getByTestId('hosted-end')).toHaveAttribute('data-end', 'succeeded', {
