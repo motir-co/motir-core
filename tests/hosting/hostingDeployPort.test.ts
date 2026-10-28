@@ -47,10 +47,33 @@ describe('getHostingDeployPort', () => {
   it('refuses a target with no registered adapter, and uses one once registered', () => {
     vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', '');
     expect(() => getHostingDeployPort('aws')).toThrow(OrchestratorNotConfiguredError);
-    expect(() => getHostingDeployPort('serverless')).toThrow(/no serverless hosting adapter/);
     const aws = createFakeHostingDeployPort({ target: 'aws' });
     registerHostingAdapter('aws', () => aws);
     expect(getHostingDeployPort('aws')).toBe(aws);
+  });
+
+  it('builds the serverless adapter from its scoped role, read at call time (MOTIR-9972)', () => {
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', '');
+    vi.stubEnv('MOTIR_HOSTING_AWS_SERVERLESS_ROLE_ARN', '');
+    expect(() => getHostingDeployPort('serverless')).toThrow(OrchestratorNotConfiguredError);
+    expect(() => getHostingDeployPort('serverless')).toThrow(
+      /MOTIR_HOSTING_AWS_SERVERLESS_ROLE_ARN/,
+    );
+    vi.stubEnv(
+      'MOTIR_HOSTING_AWS_SERVERLESS_ROLE_ARN',
+      'arn:aws:iam::212859366014:role/motir-hosting-serverless-deploy',
+    );
+    // With and without Motir's management key as the identity that assumes it.
+    vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', '');
+    expect(getHostingDeployPort('serverless').target).toBe('serverless');
+    vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', 'AKIA');
+    vi.stubEnv('AWS_ORG_ADMIN_SECRET_ACCESS_KEY', 'secret');
+    vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', '');
+    expect(getHostingDeployPort('serverless', { appPrefix: 'mh-check-' }).target).toBe(
+      'serverless',
+    );
+    vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', 'arn:aws:iam::576360162297:role/motir-add-shard');
+    expect(getHostingDeployPort('serverless').target).toBe('serverless');
   });
 
   it('narrows the app prefix for a caller that owns its own apps', async () => {

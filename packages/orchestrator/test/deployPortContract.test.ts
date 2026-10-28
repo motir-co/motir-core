@@ -4,12 +4,16 @@ import {
   OrchestratorApiError,
   createFakeHostingDeployPort,
   createFlyHostingDeployPort,
+  createServerlessHostingDeployPort,
   type DeployReleaseInput,
+  type HostingApp,
   type HostingDeployPort,
+  type OriginCredentialKind,
   type HostingEnvironment,
   type ReleaseUsage,
 } from '../src/index';
 import { createHostingFlySim, flyJson } from './contract/hostingFlySim';
+import { SIM_ACCOUNT, SIM_REGION, createLambdaSim } from './contract/hostingLambdaSim';
 
 // THE HOSTING DEPLOY PORT'S CONTRACT (Story MOTIR-9791 · MOTIR-9806) — one case
 // list, run unchanged against every adapter. The preview and production stories
@@ -17,7 +21,9 @@ import { createHostingFlySim, flyJson } from './contract/hostingFlySim';
 // assertion below holds for the Fly adapter too (driven through an in-memory
 // Machines API, no network). A new adapter (serverless, AWS) joins by adding ONE
 // entry to `ADAPTERS`: a port, a clock it advances, a provider failure it can
-// inject, and a read of what the provider was told to run.
+// inject, a read of what the provider was told to run, and the few facts that
+// are the target's own rather than the port's (`TargetFacts`) — the image it can
+// run, how its release ids and addresses look, and its origin credential.
 
 interface ProviderRuntime {
   readonly image: string;
@@ -25,8 +31,31 @@ interface ProviderRuntime {
   readonly healthCheckPath: string;
 }
 
+/** What differs by target and is not the port's to fix (MOTIR-9972). */
+interface TargetFacts {
+  /** An image the target runs: Fly any registry, serverless only its own ECR. */
+  readonly image: { readonly ref: string; readonly digest: string };
+  /** The id of an app's first release: Fly's are minted, Lambda's are versions. */
+  readonly firstReleaseId: string;
+  readonly originCredential: OriginCredentialKind;
+  /** The address a release of `appRef` is reached at. */
+  upstream(appRef: string): RegExp;
+  /** The push namespace every preview of the production unit's repository shares. */
+  previewNamespace(production: HostingApp): string;
+}
+
+const FLY_FACTS: TargetFacts = {
+  image: { ref: 'docker.io/traefik/whoami', digest: 'sha256:abc' },
+  firstReleaseId: 'rel-1',
+  // Every Fly release is reached only through its origin-secret guard.
+  originCredential: 'origin_secret',
+  upstream: (appRef) => new RegExp(`^https://${appRef}\\.`),
+  previewNamespace: (production) => `${production.appRef}-pv`,
+};
+
 interface HostingHarness {
   readonly port: HostingDeployPort;
+  readonly facts: TargetFacts;
   advanceSeconds(seconds: number): void;
   /** The provider refuses the next destroy (of a release or of an app) for `appRef`
    *  once, destroying nothing. */
@@ -42,6 +71,7 @@ function fakeHarness(): HostingHarness {
   const fake = createFakeHostingDeployPort({ appPrefix: PREFIX, start: new Date(START) });
   return {
     port: fake,
+    facts: FLY_FACTS,
     advanceSeconds: (s) => fake.advanceSeconds(s),
     failNextDestroy: (_appRef, operation) => fake.failNext(operation),
     runtimeOf(appRef) {
@@ -75,6 +105,7 @@ function flyHarness(): HostingHarness {
   );
   return {
     port,
+    facts: FLY_FACTS,
     advanceSeconds: (s) => {
       clock += s * 1000;
     },
@@ -108,25 +139,77 @@ function flyHarness(): HostingHarness {
   };
 }
 
+function serverlessHarness(): HostingHarness {
+  let clock = START;
+  const sim = createLambdaSim(() => clock);
+  const port = createServerlessHostingDeployPort(
+    {
+      roleArn: `arn:aws:iam::${SIM_ACCOUNT}:role/motir-hosting-serverless-deploy`,
+      accountId: SIM_ACCOUNT,
+      region: SIM_REGION,
+      appPrefix: PREFIX,
+    },
+    {
+      clientFactory: sim.clientFactory,
+      now: () => new Date(clock),
+      sleep: async () => {},
+    },
+  );
+  return {
+    port,
+    facts: {
+      image: {
+        ref: `${SIM_ACCOUNT}.dkr.ecr.${SIM_REGION}.amazonaws.com/mh/cmrepo1/production`,
+        digest: 'sha256:abc',
+      },
+      // A release is a published Lambda version.
+      firstReleaseId: '1',
+      // The upstream is a function URL with IAM auth.
+      originCredential: 'aws_sigv4',
+      upstream: () => /^https:\/\/[a-z0-9]+\.lambda-url\.us-east-1\.on\.aws\/$/,
+      previewNamespace: (production) => production.pushNamespace.replace(/production$/, 'preview'),
+    },
+    advanceSeconds: (s) => {
+      sim.advanceSeconds(s);
+      clock += s * 1000;
+    },
+    failNextDestroy(appRef) {
+      // Both a release's and an app's destroy delete the function first.
+      sim.failNext('DeleteFunctionCommand', (input) => input['FunctionName'] === appRef);
+    },
+    runtimeOf(appRef) {
+      const live = sim.liveSnapshot(appRef);
+      return live
+        ? {
+            image: live.imageUri,
+            port: Number(live.variables['AWS_LWA_PORT']),
+            healthCheckPath: String(live.variables['AWS_LWA_READINESS_CHECK_PATH']),
+          }
+        : null;
+    },
+  };
+}
+
 const ADAPTERS: ReadonlyArray<readonly [string, () => HostingHarness]> = [
   ['fake', fakeHarness],
   ['fly', flyHarness],
+  ['serverless', serverlessHarness],
 ];
 
 const R = 'cmrepo1';
 const PRODUCTION: HostingEnvironment = { kind: 'production' };
 const PREVIEW: HostingEnvironment = { kind: 'preview', pullRequest: 7 };
-const IMAGE = { ref: 'docker.io/traefik/whoami', digest: 'sha256:abc' };
 
-function release(
+function releaseOf(
   appRef: string,
   environment: HostingEnvironment,
   marker: string,
+  image: TargetFacts['image'],
 ): DeployReleaseInput {
   return {
     appRef,
     environment,
-    artifact: { kind: 'image', ...IMAGE },
+    artifact: { kind: 'image', ...image },
     runtime: {
       port: 8080,
       healthCheck: { path: '/health' },
@@ -151,27 +234,35 @@ afterEach(() => {
 
 describe.each(ADAPTERS)('the hosting deploy port contract — %s', (_name, make) => {
   let h: HostingHarness;
+  let prodApp: HostingApp;
   let prod: string;
+  const release = (appRef: string, environment: HostingEnvironment, marker: string) =>
+    releaseOf(appRef, environment, marker, h.facts.image);
 
   beforeEach(async () => {
     h = make();
-    prod = (await h.port.ensureApp({ repositoryId: R, environment: PRODUCTION })).appRef;
+    prodApp = await h.port.ensureApp({ repositoryId: R, environment: PRODUCTION });
+    prod = prodApp.appRef;
   });
 
   it('deploys release A, gives an address, and describes A running with the manifest’s runtime', async () => {
     const a = await h.port.deploy(release(prod, PRODUCTION, 'A'));
-    expect(a).toMatchObject({ appRef: prod, environment: PRODUCTION, releaseId: 'rel-1' });
+    const { facts } = h;
+    expect(a).toMatchObject({
+      appRef: prod,
+      environment: PRODUCTION,
+      releaseId: facts.firstReleaseId,
+    });
     const description = await h.port.describe(a);
     expect(description).toMatchObject({
       state: 'healthy',
-      releaseId: 'rel-1',
+      releaseId: facts.firstReleaseId,
       previousReleaseId: null,
-      // Every Fly release is reached only through its origin-secret guard.
-      originCredential: 'origin_secret',
+      originCredential: facts.originCredential,
     });
-    expect(description.upstreamAddress).toMatch(new RegExp(`^https://${prod}\\.`));
+    expect(description.upstreamAddress).toMatch(facts.upstream(prod));
     expect(h.runtimeOf(prod)).toEqual({
-      image: `${IMAGE.ref}@${IMAGE.digest}`,
+      image: `${facts.image.ref}@${facts.image.digest}`,
       port: 8080,
       healthCheckPath: '/health',
     });
@@ -180,7 +271,8 @@ describe.each(ADAPTERS)('the hosting deploy port contract — %s', (_name, make)
   it('keeps a preview and production side by side; destroying the preview leaves production', async () => {
     const pr = await h.port.ensureApp({ repositoryId: R, environment: PREVIEW });
     expect(pr.appRef).toBe(`${prod}-pr7`);
-    expect(pr.pushNamespace).toBe(`${prod}-pv`);
+    expect(pr.pushNamespace).toBe(h.facts.previewNamespace(prodApp));
+    expect(pr.pushNamespace).not.toBe(prodApp.pushNamespace);
     const preview = await h.port.deploy(release(pr.appRef, PREVIEW, 'P'));
     const production = await h.port.deploy(release(prod, PRODUCTION, 'A'));
 

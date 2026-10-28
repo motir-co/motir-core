@@ -124,6 +124,9 @@ export interface ReleaseUsage {
   readonly since: Date;
   readonly until: Date;
   readonly runningSeconds: number;
+  /** Requests served in the window, where the target meters them (serverless,
+   *  MOTIR-9972); a target that does not leaves it out. */
+  readonly invocations?: number;
 }
 
 export type ReleaseDestroyReason =
