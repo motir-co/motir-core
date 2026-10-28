@@ -16,6 +16,7 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }));
 
 const setMemberRoleAction = vi.fn();
 vi.mock('@/app/(authed)/settings/workspace/actions', () => ({
+  resendInviteAction: vi.fn(async () => ({ ok: true })),
   setMemberRoleAction: (...a: unknown[]) => setMemberRoleAction(...a),
   removeMemberAction: vi.fn(async () => ({ ok: true })),
   setMemberAccessScopeAction: vi.fn(async () => ({ ok: true })),
@@ -231,6 +232,14 @@ describe('a Member or a Viewer (1f)', () => {
 // Bug MOTIR-6317: removing another member is a Manager's act, and never reaches
 // an org Owner / Admin. The server refuses both; the row HIDES the entry point
 // (the permission-gated UI rule) — only an aria-hidden spacer stays for layout.
+describe('pending invitations (MOTIR-9997)', () => {
+  it('a Manager with nothing pending sees no Pending block — the card is as before', () => {
+    renderCard();
+    expect(screen.queryByText('Pending invitations')).toBeNull();
+    expect(screen.queryByRole('button', { name: /Resend/ })).toBeNull();
+  });
+});
+
 describe('who is offered Remove (MOTIR-6317)', () => {
   const removeButtons = () => screen.queryAllByRole('button', { name: 'Remove' });
 

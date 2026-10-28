@@ -2202,7 +2202,58 @@
       "inviteNoProjectsWarning": "La personne ne pourra rien ouvrir tant qu’un gestionnaire ne l’aura pas ajoutée à un projet.",
       "inviteJoinsAsMember": "La personne rejoint l’espace en tant que Membre. Vous pourrez modifier son rôle une fois l’invitation acceptée.",
       "errorInviteProjects": "L’un de ces projets ne peut pas être rejoint. Choisissez-les de nouveau.",
-      "errorInviteNotAllowed": "Vous ne pouvez pas envoyer cette invitation. Seul un gestionnaire de l’espace de travail peut inviter avec un accès Restreint."
+      "errorInviteNotAllowed": "Vous ne pouvez pas envoyer cette invitation. Seul un gestionnaire de l’espace de travail peut inviter avec un accès Restreint.",
+      "pending": {
+        "heading": "Invitations en attente",
+        "invitationColumn": "Invitation",
+        "deliveryColumn": "Remise",
+        "invitedBy": "Invité par {name}, {sent}",
+        "invitedByFormer": "Invité par un ancien membre, {sent}",
+        "expiresIn": "Expire dans {count, plural, one {# jour} other {# jours}}",
+        "expiresToday": "Expire aujourd’hui",
+        "expiresOn": "Expire le {date}",
+        "resend": "Renvoyer",
+        "resendLabel": "Renvoyer l’invitation à {email}",
+        "resendScopeTooltip": "Seul un gestionnaire peut renvoyer une invitation restreinte",
+        "resentToast": "Nouvelle invitation envoyée à {email}",
+        "refusalRateLimited": "Limite atteinte : 3 invitations par adresse et par heure.",
+        "refusalRateLimitedBody": "Réessayez plus tard.",
+        "refusalAlreadyMember": "Cette personne a déjà rejoint l’espace de travail.",
+        "refusalNotAllowed": "Vous ne pouvez pas renvoyer cette invitation.",
+        "refusalNoLongerPending": "Cette invitation n’est plus en attente.",
+        "showAll": "Afficher les {count} invitations en attente",
+        "showFewer": "Afficher moins",
+        "delivery": {
+          "queued": {
+            "label": "En file",
+            "helper": "En attente d’envoi"
+          },
+          "accepted": {
+            "label": "Acceptée",
+            "helper": "Le fournisseur de messagerie l’a reçue"
+          },
+          "delivered": {
+            "label": "Remise",
+            "helper": "A atteint le serveur de messagerie du destinataire"
+          },
+          "bounced": {
+            "label": "Rejetée",
+            "helper": "L’adresse l’a refusée"
+          },
+          "complained": {
+            "label": "Signalée",
+            "helper": "Marquée comme spam"
+          },
+          "delayed": {
+            "label": "Retardée",
+            "helper": "Le fournisseur réessaie encore"
+          },
+          "failed": {
+            "label": "Échec",
+            "helper": "N’a pas pu être envoyée"
+          }
+        }
+      }
     },
     "danger": {
       "cantLeaveTitle": "Impossible de partir",

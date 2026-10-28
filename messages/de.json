@@ -2202,7 +2202,58 @@
       "inviteNoProjectsWarning": "Die Person kann nichts öffnen, bis ein Manager sie einem Projekt hinzufügt.",
       "inviteJoinsAsMember": "Die Person tritt als Mitglied bei. Sie können ihre Rolle nach der Annahme ändern.",
       "errorInviteProjects": "Einem dieser Projekte kann nicht beigetreten werden. Wählen Sie sie erneut aus.",
-      "errorInviteNotAllowed": "Sie können diese Einladung nicht senden. Nur ein Manager des Arbeitsbereichs kann mit eingeschränktem Zugriff einladen."
+      "errorInviteNotAllowed": "Sie können diese Einladung nicht senden. Nur ein Manager des Arbeitsbereichs kann mit eingeschränktem Zugriff einladen.",
+      "pending": {
+        "heading": "Ausstehende Einladungen",
+        "invitationColumn": "Einladung",
+        "deliveryColumn": "Zustellung",
+        "invitedBy": "Eingeladen von {name}, {sent}",
+        "invitedByFormer": "Eingeladen von einem ehemaligen Mitglied, {sent}",
+        "expiresIn": "Läuft in {count, plural, one {# Tag} other {# Tagen}} ab",
+        "expiresToday": "Läuft heute ab",
+        "expiresOn": "Läuft ab am {date}",
+        "resend": "Erneut senden",
+        "resendLabel": "Einladung erneut an {email} senden",
+        "resendScopeTooltip": "Nur ein Manager kann eine eingeschränkte Einladung erneut senden",
+        "resentToast": "Neue Einladung an {email} gesendet",
+        "refusalRateLimited": "Limit erreicht: 3 Einladungen pro Adresse und Stunde.",
+        "refusalRateLimitedBody": "Versuchen Sie es später erneut.",
+        "refusalAlreadyMember": "Diese Person ist dem Arbeitsbereich bereits beigetreten.",
+        "refusalNotAllowed": "Sie können diese Einladung nicht erneut senden.",
+        "refusalNoLongerPending": "Diese Einladung ist nicht mehr ausstehend.",
+        "showAll": "Alle {count} ausstehenden Einladungen anzeigen",
+        "showFewer": "Weniger anzeigen",
+        "delivery": {
+          "queued": {
+            "label": "In Warteschlange",
+            "helper": "Wartet auf den Versand"
+          },
+          "accepted": {
+            "label": "Angenommen",
+            "helper": "Der Mailanbieter hat sie erhalten"
+          },
+          "delivered": {
+            "label": "Zugestellt",
+            "helper": "Hat den Mailserver des Empfängers erreicht"
+          },
+          "bounced": {
+            "label": "Unzustellbar",
+            "helper": "Die Adresse hat sie abgelehnt"
+          },
+          "complained": {
+            "label": "Beschwerde",
+            "helper": "Als Spam markiert"
+          },
+          "delayed": {
+            "label": "Verzögert",
+            "helper": "Der Anbieter versucht es weiter"
+          },
+          "failed": {
+            "label": "Fehlgeschlagen",
+            "helper": "Konnte nicht gesendet werden"
+          }
+        }
+      }
     },
     "danger": {
       "cantLeaveTitle": "Verlassen nicht möglich",

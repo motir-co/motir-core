@@ -2202,7 +2202,58 @@
       "inviteNoProjectsWarning": "Non potrà aprire nulla finché un manager non lo aggiungerà a un progetto.",
       "inviteJoinsAsMember": "Si unirà come Membro. Potrai cambiarne il ruolo dopo che avrà accettato.",
       "errorInviteProjects": "Non è possibile unirsi a uno di quei progetti. Selezionali di nuovo.",
-      "errorInviteNotAllowed": "Non puoi inviare questo invito. Solo un manager dell’area di lavoro può invitare con accesso Limitato."
+      "errorInviteNotAllowed": "Non puoi inviare questo invito. Solo un manager dell’area di lavoro può invitare con accesso Limitato.",
+      "pending": {
+        "heading": "Inviti in sospeso",
+        "invitationColumn": "Invito",
+        "deliveryColumn": "Consegna",
+        "invitedBy": "Invitato da {name}, {sent}",
+        "invitedByFormer": "Invitato da un ex membro, {sent}",
+        "expiresIn": "Scade tra {count, plural, one {# giorno} other {# giorni}}",
+        "expiresToday": "Scade oggi",
+        "expiresOn": "Scade il {date}",
+        "resend": "Invia di nuovo",
+        "resendLabel": "Invia di nuovo l’invito a {email}",
+        "resendScopeTooltip": "Solo un Manager può inviare di nuovo un invito limitato",
+        "resentToast": "Nuovo invito inviato a {email}",
+        "refusalRateLimited": "Limite raggiunto: 3 inviti per indirizzo all’ora.",
+        "refusalRateLimitedBody": "Riprova più tardi.",
+        "refusalAlreadyMember": "Questa persona si è già unita all’area di lavoro.",
+        "refusalNotAllowed": "Non puoi inviare di nuovo questo invito.",
+        "refusalNoLongerPending": "Questo invito non è più in sospeso.",
+        "showAll": "Mostra tutti i {count} inviti in sospeso",
+        "showFewer": "Mostra meno",
+        "delivery": {
+          "queued": {
+            "label": "In coda",
+            "helper": "In attesa di invio"
+          },
+          "accepted": {
+            "label": "Accettato",
+            "helper": "Il provider di posta l’ha ricevuto"
+          },
+          "delivered": {
+            "label": "Consegnato",
+            "helper": "Ha raggiunto il server di posta del destinatario"
+          },
+          "bounced": {
+            "label": "Respinto",
+            "helper": "L’indirizzo l’ha rifiutato"
+          },
+          "complained": {
+            "label": "Contestato",
+            "helper": "Contrassegnato come spam"
+          },
+          "delayed": {
+            "label": "In ritardo",
+            "helper": "Il provider sta ancora riprovando"
+          },
+          "failed": {
+            "label": "Non riuscito",
+            "helper": "Non è stato possibile inviarlo"
+          }
+        }
+      }
     },
     "danger": {
       "cantLeaveTitle": "Impossibile abbandonare",

@@ -2202,7 +2202,58 @@
       "inviteNoProjectsWarning": "Ze kunnen niets openen totdat een Manager hen aan een project toevoegt.",
       "inviteJoinsAsMember": "Ze worden toegevoegd als Lid. Je kunt hun rol wijzigen nadat ze hebben geaccepteerd.",
       "errorInviteProjects": "Aan een van die projecten kan niet worden deelgenomen. Kies ze opnieuw.",
-      "errorInviteNotAllowed": "Je kunt deze uitnodiging niet versturen. Alleen een Manager van de werkruimte kan uitnodigen met Beperkte toegang."
+      "errorInviteNotAllowed": "Je kunt deze uitnodiging niet versturen. Alleen een Manager van de werkruimte kan uitnodigen met Beperkte toegang.",
+      "pending": {
+        "heading": "Openstaande uitnodigingen",
+        "invitationColumn": "Uitnodiging",
+        "deliveryColumn": "Bezorging",
+        "invitedBy": "Uitgenodigd door {name}, {sent}",
+        "invitedByFormer": "Uitgenodigd door een voormalig lid, {sent}",
+        "expiresIn": "Verloopt over {count, plural, one {# dag} other {# dagen}}",
+        "expiresToday": "Verloopt vandaag",
+        "expiresOn": "Verloopt op {date}",
+        "resend": "Opnieuw versturen",
+        "resendLabel": "Uitnodiging opnieuw versturen naar {email}",
+        "resendScopeTooltip": "Alleen een Manager kan een beperkte uitnodiging opnieuw versturen",
+        "resentToast": "Nieuwe uitnodiging verstuurd naar {email}",
+        "refusalRateLimited": "Limiet bereikt: 3 uitnodigingen per adres per uur.",
+        "refusalRateLimitedBody": "Probeer het later opnieuw.",
+        "refusalAlreadyMember": "Deze persoon is al lid van de werkruimte.",
+        "refusalNotAllowed": "Je kunt deze uitnodiging niet opnieuw versturen.",
+        "refusalNoLongerPending": "Deze uitnodiging staat niet meer open.",
+        "showAll": "Alle {count} openstaande uitnodigingen tonen",
+        "showFewer": "Minder tonen",
+        "delivery": {
+          "queued": {
+            "label": "In wachtrij",
+            "helper": "Wacht op verzending"
+          },
+          "accepted": {
+            "label": "Geaccepteerd",
+            "helper": "De mailprovider heeft hem ontvangen"
+          },
+          "delivered": {
+            "label": "Bezorgd",
+            "helper": "Heeft de mailserver van de ontvanger bereikt"
+          },
+          "bounced": {
+            "label": "Gebounced",
+            "helper": "Het adres heeft hem geweigerd"
+          },
+          "complained": {
+            "label": "Klacht",
+            "helper": "Gemarkeerd als spam"
+          },
+          "delayed": {
+            "label": "Vertraagd",
+            "helper": "De provider probeert het nog"
+          },
+          "failed": {
+            "label": "Mislukt",
+            "helper": "Kon niet worden verstuurd"
+          }
+        }
+      }
     },
     "danger": {
       "cantLeaveTitle": "Kan niet vertrekken",

@@ -13,6 +13,21 @@ vi.mock('@/lib/auth', async (importOriginal) => {
     getSession: async () => mockSession.current,
   };
 });
+// The Resend server action (MOTIR-9996) also reads the active workspace and
+// revalidates; the invite routes touch neither, so these mocks change nothing
+// for them.
+const activeWorkspace: { current: { userId: string; workspaceId: string } | null } = {
+  current: null,
+};
+vi.mock('@/lib/workspaces', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/workspaces')>();
+  return { ...actual, getWorkspaceContext: async () => activeWorkspace.current };
+});
+const revalidated = vi.hoisted(() => [] as string[]);
+vi.mock('next/cache', () => ({
+  revalidatePath: (path: string) => revalidated.push(path),
+  revalidateTag: () => undefined,
+}));
 
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
@@ -23,6 +38,16 @@ import {
   INVITE_IDENTIFIER_PREFIX,
   workspaceInvitesService,
 } from '@/lib/services/workspaceInvitesService';
+import { verificationRepository } from '@/lib/repositories/verificationRepository';
+import { resendInviteAction } from '@/app/(authed)/settings/workspace/actions';
+import {
+  InviteExpiredOrMissingError,
+  InviteNotAllowedForScopeError,
+  InviteRateLimitedError,
+  InviteScopeForbiddenError,
+  InviteTargetAlreadyMemberError,
+  NotAMemberError,
+} from '@/lib/workspaces/errors';
 import { POST as sendInvitePOST } from '@/app/api/workspaces/[workspaceId]/invites/route';
 import { GET as validateInviteGET } from '@/app/api/invites/[token]/route';
 import { POST as acceptInvitePOST } from '@/app/api/invites/[token]/accept/route';
@@ -110,6 +135,8 @@ beforeEach(async () => {
   await truncateAuthTables();
   await truncateJobRuns();
   mockSession.current = null;
+  activeWorkspace.current = null;
+  revalidated.length = 0;
   emailEvents = captureEmailEvents();
 });
 
@@ -684,5 +711,297 @@ describe('an invite carries the access scope', () => {
     expect(await res.json()).toEqual({ workspaceId: f.workspace.id, skippedProjects: ['Beta'] });
     const added = await adminDb.projectMembership.findMany({ where: { userId: f.contractor.id } });
     expect(added.map((r) => r.projectId)).toEqual([f.alpha.id]);
+  });
+});
+
+describe('resendInvite — replace a pending invitation (MOTIR-9996)', () => {
+  async function rowFor(token: string) {
+    return adminDb.verification.findFirstOrThrow({
+      where: { identifier: INVITE_IDENTIFIER_PREFIX + token },
+    });
+  }
+
+  function payloadOf(value: string) {
+    return JSON.parse(value) as Record<string, unknown>;
+  }
+
+  async function liveRowsFor(email: string) {
+    return adminDb.verification.findMany({
+      where: {
+        identifier: { startsWith: INVITE_IDENTIFIER_PREFIX },
+        value: { contains: email },
+        expiresAt: { gt: new Date() },
+      },
+    });
+  }
+
+  async function memberOf(workspaceId: string, email: string, scope: 'full' | 'limited') {
+    const user = await usersService.createUser({
+      email,
+      password: 'hunter2hunter2',
+      name: email,
+    });
+    await workspacesService.addMember({ userId: user.id, workspaceId });
+    if (scope === 'limited') {
+      await adminDb.workspaceMembership.update({
+        where: { userId_workspaceId: { userId: user.id, workspaceId } },
+        data: { accessScope: 'limited' },
+      });
+    }
+    return user;
+  }
+
+  it('mints a new link with the same payload and original inviter, emails it, and retires the old one', async () => {
+    const { user: manager, workspace } = await makeInviter('mgr-resend@example.com', 'Ana Ruiz');
+    const resender = await memberOf(workspace.id, 'resender@example.com', 'full');
+    const oldToken = await createInvite({
+      workspaceId: workspace.id,
+      email: 'marta@example.com',
+      inviterUserId: manager.id,
+    });
+    const oldRow = await rowFor(oldToken);
+    const before = Date.now();
+
+    await workspaceInvitesService.resendInvite({
+      actorUserId: resender.id,
+      actorName: 'Resender',
+      workspaceId: workspace.id,
+      inviteId: oldRow.id,
+    });
+
+    const [fresh] = await liveRowsFor('marta@example.com');
+    const newToken = fresh!.identifier.slice(INVITE_IDENTIFIER_PREFIX.length);
+    expect(newToken).not.toBe(oldToken);
+    expect(payloadOf(fresh!.value)).toMatchObject({
+      workspaceId: workspace.id,
+      email: 'marta@example.com',
+      accessScope: 'full',
+      projectIds: [],
+      inviterUserId: manager.id,
+      resentByUserId: resender.id,
+    });
+    expect(await workspaceInvitesService.validateInvite(newToken)).toMatchObject({
+      workspaceName: workspace.name,
+      email: 'marta@example.com',
+    });
+    const sent = emailEvents.events.at(-1)!.data;
+    expect(sent.idempotencyKey).toBe(newToken);
+    expect(sent.to).toBe('marta@example.com');
+    expect((sent.data as { inviterName: string }).inviterName).toBe('Resender');
+
+    // The old link: kept as a row (it counts toward the limit), no longer valid.
+    const retired = await rowFor(oldToken);
+    expect(retired.expiresAt.getTime()).toBeLessThanOrEqual(Date.now());
+    expect(retired.expiresAt.getTime()).toBeGreaterThanOrEqual(before - 1_000);
+    expect(await workspaceInvitesService.validateInvite(oldToken)).toBeNull();
+    expect(await workspaceInvitesService.inspectInvite(oldToken)).toEqual({ status: 'expired' });
+    await expect(
+      workspaceInvitesService.acceptInvite(oldToken, { id: 'anyone', email: 'marta@example.com' }),
+    ).rejects.toBeInstanceOf(InviteExpiredOrMissingError);
+  });
+
+  it('a failed retire rolls the new row back, and of two concurrent Resends exactly one wins', async () => {
+    const { user: manager, workspace } = await makeInviter('mgr-race@example.com', 'Manager');
+    const token = await createInvite({
+      workspaceId: workspace.id,
+      email: 'race@example.com',
+      inviterUserId: manager.id,
+    });
+    const row = await rowFor(token);
+    const resend = () =>
+      workspaceInvitesService.resendInvite({
+        actorUserId: manager.id,
+        actorName: 'Manager',
+        workspaceId: workspace.id,
+        inviteId: row.id,
+      });
+
+    const spy = vi
+      .spyOn(verificationRepository, 'retireUnexpiredByIdentifier')
+      .mockResolvedValue(0);
+    const rowsBefore = await adminDb.verification.count();
+    const eventsBefore = emailEvents.events.length;
+    await expect(resend()).rejects.toBeInstanceOf(InviteExpiredOrMissingError);
+    spy.mockRestore();
+    expect(await adminDb.verification.count()).toBe(rowsBefore);
+    expect(emailEvents.events).toHaveLength(eventsBefore);
+
+    const results = await Promise.allSettled([resend(), resend()]);
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    const [rejected] = results.filter((r) => r.status === 'rejected');
+    expect((rejected as PromiseRejectedResult).reason).toBeInstanceOf(InviteExpiredOrMissingError);
+    expect(await liveRowsFor('race@example.com')).toHaveLength(1);
+  });
+
+  it('the original plus two Resends succeed; the third Resend and a new send are refused at the limit', async () => {
+    const { user: manager, workspace } = await makeInviter('mgr-limit@example.com', 'Manager');
+    await createInvite({
+      workspaceId: workspace.id,
+      email: 'limit@example.com',
+      inviterUserId: manager.id,
+    });
+    const resendLatest = async () => {
+      const [live] = await liveRowsFor('limit@example.com');
+      return workspaceInvitesService.resendInvite({
+        actorUserId: manager.id,
+        actorName: 'Manager',
+        workspaceId: workspace.id,
+        inviteId: live!.id,
+      });
+    };
+    await resendLatest();
+    await resendLatest();
+    const eventsBefore = emailEvents.events.length;
+
+    const refusal = await resendLatest().catch((err: unknown) => err);
+    expect(refusal).toBeInstanceOf(InviteRateLimitedError);
+    expect((refusal as InviteRateLimitedError).max).toBe(3);
+    const rows = await adminDb.verification.count({
+      where: { identifier: { startsWith: INVITE_IDENTIFIER_PREFIX } },
+    });
+    expect(rows).toBe(3);
+    expect(emailEvents.events).toHaveLength(eventsBefore);
+    await expect(
+      workspaceInvitesService.sendInvite({
+        inviterUserId: manager.id,
+        inviterName: 'Manager',
+        workspaceId: workspace.id,
+        targetEmail: 'limit@example.com',
+      }),
+    ).rejects.toBeInstanceOf(InviteRateLimitedError);
+  });
+
+  it('who may resend: Manager any, Full only Full, Limited and non-members none — refusals write nothing', async () => {
+    const { user: manager, workspace } = await makeInviter('mgr-roles@example.com', 'Manager');
+    const full = await memberOf(workspace.id, 'full-roles@example.com', 'full');
+    const limited = await memberOf(workspace.id, 'limited-roles@example.com', 'limited');
+    const outsider = await usersService.createUser({
+      email: 'outsider-roles@example.com',
+      password: 'hunter2hunter2',
+      name: 'Outsider',
+    });
+    const fullToken = await createInvite({
+      workspaceId: workspace.id,
+      email: 'full-invitee@example.com',
+      inviterUserId: manager.id,
+    });
+    await workspaceInvitesService.sendInvite({
+      inviterUserId: manager.id,
+      inviterName: 'Manager',
+      workspaceId: workspace.id,
+      targetEmail: 'limited-invitee@example.com',
+      accessScope: 'limited',
+    });
+    const fullId = (await rowFor(fullToken)).id;
+    const limitedId = (await liveRowsFor('limited-invitee@example.com'))[0]!.id;
+
+    const asActor = async (user: { id: string; email: string }, inviteId: string) => {
+      mockSession.current = { user: { id: user.id, email: user.email, name: user.email } };
+      activeWorkspace.current = { userId: user.id, workspaceId: workspace.id };
+      return resendInviteAction(inviteId);
+    };
+
+    const rowsBefore = await adminDb.verification.count();
+    const eventsBefore = emailEvents.events.length;
+    expect(await asActor(full, limitedId)).toEqual({ ok: false, code: 'INVITE_SCOPE_FORBIDDEN' });
+    expect(await asActor(limited, fullId)).toEqual({
+      ok: false,
+      code: 'INVITE_NOT_ALLOWED_FOR_SCOPE',
+    });
+    expect(await asActor(outsider, fullId)).toEqual({ ok: false, code: 'NOT_A_MEMBER' });
+    expect(await adminDb.verification.count()).toBe(rowsBefore);
+    expect(emailEvents.events).toHaveLength(eventsBefore);
+    await expect(
+      workspaceInvitesService.resendInvite({
+        actorUserId: full.id,
+        actorName: 'Full',
+        workspaceId: workspace.id,
+        inviteId: limitedId,
+      }),
+    ).rejects.toBeInstanceOf(InviteScopeForbiddenError);
+    await expect(
+      workspaceInvitesService.resendInvite({
+        actorUserId: limited.id,
+        actorName: 'Limited',
+        workspaceId: workspace.id,
+        inviteId: fullId,
+      }),
+    ).rejects.toBeInstanceOf(InviteNotAllowedForScopeError);
+    await expect(
+      workspaceInvitesService.resendInvite({
+        actorUserId: outsider.id,
+        actorName: 'Outsider',
+        workspaceId: workspace.id,
+        inviteId: fullId,
+      }),
+    ).rejects.toBeInstanceOf(NotAMemberError);
+
+    // A Full non-Manager may resend a Full invitation; a Manager a Limited one.
+    expect(await asActor(full, fullId)).toEqual({ ok: true });
+    expect(revalidated).toEqual(
+      expect.arrayContaining(['/settings/workspace', '/settings/organization']),
+    );
+    expect(await asActor(manager, limitedId)).toEqual({ ok: true });
+    const [resentLimited] = await liveRowsFor('limited-invitee@example.com');
+    expect(payloadOf(resentLimited!.value)).toMatchObject({ accessScope: 'limited' });
+  });
+
+  it('refuses an address that has joined, and a missing, expired, foreign or non-invite row', async () => {
+    const { user: manager, workspace } = await makeInviter('mgr-refuse@example.com', 'Manager');
+    const { user: otherOwner, workspace: other } = await makeInviter(
+      'other-refuse@example.com',
+      'Other',
+    );
+    const joinedToken = await createInvite({
+      workspaceId: workspace.id,
+      email: 'joined@example.com',
+      inviterUserId: manager.id,
+    });
+    await memberOf(workspace.id, 'joined@example.com', 'full');
+    const expiredToken = await createInvite({
+      workspaceId: workspace.id,
+      email: 'expired-resend@example.com',
+      inviterUserId: manager.id,
+    });
+    await adminDb.verification.updateMany({
+      where: { identifier: INVITE_IDENTIFIER_PREFIX + expiredToken },
+      data: { expiresAt: new Date(Date.now() - 1_000) },
+    });
+    const foreignToken = await createInvite({
+      workspaceId: other.id,
+      email: 'foreign@example.com',
+      inviterUserId: otherOwner.id,
+    });
+    const notAnInvite = await adminDb.verification.create({
+      data: {
+        identifier: 'trust-device-resend-test',
+        value: manager.id,
+        expiresAt: new Date(Date.now() + 60_000),
+      },
+    });
+
+    const rowsBefore = await adminDb.verification.count();
+    const eventsBefore = emailEvents.events.length;
+    const resend = (inviteId: string) =>
+      workspaceInvitesService.resendInvite({
+        actorUserId: manager.id,
+        actorName: 'Manager',
+        workspaceId: workspace.id,
+        inviteId,
+      });
+
+    await expect(resend((await rowFor(joinedToken)).id)).rejects.toBeInstanceOf(
+      InviteTargetAlreadyMemberError,
+    );
+    for (const id of [
+      'no-such-invite',
+      (await rowFor(expiredToken)).id,
+      (await rowFor(foreignToken)).id,
+      notAnInvite.id,
+    ]) {
+      await expect(resend(id)).rejects.toBeInstanceOf(InviteExpiredOrMissingError);
+    }
+    expect(await adminDb.verification.count()).toBe(rowsBefore);
+    expect(emailEvents.events).toHaveLength(eventsBefore);
   });
 });
