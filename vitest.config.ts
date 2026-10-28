@@ -838,7 +838,6 @@ export default defineConfig({
         //
         //   workspaceSettingsNav.ts     93.33 / 91.66 / 100 / 100
         //   WorkspaceSidebarHeader.tsx  100   / 100   / 100 / 100
-        //   JobRunsFoldInSection.tsx    100   / 100   / 100 / 100
         //   WorkspaceSwitcher.tsx        40   /  61.11/  26.66 / 40.42
         //
         // The registry's one uncovered line is its `if (!entry.href)` guard, an
@@ -847,7 +846,7 @@ export default defineConfig({
         // initial fallback were undriven — and MOTIR-4848 wrote the four missing
         // cases rather than pinning three axes and leaving the fourth off, which
         // is the remedy this list's own rule prescribes (MOTIR-4368's precedent
-        // on `SidebarNav`). All three are GATED in `thresholds` below.
+        // on `SidebarNav`). Both are GATED in `thresholds` below.
         //
         // ⚠️ `WorkspaceSwitcher.tsx` IS REPORT-ONLY, deliberately — it is in this
         // list and NOT in `thresholds`. This story added one row to it and the
@@ -859,7 +858,6 @@ export default defineConfig({
         // undertake. It publishes a number until a card owns the gap.
         'lib/settings/workspaceSettingsNav.ts',
         'app/**/_components/WorkspaceSidebarHeader.tsx',
-        'app/**/_components/JobRunsFoldInSection.tsx',
         'app/**/_components/WorkspaceSwitcher.tsx',
         // ⚠️ `app/**/settings/workspace/layout.tsx` is NOT here. It is an async
         // Server Component whose whole body is a session check and a redirect,
@@ -1761,6 +1759,21 @@ export default defineConfig({
         'lib/services/fleetQuotaRequestService.ts',
         'lib/services/fleetShardQuotaService.ts',
         'scripts/fleet/fleetAdminPoolCommands.ts',
+        // Story MOTIR-9709 · MOTIR-9933 — the AWS deploy script and the read-only
+        // `fleet-admin check-quota`. MEASURED on the story branch against
+        // `tests/awsDeploy/**`, `tests/hosting/credentialModes.test.ts` and
+        // `tests/ciFleet/fleetAdminCheckQuota.test.ts`: awsDeploy 98.87 / 98.07 /
+        // 100 / 100, rollingDeploy 100 / 96.42 / 100 / 100, migrateRun, ports and
+        // taskDefinitions 100 on all four, fleetAdminCheckQuota 100 / 100 / 100 /
+        // 100 (statements / branches / functions / lines). The branches left are the
+        // entry guard and a container missing from its own clone. Pinned at the
+        // fleet's 90 floor below. (`lib/blob/s3.ts` is gated further down.)
+        'scripts/aws-deploy/awsDeploy.ts',
+        'scripts/aws-deploy/migrateRun.ts',
+        'scripts/aws-deploy/ports.ts',
+        'scripts/aws-deploy/rollingDeploy.ts',
+        'scripts/aws-deploy/taskDefinitions.ts',
+        'scripts/fleet/fleetAdminCheckQuota.ts',
         // Story MOTIR-9367 · MOTIR-9564 — the platform Pools read and its section on
         // /admin/monitoring. MEASURED on this branch against `poolsStoryIntegration`,
         // `poolsSection` and `platformFleetPoolsService`: the service 100 on all four,
@@ -3854,6 +3867,43 @@ export default defineConfig({
           branches: 90,
           statements: 90,
         },
+        // Story MOTIR-9709 · MOTIR-9933 — measured above, pinned at the floor.
+        'scripts/aws-deploy/awsDeploy.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'scripts/aws-deploy/migrateRun.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'scripts/aws-deploy/ports.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'scripts/aws-deploy/rollingDeploy.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'scripts/aws-deploy/taskDefinitions.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'scripts/fleet/fleetAdminCheckQuota.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
         // Story MOTIR-9219 · MOTIR-9295 — measured above, pinned at the floor (the start
         // service's branches at 88, for the reason the `include` block gives).
         'lib/planChange/planOffer.ts': {
@@ -5503,12 +5553,6 @@ export default defineConfig({
           statements: 90,
         },
         'app/**/_components/WorkspaceSidebarHeader.tsx': {
-          lines: 90,
-          functions: 90,
-          branches: 90,
-          statements: 90,
-        },
-        'app/**/_components/JobRunsFoldInSection.tsx': {
           lines: 90,
           functions: 90,
           branches: 90,

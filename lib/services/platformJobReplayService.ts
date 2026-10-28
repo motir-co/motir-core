@@ -16,9 +16,10 @@ import type { ReplayAllResultDTO } from '@/lib/dto/jobs';
 // dead letter from /admin/jobs, a workspace's or a workspace-less one, and the
 // replay is written to the platform audit log.
 //
-// It is `jobsDashboardService.replaySystemDLQ`'s shape minus that door's one
-// refusal: the system door refuses a row that has a workspace, and this one is
-// the staff door that takes it. Both keep working; neither is altered.
+// It is the only replay door left: the tenant dashboard's manager-gated replay
+// and its System tab's workspace-less replay were deleted with that dashboard
+// (Story MOTIR-9982). Unlike the System tab's door it takes a row that has a
+// workspace as readily as one that has none.
 //
 // ⚠️ TWO TRANSACTIONS, NEVER NESTED. The replay runs under `withSystemContext`
 // (`app.system_admin`, the only binding that admits every tenant's row); the
@@ -64,7 +65,7 @@ export const platformJobReplayService = {
           ? { outcome: 'already-replayed', entry: toJobRunDlqDTO(entry) }
           : await replayDlqInTx(dlqId, tx);
 
-      // The same warn-level line the other two doors write; `door` tells them apart.
+      // The warn-level line every replay door has written; `door` names this one.
       console.warn(
         '[jobs.replay]',
         JSON.stringify({

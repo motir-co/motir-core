@@ -56,7 +56,12 @@ export interface GithubAccountForOrganizationDTO {
 
 export type GithubAccountsForOrganizationDTO =
   | { state: 'ok'; accounts: GithubAccountForOrganizationDTO[] }
-  | { state: 'identity_required' };
+  | {
+      state: 'identity_required';
+      /** `refused` — a linked identity exists, but GitHub no longer accepts its
+       *  token (Bug MOTIR-8984); absent — no linked identity at all. */
+      reason?: 'refused';
+    };
 
 /** One account's repositories as this organisation may claim them. A repository
  *  `connected_elsewhere` carries no identifier of who owns it. */

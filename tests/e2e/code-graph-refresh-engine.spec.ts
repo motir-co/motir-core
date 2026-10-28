@@ -278,25 +278,17 @@ test('the coalesced run is RENDERED on the operator dashboard @smoke', async ({
 
   await expect
     .poll(async () => (await ledgerRows())[0]?.status ?? 'none', {
-      message: 'the refresh should settle before the dashboard is read',
+      message: 'the refresh should settle in the ledger',
       timeout: 120_000,
       intervals: [500],
     })
     .toBe('succeeded');
 
-  // The only user-visible thing this story could have broken: the ledger DTOs the
-  // jobs surface reads. Unchanged by the collapse, and this is what says so.
-  //
-  // ⚠️ THE DOOR MOVED FOR THIS FIXTURE (Story MOTIR-4843 · MOTIR-4861). A fresh
-  // sign-up gets ONE auto-created workspace — the COLLAPSED state — and
-  // `/settings/workspace/jobs` `notFound()`s there now, joining the three sibling
-  // workspace routes MOTIR-3502 folded in. The dashboard is a section on the one
-  // settings home instead (`JobRunsFoldInSection`): same component, same reads,
-  // same tabs and filters, with its links built from THIS address.
-  await page.goto('/settings/organization');
-  await expect(page.getByRole('heading', { name: 'Job runs', exact: true })).toBeVisible();
-  const row = page.getByText(REFRESH_JOB, { exact: false }).first();
-  await expect(row).toBeVisible();
+  // ⚠️ A DASHBOARD STEP STOOD HERE (Story MOTIR-4843 · MOTIR-4861), and its
+  // surface is retired (Story MOTIR-9982 · MOTIR-10042): it opened the tenant
+  // Job runs dashboard to see this refresh's row. The ledger is staff-only at
+  // `/admin/jobs` now, covered by its own specs; the settled ledger row polled
+  // above is the claim.
 });
 
 test('a worker KILLED mid-index resumes on the SAME container — one boot, no orphan @smoke', async ({

@@ -737,9 +737,6 @@
       "pickProjectFirst": "Pick a project first.",
       "unknownRelationship": "Unknown relationship.",
       "pickIssueToLink": "Pick a work item to link.",
-      "missingDlqId": "Missing dead-letter id.",
-      "ownerOnlyReplay": "Only a workspace Manager can replay jobs.",
-      "dlqGone": "That dead-letter entry no longer exists.",
       "workspaceNameEmpty": "Workspace name cannot be empty.",
       "useLeaveToRemoveSelf": "Use Leave to remove yourself.",
       "cannotRemoveLastMember": "Cannot remove the last member.",
@@ -765,9 +762,7 @@
       "workspaceSecurityForbidden": "Only owners and admins of a workspace can change its security settings.",
       "refused": "That didn’t go through: {reason}",
       "organizationClosing": "This organization is scheduled for deletion and is read-only. Only its Owner can cancel the deletion.",
-      "memberProjectsFailed": "Couldn’t load their projects.",
-      "systemReplayWorkspaceRow": "That dead letter belongs to a workspace — replay it from that workspace's Dead letter tab.",
-      "systemReplayOperatorOnly": "Only the platform operator can replay system dead letters."
+      "memberProjectsFailed": "Couldn’t load their projects."
     },
     "links": {
       "notFound": "That work item no longer exists.",
@@ -2066,13 +2061,11 @@
       "nav": {
         "group": {
           "general": "General",
-          "access": "Access",
-          "operations": "Operations"
+          "access": "Access"
         },
         "workspace": "Workspace",
         "security": "Security",
         "roles": "Roles & permissions",
-        "jobs": "Job runs",
         "publicAddress": "Public address"
       }
     },
@@ -2202,7 +2195,58 @@
       "inviteNoProjectsWarning": "They won’t be able to open anything until a Manager adds them to a project.",
       "inviteJoinsAsMember": "They join as a Member. You can change their role after they accept.",
       "errorInviteProjects": "One of those projects can’t be joined. Pick them again.",
-      "errorInviteNotAllowed": "You can’t send this invite. Only a workspace Manager can invite with Limited access."
+      "errorInviteNotAllowed": "You can’t send this invite. Only a workspace Manager can invite with Limited access.",
+      "pending": {
+        "heading": "Pending invitations",
+        "invitationColumn": "Invitation",
+        "deliveryColumn": "Delivery",
+        "invitedBy": "Invited by {name}, {sent}",
+        "invitedByFormer": "Invited by a former member, {sent}",
+        "expiresIn": "Expires in {count, plural, one {# day} other {# days}}",
+        "expiresToday": "Expires today",
+        "expiresOn": "Expires {date}",
+        "resend": "Resend",
+        "resendLabel": "Resend the invitation to {email}",
+        "resendScopeTooltip": "Only a Manager can resend a Limited invitation",
+        "resentToast": "New invitation sent to {email}",
+        "refusalRateLimited": "Limit reached: 3 invitations per address per hour.",
+        "refusalRateLimitedBody": "Try again later.",
+        "refusalAlreadyMember": "This person has already joined the workspace.",
+        "refusalNotAllowed": "You can't resend this invitation.",
+        "refusalNoLongerPending": "This invitation is no longer pending.",
+        "showAll": "Show all {count} pending invitations",
+        "showFewer": "Show fewer",
+        "delivery": {
+          "queued": {
+            "label": "Queued",
+            "helper": "Waiting to be sent"
+          },
+          "accepted": {
+            "label": "Accepted",
+            "helper": "The mail provider has it"
+          },
+          "delivered": {
+            "label": "Delivered",
+            "helper": "Reached the recipient's mail server"
+          },
+          "bounced": {
+            "label": "Bounced",
+            "helper": "The address refused it"
+          },
+          "complained": {
+            "label": "Complained",
+            "helper": "Marked as spam"
+          },
+          "delayed": {
+            "label": "Delayed",
+            "helper": "The provider is still retrying"
+          },
+          "failed": {
+            "label": "Failed",
+            "helper": "Could not be sent"
+          }
+        }
+      }
     },
     "danger": {
       "cantLeaveTitle": "Can't leave",
@@ -2920,86 +2964,6 @@
       "heroOverviewSubheading": "The tagline, tags and README visitors see on your public page.",
       "editOnPublicPage": "Edit the public page",
       "heroOverviewNote": "Opens Settings › Public page. You can write it before the project is public."
-    },
-    "jobs": {
-      "title": "Job runs",
-      "subtitle": "Background jobs for this workspace — delivery of invites & password resets, and any scheduled work. Failed jobs land in the dead-letter queue, where an owner can replay them.",
-      "tab": {
-        "runs": "Recent runs",
-        "dlq": "Dead letter",
-        "system": "System"
-      },
-      "tabNavLabel": "Job run views",
-      "dlqBadgeLabel": "{count} in dead-letter queue",
-      "filterGroupLabel": "Filter by status",
-      "filter": {
-        "all": "All",
-        "succeeded": "Succeeded",
-        "failed": "Failed",
-        "running": "Running",
-        "abandoned": "Abandoned"
-      },
-      "runsTableCaption": "Background job runs",
-      "col": {
-        "status": "Status",
-        "delivery": "Delivery",
-        "function": "Function",
-        "event": "Event",
-        "attempts": "Attempts",
-        "started": "Started",
-        "duration": "Duration",
-        "failure": "Failure",
-        "details": "Details",
-        "firstFailed": "First failed",
-        "lastFailed": "Last failed",
-        "replayed": "Replayed",
-        "actions": "Actions"
-      },
-      "view": "View",
-      "runDetailTitle": "Run detail",
-      "dlqTableCaption": "Dead-letter queue",
-      "replay": "Replay",
-      "replayTooltip": "Only a workspace Manager can replay jobs",
-      "alreadyReplayedToastTitle": "Already replayed",
-      "alreadyReplayedToastDesc": "This entry was replayed earlier — nothing new was queued.",
-      "replayedToastTitle": "Job replayed",
-      "replayedToastDesc": "The original event was re-emitted.",
-      "replayErrorTitle": "Could not replay",
-      "dlqDetailTitle": "Dead-letter detail",
-      "dlqDetailDesc": "The failure and the original event payload (replayable as-is).",
-      "failureHeading": "Failure",
-      "eventPayloadHeading": "Event payload",
-      "pageLabel": "Page {page}",
-      "previous": "Previous",
-      "next": "Next",
-      "refresh": "Refresh",
-      "dlqEmptyTitle": "Nothing in the dead-letter queue",
-      "dlqEmptyDesc": "Every job has succeeded or is still retrying.",
-      "runsEmptyTitle": "No job runs yet",
-      "runsEmptyDesc": "When a background job runs, it'll appear here.",
-      "delivery": {
-        "accepted": "accepted",
-        "delivered": "delivered",
-        "bounced": "bounced",
-        "complained": "complained",
-        "delayed": "delayed"
-      },
-      "deliveryNone": "No delivery record",
-      "deliveryDetail": {
-        "heading": "Delivery",
-        "state": "State",
-        "messageId": "Message id",
-        "recipient": "Recipient",
-        "template": "Template",
-        "lastEvent": "Last event",
-        "never": "No provider event yet"
-      },
-      "systemDlqTitle": "Dead letters with no workspace",
-      "systemDlqSummary": "{waiting} waiting to be replayed · {replayed} replayed in the last 7 days",
-      "systemDlqTableCaption": "System dead letters",
-      "systemDlqEmptyTitle": "No system dead letters",
-      "systemDlqEmptyDesc": "Every job without a workspace has succeeded or is still retrying.",
-      "systemRunsTitle": "System runs"
     },
     "account": {
       "eyebrow": "Account settings",
@@ -4176,10 +4140,6 @@
         "security": "Security",
         "usage": "Usage & cost",
         "billing": "Billing & plans"
-      },
-      "jobRunsFoldIn": {
-        "title": "Job runs",
-        "subtitle": "Background work for this workspace — what ran, what failed, and what is waiting in the dead-letter queue."
       }
     },
     "gitAccounts": {
@@ -7534,7 +7494,8 @@
       "install_error": "We couldn't finish setting up the GitHub App. Please try installing again.",
       "select_repos": "The Motir GitHub App is installed. Choose which of the account's repositories this organisation connects.",
       "repo_unavailable": "That repository is already connected to another organisation, so it wasn't added here. Nothing else changed.",
-      "installation_not_accessible": "You can't see that GitHub account on GitHub, so it wasn't linked to this organisation. Nothing was changed."
+      "installation_not_accessible": "You can't see that GitHub account on GitHub, so it wasn't linked to this organisation. Nothing was changed.",
+      "identity_refused": "GitHub no longer accepts your GitHub sign-in, so Motir couldn't finish connecting the App. In Settings → Account → Git accounts, disconnect your account and connect it again, then try again."
     },
     "connect": {
       "title": "Connect GitHub",
@@ -7932,7 +7893,9 @@
       "identity": {
         "title": "Connect your GitHub account first",
         "body": "Motir lists the GitHub accounts you can see through your own GitHub identity. Connect it in Settings → Account → Git accounts, then come back here.",
-        "action": "Go to Git accounts"
+        "action": "Go to Git accounts",
+        "refusedTitle": "Reconnect your GitHub account",
+        "refusedBody": "GitHub no longer accepts the sign-in Motir has for you: it was revoked or has expired. In Settings → Account → Git accounts, disconnect it and connect it again, then come back here. Nothing was changed."
       },
       "cancel": "Cancel",
       "back": "All accounts",

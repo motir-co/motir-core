@@ -5140,21 +5140,39 @@ has NOT STARTED. The level view a session opened on is a snapshot that cannot te
 "being written now" from "not started", so the session reads this, live, first.
 
 ```jsonc
-get_plan_authoring_state({ planId })
-// → { planId: "cm…", status: "generating", proposals: [
+get_plan_authoring_state({ planId, workItems: ["ACME-12"] })
+// → { planId: "cm…", status: "generating",
+//     proposals: [
 //      { ref: "planItem:ck_email", op: "add", title: "Send the invoice email", state: "authoring" },
-//      { ref: "planItem:ck_retry", op: "add", title: "Retry a bounced email",  state: "not_started" } ] }
+//      { ref: "planItem:ck_retry", op: "add", title: "Retry a bounced email",  state: "not_started" } ],
+//     committed: [
+//      { ref: "cm_wi_9", key: "ACME-9",  title: "Invoice list", inWalk: true,  state: "not_started" },
+//      { ref: "cm_wi_12", key: "ACME-12", title: "Billing page", inWalk: false, state: "not_in_walk" } ],
+//     unresolved: [] }
 ```
 
 `authoring` — an `author` step reported through `report_plan_step` targets the
 card and has not ended. `authored` — an author session that targeted it has
-ended, or it was appended COMPLETE and never needed one (a `modify` always is).
+ended, or it was appended COMPLETE and never needed one.
 `not_started` — no author session, live or ended, and the card is still
 incomplete: a missing body or explanation, a `validate_plan` section finding, or,
 on a childless leaf, a missing type, executor, size or difficulty. "Complete" is
 plan.py's own `author_gaps` test, so a card the surgical add appended complete
 reads `authored` rather than `not_started` for ever. `project:browse`, read
 through the same reader gate as `get_plan`; it writes nothing.
+
+**Committed cards (MOTIR-10001)** are answered in `committed`, by work-item id. A
+committed card the walk RE-AUTHORS races exactly as a proposal does, so it reads
+the same three states: one the lay listed — a `modify` that changes its title, or
+an id the driver recorded in the plan's `plannerRecord.walkListed` before the
+card's session opens — one a `modify` rewrote the body of (`authored`), or one an
+`author` step has targeted. Every card named in the optional **`workItems`** (keys
+or ids, at most 50) is answered too, and a committed card the walk does not
+re-author reads **`not_in_walk`**: no session of this plan will rewrite its body,
+so the planner rule is that an edge drawn onto it must rest on what its body
+already says, with that as the edge's reason. A `workItems` entry naming no work
+item of the plan's project comes back in `unresolved` rather than failing the read.
+A `modify` row no longer appears in `proposals`; its card is a `committed` row.
 
 ##### The PROJECTED mode on the existing validators
 

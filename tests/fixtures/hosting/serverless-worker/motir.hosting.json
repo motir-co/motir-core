@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "targets": ["serverless"],
+  "port": 8080,
+  "healthCheck": { "path": "/health" },
+  "startCommand": "node /app/server.mjs",
+  "buildCommand": "echo prebuilt",
+  "requires": { "websockets": false, "backgroundWork": true },
+  "database": { "kind": "postgres", "migrateCommand": "node /app/server.mjs migrate" }
+}

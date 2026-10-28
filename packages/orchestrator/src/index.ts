@@ -55,3 +55,11 @@ export * from './hosting/shape';
 export * from './hosting/originSecret';
 export * from './adapters/fake/hosting';
 export * from './adapters/fly/hosting';
+export * from './adapters/serverless';
+// The DATABASE PORT (MOTIR-9971): an application's own database and its fake.
+export * from './database/types';
+export * from './database/errors';
+export * from './database/env';
+export * from './database/fake';
+export { createNeonDatabasePort } from './adapters/neon/database';
+export { neonDatabaseConfig } from './adapters/neon/config';

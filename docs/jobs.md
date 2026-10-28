@@ -75,8 +75,8 @@ of the Playwright runner, which is why `globalSetup` is where it lives.
 
 > ⚠️ **HISTORICAL.** This used to be `pnpm dev:inngest` plus a second terminal
 > running `inngest-cli dev -u http://localhost:3000/api/inngest`, which gave a
-> local dashboard on `:8288`. The in-app equivalent is
-> `/settings/workspace/jobs` (below), which is the surface an operator uses in
+> local dashboard on `:8288`. The in-app equivalent is the platform job ledger
+> at `/admin/jobs` (below, staff only), which is the surface an operator uses in
 > production too.
 
 ## `defineJob(options, handler)`
@@ -918,7 +918,7 @@ run and its replayable record always land together. The DLQ row captures
 everything needed to replay: the `function_id`, the original `event_name` +
 full `event_data` payload, the serialized `failure`, the `attempts` count, and
 `first_failed_at` / `last_failed_at`. This is the durable operator surface
-(the 1.6.5 dashboard's DLQ tab reads it). It used to sit beside a vendor failure
+(the **Dead letters** tab of `/admin/jobs` reads it). It used to sit beside a vendor failure
 view that was available for deep tracing and was never the source of truth for
 operator action; there is one surface now, and it is this one.
 
@@ -926,34 +926,39 @@ operator action; there is one surface now, and it is this one.
 
 - **How DLQ rows appear** — automatically, once a job's retries are exhausted.
   Each row is one dead-lettered run. `replayed_at` is null until you replay it.
-- **How to replay** — click **Replay** on the dead-letter row in the operator
-  dashboard (see below). Under the hood the owner-gated `jobsDashboardService`
-  calls `replayDLQ(dlqId, tx)` (`lib/jobs/dlq.ts`), which re-emits the original
+- **How to replay** — platform staff at `operator` or above open `/admin/jobs` →
+  **Dead letters**, which lists every workspace's dead letters and the
+  workspace-less ones a `system.*` job writes, together: every unreplayed row,
+  then the ones replayed in the last seven days. Click **Replay** on a row to
+  replay that one; **Replay** is absent on a replayed row. Under the hood
+  `platformJobReplayService.replayOne` runs `replayDLQ(dlqId, tx)`
+  (`lib/jobs/dlq.ts`) under `withSystemContext`, which re-emits the original
   event — with a **re-shaped idempotency key** (see below) — and stamps
-  `replayed_at` so the action is auditable.
-- **How to replay a dead letter with NO workspace** — every `system.*` job writes
-  its dead letters with `workspace_id` NULL, and the workspace **Dead letter** tab
-  cannot take them (it replays rows of the active workspace, as a workspace Manager).
-  Platform staff at `operator` level or above replay them from **System** → **Dead
-  letters with no workspace** on the jobs dashboard (`/settings/workspace/jobs?tab=system`,
-  or the same tab in the organization's _Job runs_ section). That list is every
-  unreplayed row plus the ones replayed in the last seven days; **Replay** is absent
-  on a replayed row. Under the hood `replaySystemDlqAction` calls
-  `jobsDashboardService.replaySystemDLQ`, which runs `replayDLQ(dlqId, tx)` under
-  `withSystemContext` — the same re-emit, key re-shaping and stamp as above — and
-  refuses a caller below `operator` and a row that has a workspace (replay
-  that one from its workspace's Dead letter tab). MOTIR-8083.
+  `replayed_at`, then writes a `jobs.dlq_replay` row to the platform audit log
+  (MOTIR-9985). It refuses a caller below `operator` before any read.
+- **How to replay every dead letter of one function** — choose the function in
+  the **Function** filter on **Dead letters** (it lists every function with a
+  row waiting, and its count), then **Replay all _N_** and confirm. Each row is
+  replayed through the same door, one transaction and one audit row each, 50 at
+  a time; a row someone else replays first is counted as already replayed, and a
+  row that fails stays in the list (MOTIR-9986). `operator` or above.
+- **Who sees what** — a `support` account reads both tabs and gets no replay
+  control (the page says so); the actions and services refuse below `operator`
+  whatever the page draws. A tenant user, including a workspace Manager or an
+  organization Owner, gets the console's 404. The tenant Job runs page at
+  `/settings/workspace/jobs` that used to carry a workspace Manager's replay was
+  retired (Story MOTIR-9982); that address is an ordinary 404 now.
 
   ⚠️ **"A second click does nothing" holds only for a job that declares an
   idempotency template.** The dedup is the `(job_id, idempotency_key)` unique index,
   and a job with no template (`system.platform-meter-report` is one; `email.send`
   is not) has a NULL key and nothing to collide on, so replaying the same row twice
   runs it twice. For the meter report that is harmless (its receiver accepts a
-  duplicate), which is why the System tab takes **Replay** off a row once it is
+  duplicate), which is why `/admin/jobs` takes **Replay** off a row once it is
   replayed instead of relying on the dedup to absorb a second press.
 
 - **What a second click does** — nothing, and it says so. The row is already
-  replayed, its key is already taken, and the dashboard toasts _"Already
+  replayed, its key is already taken, and `/admin/jobs` toasts _"Already
   replayed"_ rather than an error; `replayed_at` keeps the time of the replay
   that actually queued a run (MOTIR-3730).
 - **When NOT to replay** — if the failure was a bad payload or a since-removed
@@ -965,7 +970,9 @@ nothing else in the system replays, discards or expires it. So every row needs
 a verdict, taken from its `failure`, and one of two dispositions (the rule
 MOTIR-5844 applied to the 1,381 rows that had accumulated by 2026-09-21):
 
-- **Replay** it (a system job's row: from the System tab, see above) — only when the
+- **Replay** it — at `/admin/jobs` → **Dead letters**, as `operator` or above:
+  filter by the function the filed bug names, then **Replay** one row, or
+  **Replay all** for that function (see above) — only when the
   failure was transient AND the run is still wanted. A cron tick is almost never still wanted, because every later tick
   already ran; a superseded run (an index of a repository that has been indexed
   since) is not either. **Replaying `email.send` sends real mail**, late, to
@@ -1122,42 +1129,45 @@ set` restarts the machines on the CURRENT release, not on `main`, so
 
 ## Operator dashboard
 
-`/settings/workspace/jobs` (Subtask 1.6.5) is the in-app surface for the ledger
-above, and since MOTIR-3418 it is the ONLY one — there is no vendor dashboard to
-fall back to. It's a
-workspace-settings sub-page (a "Job runs" link under the sidebar's Settings
-group) backed by `lib/services/jobsDashboardService.ts`.
+`/admin/jobs` (Story MOTIR-9980) is the in-app surface for the ledger above, and
+since MOTIR-3418 there is no vendor dashboard to fall back to. It is a page of
+the platform console (`app/(admin)`), for platform staff only: an account whose
+`User.platformRole` is `support` or above (`lib/jobs/platformStanding.ts`); any
+other caller gets the console's 404. Its reads are
+`lib/services/platformJobsLedgerService.ts` (the runs read goes through
+`jobsDashboardService.listSystemRuns`, which joins each send to its delivery
+record); its replays are `lib/services/platformJobReplayService.ts`.
 
 **Tabs.**
 
-- **Recent runs** (default) — every `job_run` for the active workspace,
-  newest-first, 50 per page. Columns: status pill (succeeded / failed /
-  running), function, event, attempts, started, duration, and the failure's
-  first line (full JSON via the row's **View** dialog). A status-filter row
-  (All / Succeeded / Failed / Running) narrows the list.
-- **Dead letter** — the workspace's `job_run_dlq` rows, newest-failure-first.
-  The tab carries a badge with the count of **not-yet-replayed** entries.
-  **Replay** is gated to the workspace **owner** (others see a disabled button
-  with a tooltip); **View** opens the failure + the replayable event payload.
-- **System** — visible only to platform staff: an account whose
-  `User.platformRole` is `support` or above (`lib/jobs/platformStanding.ts`). Same
-  shape as Recent runs but spans **all** workspaces, including untenanted system
-  jobs (`workspace_id IS NULL`). Replaying a dead letter with no workspace from it
-  needs `operator` or above. Both are read fresh on every request, so a revoked
-  role loses the tab on the next page load; roles are granted out-of-band, per
-  `docs/decisions/platform-staff-auth.md` §6 (MOTIR-8196).
+- **Runs** (default) — every `job_run` in every workspace and in none, newest
+  first, 50 per page, with a status filter (All / Running / Succeeded / Failed /
+  Abandoned). Each row names its workspace, or says it has none.
+- **Dead letters** — every unreplayed `job_run_dlq` row, newest failure first,
+  then those replayed in the last seven days; the tab carries the waiting count.
+  The **Function** filter narrows both halves to one function and reaches its
+  rows however old they are. **Replay** and **Replay all** need `operator` or
+  above; `support` reads the tab with neither control.
 
-  _Migration note:_ `PLATFORM_ADMIN_EMAIL` was removed with no fallback; platform
-  staff are granted a role instead. Setting the variable now does nothing.
+Both levels are read fresh on every request, so a revoked role loses the page on
+the next load; roles are granted out-of-band, per
+`docs/decisions/platform-staff-auth.md` §6 (MOTIR-8196). Viewing is audited by
+the console's layout, and each replay writes a platform audit row.
 
-**Scoping.** Tenant reads run under `withWorkspaceContext`, so the `job_run` /
-`job_run_dlq` RLS policies scope every row to the active workspace (the repo
-also filters by `workspace_id` explicitly, so the scope holds in dev/CI where
-the superuser bypasses RLS). The System tab is the one `withSystemContext` read.
+_Migration note:_ `PLATFORM_ADMIN_EMAIL` was removed with no fallback; platform
+staff are granted a role instead. Setting the variable now does nothing.
 
-**No realtime in v1.** There is no polling or websockets — a **Refresh** button
-reloads the data. Auto-refresh is deferred to a holistic reporting pass in
-Epic 6 (PRODECT_FINDINGS #37).
+_Retired:_ the workspace-settings **Job runs** page at `/settings/workspace/jobs`
+(Subtask 1.6.5), its organization-page fold-in and its System tab were removed
+in Story MOTIR-9982. That address answers an ordinary 404.
+
+**Scoping.** Every read and replay runs under `withSystemContext`, the only RLS
+binding that admits every tenant's rows and the workspace-less ones, so the
+platform role check in the service is the whole gate; the page's 404 is a
+second line.
+
+**No realtime in v1.** There is no polling or websockets; reload the page to
+see new rows.
 
 ## Scheduled jobs
 
@@ -1341,7 +1351,7 @@ against it rather than from "one interval since the last tick".
 (`lib/services/jobScheduleHealthService.ts`). It walks every registered cron job
 and fails the run when one has missed more than one consecutive tick,
 dead-lettering with the offenders named in the message — which lands on
-`/settings/workspace/jobs` → DLQ, the surface a person actually opens. Cron jobs
+`/admin/jobs` → **Dead letters**, the surface a person actually opens. Cron jobs
 are the tripwire because they are the only ones whose silence is unambiguous: an
 event-triggered job that never ran may simply never have been triggered.
 

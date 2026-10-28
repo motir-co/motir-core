@@ -17,7 +17,7 @@ import { cn } from '@/lib/utils/cn';
 // `columns` (header + per-row `cell` render-prop) and a nested `rows` model and
 // emits the WAI-ARIA `treegrid` markup the design's hierarchical issue table
 // needs (design/work-items/tree.png). There is no other table primitive in
-// components/ui — JobsDashboard / WorkflowEditor each hand-roll a local
+// components/ui — WorkflowEditor hand-rolls a local
 // `<table>`; this is the shared one a tree view reaches for.
 //
 // PURELY PRESENTATIONAL: it renders already-shaped data + render-props and

@@ -737,9 +737,6 @@
       "pickProjectFirst": "Najpierw wybierz projekt.",
       "unknownRelationship": "Nieznana relacja.",
       "pickIssueToLink": "Wybierz element roboczy do powiązania.",
-      "missingDlqId": "Brak identyfikatora wpisu w kolejce niedostarczonych.",
-      "ownerOnlyReplay": "Tylko menedżer obszaru roboczego może ponownie uruchamiać zadania.",
-      "dlqGone": "Ten wpis w kolejce niedostarczonych już nie istnieje.",
       "workspaceNameEmpty": "Nazwa obszaru roboczego nie może być pusta.",
       "useLeaveToRemoveSelf": "Aby usunąć siebie, użyj opcji Opuść.",
       "cannotRemoveLastMember": "Nie można usunąć ostatniego członka.",
@@ -765,9 +762,7 @@
       "workspaceSecurityForbidden": "Tylko właściciele i administratorzy obszaru roboczego mogą zmieniać jego ustawienia zabezpieczeń.",
       "refused": "Nie udało się: {reason}",
       "organizationClosing": "Ta organizacja jest zaplanowana do usunięcia i jest tylko do odczytu. Tylko jej właściciel może anulować usunięcie.",
-      "memberProjectsFailed": "Nie udało się załadować projektów tej osoby.",
-      "systemReplayWorkspaceRow": "Ten wpis w kolejce niedostarczonych należy do przestrzeni roboczej — uruchom go ponownie na karcie Niedostarczone tej przestrzeni.",
-      "systemReplayOperatorOnly": "Tylko operator platformy może ponownie uruchamiać systemowe niedostarczone wpisy."
+      "memberProjectsFailed": "Nie udało się załadować projektów tej osoby."
     },
     "links": {
       "notFound": "Ten element roboczy już nie istnieje.",
@@ -2066,13 +2061,11 @@
       "nav": {
         "group": {
           "general": "Ogólne",
-          "access": "Dostęp",
-          "operations": "Operacje"
+          "access": "Dostęp"
         },
         "workspace": "Obszar roboczy",
         "security": "Zabezpieczenia",
         "roles": "Role i uprawnienia",
-        "jobs": "Uruchomienia zadań",
         "publicAddress": "Adres publiczny"
       }
     },
@@ -2202,7 +2195,58 @@
       "inviteNoProjectsWarning": "Osoba nie będzie mogła niczego otworzyć, dopóki menedżer nie doda jej do projektu.",
       "inviteJoinsAsMember": "Osoba dołączy jako członek. Możesz zmienić jej rolę po przyjęciu zaproszenia.",
       "errorInviteProjects": "Do jednego z tych projektów nie można dołączyć. Wybierz je ponownie.",
-      "errorInviteNotAllowed": "Nie możesz wysłać tego zaproszenia. Tylko menedżer obszaru roboczego może zapraszać z ograniczonym dostępem."
+      "errorInviteNotAllowed": "Nie możesz wysłać tego zaproszenia. Tylko menedżer obszaru roboczego może zapraszać z ograniczonym dostępem.",
+      "pending": {
+        "heading": "Oczekujące zaproszenia",
+        "invitationColumn": "Zaproszenie",
+        "deliveryColumn": "Dostarczenie",
+        "invitedBy": "Zaprasza: {name}, {sent}",
+        "invitedByFormer": "Zaprasza: były członek, {sent}",
+        "expiresIn": "Wygasa za {count, plural, one {# dzień} few {# dni} many {# dni} other {# dnia}}",
+        "expiresToday": "Wygasa dzisiaj",
+        "expiresOn": "Wygasa {date}",
+        "resend": "Wyślij ponownie",
+        "resendLabel": "Wyślij ponownie zaproszenie na adres {email}",
+        "resendScopeTooltip": "Tylko menedżer może ponownie wysłać ograniczone zaproszenie",
+        "resentToast": "Wysłano nowe zaproszenie na adres {email}",
+        "refusalRateLimited": "Osiągnięto limit: 3 zaproszenia na adres na godzinę.",
+        "refusalRateLimitedBody": "Spróbuj ponownie później.",
+        "refusalAlreadyMember": "Ta osoba już dołączyła do obszaru roboczego.",
+        "refusalNotAllowed": "Nie możesz ponownie wysłać tego zaproszenia.",
+        "refusalNoLongerPending": "To zaproszenie już nie oczekuje.",
+        "showAll": "Pokaż wszystkie oczekujące zaproszenia ({count})",
+        "showFewer": "Pokaż mniej",
+        "delivery": {
+          "queued": {
+            "label": "W kolejce",
+            "helper": "Czeka na wysłanie"
+          },
+          "accepted": {
+            "label": "Przyjęte",
+            "helper": "Dostawca poczty je otrzymał"
+          },
+          "delivered": {
+            "label": "Dostarczone",
+            "helper": "Dotarło do serwera poczty odbiorcy"
+          },
+          "bounced": {
+            "label": "Odrzucone",
+            "helper": "Adres je odrzucił"
+          },
+          "complained": {
+            "label": "Skarga",
+            "helper": "Oznaczone jako spam"
+          },
+          "delayed": {
+            "label": "Opóźnione",
+            "helper": "Dostawca wciąż ponawia próby"
+          },
+          "failed": {
+            "label": "Niepowodzenie",
+            "helper": "Nie udało się wysłać"
+          }
+        }
+      }
     },
     "danger": {
       "cantLeaveTitle": "Nie można odejść",
@@ -2920,86 +2964,6 @@
       "heroOverviewSubheading": "Hasło, tagi i README, które odwiedzający widzą na Twojej stronie publicznej.",
       "editOnPublicPage": "Edytuj stronę publiczną",
       "heroOverviewNote": "Otwiera Ustawienia › Strona publiczna. Możesz ją przygotować, zanim projekt stanie się publiczny."
-    },
-    "jobs": {
-      "title": "Uruchomienia zadań",
-      "subtitle": "Zadania w tle dla tego obszaru roboczego — dostarczanie zaproszeń i resetów hasła oraz wszelka zaplanowana praca. Nieudane zadania trafiają do kolejki niedostarczonych, gdzie właściciel może je ponownie uruchomić.",
-      "tab": {
-        "runs": "Ostatnie uruchomienia",
-        "dlq": "Niedostarczone",
-        "system": "System"
-      },
-      "tabNavLabel": "Widoki uruchomień zadań",
-      "dlqBadgeLabel": "W kolejce niedostarczonych: {count}",
-      "filterGroupLabel": "Filtruj według statusu",
-      "filter": {
-        "all": "Wszystkie",
-        "succeeded": "Udane",
-        "failed": "Nieudane",
-        "running": "W trakcie",
-        "abandoned": "Porzucone"
-      },
-      "runsTableCaption": "Uruchomienia zadań w tle",
-      "col": {
-        "status": "Status",
-        "delivery": "Dostarczenie",
-        "function": "Funkcja",
-        "event": "Zdarzenie",
-        "attempts": "Próby",
-        "started": "Rozpoczęto",
-        "duration": "Czas trwania",
-        "failure": "Niepowodzenie",
-        "details": "Szczegóły",
-        "firstFailed": "Pierwsze niepowodzenie",
-        "lastFailed": "Ostatnie niepowodzenie",
-        "replayed": "Uruchomiono ponownie",
-        "actions": "Akcje"
-      },
-      "view": "Wyświetl",
-      "runDetailTitle": "Szczegóły uruchomienia",
-      "dlqTableCaption": "Kolejka niedostarczonych",
-      "replay": "Uruchom ponownie",
-      "replayTooltip": "Tylko menedżer obszaru roboczego może ponownie uruchamiać zadania",
-      "alreadyReplayedToastTitle": "Już uruchomiono ponownie",
-      "alreadyReplayedToastDesc": "Ten wpis został już wcześniej uruchomiony ponownie — nic nowego nie zostało dodane do kolejki.",
-      "replayedToastTitle": "Zadanie uruchomiono ponownie",
-      "replayedToastDesc": "Pierwotne zdarzenie zostało wyemitowane ponownie.",
-      "replayErrorTitle": "Nie udało się uruchomić ponownie",
-      "dlqDetailTitle": "Szczegóły wpisu niedostarczonego",
-      "dlqDetailDesc": "Niepowodzenie i pierwotny ładunek zdarzenia (można go ponownie uruchomić bez zmian).",
-      "failureHeading": "Niepowodzenie",
-      "eventPayloadHeading": "Ładunek zdarzenia",
-      "pageLabel": "Strona {page}",
-      "previous": "Poprzednia",
-      "next": "Następna",
-      "refresh": "Odśwież",
-      "dlqEmptyTitle": "Kolejka niedostarczonych jest pusta",
-      "dlqEmptyDesc": "Każde zadanie zakończyło się powodzeniem lub jest wciąż ponawiane.",
-      "runsEmptyTitle": "Brak uruchomień zadań",
-      "runsEmptyDesc": "Gdy zadanie w tle zostanie uruchomione, pojawi się tutaj.",
-      "delivery": {
-        "accepted": "przyjęto",
-        "delivered": "dostarczono",
-        "bounced": "odrzucono",
-        "complained": "oznaczono jako spam",
-        "delayed": "opóźniono"
-      },
-      "deliveryNone": "Brak rekordu dostarczenia",
-      "deliveryDetail": {
-        "heading": "Dostarczenie",
-        "state": "Stan",
-        "messageId": "Identyfikator wiadomości",
-        "recipient": "Odbiorca",
-        "template": "Szablon",
-        "lastEvent": "Ostatnie zdarzenie",
-        "never": "Brak zdarzeń od dostawcy"
-      },
-      "systemDlqTitle": "Niedostarczone bez przestrzeni roboczej",
-      "systemDlqSummary": "{waiting} czeka na ponowne uruchomienie · {replayed} uruchomionych ponownie w ostatnich 7 dniach",
-      "systemDlqTableCaption": "Systemowe niedostarczone",
-      "systemDlqEmptyTitle": "Brak systemowych niedostarczonych",
-      "systemDlqEmptyDesc": "Każde zadanie bez przestrzeni roboczej zakończyło się powodzeniem albo jest nadal ponawiane.",
-      "systemRunsTitle": "Uruchomienia systemowe"
     },
     "account": {
       "eyebrow": "Ustawienia konta",
@@ -4176,10 +4140,6 @@
         "security": "Zabezpieczenia",
         "usage": "Użycie i koszty",
         "billing": "Rozliczenia i plany"
-      },
-      "jobRunsFoldIn": {
-        "title": "Uruchomienia zadań",
-        "subtitle": "Praca w tle dla tego obszaru roboczego — co zostało uruchomione, co się nie powiodło i co czeka w kolejce niedostarczonych."
       }
     },
     "gitAccounts": {
@@ -7537,7 +7497,8 @@
       "install_error": "Nie udało się dokończyć konfiguracji aplikacji GitHub App. Spróbuj zainstalować ponownie.",
       "select_repos": "Motir GitHub App jest zainstalowana. Wybierz, które repozytoria tego konta łączy ta organizacja.",
       "repo_unavailable": "To repozytorium jest już połączone z inną organizacją, więc nie zostało tu dodane. Nic innego się nie zmieniło.",
-      "installation_not_accessible": "Nie widzisz tego konta GitHub w serwisie GitHub, więc nie zostało ono połączone z tą organizacją. Nic nie zostało zmienione."
+      "installation_not_accessible": "Nie widzisz tego konta GitHub w serwisie GitHub, więc nie zostało ono połączone z tą organizacją. Nic nie zostało zmienione.",
+      "identity_refused": "GitHub nie akceptuje już Twojego logowania do GitHuba, więc Motir nie mógł dokończyć łączenia aplikacji. W Ustawienia → Konto → Konta Git odłącz swoje konto i połącz je ponownie, a potem spróbuj jeszcze raz."
     },
     "connect": {
       "title": "Połącz GitHuba",
@@ -7935,7 +7896,9 @@
       "identity": {
         "title": "Najpierw połącz swoje konto GitHub",
         "body": "Motir wyświetla konta GitHub, które widzisz dzięki własnej tożsamości GitHub. Połącz ją w Ustawienia → Konto → Konta Git, a potem wróć tutaj.",
-        "action": "Przejdź do kont Git"
+        "action": "Przejdź do kont Git",
+        "refusedTitle": "Połącz ponownie swoje konto GitHub",
+        "refusedBody": "GitHub nie akceptuje już logowania, które Motir ma dla Ciebie: zostało odwołane lub wygasło. W Ustawienia → Konto → Konta Git odłącz je i połącz ponownie, a potem wróć tutaj. Nic nie zostało zmienione."
       },
       "cancel": "Anuluj",
       "back": "Wszystkie konta",

@@ -185,7 +185,7 @@ describe('the branch does not fire outside the area', () => {
     expect(screen.queryByText('Organisation settings')).toBeNull();
   });
 
-  it.each([['/settings/workspace'], ['/settings/workspace/jobs']])(
+  it.each([['/settings/workspace'], ['/settings/workspace/roles']])(
     'renders NEITHER rail at %s — the workspace branch answers first',
     (path) => {
       pathname = path;

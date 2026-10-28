@@ -737,9 +737,6 @@
       "pickProjectFirst": "Elige primero un proyecto.",
       "unknownRelationship": "Relación desconocida.",
       "pickIssueToLink": "Elige un elemento de trabajo para vincular.",
-      "missingDlqId": "Falta el id de la cola de mensajes fallidos.",
-      "ownerOnlyReplay": "Solo un gestor del espacio de trabajo puede volver a ejecutar trabajos.",
-      "dlqGone": "Esa entrada de la cola de mensajes fallidos ya no existe.",
       "workspaceNameEmpty": "El nombre del espacio de trabajo no puede estar vacío.",
       "useLeaveToRemoveSelf": "Usa Salir para quitarte.",
       "cannotRemoveLastMember": "No se puede quitar al último miembro.",
@@ -765,9 +762,7 @@
       "workspaceSecurityForbidden": "Solo los propietarios y administradores de un espacio de trabajo pueden cambiar su configuración de seguridad.",
       "refused": "No se ha podido completar: {reason}",
       "organizationClosing": "Esta organización está programada para eliminarse y es de solo lectura. Solo su propietario puede cancelar la eliminación.",
-      "memberProjectsFailed": "No se pudieron cargar sus proyectos.",
-      "systemReplayWorkspaceRow": "Esa entrada de la cola de mensajes fallidos pertenece a un espacio de trabajo: vuelve a ejecutarla desde la pestaña Mensajes fallidos de ese espacio.",
-      "systemReplayOperatorOnly": "Solo el operador de la plataforma puede volver a ejecutar los mensajes fallidos del sistema."
+      "memberProjectsFailed": "No se pudieron cargar sus proyectos."
     },
     "links": {
       "notFound": "Ese elemento de trabajo ya no existe.",
@@ -2066,13 +2061,11 @@
       "nav": {
         "group": {
           "general": "General",
-          "access": "Acceso",
-          "operations": "Operaciones"
+          "access": "Acceso"
         },
         "workspace": "Espacio de trabajo",
         "security": "Seguridad",
         "roles": "Roles y permisos",
-        "jobs": "Ejecuciones de trabajos",
         "publicAddress": "Dirección pública"
       }
     },
@@ -2202,7 +2195,58 @@
       "inviteNoProjectsWarning": "No podrá abrir nada hasta que un gestor le añada a un proyecto.",
       "inviteJoinsAsMember": "Se unirá como miembro. Puedes cambiar su rol cuando acepte.",
       "errorInviteProjects": "No es posible unirse a uno de esos proyectos. Vuelve a elegirlos.",
-      "errorInviteNotAllowed": "No puedes enviar esta invitación. Solo un gestor del espacio de trabajo puede invitar con acceso Limitado."
+      "errorInviteNotAllowed": "No puedes enviar esta invitación. Solo un gestor del espacio de trabajo puede invitar con acceso Limitado.",
+      "pending": {
+        "heading": "Invitaciones pendientes",
+        "invitationColumn": "Invitación",
+        "deliveryColumn": "Entrega",
+        "invitedBy": "Invitado por {name}, {sent}",
+        "invitedByFormer": "Invitado por un antiguo miembro, {sent}",
+        "expiresIn": "Caduca en {count, plural, one {# día} other {# días}}",
+        "expiresToday": "Caduca hoy",
+        "expiresOn": "Caduca el {date}",
+        "resend": "Reenviar",
+        "resendLabel": "Reenviar la invitación a {email}",
+        "resendScopeTooltip": "Solo un gestor puede reenviar una invitación limitada",
+        "resentToast": "Nueva invitación enviada a {email}",
+        "refusalRateLimited": "Límite alcanzado: 3 invitaciones por dirección y hora.",
+        "refusalRateLimitedBody": "Vuelve a intentarlo más tarde.",
+        "refusalAlreadyMember": "Esta persona ya se ha unido al espacio de trabajo.",
+        "refusalNotAllowed": "No puedes reenviar esta invitación.",
+        "refusalNoLongerPending": "Esta invitación ya no está pendiente.",
+        "showAll": "Mostrar las {count} invitaciones pendientes",
+        "showFewer": "Mostrar menos",
+        "delivery": {
+          "queued": {
+            "label": "En cola",
+            "helper": "Esperando para enviarse"
+          },
+          "accepted": {
+            "label": "Aceptada",
+            "helper": "El proveedor de correo la tiene"
+          },
+          "delivered": {
+            "label": "Entregada",
+            "helper": "Llegó al servidor de correo del destinatario"
+          },
+          "bounced": {
+            "label": "Rebotada",
+            "helper": "La dirección la rechazó"
+          },
+          "complained": {
+            "label": "Denunciada",
+            "helper": "Marcada como spam"
+          },
+          "delayed": {
+            "label": "Retrasada",
+            "helper": "El proveedor sigue reintentando"
+          },
+          "failed": {
+            "label": "Fallida",
+            "helper": "No se pudo enviar"
+          }
+        }
+      }
     },
     "danger": {
       "cantLeaveTitle": "No puedes salir",
@@ -2920,86 +2964,6 @@
       "heroOverviewSubheading": "El eslogan, las etiquetas y el README que ven los visitantes en tu página pública.",
       "editOnPublicPage": "Editar la página pública",
       "heroOverviewNote": "Abre Configuración › Página pública. Puedes redactarla antes de que el proyecto sea público."
-    },
-    "jobs": {
-      "title": "Ejecuciones de trabajos",
-      "subtitle": "Trabajos en segundo plano de este espacio de trabajo: entrega de invitaciones y restablecimientos de contraseña, y cualquier trabajo programado. Los trabajos fallidos van a la cola de mensajes fallidos, donde un propietario puede volver a ejecutarlos.",
-      "tab": {
-        "runs": "Ejecuciones recientes",
-        "dlq": "Mensajes fallidos",
-        "system": "Sistema"
-      },
-      "tabNavLabel": "Vistas de ejecuciones de trabajos",
-      "dlqBadgeLabel": "{count} en la cola de mensajes fallidos",
-      "filterGroupLabel": "Filtrar por estado",
-      "filter": {
-        "all": "Todos",
-        "succeeded": "Correctos",
-        "failed": "Fallidos",
-        "running": "En ejecución",
-        "abandoned": "Abandonados"
-      },
-      "runsTableCaption": "Ejecuciones de trabajos en segundo plano",
-      "col": {
-        "status": "Estado",
-        "delivery": "Entrega",
-        "function": "Función",
-        "event": "Evento",
-        "attempts": "Intentos",
-        "started": "Iniciado",
-        "duration": "Duración",
-        "failure": "Fallo",
-        "details": "Detalles",
-        "firstFailed": "Primer fallo",
-        "lastFailed": "Último fallo",
-        "replayed": "Reejecutado",
-        "actions": "Acciones"
-      },
-      "view": "Ver",
-      "runDetailTitle": "Detalle de la ejecución",
-      "dlqTableCaption": "Cola de mensajes fallidos",
-      "replay": "Volver a ejecutar",
-      "replayTooltip": "Solo un gestor del espacio de trabajo puede volver a ejecutar trabajos",
-      "alreadyReplayedToastTitle": "Ya se volvió a ejecutar",
-      "alreadyReplayedToastDesc": "Esta entrada ya se volvió a ejecutar antes: no se ha puesto nada nuevo en cola.",
-      "replayedToastTitle": "Trabajo reejecutado",
-      "replayedToastDesc": "Se volvió a emitir el evento original.",
-      "replayErrorTitle": "No se pudo volver a ejecutar",
-      "dlqDetailTitle": "Detalle del mensaje fallido",
-      "dlqDetailDesc": "El fallo y la carga útil del evento original (se puede volver a ejecutar tal cual).",
-      "failureHeading": "Fallo",
-      "eventPayloadHeading": "Carga útil del evento",
-      "pageLabel": "Página {page}",
-      "previous": "Anterior",
-      "next": "Siguiente",
-      "refresh": "Actualizar",
-      "dlqEmptyTitle": "No hay nada en la cola de mensajes fallidos",
-      "dlqEmptyDesc": "Todos los trabajos se han completado correctamente o se siguen reintentando.",
-      "runsEmptyTitle": "Aún no hay ejecuciones de trabajos",
-      "runsEmptyDesc": "Cuando se ejecute un trabajo en segundo plano, aparecerá aquí.",
-      "delivery": {
-        "accepted": "aceptado",
-        "delivered": "entregado",
-        "bounced": "rebotado",
-        "complained": "marcado como spam",
-        "delayed": "retrasado"
-      },
-      "deliveryNone": "Sin registro de entrega",
-      "deliveryDetail": {
-        "heading": "Entrega",
-        "state": "Estado",
-        "messageId": "Id del mensaje",
-        "recipient": "Destinatario",
-        "template": "Plantilla",
-        "lastEvent": "Último evento",
-        "never": "Aún no hay eventos del proveedor"
-      },
-      "systemDlqTitle": "Mensajes fallidos sin espacio de trabajo",
-      "systemDlqSummary": "{waiting} pendientes de volver a ejecutar · {replayed} vueltos a ejecutar en los últimos 7 días",
-      "systemDlqTableCaption": "Mensajes fallidos del sistema",
-      "systemDlqEmptyTitle": "No hay mensajes fallidos del sistema",
-      "systemDlqEmptyDesc": "Todos los trabajos sin espacio de trabajo han terminado bien o aún se están reintentando.",
-      "systemRunsTitle": "Ejecuciones del sistema"
     },
     "account": {
       "eyebrow": "Configuración de la cuenta",
@@ -4176,10 +4140,6 @@
         "security": "Seguridad",
         "usage": "Uso y coste",
         "billing": "Facturación y planes"
-      },
-      "jobRunsFoldIn": {
-        "title": "Ejecuciones de trabajos",
-        "subtitle": "Trabajo en segundo plano de este espacio de trabajo: qué se ejecutó, qué falló y qué espera en la cola de mensajes fallidos."
       }
     },
     "gitAccounts": {
@@ -7537,7 +7497,8 @@
       "install_error": "No pudimos terminar de configurar la GitHub App. Vuelve a intentar la instalación.",
       "select_repos": "La Motir GitHub App está instalada. Elige qué repositorios de la cuenta conecta esta organización.",
       "repo_unavailable": "Ese repositorio ya está conectado a otra organización, así que no se ha añadido aquí. No ha cambiado nada más.",
-      "installation_not_accessible": "No puedes ver esa cuenta de GitHub en GitHub, así que no se ha vinculado a esta organización. No se ha cambiado nada."
+      "installation_not_accessible": "No puedes ver esa cuenta de GitHub en GitHub, así que no se ha vinculado a esta organización. No se ha cambiado nada.",
+      "identity_refused": "GitHub ya no acepta tu inicio de sesión de GitHub, así que Motir no pudo terminar de conectar la App. En Configuración → Cuenta → Cuentas de Git, desconecta tu cuenta y vuelve a conectarla; luego inténtalo de nuevo."
     },
     "connect": {
       "title": "Conectar GitHub",
@@ -7935,7 +7896,9 @@
       "identity": {
         "title": "Primero conecta tu cuenta de GitHub",
         "body": "Motir muestra las cuentas de GitHub que puedes ver a través de tu propia identidad de GitHub. Conéctala en Configuración → Cuenta → Cuentas de Git y luego vuelve aquí.",
-        "action": "Ir a Cuentas de Git"
+        "action": "Ir a Cuentas de Git",
+        "refusedTitle": "Vuelve a conectar tu cuenta de GitHub",
+        "refusedBody": "GitHub ya no acepta el inicio de sesión que Motir tiene para ti: se revocó o ha caducado. En Configuración → Cuenta → Cuentas de Git, desconéctalo y vuelve a conectarlo; luego vuelve aquí. No se ha cambiado nada."
       },
       "cancel": "Cancelar",
       "back": "Todas las cuentas",

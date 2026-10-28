@@ -737,9 +737,6 @@
       "pickProjectFirst": "Kies eerst een project.",
       "unknownRelationship": "Onbekende relatie.",
       "pickIssueToLink": "Kies een werkitem om te koppelen.",
-      "missingDlqId": "Dead-letter-id ontbreekt.",
-      "ownerOnlyReplay": "Alleen een Manager van de werkruimte kan taken opnieuw afspelen.",
-      "dlqGone": "Dat dead-letter-item bestaat niet meer.",
       "workspaceNameEmpty": "De naam van de werkruimte mag niet leeg zijn.",
       "useLeaveToRemoveSelf": "Gebruik Verlaten om jezelf te verwijderen.",
       "cannotRemoveLastMember": "Het laatste lid kan niet worden verwijderd.",
@@ -765,9 +762,7 @@
       "workspaceSecurityForbidden": "Alleen eigenaren en beheerders van een werkruimte kunnen de beveiligingsinstellingen ervan wijzigen.",
       "refused": "Dat is niet gelukt: {reason}",
       "organizationClosing": "Deze organisatie staat gepland voor verwijdering en is alleen-lezen. Alleen de Eigenaar kan de verwijdering annuleren.",
-      "memberProjectsFailed": "Kan de projecten van deze persoon niet laden.",
-      "systemReplayWorkspaceRow": "Dat dead-letter-item hoort bij een workspace – speel het opnieuw af vanaf het tabblad Dead letter van die workspace.",
-      "systemReplayOperatorOnly": "Alleen de platformbeheerder kan dead letters van het systeem opnieuw afspelen."
+      "memberProjectsFailed": "Kan de projecten van deze persoon niet laden."
     },
     "links": {
       "notFound": "Dat werkitem bestaat niet meer.",
@@ -2066,13 +2061,11 @@
       "nav": {
         "group": {
           "general": "Algemeen",
-          "access": "Toegang",
-          "operations": "Bedrijfsvoering"
+          "access": "Toegang"
         },
         "workspace": "Werkruimte",
         "security": "Beveiliging",
         "roles": "Rollen en rechten",
-        "jobs": "Taakuitvoeringen",
         "publicAddress": "Openbaar adres"
       }
     },
@@ -2202,7 +2195,58 @@
       "inviteNoProjectsWarning": "Ze kunnen niets openen totdat een Manager hen aan een project toevoegt.",
       "inviteJoinsAsMember": "Ze worden toegevoegd als Lid. Je kunt hun rol wijzigen nadat ze hebben geaccepteerd.",
       "errorInviteProjects": "Aan een van die projecten kan niet worden deelgenomen. Kies ze opnieuw.",
-      "errorInviteNotAllowed": "Je kunt deze uitnodiging niet versturen. Alleen een Manager van de werkruimte kan uitnodigen met Beperkte toegang."
+      "errorInviteNotAllowed": "Je kunt deze uitnodiging niet versturen. Alleen een Manager van de werkruimte kan uitnodigen met Beperkte toegang.",
+      "pending": {
+        "heading": "Openstaande uitnodigingen",
+        "invitationColumn": "Uitnodiging",
+        "deliveryColumn": "Bezorging",
+        "invitedBy": "Uitgenodigd door {name}, {sent}",
+        "invitedByFormer": "Uitgenodigd door een voormalig lid, {sent}",
+        "expiresIn": "Verloopt over {count, plural, one {# dag} other {# dagen}}",
+        "expiresToday": "Verloopt vandaag",
+        "expiresOn": "Verloopt op {date}",
+        "resend": "Opnieuw versturen",
+        "resendLabel": "Uitnodiging opnieuw versturen naar {email}",
+        "resendScopeTooltip": "Alleen een Manager kan een beperkte uitnodiging opnieuw versturen",
+        "resentToast": "Nieuwe uitnodiging verstuurd naar {email}",
+        "refusalRateLimited": "Limiet bereikt: 3 uitnodigingen per adres per uur.",
+        "refusalRateLimitedBody": "Probeer het later opnieuw.",
+        "refusalAlreadyMember": "Deze persoon is al lid van de werkruimte.",
+        "refusalNotAllowed": "Je kunt deze uitnodiging niet opnieuw versturen.",
+        "refusalNoLongerPending": "Deze uitnodiging staat niet meer open.",
+        "showAll": "Alle {count} openstaande uitnodigingen tonen",
+        "showFewer": "Minder tonen",
+        "delivery": {
+          "queued": {
+            "label": "In wachtrij",
+            "helper": "Wacht op verzending"
+          },
+          "accepted": {
+            "label": "Geaccepteerd",
+            "helper": "De mailprovider heeft hem ontvangen"
+          },
+          "delivered": {
+            "label": "Bezorgd",
+            "helper": "Heeft de mailserver van de ontvanger bereikt"
+          },
+          "bounced": {
+            "label": "Gebounced",
+            "helper": "Het adres heeft hem geweigerd"
+          },
+          "complained": {
+            "label": "Klacht",
+            "helper": "Gemarkeerd als spam"
+          },
+          "delayed": {
+            "label": "Vertraagd",
+            "helper": "De provider probeert het nog"
+          },
+          "failed": {
+            "label": "Mislukt",
+            "helper": "Kon niet worden verstuurd"
+          }
+        }
+      }
     },
     "danger": {
       "cantLeaveTitle": "Kan niet vertrekken",
@@ -2920,86 +2964,6 @@
       "heroOverviewSubheading": "De slogan, tags en README die bezoekers op je openbare pagina zien.",
       "editOnPublicPage": "De openbare pagina bewerken",
       "heroOverviewNote": "Opent Instellingen › Openbare pagina. Je kunt hem schrijven voordat het project openbaar is."
-    },
-    "jobs": {
-      "title": "Taakuitvoeringen",
-      "subtitle": "Achtergrondtaken voor deze werkruimte — het bezorgen van uitnodigingen en wachtwoordherstel, en gepland werk. Mislukte taken komen in de dead-letter-wachtrij terecht, waar een eigenaar ze opnieuw kan afspelen.",
-      "tab": {
-        "runs": "Recente uitvoeringen",
-        "dlq": "Dead letter",
-        "system": "Systeem"
-      },
-      "tabNavLabel": "Weergaven van taakuitvoeringen",
-      "dlqBadgeLabel": "{count} in dead-letter-wachtrij",
-      "filterGroupLabel": "Filteren op status",
-      "filter": {
-        "all": "Alle",
-        "succeeded": "Geslaagd",
-        "failed": "Mislukt",
-        "running": "Bezig",
-        "abandoned": "Opgegeven"
-      },
-      "runsTableCaption": "Uitvoeringen van achtergrondtaken",
-      "col": {
-        "status": "Status",
-        "delivery": "Bezorging",
-        "function": "Functie",
-        "event": "Gebeurtenis",
-        "attempts": "Pogingen",
-        "started": "Gestart",
-        "duration": "Duur",
-        "failure": "Fout",
-        "details": "Details",
-        "firstFailed": "Eerst mislukt",
-        "lastFailed": "Laatst mislukt",
-        "replayed": "Opnieuw afgespeeld",
-        "actions": "Acties"
-      },
-      "view": "Bekijken",
-      "runDetailTitle": "Details van de uitvoering",
-      "dlqTableCaption": "Dead-letter-wachtrij",
-      "replay": "Opnieuw afspelen",
-      "replayTooltip": "Alleen een Manager van de werkruimte kan taken opnieuw afspelen",
-      "alreadyReplayedToastTitle": "Al opnieuw afgespeeld",
-      "alreadyReplayedToastDesc": "Dit item is eerder al opnieuw afgespeeld — er is niets nieuws in de wachtrij gezet.",
-      "replayedToastTitle": "Taak opnieuw afgespeeld",
-      "replayedToastDesc": "De oorspronkelijke gebeurtenis is opnieuw verzonden.",
-      "replayErrorTitle": "Kan niet opnieuw afspelen",
-      "dlqDetailTitle": "Dead-letter-details",
-      "dlqDetailDesc": "De fout en de oorspronkelijke payload van de gebeurtenis (ongewijzigd opnieuw af te spelen).",
-      "failureHeading": "Fout",
-      "eventPayloadHeading": "Payload van de gebeurtenis",
-      "pageLabel": "Pagina {page}",
-      "previous": "Vorige",
-      "next": "Volgende",
-      "refresh": "Vernieuwen",
-      "dlqEmptyTitle": "Niets in de dead-letter-wachtrij",
-      "dlqEmptyDesc": "Elke taak is geslaagd of wordt nog opnieuw geprobeerd.",
-      "runsEmptyTitle": "Nog geen taakuitvoeringen",
-      "runsEmptyDesc": "Wanneer een achtergrondtaak wordt uitgevoerd, verschijnt die hier.",
-      "delivery": {
-        "accepted": "geaccepteerd",
-        "delivered": "bezorgd",
-        "bounced": "gebounced",
-        "complained": "klacht",
-        "delayed": "vertraagd"
-      },
-      "deliveryNone": "Geen bezorgregistratie",
-      "deliveryDetail": {
-        "heading": "Bezorging",
-        "state": "Status",
-        "messageId": "Bericht-id",
-        "recipient": "Ontvanger",
-        "template": "Sjabloon",
-        "lastEvent": "Laatste gebeurtenis",
-        "never": "Nog geen gebeurtenis van de provider"
-      },
-      "systemDlqTitle": "Dead letters zonder workspace",
-      "systemDlqSummary": "{waiting} wachten op opnieuw afspelen · {replayed} opnieuw afgespeeld in de afgelopen 7 dagen",
-      "systemDlqTableCaption": "Dead letters van het systeem",
-      "systemDlqEmptyTitle": "Geen dead letters van het systeem",
-      "systemDlqEmptyDesc": "Elke taak zonder workspace is geslaagd of wordt nog opnieuw geprobeerd.",
-      "systemRunsTitle": "Systeemruns"
     },
     "account": {
       "eyebrow": "Accountinstellingen",
@@ -4176,10 +4140,6 @@
         "security": "Beveiliging",
         "usage": "Gebruik en kosten",
         "billing": "Facturering en abonnementen"
-      },
-      "jobRunsFoldIn": {
-        "title": "Taakuitvoeringen",
-        "subtitle": "Achtergrondwerk voor deze werkruimte — wat er is uitgevoerd, wat er is mislukt en wat er in de dead-letter-wachtrij wacht."
       }
     },
     "gitAccounts": {
@@ -7537,7 +7497,8 @@
       "install_error": "We konden het instellen van de GitHub-app niet afronden. Probeer opnieuw te installeren.",
       "select_repos": "De Motir GitHub App is geïnstalleerd. Kies welke repository's van het account deze organisatie koppelt.",
       "repo_unavailable": "Die repository is al gekoppeld aan een andere organisatie en is daarom hier niet toegevoegd. Verder is er niets veranderd.",
-      "installation_not_accessible": "Je kunt dat GitHub-account niet zien op GitHub, dus het is niet aan deze organisatie gekoppeld. Er is niets gewijzigd."
+      "installation_not_accessible": "Je kunt dat GitHub-account niet zien op GitHub, dus het is niet aan deze organisatie gekoppeld. Er is niets gewijzigd.",
+      "identity_refused": "GitHub accepteert je GitHub-aanmelding niet meer, dus Motir kon het koppelen van de app niet afronden. Verbreek in Instellingen → Account → Git-accounts de verbinding met je account, verbind het opnieuw en probeer het daarna nog eens."
     },
     "connect": {
       "title": "GitHub koppelen",
@@ -7935,7 +7896,9 @@
       "identity": {
         "title": "Verbind eerst je GitHub-account",
         "body": "Motir toont de GitHub-accounts die je via je eigen GitHub-identiteit kunt zien. Verbind die in Instellingen → Account → Git-accounts en kom daarna hier terug.",
-        "action": "Naar Git-accounts"
+        "action": "Naar Git-accounts",
+        "refusedTitle": "Verbind je GitHub-account opnieuw",
+        "refusedBody": "GitHub accepteert de aanmelding die Motir voor je heeft niet meer: die is ingetrokken of verlopen. Verbreek in Instellingen → Account → Git-accounts de verbinding, verbind opnieuw en kom daarna hier terug. Er is niets gewijzigd."
       },
       "cancel": "Annuleren",
       "back": "Alle accounts",

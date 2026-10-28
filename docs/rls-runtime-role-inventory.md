@@ -1790,14 +1790,14 @@ discriminator is the block's ROLE in the test, not its syntax:
   a direct-DB assertion. These are the fixture class.
 - **LEFT (72 sites)** — the callback hands `tx` to the service or repository under test.
   `withSystemContext((tx) => fleetCeilingService.census(NOW, tx))` is the jobs runtime's own calling
-  context; `withSystemContext((tx) => replayDLQ(dlqId, tx))` is the operator route's — which is
-  `jobsDashboardService.replaySystemDLQ`, reached from the System tab's **Replay** control through
-  `replaySystemDlqAction` (MOTIR-8083; it was described here for some time before it was built, and
-  until then nothing could replay a dead letter with no workspace). It is the only `replayDLQ` caller
-  that bypasses tenant RLS, so both of its refusals live in the SERVICE, not the action or the UI: the
+  context; `withSystemContext((tx) => replayDLQ(dlqId, tx))` is the operator route's — today
+  `platformJobReplayService.replayOne`, reached from `/admin/jobs` → **Dead letters**' **Replay** and
+  **Replay all** controls (MOTIR-9985 · MOTIR-9986). It replaced the tenant dashboard's System tab
+  door (`replaySystemDLQ`, MOTIR-8083) and its manager-gated `withWorkspaceContext` door, both
+  deleted with that dashboard (Story MOTIR-9982), so it is now the only `replayDLQ` caller outside the
+  tests. It bypasses tenant RLS, so its refusal lives in the SERVICE, not the action or the UI: the
   caller must hold the `operator` platform role or above (`User.platformRole`, read fresh through
-  `resolveJobsPlatformRole`; the System tab itself opens at `support`), and the row must have `workspace_id IS NULL` — a workspace's row is refused by name and keeps
-  the manager-gated `withWorkspaceContext` door. Moving these to
+  `requirePlatformStaff`; the page itself opens at `support`). Moving these to
   `adminDb` would make them pass by taking the code under test off the restricted role, which is the
   one way this work fails silently (`tests/helpers/adminDb.ts`'s own ⚠️).
 

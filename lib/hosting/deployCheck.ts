@@ -30,6 +30,9 @@
 // all of it against the fake with no Docker, AWS or network. `--target fly` (the
 // default) is the check as it was.
 //
+// `--target serverless` (MOTIR-9975) runs the serverless target's steps instead,
+// from `./serverlessDeployCheck`, against Motir's own serverless account.
+//
 // With `--workspace`, `--repository` and `--environment` on the Fly target (Story
 // MOTIR-9795 · MOTIR-9965) the deploying steps take their environment from the
 // entries an administrator stored for that repository and environment, through
@@ -45,12 +48,19 @@ import {
 } from '@/lib/environmentConfig/vocabulary';
 import { HostingManifestInvalidError, HostingManifestMissingError } from '@/lib/hosting/errors';
 import { parseHostingManifest, type HostingManifest } from '@/lib/hosting/manifest';
+// A cycle by design: that module uses this one's helpers, and this one only
+// calls into it at run time. Neither touches the other's bindings while loading.
+import {
+  runServerlessDeployCheckStep,
+  type ServerlessDeployCheckDeps,
+} from '@/lib/hosting/serverlessDeployCheck';
 import {
   AWS_APP_PREFIX,
   deriveOriginSecret,
   hostingAppNames,
   HostingAppNameInvalidError,
   ORIGIN_SECRET_HEADER,
+  OrchestratorNotConfiguredError,
   registryPushNamespace,
   type HostingDeployPort,
   type HostingEnvironment,
@@ -99,7 +109,18 @@ export const DEPLOY_CHECK_AWS_FIXTURE_DIR = 'tests/fixtures/hosting/aws-fixture-
 /** The tenant account's region: where `push` logs in to the registry. */
 export const DEPLOY_CHECK_AWS_REGION = TENANT_ACCOUNT_REGION;
 
-export const DEPLOY_CHECK_TARGETS = ['fly', 'aws'] as const;
+/** The serverless target's app prefix (MOTIR-9975): inside the scoped role's
+ *  `mh-*`, which a `motir-deploy-check-` function name would fall outside. */
+export const SERVERLESS_DEPLOY_CHECK_APP_PREFIX = 'mh-deploy-check-';
+/** The serverless fixture, and its worker twin that the target refuses. */
+export const SERVERLESS_DEPLOY_CHECK_DEFAULT_MANIFEST =
+  'tests/fixtures/hosting/serverless/motir.hosting.json';
+export const SERVERLESS_DEPLOY_CHECK_WORKER_MANIFEST =
+  'tests/fixtures/hosting/serverless-worker/motir.hosting.json';
+/** The directory the serverless fixture image is built from. */
+export const SERVERLESS_DEPLOY_CHECK_IMAGE_CONTEXT = 'tests/fixtures/hosting/serverless';
+
+export const DEPLOY_CHECK_TARGETS = ['fly', 'aws', 'serverless'] as const;
 export type DeployCheckTarget = (typeof DEPLOY_CHECK_TARGETS)[number];
 
 export const DEPLOY_CHECK_STEPS = [
@@ -116,10 +137,15 @@ export const DEPLOY_CHECK_STEPS = [
   'page',
   'no-shape',
 ] as const;
-export type DeployCheckStep = (typeof DEPLOY_CHECK_STEPS)[number];
+
+/** The steps only the serverless target has (MOTIR-9975). */
+export const SERVERLESS_ONLY_DEPLOY_CHECK_STEPS = ['database', 'image', 'refuse'] as const;
+export type DeployCheckStep =
+  | (typeof DEPLOY_CHECK_STEPS)[number]
+  | (typeof SERVERLESS_ONLY_DEPLOY_CHECK_STEPS)[number];
 
 /** The steps only the AWS target has. */
-const AWS_ONLY_STEPS: readonly DeployCheckStep[] = ['converge', 'push', 'page', 'no-shape'];
+export const AWS_ONLY_STEPS: readonly DeployCheckStep[] = ['converge', 'push', 'page', 'no-shape'];
 
 /** `page` tries a cold release this many times, this far apart, before it
  *  fails: a function's first invocation and a scale-from-zero database both
@@ -202,13 +228,15 @@ export const DEPLOY_CHECK_USAGE = [
   'Usage: pnpm hosting:deploy-check <step> [--manifest <path>] [--name <app>] [--image <ref>]',
   '       pnpm hosting:deploy-check <step> --target aws --repository <id> [--shape <function|container>]',
   '                                 [--organization <id>] [--aws-profile <profile>] [--image <ref>]',
+  '       pnpm hosting:deploy-check <step> --target serverless [--manifest <path>] [--name <app>]',
   '       pnpm hosting:deploy-check <step> --workspace <workspaceId> --repository <projectRepositoryId> --environment <env>',
-  `  steps: ${DEPLOY_CHECK_STEPS.join(', ')}`,
+  `  steps: ${DEPLOY_CHECK_STEPS.join(', ')}, ${SERVERLESS_ONLY_DEPLOY_CHECK_STEPS.join(', ')}`,
   `  ${AWS_ONLY_STEPS.join(', ')}: --target aws only`,
+  `  ${SERVERLESS_ONLY_DEPLOY_CHECK_STEPS.join(', ')}: --target serverless only`,
   '  report      GETs / on the serving release and prints what the app answers',
   `  --target    ${DEPLOY_CHECK_TARGETS.join(' or ')}; defaults to fly`,
-  `  --manifest  defaults to ${DEPLOY_CHECK_DEFAULT_MANIFEST} (aws: ${DEPLOY_CHECK_AWS_MANIFEST})`,
-  `  --name      defaults to ${DEPLOY_CHECK_DEFAULT_NAME}; must start with ${DEPLOY_CHECK_APP_PREFIX} (fly only)`,
+  `  --manifest  defaults to ${DEPLOY_CHECK_DEFAULT_MANIFEST} (aws: ${DEPLOY_CHECK_AWS_MANIFEST}; serverless: ${SERVERLESS_DEPLOY_CHECK_DEFAULT_MANIFEST})`,
+  `  --name      defaults to ${DEPLOY_CHECK_DEFAULT_NAME}; must start with ${DEPLOY_CHECK_APP_PREFIX} (fly and serverless)`,
   `  --image     defaults to ${DEPLOY_CHECK_IMAGE} (aws: the pushed release-1 / release-2 tag)`,
   '  --repository    aws: the Motir repository the check app is mh-<id> of (required)',
   '  --shape         aws: function or container; absent, the port refuses the deploy',
@@ -243,6 +271,9 @@ export interface DeployCheckOptions {
   readonly image: string;
   /** Set when the target is `aws`; absent is the Fly check. */
   readonly aws?: DeployCheckAwsOptions;
+  /** `serverless` runs the serverless target's steps; absent is Fly or, with
+   *  `aws` set, AWS. */
+  readonly target?: DeployCheckTarget;
   /** Fly only. Absent: the check's own fixed environment, as before MOTIR-9965. */
   readonly stored?: DeployCheckStoredEnvironment;
 }
@@ -281,6 +312,9 @@ export interface DeployCheckDeps {
   readonly signedFetch?: (url: string) => Promise<Response>;
   /** Waits between `page` attempts; absent is a timer. */
   readonly sleep?: (ms: number) => Promise<void>;
+  /** What only the serverless target needs; absent, `--target serverless` is
+   *  refused as not configured. */
+  readonly serverless?: ServerlessDeployCheckDeps;
   /** A repository's stored environment in the deploy port's shape
    *  (`lib/environmentConfig/resolveEnvironment.ts`); called only with `stored`. */
   readonly resolveEnvironment?: (
@@ -359,12 +393,15 @@ export function awsReleaseImage(repositoryId: string, release: 1 | 2): string {
   return `${registryPushNamespace(repositoryId, 'production')}:release-${release}`;
 }
 
-function readManifest(deps: DeployCheckDeps, path: string): HostingManifest {
+export function readManifest(
+  deps: Pick<DeployCheckDeps, 'readManifest'>,
+  path: string,
+): HostingManifest {
   return parseHostingManifest(deps.readManifest(path));
 }
 
 /** The release the check's app serves now, or null when it has none. */
-async function servingHandle(
+export async function servingHandle(
   port: HostingDeployPort,
   appRef: string,
 ): Promise<ReleaseHandle | null> {
@@ -478,8 +515,17 @@ async function deployAwsRelease(
 }
 
 async function rollback(deps: DeployCheckDeps, options: DeployCheckOptions): Promise<void> {
-  const { appRef } = checkApp(options);
-  const port = portOf(deps, options);
+  await rollbackApp(deps, portOf(deps, options), checkApp(options).appRef);
+  // No push and no build: the previous release's image is already there.
+  if (options.aws) await page(deps, options);
+}
+
+/** Roll the app back and print which release serves; shared by every target. */
+export async function rollbackApp(
+  deps: Pick<DeployCheckDeps, 'print'>,
+  port: HostingDeployPort,
+  appRef: string,
+): Promise<void> {
   const handle = await port.rollback({ appRef, environment: ENVIRONMENT });
   const description = await port.describe(handle);
   deps.print('rollback', {
@@ -488,13 +534,18 @@ async function rollback(deps: DeployCheckDeps, options: DeployCheckOptions): Pro
     previousReleaseId: description.previousReleaseId,
     address: description.upstreamAddress,
   });
-  // No push and no build: the previous release's image is already there.
-  if (options.aws) await page(deps, options);
 }
 
 async function status(deps: DeployCheckDeps, options: DeployCheckOptions): Promise<void> {
-  const { appRef } = checkApp(options);
-  const port = portOf(deps, options);
+  await statusOf(deps, portOf(deps, options), checkApp(options).appRef);
+}
+
+/** Print which release the app serves, from the port; shared by every target. */
+export async function statusOf(
+  deps: Pick<DeployCheckDeps, 'print'>,
+  port: HostingDeployPort,
+  appRef: string,
+): Promise<void> {
   const handle = await servingHandle(port, appRef);
   if (!handle) {
     deps.print('status', { app: appRef, state: 'none', servingReleaseId: null });
@@ -510,7 +561,7 @@ async function status(deps: DeployCheckDeps, options: DeployCheckOptions): Promi
   });
 }
 
-const statusLine = (res: Response): string => `${res.status} ${res.statusText}`.trim();
+export const statusLine = (res: Response): string => `${res.status} ${res.statusText}`.trim();
 
 async function probe(deps: DeployCheckDeps, options: DeployCheckOptions): Promise<void> {
   const manifest = readManifest(deps, options.manifestPath);
@@ -799,6 +850,12 @@ export async function runDeployCheckStep(
   deps: DeployCheckDeps,
   options: DeployCheckOptions,
 ): Promise<void> {
+  if (options.target === 'serverless') {
+    if (!deps.serverless) {
+      throw new OrchestratorNotConfiguredError('the serverless deploy check has no dependencies');
+    }
+    return runServerlessDeployCheckStep(step, { ...deps, serverless: deps.serverless }, options);
+  }
   if (!options.aws && AWS_ONLY_STEPS.includes(step)) awsOptions(step, options);
   switch (step) {
     case 'converge':
@@ -836,6 +893,10 @@ export async function runDeployCheckStep(
       await probe(deps, options);
       await report(deps, options);
       return destroy(deps, options);
+    case 'database':
+    case 'image':
+    case 'refuse':
+      throw new DeployCheckUsageError(`${step} runs with --target serverless only.`);
   }
 }
 
@@ -890,7 +951,10 @@ export function parseDeployCheckArgs(argv: readonly string[]): {
       const value = flag[2] ?? argv[(i += 1)];
       if (!value) throw new DeployCheckUsageError(`--${key} needs a value.`);
       flags[key] = value;
-    } else if (!step && (DEPLOY_CHECK_STEPS as readonly string[]).includes(arg)) {
+    } else if (
+      !step &&
+      [...DEPLOY_CHECK_STEPS, ...SERVERLESS_ONLY_DEPLOY_CHECK_STEPS].some((known) => known === arg)
+    ) {
       step = arg as DeployCheckStep;
     } else {
       throw new DeployCheckUsageError(`Unknown argument: ${arg}`);
@@ -900,6 +964,9 @@ export function parseDeployCheckArgs(argv: readonly string[]): {
   const target = flags.target ?? 'fly';
   if (!(DEPLOY_CHECK_TARGETS as readonly string[]).includes(target)) {
     throw new DeployCheckUsageError(`--target is ${DEPLOY_CHECK_TARGETS.join(' or ')}.`);
+  }
+  if (target !== 'serverless' && SERVERLESS_ONLY_DEPLOY_CHECK_STEPS.some((only) => only === step)) {
+    throw new DeployCheckUsageError(`${step} runs with --target serverless only.`);
   }
   if (target === 'aws') {
     for (const only of ['workspace', 'environment'] as const) {
@@ -929,17 +996,28 @@ export function parseDeployCheckArgs(argv: readonly string[]): {
   for (const only of ['shape', 'organization', 'aws-profile'] as const) {
     if (flags[only]) throw new DeployCheckUsageError(`--${only} is for --target aws only.`);
   }
+  const serverless = target === 'serverless';
   // On Fly, `--repository` names the repository whose stored environment the
   // check deploys, and comes with `--workspace` and `--environment`.
   const stored = parseStoredEnvironment(flags);
+  if (serverless && stored) {
+    throw new DeployCheckUsageError(
+      '--workspace, --repository and --environment are for --target fly only.',
+    );
+  }
   return {
     step,
     options: {
       manifestPath:
         flags.manifest ??
-        (stored ? DEPLOY_CHECK_ENV_REPORT_MANIFEST : DEPLOY_CHECK_DEFAULT_MANIFEST),
+        (serverless
+          ? SERVERLESS_DEPLOY_CHECK_DEFAULT_MANIFEST
+          : stored
+            ? DEPLOY_CHECK_ENV_REPORT_MANIFEST
+            : DEPLOY_CHECK_DEFAULT_MANIFEST),
       appName: flags.name ?? DEPLOY_CHECK_DEFAULT_NAME,
       image: flags.image ?? (stored ? DEPLOY_CHECK_ENV_REPORT_IMAGE : DEPLOY_CHECK_IMAGE),
+      ...(serverless ? { target: 'serverless' as const } : {}),
       ...(stored ? { stored } : {}),
     },
   };

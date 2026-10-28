@@ -15,8 +15,12 @@ import type { PermissionKey } from '@/lib/permissions/catalog';
 export type ActionGate =
   /** The service asserts this project permission key. */
   | { kind: 'key'; key: PermissionKey }
-  /** The service asserts a WORKSPACE or ORG role rather than a project key. */
-  | { kind: 'role'; role: 'org:owner-or-admin' | 'workspace:manager' }
+  /**
+   * The service asserts a WORKSPACE or ORG role rather than a project key.
+   * `workspace:inviter` is whoever may invite (a Manager, or a Full member), with
+   * a Limited invitation kept to a Manager (MOTIR-6546's scope rules).
+   */
+  | { kind: 'role'; role: 'org:owner-or-admin' | 'workspace:manager' | 'workspace:inviter' }
   /** A READ. Its page's own gate decides who reaches it; nothing to enable. */
   | { kind: 'read' }
   /** Acts on the actor's OWN account or membership — there is no right to lack. */
@@ -273,17 +277,9 @@ export const SERVER_ACTION_GATES: Record<string, ActionGate> = {
     reason: 'the actor’s own active project, through setActiveProject’s entry gate',
   },
   'settings/workspace/actions.ts#setMemberRoleAction': { kind: 'role', role: 'workspace:manager' },
-  'settings/workspace/jobs/actions.ts#replayDlqAction': { kind: 'role', role: 'workspace:manager' },
-  // MOTIR-8083: the platform OPERATOR's replay of a workspace-less dead letter. Not a
-  // tenant permission at all — the service asserts the `operator` platform role (and refuses a
-  // row that has a workspace), and the control exists only on the System tab, which
-  // `parseJobsParams` / `showSystemTab` render for that operator alone. So there is no
-  // capability for a client control to read; `self` is the kind that asks for none.
-  'settings/workspace/jobs/actions.ts#replaySystemDlqAction': {
-    kind: 'self',
-    reason:
-      'platform staff at operator level (User.platformRole), asserted in the service; the control only exists on the operator-only System tab',
-  },
+  // Resend a pending invitation (MOTIR-9996): the invite's own scope rules,
+  // re-asserted by `workspaceInvitesService.resendInvite`.
+  'settings/workspace/actions.ts#resendInviteAction': { kind: 'role', role: 'workspace:inviter' },
   'settings/workspace/security/actions.ts#setWorkspaceRequireTwoFactorAction': {
     kind: 'role',
     role: 'workspace:manager',

@@ -737,9 +737,6 @@
       "pickProjectFirst": "Escolha um projeto primeiro.",
       "unknownRelationship": "Relação desconhecida.",
       "pickIssueToLink": "Escolha um item de trabalho para vincular.",
-      "missingDlqId": "ID da dead-letter ausente.",
-      "ownerOnlyReplay": "Somente um Gerente do espaço de trabalho pode reprocessar jobs.",
-      "dlqGone": "Essa entrada de dead-letter não existe mais.",
       "workspaceNameEmpty": "O nome do espaço de trabalho não pode ficar vazio.",
       "useLeaveToRemoveSelf": "Use Sair para remover a si mesmo.",
       "cannotRemoveLastMember": "Não é possível remover o último membro.",
@@ -765,9 +762,7 @@
       "workspaceSecurityForbidden": "Somente proprietários e administradores de um espaço de trabalho podem alterar as configurações de segurança dele.",
       "refused": "Não foi possível concluir: {reason}",
       "organizationClosing": "Esta organização está programada para exclusão e é somente leitura. Somente o Proprietário dela pode cancelar a exclusão.",
-      "memberProjectsFailed": "Não foi possível carregar os projetos dessa pessoa.",
-      "systemReplayWorkspaceRow": "Essa entrada de dead-letter pertence a um workspace — reprocesse-a na aba Dead-letter desse workspace.",
-      "systemReplayOperatorOnly": "Somente o operador da plataforma pode reprocessar dead-letters do sistema."
+      "memberProjectsFailed": "Não foi possível carregar os projetos dessa pessoa."
     },
     "links": {
       "notFound": "Esse item de trabalho não existe mais.",
@@ -2066,13 +2061,11 @@
       "nav": {
         "group": {
           "general": "Geral",
-          "access": "Acesso",
-          "operations": "Operações"
+          "access": "Acesso"
         },
         "workspace": "Espaço de trabalho",
         "security": "Segurança",
         "roles": "Funções e permissões",
-        "jobs": "Execuções de jobs",
         "publicAddress": "Endereço público"
       }
     },
@@ -2202,7 +2195,58 @@
       "inviteNoProjectsWarning": "A pessoa não poderá abrir nada até que um Gerente a adicione a um projeto.",
       "inviteJoinsAsMember": "A pessoa entra como Membro. Você pode alterar a função dela depois que ela aceitar.",
       "errorInviteProjects": "Não é possível participar de um desses projetos. Escolha-os novamente.",
-      "errorInviteNotAllowed": "Você não pode enviar este convite. Somente um Gerente do espaço de trabalho pode convidar com acesso Limitado."
+      "errorInviteNotAllowed": "Você não pode enviar este convite. Somente um Gerente do espaço de trabalho pode convidar com acesso Limitado.",
+      "pending": {
+        "heading": "Convites pendentes",
+        "invitationColumn": "Convite",
+        "deliveryColumn": "Entrega",
+        "invitedBy": "Convidado por {name}, {sent}",
+        "invitedByFormer": "Convidado por um ex-membro, {sent}",
+        "expiresIn": "Expira em {count, plural, one {# dia} other {# dias}}",
+        "expiresToday": "Expira hoje",
+        "expiresOn": "Expira em {date}",
+        "resend": "Reenviar",
+        "resendLabel": "Reenviar o convite para {email}",
+        "resendScopeTooltip": "Somente um gerente pode reenviar um convite limitado",
+        "resentToast": "Novo convite enviado para {email}",
+        "refusalRateLimited": "Limite atingido: 3 convites por endereço por hora.",
+        "refusalRateLimitedBody": "Tente novamente mais tarde.",
+        "refusalAlreadyMember": "Esta pessoa já entrou no espaço de trabalho.",
+        "refusalNotAllowed": "Você não pode reenviar este convite.",
+        "refusalNoLongerPending": "Este convite não está mais pendente.",
+        "showAll": "Mostrar todos os {count} convites pendentes",
+        "showFewer": "Mostrar menos",
+        "delivery": {
+          "queued": {
+            "label": "Na fila",
+            "helper": "Aguardando envio"
+          },
+          "accepted": {
+            "label": "Aceito",
+            "helper": "O provedor de e-mail o recebeu"
+          },
+          "delivered": {
+            "label": "Entregue",
+            "helper": "Chegou ao servidor de e-mail do destinatário"
+          },
+          "bounced": {
+            "label": "Devolvido",
+            "helper": "O endereço o recusou"
+          },
+          "complained": {
+            "label": "Reclamação",
+            "helper": "Marcado como spam"
+          },
+          "delayed": {
+            "label": "Atrasado",
+            "helper": "O provedor ainda está tentando"
+          },
+          "failed": {
+            "label": "Falhou",
+            "helper": "Não foi possível enviar"
+          }
+        }
+      }
     },
     "danger": {
       "cantLeaveTitle": "Não é possível sair",
@@ -2920,86 +2964,6 @@
       "heroOverviewSubheading": "O slogan, as tags e o README que os visitantes veem na sua página pública.",
       "editOnPublicPage": "Editar a página pública",
       "heroOverviewNote": "Abre Configurações › Página pública. Você pode escrevê-la antes de o projeto ser público."
-    },
-    "jobs": {
-      "title": "Execuções de jobs",
-      "subtitle": "Jobs em segundo plano deste espaço de trabalho — envio de convites e redefinições de senha e qualquer trabalho agendado. Jobs com falha vão para a fila de dead-letter, onde um proprietário pode reprocessá-los.",
-      "tab": {
-        "runs": "Execuções recentes",
-        "dlq": "Dead-letter",
-        "system": "Sistema"
-      },
-      "tabNavLabel": "Visualizações de execuções de jobs",
-      "dlqBadgeLabel": "{count} na fila de dead-letter",
-      "filterGroupLabel": "Filtrar por status",
-      "filter": {
-        "all": "Todos",
-        "succeeded": "Bem-sucedidos",
-        "failed": "Com falha",
-        "running": "Em execução",
-        "abandoned": "Abandonados"
-      },
-      "runsTableCaption": "Execuções de jobs em segundo plano",
-      "col": {
-        "status": "Status",
-        "delivery": "Entrega",
-        "function": "Função",
-        "event": "Evento",
-        "attempts": "Tentativas",
-        "started": "Iniciado",
-        "duration": "Duração",
-        "failure": "Falha",
-        "details": "Detalhes",
-        "firstFailed": "Primeira falha",
-        "lastFailed": "Última falha",
-        "replayed": "Reprocessado",
-        "actions": "Ações"
-      },
-      "view": "Ver",
-      "runDetailTitle": "Detalhes da execução",
-      "dlqTableCaption": "Fila de dead-letter",
-      "replay": "Reprocessar",
-      "replayTooltip": "Somente um Gerente do espaço de trabalho pode reprocessar jobs",
-      "alreadyReplayedToastTitle": "Já reprocessado",
-      "alreadyReplayedToastDesc": "Esta entrada já foi reprocessada — nada novo foi enfileirado.",
-      "replayedToastTitle": "Job reprocessado",
-      "replayedToastDesc": "O evento original foi emitido novamente.",
-      "replayErrorTitle": "Não foi possível reprocessar",
-      "dlqDetailTitle": "Detalhes da dead-letter",
-      "dlqDetailDesc": "A falha e o payload do evento original (reprocessável como está).",
-      "failureHeading": "Falha",
-      "eventPayloadHeading": "Payload do evento",
-      "pageLabel": "Página {page}",
-      "previous": "Anterior",
-      "next": "Próxima",
-      "refresh": "Atualizar",
-      "dlqEmptyTitle": "Nada na fila de dead-letter",
-      "dlqEmptyDesc": "Todos os jobs foram bem-sucedidos ou ainda estão sendo tentados novamente.",
-      "runsEmptyTitle": "Ainda não há execuções de jobs",
-      "runsEmptyDesc": "Quando um job em segundo plano for executado, ele aparecerá aqui.",
-      "delivery": {
-        "accepted": "aceito",
-        "delivered": "entregue",
-        "bounced": "devolvido",
-        "complained": "denunciado",
-        "delayed": "atrasado"
-      },
-      "deliveryNone": "Nenhum registro de entrega",
-      "deliveryDetail": {
-        "heading": "Entrega",
-        "state": "Estado",
-        "messageId": "ID da mensagem",
-        "recipient": "Destinatário",
-        "template": "Modelo",
-        "lastEvent": "Último evento",
-        "never": "Ainda não há evento do provedor"
-      },
-      "systemDlqTitle": "Dead-letters sem workspace",
-      "systemDlqSummary": "{waiting} aguardando reprocessamento · {replayed} reprocessadas nos últimos 7 dias",
-      "systemDlqTableCaption": "Dead-letters do sistema",
-      "systemDlqEmptyTitle": "Nenhuma dead-letter do sistema",
-      "systemDlqEmptyDesc": "Todo job sem workspace foi concluído com sucesso ou ainda está sendo repetido.",
-      "systemRunsTitle": "Execuções do sistema"
     },
     "account": {
       "eyebrow": "Configurações da conta",
@@ -4176,10 +4140,6 @@
         "security": "Segurança",
         "usage": "Uso e custo",
         "billing": "Faturamento e planos"
-      },
-      "jobRunsFoldIn": {
-        "title": "Execuções de jobs",
-        "subtitle": "Trabalho em segundo plano deste espaço de trabalho — o que foi executado, o que falhou e o que está aguardando na fila de dead-letter."
       }
     },
     "gitAccounts": {
@@ -7537,7 +7497,8 @@
       "install_error": "Não foi possível concluir a configuração do GitHub App. Tente instalar novamente.",
       "select_repos": "A Motir GitHub App está instalada. Escolha quais repositórios da conta esta organização conecta.",
       "repo_unavailable": "Esse repositório já está conectado a outra organização, por isso não foi adicionado aqui. Nada mais mudou.",
-      "installation_not_accessible": "Você não consegue ver essa conta do GitHub no GitHub, por isso ela não foi vinculada a esta organização. Nada foi alterado."
+      "installation_not_accessible": "Você não consegue ver essa conta do GitHub no GitHub, por isso ela não foi vinculada a esta organização. Nada foi alterado.",
+      "identity_refused": "O GitHub não aceita mais o seu login do GitHub, então o Motir não conseguiu concluir a conexão do App. Em Configurações → Conta → Contas Git, desconecte sua conta e conecte-a de novo; depois tente novamente."
     },
     "connect": {
       "title": "Conectar o GitHub",
@@ -7935,7 +7896,9 @@
       "identity": {
         "title": "Conecte sua conta do GitHub primeiro",
         "body": "O Motir lista as contas do GitHub que você pode ver por meio da sua própria identidade do GitHub. Conecte-a em Configurações → Conta → Contas Git e depois volte aqui.",
-        "action": "Ir para Contas Git"
+        "action": "Ir para Contas Git",
+        "refusedTitle": "Reconecte sua conta do GitHub",
+        "refusedBody": "O GitHub não aceita mais o login que o Motir tem para você: ele foi revogado ou expirou. Em Configurações → Conta → Contas Git, desconecte-o e conecte-o de novo; depois volte aqui. Nada foi alterado."
       },
       "cancel": "Cancelar",
       "back": "Todas as contas",

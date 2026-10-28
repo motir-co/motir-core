@@ -51,7 +51,8 @@ describe('workspaceSettingsNav — totality (route ↔ entry, mistake #29)', () 
     // No drift in either direction: a new page without an entry, or an entry
     // without a page, both fail.
     expect(registryRoutes).toEqual(fsRoutes);
-    expect(fsRoutes).toHaveLength(8);
+    // Seven since MOTIR-10043 deleted the tenant Job runs page with its row.
+    expect(fsRoutes).toHaveLength(7);
   });
 });
 
@@ -61,7 +62,7 @@ describe('workspaceSettingsNav — the ONE filter axis, and it defaults closed',
       visibleWorkspaceSettingsNav(true, undefined, { publicProjectsAvailable: true }).map(
         (e) => e.id,
       ),
-    ).toEqual(['workspace', 'security', 'roles', 'public-address', 'jobs']);
+    ).toEqual(['workspace', 'security', 'roles', 'public-address']);
   });
 
   it('drops the cloud-only Public address row off-cloud, and by default (MOTIR-9514)', () => {
@@ -69,18 +70,17 @@ describe('workspaceSettingsNav — the ONE filter axis, and it defaults closed',
     const offCloud = visibleWorkspaceSettingsNav(true, undefined, {
       publicProjectsAvailable: false,
     }).map((e) => e.id);
-    expect(offCloud).toEqual(['workspace', 'security', 'roles', 'jobs']);
+    expect(offCloud).toEqual(['workspace', 'security', 'roles']);
     expect(visibleWorkspaceSettingsNav(true).map((e) => e.id)).toEqual(offCloud);
   });
 
   it('returns NO rows below the reveal — not fewer rows, none', () => {
-    // ⚠️ This is the assertion the re-plan turns on. An earlier shape of this
-    // registry exempted `jobs`, because `/settings/workspace/jobs` answered 200
-    // at every workspace count while its siblings 404'd (MOTIR-3502 AC 6). That
-    // was an UNFINISHED COLLAPSE, not a decision: it was the one workspace
-    // surface with no fold-in. MOTIR-4861 gives it one on
-    // `/settings/organization`, so the axis is uniform and the rail below the
-    // reveal is EMPTY. MOTIR-4859 is the planning bug.
+    // ⚠️ This is the assertion the re-plan turned on. An earlier shape of this
+    // registry exempted the Job runs row, whose route answered 200 at every
+    // workspace count while its siblings 404'd (MOTIR-3502 AC 6) — an UNFINISHED
+    // COLLAPSE, not a decision (MOTIR-4859). The row has since been retired with
+    // the tenant surface (Story MOTIR-9982), and the rail below the reveal stays
+    // EMPTY.
     expect(visibleWorkspaceSettingsNav(false)).toEqual([]);
   });
 
@@ -92,7 +92,7 @@ describe('workspaceSettingsNav — the ONE filter axis, and it defaults closed',
   });
 
   it('has NO role axis — no entry carries an admin-style flag', () => {
-    // §6d forbids a relocation that NARROWS a gate. All three routes check a
+    // §6d forbids a relocation that NARROWS a gate. These routes check a
     // session and a workspace context and no role at all, so a role flag here
     // would take a shipped capability away silently.
     for (const entry of WORKSPACE_SETTINGS_NAV) {
@@ -120,11 +120,11 @@ describe('workspaceSettingsNav — grouping and active detection', () => {
     expect(groupWorkspaceSettingsNav(visibleWorkspaceSettingsNav(false))).toEqual([]);
   });
 
-  it('the root is EXACT, so exactly one row reads active on each of the three routes', () => {
+  it('the root is EXACT, so exactly one row reads active on each of its routes', () => {
     const routes = [
       '/settings/workspace',
       '/settings/workspace/security',
-      '/settings/workspace/jobs',
+      '/settings/workspace/public-address',
     ];
     for (const pathname of routes) {
       const active = WORKSPACE_SETTINGS_NAV.filter((e) =>
@@ -137,7 +137,7 @@ describe('workspaceSettingsNav — grouping and active detection', () => {
 
   it('recognises the area, and nothing outside it', () => {
     expect(isWorkspaceSettingsPath('/settings/workspace')).toBe(true);
-    expect(isWorkspaceSettingsPath('/settings/workspace/jobs')).toBe(true);
+    expect(isWorkspaceSettingsPath('/settings/workspace/security')).toBe(true);
     expect(isWorkspaceSettingsPath('/settings/organization')).toBe(false);
     expect(isWorkspaceSettingsPath('/settings/project')).toBe(false);
     // A sibling route whose path merely STARTS with the root's string must not

@@ -737,9 +737,6 @@
       "pickProjectFirst": "Wählen Sie zuerst ein Projekt aus.",
       "unknownRelationship": "Unbekannte Beziehung.",
       "pickIssueToLink": "Wählen Sie ein Arbeitselement zum Verknüpfen aus.",
-      "missingDlqId": "Dead-Letter-ID fehlt.",
-      "ownerOnlyReplay": "Nur ein Manager des Arbeitsbereichs kann Aufträge erneut ausführen.",
-      "dlqGone": "Dieser Dead-Letter-Eintrag existiert nicht mehr.",
       "workspaceNameEmpty": "Der Name des Arbeitsbereichs darf nicht leer sein.",
       "useLeaveToRemoveSelf": "Verwenden Sie „Verlassen“, um sich selbst zu entfernen.",
       "cannotRemoveLastMember": "Das letzte Mitglied kann nicht entfernt werden.",
@@ -765,9 +762,7 @@
       "workspaceSecurityForbidden": "Nur Inhaber und Administratoren eines Arbeitsbereichs können dessen Sicherheitseinstellungen ändern.",
       "refused": "Das hat nicht geklappt: {reason}",
       "organizationClosing": "Diese Organisation ist zur Löschung vorgesehen und schreibgeschützt. Nur ihr Inhaber kann die Löschung abbrechen.",
-      "memberProjectsFailed": "Die Projekte dieser Person konnten nicht geladen werden.",
-      "systemReplayWorkspaceRow": "Dieser Dead-Letter-Eintrag gehört zu einem Workspace – führe ihn im Tab „Dead Letter“ dieses Workspace erneut aus.",
-      "systemReplayOperatorOnly": "Nur der Plattform-Betreiber kann System-Dead-Letter erneut ausführen."
+      "memberProjectsFailed": "Die Projekte dieser Person konnten nicht geladen werden."
     },
     "links": {
       "notFound": "Dieses Arbeitselement existiert nicht mehr.",
@@ -2066,13 +2061,11 @@
       "nav": {
         "group": {
           "general": "Allgemein",
-          "access": "Zugriff",
-          "operations": "Betrieb"
+          "access": "Zugriff"
         },
         "workspace": "Arbeitsbereich",
         "security": "Sicherheit",
         "roles": "Rollen & Berechtigungen",
-        "jobs": "Auftragsausführungen",
         "publicAddress": "Öffentliche Adresse"
       }
     },
@@ -2202,7 +2195,58 @@
       "inviteNoProjectsWarning": "Die Person kann nichts öffnen, bis ein Manager sie einem Projekt hinzufügt.",
       "inviteJoinsAsMember": "Die Person tritt als Mitglied bei. Sie können ihre Rolle nach der Annahme ändern.",
       "errorInviteProjects": "Einem dieser Projekte kann nicht beigetreten werden. Wählen Sie sie erneut aus.",
-      "errorInviteNotAllowed": "Sie können diese Einladung nicht senden. Nur ein Manager des Arbeitsbereichs kann mit eingeschränktem Zugriff einladen."
+      "errorInviteNotAllowed": "Sie können diese Einladung nicht senden. Nur ein Manager des Arbeitsbereichs kann mit eingeschränktem Zugriff einladen.",
+      "pending": {
+        "heading": "Ausstehende Einladungen",
+        "invitationColumn": "Einladung",
+        "deliveryColumn": "Zustellung",
+        "invitedBy": "Eingeladen von {name}, {sent}",
+        "invitedByFormer": "Eingeladen von einem ehemaligen Mitglied, {sent}",
+        "expiresIn": "Läuft in {count, plural, one {# Tag} other {# Tagen}} ab",
+        "expiresToday": "Läuft heute ab",
+        "expiresOn": "Läuft ab am {date}",
+        "resend": "Erneut senden",
+        "resendLabel": "Einladung erneut an {email} senden",
+        "resendScopeTooltip": "Nur ein Manager kann eine eingeschränkte Einladung erneut senden",
+        "resentToast": "Neue Einladung an {email} gesendet",
+        "refusalRateLimited": "Limit erreicht: 3 Einladungen pro Adresse und Stunde.",
+        "refusalRateLimitedBody": "Versuchen Sie es später erneut.",
+        "refusalAlreadyMember": "Diese Person ist dem Arbeitsbereich bereits beigetreten.",
+        "refusalNotAllowed": "Sie können diese Einladung nicht erneut senden.",
+        "refusalNoLongerPending": "Diese Einladung ist nicht mehr ausstehend.",
+        "showAll": "Alle {count} ausstehenden Einladungen anzeigen",
+        "showFewer": "Weniger anzeigen",
+        "delivery": {
+          "queued": {
+            "label": "In Warteschlange",
+            "helper": "Wartet auf den Versand"
+          },
+          "accepted": {
+            "label": "Angenommen",
+            "helper": "Der Mailanbieter hat sie erhalten"
+          },
+          "delivered": {
+            "label": "Zugestellt",
+            "helper": "Hat den Mailserver des Empfängers erreicht"
+          },
+          "bounced": {
+            "label": "Unzustellbar",
+            "helper": "Die Adresse hat sie abgelehnt"
+          },
+          "complained": {
+            "label": "Beschwerde",
+            "helper": "Als Spam markiert"
+          },
+          "delayed": {
+            "label": "Verzögert",
+            "helper": "Der Anbieter versucht es weiter"
+          },
+          "failed": {
+            "label": "Fehlgeschlagen",
+            "helper": "Konnte nicht gesendet werden"
+          }
+        }
+      }
     },
     "danger": {
       "cantLeaveTitle": "Verlassen nicht möglich",
@@ -2920,86 +2964,6 @@
       "heroOverviewSubheading": "Slogan, Tags und README, die Besucher auf Ihrer öffentlichen Seite sehen.",
       "editOnPublicPage": "Öffentliche Seite bearbeiten",
       "heroOverviewNote": "Öffnet Einstellungen › Öffentliche Seite. Sie können sie schreiben, bevor das Projekt öffentlich ist."
-    },
-    "jobs": {
-      "title": "Auftragsausführungen",
-      "subtitle": "Hintergrundaufträge für diesen Arbeitsbereich – Zustellung von Einladungen und Passwort-Zurücksetzungen sowie geplante Arbeiten. Fehlgeschlagene Aufträge landen in der Dead-Letter-Queue, wo ein Inhaber sie erneut ausführen kann.",
-      "tab": {
-        "runs": "Letzte Ausführungen",
-        "dlq": "Dead Letter",
-        "system": "System"
-      },
-      "tabNavLabel": "Ansichten der Auftragsausführungen",
-      "dlqBadgeLabel": "{count} in der Dead-Letter-Queue",
-      "filterGroupLabel": "Nach Status filtern",
-      "filter": {
-        "all": "Alle",
-        "succeeded": "Erfolgreich",
-        "failed": "Fehlgeschlagen",
-        "running": "Läuft",
-        "abandoned": "Aufgegeben"
-      },
-      "runsTableCaption": "Ausführungen von Hintergrundaufträgen",
-      "col": {
-        "status": "Status",
-        "delivery": "Zustellung",
-        "function": "Funktion",
-        "event": "Ereignis",
-        "attempts": "Versuche",
-        "started": "Gestartet",
-        "duration": "Dauer",
-        "failure": "Fehler",
-        "details": "Details",
-        "firstFailed": "Erster Fehler",
-        "lastFailed": "Letzter Fehler",
-        "replayed": "Erneut ausgeführt",
-        "actions": "Aktionen"
-      },
-      "view": "Anzeigen",
-      "runDetailTitle": "Ausführungsdetails",
-      "dlqTableCaption": "Dead-Letter-Queue",
-      "replay": "Erneut ausführen",
-      "replayTooltip": "Nur ein Manager des Arbeitsbereichs kann Aufträge erneut ausführen",
-      "alreadyReplayedToastTitle": "Bereits erneut ausgeführt",
-      "alreadyReplayedToastDesc": "Dieser Eintrag wurde bereits früher erneut ausgeführt – es wurde nichts Neues eingereiht.",
-      "replayedToastTitle": "Auftrag erneut ausgeführt",
-      "replayedToastDesc": "Das ursprüngliche Ereignis wurde erneut ausgelöst.",
-      "replayErrorTitle": "Erneute Ausführung nicht möglich",
-      "dlqDetailTitle": "Dead-Letter-Details",
-      "dlqDetailDesc": "Der Fehler und die ursprünglichen Ereignisdaten (unverändert erneut ausführbar).",
-      "failureHeading": "Fehler",
-      "eventPayloadHeading": "Ereignisdaten",
-      "pageLabel": "Seite {page}",
-      "previous": "Zurück",
-      "next": "Weiter",
-      "refresh": "Aktualisieren",
-      "dlqEmptyTitle": "Nichts in der Dead-Letter-Queue",
-      "dlqEmptyDesc": "Jeder Auftrag war erfolgreich oder wird noch wiederholt.",
-      "runsEmptyTitle": "Noch keine Auftragsausführungen",
-      "runsEmptyDesc": "Wenn ein Hintergrundauftrag ausgeführt wird, erscheint er hier.",
-      "delivery": {
-        "accepted": "angenommen",
-        "delivered": "zugestellt",
-        "bounced": "unzustellbar",
-        "complained": "beanstandet",
-        "delayed": "verzögert"
-      },
-      "deliveryNone": "Kein Zustellungsdatensatz",
-      "deliveryDetail": {
-        "heading": "Zustellung",
-        "state": "Status",
-        "messageId": "Nachrichten-ID",
-        "recipient": "Empfänger",
-        "template": "Vorlage",
-        "lastEvent": "Letztes Ereignis",
-        "never": "Noch kein Ereignis vom Anbieter"
-      },
-      "systemDlqTitle": "Dead Letter ohne Workspace",
-      "systemDlqSummary": "{waiting} warten auf erneute Ausführung · {replayed} in den letzten 7 Tagen erneut ausgeführt",
-      "systemDlqTableCaption": "System-Dead-Letter",
-      "systemDlqEmptyTitle": "Keine System-Dead-Letter",
-      "systemDlqEmptyDesc": "Jeder Job ohne Workspace war erfolgreich oder wird noch wiederholt.",
-      "systemRunsTitle": "Systemläufe"
     },
     "account": {
       "eyebrow": "Kontoeinstellungen",
@@ -4176,10 +4140,6 @@
         "security": "Sicherheit",
         "usage": "Nutzung & Kosten",
         "billing": "Abrechnung & Pläne"
-      },
-      "jobRunsFoldIn": {
-        "title": "Auftragsausführungen",
-        "subtitle": "Hintergrundarbeit für diesen Arbeitsbereich – was ausgeführt wurde, was fehlgeschlagen ist und was in der Dead-Letter-Queue wartet."
       }
     },
     "gitAccounts": {
@@ -7537,7 +7497,8 @@
       "install_error": "Die Einrichtung der GitHub App konnte nicht abgeschlossen werden. Bitte versuchen Sie die Installation erneut.",
       "select_repos": "Die Motir GitHub App ist installiert. Wählen Sie, welche Repositorys des Kontos diese Organisation verbindet.",
       "repo_unavailable": "Dieses Repository ist bereits mit einer anderen Organisation verbunden und wurde daher hier nicht hinzugefügt. Sonst wurde nichts geändert.",
-      "installation_not_accessible": "Sie können dieses GitHub-Konto auf GitHub nicht sehen, daher wurde es nicht mit dieser Organisation verknüpft. Es wurde nichts geändert."
+      "installation_not_accessible": "Sie können dieses GitHub-Konto auf GitHub nicht sehen, daher wurde es nicht mit dieser Organisation verknüpft. Es wurde nichts geändert.",
+      "identity_refused": "GitHub akzeptiert Ihre GitHub-Anmeldung nicht mehr, daher konnte Motir die Verbindung der App nicht abschließen. Trennen Sie Ihr Konto unter Einstellungen → Konto → Git-Konten, verbinden Sie es erneut und versuchen Sie es dann noch einmal."
     },
     "connect": {
       "title": "GitHub verbinden",
@@ -7935,7 +7896,9 @@
       "identity": {
         "title": "Verbinden Sie zuerst Ihr GitHub-Konto",
         "body": "Motir listet die GitHub-Konten auf, die Sie über Ihre eigene GitHub-Identität sehen können. Verbinden Sie sie unter Einstellungen → Konto → Git-Konten und kehren Sie dann hierher zurück.",
-        "action": "Zu Git-Konten"
+        "action": "Zu Git-Konten",
+        "refusedTitle": "Verbinden Sie Ihr GitHub-Konto erneut",
+        "refusedBody": "GitHub akzeptiert die Anmeldung, die Motir für Sie hat, nicht mehr: Sie wurde widerrufen oder ist abgelaufen. Trennen Sie sie unter Einstellungen → Konto → Git-Konten, verbinden Sie sie erneut und kehren Sie dann hierher zurück. Es wurde nichts geändert."
       },
       "cancel": "Abbrechen",
       "back": "Alle Konten",
