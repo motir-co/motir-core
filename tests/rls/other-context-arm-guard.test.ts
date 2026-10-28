@@ -140,6 +140,14 @@ const DELIBERATELY_UNARMED: Record<string, { verdict: Verdict; why: string }> = 
       verdict: 'guc-less-arm',
       why: HOSTNAME_RESERVATION_WHY,
     },
+  // The name-hold sweep's own gate (Story MOTIR-4528 · MOTIR-9509) reads and
+  // writes the same table from inside a workspace context, to prove a hold in
+  // force survives the sweep and a swept digest can be reserved again — the
+  // same table, the same policy, reached from a test.
+  'workspace-user::tests/publicAddresses/nameHoldSweep.test.ts#it:never touches a hold still in force — it is still reserved afterwards :: publicHostnameReservation':
+    { verdict: 'guc-less-arm', why: HOSTNAME_RESERVATION_WHY },
+  'workspace-user::tests/publicAddresses/nameHoldSweep.test.ts#it:lets a swept digest be reserved again, with no unique-key collision :: publicHostnameReservation':
+    { verdict: 'guc-less-arm', why: HOSTNAME_RESERVATION_WHY },
   'user::lib/services/publicRequestsService.ts#toggleUpvote :: workItem': {
     verdict: 'guc-less-arm',
     why:
