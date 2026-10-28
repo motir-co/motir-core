@@ -3,12 +3,16 @@
 // (`pnpm hosting:deploy-check`, MOTIR-9805) runs from a laptop with only the Fly
 // token set. `./index` re-exports everything here.
 import {
+  AWS_MANAGEMENT_ENV,
   createFakeHostingDeployPort,
   createFlyHostingDeployPort,
+  createServerlessHostingDeployPort,
   flyHostingConfig,
   OrchestratorNotConfiguredError,
+  serverlessHostingConfig,
   type HostingDeployPort,
   type HostingDeployTarget,
+  type ServerlessSourceCredentials,
 } from '@motir/orchestrator';
 import { createConfiguredAwsHostingPort } from './awsHosting';
 import { selectedOrchestratorProvider } from './provider';
@@ -18,9 +22,10 @@ import { selectedOrchestratorProvider } from './provider';
 // One port for a hosted app's releases, keyed by the repository's hosting
 // TARGET (MOTIR-9808). The fake while `MOTIR_FLEET_ORCHESTRATOR=fake`, so a suite
 // that selects the fake gets every fake; Fly's adapter otherwise, with its OWN
-// token (`MOTIR_HOSTING_FLY_API_TOKEN`, read at call time); any other target
-// through a registry, so the serverless and AWS adapters each land as one file
-// and one `registerHostingAdapter` call rather than a second port.
+// token (`MOTIR_HOSTING_FLY_API_TOKEN`, read at call time); the serverless one
+// with its scoped role (`MOTIR_HOSTING_AWS_SERVERLESS_ROLE_ARN`, MOTIR-9972); any
+// other target through a registry, so the AWS adapter lands as one file and one
+// `registerHostingAdapter` call rather than a second port.
 
 /** How a caller narrows the adapter it gets. `appPrefix` replaces the target's
  *  configured app-name prefix, so a caller that owns its own apps (the operator
@@ -71,7 +76,29 @@ export function getHostingDeployPort(
       ...(appPrefix ? { appPrefix } : {}),
     });
   }
+  if (target === 'serverless') {
+    return createServerlessHostingDeployPort(
+      { ...serverlessHostingConfig(), ...(appPrefix ? { appPrefix } : {}) },
+      { sourceCredentials: serverlessSourceCredentials() },
+    );
+  }
   throw new OrchestratorNotConfiguredError(`no ${target} hosting adapter is registered`);
+}
+
+/**
+ * Who assumes the serverless account's scoped role. On the app it is Motir's
+ * management key and the role it assumes there (`motir-add-shard`), which the
+ * scoped role trusts (MOTIR-9970); unset, the SDK's default chain — an operator's
+ * own profile on a laptop. Read here, at the composition root, so the adapter
+ * itself reads only its role and region.
+ */
+function serverlessSourceCredentials(): ServerlessSourceCredentials | null {
+  const read = (name: string) => process.env[name]?.trim() ?? '';
+  const accessKeyId = read(AWS_MANAGEMENT_ENV.accessKeyId);
+  const secretAccessKey = read(AWS_MANAGEMENT_ENV.secretAccessKey);
+  if (!accessKeyId || !secretAccessKey) return null;
+  const roleArn = read(AWS_MANAGEMENT_ENV.roleArn);
+  return { accessKeyId, secretAccessKey, ...(roleArn ? { roleArn } : {}) };
 }
 
 const ORIGIN_SECRET_KEY_ENV = 'MOTIR_HOSTING_ORIGIN_SECRET_KEY';

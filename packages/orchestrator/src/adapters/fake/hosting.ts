@@ -22,6 +22,7 @@ import type {
   ReleaseUsage,
 } from '../../hosting/types';
 import { computeUsageFor, runningSecondsBetween, type RunTransition } from '../../hosting/usage';
+import { assertServerlessRuntime } from '../serverless/preflight';
 
 // The FAKE hosting deploy port (MOTIR-5773) — the second implementation shipped
 // beside the Fly adapter, for the reason every port here has one: the preview
@@ -98,13 +99,14 @@ export interface FakeHostingOptions {
 
 /** The origin credential a forwarder sends to a release of that target and
  *  shape (MOTIR-5769 §4): Fly's guard and an AWS container's load-balancer rule
- *  check the origin secret; an AWS function URL is IAM-authorised (SigV4). */
+ *  check the origin secret; a serverless release and an AWS function URL are
+ *  IAM-authorised (SigV4). */
 function originCredentialFor(
   target: HostingDeployTarget,
   shape: ReleaseShape | undefined,
 ): OriginCredentialKind {
   if (target === 'fly') return 'origin_secret';
-  if (target !== 'aws') return 'none';
+  if (target === 'serverless') return 'aws_sigv4';
   return shape === 'function' ? 'aws_sigv4' : 'origin_secret';
 }
 
@@ -275,6 +277,9 @@ export function createFakeHostingDeployPort(
     },
 
     async deploy(input) {
+      // As the serverless adapter: its manifest refusals come before anything
+      // else, so a refused release finds no app and creates nothing.
+      if (target === 'serverless') assertServerlessRuntime(input.runtime);
       const shape = shapeOf(input);
       const app = appOf(input.appRef);
       if (!sameEnvironment(app.environment, input.environment)) {
@@ -321,7 +326,8 @@ export function createFakeHostingDeployPort(
         previousReleaseId: app.previous?.releaseId ?? null,
         upstreamAddress: upstreamFor(app.appRef, app.live.shape),
         // As the real adapters: a Fly release sits behind the origin-secret
-        // guard (MOTIR-9947); an AWS release behind its shape's credential.
+        // guard (MOTIR-9947), a serverless one behind a SigV4-signed function
+        // URL (MOTIR-9972), an AWS release behind its shape's credential.
         originCredential: originCredentialFor(target, app.live.shape),
       };
     },

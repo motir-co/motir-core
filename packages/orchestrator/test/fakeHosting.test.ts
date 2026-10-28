@@ -164,15 +164,47 @@ describe('the fake hosting deploy port', () => {
     });
   });
 
-  it('a target with no guard and no shapes answers no origin credential', async () => {
+  it('a target with no shapes answers its own credential at the named host', async () => {
     const port = createFakeHostingDeployPort({ target: 'serverless', appPrefix: 'x-' });
     const { appRef } = await port.ensureApp({ repositoryId: 'r', environment: PRODUCTION });
-    const handle = await port.deploy(input(appRef, PRODUCTION));
+    const http = input(appRef, PRODUCTION);
+    const handle = await port.deploy({
+      ...http,
+      runtime: { ...http.runtime, requires: { websockets: false, backgroundWork: false } },
+    });
     expect(await port.describe(handle)).toMatchObject({
-      originCredential: 'none',
+      originCredential: 'aws_sigv4',
       upstreamAddress: 'https://x-r.fake.invalid',
     });
     expect((await port.destroy(handle, 'operator')).compute).toBeUndefined();
+  });
+});
+
+describe('the fake serverless port (MOTIR-9975)', () => {
+  it('refuses by the manifest field before looking for the app, as the adapter does', async () => {
+    const port = createFakeHostingDeployPort({ target: 'serverless', appPrefix: 'x-' });
+    const worker = input('x-r', PRODUCTION);
+    const refused = {
+      ...worker,
+      runtime: { ...worker.runtime, requires: { websockets: false, backgroundWork: true } },
+    };
+    await expect(port.deploy(refused)).rejects.toMatchObject({
+      code: 'HOSTING_RUNTIME_REFUSED',
+      field: 'requires.backgroundWork',
+    });
+    await expect(port.deploy(worker)).rejects.toMatchObject({ field: 'requires' });
+    expect(port.app('x-r')).toBeUndefined();
+  });
+
+  it('serves an HTTP release behind the SigV4 origin credential', async () => {
+    const port = createFakeHostingDeployPort({ target: 'serverless', appPrefix: 'x-' });
+    await port.ensureApp({ repositoryId: 'r', environment: PRODUCTION });
+    const http = input('x-r', PRODUCTION);
+    const handle = await port.deploy({
+      ...http,
+      runtime: { ...http.runtime, requires: { websockets: false, backgroundWork: false } },
+    });
+    expect((await port.describe(handle)).originCredential).toBe('aws_sigv4');
   });
 });
 

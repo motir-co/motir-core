@@ -5,23 +5,20 @@ import {
   NoPreviousReleaseError,
   OrchestratorApiError,
   ReleaseShapeRequiredError,
-  createFakeHostingDeployPort,
-  createFlyHostingDeployPort,
   type DeployReleaseInput,
-  type HostingDeployPort,
   type HostingEnvironment,
-  type OriginCredentialKind,
-  type ReleaseIdlePolicy,
   type ReleaseShape,
   type ReleaseUsage,
 } from '../src/index';
 import {
-  AWS_ACCOUNT,
-  AWS_CUSTOMER,
-  AWS_REGION,
-  awsAdapterHarness,
-} from './contract/awsHostingHarness';
-import { createHostingFlySim, flyJson } from './contract/hostingFlySim';
+  ADAPTERS,
+  CUSTOMER,
+  IMAGE,
+  R,
+  SUSPEND,
+  fakeAwsHarness,
+  type HostingHarness,
+} from './contract/hostingHarnesses';
 
 // THE HOSTING DEPLOY PORT'S CONTRACT (Story MOTIR-9791 · MOTIR-9806) — one case
 // list, run unchanged against every adapter. The preview and production stories
@@ -42,190 +39,11 @@ import { createHostingFlySim, flyJson } from './contract/hostingFlySim';
 // case list holds for it unchanged; what differs per entry is only what the
 // harness says — where a release answers, with which credential, and the image
 // reference its provider pulls (AWS pulls the tenant registry's copy).
-
-interface ProviderRuntime {
-  readonly image: string;
-  readonly port: number;
-  readonly healthCheckPath: string;
-}
-
-interface HostingHarness {
-  readonly port: HostingDeployPort;
-  /** How the address of a release of `appRef` reads. */
-  upstream(appRef: string): RegExp;
-  /** The image reference the provider runs for `IMAGE` in `R`'s production. */
-  readonly runsImage: string;
-  /** The AWS shape every release in this run takes; absent off AWS. */
-  readonly shape?: ReleaseShape;
-  /** The idle policy this harness's releases ask for. */
-  readonly idle: ReleaseIdlePolicy;
-  /** What a forwarder must send to reach this harness's releases. */
-  readonly originCredential: OriginCredentialKind;
-  advanceSeconds(seconds: number): void;
-  /** The provider refuses the next destroy (of a release or of an app) for `appRef`
-   *  once, destroying nothing. */
-  failNextDestroy(appRef: string, operation: 'destroy' | 'destroyApp'): void;
-  /** What the provider was told to run in that app now. */
-  runtimeOf(appRef: string): ProviderRuntime | null;
-}
-
-const START = Date.parse('2026-10-28T00:00:00.000Z');
-const PREFIX = 'mh-';
-
-const SUSPEND: ReleaseIdlePolicy = { mode: 'suspend', idleSeconds: 300 };
-
-function fakeHarness(): HostingHarness {
-  const fake = createFakeHostingDeployPort({ appPrefix: PREFIX, start: new Date(START) });
-  return {
-    port: fake,
-    upstream: namedHost,
-    runsImage: PINNED_IMAGE,
-    idle: SUSPEND,
-    originCredential: 'origin_secret',
-    advanceSeconds: (s) => fake.advanceSeconds(s),
-    failNextDestroy: (_appRef, operation) => fake.failNext(operation),
-    runtimeOf(appRef) {
-      const live = fake.app(appRef)?.live;
-      return live
-        ? {
-            image: live.image,
-            port: live.runtime.port,
-            healthCheckPath: live.runtime.healthCheck.path,
-          }
-        : null;
-    },
-  };
-}
-
-type FakeAwsHarness = HostingHarness & {
-  readonly fake: ReturnType<typeof createFakeHostingDeployPort>;
-};
-
-/** The fake, built as the AWS target, deploying one shape. */
-function fakeAwsHarness(shape: ReleaseShape): FakeAwsHarness {
-  const fake = createFakeHostingDeployPort({
-    target: 'aws',
-    appPrefix: PREFIX,
-    start: new Date(START),
-    refuseRepositories: [CUSTOMER],
-  });
-  return {
-    port: fake,
-    upstream: namedHost,
-    runsImage: PINNED_IMAGE,
-    fake,
-    shape,
-    idle: shape === 'container' ? { mode: 'always_on' } : SUSPEND,
-    originCredential: shape === 'function' ? 'aws_sigv4' : 'origin_secret',
-    advanceSeconds: (s) => fake.advanceSeconds(s),
-    failNextDestroy: (_appRef, operation) => fake.failNext(operation),
-    runtimeOf(appRef) {
-      const live = fake.app(appRef)?.live;
-      return live
-        ? {
-            image: live.image,
-            port: live.runtime.port,
-            healthCheckPath: live.runtime.healthCheck.path,
-          }
-        : null;
-    },
-  };
-}
-
-function flyHarness(): HostingHarness {
-  let clock = START;
-  let ids = 0;
-  const sim = createHostingFlySim(() => clock);
-  vi.stubGlobal('fetch', sim.fetch);
-  const port = createFlyHostingDeployPort(
-    {
-      token: 'hosting-token',
-      org: 'motir-hosting',
-      region: 'iad',
-      appPrefix: PREFIX,
-      guardImage: 'registry.fly.io/motir-hosting-guard@sha256:guard',
-      originSecretKey: 'origin-key',
-    },
-    { now: () => new Date(clock), newReleaseId: () => `rel-${(ids += 1)}` },
-  );
-  return {
-    port,
-    upstream: namedHost,
-    runsImage: PINNED_IMAGE,
-    idle: SUSPEND,
-    originCredential: 'origin_secret',
-    advanceSeconds: (s) => {
-      clock += s * 1000;
-    },
-    failNextDestroy(appRef, operation) {
-      const target =
-        operation === 'destroy'
-          ? (path: string) => path.startsWith(`/apps/${appRef}/machines/`)
-          : (path: string) => path === `/apps/${appRef}`;
-      let pending = true;
-      sim.overrides.push((call) => {
-        if (!pending || call.method !== 'DELETE' || !target(call.path)) return null;
-        pending = false;
-        return flyJson(503, { error: 'unavailable' });
-      });
-    },
-    runtimeOf(appRef) {
-      const config = sim.apps.get(appRef)?.[0]?.config;
-      if (!config) return null;
-      // The app container and the port its guard forwards to: the service
-      // itself is the guard's (MOTIR-9947), never the app's.
-      const containers = config['containers'] as Array<Record<string, unknown>>;
-      const app = containers.find((c) => c['name'] === 'app')!;
-      const guard = containers.find((c) => c['name'] === 'guard')!;
-      const health = (config['checks'] as Record<string, Record<string, unknown>>)['health']!;
-      return {
-        image: String(app['image']),
-        port: Number((guard['env'] as Record<string, string>)['MOTIR_GUARD_APP_PORT']),
-        healthCheckPath: String(health['path']),
-      };
-    },
-  };
-}
-
-/** The real AWS adapter on the fake tenant account, deploying one shape. A
- *  provider destroy failure is the release (or database) stack's delete
- *  refused once, before anything is deleted. */
-function awsHarness(shape: ReleaseShape): HostingHarness {
-  const h = awsAdapterHarness({ start: new Date(START) });
-  return {
-    port: h.port,
-    shape,
-    idle: shape === 'container' ? { mode: 'always_on' } : SUSPEND,
-    originCredential: shape === 'function' ? 'aws_sigv4' : 'origin_secret',
-    // A function URL is a host AWS generates; a container answers on the
-    // account's load balancer.
-    upstream: () =>
-      shape === 'function'
-        ? new RegExp(`^https://[0-9a-f]{32}\\.lambda-url\\.${AWS_REGION}\\.on\\.aws/$`)
-        : new RegExp(`^https?://motir-tenant-1\\.${AWS_REGION}\\.elb\\.amazonaws\\.com`),
-    runsImage: `${AWS_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com/mh/${R}/production@${IMAGE.digest}`,
-    advanceSeconds: (s) => h.advanceSeconds(s),
-    failNextDestroy: () => h.fakes.cloudformation.failAt('deleteStack', 1),
-    runtimeOf(appRef) {
-      const parameters = h.fakes.cloudformation.stacks.get(`motir-release-${appRef}`)?.parameters;
-      if (!parameters?.['ConfigHash']) return null;
-      return {
-        image: parameters['ImageUri']!,
-        port: Number(parameters['Port']),
-        healthCheckPath: parameters['HealthCheckPath']!,
-      };
-    },
-  };
-}
-
-const ADAPTERS: ReadonlyArray<readonly [string, () => HostingHarness]> = [
-  ['fake', fakeHarness],
-  ['fly', flyHarness],
-  ['fake-aws-function', () => fakeAwsHarness('function')],
-  ['fake-aws-container', () => fakeAwsHarness('container')],
-  ['aws function', () => awsHarness('function')],
-  ['aws container', () => awsHarness('container')],
-];
+//
+// The serverless adapter (MOTIR-9972) joins as `serverless`, over an in-memory
+// Lambda account; it runs only an image in its own registry, so its harness
+// names the image a release deploys. The harnesses live in
+// `./contract/hostingHarnesses.ts`, shared with the serverless story gate.
 
 /** Adapters with shapes, and how a test holds their tenant account back. */
 interface AwsHarness extends HostingHarness {
@@ -243,20 +61,10 @@ const AWS_ADAPTERS: ReadonlyArray<readonly [string, () => AwsHarness]> = (
   },
 ]);
 
-const CUSTOMER = AWS_CUSTOMER;
-const R = 'cmrepo1';
 const PRODUCTION: HostingEnvironment = { kind: 'production' };
 const PREVIEW: HostingEnvironment = { kind: 'preview', pullRequest: 7 };
-const IMAGE = { ref: 'docker.io/traefik/whoami', digest: 'sha256:abc' };
-const PINNED_IMAGE = `${IMAGE.ref}@${IMAGE.digest}`;
-
-/** Fly's and the fake's address: the app's own name under the target's host. */
-function namedHost(appRef: string): RegExp {
-  return new RegExp(`^https://${appRef}\\.`);
-}
-
 function release(
-  h: Pick<HostingHarness, 'shape' | 'idle'>,
+  h: Pick<HostingHarness, 'shape' | 'idle' | 'image'>,
   appRef: string,
   environment: HostingEnvironment,
   marker: string,
@@ -264,12 +72,14 @@ function release(
   return {
     appRef,
     environment,
-    artifact: { kind: 'image', ...IMAGE },
+    artifact: { kind: 'image', ...(h.image ?? IMAGE) },
     runtime: {
       port: 8080,
       healthCheck: { path: '/health' },
       startCommand: '/whoami',
       database: { kind: 'none' },
+      // HTTP only: the serverless target refuses a release that does not say so.
+      requires: { websockets: false, backgroundWork: false },
     },
     env: [{ name: 'WHOAMI_NAME', value: marker, secret: false }],
     idle: h.idle,
