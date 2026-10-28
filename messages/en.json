@@ -2072,7 +2072,8 @@
         "workspace": "Workspace",
         "security": "Security",
         "roles": "Roles & permissions",
-        "jobs": "Job runs"
+        "jobs": "Job runs",
+        "publicAddress": "Public address"
       }
     },
     "name": {
@@ -2707,43 +2708,6 @@
         "title": "No public namespace is configured",
         "description": "This deployment has no tenant base domain set, so a subdomain cannot be claimed yet. An operator sets MOTIR_PUBLIC_TENANT_DOMAIN."
       },
-      "subdomain": {
-        "title": "Workspace subdomain",
-        "subtitle": "One address for the whole workspace. Every public project in it answers underneath.",
-        "label": "Subdomain",
-        "helper": "Your projects will be at {preview}. Lowercase letters, digits and hyphens; 3–63 characters.",
-        "claim": "Claim subdomain",
-        "claimable": "This can be renamed later, a limited number of times.",
-        "active": "Active",
-        "alias": "Redirects here",
-        "aliasShort": "Redirects",
-        "copy": "Copy address",
-        "copied": "Address copied",
-        "open": "Open in a new tab",
-        "rename": "Rename",
-        "renamesLeft": "{count, plural, =0 {No renames left.} one {# rename left.} other {# renames left.}}",
-        "readOnly": "Managed by a workspace owner or admin.",
-        "none": "No subdomain claimed yet."
-      },
-      "rename": {
-        "title": "Rename this subdomain?",
-        "warningTitle": "The old address keeps working, and is never released.",
-        "warningBody": "{old} will redirect here permanently and cannot be claimed by anyone else — including you, later.",
-        "remaining": "You have {count, plural, one {# rename} other {# renames}} left after this one.",
-        "cancel": "Cancel",
-        "confirm": "Rename"
-      },
-      "release": {
-        "remove": "Remove",
-        "title": "Remove {hostname}?",
-        "lead": "{count, plural, one {This address will stop answering:} other {These # addresses will stop answering:}}",
-        "warningTitle": "{count, plural, one {This name is held for ever. Nobody can claim it again — including you.} other {These names are held for ever. Nobody can claim them again — including you.}}",
-        "warningBody": "Motir keeps every released name out of its namespace permanently, so no other workspace can inherit links that pointed at yours.",
-        "renamesAfter": "You will have {count, plural, =0 {no renames} one {# rename} other {# renames}} left if you claim a subdomain again — releasing does not give them back.",
-        "fallback": "Your public projects go back to {url}, and appear on {site} again.",
-        "cancel": "Cancel",
-        "confirm": "Remove subdomain"
-      },
       "domains": {
         "title": "Your own domain",
         "subtitle": "Serve this project from a domain you own.",
@@ -2832,17 +2796,6 @@
         },
         "lastChecked": "Last checked {when}",
         "error": "That did not work. Try again in a moment."
-      },
-      "error": {
-        "reserved": "{label} is reserved. Motir keeps a small set of names for its own hosts and for names a reader could mistake for one.",
-        "structurallyReserved": "{label} is reserved. Names beginning with an underscore, xn-- or motir- belong to Motir or to the DNS itself.",
-        "tooShort": "Too short — a subdomain is at least 3 characters.",
-        "tooLong": "Too long — a subdomain is at most 63 characters.",
-        "badGrammar": "Lowercase letters, digits and hyphens only, starting and ending with a letter or digit.",
-        "taken": "{label} is already in use. A subdomain that has been renamed away from also keeps its name, so this one may belong to a workspace that no longer answers on it.",
-        "capReached": "You have used every rename for this workspace. The address cannot be changed again.",
-        "forbidden": "Only a workspace owner or admin can change this address.",
-        "generic": "That did not work. Try again in a moment."
       }
     },
     "codeAccess": {
@@ -4370,6 +4323,92 @@
         "title": "Repository not found",
         "body": "Motir keeps no environment for this repository. Choose one of the project’s repositories that Motir hosts.",
         "back": "Back to Environment"
+      }
+    },
+    "workspaceAddress": {
+      "door": {
+        "title": "Public address",
+        "claimed": "{host} — one name for the workspace.",
+        "none": "No name claimed yet.",
+        "manage": "Manage →",
+        "claim": "Claim a name →"
+      },
+      "title": "Public address",
+      "subtitle": "The one name your workspace answers at.",
+      "readOnly": "Only workspace owners and admins can change this.",
+      "none": "No name claimed yet.",
+      "unavailable": {
+        "title": "Public addresses aren’t set up on this server",
+        "description": "An operator needs to set MOTIR_PUBLIC_TENANT_DOMAIN before a workspace can claim a name."
+      },
+      "field": {
+        "label": "Name",
+        "renameLabel": "New name",
+        "hint": "Lowercase letters, digits and single hyphens; {min}–{max} characters. A workspace has one name.",
+        "preview": "Readers will find you at {host}"
+      },
+      "claim": "Claim name",
+      "refusal": {
+        "tooShort": "Use at least {min} characters.",
+        "badGrammar": "Use only lowercase letters, digits and hyphens.",
+        "doubleHyphen": "A name can’t contain two hyphens in a row — that’s kept for application addresses.",
+        "tooLong": "Use {max} characters or fewer.",
+        "taken": "{host} is taken. Try another name.",
+        "reserved": "“{label}” is reserved. Choose another name.",
+        "quarantined": "{host} was released recently and is held until {date}. Anyone can claim it from then.",
+        "generic": "The name couldn’t be saved. Try again."
+      },
+      "row": {
+        "live": "Live",
+        "copy": "Copy address",
+        "copied": "Address copied",
+        "open": "Open in a new tab"
+      },
+      "rename": "Rename",
+      "release": "Release",
+      "lock": "You can change the name again on {date}. A rename and a release each count as one change, once every 30 days.",
+      "lockShort": "You can change the name again on {date}.",
+      "review": "Review",
+      "cancel": "Cancel",
+      "confirm": {
+        "renameTitle": "Rename to {host}?",
+        "releaseTitle": "Release {host}?",
+        "stops": "{host} stops answering now.",
+        "returnsOn": "Anyone can claim it from {date}.",
+        "returnsNow": "Anyone can claim it right away — you held it for less than 24 hours.",
+        "noRedirectRename": "Nothing redirects from the old address to the new one, so update any links you have shared.",
+        "noRedirectRelease": "Nothing redirects. Your public projects stay at their motir.co addresses.",
+        "lockAfterRename": "You can’t change the name again until {date}.",
+        "lockAfterRelease": "You can claim a new name right away. The next change after that is allowed on {date}.",
+        "rename": "Rename",
+        "renaming": "Renaming…",
+        "release": "Release name",
+        "releasing": "Releasing…"
+      },
+      "toast": {
+        "claimed": "{host} is yours",
+        "renamed": "Renamed to {host}",
+        "renamedBody": "{old} no longer answers.",
+        "released": "{host} released",
+        "refusedTitle": "Name not changed",
+        "refusedLimit": "You can change it again on {date}.",
+        "refusedTaken": "{host} was just taken. Try another name.",
+        "refusedQuarantined": "{host} is held until {date}."
+      },
+      "released": {
+        "held": "{host} was released. It is held until {date}, then anyone can claim it.",
+        "free": "{host} was released. Anyone can claim it now.",
+        "lock": "You can claim a name now. After that, the next change is allowed on {date}."
+      },
+      "loadError": "The address couldn’t be loaded.",
+      "retry": "Try again",
+      "echo": {
+        "title": "Workspace address",
+        "claimedSub": "The name your workspace answers at.",
+        "noneSub": "Your workspace has no name yet.",
+        "projectPage": "This project's public page is at {url}.",
+        "change": "Change in workspace settings →",
+        "claim": "Claim a name for the workspace →"
       }
     }
   },
@@ -6899,13 +6938,13 @@
       "loading": "Loading…",
       "label": {
         "agentRunsInParallel": "Agent runs in parallel",
-        "agentsRunningInOrg": "Hosted agents per organisation",
+        "agentsInOrg": "Hosted agents per organisation",
         "agentsPerPerson": "Hosted agents per person",
         "ciJobsInFlight": "CI jobs in flight"
       },
       "explain": {
         "agentRunsInParallel": "Hosted agent runs that run at the same time. More wait their turn in the queue.",
-        "agentsRunningInOrg": "Hosted agents running across the organisation at once. A start beyond it is refused, not queued.",
+        "agentsInOrg": "Live hosted agents across the organisation, running or asleep. A new one beyond it is refused, not queued.",
         "agentsPerPerson": "Live hosted agents one person may hold. A new one beyond it is refused, not queued.",
         "ciJobsInFlight": "CI jobs on Motir's runners at once. More wait in the queue."
       },
@@ -11907,8 +11946,8 @@
           "override": "override"
         },
         "facts": {
-          "plan": "Plan <strong>{plan}</strong> · hosted runs at once: {runs} · agents per person: {perUser} · agents running: {running} · CI jobs at once: {ci}",
-          "planCiUnreadable": "Plan <strong>{plan}</strong> · hosted runs at once: {runs} · agents per person: {perUser} · agents running: {running} · CI limit unreadable",
+          "plan": "Plan <strong>{plan}</strong> · hosted runs at once: {runs} · agents per person: {perUser} · agents: {agents} · CI jobs at once: {ci}",
+          "planCiUnreadable": "Plan <strong>{plan}</strong> · hosted runs at once: {runs} · agents per person: {perUser} · agents: {agents} · CI limit unreadable",
           "planExempt": "Plan <strong>No plan limit</strong>",
           "planExemptOverride": "Plan <strong>No plan limit</strong> · CI jobs at once: {ci} (override)",
           "planUnknown": "Plan <strong>unknown · {key}</strong> · new containers refused",
@@ -12809,8 +12848,8 @@
       "creditsUnknown": "Motir could not check your organization’s credits just now. Try again in a moment.",
       "userCap": "Your organization’s {plan} plan allows {limit, plural, one {# agent} other {# agents}} per person. Each one is charged for its storage every day, even asleep. Delete one to create another.",
       "userCapNoFigure": "You already have as many agents as your organization’s plan allows per person. Each one is charged for its storage every day, even asleep. Delete one to create another.",
-      "orgRunningLimit": "Your organization’s {plan} plan runs {limit, plural, one {# agent} other {# agents}} at once, and all of them are running. Hibernate one to start another.",
-      "orgRunningLimitNoFigure": "Your organization is already running as many agents at once as its plan allows. Hibernate one to start another.",
+      "orgCap": "Your organization’s {plan} plan allows {limit, plural, one {# agent} other {# agents}} in the organization, running or asleep. Each one is charged for its storage every day, even asleep. Delete one to create another.",
+      "orgCapNoFigure": "Your organization already has as many agents as its plan allows, running or asleep. Each one is charged for its storage every day, even asleep. Delete one to create another.",
       "busy": "Motir is running as many machines as it can right now. Try again in a few minutes.",
       "notOffered": "That coding agent isn’t offered: its terms don’t yet allow a platform to host it. Choose another coding agent.",
       "nameTaken": "You already have an agent called {name} on this project.",
@@ -12824,7 +12863,7 @@
       "aiPlanUnknown": "Couldn’t check your AI plan",
       "credits": "Out of credits",
       "userCap": "Your limit",
-      "orgRunningLimit": "Your organization’s limit"
+      "orgCap": "Your organization’s limit"
     },
     "lapse": {
       "bannerLead": "Your organization’s AI plan has ended.",

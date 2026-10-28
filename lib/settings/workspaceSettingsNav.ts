@@ -1,4 +1,4 @@
-import { Boxes, ListChecks, Shield, ShieldCheck } from 'lucide-react';
+import { Boxes, Link2, ListChecks, Shield, ShieldCheck } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 // The WORKSPACE-settings navigation REGISTRY (Story MOTIR-4843 · MOTIR-4846).
@@ -84,6 +84,18 @@ export interface WorkspaceSettingsNavEntry {
   exact?: true;
   /** Drill-down routes reached FROM this row, which keep it active (the Roles room). */
   nestedRoutes?: string[];
+  /**
+   * The room exists only on a CLOUD build (Story MOTIR-4528 · MOTIR-9514), so
+   * off-cloud the row is ABSENT and the page 404s — the same deployment axis
+   * `projectSettingsNav.ts` names `cloudOnly`. It composes with the reveal: a
+   * cloud-only row still needs the tier revealed.
+   */
+  cloudOnly?: true;
+}
+
+/** What this BUILD has — the deployment axis beside the reveal. */
+export interface WorkspaceSettingsNavAvailability {
+  publicProjectsAvailable: boolean;
 }
 
 /** The workspace-settings area root — a real page, not a redirect. */
@@ -141,6 +153,22 @@ export const WORKSPACE_SETTINGS_NAV: WorkspaceSettingsNavEntry[] = [
     ],
   },
   {
+    // Story MOTIR-4528 · MOTIR-9514 — the workspace's one public name, moved up
+    // from project settings because a subdomain is a property of the WORKSPACE
+    // (ADR §3). `Link2` is the glyph the project rail gave the same room, so the
+    // two doors agree. Placed after Roles, as `design/workspace-address` panel 0
+    // draws it.
+    //
+    // ⚠️ ITS PAGE ANSWERS AT EVERY WORKSPACE COUNT, like Roles: below the reveal
+    // the org page carries a door card to it instead of this row.
+    id: 'public-address',
+    group: 'access',
+    href: '/settings/workspace/public-address',
+    icon: Link2,
+    labelKey: 'publicAddress',
+    cloudOnly: true,
+  },
+  {
     id: 'jobs',
     group: 'operations',
     href: '/settings/workspace/jobs',
@@ -181,8 +209,12 @@ export function isWorkspaceSettingsEntryActive(
 export function visibleWorkspaceSettingsNav(
   revealed: boolean = false,
   entries: WorkspaceSettingsNavEntry[] = WORKSPACE_SETTINGS_NAV,
+  available: WorkspaceSettingsNavAvailability = { publicProjectsAvailable: false },
 ): WorkspaceSettingsNavEntry[] {
-  return revealed ? [...entries] : [];
+  if (!revealed) return [];
+  // The deployment axis also DEFAULTS CLOSED: a caller that forgets it drops the
+  // cloud-only row rather than pointing at a room that 404s off-cloud.
+  return entries.filter((entry) => !entry.cloudOnly || available.publicProjectsAvailable);
 }
 
 /**

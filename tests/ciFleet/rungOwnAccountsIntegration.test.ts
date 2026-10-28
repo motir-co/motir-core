@@ -25,6 +25,8 @@ import { truncateAuthTables } from '../helpers/db';
 import {
   ADD_SHARD_ENTERPRISE_SLUG as SLUG,
   FakeOrganization,
+  buildStacksInto,
+  stubPoolDefinitionEnv,
   installAddShardGithub,
   newGithubWorld,
   type GithubWorld,
@@ -400,6 +402,7 @@ beforeAll(async () => {
   vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', SECRETS.managementKey);
   vi.stubEnv('AWS_ORG_ADMIN_SECRET_ACCESS_KEY', SECRETS.managementSecret);
   vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', 'arn:aws:iam::576360162297:role/motir-add-shard');
+  stubPoolDefinitionEnv();
   vi.spyOn(console, 'warn').mockImplementation(() => undefined);
   vi.spyOn(console, 'error').mockImplementation(() => undefined);
   _resetInstallationTokenCache();
@@ -409,6 +412,7 @@ beforeAll(async () => {
   github = newGithubWorld();
   github.orgs.add(GITHUB_ORG);
   organization = new FakeOrganization(SESSION);
+  buildStacksInto(organization, () => ec2);
   organization.quota = 5; // a new account's AWS default
   const ec2 = new AwsEc2Fake();
   installAddShardGithub(github, SECRETS.installation);
@@ -642,7 +646,7 @@ describe('granted, each org runs on its own accounts at granted ÷ 2', () => {
       ciBurstCap: ci / 2,
     });
     expect([read.agentRunsInParallel, read.ciBurstCap]).toEqual([128, 800]);
-    expect([read.agentsPerUser, read.agentsRunningPerOrg]).toEqual([10, 50]);
+    expect([read.agentsPerUser, read.agentsPerOrg]).toEqual([10, 50]);
     const job = await ciJob(top);
     expect(job.landed).toEqual(on(await row(top.organizationId, 'ci_runner')));
     await finishCi([job.intentId]);
@@ -656,7 +660,7 @@ describe('granted, each org runs on its own accounts at granted ÷ 2', () => {
     expect([index.state, index.liveAt]).toEqual([hoster.state, hoster.liveAt]);
     expect(index.liveAt).not.toBeNull();
 
-    const perOrg = (await caps(rung.organizationId)).agentsRunningPerOrg;
+    const perOrg = (await caps(rung.organizationId)).agentsPerOrg;
     const placed: Landed[] = [];
     for (let i = 0; i <= perOrg; i++) placed.push(await agentInstance(rung));
     expect(placed.slice(0, perOrg)).toEqual(Array(perOrg).fill(on(hoster)));

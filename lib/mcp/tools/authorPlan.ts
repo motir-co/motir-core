@@ -17,7 +17,11 @@ import type {
   ProposedTodoInput,
   CorrectPlanBriefKey,
 } from '@/lib/dto/plans';
-import { MODIFY_KIND_TARGETS, PLAN_ITEM_REASON_MAX } from '@/lib/dto/plans';
+import {
+  MODIFY_KIND_TARGETS,
+  PLAN_ITEM_REASON_MAX,
+  PLANNER_RECORD_MAX_BYTES,
+} from '@/lib/dto/plans';
 import { PLAN_NARRATION_BATCH_MAX, PLAN_NARRATION_SENTENCE_MAX } from '@/lib/plans/planNarration';
 import {
   TODO_COMMAND_MAX_LENGTH,
@@ -1147,12 +1151,24 @@ const updatePlanInputSchema = {
       'The longer summary (Markdown) shown to the reviewer above the tree — the sentence they ' +
         'read before any card. `null` clears it. Omit it to leave it exactly as it is.',
     ),
+  plannerRecord: z
+    .record(z.string(), z.unknown())
+    .nullable()
+    .optional()
+    .describe(
+      'YOUR OWN record on the plan, as data — machine state you keep between runs (e.g. the ' +
+        'targets you settled and how each walk left them), which a reviewer never sees. A JSON ' +
+        `object of at most ${PLANNER_RECORD_MAX_BYTES} bytes, REPLACED WHOLE; \`null\` clears it. ` +
+        '`get_plan` returns it as `plannerRecord`. Keep it out of `summary`: the summary is ' +
+        'prose a person reads and may correct. Omit it to leave it exactly as it is.',
+    ),
 };
 
 interface UpdatePlanArgs {
   planId: string;
   title?: string | null;
   summary?: string | null;
+  plannerRecord?: Record<string, unknown> | null;
 }
 
 // ── AND `record_plan_revision_reason` (Story MOTIR-5543 · MOTIR-6086) ────────
@@ -1920,15 +1936,20 @@ export async function runWithdrawPlanProposal(
  * reviewer is reading right now.
  */
 function summarizeBriefCorrection(plan: PlanWithItemsDto, changed: readonly string[]): string {
+  // The planner's record is no part of the heading, and its write is on no timeline (MOTIR-9978).
+  const onTimeline = changed.some((key) => key !== 'plannerRecord');
   return [
     `Corrected plan ${plan.id}'s own ${changed.join(' and ')} — ${plan.status}, ` +
       `${plan.itemCount} proposal(s), every one of them untouched.`,
-    plan.status === 'planned'
-      ? 'This plan is `planned` — it is in front of a reviewer, and this edit is on its ' +
-        'timeline with the harness and model that made it, so they can see the heading changed ' +
-        'after they started reading.'
-      : `Still \`generating\` — send \`final: true\` on a last \`${ADD_PLAN_ITEMS_TOOL_NAME}\` ` +
-        'batch to put the plan in front of a reviewer.',
+    !onTimeline
+      ? 'Only your planner record changed: no reviewer sees it, and nothing was added to the ' +
+        'plan’s timeline.'
+      : plan.status === 'planned'
+        ? 'This plan is `planned` — it is in front of a reviewer, and this edit is on its ' +
+          'timeline with the harness and model that made it, so they can see the heading changed ' +
+          'after they started reading.'
+        : `Still \`generating\` — send \`final: true\` on a last \`${ADD_PLAN_ITEMS_TOOL_NAME}\` ` +
+          'batch to put the plan in front of a reviewer.',
     '',
     PROPOSAL_GATE,
   ].join('\n');
@@ -1947,7 +1968,11 @@ export async function runUpdatePlan(
   args: UpdatePlanArgs,
   ctx: ServiceContext,
 ): Promise<CallToolResult> {
-  const patchable = ['title', 'summary'] as const satisfies readonly CorrectPlanBriefKey[];
+  const patchable = [
+    'title',
+    'summary',
+    'plannerRecord',
+  ] as const satisfies readonly CorrectPlanBriefKey[];
 
   const input: CorrectPlanBriefInput = {};
   const changed: string[] = [];
@@ -1958,10 +1983,11 @@ export async function runUpdatePlan(
   }
 
   const plan = await plansService.correctPlanBrief(args.planId, input, ctx);
+  const plannerRecord = await plansService.getPlannerRecord(args.planId, ctx);
 
   return toolOk(
     summarizeBriefCorrection(plan, changed),
-    derived(planPayload, presentMcpPlan(plan)),
+    derived(planPayload, { ...presentMcpPlan(plan), plannerRecord }),
   );
 }
 
@@ -2422,7 +2448,9 @@ export function registerAuthorPlan(server: McpServer, resolveContext: McpContext
         'that was falsified, a decision that moved, a disposition you now have to restate — ' +
         'instead of withdrawing every proposal to rebuild the plan under a new id. The patch is ' +
         'SPARSE: a field you omit is left exactly as it was and an explicit `null` clears it, ' +
-        'so send only what you are changing; a call sending neither is refused. Legal while the ' +
+        'so send only what you are changing; a call sending none of them is refused. It also ' +
+        'holds `plannerRecord`, YOUR machine state on the plan, which no reviewer sees and which ' +
+        'puts nothing on the timeline. Legal while the ' +
         'plan is `generating` AND after you have closed it with `final: true`, while it is ' +
         '`planned` and waiting for a reviewer. It is REFUSED once the plan is `approved` (its ' +
         'proposals have become work items and the plan is the record of what was approved) or ' +

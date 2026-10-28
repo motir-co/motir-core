@@ -183,9 +183,10 @@ export class AwsEc2Fake implements Ec2Api {
   }
 
   /**
-   * Put a shard's network in place directly, with FIXED ids — what
-   * `ensureAwsShardNetwork` leaves, without its calls. One subnet per zone and
-   * one no-inbound group, all tagged `motir-shard=<shardTag>`.
+   * Put a shard's network in place directly, with FIXED ids — what the
+   * pool-account definition builds (MOTIR-9845), without its calls: a VPC, an
+   * attached internet gateway, a public route table, one subnet per zone and one
+   * no-inbound group, all tagged `motir-shard=<shardTag>`.
    */
   seedShardNetwork(shardTag: string, zones: readonly string[] = ['us-east-1a', 'us-east-1b']) {
     const tags = [{ key: 'motir-shard', value: shardTag }];
@@ -202,6 +203,23 @@ export class AwsEc2Fake implements Ec2Api {
         tags,
       });
     });
+    const internetGatewayId = `igw-${shardTag}`;
+    this.internetGateways.set(internetGatewayId, {
+      internetGatewayId,
+      attachedVpcIds: [vpcId],
+      tags,
+    });
+    const routeTableId = `rtb-${shardTag}`;
+    this.routeTables.set(routeTableId, {
+      routeTableId,
+      vpcId,
+      routes: [
+        { destinationCidrBlock: '10.40.0.0/16', gatewayId: 'local' },
+        { destinationCidrBlock: '0.0.0.0/0', gatewayId: internetGatewayId },
+      ],
+      associatedSubnetIds: zones.map((z) => `subnet-${shardTag}-${z}`),
+      tags,
+    });
     const groupId = `sg-${shardTag}`;
     this.securityGroups.set(groupId, {
       groupId,
@@ -210,7 +228,13 @@ export class AwsEc2Fake implements Ec2Api {
       ingressRuleCount: 0,
       tags,
     });
-    return { vpcId, groupId, subnetIds: zones.map((z) => `subnet-${shardTag}-${z}`) };
+    return {
+      vpcId,
+      internetGatewayId,
+      routeTableId,
+      groupId,
+      subnetIds: zones.map((z) => `subnet-${shardTag}-${z}`),
+    };
   }
 
   /**

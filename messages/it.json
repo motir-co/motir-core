@@ -2072,7 +2072,8 @@
         "workspace": "Area di lavoro",
         "security": "Sicurezza",
         "roles": "Ruoli e permessi",
-        "jobs": "Esecuzioni dei job"
+        "jobs": "Esecuzioni dei job",
+        "publicAddress": "Indirizzo pubblico"
       }
     },
     "name": {
@@ -2707,43 +2708,6 @@
         "title": "Nessuno spazio dei nomi pubblico configurato",
         "description": "Questo deployment non ha un dominio base per i tenant, quindi non è ancora possibile richiedere un sottodominio. Un operatore deve impostare MOTIR_PUBLIC_TENANT_DOMAIN."
       },
-      "subdomain": {
-        "title": "Sottodominio dell’area di lavoro",
-        "subtitle": "Un unico indirizzo per l’intera area di lavoro. Ogni progetto pubblico al suo interno risponde sotto di esso.",
-        "label": "Sottodominio",
-        "helper": "I tuoi progetti saranno su {preview}. Lettere minuscole, cifre e trattini; da 3 a 63 caratteri.",
-        "claim": "Richiedi sottodominio",
-        "claimable": "Potrai rinominarlo in seguito, un numero limitato di volte.",
-        "active": "Attivo",
-        "alias": "Reindirizza qui",
-        "aliasShort": "Reindirizza",
-        "copy": "Copia indirizzo",
-        "copied": "Indirizzo copiato",
-        "open": "Apri in una nuova scheda",
-        "rename": "Rinomina",
-        "renamesLeft": "{count, plural, =0 {Nessuna ridenominazione rimasta.} one {# ridenominazione rimasta.} other {# ridenominazioni rimaste.}}",
-        "readOnly": "Gestito da un proprietario o amministratore dell’area di lavoro.",
-        "none": "Ancora nessun sottodominio richiesto."
-      },
-      "rename": {
-        "title": "Rinominare questo sottodominio?",
-        "warningTitle": "Il vecchio indirizzo continua a funzionare e non viene mai rilasciato.",
-        "warningBody": "{old} reindirizzerà qui in modo permanente e non potrà essere richiesto da nessun altro, nemmeno da te in futuro.",
-        "remaining": "Dopo questa ti {count, plural, one {resterà # ridenominazione} other {resteranno # ridenominazioni}}.",
-        "cancel": "Annulla",
-        "confirm": "Rinomina"
-      },
-      "release": {
-        "remove": "Rimuovi",
-        "title": "Rimuovere {hostname}?",
-        "lead": "{count, plural, one {Questo indirizzo smetterà di rispondere:} other {Questi # indirizzi smetteranno di rispondere:}}",
-        "warningTitle": "{count, plural, one {Questo nome resta riservato per sempre. Nessuno potrà richiederlo di nuovo, nemmeno tu.} other {Questi nomi restano riservati per sempre. Nessuno potrà richiederli di nuovo, nemmeno tu.}}",
-        "warningBody": "Motir esclude in modo permanente dal proprio spazio dei nomi ogni nome rilasciato, così nessun’altra area di lavoro può ereditare i link che puntavano alla tua.",
-        "renamesAfter": "Se richiederai di nuovo un sottodominio, ti {count, plural, =0 {non resteranno ridenominazioni} one {resterà # ridenominazione} other {resteranno # ridenominazioni}}: il rilascio non le restituisce.",
-        "fallback": "I tuoi progetti pubblici tornano su {url} e compaiono di nuovo su {site}.",
-        "cancel": "Annulla",
-        "confirm": "Rimuovi sottodominio"
-      },
       "domains": {
         "title": "Il tuo dominio",
         "subtitle": "Pubblica questo progetto da un dominio di tua proprietà.",
@@ -2832,17 +2796,6 @@
         },
         "lastChecked": "Ultima verifica {when}",
         "error": "Operazione non riuscita. Riprova tra poco."
-      },
-      "error": {
-        "reserved": "{label} è riservato. Motir riserva un piccolo insieme di nomi per i propri host e per nomi che un lettore potrebbe confondere con essi.",
-        "structurallyReserved": "{label} è riservato. I nomi che iniziano con un trattino basso, xn-- o motir- appartengono a Motir o al DNS stesso.",
-        "tooShort": "Troppo corto: un sottodominio deve avere almeno 3 caratteri.",
-        "tooLong": "Troppo lungo: un sottodominio può avere al massimo 63 caratteri.",
-        "badGrammar": "Solo lettere minuscole, cifre e trattini, con inizio e fine costituiti da una lettera o una cifra.",
-        "taken": "{label} è già in uso. Anche un sottodominio rinominato mantiene il proprio nome, quindi questo potrebbe appartenere a un’area di lavoro che non risponde più a quell’indirizzo.",
-        "capReached": "Hai usato tutte le ridenominazioni disponibili per questa area di lavoro. L’indirizzo non può più essere cambiato.",
-        "forbidden": "Solo un proprietario o amministratore dell’area di lavoro può modificare questo indirizzo.",
-        "generic": "Operazione non riuscita. Riprova tra poco."
       }
     },
     "codeAccess": {
@@ -4370,6 +4323,92 @@
         "title": "Repository non trovato",
         "body": "Motir non conserva alcun ambiente per questo repository. Scegli uno dei repository del progetto ospitati da Motir.",
         "back": "Torna ad Ambiente"
+      }
+    },
+    "workspaceAddress": {
+      "door": {
+        "title": "Indirizzo pubblico",
+        "claimed": "{host} — un solo nome per l’area di lavoro.",
+        "none": "Nessun nome ancora rivendicato.",
+        "manage": "Gestisci →",
+        "claim": "Rivendica un nome →"
+      },
+      "title": "Indirizzo pubblico",
+      "subtitle": "L’unico nome a cui risponde la tua area di lavoro.",
+      "readOnly": "Solo i proprietari e gli amministratori dell’area di lavoro possono modificarlo.",
+      "none": "Nessun nome ancora rivendicato.",
+      "unavailable": {
+        "title": "Gli indirizzi pubblici non sono configurati su questo server",
+        "description": "Un operatore deve impostare MOTIR_PUBLIC_TENANT_DOMAIN prima che un’area di lavoro possa rivendicare un nome."
+      },
+      "field": {
+        "label": "Nome",
+        "renameLabel": "Nuovo nome",
+        "hint": "Lettere minuscole, cifre e trattini singoli; da {min} a {max} caratteri. Un’area di lavoro ha un solo nome.",
+        "preview": "I lettori ti troveranno su {host}"
+      },
+      "claim": "Rivendica nome",
+      "refusal": {
+        "tooShort": "Usa almeno {min} caratteri.",
+        "badGrammar": "Usa solo lettere minuscole, cifre e trattini.",
+        "doubleHyphen": "Un nome non può contenere due trattini di seguito: sono riservati agli indirizzi delle applicazioni.",
+        "tooLong": "Usa al massimo {max} caratteri.",
+        "taken": "{host} è già occupato. Prova un altro nome.",
+        "reserved": "«{label}» è riservato. Scegli un altro nome.",
+        "quarantined": "{host} è stato rilasciato di recente ed è trattenuto fino al {date}. Da quel giorno chiunque potrà rivendicarlo.",
+        "generic": "Impossibile salvare il nome. Riprova."
+      },
+      "row": {
+        "live": "Attivo",
+        "copy": "Copia indirizzo",
+        "copied": "Indirizzo copiato",
+        "open": "Apri in una nuova scheda"
+      },
+      "rename": "Rinomina",
+      "release": "Rilascia",
+      "lock": "Potrai cambiare di nuovo il nome il {date}. Una rinomina e un rilascio contano ciascuno come una modifica, una volta ogni 30 giorni.",
+      "lockShort": "Potrai cambiare di nuovo il nome il {date}.",
+      "review": "Controlla",
+      "cancel": "Annulla",
+      "confirm": {
+        "renameTitle": "Rinominare in {host}?",
+        "releaseTitle": "Rilasciare {host}?",
+        "stops": "{host} smette di rispondere subito.",
+        "returnsOn": "Chiunque potrà rivendicarlo dal {date}.",
+        "returnsNow": "Chiunque può rivendicarlo subito: l’hai tenuto per meno di 24 ore.",
+        "noRedirectRename": "Non c’è alcun reindirizzamento dal vecchio indirizzo al nuovo, quindi aggiorna i link che hai condiviso.",
+        "noRedirectRelease": "Nessun reindirizzamento. I tuoi progetti pubblici restano ai loro indirizzi motir.co.",
+        "lockAfterRename": "Non potrai cambiare di nuovo il nome fino al {date}.",
+        "lockAfterRelease": "Puoi rivendicare subito un nuovo nome. La modifica successiva sarà consentita dal {date}.",
+        "rename": "Rinomina",
+        "renaming": "Rinomina in corso…",
+        "release": "Rilascia nome",
+        "releasing": "Rilascio in corso…"
+      },
+      "toast": {
+        "claimed": "{host} è tuo",
+        "renamed": "Rinominato in {host}",
+        "renamedBody": "{old} non risponde più.",
+        "released": "{host} rilasciato",
+        "refusedTitle": "Nome non modificato",
+        "refusedLimit": "Potrai cambiarlo di nuovo il {date}.",
+        "refusedTaken": "{host} è appena stato occupato. Prova un altro nome.",
+        "refusedQuarantined": "{host} è trattenuto fino al {date}."
+      },
+      "released": {
+        "held": "{host} è stato rilasciato. È trattenuto fino al {date}, poi chiunque potrà rivendicarlo.",
+        "free": "{host} è stato rilasciato. Chiunque può rivendicarlo ora.",
+        "lock": "Puoi rivendicare un nome ora. Dopo, la modifica successiva sarà consentita dal {date}."
+      },
+      "loadError": "Impossibile caricare l’indirizzo.",
+      "retry": "Riprova",
+      "echo": {
+        "title": "Indirizzo dell’area di lavoro",
+        "claimedSub": "Il nome a cui risponde la tua area di lavoro.",
+        "noneSub": "La tua area di lavoro non ha ancora un nome.",
+        "projectPage": "La pagina pubblica di questo progetto è su {url}.",
+        "change": "Modifica nelle impostazioni dell’area di lavoro →",
+        "claim": "Rivendica un nome per l’area di lavoro →"
       }
     }
   },
@@ -6902,13 +6941,13 @@
       "loading": "Caricamento…",
       "label": {
         "agentRunsInParallel": "Esecuzioni di agenti in parallelo",
-        "agentsRunningInOrg": "Agenti ospitati per organizzazione",
+        "agentsInOrg": "Agenti ospitati per organizzazione",
         "agentsPerPerson": "Agenti ospitati per persona",
         "ciJobsInFlight": "Job CI in corso"
       },
       "explain": {
         "agentRunsInParallel": "Job di agenti ospitati eseguiti in contemporanea. Oltre il limite attendono in coda.",
-        "agentsRunningInOrg": "Agenti ospitati attivi in contemporanea in tutta l’organizzazione. Oltre il limite un avvio viene rifiutato, non messo in coda.",
+        "agentsInOrg": "Agenti ospitati attivi in tutta l’organizzazione, in funzione o ibernati. Oltre il limite uno nuovo viene rifiutato, non messo in coda.",
         "agentsPerPerson": "Agenti ospitati attivi che una persona può avere. Oltre il limite uno nuovo viene rifiutato, non messo in coda.",
         "ciJobsInFlight": "Job CI eseguiti in contemporanea sui runner di Motir. Oltre il limite attendono in coda."
       },
@@ -11910,8 +11949,8 @@
           "override": "deroga"
         },
         "facts": {
-          "plan": "Piano <strong>{plan}</strong> · {runs} esecuzioni ospitate alla volta · {perUser} agenti per persona · {running} agenti in esecuzione · {ci} job di CI alla volta",
-          "planCiUnreadable": "Piano <strong>{plan}</strong> · {runs} esecuzioni ospitate alla volta · {perUser} agenti per persona · {running} agenti in esecuzione · limite CI illeggibile",
+          "plan": "Piano <strong>{plan}</strong> · {runs} esecuzioni ospitate alla volta · {perUser} agenti per persona · {agents} agenti · {ci} job di CI alla volta",
+          "planCiUnreadable": "Piano <strong>{plan}</strong> · {runs} esecuzioni ospitate alla volta · {perUser} agenti per persona · {agents} agenti · limite CI illeggibile",
           "planExempt": "Piano <strong>Nessun limite di piano</strong>",
           "planExemptOverride": "Piano <strong>Nessun limite di piano</strong> · {ci} job di CI alla volta (deroga)",
           "planUnknown": "Piano <strong>sconosciuto · {key}</strong> · nuovi container rifiutati",
@@ -12812,8 +12851,8 @@
       "creditsUnknown": "Motir non è riuscito a verificare i crediti della tua organizzazione in questo momento. Riprova tra poco.",
       "userCap": "Il piano {plan} della tua organizzazione consente {limit, plural, one {# agente} other {# agenti}} per persona. Ognuno viene addebitato ogni giorno per lo spazio di archiviazione, anche se ibernato. Eliminane uno per crearne un altro.",
       "userCapNoFigure": "Hai già tanti agenti quanti ne consente per persona il piano della tua organizzazione. Ognuno viene addebitato ogni giorno per lo spazio di archiviazione, anche se ibernato. Eliminane uno per crearne un altro.",
-      "orgRunningLimit": "Il piano {plan} della tua organizzazione esegue {limit, plural, one {# agente} other {# agenti}} alla volta, e sono già tutti in funzione. Ibernane uno per avviarne un altro.",
-      "orgRunningLimitNoFigure": "La tua organizzazione ha già in funzione tanti agenti quanti ne consente il suo piano. Ibernane uno per avviarne un altro.",
+      "orgCap": "Il piano {plan} della tua organizzazione consente {limit, plural, one {# agente} other {# agenti}} nell’organizzazione, in funzione o ibernati. Ognuno viene addebitato ogni giorno per lo spazio di archiviazione, anche se ibernato. Eliminane uno per crearne un altro.",
+      "orgCapNoFigure": "La tua organizzazione ha già tanti agenti quanti ne consente il suo piano, in funzione o ibernati. Ognuno viene addebitato ogni giorno per lo spazio di archiviazione, anche se ibernato. Eliminane uno per crearne un altro.",
       "busy": "Motir sta facendo girare tutte le macchine che può in questo momento. Riprova tra qualche minuto.",
       "notOffered": "Quell’agente di programmazione non è disponibile: i suoi termini non consentono ancora a una piattaforma di ospitarlo. Scegli un altro agente di programmazione.",
       "nameTaken": "Hai già un agente chiamato {name} in questo progetto.",
@@ -12827,7 +12866,7 @@
       "aiPlanUnknown": "Impossibile verificare il tuo piano AI",
       "credits": "Crediti esauriti",
       "userCap": "Il tuo limite",
-      "orgRunningLimit": "Il limite della tua organizzazione"
+      "orgCap": "Il limite della tua organizzazione"
     },
     "lapse": {
       "bannerLead": "Il piano AI della tua organizzazione è terminato.",

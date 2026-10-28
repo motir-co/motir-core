@@ -479,7 +479,7 @@ describe('each workload fills its own figure while the others still admit', () =
     await startHostedRun();
     await agentsRunning(2);
     // Both at their figures: a second run would wait, a third agent is refused.
-    await expect(create('one-too-many')).rejects.toMatchObject({ reason: 'org_running_cap' });
+    await expect(create('one-too-many')).rejects.toMatchObject({ reason: 'org_cap' });
 
     for (let i = 0; i < 2; i++) {
       expect(await admitCi()).toMatchObject({ outcome: 'admitted', ciBurstCap: 2 });
@@ -651,7 +651,7 @@ describe('a plan change reaches every door after the 30-second cache, and ends n
       planName: 'Standard',
       agentRunsInParallel: 1,
       agentsPerUser: 1,
-      agentsRunningPerOrg: 2,
+      agentsPerOrg: 2,
       ciBurstCap: 2,
       ciBurstSource: 'plan',
     });
@@ -781,7 +781,7 @@ describe('the platform monitor reports the figures the gates applied', () => {
       planName: tier.name,
       agentRunsInParallel: caps.caps.agentRunsInParallel,
       agentsPerUser: caps.caps.agentsPerUser,
-      agentsRunningPerOrg: caps.caps.agentsRunningPerOrg,
+      agentsPerOrg: caps.caps.agentsPerOrg,
       ciBurstCap: ci.figure,
       ciBurstSource: 'plan',
     });
@@ -805,7 +805,7 @@ describe('the platform monitor reports the figures the gates applied', () => {
       planName: 'Max',
       agentRunsInParallel: 5,
       agentsPerUser: 3,
-      agentsRunningPerOrg: 20,
+      agentsPerOrg: 20,
       ciBurstCap: 7,
       ciBurstSource: 'override',
     });

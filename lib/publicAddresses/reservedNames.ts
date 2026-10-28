@@ -173,6 +173,3 @@ export function refuseLabel(label: string): LabelRefusal | null {
   if (RESERVED_SUBDOMAIN_LABELS.has(label)) return 'reserved';
   return null;
 }
-
-/** The ADR §8 rename cap. A constant, so changing it is one line. */
-export const MAX_SUBDOMAIN_RENAMES = 5;

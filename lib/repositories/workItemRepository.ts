@@ -3482,6 +3482,8 @@ export const workItemRepository = {
     Array<{
       id: string;
       descriptionMd: string | null;
+      /** The second stored body, scanned for mislabelled links (MOTIR-9938). */
+      explanationMd: string | null;
       /** The row's kind — the section registry's first coordinate (MOTIR-9032). */
       kind: string;
       type: string | null;
@@ -3513,6 +3515,7 @@ export const workItemRepository = {
       select: {
         id: true,
         descriptionMd: true,
+        explanationMd: true,
         kind: true,
         type: true,
         executor: true,

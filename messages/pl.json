@@ -2072,7 +2072,8 @@
         "workspace": "Obszar roboczy",
         "security": "Zabezpieczenia",
         "roles": "Role i uprawnienia",
-        "jobs": "Uruchomienia zadań"
+        "jobs": "Uruchomienia zadań",
+        "publicAddress": "Adres publiczny"
       }
     },
     "name": {
@@ -2707,43 +2708,6 @@
         "title": "Nie skonfigurowano publicznej przestrzeni nazw",
         "description": "To wdrożenie nie ma ustawionej domeny bazowej dzierżawców, więc nie można jeszcze zarezerwować subdomeny. Operator ustawia MOTIR_PUBLIC_TENANT_DOMAIN."
       },
-      "subdomain": {
-        "title": "Subdomena obszaru roboczego",
-        "subtitle": "Jeden adres dla całego obszaru roboczego. Każdy publiczny projekt w nim jest dostępny pod tym adresem.",
-        "label": "Subdomena",
-        "helper": "Twoje projekty będą dostępne pod adresem {preview}. Małe litery, cyfry i myślniki; 3–63 znaki.",
-        "claim": "Zarezerwuj subdomenę",
-        "claimable": "Nazwę można później zmienić ograniczoną liczbę razy.",
-        "active": "Aktywna",
-        "alias": "Przekierowuje tutaj",
-        "aliasShort": "Przekierowuje",
-        "copy": "Kopiuj adres",
-        "copied": "Skopiowano adres",
-        "open": "Otwórz w nowej karcie",
-        "rename": "Zmień nazwę",
-        "renamesLeft": "{count, plural, =0 {Nie pozostały żadne zmiany nazwy.} one {Pozostała # zmiana nazwy.} few {Pozostały # zmiany nazwy.} many {Pozostało # zmian nazwy.} other {Pozostało # zmiany nazwy.}}",
-        "readOnly": "Zarządzane przez właściciela lub administratora obszaru roboczego.",
-        "none": "Nie zarezerwowano jeszcze subdomeny."
-      },
-      "rename": {
-        "title": "Zmienić nazwę tej subdomeny?",
-        "warningTitle": "Stary adres nadal działa i nigdy nie zostanie zwolniony.",
-        "warningBody": "{old} będzie trwale przekierowywać tutaj i nikt inny nie będzie mógł go zarezerwować — nawet Twój obszar roboczy w przyszłości.",
-        "remaining": "Po tej zmianie {count, plural, one {pozostanie # zmiana nazwy} few {pozostaną # zmiany nazwy} many {pozostanie # zmian nazwy} other {pozostanie # zmiany nazwy}}.",
-        "cancel": "Anuluj",
-        "confirm": "Zmień nazwę"
-      },
-      "release": {
-        "remove": "Usuń",
-        "title": "Usunąć {hostname}?",
-        "lead": "{count, plural, one {Ten adres przestanie działać:} few {Te # adresy przestaną działać:} many {Tych # adresów przestanie działać:} other {Te # adresu przestaną działać:}}",
-        "warningTitle": "{count, plural, one {Ta nazwa jest zablokowana na zawsze. Nikt nie może jej ponownie zarezerwować — nawet Twój obszar roboczy.} few {Te nazwy są zablokowane na zawsze. Nikt nie może ich ponownie zarezerwować — nawet Twój obszar roboczy.} many {Te nazwy są zablokowane na zawsze. Nikt nie może ich ponownie zarezerwować — nawet Twój obszar roboczy.} other {Te nazwy są zablokowane na zawsze. Nikt nie może ich ponownie zarezerwować — nawet Twój obszar roboczy.}}",
-        "warningBody": "Motir trwale wyklucza każdą zwolnioną nazwę ze swojej przestrzeni nazw, aby żaden inny obszar roboczy nie przejął linków, które wskazywały na Twój.",
-        "renamesAfter": "Jeśli ponownie zarezerwujesz subdomenę, {count, plural, =0 {nie pozostaną żadne zmiany nazwy} one {pozostanie # zmiana nazwy} few {pozostaną # zmiany nazwy} many {pozostanie # zmian nazwy} other {pozostanie # zmiany nazwy}} — zwolnienie ich nie przywraca.",
-        "fallback": "Twoje publiczne projekty wrócą pod adres {url} i ponownie pojawią się w {site}.",
-        "cancel": "Anuluj",
-        "confirm": "Usuń subdomenę"
-      },
       "domains": {
         "title": "Własna domena",
         "subtitle": "Udostępniaj ten projekt z domeny, która należy do Ciebie.",
@@ -2832,17 +2796,6 @@
         },
         "lastChecked": "Ostatnio sprawdzono {when}",
         "error": "To się nie udało. Spróbuj ponownie za chwilę."
-      },
-      "error": {
-        "reserved": "{label} jest zarezerwowana. Motir zachowuje niewielki zestaw nazw dla własnych hostów oraz nazw, które czytelnik mógłby z nimi pomylić.",
-        "structurallyReserved": "{label} jest zarezerwowana. Nazwy zaczynające się od podkreślenia, xn-- lub motir- należą do Motir lub samego DNS.",
-        "tooShort": "Za krótka — subdomena ma co najmniej 3 znaki.",
-        "tooLong": "Za długa — subdomena ma maksymalnie 63 znaki.",
-        "badGrammar": "Tylko małe litery, cyfry i myślniki; musi zaczynać się i kończyć literą lub cyfrą.",
-        "taken": "{label} jest już używana. Subdomena, której nazwę zmieniono, również zachowuje swoją nazwę, więc ta może należeć do obszaru roboczego, który już pod nią nie odpowiada.",
-        "capReached": "Wykorzystano wszystkie zmiany nazwy dla tego obszaru roboczego. Adresu nie można już zmienić.",
-        "forbidden": "Tylko właściciel lub administrator obszaru roboczego może zmienić ten adres.",
-        "generic": "To się nie udało. Spróbuj ponownie za chwilę."
       }
     },
     "codeAccess": {
@@ -4370,6 +4323,92 @@
         "title": "Nie znaleziono repozytorium",
         "body": "Motir nie przechowuje środowiska dla tego repozytorium. Wybierz jedno z repozytoriów projektu hostowanych przez Motir.",
         "back": "Wróć do Środowiska"
+      }
+    },
+    "workspaceAddress": {
+      "door": {
+        "title": "Adres publiczny",
+        "claimed": "{host} — jedna nazwa obszaru roboczego.",
+        "none": "Nie zajęto jeszcze żadnej nazwy.",
+        "manage": "Zarządzaj →",
+        "claim": "Zajmij nazwę →"
+      },
+      "title": "Adres publiczny",
+      "subtitle": "Jedyna nazwa, pod którą odpowiada obszar roboczy.",
+      "readOnly": "Tylko właściciele i administratorzy obszaru roboczego mogą to zmienić.",
+      "none": "Nie zajęto jeszcze żadnej nazwy.",
+      "unavailable": {
+        "title": "Adresy publiczne nie są skonfigurowane na tym serwerze",
+        "description": "Operator musi ustawić MOTIR_PUBLIC_TENANT_DOMAIN, zanim obszar roboczy będzie mógł zająć nazwę."
+      },
+      "field": {
+        "label": "Nazwa",
+        "renameLabel": "Nowa nazwa",
+        "hint": "Małe litery, cyfry i pojedyncze łączniki; od {min} do {max} znaków. Obszar roboczy ma jedną nazwę.",
+        "preview": "Czytelnicy znajdą cię pod adresem {host}"
+      },
+      "claim": "Zajmij nazwę",
+      "refusal": {
+        "tooShort": "Użyj co najmniej {min} znaków.",
+        "badGrammar": "Używaj tylko małych liter, cyfr i łączników.",
+        "doubleHyphen": "Nazwa nie może zawierać dwóch łączników z rzędu — są zarezerwowane dla adresów aplikacji.",
+        "tooLong": "Użyj najwyżej {max} znaków.",
+        "taken": "{host} jest zajęty. Spróbuj innej nazwy.",
+        "reserved": "„{label}” jest zarezerwowana. Wybierz inną nazwę.",
+        "quarantined": "{host} został niedawno zwolniony i jest wstrzymany do {date}. Od tego dnia każdy może go zająć.",
+        "generic": "Nie udało się zapisać nazwy. Spróbuj ponownie."
+      },
+      "row": {
+        "live": "Aktywny",
+        "copy": "Kopiuj adres",
+        "copied": "Skopiowano adres",
+        "open": "Otwórz w nowej karcie"
+      },
+      "rename": "Zmień nazwę",
+      "release": "Zwolnij",
+      "lock": "Nazwę można zmienić ponownie {date}. Zmiana nazwy i zwolnienie liczą się jako jedna zmiana, raz na 30 dni.",
+      "lockShort": "Nazwę można zmienić ponownie {date}.",
+      "review": "Sprawdź",
+      "cancel": "Anuluj",
+      "confirm": {
+        "renameTitle": "Zmienić nazwę na {host}?",
+        "releaseTitle": "Zwolnić {host}?",
+        "stops": "{host} przestaje odpowiadać od teraz.",
+        "returnsOn": "Każdy może go zająć od {date}.",
+        "returnsNow": "Każdy może go zająć od razu — był używany krócej niż 24 godziny.",
+        "noRedirectRename": "Stary adres nie przekierowuje na nowy, więc zaktualizuj udostępnione linki.",
+        "noRedirectRelease": "Nie ma przekierowania. Projekty publiczne pozostają pod adresami motir.co.",
+        "lockAfterRename": "Nazwy nie można zmienić ponownie przed {date}.",
+        "lockAfterRelease": "Nową nazwę możesz zająć od razu. Kolejna zmiana po tym będzie możliwa od {date}.",
+        "rename": "Zmień nazwę",
+        "renaming": "Zmienianie nazwy…",
+        "release": "Zwolnij nazwę",
+        "releasing": "Zwalnianie…"
+      },
+      "toast": {
+        "claimed": "{host} jest twój",
+        "renamed": "Zmieniono nazwę na {host}",
+        "renamedBody": "{old} już nie odpowiada.",
+        "released": "Zwolniono {host}",
+        "refusedTitle": "Nazwa nie została zmieniona",
+        "refusedLimit": "Możesz ją zmienić ponownie {date}.",
+        "refusedTaken": "{host} został właśnie zajęty. Spróbuj innej nazwy.",
+        "refusedQuarantined": "{host} jest wstrzymany do {date}."
+      },
+      "released": {
+        "held": "Zwolniono {host}. Jest wstrzymany do {date}, potem każdy może go zająć.",
+        "free": "Zwolniono {host}. Każdy może go teraz zająć.",
+        "lock": "Możesz teraz zająć nazwę. Kolejna zmiana po tym będzie możliwa od {date}."
+      },
+      "loadError": "Nie udało się wczytać adresu.",
+      "retry": "Spróbuj ponownie",
+      "echo": {
+        "title": "Adres obszaru roboczego",
+        "claimedSub": "Nazwa, pod którą odpowiada obszar roboczy.",
+        "noneSub": "Obszar roboczy nie ma jeszcze nazwy.",
+        "projectPage": "Publiczna strona tego projektu jest pod adresem {url}.",
+        "change": "Zmień w ustawieniach obszaru roboczego →",
+        "claim": "Zajmij nazwę dla obszaru roboczego →"
       }
     }
   },
@@ -6902,13 +6941,13 @@
       "loading": "Wczytywanie…",
       "label": {
         "agentRunsInParallel": "Równoległe uruchomienia agentów",
-        "agentsRunningInOrg": "Hostowane agenty na organizację",
+        "agentsInOrg": "Hostowane agenty na organizację",
         "agentsPerPerson": "Hostowane agenty na osobę",
         "ciJobsInFlight": "Trwające zadania CI"
       },
       "explain": {
         "agentRunsInParallel": "Zadania hostowanych agentów działające naraz. Kolejne czekają w kolejce.",
-        "agentsRunningInOrg": "Hostowane agenty działające naraz w całej organizacji. Powyżej limitu start jest odrzucany, a nie kolejkowany.",
+        "agentsInOrg": "Aktywne hostowane agenty w całej organizacji, działające lub uśpione. Powyżej limitu nowy jest odrzucany, a nie kolejkowany.",
         "agentsPerPerson": "Aktywne hostowane agenty, które może mieć jedna osoba. Powyżej limitu nowy jest odrzucany, a nie kolejkowany.",
         "ciJobsInFlight": "Zadania CI działające naraz na runnerach Motir. Kolejne czekają w kolejce."
       },
@@ -11910,8 +11949,8 @@
           "override": "nadpisanie"
         },
         "facts": {
-          "plan": "Plan <strong>{plan}</strong> · hostowane uruchomienia naraz: {runs} · agenci na osobę: {perUser} · działający agenci: {running} · zadania CI naraz: {ci}",
-          "planCiUnreadable": "Plan <strong>{plan}</strong> · hostowane uruchomienia naraz: {runs} · agenci na osobę: {perUser} · działający agenci: {running} · limit CI nieczytelny",
+          "plan": "Plan <strong>{plan}</strong> · hostowane uruchomienia naraz: {runs} · agenci na osobę: {perUser} · agenci: {agents} · zadania CI naraz: {ci}",
+          "planCiUnreadable": "Plan <strong>{plan}</strong> · hostowane uruchomienia naraz: {runs} · agenci na osobę: {perUser} · agenci: {agents} · limit CI nieczytelny",
           "planExempt": "Plan <strong>Brak limitu planu</strong>",
           "planExemptOverride": "Plan <strong>Brak limitu planu</strong> · zadania CI naraz: {ci} (nadpisanie)",
           "planUnknown": "Plan <strong>nieznany · {key}</strong> · nowe kontenery odrzucane",
@@ -12812,8 +12851,8 @@
       "creditsUnknown": "Motir nie mógł teraz sprawdzić kredytów Twojej organizacji. Spróbuj ponownie za chwilę.",
       "userCap": "Limit agentów na osobę w planie {plan} Twojej organizacji wynosi {limit, plural, other {#}}. Za przestrzeń dyskową każdego z nich naliczana jest codzienna opłata, nawet w uśpieniu. Usuń jednego, aby utworzyć kolejnego.",
       "userCapNoFigure": "Masz już tylu agentów, ilu plan Twojej organizacji pozwala mieć jednej osobie. Za przestrzeń dyskową każdego z nich naliczana jest codzienna opłata, nawet w uśpieniu. Usuń jednego, aby utworzyć kolejnego.",
-      "orgRunningLimit": "Limit jednocześnie działających agentów w planie {plan} Twojej organizacji wynosi {limit, plural, other {#}} i wszystkie już działają. Uśpij jednego, aby uruchomić kolejnego.",
-      "orgRunningLimitNoFigure": "W Twojej organizacji działa już tylu agentów naraz, ilu pozwala jej plan. Uśpij jednego, aby uruchomić kolejnego.",
+      "orgCap": "Limit agentów w organizacji, działających lub uśpionych, w planie {plan} Twojej organizacji wynosi {limit, plural, other {#}}. Za przestrzeń dyskową każdego z nich naliczana jest codzienna opłata, nawet w uśpieniu. Usuń jednego, aby utworzyć kolejnego.",
+      "orgCapNoFigure": "Twoja organizacja ma już tylu agentów, działających lub uśpionych, ilu pozwala jej plan. Za przestrzeń dyskową każdego z nich naliczana jest codzienna opłata, nawet w uśpieniu. Usuń jednego, aby utworzyć kolejnego.",
       "busy": "Motir uruchamia teraz tyle maszyn, ile może. Spróbuj ponownie za kilka minut.",
       "notOffered": "Ten agent kodujący nie jest oferowany: jego warunki nie pozwalają jeszcze platformie go hostować. Wybierz innego agenta kodującego.",
       "nameTaken": "Masz już w tym projekcie agenta o nazwie {name}.",
@@ -12827,7 +12866,7 @@
       "aiPlanUnknown": "Nie udało się sprawdzić planu AI",
       "credits": "Brak kredytów",
       "userCap": "Twój limit",
-      "orgRunningLimit": "Limit Twojej organizacji"
+      "orgCap": "Limit Twojej organizacji"
     },
     "lapse": {
       "bannerLead": "Plan AI Twojej organizacji wygasł.",

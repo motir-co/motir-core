@@ -676,6 +676,9 @@ export interface JobEventDataMap {
    *  deletes each archive's blob once its seven-day window has run out and
    *  moves the row to `expired`. Cross-tenant by design. */
   'system.data-export-expiry-sweep': SystemScheduledData;
+  /** The expired name-hold sweep (Story MOTIR-4528 · MOTIR-9509) — deletes the
+   *  public-hostname reservations whose hold has lapsed. Cross-tenant by design. */
+  'system.public-hostname-reservation-sweep': SystemScheduledData;
   /** The runner FLEET (Story MOTIR-1916 · MOTIR-1921): the interim pending-intent
    *  trigger, the per-intent boot, and the crash-backstop reaper. */
   'system.ci-runner-provision-sweep': SystemScheduledData;

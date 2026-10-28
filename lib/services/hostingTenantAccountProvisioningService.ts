@@ -1,15 +1,13 @@
 import {
   awsManagementCredentials,
+  awsManagementRequiredEnv,
   createAwsManagementApi,
   createEc2Api,
   type AwsManagementApi,
 } from '@motir/orchestrator';
 import { FleetShardProvisioningRefusedError } from '@/lib/ciFleet/errors';
 import { hostingTenantAccountPlan } from '@/lib/ciFleet/hostingTenantAccounts';
-import {
-  AWS_RUNTIME_CREDENTIAL_OPTION,
-  createAwsShardProvisioningProvider,
-} from '@/lib/fleetShards/awsProvisioningProvider';
+import { createAwsShardProvisioningProvider } from '@/lib/fleetShards/awsProvisioningProvider';
 import {
   AWS_MEMBER_EMAIL_TEMPLATE_ENV,
   memberEmailTemplateProblems,
@@ -74,14 +72,16 @@ export async function createOrFindTenantAccount(
     region: plan.region,
     options: {
       'account-email': plan.memberEmail ?? '',
-      [AWS_RUNTIME_CREDENTIAL_OPTION]: 'role',
     },
     credentialRef: '',
   };
 
   // Preflight, before any AWS call.
   const problems = memberEmailTemplateProblems(template);
-  const missing = provider.requiredEnv(ctx).filter((name) => !env[name]?.trim());
+  // Only the `account` step runs, so only the management credential is needed:
+  // the provider's own `requiredEnv` adds the pool-account definition, which a
+  // tenant account never applies (MOTIR-9845).
+  const missing = awsManagementRequiredEnv(env).filter((name) => !env[name]?.trim());
   if (missing.length > 0) problems.push(`set ${missing.join(', ')}`);
   if (problems.length > 0) throw new FleetShardProvisioningRefusedError(problems);
 
@@ -109,6 +109,6 @@ export async function createOrFindTenantAccount(
     });
   }
 
-  const { moved } = await api().moveAccountToOu(accountId, ouId);
+  const { moved } = await api().moveAccountToOrganizationalUnit(accountId, ouId);
   return { accountId, ouId, created: step.created, moved };
 }

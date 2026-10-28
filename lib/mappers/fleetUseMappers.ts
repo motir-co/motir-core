@@ -40,7 +40,7 @@ export function toFleetUsePlanDTO(plan: OrgPlanFiguresDTO): FleetUsePlanDTO {
   const noFleet =
     plan.agentRunsInParallel === 0 &&
     plan.agentsPerUser === 0 &&
-    plan.agentsRunningPerOrg === 0 &&
+    plan.agentsPerOrg === 0 &&
     plan.ciBurstCap === 0;
   return { kind: 'limited', planKey: plan.planKey, planName: plan.planName, noFleet };
 }
@@ -51,8 +51,8 @@ function figureOf(plan: OrgPlanFiguresDTO, key: FleetUseFigureKey): number | nul
   switch (key) {
     case 'agentRunsInParallel':
       return plan.agentRunsInParallel;
-    case 'agentsRunningInOrg':
-      return plan.agentsRunningPerOrg;
+    case 'agentsInOrg':
+      return plan.agentsPerOrg;
     case 'agentsPerPerson':
       return plan.agentsPerUser;
     case 'ciJobsInFlight':
@@ -72,8 +72,8 @@ function countsOfFigure(
   switch (key) {
     case 'agentRunsInParallel':
       return { inUse: counts.agentRuns.inFlight, waiting: counts.agentRuns.waiting };
-    case 'agentsRunningInOrg':
-      return { inUse: counts.agentsRunning.inFlight, waiting: null };
+    case 'agentsInOrg':
+      return { inUse: counts.agentsLive.inFlight, waiting: null };
     case 'agentsPerPerson':
       return { inUse: counts.agentsPerUser.membersAtFigure, waiting: null };
     case 'ciJobsInFlight':
@@ -123,7 +123,7 @@ export function toFleetUseDTO(facts: FleetUseFacts): FleetUseDTO {
     countsRead: facts.counts !== null,
     figures: {
       agentRunsInParallel: toFigure(facts, 'agentRunsInParallel'),
-      agentsRunningInOrg: toFigure(facts, 'agentsRunningInOrg'),
+      agentsInOrg: toFigure(facts, 'agentsInOrg'),
       agentsPerPerson: toFigure(facts, 'agentsPerPerson'),
       ciJobsInFlight: toFigure(facts, 'ciJobsInFlight'),
     },

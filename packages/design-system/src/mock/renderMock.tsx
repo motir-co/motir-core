@@ -60,14 +60,16 @@ export interface RenderMockOptions {
    */
   fontCss?: string;
   /**
-   * How wide the board is drawn (MOTIR-9758). Defaults to `'narrow'`.
-   * - `'narrow'` — the 64rem column every mock has always had.
-   * - `'full'` — the viewport's width, for a page that ships full width.
+   * How wide the board is drawn (MOTIR-9758). Defaults to `'full'`: a design
+   * result is reviewed at the width of the screen it is opened on, and a page's
+   * own column sits inside the board as the page ships it.
+   * - `'full'` — the viewport's width.
+   * - `'narrow'` — the 64rem column every mock had before 0.19.
    * - any other string — ONE max-width utility, e.g. `'max-w-[1400px]'`, for a
    *   page that ships at that width. It lands on the board as a class, so
    *   Tailwind compiles it like any other candidate.
    *
-   * An empty string, or one holding whitespace, falls back to `'narrow'` and
+   * An empty string, or one holding whitespace, falls back to `'full'` and
    * the fallback is named in a comment at the top, as an unknown axis is.
    */
   boardWidth?: BoardWidth;
@@ -186,17 +188,16 @@ function safeStyleText(css: string): string {
 
 const BODY_CLASS = 'bg-(--el-page-bg) text-(--el-text) font-sans antialiased';
 
-const NARROW_WIDTH_CLASS = 'max-w-[64rem]';
+const FULL_WIDTH_CLASS = 'w-full';
 
 /** The board's width class for `boardWidth`, plus a note when it fell back. */
 function resolveBoardWidth(boardWidth: unknown): { widthClass: string; fallback?: string } {
-  if (boardWidth === undefined || boardWidth === 'narrow')
-    return { widthClass: NARROW_WIDTH_CLASS };
-  if (boardWidth === 'full') return { widthClass: 'w-full' };
+  if (boardWidth === undefined || boardWidth === 'full') return { widthClass: FULL_WIDTH_CLASS };
+  if (boardWidth === 'narrow') return { widthClass: 'max-w-[64rem]' };
   if (typeof boardWidth === 'string' && /^\S+$/.test(boardWidth)) return { widthClass: boardWidth };
   return {
-    widthClass: NARROW_WIDTH_CLASS,
-    fallback: `boardWidth ${JSON.stringify(boardWidth)} is not one class — fell back to "narrow"`,
+    widthClass: FULL_WIDTH_CLASS,
+    fallback: `boardWidth ${JSON.stringify(boardWidth)} is not one class — fell back to "full"`,
   };
 }
 

@@ -757,6 +757,7 @@ describe('workItemsService.validateWorkItem — the prose-vs-graph advisory', ()
         label: 'GHOST',
         targetId: 'cl_does_not_exist',
         targetKey: null,
+        field: 'descriptionMd',
       },
     ]);
     expect(result.valid).toBe(true);
@@ -785,6 +786,7 @@ describe('workItemsService.validateWorkItem — the prose-vs-graph advisory', ()
         label: 'ZULU-1',
         targetId: foreign.id,
         targetKey: null,
+        field: 'descriptionMd',
       },
     ]);
   });
@@ -843,6 +845,7 @@ describe('workItemsService.validateWorkItem — the prose-vs-graph advisory', ()
         label: 'SECRET-1',
         targetId: secretItem.id,
         targetKey: null,
+        field: 'descriptionMd',
       },
     ]);
     // The owner, who CAN open it, sees a correctly labelled link — nothing.
@@ -962,6 +965,7 @@ describe('workItemsService.validateWorkItem — the MISLABELLED-LINK advisory', 
         label: meant.identifier,
         targetId: opened.id,
         targetKey: opened.identifier,
+        field: 'descriptionMd',
       },
     ]);
     // An advisory, never a blocker.
@@ -1002,6 +1006,7 @@ describe('workItemsService.validateWorkItem — the MISLABELLED-LINK advisory', 
         label: 'the ReDoS guard',
         targetId: 'cl_nowhere',
         targetKey: null,
+        field: 'descriptionMd',
       },
       {
         kind: 'shape',
@@ -1010,6 +1015,7 @@ describe('workItemsService.validateWorkItem — the MISLABELLED-LINK advisory', 
         label: 'PROD-4202',
         targetId: 'cmtehjd4s00kjhwphdoxk2mwz',
         targetKey: null,
+        field: 'descriptionMd',
       },
     ]);
   });
@@ -1140,8 +1146,89 @@ describe('workItemsService.validateWorkItem — the MISLABELLED-LINK advisory ig
         label: meant.identifier,
         targetId: opened.id,
         targetKey: opened.identifier,
+        field: 'descriptionMd',
       },
     ]);
+  });
+});
+
+// Bug MOTIR-9938 — the explanation is a second stored body whose chips open
+// cards exactly as the description's do, so its links are judged too, and the
+// advisory names the body to fix.
+describe('workItemsService.validateWorkItem — the MISLABELLED-LINK advisory scans the EXPLANATION', () => {
+  const mislabelled = (r: WorkItemValidityDto) => r.advisories.filter(isMislabelledLinkAdvisory);
+  const mkExplained = (
+    fx: Awaited<ReturnType<typeof makeWorkItemFixture>>,
+    title: string,
+    descriptionMd: string,
+    explanationMd: string,
+  ) =>
+    workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', type: 'code', title, descriptionMd, explanationMd },
+      fx.ctx,
+    );
+
+  it('AC1: a dead link and a crossed link in the explanation are flagged, naming `explanationMd`', async () => {
+    const fx = await makeWorkItemFixture();
+    const meant = await mk(fx, 'The card the label names', 'task');
+    const opened = await mk(fx, 'The card the id opens', 'task');
+    const card = await mkExplained(
+      fx,
+      'Card with bad explanation links',
+      'Nothing linked here.',
+      `Why: ${ref(meant.identifier, opened.id)} and ${ref('PROD-4202', 'cl_nowhere')}.`,
+    );
+
+    const result = await workItemsService.validateWorkItem(fx.projectId, card.identifier, fx.ctx);
+    expect(mislabelled(result)).toEqual([
+      {
+        kind: 'shape',
+        item: card.identifier,
+        severity: 'likely-mislabelled-link',
+        label: 'PROD-4202',
+        targetId: 'cl_nowhere',
+        targetKey: null,
+        field: 'explanationMd',
+      },
+      {
+        kind: 'shape',
+        item: card.identifier,
+        severity: 'likely-mislabelled-link',
+        label: meant.identifier,
+        targetId: opened.id,
+        targetKey: opened.identifier,
+        field: 'explanationMd',
+      },
+    ]);
+    expect(result.valid).toBe(true);
+  });
+
+  it('AC2: the same link in both bodies is two advisories, one per body, description first', async () => {
+    const fx = await makeWorkItemFixture();
+    const bad = ref('PROD-4202', 'cl_nowhere');
+    const card = await mkExplained(fx, 'Card linking twice', `See ${bad}.`, `Because ${bad}.`);
+
+    const result = await workItemsService.validateWorkItem(fx.projectId, card.identifier, fx.ctx);
+    expect(mislabelled(result).map((a) => a.field)).toEqual(['descriptionMd', 'explanationMd']);
+  });
+
+  it('AC3: a link quoted in code in the explanation raises nothing (MOTIR-9825)', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await mkExplained(
+      fx,
+      'Card quoting a link in its explanation',
+      'Plain.',
+      [
+        'The defect was `' + ref('PROD-4202', 'cl_nowhere') + '`.',
+        '',
+        '```md',
+        ref('PROD-1', 'cl_gone'),
+        '```',
+      ].join('\n'),
+    );
+
+    const result = await workItemsService.validateWorkItem(fx.projectId, card.identifier, fx.ctx);
+    expect(mislabelled(result)).toEqual([]);
   });
 });
 
@@ -1168,10 +1255,10 @@ describe('validate_work_item (MCP) — the MISLABELLED-LINK advisory reaches the
 
     expect(text(res)).toContain('is VALID');
     expect(text(res)).toContain(
-      `${card.identifier} links "${meant.identifier}" to motir:${opened.id}, which is ${opened.identifier}.`,
+      `${card.identifier} links "${meant.identifier}" to motir:${opened.id} in its descriptionMd, which is ${opened.identifier}.`,
     );
     expect(text(res)).toContain(
-      `${card.identifier} links "PROD-404" to motir:cl_dead, which opens NO work item.`,
+      `${card.identifier} links "PROD-404" to motir:cl_dead in its descriptionMd, which opens NO work item.`,
     );
     await client.close();
   });

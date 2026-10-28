@@ -17,7 +17,6 @@ import { FLEET_WORKLOAD_KINDS } from '@/lib/ciFleet/workloads';
 import {
   AWS_DEFAULT_REGION,
   AWS_REAP_UNTAGGED_OPTION,
-  AWS_RUNTIME_CREDENTIAL_OPTION,
 } from '@/lib/fleetShards/awsProvisioningProvider';
 import {
   AWS_MEMBER_EMAIL_TEMPLATE_ENV,
@@ -324,7 +323,6 @@ export const fleetShardProvisioningService = {
       operatorEmail: operator.email,
       providerOptions: {
         'account-email': template ? memberAccountEmail(template, name) : '',
-        [AWS_RUNTIME_CREDENTIAL_OPTION]: 'role',
       },
     };
     return walk(await preflight(addInput, operator, problems), addInput, {
@@ -386,7 +384,6 @@ export const fleetShardProvisioningService = {
       operatorEmail: operator.email,
       providerOptions: {
         'account-email': template ? memberAccountEmail(template, name) : '',
-        [AWS_RUNTIME_CREDENTIAL_OPTION]: 'role',
         // The attribution pass reaps every machine on an own account (MOTIR-9584).
         [AWS_REAP_UNTAGGED_OPTION]: 'true',
       },
@@ -552,7 +549,12 @@ async function walk(
   report(
     'network',
     network.created.length > 0 ? 'done' : 'already',
-    network.created.length > 0 ? `created ${network.created.join(', ')}` : 'already in place',
+    [
+      network.created.length > 0 ? `created ${network.created.join(', ')}` : 'already in place',
+      network.detail,
+    ]
+      .filter(Boolean)
+      .join('; '),
   );
 
   const quota = await provider.readQuota(ctx);
@@ -577,20 +579,10 @@ async function walk(
 
   const credential = await provider.runtimeCredential(ctx);
   if (credential.confirmed) {
-    report(
-      'runtime_credential',
-      credential.created.length > 0 ? 'done' : 'already',
-      `the key under ${ctx.credentialRef} resolves and works`,
-    );
+    report('runtime_credential', 'already', 'the runtime credential is confirmed');
   } else {
     const owed = provider.manualCredentialStep(ctx);
-    report(
-      'runtime_credential',
-      'pending',
-      credential.created.length > 0
-        ? `created ${credential.created.join(', ')}; the key is a person's step`
-        : "the key is a person's step",
-    );
+    report('runtime_credential', 'pending', 'the runtime credential is not confirmed yet');
     pending.push(owed);
   }
 

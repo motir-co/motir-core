@@ -1,4 +1,4 @@
-import { PUBLIC_API_MAJOR, PUBLIC_CONTRACT_VERSION } from '@/lib/api/public/contractVersion';
+import { PUBLIC_CONTRACT_VERSION } from '@/lib/api/public/contractVersion';
 import { toOpenApiSchema } from '@/lib/api/v1/openapi/emit';
 import { PUBLIC_OPERATIONS } from '@/lib/api/public/openapi/operations';
 import type { z } from 'zod/v4';
@@ -204,7 +204,7 @@ export function emitPublicOpenApiDocument(): JsonObject {
       version: PUBLIC_CONTRACT_VERSION,
       description:
         'The anonymous read surface a public renderer consumes. Separate from the authenticated ' +
-        `\`/api/v${PUBLIC_API_MAJOR}\` client API, which requires a token and has its own version ` +
+        '`/api/v1` client API, which requires a token and has its own version ' +
         'and its own document — see `docs/decisions/public-surface-hosts.md` AMENDMENT 1 for why ' +
         'these are two contracts rather than one.',
     },

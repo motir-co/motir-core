@@ -427,25 +427,23 @@ export const agentInstanceRepository = {
   },
 
   /**
-   * The org's running cap count (MOTIR-9374): its instances in a running state,
-   * UNION the instances it holds a fleet slot for (`admittingIds`) whose row has
-   * not moved yet — a create whose row is not inserted, or a wake still
-   * `hibernated`. ONE statement, so a racer that moves its row between two reads
-   * can be neither missed nor counted twice; two wakes one below the figure
-   * cannot both pass the guard that holds the fleet admission lock.
+   * The org figure's count (MOTIR-9954): its LIVE instances, running or
+   * hibernating (any state, not deleted), UNION the instances it holds a fleet
+   * slot for (`admittingIds`) whose row is not inserted yet — a create in flight.
+   * A held slot whose row exists is the same id, so it counts once. ONE statement,
+   * so two creates one below the figure cannot both pass the guard that holds the
+   * fleet admission lock.
    */
-  async countRunningOrAdmitting(
+  async countLiveOrAdmitting(
     organizationId: string,
     admittingIds: string[],
     tx: Prisma.TransactionClient,
   ): Promise<number> {
-    const states = [...RUNNING_STATES];
     const rows = await tx.$queryRaw<Array<{ n: number }>>`
       SELECT COUNT(*)::int AS "n" FROM (
         SELECT "id" FROM "agent_instance"
         WHERE "organization_id" = ${organizationId}
           AND "deleted_at" IS NULL
-          AND "state"::text = ANY(${states}::text[])
         UNION
         SELECT unnest(${admittingIds}::text[])
       ) AS "counted"

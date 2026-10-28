@@ -836,7 +836,9 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // advisory is another severity on the channel, outside the verdict.
     // Re-pinned for MOTIR-9835, summary UNCHANGED: an extra heading alone is not a
     // section finding — advisory channel only, outside the verdict.
-    descriptionFingerprint: '3810aa68df89',
+    // Re-pinned for MOTIR-9938, summary UNCHANGED: the mislabelled-link advisory
+    // now scans the explanation too — still advisory, outside the verdict.
+    descriptionFingerprint: 'f5357970c9f9',
   },
   get_plan_authoring_state: {
     // MOTIR-9821: the live read an author session makes before it wires an edge onto a sibling.
@@ -871,7 +873,9 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // proposed bodies) rides beside the verdict and never touches it.
     // Re-pinned for MOTIR-9835, summary UNCHANGED: an extra heading alone is not a
     // section finding — advisory channel only, outside the verdict.
-    descriptionFingerprint: '17faf9b75460',
+    // Re-pinned for MOTIR-9938, summary UNCHANGED: the mislabelled-link advisory
+    // now scans proposed explanations too — beside the verdict, never in it.
+    descriptionFingerprint: '6a2d9d6bf0f4',
   },
   get_plan_status: {
     // Re-pinned for MOTIR-3064, summary UNCHANGED and deliberately so: the tool
@@ -1012,9 +1016,9 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // are all about a PROPOSAL and this one is not — that is the whole reason a
     // reader picks between them.
     summary:
-      "Correct a plan's OWN title and summary — the heading above the tree — without touching a single proposal.",
+      "Correct a plan's OWN title and summary — the heading above the tree — without touching a single proposal, and keep your planner record on it.",
     // Regenerated from a live `tools/list` handshake, never from the source.
-    descriptionFingerprint: '3c8e94ce5a31',
+    descriptionFingerprint: 'd8f72cc61e0f',
   },
   record_plan_revision_reason: {
     // The line has to say the thing that makes this tool unlike its six

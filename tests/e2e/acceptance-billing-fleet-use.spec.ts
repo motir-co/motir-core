@@ -322,8 +322,8 @@ test.describe('Fleet use on Billing & plans', () => {
         );
         await expect(runs.getByRole('listitem')).toContainText(copy.waiting.planLimit);
 
-        await expect(figureRow(fleet, 'agentsRunningInOrg')).toContainText(
-          inUseOf(0, PRO_CAPS.agentsRunningPerOrg),
+        await expect(figureRow(fleet, 'agentsInOrg')).toContainText(
+          inUseOf(0, PRO_CAPS.agentsPerOrg),
         );
         await expect(figureRow(fleet, 'agentsPerPerson')).toContainText(
           icu(copy.membersAt, { count: 0, figure: n(PRO_CAPS.agentsPerUser) }),
@@ -414,7 +414,7 @@ test.describe('Fleet use on Billing & plans', () => {
         await expect(fleet.getByRole('button', { name: copy.tryAgain })).toBeVisible();
         for (const key of [
           'agentRunsInParallel',
-          'agentsRunningInOrg',
+          'agentsInOrg',
           'agentsPerPerson',
           'ciJobsInFlight',
         ]) {
@@ -488,7 +488,7 @@ test.describe('Fleet use on Billing & plans', () => {
         await expect(mergedRow).toContainText(
           icu(copy.accounts.sharedFloor.indexer_and_hoster, {
             perPerson: n(HOST_FLOOR.agentsPerUser),
-            perOrg: n(HOST_FLOOR.agentsRunningPerOrg),
+            perOrg: n(HOST_FLOOR.agentsPerOrg),
           }),
         );
         await expect(mergedRow).toContainText(
@@ -548,7 +548,7 @@ test.describe('Fleet use on Billing & plans', () => {
         await expect(mergedRow).toContainText(
           icu(copy.accounts.sharedFloor.indexer_and_hoster, {
             perPerson: n(HOST_FLOOR.agentsPerUser),
-            perOrg: n(HOST_FLOOR.agentsRunningPerOrg),
+            perOrg: n(HOST_FLOOR.agentsPerOrg),
           }),
         );
 
