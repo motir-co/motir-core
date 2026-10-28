@@ -223,6 +223,13 @@ RUN pnpm build:relay
 # (`scripts/build-fleet-admin.mjs`), with the worker's external set.
 RUN pnpm build:fleet-admin
 
+# ── the operator deploy-check bundle (MOTIR-9965) ───────────────────────────
+# `node hosting/deploy-check.mjs <step> --workspace … --repository … --environment …`
+# resolves a repository's stored environment, which needs the database and
+# ENVIRONMENT_CONFIG_ENCRYPTION_KEY — so it runs on this machine, bundled the
+# fleet-admin way (`scripts/build-deploy-check.mjs`).
+RUN pnpm build:deploy-check
+
 
 # ── assert the standalone output stayed small — the prune's successor ────────
 # ⚠️ THIS STEP USED TO PRUNE. It does not any more, because there is nothing
@@ -386,6 +393,12 @@ COPY --from=builder --chown=nextjs:nodejs /app/.relay/relay.mjs.map ./relay/rela
 # copied so an error names a source line.
 COPY --from=builder --chown=nextjs:nodejs /app/.fleet-admin/fleet-admin.mjs ./fleet/fleet-admin.mjs
 COPY --from=builder --chown=nextjs:nodejs /app/.fleet-admin/fleet-admin.mjs.map ./fleet/fleet-admin.mjs.map
+
+# ── /app/hosting — the operator deploy check (MOTIR-9965) ───────────────────
+# Run by hand over `fly ssh console`, like fleet-admin; its unresolved imports
+# resolve upward into `/app/node_modules`.
+COPY --from=builder --chown=nextjs:nodejs /app/.deploy-check/deploy-check.mjs ./hosting/deploy-check.mjs
+COPY --from=builder --chown=nextjs:nodejs /app/.deploy-check/deploy-check.mjs.map ./hosting/deploy-check.mjs.map
 
 # ── the RUNNING process must be able to name its own build (MOTIR-3760) ─────
 # ⚠️ THE BUILDER STAGE'S `MOTIR_RELEASE` DOES NOT REACH HERE, AND FOR MONTHS

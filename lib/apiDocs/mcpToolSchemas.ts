@@ -2562,10 +2562,37 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
           additionalProperties: false,
         },
         description:
-          'Every discrepancy you found, in ONE call — 1–20 points, each field 1–2000 characters once trimmed.',
+          'Every discrepancy you found, in ONE call — 1–20 points, each field 1–2000 characters once trimmed. Omit it when the record carries only decisions.',
+      },
+      decisions: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            planSaid: {
+              type: 'string',
+              description:
+                'What the card or its plan said about this detail — "nothing" when it was silent.',
+            },
+            chose: { type: 'string', description: 'What you decided and built.' },
+            why: {
+              type: 'string',
+              description:
+                'Why — the repository\'s convention you followed or, where it is silent, the established industry best practice for the stack. Never "it was the simplest".',
+            },
+            alternatives: {
+              type: 'string',
+              description: 'The options you considered and did not take, and why not.',
+            },
+          },
+          required: ['planSaid', 'chose', 'why'],
+          additionalProperties: false,
+        },
+        description:
+          'Every decision you made where the card left the HOW open, in the SAME one call — up to 20, each field 1–2000 characters once trimmed.',
       },
     },
-    required: ['key', 'points'],
+    required: ['key'],
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },

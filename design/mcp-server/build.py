@@ -71,7 +71,7 @@ SUMMARIES = {
     "get_plan": "A plan with the proposals it bundles: what the planner actually proposed, not just how much.",
     "get_approved_shape_verdict": "Is this card still what its last approved plan approved? Its plan history and the verdict.",
     "report_unbuildable_target": "A dispatched runner reports the card it stopped on as unbuildable — acknowledged, nothing to act on.",
-    "record_run_discrepancy": "A runner that built a card through a plan wrong only about the HOW records what it built differently — a card comment and a run record, acknowledged.",
+    "record_run_discrepancy": "A runner records what it built differently from a plan wrong only about the HOW, and the decisions it made where the plan was silent — a card comment and a run record, acknowledged.",
     "open_plan_session": "Open — or resume — a project's planning conversation, and read its thread.",
     "create_work_item": "Create an epic, story, task, bug or subtask; points, estimate, type, executor and repo in one call.",
     "update_work_item": "Edit any subset of an item's fields, including the explanation body create cannot set.",

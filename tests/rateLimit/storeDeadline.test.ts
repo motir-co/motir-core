@@ -413,6 +413,18 @@ const DEADLINE_IRRELEVANT: ReadonlyMap<string, string> = new Map([
       '(MOTIR-3067)',
   ],
   [
+    'tests/workspace-pending-invites-resend.integration.test.ts',
+    'Resend (MOTIR-9996) is held to the same invite throttle as `tests/workspace-invites.test.ts`: ' +
+      '`workspaceInvitesService.resendInvite` counts `verification` ROWS in the window and throws ' +
+      '`InviteRateLimitedError`. No shared store is reached, so there is no deadline to miss.',
+  ],
+  [
+    'tests/components/workspace-pending-invites.test.tsx',
+    'The Pending invitations block (MOTIR-9997) is rendered with `resendInviteAction` MOCKED: its ' +
+      '`RATE_LIMITED` refusal is a value the test hands the mock, to assert the toast copy. No ' +
+      'limiter, counter or store runs.',
+  ],
+  [
     'tests/email-change.test.ts',
     'Same shape as the invite throttle: `usersService.requestEmailChange` compares a ' +
       'recent-row COUNT against `EMAIL_CHANGE_RATE_MAX` and throws ' +

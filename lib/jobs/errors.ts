@@ -45,6 +45,16 @@ export class SystemReplayForbiddenError extends Error {
 }
 
 /**
+ * True for {@link SystemReplayForbiddenError}. The `(admin)` console's actions
+ * test for the refusal through this guard rather than the class, because no
+ * executable text under `app/(admin)` may spell the word the console's 404
+ * posture forbids (`tests/platform/adminRouteGate.test.ts`).
+ */
+export function isSystemReplayRefusal(err: unknown): err is SystemReplayForbiddenError {
+  return err instanceof SystemReplayForbiddenError;
+}
+
+/**
  * Thrown when the operator's system replay is pointed at a dead letter that
  * BELONGS to a workspace (MOTIR-8083). That row keeps its own door, the
  * manager-gated replay on the workspace's Dead letter tab; the system door runs
@@ -56,5 +66,19 @@ export class SystemReplayWorkspaceRowError extends Error {
   constructor(dlqId: string) {
     super(`job_run_dlq ${dlqId} belongs to a workspace and cannot be replayed as a system row`);
     this.name = 'SystemReplayWorkspaceRowError';
+  }
+}
+
+/**
+ * Thrown when someone below the `support` platform role reads the platform job
+ * ledger (MOTIR-9984). Those reads run under `withSystemContext`, which bypasses
+ * tenant RLS, so the role check in the service is the whole gate; the page's own
+ * 404 is a second line, not the first.
+ */
+export class PlatformJobsReadForbiddenError extends Error {
+  readonly code = 'PLATFORM_JOBS_READ_FORBIDDEN' as const;
+  constructor() {
+    super('The platform job ledger is read by platform staff at support or above');
+    this.name = 'PlatformJobsReadForbiddenError';
   }
 }

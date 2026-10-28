@@ -12,6 +12,8 @@ import { cleanup, render, screen } from '@testing-library/react';
 //   * an org Owner / Admin's Leave is locked by the org role, naming both tiers;
 //   * the Roles door counts the workspace's custom roles;
 //   * a workspace that went away between the reads renders nothing;
+//   * the Members card gets the pending invitations only for a viewer who may
+//     invite, and none when the read fails (MOTIR-9997);
 //   * the Public address door (Story MOTIR-4528 · MOTIR-9514) mounts only on
 //     cloud with a base domain, and names the workspace's host when it has one.
 
@@ -22,8 +24,11 @@ vi.mock('next-intl/server', () => ({
 const svc = vi.hoisted(() => ({
   summary: null as { id: string; name: string } | null,
   migration: null as { entries: unknown[]; total: number; nextCursor: string | null } | null,
+  invites: [] as unknown[],
+  invitesFail: false,
   context: {
     canManageRoles: true,
+    canInvite: true,
     orgManagedUserIds: [] as string[],
     organizationName: 'Acme',
     customRoles: [] as { id: string; name: string }[],
@@ -38,7 +43,17 @@ const props = vi.hoisted(() => ({
   danger: null as Record<string, unknown> | null,
   twoFactor: null as Record<string, unknown> | null,
   door: null as Record<string, unknown> | null,
+  members: null as Record<string, unknown> | null,
   addressDoor: null as Record<string, unknown> | null,
+}));
+
+vi.mock('@/lib/services/workspaceInvitesService', () => ({
+  workspaceInvitesService: {
+    listPendingInvites: async () => {
+      if (svc.invitesFail) throw new Error('read failed');
+      return svc.invites;
+    },
+  },
 }));
 
 vi.mock('@/lib/billing/availability', () => ({ isCloud: () => svc.cloud }));
@@ -87,7 +102,10 @@ vi.mock('@/app/(authed)/settings/workspace/_components/NameCard', () => ({
   NameCard: () => <div data-testid="name" />,
 }));
 vi.mock('@/app/(authed)/settings/workspace/_components/MembersCard', () => ({
-  MembersCard: () => <div data-testid="members" />,
+  MembersCard: (p: Record<string, unknown>) => {
+    props.members = p;
+    return <div data-testid="members" />;
+  },
 }));
 vi.mock('@/app/(authed)/settings/workspace/_components/RoleMigrationNotice', () => ({
   RoleMigrationNotice: () => <div data-testid="migration-notice" />,
@@ -124,8 +142,11 @@ const section = () =>
 beforeEach(() => {
   svc.summary = { id: 'ws1', name: 'Northwind' };
   svc.migration = null;
+  svc.invites = [];
+  svc.invitesFail = false;
   svc.context = {
     canManageRoles: true,
+    canInvite: true,
     orgManagedUserIds: [],
     organizationName: 'Acme',
     customRoles: [],
@@ -135,7 +156,7 @@ beforeEach(() => {
   svc.tenantDomain = false;
   svc.subdomain = null;
   svc.subdomainReads = 0;
-  props.danger = props.twoFactor = props.door = props.addressDoor = null;
+  props.danger = props.twoFactor = props.door = props.members = props.addressDoor = null;
 });
 afterEach(() => cleanup());
 
@@ -186,6 +207,24 @@ describe('the fold-in’s role branches', () => {
     render(<>{await section()}</>);
     expect(props.twoFactor?.['lockedBy']).toBe('Acme');
     expect(props.twoFactor?.['canManage']).toBe(true);
+  });
+
+  it('hands the Members card the pending invitations only when the viewer may invite', async () => {
+    svc.invites = [{ id: 'inv-1' }];
+    render(<>{await section()}</>);
+    expect(props.members?.['pendingInvites']).toEqual([{ id: 'inv-1' }]);
+    cleanup();
+
+    svc.context = { ...svc.context, canInvite: false };
+    render(<>{await section()}</>);
+    expect(props.members?.['pendingInvites']).toEqual([]);
+  });
+
+  it('a failed pending-invitations read draws the card without them', async () => {
+    svc.invitesFail = true;
+    render(<>{await section()}</>);
+    expect(screen.getByTestId('members')).toBeTruthy();
+    expect(props.members?.['pendingInvites']).toEqual([]);
   });
 
   it('a workspace that went away between the reads renders nothing', async () => {

@@ -393,9 +393,9 @@ export const ko: McpSummaryTranslations = {
   },
   record_run_discrepancy: {
     summary:
-      'HOW만 잘못된 계획으로 작업 항목을 빌드한 러너가 계획과 다르게 빌드한 내용을 기록합니다 — 작업 항목 댓글과 실행 기록이 남고, 확인됩니다.',
+      '러너가 HOW만 잘못된 계획과 다르게 빌드한 내용과, 계획이 정하지 않은 부분에서 내린 결정을 기록합니다 — 작업 항목 댓글과 실행 기록이 남고, 확인됩니다.',
     source:
-      'A runner that built a card through a plan wrong only about the HOW records what it built differently — a card comment and a run record, acknowledged.',
+      'A runner records what it built differently from a plan wrong only about the HOW, and the decisions it made where the plan was silent — a card comment and a run record, acknowledged.',
   },
   report_unbuildable_target: {
     summary:

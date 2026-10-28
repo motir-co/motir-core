@@ -399,6 +399,30 @@ export const jobRunRepository = {
   },
 
   /**
+   * The idempotency keys, among `idempotencyKeys`, that have a `failed` run of
+   * `functionId` in `workspaceId` (MOTIR-9995) — a dead-lettered send: the
+   * ledger flips a run to `failed` only once its retries are exhausted.
+   * `abandoned` is not a dead letter and is not read. Takes `tx` because the
+   * caller runs it under `withWorkspaceContext` (the job_run RLS policy); the
+   * explicit `workspaceId` is the in-query scope that also holds where RLS is
+   * bypassed, as `listByWorkspace` does.
+   */
+  async listFailedKeysByFunctionAndIdempotencyKeys(
+    workspaceId: string,
+    functionId: string,
+    idempotencyKeys: string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    if (idempotencyKeys.length === 0) return [];
+    const rows = await tx.jobRun.findMany({
+      where: { workspaceId, functionId, status: 'failed', idempotencyKey: { in: idempotencyKeys } },
+      select: { idempotencyKey: true },
+      distinct: ['idempotencyKey'],
+    });
+    return rows.map((row) => row.idempotencyKey).filter((key): key is string => key !== null);
+  },
+
+  /**
    * System-tab read (1.6.5): every run across all workspaces INCLUDING the
    * untenanted system rows (workspace_id IS NULL). No workspace filter — the
    * caller MUST run this under withSystemContext (the only context whose RLS

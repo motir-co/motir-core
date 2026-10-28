@@ -267,10 +267,11 @@ export const RUN_DISCREPANCY_POINTS_MAX = 20;
 export const RUN_DISCREPANCY_FIELD_MAX = 2000;
 
 /**
- * 422 — a discrepancy record is malformed: no points, more than
- * {@link RUN_DISCREPANCY_POINTS_MAX}, or a `planAsked` / `built` / `why` that is empty or longer
- * than {@link RUN_DISCREPANCY_FIELD_MAX} characters once trimmed (Story MOTIR-8651 ·
- * MOTIR-8655, `runDiscrepancyService.recordDiscrepancy`).
+ * 422 — a discrepancy record is malformed: no points and no decisions, more than
+ * {@link RUN_DISCREPANCY_POINTS_MAX} of either, or a `planAsked` / `built` / `why` (a decision's
+ * `planSaid` / `chose` / `why`, or an `alternatives` it sent) that is empty or longer than
+ * {@link RUN_DISCREPANCY_FIELD_MAX} characters once trimmed (Story MOTIR-8651 · MOTIR-8655,
+ * `runDiscrepancyService.recordDiscrepancy`; the decisions arm is MOTIR-10000).
  *
  * Refused, not truncated, and checked BEFORE anything is resolved or written: a cut point
  * reads as a whole one, and the refusal says nothing about the card or its run.
@@ -278,20 +279,33 @@ export const RUN_DISCREPANCY_FIELD_MAX = 2000;
 export class RunDiscrepancyInvalidError extends Error {
   readonly code = 'RUN_DISCREPANCY_INVALID';
   constructor(
-    readonly reason: 'points_empty' | 'points_too_many' | 'field_empty' | 'field_too_long',
-    readonly where?: { point: number; field: 'planAsked' | 'built' | 'why' },
+    readonly reason:
+      | 'points_empty'
+      | 'points_too_many'
+      | 'decisions_too_many'
+      | 'field_empty'
+      | 'field_too_long',
+    readonly where?:
+      | { point: number; field: 'planAsked' | 'built' | 'why' }
+      | { decision: number; field: 'planSaid' | 'chose' | 'why' | 'alternatives' },
   ) {
-    const at = where ? ` (point ${where.point}, \`${where.field}\`)` : '';
+    let at = '';
+    if (where && 'point' in where) at = ` (point ${where.point}, \`${where.field}\`)`;
+    if (where && 'decision' in where) at = ` (decision ${where.decision}, \`${where.field}\`)`;
     super(
       reason === 'points_empty'
-        ? 'A discrepancy record needs at least one point (planAsked · built · why); nothing was written.'
+        ? 'A discrepancy record needs at least one point (planAsked · built · why) or one ' +
+            'decision (planSaid · chose · why); nothing was written.'
         : reason === 'points_too_many'
           ? `A discrepancy record takes at most ${RUN_DISCREPANCY_POINTS_MAX} points; list the ` +
             'most important ones and call once. Nothing was written.'
-          : reason === 'field_empty'
-            ? `A discrepancy point's fields must each be non-empty${at}; nothing was written.`
-            : `A discrepancy point's fields are at most ${RUN_DISCREPANCY_FIELD_MAX} characters` +
-              `${at}; shorten it. Nothing was written.`,
+          : reason === 'decisions_too_many'
+            ? `A discrepancy record takes at most ${RUN_DISCREPANCY_POINTS_MAX} decisions; list ` +
+              'the most important ones and call once. Nothing was written.'
+            : reason === 'field_empty'
+              ? `A discrepancy point's fields must each be non-empty${at}; nothing was written.`
+              : `A discrepancy point's fields are at most ${RUN_DISCREPANCY_FIELD_MAX} characters` +
+                `${at}; shorten it. Nothing was written.`,
     );
     this.name = 'RunDiscrepancyInvalidError';
   }

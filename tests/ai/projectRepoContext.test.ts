@@ -39,6 +39,25 @@ import { truncateAuthTables } from '../helpers/db';
 import { randomToken } from '../helpers/random';
 import type { ProjectContext } from '@/lib/projects';
 import { organizationIdOf } from '../helpers/organizationOf';
+import {
+  HOSTING_TARGETS,
+  type HostingSize,
+  type HostingTarget,
+  type HostingUseCase,
+} from '@/lib/hosting/vocabulary';
+import { starterByHostingTarget } from '@/lib/projectRepos/seedMatching';
+import {
+  SEED_SOURCE_ORGANIZATION,
+  SEED_SOURCE_PLATFORM_STARTER,
+} from '@/lib/projectRepos/vocabulary';
+
+/** The four MOTIR-10014 fields a row with no recorded hosting carries. */
+const UNHOSTED = {
+  seedSource: 'blank',
+  hostingTarget: null,
+  hostingUseCase: null,
+  hostingSize: null,
+} as const;
 
 const PASSWORD = 'hunter2hunter2';
 
@@ -98,6 +117,8 @@ async function addRow(
     label?: string | null;
     state?: 'proposed' | 'creating' | 'created' | 'connected' | 'skipped' | 'failed';
     realizedName?: string;
+    seedSource?: string;
+    hosting?: { target: HostingTarget; useCase: HostingUseCase; size: HostingSize };
   },
 ): Promise<string> {
   let githubRepoId: string | undefined;
@@ -135,7 +156,14 @@ async function addRow(
       role: opts.role,
       label: opts.label ?? null,
       name: opts.name,
-      seedSource: 'blank',
+      seedSource: opts.seedSource ?? 'blank',
+      ...(opts.hosting
+        ? {
+            hostingTarget: opts.hosting.target,
+            hostingUseCase: opts.hosting.useCase,
+            hostingSize: opts.hosting.size,
+          }
+        : {}),
       state: opts.state ?? (opts.realizedName ? 'connected' : 'proposed'),
       position: `a${(nextPosition++).toString(36).padStart(4, '0')}`,
       ...(githubRepoId ? { githubRepoId } : {}),
@@ -170,9 +198,18 @@ describe('resolveProjectRepoContext', () => {
           role: 'api',
           label: 'billing',
           state: 'connected',
+          ...UNHOSTED,
         },
-        { ref: search, name: 'search-api', role: 'api', label: 'search', state: 'proposed' },
+        {
+          ref: search,
+          name: 'search-api',
+          role: 'api',
+          label: 'search',
+          state: 'proposed',
+          ...UNHOSTED,
+        },
       ],
+      starterByTarget: starterByHostingTarget(),
     });
     // Two DISTINCT refs for one role — the property the whole field exists for.
     expect(new Set(repositories!.repos.map((r) => r.ref)).size).toBe(2);
@@ -234,6 +271,63 @@ describe('resolveProjectRepoContext', () => {
     expect((await resolveProjectRepoContext(b.projectId, b))!.repos.map((r) => r.name)).toEqual([
       'b-web',
     ]);
+  });
+});
+
+describe('MOTIR-10014 — owner inputs, hosting and the starter per target', () => {
+  it('carries seedSource and the three hosting fields on every row — nulls where none is recorded', async () => {
+    const seed = await seedWorkspace();
+    const ctx = await seedProject(seed, 'HOST');
+    const customer = await addRow(ctx, {
+      name: 'their-app',
+      role: 'web',
+      seedSource: SEED_SOURCE_ORGANIZATION,
+      realizedName: 'their-app',
+    });
+    const motir = await addRow(ctx, {
+      name: 'our-app',
+      role: 'web',
+      seedSource: SEED_SOURCE_PLATFORM_STARTER,
+      hosting: { target: 'serverless', useCase: 'internal_tool', size: 'small' },
+    });
+
+    const repositories = await resolveProjectRepoContext(ctx.projectId, ctx);
+
+    expect(repositories!.repos).toEqual([
+      {
+        ref: customer,
+        name: 'their-app',
+        role: 'web',
+        label: null,
+        state: 'connected',
+        seedSource: 'organization',
+        hostingTarget: null,
+        hostingUseCase: null,
+        hostingSize: null,
+      },
+      {
+        ref: motir,
+        name: 'our-app',
+        role: 'web',
+        label: null,
+        state: 'proposed',
+        seedSource: 'nextjs-prisma-vercel-starter',
+        hostingTarget: 'serverless',
+        hostingUseCase: 'internal_tool',
+        hostingSize: 'small',
+      },
+    ]);
+  });
+
+  it('carries starterByTarget with exactly one entry per hosting target', async () => {
+    const seed = await seedWorkspace();
+    const ctx = await seedProject(seed, 'STRT');
+    await addRow(ctx, { name: 'our-app', role: 'web' });
+
+    const repositories = await resolveProjectRepoContext(ctx.projectId, ctx);
+
+    expect(Object.keys(repositories!.starterByTarget)).toEqual([...HOSTING_TARGETS]);
+    expect(repositories!.starterByTarget).toEqual(starterByHostingTarget());
   });
 });
 
@@ -313,7 +407,17 @@ describe('the planning-job ENVELOPE', () => {
         // `connected`, not `proposed`: the row is REALIZED (MOTIR-4653), which is
         // what puts its repository into `context.code` above. `addRow` derives the
         // state from realization exactly as the establish path does.
-        repos: [{ ref: web, name: 'motir-core', role: 'web', label: null, state: 'connected' }],
+        repos: [
+          {
+            ref: web,
+            name: 'motir-core',
+            role: 'web',
+            label: null,
+            state: 'connected',
+            ...UNHOSTED,
+          },
+        ],
+        starterByTarget: starterByHostingTarget(),
       },
     });
   });

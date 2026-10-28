@@ -16,6 +16,7 @@ import {
   Sparkles,
   Tag,
   Users,
+  Variable,
   Workflow,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -102,6 +103,18 @@ export interface SettingsNavAvailability {
    * the room draws it (its unavailable state).
    */
   hostedRunsAvailable?: boolean;
+  /**
+   * Whether the ACTIVE PROJECT holds at least one repository Motir hosts — a row
+   * whose `seedSource` is not the organisation's (Story MOTIR-9795 · MOTIR-9966;
+   * `design/environment/design-notes.md`, panel 19). It drops every
+   * {@link SettingsNavEntry.motirRepositoriesOnly} row: a project holding only
+   * customer repositories has nothing to set in the Environment room.
+   *
+   * A PROJECT fact rather than a build fact, so the layout resolves it per
+   * request beside the actor's permissions. OPTIONAL, and absent means `false`,
+   * closed like the two fields above.
+   */
+  motirRepositoriesPresent?: boolean;
 }
 
 /**
@@ -117,6 +130,7 @@ export interface SettingsNavAvailability {
 const NO_CLOUD_CAPABILITIES: SettingsNavAvailability = {
   publicProjectsAvailable: false,
   hostedRunsAvailable: false,
+  motirRepositoriesPresent: false,
 };
 
 /** Whether `entry` exists at all on a deployment with these capabilities. */
@@ -126,6 +140,7 @@ export function isSettingsEntryAvailable(
 ): boolean {
   if (entry.cloudOnly && !available.publicProjectsAvailable) return false;
   if (entry.hostedRunsOnly && available.hostedRunsAvailable !== true) return false;
+  if (entry.motirRepositoriesOnly && available.motirRepositoriesPresent !== true) return false;
   return true;
 }
 
@@ -225,6 +240,14 @@ export interface SettingsNavEntry {
    */
   hostedRunsOnly?: true;
   /**
+   * This room exists ONLY for a project holding a repository Motir hosts
+   * ({@link SettingsNavAvailability.motirRepositoriesPresent}) — the same second
+   * axis as {@link cloudOnly}, decided per project (MOTIR-9966). The destination
+   * still renders for a project without one (its not-found state), and the
+   * totality test pairs the route regardless.
+   */
+  motirRepositoriesOnly?: true;
+  /**
    * Routes reached by DRILLING DOWN from this entry, which deliberately get no
    * rail row of their own (Subtask MOTIR-2263 — the role DETAIL screen). Each
    * must be a strict sub-path of {@link href}: this field declares a nested
@@ -291,6 +314,35 @@ export const PROJECT_SETTINGS_NAV: SettingsNavEntry[] = [
     // lives" — retired by the 2026-08-08 amendment, which supersedes read-only
     // views of an administrative surface.)
     permission: 'repository:manage',
+  },
+  {
+    id: 'environment',
+    group: 'general',
+    href: '/settings/project/environment',
+    // `Variable` — the glyph the approved design draws (MOTIR-9959).
+    icon: Variable,
+    labelKey: 'nav.environment',
+    // Story MOTIR-9795 · MOTIR-9966, drawn by MOTIR-9959
+    // (`design/environment/environment.mock.html` · `design/environment/
+    // design-notes.md` § Where it lives). A Motir repository's values per
+    // environment. DIRECTLY UNDER Repositories: both rooms are about the
+    // project's repositories, and this one is its own room rather than a section
+    // there because Repositories is hidden from members and this room has a
+    // member view.
+    //
+    // VERIFIED (write key): every `environmentConfigService` write (`set`,
+    // `delete`) asserts `repository:manage`. It gates the add row and the Edit,
+    // Replace and Delete controls; the page reads it through
+    // `settingsEntryKeys('environment')`.
+    permission: 'repository:manage',
+    // ⚠️ A DISTINCT VIEW KEY, DECIDED BY THE APPROVED DESIGN (MOTIR-9959): a member
+    // who can browse the project may read what its app runs with, secrets shown
+    // only as Set. VERIFIED: `environmentConfigService.list` and `listChanges`
+    // assert `project:browse`. Its evidence row is in
+    // `tests/settings/projectSettingsNav.test.ts`'s VIEW_KEY_EVIDENCE.
+    viewPermission: 'project:browse',
+    // A PROJECT fact: absent from a project holding no repository Motir hosts.
+    motirRepositoriesOnly: true,
   },
   {
     id: 'monitoring',

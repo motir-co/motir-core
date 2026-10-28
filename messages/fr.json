@@ -1958,6 +1958,7 @@
       "translation": "Traduction",
       "rules": "Règles",
       "repositories": "Dépôts",
+      "environment": "Environnement",
       "monitoring": "Surveillance",
       "approvals": "Approbations",
       "bugs": "Bugs"
@@ -2201,7 +2202,58 @@
       "inviteNoProjectsWarning": "La personne ne pourra rien ouvrir tant qu’un gestionnaire ne l’aura pas ajoutée à un projet.",
       "inviteJoinsAsMember": "La personne rejoint l’espace en tant que Membre. Vous pourrez modifier son rôle une fois l’invitation acceptée.",
       "errorInviteProjects": "L’un de ces projets ne peut pas être rejoint. Choisissez-les de nouveau.",
-      "errorInviteNotAllowed": "Vous ne pouvez pas envoyer cette invitation. Seul un gestionnaire de l’espace de travail peut inviter avec un accès Restreint."
+      "errorInviteNotAllowed": "Vous ne pouvez pas envoyer cette invitation. Seul un gestionnaire de l’espace de travail peut inviter avec un accès Restreint.",
+      "pending": {
+        "heading": "Invitations en attente",
+        "invitationColumn": "Invitation",
+        "deliveryColumn": "Remise",
+        "invitedBy": "Invité par {name}, {sent}",
+        "invitedByFormer": "Invité par un ancien membre, {sent}",
+        "expiresIn": "Expire dans {count, plural, one {# jour} other {# jours}}",
+        "expiresToday": "Expire aujourd’hui",
+        "expiresOn": "Expire le {date}",
+        "resend": "Renvoyer",
+        "resendLabel": "Renvoyer l’invitation à {email}",
+        "resendScopeTooltip": "Seul un gestionnaire peut renvoyer une invitation restreinte",
+        "resentToast": "Nouvelle invitation envoyée à {email}",
+        "refusalRateLimited": "Limite atteinte : 3 invitations par adresse et par heure.",
+        "refusalRateLimitedBody": "Réessayez plus tard.",
+        "refusalAlreadyMember": "Cette personne a déjà rejoint l’espace de travail.",
+        "refusalNotAllowed": "Vous ne pouvez pas renvoyer cette invitation.",
+        "refusalNoLongerPending": "Cette invitation n’est plus en attente.",
+        "showAll": "Afficher les {count} invitations en attente",
+        "showFewer": "Afficher moins",
+        "delivery": {
+          "queued": {
+            "label": "En file",
+            "helper": "En attente d’envoi"
+          },
+          "accepted": {
+            "label": "Acceptée",
+            "helper": "Le fournisseur de messagerie l’a reçue"
+          },
+          "delivered": {
+            "label": "Remise",
+            "helper": "A atteint le serveur de messagerie du destinataire"
+          },
+          "bounced": {
+            "label": "Rejetée",
+            "helper": "L’adresse l’a refusée"
+          },
+          "complained": {
+            "label": "Signalée",
+            "helper": "Marquée comme spam"
+          },
+          "delayed": {
+            "label": "Retardée",
+            "helper": "Le fournisseur réessaie encore"
+          },
+          "failed": {
+            "label": "Échec",
+            "helper": "N’a pas pu être envoyée"
+          }
+        }
+      }
     },
     "danger": {
       "cantLeaveTitle": "Impossible de partir",
@@ -4156,7 +4208,8 @@
         "hosted-agent": "Le modèle qu’utilise une exécution hébergée est affiché aux personnes qui peuvent lancer une exécution hébergée sur ce projet. Adressez-vous à un administrateur du projet si vous avez besoin de le voir.",
         "translation": "Le fait que le contenu de travail de ce projet soit traduit pour chaque lecteur est visible par les personnes qui peuvent lire les éléments de travail du projet. Contactez un administrateur du projet si vous avez besoin de le voir.",
         "automation": "L’automatisation du projet est gérée par les administrateurs du projet. Adressez-vous à un administrateur si une règle doit être modifiée.",
-        "monitoring": "La connexion de ce projet à un outil de surveillance des erreurs est gérée par les personnes qui peuvent gérer les intégrations. Adressez-vous à un administrateur du projet si Sentry doit être connecté ou reconnecté."
+        "monitoring": "La connexion de ce projet à un outil de surveillance des erreurs est gérée par les personnes qui peuvent gérer les intégrations. Adressez-vous à un administrateur du projet si Sentry doit être connecté ou reconnecté.",
+        "environment": "Les valeurs d’environnement d’un dépôt sont visibles par les personnes qui peuvent parcourir ce projet. Contactez un administrateur du projet si vous avez besoin de les voir."
       }
     },
     "organization": {
@@ -4227,6 +4280,101 @@
       "saveError": "Une erreur s’est produite. Réessayez.",
       "saveForbidden": "Vous ne pouvez plus modifier l’endroit où sont classés les Bugs de ce projet.",
       "folderGone": "Ce dossier n’existe plus. Choisissez-en un autre."
+    },
+    "environment": {
+      "title": "Environnement",
+      "lede": "Les valeurs que votre application lit à l’exécution. Définissez-les une fois par environnement ; Motir les transmet à l’application lors de son prochain déploiement.",
+      "repositoryLabel": "Dépôt",
+      "role": {
+        "web": "Application web",
+        "api": "API",
+        "mobile": "Application mobile",
+        "shared": "Code partagé",
+        "infra": "Infrastructure",
+        "other": "Autre"
+      },
+      "tablistLabel": "Environnement",
+      "tab": {
+        "production": "Production",
+        "preview": "Aperçu",
+        "release": "Version"
+      },
+      "column": {
+        "name": "Nom",
+        "value": "Valeur"
+      },
+      "set": "Défini",
+      "secretHidden": "Secret · valeur masquée",
+      "edit": "Modifier",
+      "replace": "Remplacer",
+      "delete": "Supprimer",
+      "editAria": "Modifier {name}",
+      "replaceAria": "Remplacer {name}",
+      "deleteAria": "Supprimer {name}",
+      "saving": "Enregistrement",
+      "add": {
+        "heading": "Ajouter une valeur",
+        "namePlaceholder": "NOM",
+        "valuePlaceholder": "Valeur",
+        "secret": "Secret",
+        "save": "Enregistrer",
+        "helper": "Un secret peut être remplacé ou supprimé, mais jamais réaffiché — ni à vous, ni à personne."
+      },
+      "error": {
+        "nameRequired": "Saisissez un nom.",
+        "duplicate": "{name} est déjà défini dans {environment}. Modifiez-le plutôt dans la liste.",
+        "invalidName": "Utilisez des lettres, des chiffres et des tirets bas, sans commencer par un chiffre.",
+        "reserved": "{name} est réservé : PORT, DATABASE_URL et les noms MOTIR_* sont définis par Motir. Choisissez un autre nom."
+      },
+      "saved": {
+        "secret": "{name} est enregistré comme secret. Sa valeur est désormais masquée.",
+        "plain": "{name} est enregistré."
+      },
+      "replaceFlow": {
+        "placeholder": "Nouvelle valeur",
+        "aria": "Nouvelle valeur pour {name}",
+        "helper": "La valeur actuelle reste masquée. L’enregistrement la remplace au prochain déploiement.",
+        "cancel": "Annuler"
+      },
+      "deleteDialog": {
+        "title": "Supprimer {name} de {environment} ?",
+        "body": "L’application ne reçoit plus {name} dans {environment} à partir de son prochain déploiement. {count, plural, one {{others} conserve sa propre valeur.} other {{others} conservent leurs propres valeurs.}} Cette action est irréversible.",
+        "confirm": "Supprimer",
+        "cancel": "Annuler"
+      },
+      "empty": {
+        "title": "Aucune valeur dans {environment} pour l’instant",
+        "production": "Votre application en production les reçoit. Ajoutez la première ci-dessous.",
+        "preview": "L’aperçu de chaque pull request les reçoit. Ajoutez la première ci-dessous.",
+        "release": "La version construite par votre train les reçoit. Ajoutez la première ci-dessous."
+      },
+      "loading": "Chargement des valeurs…",
+      "loadError": {
+        "title": "Impossible de charger les valeurs",
+        "body": "Rien n’a été modifié. Réessayez dans un instant."
+      },
+      "retry": "Réessayer",
+      "saveError": "Impossible d’enregistrer {name}. Rien n’a été modifié.",
+      "deleteError": "Impossible de supprimer {name}. La valeur est toujours définie.",
+      "readOnly": {
+        "note": "Vous pouvez lire ces valeurs. Seuls les administrateurs du projet peuvent les modifier.",
+        "tooltip": "Seuls les administrateurs du projet peuvent modifier les valeurs d’environnement."
+      },
+      "changes": {
+        "heading": "Modifications récentes · {environment}",
+        "added": "a ajouté",
+        "replaced": "a remplacé",
+        "deleted": "a supprimé",
+        "secret": "Secret",
+        "unknownActor": "Un ancien membre",
+        "loadError": "Impossible de charger les modifications récentes.",
+        "empty": "Aucune modification pour l’instant. Chaque modification de cet environnement apparaît ici — qui l’a faite et quand, jamais la valeur."
+      },
+      "notFound": {
+        "title": "Dépôt introuvable",
+        "body": "Motir ne conserve aucun environnement pour ce dépôt. Choisissez l’un des dépôts du projet hébergés par Motir.",
+        "back": "Retour à Environnement"
+      }
     },
     "workspaceAddress": {
       "door": {
@@ -10085,7 +10233,8 @@
       "navIdeas": "Idées",
       "navRunModels": "Modèles des exécutions hébergées",
       "navFleetSettings": "Paramètres de la flotte",
-      "navCapacity": "Capacité des fournisseurs"
+      "navCapacity": "Capacité des fournisseurs",
+      "navJobs": "Tâches"
     },
     "nav": {
       "overview": "Vue d'ensemble",
@@ -10307,6 +10456,9 @@
             "limits": {
               "edit": "Limites de capacité d’un modèle de fournisseur modifiées"
             }
+          },
+          "jobs": {
+            "dlq_replay": "A rejoué une lettre morte"
           }
         }
       }
@@ -12601,6 +12753,104 @@
         "unreachable": "La passerelle n’a pas répondu. Rien n’a été enregistré ; réessayez.",
         "notPermitted": "Votre rôle ne permet pas de modifier les limites, rien n’a donc été enregistré.",
         "failed": "Les limites n’ont pas pu être enregistrées. Rien n’a été modifié ; réessayez."
+      }
+    },
+    "jobs": {
+      "breadcrumb": "Plateforme · Tâches",
+      "title": "Tâches",
+      "subtitle": "Chaque tâche d’arrière-plan exécutée par la plateforme, dans chaque espace de travail ou dans aucun, et chaque lettre morte en attente d’être rejouée.",
+      "tabsLabel": "Vues du registre des tâches",
+      "tabs": {
+        "runs": "Exécutions",
+        "dlq": "Lettres mortes",
+        "waiting": "{count} en attente"
+      },
+      "status": {
+        "label": "Statut",
+        "all": "Toutes",
+        "running": "En cours",
+        "succeeded": "Réussie",
+        "failed": "Échouée",
+        "abandoned": "Abandonnée"
+      },
+      "columns": {
+        "function": "Fonction",
+        "event": "Événement",
+        "functionEvent": "Fonction · événement",
+        "workspace": "Espace de travail",
+        "status": "Statut",
+        "attempt": "Tentative",
+        "attempts": "Tentatives",
+        "started": "Début",
+        "duration": "Durée",
+        "failure": "Échec",
+        "lastFailed": "Dernier échec",
+        "replay": "Rejouer"
+      },
+      "runsCaption": "Exécutions de tâches d’arrière-plan",
+      "dlqCaption": "Lettres mortes",
+      "noWorkspace": "Aucun espace de travail",
+      "pageLabel": "Page {page}",
+      "pagerLabel": "Pages des exécutions",
+      "previous": "Précédent",
+      "next": "Suivant",
+      "runsEmpty": {
+        "titleAll": "Aucune exécution pour l’instant",
+        "bodyAll": "Les tâches d’arrière-plan apparaissent ici lorsqu’elles s’exécutent.",
+        "titleStatus": "Aucune exécution avec ce statut",
+        "bodyStatus": "Rien dans le registre n’a ce statut. Choisissez Toutes pour voir chaque exécution."
+      },
+      "runsError": {
+        "title": "Le registre des tâches n’a pas pu être lu"
+      },
+      "dlqError": {
+        "title": "Les lettres mortes n’ont pas pu être lues"
+      },
+      "error": {
+        "body": "La base de données n’a pas répondu. Rien n’a été modifié."
+      },
+      "retry": "Réessayer",
+      "loadingRuns": "Chargement des exécutions",
+      "readOnly": "Lecture seule. Rejouer une lettre morte nécessite le rôle d’opérateur.",
+      "fn": {
+        "label": "Fonction",
+        "all": "Toutes les fonctions"
+      },
+      "waitingLine": "{waiting} en attente · {replayed} rejouées au cours des 7 derniers jours",
+      "capped": "{shown} sur {count} affichées. La liste montre les 200 plus récentes.",
+      "replay": "Rejouer",
+      "replayAria": "Rejouer la lettre morte de {function}",
+      "replayedAt": "Rejouée {time}",
+      "toast": {
+        "replayedTitle": "Lettre morte rejouée",
+        "replayedBody": "{function} a été renvoyée.",
+        "alreadyTitle": "Déjà rejouée",
+        "alreadyBody": "Quelqu’un a rejoué cette lettre morte en premier. Rien n’a été renvoyé.",
+        "failedTitle": "Le rejeu a échoué",
+        "failedBody": "Rien n’a été envoyé. Réessayez.",
+        "notPermittedBody": "Rejouer une lettre morte nécessite le rôle d’opérateur.",
+        "notFoundBody": "Cette lettre morte n’existe plus."
+      },
+      "replayAll": {
+        "button": "Rejouer les {count}",
+        "title": "Rejouer {count} lettres mortes de {function} ?",
+        "body": "Chacune est renvoyée comme une nouvelle exécution et inscrite au journal d’audit de la plateforme. Une lettre morte rejouée d’abord par quelqu’un d’autre est ignorée.",
+        "confirm": "Rejouer {count}",
+        "cancel": "Annuler",
+        "running": "Rejeu en cours…",
+        "runningLine": "Rejeu de {count} lettres mortes, 50 à la fois. Laissez cette fenêtre ouverte jusqu’à la fin.",
+        "doneTitle": "Rejeu terminé",
+        "doneWithFailuresTitle": "Rejeu terminé avec des échecs",
+        "replayed": "{count} rejouées",
+        "already": "{count} déjà rejouées par quelqu’un d’autre",
+        "nothingLeft": "0 rejouée — les {count} avaient déjà été rejouées",
+        "failed": "{count} n’ont pas pu être rejouées. Elles restent dans la liste ; rejouez-les une par une.",
+        "error": "Le rejeu n’a pas pu s’exécuter. Rien n’a été modifié.",
+        "close": "Terminé"
+      },
+      "dlqEmpty": {
+        "title": "Rien en attente",
+        "body": "Aucune tâche n’a épuisé ses tentatives. Les lettres mortes apparaissent ici lorsque cela arrive."
       }
     }
   },

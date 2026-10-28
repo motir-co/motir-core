@@ -3,6 +3,7 @@ import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
 import { getWorkspaceContext } from '@/lib/workspaces';
 import { workspacesService } from '@/lib/services/workspacesService';
+import { workspaceInvitesService } from '@/lib/services/workspaceInvitesService';
 import { roleMigrationReportService } from '@/lib/services/roleMigrationReportService';
 import { RoleMigrationNotice } from './_components/RoleMigrationNotice';
 import { orgCanForWorkspace } from '@/lib/services/organizationAccessService';
@@ -72,13 +73,20 @@ export default async function WorkspaceSettingsPage() {
   // MOTIR-6168 · MOTIR-6465) join the same wave: who may change roles is decided
   // on the SERVER and passed down as a boolean, and the report is null for a
   // reader who is not a Manager.
-  const [members, canRemoveWorkspace, roleContext, migration] = await allSettledOrThrow([
+  // Pending invitations (MOTIR-9997) join the wave too: the read refuses a
+  // viewer who may not invite, and any failure draws the card without the block
+  // rather than failing the page.
+  const [members, canRemoveWorkspace, roleContext, migration, invites] = await allSettledOrThrow([
     workspacesService.listMembers(ctx.workspaceId, ctx.userId),
     orgCanForWorkspace(ctx.userId, ctx.workspaceId, 'manageWorkspaces'),
     workspacesService.getMemberRoleContext(ctx.workspaceId, ctx.userId),
     roleMigrationReportService.firstPageForViewer(ctx.workspaceId, ctx.userId),
+    workspaceInvitesService
+      .listPendingInvites({ userId: ctx.userId, workspaceId: ctx.workspaceId })
+      .catch(() => []),
   ]);
   const memberCount = members.length;
+  const pendingInvites = roleContext.canInvite ? invites : [];
 
   return (
     <div className="mx-auto flex max-w-[42rem] flex-col gap-6">
@@ -99,6 +107,7 @@ export default async function WorkspaceSettingsPage() {
         members={members}
         currentUserId={ctx.userId}
         roleContext={roleContext}
+        pendingInvites={pendingInvites}
       />
 
       <DangerZoneCard

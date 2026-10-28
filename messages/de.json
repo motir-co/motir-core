@@ -1958,6 +1958,7 @@
       "translation": "Übersetzung",
       "rules": "Regeln",
       "repositories": "Repositorys",
+      "environment": "Umgebung",
       "monitoring": "Monitoring",
       "approvals": "Genehmigungen",
       "bugs": "Bugs"
@@ -2201,7 +2202,58 @@
       "inviteNoProjectsWarning": "Die Person kann nichts öffnen, bis ein Manager sie einem Projekt hinzufügt.",
       "inviteJoinsAsMember": "Die Person tritt als Mitglied bei. Sie können ihre Rolle nach der Annahme ändern.",
       "errorInviteProjects": "Einem dieser Projekte kann nicht beigetreten werden. Wählen Sie sie erneut aus.",
-      "errorInviteNotAllowed": "Sie können diese Einladung nicht senden. Nur ein Manager des Arbeitsbereichs kann mit eingeschränktem Zugriff einladen."
+      "errorInviteNotAllowed": "Sie können diese Einladung nicht senden. Nur ein Manager des Arbeitsbereichs kann mit eingeschränktem Zugriff einladen.",
+      "pending": {
+        "heading": "Ausstehende Einladungen",
+        "invitationColumn": "Einladung",
+        "deliveryColumn": "Zustellung",
+        "invitedBy": "Eingeladen von {name}, {sent}",
+        "invitedByFormer": "Eingeladen von einem ehemaligen Mitglied, {sent}",
+        "expiresIn": "Läuft in {count, plural, one {# Tag} other {# Tagen}} ab",
+        "expiresToday": "Läuft heute ab",
+        "expiresOn": "Läuft ab am {date}",
+        "resend": "Erneut senden",
+        "resendLabel": "Einladung erneut an {email} senden",
+        "resendScopeTooltip": "Nur ein Manager kann eine eingeschränkte Einladung erneut senden",
+        "resentToast": "Neue Einladung an {email} gesendet",
+        "refusalRateLimited": "Limit erreicht: 3 Einladungen pro Adresse und Stunde.",
+        "refusalRateLimitedBody": "Versuchen Sie es später erneut.",
+        "refusalAlreadyMember": "Diese Person ist dem Arbeitsbereich bereits beigetreten.",
+        "refusalNotAllowed": "Sie können diese Einladung nicht erneut senden.",
+        "refusalNoLongerPending": "Diese Einladung ist nicht mehr ausstehend.",
+        "showAll": "Alle {count} ausstehenden Einladungen anzeigen",
+        "showFewer": "Weniger anzeigen",
+        "delivery": {
+          "queued": {
+            "label": "In Warteschlange",
+            "helper": "Wartet auf den Versand"
+          },
+          "accepted": {
+            "label": "Angenommen",
+            "helper": "Der Mailanbieter hat sie erhalten"
+          },
+          "delivered": {
+            "label": "Zugestellt",
+            "helper": "Hat den Mailserver des Empfängers erreicht"
+          },
+          "bounced": {
+            "label": "Unzustellbar",
+            "helper": "Die Adresse hat sie abgelehnt"
+          },
+          "complained": {
+            "label": "Beschwerde",
+            "helper": "Als Spam markiert"
+          },
+          "delayed": {
+            "label": "Verzögert",
+            "helper": "Der Anbieter versucht es weiter"
+          },
+          "failed": {
+            "label": "Fehlgeschlagen",
+            "helper": "Konnte nicht gesendet werden"
+          }
+        }
+      }
     },
     "danger": {
       "cantLeaveTitle": "Verlassen nicht möglich",
@@ -4156,7 +4208,8 @@
         "hosted-agent": "Welches Modell ein gehosteter Lauf verwendet, sehen Personen, die in diesem Projekt einen gehosteten Lauf starten können. Wenden Sie sich an einen Projektadministrator, wenn Sie es sehen müssen.",
         "translation": "Ob die Arbeitsinhalte dieses Projekts für jede lesende Person übersetzt werden, sehen Personen, die die Arbeitselemente des Projekts lesen können. Fragen Sie einen Projektadministrator, wenn Sie es sehen müssen.",
         "automation": "Die Projektautomatisierung wird von Projektadministratoren verwaltet. Wenden Sie sich an einen Administrator, wenn eine Regel geändert werden muss.",
-        "monitoring": "Die Verbindung dieses Projekts zum Fehlermonitor wird von Personen verwaltet, die Integrationen verwalten dürfen. Wenden Sie sich an einen Projektadministrator, wenn Sentry verbunden oder neu verbunden werden muss."
+        "monitoring": "Die Verbindung dieses Projekts zum Fehlermonitor wird von Personen verwaltet, die Integrationen verwalten dürfen. Wenden Sie sich an einen Projektadministrator, wenn Sentry verbunden oder neu verbunden werden muss.",
+        "environment": "Die Umgebungswerte eines Repositorys sehen Personen, die dieses Projekt durchsuchen können. Fragen Sie einen Projektadministrator, wenn Sie sie sehen müssen."
       }
     },
     "organization": {
@@ -4227,6 +4280,101 @@
       "saveError": "Ein Fehler ist aufgetreten. Versuchen Sie es erneut.",
       "saveForbidden": "Sie können nicht mehr ändern, wo die Bugs dieses Projekts abgelegt werden.",
       "folderGone": "Dieser Ordner existiert nicht mehr. Wählen Sie einen anderen."
+    },
+    "environment": {
+      "title": "Umgebung",
+      "lede": "Werte, die Ihre App beim Ausführen liest. Legen Sie sie einmal pro Umgebung fest; Motir übergibt sie der App beim nächsten Deployment.",
+      "repositoryLabel": "Repository",
+      "role": {
+        "web": "Web-App",
+        "api": "API",
+        "mobile": "Mobile App",
+        "shared": "Gemeinsamer Code",
+        "infra": "Infrastruktur",
+        "other": "Sonstiges"
+      },
+      "tablistLabel": "Umgebung",
+      "tab": {
+        "production": "Produktion",
+        "preview": "Vorschau",
+        "release": "Release"
+      },
+      "column": {
+        "name": "Name",
+        "value": "Wert"
+      },
+      "set": "Gesetzt",
+      "secretHidden": "Geheim · Wert verborgen",
+      "edit": "Bearbeiten",
+      "replace": "Ersetzen",
+      "delete": "Löschen",
+      "editAria": "{name} bearbeiten",
+      "replaceAria": "{name} ersetzen",
+      "deleteAria": "{name} löschen",
+      "saving": "Wird gespeichert",
+      "add": {
+        "heading": "Wert hinzufügen",
+        "namePlaceholder": "NAME",
+        "valuePlaceholder": "Wert",
+        "secret": "Geheim",
+        "save": "Speichern",
+        "helper": "Ein Geheimnis kann ersetzt oder gelöscht, aber nie wieder angezeigt werden – weder Ihnen noch sonst jemandem."
+      },
+      "error": {
+        "nameRequired": "Geben Sie einen Namen ein.",
+        "duplicate": "{name} ist in {environment} bereits gesetzt. Bearbeiten Sie den Eintrag stattdessen in der Liste.",
+        "invalidName": "Verwenden Sie Buchstaben, Ziffern und Unterstriche, ohne mit einer Ziffer zu beginnen.",
+        "reserved": "{name} ist reserviert: PORT, DATABASE_URL und Namen mit MOTIR_* setzt Motir. Wählen Sie einen anderen Namen."
+      },
+      "saved": {
+        "secret": "{name} wurde als Geheimnis gespeichert. Sein Wert ist ab jetzt verborgen.",
+        "plain": "{name} wurde gespeichert."
+      },
+      "replaceFlow": {
+        "placeholder": "Neuer Wert",
+        "aria": "Neuer Wert für {name}",
+        "helper": "Der aktuelle Wert bleibt verborgen. Beim Speichern wird er mit dem nächsten Deployment ersetzt.",
+        "cancel": "Abbrechen"
+      },
+      "deleteDialog": {
+        "title": "{name} aus {environment} löschen?",
+        "body": "Die App erhält {name} in {environment} ab dem nächsten Deployment nicht mehr. {count, plural, one {Für {others} bleibt der eigene Wert erhalten.} other {Für {others} bleiben die eigenen Werte erhalten.}} Dies kann nicht rückgängig gemacht werden.",
+        "confirm": "Löschen",
+        "cancel": "Abbrechen"
+      },
+      "empty": {
+        "title": "Noch keine Werte in {environment}",
+        "production": "Ihre Live-App erhält diese Werte. Fügen Sie unten den ersten hinzu.",
+        "preview": "Die Vorschau jedes Pull Requests erhält diese Werte. Fügen Sie unten den ersten hinzu.",
+        "release": "Das Release, das Ihr Train baut, erhält diese Werte. Fügen Sie unten den ersten hinzu."
+      },
+      "loading": "Werte werden geladen…",
+      "loadError": {
+        "title": "Die Werte konnten nicht geladen werden",
+        "body": "Es wurde nichts geändert. Versuchen Sie es gleich noch einmal."
+      },
+      "retry": "Erneut versuchen",
+      "saveError": "{name} konnte nicht gespeichert werden. Es wurde nichts geändert.",
+      "deleteError": "{name} konnte nicht gelöscht werden. Der Wert ist weiterhin gesetzt.",
+      "readOnly": {
+        "note": "Sie können diese Werte lesen. Nur Projektadministratoren können sie ändern.",
+        "tooltip": "Nur Projektadministratoren können Umgebungswerte ändern."
+      },
+      "changes": {
+        "heading": "Letzte Änderungen · {environment}",
+        "added": "hat hinzugefügt",
+        "replaced": "hat ersetzt",
+        "deleted": "hat gelöscht",
+        "secret": "Geheim",
+        "unknownActor": "Ein ehemaliges Mitglied",
+        "loadError": "Die letzten Änderungen konnten nicht geladen werden.",
+        "empty": "Noch keine Änderungen. Jede Änderung an dieser Umgebung wird hier aufgeführt – wer sie wann vorgenommen hat, nie der Wert."
+      },
+      "notFound": {
+        "title": "Repository nicht gefunden",
+        "body": "Motir führt für dieses Repository keine Umgebung. Wählen Sie eines der Repositorys des Projekts, die Motir hostet.",
+        "back": "Zurück zu Umgebung"
+      }
     },
     "workspaceAddress": {
       "door": {
@@ -10085,7 +10233,8 @@
       "navIdeas": "Ideen",
       "navRunModels": "Modelle für gehostete Läufe",
       "navFleetSettings": "Flotteneinstellungen",
-      "navCapacity": "Anbieterkapazität"
+      "navCapacity": "Anbieterkapazität",
+      "navJobs": "Aufträge"
     },
     "nav": {
       "overview": "Übersicht",
@@ -10307,6 +10456,9 @@
             "limits": {
               "edit": "Kapazitätslimits eines Anbietermodells bearbeitet"
             }
+          },
+          "jobs": {
+            "dlq_replay": "Dead Letter erneut ausgeführt"
           }
         }
       }
@@ -12601,6 +12753,104 @@
         "unreachable": "Das Gateway hat nicht geantwortet. Es wurde nichts gespeichert; versuchen Sie es erneut.",
         "notPermitted": "Ihre Rolle darf keine Limits bearbeiten, daher wurde nichts gespeichert.",
         "failed": "Die Limits konnten nicht gespeichert werden. Es wurde nichts geändert; versuchen Sie es erneut."
+      }
+    },
+    "jobs": {
+      "breadcrumb": "Plattform · Aufträge",
+      "title": "Aufträge",
+      "subtitle": "Jeder Hintergrundauftrag, den die Plattform ausgeführt hat, in jedem Arbeitsbereich und ohne Arbeitsbereich, und jeder Dead Letter, der auf eine erneute Ausführung wartet.",
+      "tabsLabel": "Ansichten des Auftragsprotokolls",
+      "tabs": {
+        "runs": "Ausführungen",
+        "dlq": "Dead Letter",
+        "waiting": "{count} wartend"
+      },
+      "status": {
+        "label": "Status",
+        "all": "Alle",
+        "running": "Läuft",
+        "succeeded": "Erfolgreich",
+        "failed": "Fehlgeschlagen",
+        "abandoned": "Abgebrochen"
+      },
+      "columns": {
+        "function": "Funktion",
+        "event": "Ereignis",
+        "functionEvent": "Funktion · Ereignis",
+        "workspace": "Arbeitsbereich",
+        "status": "Status",
+        "attempt": "Versuch",
+        "attempts": "Versuche",
+        "started": "Gestartet",
+        "duration": "Dauer",
+        "failure": "Fehler",
+        "lastFailed": "Zuletzt fehlgeschlagen",
+        "replay": "Erneut ausführen"
+      },
+      "runsCaption": "Ausführungen von Hintergrundaufträgen",
+      "dlqCaption": "Dead Letter",
+      "noWorkspace": "Kein Arbeitsbereich",
+      "pageLabel": "Seite {page}",
+      "pagerLabel": "Seiten der Ausführungen",
+      "previous": "Zurück",
+      "next": "Weiter",
+      "runsEmpty": {
+        "titleAll": "Noch keine Ausführungen",
+        "bodyAll": "Hintergrundaufträge erscheinen hier, sobald sie ausgeführt werden.",
+        "titleStatus": "Keine Ausführungen mit diesem Status",
+        "bodyStatus": "Nichts im Protokoll hat diesen Status. Wählen Sie „Alle“, um jede Ausführung zu sehen."
+      },
+      "runsError": {
+        "title": "Das Auftragsprotokoll konnte nicht gelesen werden"
+      },
+      "dlqError": {
+        "title": "Die Dead Letter konnten nicht gelesen werden"
+      },
+      "error": {
+        "body": "Die Datenbank hat nicht geantwortet. Es wurde nichts geändert."
+      },
+      "retry": "Erneut versuchen",
+      "loadingRuns": "Ausführungen werden geladen",
+      "readOnly": "Nur lesend. Für die erneute Ausführung eines Dead Letters ist die Rolle „Operator“ erforderlich.",
+      "fn": {
+        "label": "Funktion",
+        "all": "Alle Funktionen"
+      },
+      "waitingLine": "{waiting} wartend · {replayed} in den letzten 7 Tagen erneut ausgeführt",
+      "capped": "{shown} von {count} angezeigt. Die Liste zeigt die neuesten 200.",
+      "replay": "Erneut ausführen",
+      "replayAria": "Dead Letter von {function} erneut ausführen",
+      "replayedAt": "Erneut ausgeführt {time}",
+      "toast": {
+        "replayedTitle": "Dead Letter erneut ausgeführt",
+        "replayedBody": "{function} wurde erneut gesendet.",
+        "alreadyTitle": "Bereits erneut ausgeführt",
+        "alreadyBody": "Jemand hat diesen Dead Letter bereits erneut ausgeführt. Es wurde nichts erneut gesendet.",
+        "failedTitle": "Die erneute Ausführung ist fehlgeschlagen",
+        "failedBody": "Es wurde nichts gesendet. Versuchen Sie es erneut.",
+        "notPermittedBody": "Für die erneute Ausführung eines Dead Letters ist die Rolle „Operator“ erforderlich.",
+        "notFoundBody": "Dieser Dead Letter existiert nicht mehr."
+      },
+      "replayAll": {
+        "button": "Alle {count} erneut ausführen",
+        "title": "{count} Dead Letter von {function} erneut ausführen?",
+        "body": "Jeder wird als neue Ausführung erneut gesendet und im Plattform-Prüfprotokoll festgehalten. Ein Dead Letter, den jemand anderes zuerst erneut ausführt, wird übersprungen.",
+        "confirm": "{count} erneut ausführen",
+        "cancel": "Abbrechen",
+        "running": "Wird erneut ausgeführt…",
+        "runningLine": "{count} Dead Letter werden erneut ausgeführt, jeweils 50. Lassen Sie dieses Fenster geöffnet, bis alle ausgeführt sind.",
+        "doneTitle": "Erneute Ausführung abgeschlossen",
+        "doneWithFailuresTitle": "Erneute Ausführung mit Fehlern abgeschlossen",
+        "replayed": "{count} erneut ausgeführt",
+        "already": "{count} bereits von jemand anderem erneut ausgeführt",
+        "nothingLeft": "0 erneut ausgeführt – alle {count} waren bereits erneut ausgeführt",
+        "failed": "{count} konnten nicht erneut ausgeführt werden. Sie bleiben in der Liste; führen Sie sie einzeln erneut aus.",
+        "error": "Die erneute Ausführung konnte nicht gestartet werden. Es wurde nichts geändert.",
+        "close": "Fertig"
+      },
+      "dlqEmpty": {
+        "title": "Nichts wartet",
+        "body": "Kein Auftrag hat seine Versuche aufgebraucht. Dead Letter erscheinen hier, sobald das passiert."
       }
     }
   },

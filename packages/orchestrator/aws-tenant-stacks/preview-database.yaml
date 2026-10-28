@@ -1,0 +1,42 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Motir PREVIEW DATABASE secret — one per preview (stack
+  motir-database-<rid>-pr<n>). The preview role's generated password, later
+  joined by the preview's connection URL. Its name carries the stack id's unique
+  suffix, so a preview dropped and re-created never collides with a secret still
+  scheduled for deletion.
+
+Parameters:
+  OrganizationId:
+    Type: String
+    Description: The Motir organisation (tag motir:organization).
+    AllowedPattern: '^[a-z0-9]+$'
+  RepositoryId:
+    Type: String
+    Description: The Motir repository id (tag motir:repository).
+    AllowedPattern: '^[a-z0-9]+$'
+  PullRequestNumber:
+    Type: Number
+    Description: The preview's pull request.
+    MinValue: 1
+
+Resources:
+  PreviewSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub
+        - motir/${RepositoryId}/preview-${PullRequestNumber}/database-${Suffix}
+        - Suffix: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]
+      Description: The preview database role's password and connection URL.
+      GenerateSecretString:
+        SecretStringTemplate: '{}'
+        GenerateStringKey: password
+        PasswordLength: 32
+        ExcludePunctuation: true
+      Tags:
+        - { Key: 'motir:organization', Value: !Ref OrganizationId }
+        - { Key: 'motir:repository', Value: !Ref RepositoryId }
+
+Outputs:
+  PreviewSecretArn:
+    Value: !Ref PreviewSecret
