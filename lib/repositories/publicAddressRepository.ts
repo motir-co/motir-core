@@ -58,23 +58,6 @@ export const publicAddressRepository = {
   },
 
   /**
-   * The workspace's LIVE subdomain, read ANONYMOUSLY — the alias-redirect half
-   * of host resolution (MOTIR-4217).
-   *
-   * Separate from {@link findLiveSubdomainForWorkspace}, which takes a `tx`
-   * because it guards a write. This one answers a public request that has no
-   * workspace bound at all, so it goes through the `db` singleton and is
-   * admitted by the migration's `public_address_public_read` arm — which means
-   * a workspace holding no public project resolves to `null` here rather than
-   * leaking that it has a subdomain.
-   */
-  async findLiveSubdomainForWorkspacePublic(workspaceId: string): Promise<PublicAddress | null> {
-    return db.publicAddress.findFirst({
-      where: { workspaceId, kind: 'workspace_subdomain' },
-    });
-  },
-
-  /**
    * Every address across SEVERAL workspaces, in one query — the batched read
    * behind the crawl index's per-row canonical host (MOTIR-4217).
    *

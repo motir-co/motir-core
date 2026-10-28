@@ -127,14 +127,12 @@ async function onAPaidTier(): Promise<void> {
 /* ── seam (a): claim → the host contract resolves it; rename → it stops ───── */
 
 describe('seam (a) — a claim written by one service is read by the public contract', () => {
-  it('resolves the claimed host to the workspace and its public projects', async () => {
+  it('resolves the claimed host to the workspace, with no application to serve yet', async () => {
     await publicSubdomainService.claim(acme.workspaceId, 'acme', acme.ownerId);
 
     const resolved = await publicAddressesService.resolveHost(`acme.${BASE}`);
 
-    expect(resolved.kind).toBe('workspace');
-    if (resolved.kind !== 'workspace') throw new Error('unreachable');
-    expect(resolved.projects.map((p) => p.identifier)).toContain('ACME');
+    expect(resolved).toMatchObject({ kind: 'no_application' });
   });
 
   it('and after a RENAME the old host stops resolving at once, with no redirect', async () => {
@@ -148,7 +146,7 @@ describe('seam (a) — a claim written by one service is read by the public cont
       PublicHostNotFoundError,
     );
     const live = await publicAddressesService.resolveHost(`acme-inc.${BASE}`);
-    expect(live.kind).toBe('workspace');
+    expect(live.kind).toBe('no_application');
   });
 });
 

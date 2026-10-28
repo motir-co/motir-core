@@ -505,16 +505,6 @@ export const projectRepository = {
     return row?.name ?? null;
   },
 
-  async listPublicByWorkspace(
-    workspaceId: string,
-  ): Promise<Array<Pick<Project, 'identifier' | 'name'>>> {
-    return db.project.findMany({
-      where: { workspaceId, accessMode: 'public', archivedAt: null },
-      select: { identifier: true, name: true },
-      orderBy: { updatedAt: 'desc' },
-    });
-  },
-
   async listPublic(): Promise<Array<Pick<Project, 'identifier' | 'updatedAt'>>> {
     return db.project.findMany({
       where: { accessMode: 'public', archivedAt: null },

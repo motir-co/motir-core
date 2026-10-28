@@ -84,25 +84,22 @@ export const publicAddressesService = {
     if (!address) throw new PublicHostNotFoundError();
 
     if (address.kind === 'workspace_subdomain') {
-      const projects = await projectRepository.listPublicByWorkspace(address.workspaceId);
       const workspace = await projectRepository.findWorkspaceNameForPublic(address.workspaceId);
-      // A workspace whose public projects have all gone private still HOLDS the
-      // subdomain, and the honest answer is a workspace with no projects rather
-      // than a 404 — the address is real and the visitor followed a valid link.
       if (!workspace) throw new PublicHostNotFoundError();
-      return { kind: 'workspace', workspace: { name: workspace }, projects };
+      // The address decision (MOTIR-9790) gives the bare workspace host to the
+      // workspace's default application. No application record exists yet, so
+      // the only honest answer for a live host is that it has none to serve —
+      // the `application` outcome arrives with the record.
+      return { kind: 'no_application', workspace: { name: workspace } };
     }
 
-    if (address.kind === 'workspace_subdomain_alias') {
-      const live = await publicAddressRepository.findLiveSubdomainForWorkspacePublic(
-        address.workspaceId,
-      );
-      // An alias whose live subdomain is gone cannot say where to redirect. It
-      // should be unreachable — a rename always claims — and it 404s rather
-      // than redirecting to a guess.
-      if (!live) throw new PublicHostNotFoundError();
-      return { kind: 'alias', redirectTo: live.hostname };
-    }
+    // ⚠️ A RETIRED NAME NEVER ANSWERS (ADR §8 Amendment 3 rule 2). A rename or
+    // release deletes the row, so a retired hostname has none — but a
+    // `workspace_subdomain_alias` row left over from the retired never-released
+    // design is dormant data, and it must 404 like any other unknown host rather
+    // than redirect or fall through into the custom-domain branch below. So this
+    // admits only the one kind that branch is written for.
+    if (address.kind !== 'custom_domain') throw new PublicHostNotFoundError();
 
     // A custom domain serves only once its certificate is ISSUED. Every other
     // status — unverified, verifying, pending, failed, expired, revoked — is a

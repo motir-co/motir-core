@@ -47,30 +47,25 @@ export interface SubdomainReleaseDto {
   readonly returnsAt: string | null;
 }
 
-// ── Host resolution (MOTIR-4217) ───────────────────────────────────────────
+// ── Host resolution (MOTIR-4217; Story MOTIR-4528 · MOTIR-9511) ─────────────
 //
 // What `GET /api/public/hosts/{host}` answers. A DISCRIMINATED UNION rather
-// than one shape with nullable halves: the three cases have nothing in common
-// beyond the discriminator, and a router that has to check which fields are
-// present is a router that will one day check the wrong one.
+// than one shape with nullable halves: the cases have nothing in common beyond
+// the discriminator, and a router that has to check which fields are present is
+// a router that will one day check the wrong one.
+//
+// There is NO redirect outcome. ADR §8 Amendment 3 rule 2: a renamed or released
+// name stops answering at once, so a retired hostname is the same 404 as one
+// that never existed. A workspace host no longer lists projects either — the
+// address decision (MOTIR-9790) moves them to `motir.co/p/<identifier>` and
+// gives the bare workspace host to the workspace's default application. No
+// application record exists yet, so every live workspace host answers
+// `no_application`; the `application` outcome is owed with that record.
 
-/** A workspace subdomain — the host lists that workspace's public projects. */
-export interface PublicHostWorkspaceDto {
-  readonly kind: 'workspace';
+/** A live workspace host with no application to serve yet. */
+export interface PublicHostNoApplicationDto {
+  readonly kind: 'no_application';
   readonly workspace: { readonly name: string };
-  /** Every public project under it, freshest first. May be empty. */
-  readonly projects: ReadonlyArray<{ readonly identifier: string; readonly name: string }>;
-}
-
-/**
- * A RETIRED subdomain. The router 301s to `redirectTo` — this is the shape that
- * makes the ADR §8 never-released promise observable to a visitor rather than
- * merely true in the database.
- */
-export interface PublicHostAliasDto {
-  readonly kind: 'alias';
-  /** The live hostname to redirect to. */
-  readonly redirectTo: string;
 }
 
 /** A customer domain with an issued certificate — it serves ONE project at its root. */
@@ -81,10 +76,7 @@ export interface PublicHostProjectDto {
   readonly primary: boolean;
 }
 
-export type PublicHostResolutionDto =
-  | PublicHostWorkspaceDto
-  | PublicHostAliasDto
-  | PublicHostProjectDto;
+export type PublicHostResolutionDto = PublicHostNoApplicationDto | PublicHostProjectDto;
 
 /**
  * A project's addresses, as the renderer needs them (ADR §7).
