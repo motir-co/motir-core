@@ -2071,7 +2071,8 @@
         "workspace": "工作区",
         "security": "安全",
         "roles": "角色与权限",
-        "jobs": "任务运行"
+        "jobs": "任务运行",
+        "publicAddress": "公开地址"
       }
     },
     "name": {
@@ -4274,6 +4275,92 @@
       "saveError": "出错了，请重试。",
       "saveForbidden": "你已无法更改此项目缺陷的归档位置。",
       "folderGone": "该文件夹已不存在，请选择其他文件夹。"
+    },
+    "workspaceAddress": {
+      "door": {
+        "title": "公开地址",
+        "claimed": "{host} — 工作区唯一的名称。",
+        "none": "尚未认领名称。",
+        "manage": "管理 →",
+        "claim": "认领名称 →"
+      },
+      "title": "公开地址",
+      "subtitle": "工作区对外使用的唯一名称。",
+      "readOnly": "只有工作区所有者和管理员可以更改此项。",
+      "none": "尚未认领名称。",
+      "unavailable": {
+        "title": "此服务器未配置公开地址",
+        "description": "运维人员需要先设置 MOTIR_PUBLIC_TENANT_DOMAIN，工作区才能认领名称。"
+      },
+      "field": {
+        "label": "名称",
+        "renameLabel": "新名称",
+        "hint": "小写字母、数字和单个连字符；{min}–{max} 个字符。一个工作区只有一个名称。",
+        "preview": "访问者将通过 {host} 找到你"
+      },
+      "claim": "认领名称",
+      "refusal": {
+        "tooShort": "至少使用 {min} 个字符。",
+        "badGrammar": "只能使用小写字母、数字和连字符。",
+        "doubleHyphen": "名称不能包含连续两个连字符——这留给应用地址使用。",
+        "tooLong": "最多使用 {max} 个字符。",
+        "taken": "{host} 已被占用。请换一个名称。",
+        "reserved": "“{label}” 是保留名称。请选择其他名称。",
+        "quarantined": "{host} 最近被释放，保留至 {date}。届时任何人都可以认领。",
+        "generic": "无法保存名称。请重试。"
+      },
+      "row": {
+        "live": "已上线",
+        "copy": "复制地址",
+        "copied": "地址已复制",
+        "open": "在新标签页中打开"
+      },
+      "rename": "重命名",
+      "release": "释放",
+      "lock": "你可以在 {date} 再次更改名称。重命名和释放各算一次更改，每 30 天一次。",
+      "lockShort": "你可以在 {date} 再次更改名称。",
+      "review": "检查",
+      "cancel": "取消",
+      "confirm": {
+        "renameTitle": "重命名为 {host}？",
+        "releaseTitle": "释放 {host}？",
+        "stops": "{host} 将立即停止响应。",
+        "returnsOn": "任何人都可以从 {date} 起认领它。",
+        "returnsNow": "任何人都可以立即认领它——你持有它不到 24 小时。",
+        "noRedirectRename": "旧地址不会重定向到新地址，请更新你分享过的链接。",
+        "noRedirectRelease": "不会有任何重定向。你的公开项目仍保留在其 motir.co 地址。",
+        "lockAfterRename": "在 {date} 之前你无法再次更改名称。",
+        "lockAfterRelease": "你可以立即认领新名称。之后的下一次更改要到 {date} 才允许。",
+        "rename": "重命名",
+        "renaming": "正在重命名…",
+        "release": "释放名称",
+        "releasing": "正在释放…"
+      },
+      "toast": {
+        "claimed": "{host} 归你了",
+        "renamed": "已重命名为 {host}",
+        "renamedBody": "{old} 已不再响应。",
+        "released": "已释放 {host}",
+        "refusedTitle": "名称未更改",
+        "refusedLimit": "你可以在 {date} 再次更改。",
+        "refusedTaken": "{host} 刚刚被占用。请换一个名称。",
+        "refusedQuarantined": "{host} 保留至 {date}。"
+      },
+      "released": {
+        "held": "{host} 已被释放。它将保留至 {date}，之后任何人都可以认领。",
+        "free": "{host} 已被释放。现在任何人都可以认领。",
+        "lock": "你现在可以认领名称。之后的下一次更改要到 {date} 才允许。"
+      },
+      "loadError": "无法加载地址。",
+      "retry": "重试",
+      "echo": {
+        "title": "工作区地址",
+        "claimedSub": "工作区对外使用的名称。",
+        "noneSub": "你的工作区还没有名称。",
+        "projectPage": "此项目的公开页面位于 {url}。",
+        "change": "在工作区设置中更改 →",
+        "claim": "为工作区认领名称 →"
+      }
     }
   },
   "boards": {

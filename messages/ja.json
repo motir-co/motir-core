@@ -2071,7 +2071,8 @@
         "workspace": "ワークスペース",
         "security": "セキュリティ",
         "roles": "ロールと権限",
-        "jobs": "ジョブの実行"
+        "jobs": "ジョブの実行",
+        "publicAddress": "公開アドレス"
       }
     },
     "name": {
@@ -4274,6 +4275,92 @@
       "saveError": "問題が発生しました。もう一度お試しください。",
       "saveForbidden": "このプロジェクトのバグの登録先を変更する権限がなくなりました。",
       "folderGone": "そのフォルダーは存在しなくなりました。別のフォルダーを選択してください。"
+    },
+    "workspaceAddress": {
+      "door": {
+        "title": "公開アドレス",
+        "claimed": "{host} — ワークスペースの唯一の名前です。",
+        "none": "まだ名前が取得されていません。",
+        "manage": "管理 →",
+        "claim": "名前を取得 →"
+      },
+      "title": "公開アドレス",
+      "subtitle": "ワークスペースが応答する唯一の名前です。",
+      "readOnly": "変更できるのはワークスペースのオーナーと管理者だけです。",
+      "none": "まだ名前が取得されていません。",
+      "unavailable": {
+        "title": "このサーバーでは公開アドレスが設定されていません",
+        "description": "ワークスペースが名前を取得するには、運用担当者が MOTIR_PUBLIC_TENANT_DOMAIN を設定する必要があります。"
+      },
+      "field": {
+        "label": "名前",
+        "renameLabel": "新しい名前",
+        "hint": "小文字、数字、単独のハイフン。{min}〜{max} 文字。ワークスペースの名前は 1 つだけです。",
+        "preview": "閲覧者は {host} であなたを見つけます"
+      },
+      "claim": "名前を取得",
+      "refusal": {
+        "tooShort": "{min} 文字以上にしてください。",
+        "badGrammar": "小文字、数字、ハイフンのみ使用できます。",
+        "doubleHyphen": "ハイフンを 2 つ続けることはできません。これはアプリケーションのアドレス用に予約されています。",
+        "tooLong": "{max} 文字以内にしてください。",
+        "taken": "{host} は使用されています。別の名前を試してください。",
+        "reserved": "「{label}」は予約されています。別の名前を選んでください。",
+        "quarantined": "{host} は最近解放され、{date} まで保留されます。その日以降は誰でも取得できます。",
+        "generic": "名前を保存できませんでした。もう一度お試しください。"
+      },
+      "row": {
+        "live": "公開中",
+        "copy": "アドレスをコピー",
+        "copied": "アドレスをコピーしました",
+        "open": "新しいタブで開く"
+      },
+      "rename": "名前を変更",
+      "release": "解放",
+      "lock": "{date} に再び名前を変更できます。名前の変更と解放はそれぞれ 1 回の変更として数えられ、30 日に 1 回までです。",
+      "lockShort": "{date} に再び名前を変更できます。",
+      "review": "確認",
+      "cancel": "キャンセル",
+      "confirm": {
+        "renameTitle": "{host} に名前を変更しますか？",
+        "releaseTitle": "{host} を解放しますか？",
+        "stops": "{host} はただちに応答しなくなります。",
+        "returnsOn": "{date} から誰でも取得できるようになります。",
+        "returnsNow": "すぐに誰でも取得できます。保持期間が 24 時間未満だったためです。",
+        "noRedirectRename": "旧アドレスから新アドレスへのリダイレクトはありません。共有したリンクを更新してください。",
+        "noRedirectRelease": "リダイレクトはありません。公開プロジェクトは motir.co のアドレスのままです。",
+        "lockAfterRename": "{date} まで再び名前を変更することはできません。",
+        "lockAfterRelease": "新しい名前はすぐに取得できます。その後の次の変更は {date} から可能です。",
+        "rename": "名前を変更",
+        "renaming": "名前を変更中…",
+        "release": "名前を解放",
+        "releasing": "解放中…"
+      },
+      "toast": {
+        "claimed": "{host} を取得しました",
+        "renamed": "{host} に名前を変更しました",
+        "renamedBody": "{old} は応答しなくなりました。",
+        "released": "{host} を解放しました",
+        "refusedTitle": "名前は変更されませんでした",
+        "refusedLimit": "{date} に再び変更できます。",
+        "refusedTaken": "{host} はたった今使用されました。別の名前を試してください。",
+        "refusedQuarantined": "{host} は {date} まで保留されています。"
+      },
+      "released": {
+        "held": "{host} を解放しました。{date} まで保留され、その後は誰でも取得できます。",
+        "free": "{host} を解放しました。今すぐ誰でも取得できます。",
+        "lock": "今すぐ名前を取得できます。その後の次の変更は {date} から可能です。"
+      },
+      "loadError": "アドレスを読み込めませんでした。",
+      "retry": "再試行",
+      "echo": {
+        "title": "ワークスペースのアドレス",
+        "claimedSub": "ワークスペースが応答する名前です。",
+        "noneSub": "ワークスペースにはまだ名前がありません。",
+        "projectPage": "このプロジェクトの公開ページは {url} にあります。",
+        "change": "ワークスペース設定で変更 →",
+        "claim": "ワークスペースの名前を取得 →"
+      }
     }
   },
   "boards": {

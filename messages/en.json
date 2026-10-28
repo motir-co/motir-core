@@ -2071,7 +2071,8 @@
         "workspace": "Workspace",
         "security": "Security",
         "roles": "Roles & permissions",
-        "jobs": "Job runs"
+        "jobs": "Job runs",
+        "publicAddress": "Public address"
       }
     },
     "name": {
@@ -4274,6 +4275,92 @@
       "saveError": "Something went wrong. Try again.",
       "saveForbidden": "You can no longer change where this project's bugs are filed.",
       "folderGone": "That folder no longer exists. Choose another."
+    },
+    "workspaceAddress": {
+      "door": {
+        "title": "Public address",
+        "claimed": "{host} — one name for the workspace.",
+        "none": "No name claimed yet.",
+        "manage": "Manage →",
+        "claim": "Claim a name →"
+      },
+      "title": "Public address",
+      "subtitle": "The one name your workspace answers at.",
+      "readOnly": "Only workspace owners and admins can change this.",
+      "none": "No name claimed yet.",
+      "unavailable": {
+        "title": "Public addresses aren’t set up on this server",
+        "description": "An operator needs to set MOTIR_PUBLIC_TENANT_DOMAIN before a workspace can claim a name."
+      },
+      "field": {
+        "label": "Name",
+        "renameLabel": "New name",
+        "hint": "Lowercase letters, digits and single hyphens; {min}–{max} characters. A workspace has one name.",
+        "preview": "Readers will find you at {host}"
+      },
+      "claim": "Claim name",
+      "refusal": {
+        "tooShort": "Use at least {min} characters.",
+        "badGrammar": "Use only lowercase letters, digits and hyphens.",
+        "doubleHyphen": "A name can’t contain two hyphens in a row — that’s kept for application addresses.",
+        "tooLong": "Use {max} characters or fewer.",
+        "taken": "{host} is taken. Try another name.",
+        "reserved": "“{label}” is reserved. Choose another name.",
+        "quarantined": "{host} was released recently and is held until {date}. Anyone can claim it from then.",
+        "generic": "The name couldn’t be saved. Try again."
+      },
+      "row": {
+        "live": "Live",
+        "copy": "Copy address",
+        "copied": "Address copied",
+        "open": "Open in a new tab"
+      },
+      "rename": "Rename",
+      "release": "Release",
+      "lock": "You can change the name again on {date}. A rename and a release each count as one change, once every 30 days.",
+      "lockShort": "You can change the name again on {date}.",
+      "review": "Review",
+      "cancel": "Cancel",
+      "confirm": {
+        "renameTitle": "Rename to {host}?",
+        "releaseTitle": "Release {host}?",
+        "stops": "{host} stops answering now.",
+        "returnsOn": "Anyone can claim it from {date}.",
+        "returnsNow": "Anyone can claim it right away — you held it for less than 24 hours.",
+        "noRedirectRename": "Nothing redirects from the old address to the new one, so update any links you have shared.",
+        "noRedirectRelease": "Nothing redirects. Your public projects stay at their motir.co addresses.",
+        "lockAfterRename": "You can’t change the name again until {date}.",
+        "lockAfterRelease": "You can claim a new name right away. The next change after that is allowed on {date}.",
+        "rename": "Rename",
+        "renaming": "Renaming…",
+        "release": "Release name",
+        "releasing": "Releasing…"
+      },
+      "toast": {
+        "claimed": "{host} is yours",
+        "renamed": "Renamed to {host}",
+        "renamedBody": "{old} no longer answers.",
+        "released": "{host} released",
+        "refusedTitle": "Name not changed",
+        "refusedLimit": "You can change it again on {date}.",
+        "refusedTaken": "{host} was just taken. Try another name.",
+        "refusedQuarantined": "{host} is held until {date}."
+      },
+      "released": {
+        "held": "{host} was released. It is held until {date}, then anyone can claim it.",
+        "free": "{host} was released. Anyone can claim it now.",
+        "lock": "You can claim a name now. After that, the next change is allowed on {date}."
+      },
+      "loadError": "The address couldn’t be loaded.",
+      "retry": "Try again",
+      "echo": {
+        "title": "Workspace address",
+        "claimedSub": "The name your workspace answers at.",
+        "noneSub": "Your workspace has no name yet.",
+        "projectPage": "This project's public page is at {url}.",
+        "change": "Change in workspace settings →",
+        "claim": "Claim a name for the workspace →"
+      }
     }
   },
   "boards": {

@@ -2071,7 +2071,8 @@
         "workspace": "Arbeitsbereich",
         "security": "Sicherheit",
         "roles": "Rollen & Berechtigungen",
-        "jobs": "Auftragsausführungen"
+        "jobs": "Auftragsausführungen",
+        "publicAddress": "Öffentliche Adresse"
       }
     },
     "name": {
@@ -4274,6 +4275,92 @@
       "saveError": "Ein Fehler ist aufgetreten. Versuchen Sie es erneut.",
       "saveForbidden": "Sie können nicht mehr ändern, wo die Bugs dieses Projekts abgelegt werden.",
       "folderGone": "Dieser Ordner existiert nicht mehr. Wählen Sie einen anderen."
+    },
+    "workspaceAddress": {
+      "door": {
+        "title": "Öffentliche Adresse",
+        "claimed": "{host} – ein Name für den Arbeitsbereich.",
+        "none": "Noch kein Name beansprucht.",
+        "manage": "Verwalten →",
+        "claim": "Namen beanspruchen →"
+      },
+      "title": "Öffentliche Adresse",
+      "subtitle": "Der eine Name, unter dem Ihr Arbeitsbereich erreichbar ist.",
+      "readOnly": "Nur Eigentümer und Administratoren des Arbeitsbereichs können dies ändern.",
+      "none": "Noch kein Name beansprucht.",
+      "unavailable": {
+        "title": "Öffentliche Adressen sind auf diesem Server nicht eingerichtet",
+        "description": "Ein Betreiber muss MOTIR_PUBLIC_TENANT_DOMAIN setzen, bevor ein Arbeitsbereich einen Namen beanspruchen kann."
+      },
+      "field": {
+        "label": "Name",
+        "renameLabel": "Neuer Name",
+        "hint": "Kleinbuchstaben, Ziffern und einzelne Bindestriche; {min}–{max} Zeichen. Ein Arbeitsbereich hat einen Namen.",
+        "preview": "Leser finden Sie unter {host}"
+      },
+      "claim": "Namen beanspruchen",
+      "refusal": {
+        "tooShort": "Verwenden Sie mindestens {min} Zeichen.",
+        "badGrammar": "Verwenden Sie nur Kleinbuchstaben, Ziffern und Bindestriche.",
+        "doubleHyphen": "Ein Name darf keine zwei Bindestriche hintereinander enthalten – das ist Anwendungsadressen vorbehalten.",
+        "tooLong": "Verwenden Sie höchstens {max} Zeichen.",
+        "taken": "{host} ist vergeben. Versuchen Sie einen anderen Namen.",
+        "reserved": "„{label}“ ist reserviert. Wählen Sie einen anderen Namen.",
+        "quarantined": "{host} wurde kürzlich freigegeben und ist bis {date} gesperrt. Ab dann kann ihn jeder beanspruchen.",
+        "generic": "Der Name konnte nicht gespeichert werden. Versuchen Sie es erneut."
+      },
+      "row": {
+        "live": "Live",
+        "copy": "Adresse kopieren",
+        "copied": "Adresse kopiert",
+        "open": "In neuem Tab öffnen"
+      },
+      "rename": "Umbenennen",
+      "release": "Freigeben",
+      "lock": "Sie können den Namen am {date} wieder ändern. Eine Umbenennung und eine Freigabe zählen jeweils als eine Änderung, einmal alle 30 Tage.",
+      "lockShort": "Sie können den Namen am {date} wieder ändern.",
+      "review": "Prüfen",
+      "cancel": "Abbrechen",
+      "confirm": {
+        "renameTitle": "In {host} umbenennen?",
+        "releaseTitle": "{host} freigeben?",
+        "stops": "{host} ist ab sofort nicht mehr erreichbar.",
+        "returnsOn": "Ab {date} kann ihn jeder beanspruchen.",
+        "returnsNow": "Jeder kann ihn sofort beanspruchen – Sie hatten ihn weniger als 24 Stunden.",
+        "noRedirectRename": "Von der alten Adresse wird nicht auf die neue weitergeleitet. Aktualisieren Sie also alle geteilten Links.",
+        "noRedirectRelease": "Es gibt keine Weiterleitung. Ihre öffentlichen Projekte bleiben unter ihren motir.co-Adressen.",
+        "lockAfterRename": "Sie können den Namen erst am {date} wieder ändern.",
+        "lockAfterRelease": "Sie können sofort einen neuen Namen beanspruchen. Die nächste Änderung danach ist ab {date} möglich.",
+        "rename": "Umbenennen",
+        "renaming": "Wird umbenannt…",
+        "release": "Namen freigeben",
+        "releasing": "Wird freigegeben…"
+      },
+      "toast": {
+        "claimed": "{host} gehört Ihnen",
+        "renamed": "In {host} umbenannt",
+        "renamedBody": "{old} ist nicht mehr erreichbar.",
+        "released": "{host} freigegeben",
+        "refusedTitle": "Name nicht geändert",
+        "refusedLimit": "Sie können ihn am {date} wieder ändern.",
+        "refusedTaken": "{host} wurde gerade vergeben. Versuchen Sie einen anderen Namen.",
+        "refusedQuarantined": "{host} ist bis {date} gesperrt."
+      },
+      "released": {
+        "held": "{host} wurde freigegeben. Er ist bis {date} gesperrt, danach kann ihn jeder beanspruchen.",
+        "free": "{host} wurde freigegeben. Jeder kann ihn jetzt beanspruchen.",
+        "lock": "Sie können jetzt einen Namen beanspruchen. Die nächste Änderung danach ist ab {date} möglich."
+      },
+      "loadError": "Die Adresse konnte nicht geladen werden.",
+      "retry": "Erneut versuchen",
+      "echo": {
+        "title": "Adresse des Arbeitsbereichs",
+        "claimedSub": "Der Name, unter dem Ihr Arbeitsbereich erreichbar ist.",
+        "noneSub": "Ihr Arbeitsbereich hat noch keinen Namen.",
+        "projectPage": "Die öffentliche Seite dieses Projekts ist unter {url} erreichbar.",
+        "change": "In den Arbeitsbereich-Einstellungen ändern →",
+        "claim": "Einen Namen für den Arbeitsbereich beanspruchen →"
+      }
     }
   },
   "boards": {
