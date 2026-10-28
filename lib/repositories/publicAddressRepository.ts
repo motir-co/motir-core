@@ -303,6 +303,22 @@ export const publicAddressRepository = {
   },
 
   /**
+   * Up to `limit` legacy `workspace_subdomain_alias` rows, oldest first — the
+   * one-off cleanup's batch read (Story MOTIR-4528 · MOTIR-9520).
+   *
+   * Selected by KIND, explicitly, so the cleanup that deletes what this returns
+   * can never reach a live subdomain or a custom domain. Read under the system
+   * arm: the rows belong to every workspace.
+   */
+  async listAliasesInTx(limit: number, tx: Prisma.TransactionClient): Promise<PublicAddress[]> {
+    return tx.publicAddress.findMany({
+      where: { kind: 'workspace_subdomain_alias' },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      take: limit,
+    });
+  },
+
+  /**
    * Remove a SET of addresses in one statement — a bulk delete with no rule
    * about WHICH ids belong in the set (ADR §8 Amendment 2, MOTIR-4454). The
    * caller chooses them, through `reservesItsHostname` where a hold is owed.

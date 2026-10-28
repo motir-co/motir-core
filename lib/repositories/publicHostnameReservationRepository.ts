@@ -70,6 +70,24 @@ export const publicHostnameReservationRepository = {
   },
 
   /**
+   * Each of these digests that has a row, mapped to its `expires_at` — lapsed
+   * or live. The legacy-alias cleanup's batched classify read (MOTIR-9520), so
+   * a batch of two hundred aliases is one query rather than two hundred.
+   * Operator-only, under the `system` arm; the answer carries no provenance.
+   */
+  async findExpiriesInTx(
+    hostnameHashes: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Map<string, Date>> {
+    if (hostnameHashes.length === 0) return new Map();
+    const rows = await tx.publicHostnameReservation.findMany({
+      where: { hostnameHash: { in: [...hostnameHashes] } },
+      select: { hostnameHash: true, expiresAt: true },
+    });
+    return new Map(rows.map((r) => [r.hostnameHash, r.expiresAt]));
+  },
+
+  /**
    * Delete every hold that has lapsed at `now` (`expires_at <= now`) — the daily
    * sweep's one write (MOTIR-9509). Returns how many rows went.
    *
@@ -132,6 +150,44 @@ export const publicHostnameReservationRepository = {
         "expires_at" = GREATEST("public_hostname_reservation"."expires_at", EXCLUDED."expires_at")
       WHERE "public_hostname_reservation"."expires_at" <= ${now}
          OR "public_hostname_reservation"."retired_from_workspace_id" = EXCLUDED."retired_from_workspace_id"
+    `;
+  },
+
+  /**
+   * Hold each digest until AT LEAST its `expiresAt`, whoever wrote an existing
+   * row — the legacy-alias cleanup's write (MOTIR-9520). Returns the number of
+   * rows inserted or raised.
+   *
+   * Unlike {@link reserveMany} this is an OPERATOR write, run under the table's
+   * `system` arm, so it has no tenant to protect from another: on a digest
+   * conflict it sets `expires_at` to the LATER of the stored and the given
+   * value, whether the stored row is lapsed or live. It never lowers a hold.
+   * The stored `retired_from_workspace_id` and `retired_at` are replaced only
+   * when the hold is actually raised, so a row this leaves alone keeps its
+   * provenance.
+   */
+  async holdUntilInTx(
+    rows: ReadonlyArray<{ hostnameHash: string; retiredFromWorkspaceId: string; expiresAt: Date }>,
+    now: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    if (rows.length === 0) return 0;
+    const values = Prisma.join(
+      rows.map(
+        (row) =>
+          Prisma.sql`(${randomUUID()}, ${row.hostnameHash}, ${row.retiredFromWorkspaceId}, ${now}, ${row.expiresAt})`,
+      ),
+    );
+    return tx.$executeRaw`
+      INSERT INTO "public_hostname_reservation" (
+        "id", "hostname_hash", "retired_from_workspace_id", "retired_at", "expires_at"
+      )
+      VALUES ${values}
+      ON CONFLICT ("hostname_hash") DO UPDATE SET
+        "retired_from_workspace_id" = EXCLUDED."retired_from_workspace_id",
+        "retired_at" = EXCLUDED."retired_at",
+        "expires_at" = EXCLUDED."expires_at"
+      WHERE "public_hostname_reservation"."expires_at" < EXCLUDED."expires_at"
     `;
   },
 };

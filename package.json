@@ -39,6 +39,7 @@
     "db:backfill:ci-state": "tsx --tsconfig tsconfig.node.json scripts/backfill-work-item-ci-state.ts",
     "db:backfill:fix-reason": "tsx --tsconfig tsconfig.node.json scripts/backfill-fix-reason.ts",
     "db:backfill:resume-state": "tsx --tsconfig tsconfig.node.json scripts/backfill-resume-state.ts",
+    "db:cleanup:legacy-subdomain-aliases": "tsx --tsconfig tsconfig.node.json scripts/cleanup-legacy-subdomain-aliases.ts",
     "db:backfill:plan-gates": "tsx --tsconfig tsconfig.node.json scripts/backfill-plan-approval-gates.ts",
     "db:backfill:page-embeddings": "tsx --tsconfig tsconfig.node.json scripts/backfill-page-embeddings.ts",
     "db:converge:unlanded-cards": "tsx --tsconfig tsconfig.node.json scripts/converge-ejected-cards.ts",

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 
+import { refuseIfNonCompliant } from '@/lib/auth/requireCompliantSession';
 import { mapPublicAddressError } from '@/lib/publicAddresses/errorResponse';
 import { publicSubdomainService } from '@/lib/services/publicSubdomainService';
 import { getWorkspaceContext } from '@/lib/workspaces';
@@ -16,9 +17,14 @@ import { getWorkspaceContext } from '@/lib/workspaces';
 //
 // ⚠️ ADVICE, NEVER A RESERVATION. It takes no lock and writes nothing; PUT and
 // DELETE recompute everything under the workspace lock, so a client must not
-// treat this answer as a promise. A read, so no compliance hold — the same
-// posture as the subdomain GET. Workspace managers only (the service's gate):
+// treat this answer as a promise. Workspace managers only (the service's gate):
 // it previews a change only they can make. `404` when there is no subdomain.
+//
+// ⚠️ THE COMPLIANCE HOLD APPLIES, unlike the subdomain GET. That GET is a
+// member's read of an address; this is the first step of a manager's WRITE, and
+// a session the hold would refuse at the PUT or DELETE has no business being
+// told what the write would do. It is also what the session-gate guard
+// (`tests/api/two-factor-api-gate.test.ts`) asks of every route that reads one.
 //
 // Thin HTTP transport per `CLAUDE.md`: session, ONE service call, map typed
 // errors.
@@ -32,6 +38,9 @@ export async function GET(_req: Request, { params }: RouteParams): Promise<Respo
   if (!ctx) {
     return NextResponse.json({ error: 'Not signed in', code: 'UNAUTHENTICATED' }, { status: 401 });
   }
+  const hold = await refuseIfNonCompliant(ctx.userId);
+  if (hold) return hold;
+
   const { workspaceId } = await params;
   try {
     const preview = await publicSubdomainService.previewChange(workspaceId, ctx.userId);
