@@ -10040,7 +10040,8 @@
       "navIdeas": "아이디어",
       "navRunModels": "호스팅 실행 모델",
       "navFleetSettings": "플릿 설정",
-      "navCapacity": "공급자 용량"
+      "navCapacity": "공급자 용량",
+      "navJobs": "작업"
     },
     "nav": {
       "overview": "개요",
@@ -10262,6 +10263,9 @@
             "limits": {
               "edit": "공급자 모델의 용량 한도를 편집함"
             }
+          },
+          "jobs": {
+            "dlq_replay": "데드 레터를 재실행함"
           }
         }
       }
@@ -12556,6 +12560,104 @@
         "unreachable": "게이트웨이가 응답하지 않았습니다. 아무것도 저장되지 않았습니다. 다시 시도하세요.",
         "notPermitted": "내 역할로는 한도를 편집할 수 없어 아무것도 저장되지 않았습니다.",
         "failed": "한도를 저장하지 못했습니다. 변경된 내용이 없습니다. 다시 시도하세요."
+      }
+    },
+    "jobs": {
+      "breadcrumb": "플랫폼 · 작업",
+      "title": "작업",
+      "subtitle": "플랫폼이 실행한 모든 백그라운드 작업(워크스페이스 유무와 관계없이)과 재실행을 기다리는 모든 데드 레터입니다.",
+      "tabsLabel": "작업 원장 보기",
+      "tabs": {
+        "runs": "실행",
+        "dlq": "데드 레터",
+        "waiting": "{count}건 대기 중"
+      },
+      "status": {
+        "label": "상태",
+        "all": "전체",
+        "running": "실행 중",
+        "succeeded": "성공",
+        "failed": "실패",
+        "abandoned": "중단됨"
+      },
+      "columns": {
+        "function": "함수",
+        "event": "이벤트",
+        "functionEvent": "함수 · 이벤트",
+        "workspace": "워크스페이스",
+        "status": "상태",
+        "attempt": "시도",
+        "attempts": "시도 횟수",
+        "started": "시작",
+        "duration": "소요 시간",
+        "failure": "실패 내용",
+        "lastFailed": "마지막 실패",
+        "replay": "재실행"
+      },
+      "runsCaption": "백그라운드 작업 실행",
+      "dlqCaption": "데드 레터",
+      "noWorkspace": "워크스페이스 없음",
+      "pageLabel": "{page}페이지",
+      "pagerLabel": "실행 페이지",
+      "previous": "이전",
+      "next": "다음",
+      "runsEmpty": {
+        "titleAll": "아직 실행이 없습니다",
+        "bodyAll": "백그라운드 작업은 실행되면 여기에 표시됩니다.",
+        "titleStatus": "이 상태의 실행이 없습니다",
+        "bodyStatus": "원장에 이 상태인 항목이 없습니다. 모든 실행을 보려면 전체를 선택하십시오."
+      },
+      "runsError": {
+        "title": "작업 원장을 읽을 수 없습니다"
+      },
+      "dlqError": {
+        "title": "데드 레터를 읽을 수 없습니다"
+      },
+      "error": {
+        "body": "데이터베이스가 응답하지 않았습니다. 변경된 것은 없습니다."
+      },
+      "retry": "다시 시도",
+      "loadingRuns": "실행을 불러오는 중",
+      "readOnly": "읽기 전용입니다. 데드 레터를 재실행하려면 운영자 역할이 필요합니다.",
+      "fn": {
+        "label": "함수",
+        "all": "모든 함수"
+      },
+      "waitingLine": "대기 {waiting}건 · 최근 7일간 재실행 {replayed}건",
+      "capped": "{count}건 중 {shown}건 표시. 목록에는 최신 200건이 표시됩니다.",
+      "replay": "재실행",
+      "replayAria": "{function} 데드 레터 재실행",
+      "replayedAt": "{time} 재실행됨",
+      "toast": {
+        "replayedTitle": "데드 레터를 재실행했습니다",
+        "replayedBody": "{function}을(를) 다시 보냈습니다.",
+        "alreadyTitle": "이미 재실행됨",
+        "alreadyBody": "다른 사람이 이 데드 레터를 먼저 재실행했습니다. 다시 보낸 것은 없습니다.",
+        "failedTitle": "재실행하지 못했습니다",
+        "failedBody": "보낸 것이 없습니다. 다시 시도하십시오.",
+        "notPermittedBody": "데드 레터를 재실행하려면 운영자 역할이 필요합니다.",
+        "notFoundBody": "이 데드 레터는 더 이상 존재하지 않습니다."
+      },
+      "replayAll": {
+        "button": "{count}건 모두 재실행",
+        "title": "{function}의 데드 레터 {count}건을 재실행하시겠습니까?",
+        "body": "각 항목은 새 실행으로 다시 전송되고 플랫폼 감사 로그에 기록됩니다. 다른 사람이 먼저 재실행한 데드 레터는 건너뜁니다.",
+        "confirm": "{count}건 재실행",
+        "cancel": "취소",
+        "running": "재실행 중…",
+        "runningLine": "데드 레터 {count}건을 50건씩 재실행하는 중입니다. 끝날 때까지 이 창을 열어 두십시오.",
+        "doneTitle": "재실행이 끝났습니다",
+        "doneWithFailuresTitle": "일부 실패하고 재실행이 끝났습니다",
+        "replayed": "{count}건 재실행됨",
+        "already": "{count}건은 다른 사람이 이미 재실행함",
+        "nothingLeft": "0건 재실행됨 — {count}건 모두 이미 재실행되었습니다",
+        "failed": "{count}건은 재실행하지 못했습니다. 목록에 남아 있으니 하나씩 재실행하십시오.",
+        "error": "재실행을 시작하지 못했습니다. 변경된 것은 없습니다.",
+        "close": "완료"
+      },
+      "dlqEmpty": {
+        "title": "대기 중인 항목이 없습니다",
+        "body": "시도 횟수를 모두 소진한 작업이 없습니다. 소진되면 여기에 데드 레터가 표시됩니다."
       }
     }
   },

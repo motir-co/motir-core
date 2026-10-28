@@ -10046,7 +10046,8 @@
       "navIdeas": "Ideeën",
       "navRunModels": "Modellen voor gehoste runs",
       "navFleetSettings": "Vlootinstellingen",
-      "navCapacity": "Providercapaciteit"
+      "navCapacity": "Providercapaciteit",
+      "navJobs": "Taken"
     },
     "nav": {
       "overview": "Overzicht",
@@ -10268,6 +10269,9 @@
             "limits": {
               "edit": "Capaciteitslimieten van een providermodel bewerkt"
             }
+          },
+          "jobs": {
+            "dlq_replay": "Dead letter opnieuw afgespeeld"
           }
         }
       }
@@ -12562,6 +12566,104 @@
         "unreachable": "De gateway gaf geen antwoord. Er is niets opgeslagen; probeer het opnieuw.",
         "notPermitted": "Uw rol mag geen limieten bewerken, dus er is niets opgeslagen.",
         "failed": "De limieten konden niet worden opgeslagen. Er is niets gewijzigd; probeer het opnieuw."
+      }
+    },
+    "jobs": {
+      "breadcrumb": "Platform · Taken",
+      "title": "Taken",
+      "subtitle": "Elke achtergrondtaak die het platform heeft uitgevoerd, in elke werkruimte en zonder werkruimte, en elke dead letter die wacht om opnieuw te worden afgespeeld.",
+      "tabsLabel": "Weergaven van het takenlogboek",
+      "tabs": {
+        "runs": "Uitvoeringen",
+        "dlq": "Dead letter",
+        "waiting": "{count} wachtend"
+      },
+      "status": {
+        "label": "Status",
+        "all": "Alle",
+        "running": "Bezig",
+        "succeeded": "Geslaagd",
+        "failed": "Mislukt",
+        "abandoned": "Afgebroken"
+      },
+      "columns": {
+        "function": "Functie",
+        "event": "Gebeurtenis",
+        "functionEvent": "Functie · gebeurtenis",
+        "workspace": "Werkruimte",
+        "status": "Status",
+        "attempt": "Poging",
+        "attempts": "Pogingen",
+        "started": "Gestart",
+        "duration": "Duur",
+        "failure": "Fout",
+        "lastFailed": "Laatst mislukt",
+        "replay": "Opnieuw afspelen"
+      },
+      "runsCaption": "Uitvoeringen van achtergrondtaken",
+      "dlqCaption": "Dead letter",
+      "noWorkspace": "Geen werkruimte",
+      "pageLabel": "Pagina {page}",
+      "pagerLabel": "Pagina’s met uitvoeringen",
+      "previous": "Vorige",
+      "next": "Volgende",
+      "runsEmpty": {
+        "titleAll": "Nog geen uitvoeringen",
+        "bodyAll": "Achtergrondtaken verschijnen hier zodra ze worden uitgevoerd.",
+        "titleStatus": "Geen uitvoeringen met deze status",
+        "bodyStatus": "Niets in het logboek heeft deze status. Kies Alle om elke uitvoering te zien."
+      },
+      "runsError": {
+        "title": "Het takenlogboek kon niet worden gelezen"
+      },
+      "dlqError": {
+        "title": "De dead letters konden niet worden gelezen"
+      },
+      "error": {
+        "body": "De database gaf geen antwoord. Er is niets gewijzigd."
+      },
+      "retry": "Opnieuw proberen",
+      "loadingRuns": "Uitvoeringen laden",
+      "readOnly": "Alleen-lezen. Voor het opnieuw afspelen van een dead letter is de operatorrol nodig.",
+      "fn": {
+        "label": "Functie",
+        "all": "Alle functies"
+      },
+      "waitingLine": "{waiting} wachtend · {replayed} opnieuw afgespeeld in de afgelopen 7 dagen",
+      "capped": "{shown} van {count} getoond. De lijst toont de nieuwste 200.",
+      "replay": "Opnieuw afspelen",
+      "replayAria": "Dead letter van {function} opnieuw afspelen",
+      "replayedAt": "Opnieuw afgespeeld {time}",
+      "toast": {
+        "replayedTitle": "Dead letter opnieuw afgespeeld",
+        "replayedBody": "{function} is opnieuw verzonden.",
+        "alreadyTitle": "Al opnieuw afgespeeld",
+        "alreadyBody": "Iemand anders heeft deze dead letter al opnieuw afgespeeld. Er is niets opnieuw verzonden.",
+        "failedTitle": "Opnieuw afspelen is mislukt",
+        "failedBody": "Er is niets verzonden. Probeer het opnieuw.",
+        "notPermittedBody": "Voor het opnieuw afspelen van een dead letter is de operatorrol nodig.",
+        "notFoundBody": "Deze dead letter bestaat niet meer."
+      },
+      "replayAll": {
+        "button": "Alle {count} opnieuw afspelen",
+        "title": "{count} dead letters van {function} opnieuw afspelen?",
+        "body": "Elk wordt opnieuw verzonden als een nieuwe uitvoering en vastgelegd in het auditlogboek van het platform. Een dead letter die iemand anders eerst opnieuw afspeelt, wordt overgeslagen.",
+        "confirm": "{count} opnieuw afspelen",
+        "cancel": "Annuleren",
+        "running": "Bezig met opnieuw afspelen…",
+        "runningLine": "{count} dead letters worden opnieuw afgespeeld, 50 tegelijk. Houd dit open tot het klaar is.",
+        "doneTitle": "Opnieuw afspelen voltooid",
+        "doneWithFailuresTitle": "Opnieuw afspelen voltooid met fouten",
+        "replayed": "{count} opnieuw afgespeeld",
+        "already": "{count} al opnieuw afgespeeld door iemand anders",
+        "nothingLeft": "0 opnieuw afgespeeld — alle {count} waren al opnieuw afgespeeld",
+        "failed": "{count} konden niet opnieuw worden afgespeeld. Ze blijven in de lijst; speel ze een voor een opnieuw af.",
+        "error": "Opnieuw afspelen kon niet worden uitgevoerd. Er is niets gewijzigd.",
+        "close": "Klaar"
+      },
+      "dlqEmpty": {
+        "title": "Niets wachtend",
+        "body": "Geen enkele taak heeft zijn pogingen opgebruikt. Dead letters verschijnen hier zodra dat gebeurt."
       }
     }
   },

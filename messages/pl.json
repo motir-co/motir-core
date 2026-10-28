@@ -10046,7 +10046,8 @@
       "navIdeas": "Pomysły",
       "navRunModels": "Modele hostowanych uruchomień",
       "navFleetSettings": "Ustawienia floty",
-      "navCapacity": "Pojemność dostawców"
+      "navCapacity": "Pojemność dostawców",
+      "navJobs": "Zadania"
     },
     "nav": {
       "overview": "Przegląd",
@@ -10268,6 +10269,9 @@
             "limits": {
               "edit": "Edytowano limity pojemności modelu dostawcy"
             }
+          },
+          "jobs": {
+            "dlq_replay": "Ponownie uruchomiono niedostarczony wpis"
           }
         }
       }
@@ -12562,6 +12566,104 @@
         "unreachable": "Brama nie odpowiedziała. Nic nie zostało zapisane; spróbuj ponownie.",
         "notPermitted": "Twoja rola nie może edytować limitów, więc nic nie zostało zapisane.",
         "failed": "Nie udało się zapisać limitów. Nic nie zostało zmienione; spróbuj ponownie."
+      }
+    },
+    "jobs": {
+      "breadcrumb": "Platforma · Zadania",
+      "title": "Zadania",
+      "subtitle": "Każde zadanie w tle uruchomione przez platformę, w każdym obszarze roboczym i poza nimi, oraz każdy wpis niedostarczony czekający na ponowne uruchomienie.",
+      "tabsLabel": "Widoki rejestru zadań",
+      "tabs": {
+        "runs": "Uruchomienia",
+        "dlq": "Niedostarczone",
+        "waiting": "Oczekujące: {count}"
+      },
+      "status": {
+        "label": "Status",
+        "all": "Wszystkie",
+        "running": "W toku",
+        "succeeded": "Powodzenie",
+        "failed": "Niepowodzenie",
+        "abandoned": "Porzucone"
+      },
+      "columns": {
+        "function": "Funkcja",
+        "event": "Zdarzenie",
+        "functionEvent": "Funkcja · zdarzenie",
+        "workspace": "Obszar roboczy",
+        "status": "Status",
+        "attempt": "Próba",
+        "attempts": "Próby",
+        "started": "Rozpoczęto",
+        "duration": "Czas trwania",
+        "failure": "Błąd",
+        "lastFailed": "Ostatni błąd",
+        "replay": "Uruchom ponownie"
+      },
+      "runsCaption": "Uruchomienia zadań w tle",
+      "dlqCaption": "Niedostarczone",
+      "noWorkspace": "Brak obszaru roboczego",
+      "pageLabel": "Strona {page}",
+      "pagerLabel": "Strony uruchomień",
+      "previous": "Poprzednia",
+      "next": "Następna",
+      "runsEmpty": {
+        "titleAll": "Brak uruchomień",
+        "bodyAll": "Zadania w tle pojawiają się tutaj po uruchomieniu.",
+        "titleStatus": "Brak uruchomień o tym statusie",
+        "bodyStatus": "Nic w rejestrze nie ma tego statusu. Wybierz Wszystkie, aby zobaczyć każde uruchomienie."
+      },
+      "runsError": {
+        "title": "Nie udało się odczytać rejestru zadań"
+      },
+      "dlqError": {
+        "title": "Nie udało się odczytać niedostarczonych"
+      },
+      "error": {
+        "body": "Baza danych nie odpowiedziała. Nic nie zostało zmienione."
+      },
+      "retry": "Spróbuj ponownie",
+      "loadingRuns": "Wczytywanie uruchomień",
+      "readOnly": "Tylko do odczytu. Ponowne uruchomienie wpisu niedostarczonego wymaga roli operatora.",
+      "fn": {
+        "label": "Funkcja",
+        "all": "Wszystkie funkcje"
+      },
+      "waitingLine": "Oczekujące: {waiting} · uruchomione ponownie w ostatnich 7 dniach: {replayed}",
+      "capped": "Wyświetlono {shown} z {count}. Lista pokazuje 200 najnowszych.",
+      "replay": "Uruchom ponownie",
+      "replayAria": "Uruchom ponownie niedostarczony wpis {function}",
+      "replayedAt": "Uruchomiono ponownie {time}",
+      "toast": {
+        "replayedTitle": "Wpis niedostarczony uruchomiono ponownie",
+        "replayedBody": "{function} wysłano ponownie.",
+        "alreadyTitle": "Już uruchomiono ponownie",
+        "alreadyBody": "Ktoś inny uruchomił już ponownie ten wpis. Nic nie zostało wysłane ponownie.",
+        "failedTitle": "Ponowne uruchomienie nie powiodło się",
+        "failedBody": "Nic nie zostało wysłane. Spróbuj ponownie.",
+        "notPermittedBody": "Ponowne uruchomienie wpisu niedostarczonego wymaga roli operatora.",
+        "notFoundBody": "Ten wpis niedostarczony już nie istnieje."
+      },
+      "replayAll": {
+        "button": "Uruchom ponownie wszystkie ({count})",
+        "title": "Uruchomić ponownie {count} niedostarczonych wpisów {function}?",
+        "body": "Każdy zostanie wysłany ponownie jako nowe uruchomienie i zapisany w dzienniku audytu platformy. Wpis, który ktoś inny uruchomi wcześniej, zostanie pominięty.",
+        "confirm": "Uruchom ponownie ({count})",
+        "cancel": "Anuluj",
+        "running": "Trwa ponowne uruchamianie…",
+        "runningLine": "Trwa ponowne uruchamianie wpisów ({count}), po 50 naraz. Nie zamykaj tego okna do końca.",
+        "doneTitle": "Ponowne uruchamianie zakończone",
+        "doneWithFailuresTitle": "Ponowne uruchamianie zakończone z błędami",
+        "replayed": "Uruchomiono ponownie: {count}",
+        "already": "Już uruchomione ponownie przez kogoś innego: {count}",
+        "nothingLeft": "Uruchomiono ponownie: 0 — wszystkie ({count}) były już uruchomione",
+        "failed": "Nie udało się uruchomić ponownie: {count}. Pozostają na liście; uruchom je ponownie pojedynczo.",
+        "error": "Nie udało się rozpocząć ponownego uruchamiania. Nic nie zostało zmienione.",
+        "close": "Gotowe"
+      },
+      "dlqEmpty": {
+        "title": "Nic nie czeka",
+        "body": "Żadne zadanie nie wyczerpało prób. Wpisy niedostarczone pojawią się tutaj, gdy to nastąpi."
       }
     }
   },
