@@ -167,8 +167,14 @@ describe('the capture', () => {
 // macrotasks queued behind it run, so a pause requested just before the end
 // lands promptly on code that ran AFTER the block. Three immediates queued in one
 // check phase run back to back with no timer between them, so the heartbeat stays
-// stale throughout: the block ends once the probe is answered, and each pause
-// lands in a different follow-on. Neither follow-on held the loop.
+// stale throughout: the block ends once the probe is answered, and the pauses land
+// somewhere after it. Neither follow-on held the loop.
+//
+// WHERE a real pause lands is not deterministic (MOTIR-9955): on a loaded runner
+// the first pause can land in a follow-on, or between immediates in Node's own
+// loop, with only internals on the stack. So this live test asserts only what
+// holds for every landing, and the cases that depend on the landing are fed to
+// the pure readers as captures below ('the landings of a pause after the block').
 describe('a pause that lands after the block', () => {
   it('names no follow-on code when the pause lands after the block ended', async () => {
     await new Promise<void>((resolve) => {
@@ -183,11 +189,13 @@ describe('a pause that lands after the block', () => {
     const block = readLoopBlock();
     expect(__forTests.captureStage(), 'the confirming pause never landed').toBe(3);
     expect(block).not.toBeNull();
-    expect(block!.frame).toBe(NOT_IN_JS);
-    expect(block!.context!.inJs).toBe(false);
-    // The control: the first pause did land in follow-on code, which is what
-    // the tag would have named on the first pause alone.
-    expect(block!.context!.frames.join('\n')).toMatch(/followOnForTest|blockUntilProbedForTest/);
+    expect(block!.frame).not.toBeNull();
+    expect(block!.frame).not.toMatch(/followOnForTest|laterFollowOnForTest/);
+    // The only frame the tag may name is the one that held the loop.
+    if (block!.frame !== NOT_IN_JS) {
+      expect(block!.context!.frames.join('\n')).toContain('blockUntilProbedForTest');
+    }
+    expect(block!.context!.inJs).toBe(block!.frame !== NOT_IN_JS);
   });
 });
 
@@ -381,6 +389,68 @@ describe('classifying a capture (pure)', () => {
       BLOCK_THRESHOLD_MS,
     );
     expect(tag).toMatch(/lib\/x\.ts:12 doWork$/);
+  });
+
+  // MOTIR-9955: the live test above cannot choose where its pauses land, so the
+  // landings it can meet are fed here as captures, with the stacks CI observed.
+  // Every one is a pause after the block, and none may name a follow-on.
+  describe('the landings of a pause after the block', () => {
+    const TEST_FILE = 'file:///app/tests/monitoring/loopBlockWatchdog.test.ts';
+    const immediate = frame('', 'processImmediate', 485);
+    const blockFrames = [
+      frame(TEST_FILE, 'spinUntilStage', 57),
+      frame(TEST_FILE, 'blockUntilProbedForTest', 70),
+      immediate,
+    ];
+    const followOnFrames = [
+      frame(TEST_FILE, 'spinUntilStage', 57),
+      frame(TEST_FILE, 'followOnForTest', 75),
+      immediate,
+    ];
+    const laterFrames = [
+      frame(TEST_FILE, 'spinUntilStage', 57),
+      frame(TEST_FILE, 'laterFollowOnForTest', 80),
+      immediate,
+    ];
+
+    it('reads `not_in_js` when the first pause lands in Node’s loop between immediates', () => {
+      // motir-core#3829, Vitest 8/20: the first pause held internals only.
+      const betweenTicks = capture({
+        frames: [frame('', 'hasRejectionToWarn', 3), frame('', 'runNextTicks', 60), immediate],
+        confirm: { frames: laterFrames },
+      });
+      expect(pauseInterruptedJs(betweenTicks, BLOCK_THRESHOLD_MS)).toBe(false);
+      expect(frameTagOf(betweenTicks, BLOCK_THRESHOLD_MS)).toBe(NOT_IN_JS);
+
+      // merge-group run, Vitest 18/20: the same, after a script's hooks ran.
+      const afterScript = capture({
+        frames: [frame('', 'emitAfterScript', 92), immediate],
+        confirm: { frames: laterFrames },
+      });
+      expect(frameTagOf(afterScript, BLOCK_THRESHOLD_MS)).toBe(NOT_IN_JS);
+    });
+
+    it('reads `not_in_js` when the first pause lands in follow-on code', () => {
+      const late = capture({ frames: followOnFrames, confirm: { frames: laterFrames } });
+      expect(framesOnBothPauses(late).map((f) => f.fn)).toEqual(['processImmediate']);
+      expect(pauseInterruptedJs(late, BLOCK_THRESHOLD_MS)).toBe(false);
+      expect(frameTagOf(late, BLOCK_THRESHOLD_MS)).toBe(NOT_IN_JS);
+      // The control: read off the first pause alone, the tag would name the
+      // follow-on's frame as if it had held the loop.
+      const firstPauseOnly = capture({ frames: followOnFrames });
+      expect(frameTagOf(firstPauseOnly, BLOCK_THRESHOLD_MS)).toMatch(/:57 spinUntilStage$/);
+    });
+
+    it('names a frame of the block when both pauses land inside it', () => {
+      const inside = capture({ frames: blockFrames, confirm: { frames: blockFrames } });
+      expect(pauseInterruptedJs(inside, BLOCK_THRESHOLD_MS)).toBe(true);
+      expect(frameTagOf(inside, BLOCK_THRESHOLD_MS)).toMatch(/:57 spinUntilStage$/);
+      expect(framesOnBothPauses(inside).map((f) => f.fn)).toEqual([
+        'spinUntilStage',
+        'blockUntilProbedForTest',
+        'processImmediate',
+      ]);
+    });
   });
 
   it('truncates a long frame to 200 characters', () => {
