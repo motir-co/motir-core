@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { Cloud, Globe, Megaphone } from 'lucide-react';
+import { Cloud, Globe, Megaphone, Variable } from 'lucide-react';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
@@ -60,8 +60,18 @@ const NO_ACCESS = toSettingsNavPermissions([]);
 // A cloud build also runs hosted agents (`isHostedRunsAvailable()` asks the
 // cloud question, MOTIR-6995), so ON_CLOUD carries both capabilities; the
 // hosted-runs axis is exercised on its own in the Hosted agent block below.
-const ON_CLOUD = { publicProjectsAvailable: true, hostedRunsAvailable: true };
-const SELF_HOSTED = { publicProjectsAvailable: false, hostedRunsAvailable: false };
+// Both builds hold a project with a repository Motir hosts (MOTIR-9966), so the
+// Environment room's PROJECT axis is open in each; NO_MOTIR_REPOSITORY closes it.
+const ON_CLOUD = {
+  publicProjectsAvailable: true,
+  hostedRunsAvailable: true,
+  motirRepositoriesPresent: true,
+};
+const SELF_HOSTED = {
+  publicProjectsAvailable: false,
+  hostedRunsAvailable: false,
+  motirRepositoriesPresent: true,
+};
 /** The entries that exist on EVERY build — the rail minus the build-gated rooms. */
 const ALWAYS_PRESENT = PROJECT_SETTINGS_NAV.filter((e) => !e.cloudOnly && !e.hostedRunsOnly);
 
@@ -228,7 +238,10 @@ describe('projectSettingsNav registry — access matrix (rides the 6.4.3 policy)
     expect(visibleSettingsNav(MEMBER, PROJECT_SETTINGS_ROUTES).map((e) => e.id)).toEqual([
       'translation',
     ]);
+    // MOTIR-9966: and, in a project holding a repository Motir hosts, Environment
+    // (its view key is `project:browse` too).
     expect(visibleSettingsNav(MEMBER, PROJECT_SETTINGS_NAV, SELF_HOSTED).map((e) => e.id)).toEqual([
+      'environment',
       'translation',
     ]);
   });
@@ -288,11 +301,14 @@ describe('the Public page room (Story MOTIR-3875 · MOTIR-4243)', () => {
     // MOTIR-6995: on cloud a member is offered the Hosted agent room (its view key
     // is `work_item:edit`) and nothing cloud-only.
     // MOTIR-8830: and Translation, whose view key is `project:browse`.
+    // MOTIR-9966: and Environment, whose view key is `project:browse` too.
     expect(visibleSettingsNav(MEMBER, PROJECT_SETTINGS_NAV, ON_CLOUD).map((e) => e.id)).toEqual([
+      'environment',
       'hosted-agent',
       'translation',
     ]);
     expect(visibleSettingsNav(VIEWER, PROJECT_SETTINGS_NAV, ON_CLOUD).map((e) => e.id)).toEqual([
+      'environment',
       'translation',
     ]);
   });
@@ -412,6 +428,50 @@ describe('the Hosted agent room (Story MOTIR-6989 · MOTIR-6995)', () => {
   });
 });
 
+describe('the Environment room (Story MOTIR-9795 · MOTIR-9966)', () => {
+  const entry = PROJECT_SETTINGS_NAV.find((e) => e.id === 'environment');
+  const WITH_REPO = { publicProjectsAvailable: false, motirRepositoriesPresent: true };
+  const NO_MOTIR_REPOSITORY = { publicProjectsAvailable: true, hostedRunsAvailable: true };
+
+  it('is registered per the design table, directly under Repositories, with the Variable glyph', () => {
+    expect(entry).toBeTruthy();
+    expect(entry!.group).toBe('general');
+    expect(entry!.href).toBe('/settings/project/environment');
+    expect(entry!.labelKey).toBe('nav.environment');
+    expect(entry!.icon).toBe(Variable);
+    expect(entry!.permission).toBe('repository:manage');
+    expect(entry!.viewPermission).toBe('project:browse');
+    expect(entry!.motirRepositoriesOnly).toBe(true);
+  });
+
+  it('is ABSENT from a project holding no repository Motir hosts, whatever the actor holds', () => {
+    for (const held of [ADMIN, MEMBER, VIEWER]) {
+      expect(
+        visibleSettingsNav(held, PROJECT_SETTINGS_NAV, NO_MOTIR_REPOSITORY).map((e) => e.id),
+      ).not.toContain('environment');
+    }
+    // DEFAULTS CLOSED — a caller that forgets the project fact drops the row.
+    expect(visibleSettingsNav(ADMIN).map((e) => e.id)).not.toContain('environment');
+  });
+
+  it('opens on the VIEW key: an admin, a member and a viewer all see it', () => {
+    for (const held of [ADMIN, MEMBER, VIEWER]) {
+      expect(visibleSettingsNav(held, PROJECT_SETTINGS_NAV, WITH_REPO).map((e) => e.id)).toContain(
+        'environment',
+      );
+    }
+    expect(
+      visibleSettingsNav(NO_ACCESS, PROJECT_SETTINGS_NAV, WITH_REPO).map((e) => e.id),
+    ).not.toContain('environment');
+  });
+
+  it('only an admin holds its WRITE key', () => {
+    expect(ADMIN.has('repository:manage')).toBe(true);
+    expect(MEMBER.has('repository:manage')).toBe(false);
+    expect(VIEWER.has('repository:manage')).toBe(false);
+  });
+});
+
 describe('projectSettingsNav registry — grouping', () => {
   it('groups in rail order, only non-empty groups, entries within their group', () => {
     const groups = groupSettingsNav(PROJECT_SETTINGS_NAV);
@@ -423,6 +483,9 @@ describe('projectSettingsNav registry — grouping', () => {
     expect(groups.find((g) => g.group === 'general')?.entries.map((e) => e.id)).toEqual([
       'details',
       'repositories',
+      // MOTIR-9966 — `environment` directly under `repositories`: a Motir
+      // repository's values per environment (design/environment).
+      'environment',
       // MOTIR-5262 — `monitoring` directly under `repositories`: both hold a third
       // party's credential and the inventory bound to it (design/monitoring §6).
       'monitoring',
@@ -651,6 +714,13 @@ const KEY_EVIDENCE: Record<string, { permission: PermissionKey; source: string; 
     source: 'lib/services/projectAutoTranslateSettingsService.ts',
     gate: 'assertPermission',
   },
+  // MOTIR-9966 — the Environment room's WRITE: `set` and `delete` assert
+  // `repository:manage` (its READ asserts the view key, `project:browse`).
+  environment: {
+    permission: 'repository:manage',
+    source: 'lib/services/environmentConfigService.ts',
+    gate: 'assertPermission',
+  },
 };
 
 describe('every registry entry names the key its DESTINATION asserts (MOTIR-2468)', () => {
@@ -756,8 +826,10 @@ describe('what each actor is offered (MOTIR-2468)', () => {
   it('a built-in VIEWER is offered exactly Translation — on any build', () => {
     expect(visibleSettingsNav(VIEWER).map((e) => e.id)).toEqual(['translation']);
     expect(hasVisibleSettingsArea(VIEWER)).toBe(true);
-    // A viewer may not start a hosted run, so it does not see the Hosted agent room.
+    // A viewer may not start a hosted run, so it does not see the Hosted agent room;
+    // in a project holding a Motir repository it reads Environment (MOTIR-9966).
     expect(visibleSettingsNav(VIEWER, PROJECT_SETTINGS_NAV, ON_CLOUD).map((e) => e.id)).toEqual([
+      'environment',
       'translation',
     ]);
   });
@@ -1009,6 +1081,10 @@ const VIEW_KEY_EVIDENCE: Record<string, { source: string; gate: string }> = {
     source: 'lib/services/projectAutoTranslateSettingsService.ts',
     gate: 'assertPermission',
   },
+  environment: {
+    source: 'lib/services/environmentConfigService.ts',
+    gate: 'assertPermission',
+  },
 };
 
 /** The repo-relative `page.tsx` a settings route renders from. */
@@ -1104,8 +1180,8 @@ describe('the VIEW key cannot drift from its destination (MOTIR-5193)', () => {
     // MOTIR-5278 had updated this to `['approvals']`. With that declaration reverted,
     // the drift test rules on the fixture alone again, as MOTIR-5193 shipped it.
     // MOTIR-6995 declares the first again: Hosted agent (`work_item:edit`).
-    // MOTIR-8830 adds Translation (`project:browse`).
-    expect(declaring.map((e) => e.id)).toEqual(['hosted-agent', 'translation']);
+    // MOTIR-8830 adds Translation (`project:browse`), MOTIR-9966 Environment (the same).
+    expect(declaring.map((e) => e.id)).toEqual(['environment', 'hosted-agent', 'translation']);
   });
 
   it('every declaring entry has an evidence row, and every evidence row a declaring entry', () => {

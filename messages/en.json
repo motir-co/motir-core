@@ -1958,6 +1958,7 @@
       "translation": "Translation",
       "rules": "Rules",
       "repositories": "Repositories",
+      "environment": "Environment",
       "monitoring": "Monitoring",
       "approvals": "Approvals",
       "bugs": "Bugs"
@@ -4203,7 +4204,8 @@
         "hosted-agent": "Which model a hosted run uses is shown to people who can start a hosted run on this project. Ask a project admin if you need to see it.",
         "translation": "Whether this project's work content is translated for each reader is shown to people who can read the project's work items. Ask a project admin if you need to see it.",
         "automation": "Project automation is managed by project admins. Ask an admin if you need a rule changed.",
-        "monitoring": "This project's error-monitor connection is managed by people who can manage integrations. Ask a project admin if Sentry needs connecting or reconnecting."
+        "monitoring": "This project's error-monitor connection is managed by people who can manage integrations. Ask a project admin if Sentry needs connecting or reconnecting.",
+        "environment": "A repository's environment values are shown to people who can browse this project. Ask a project admin if you need to see them."
       }
     },
     "organization": {
@@ -4274,6 +4276,101 @@
       "saveError": "Something went wrong. Try again.",
       "saveForbidden": "You can no longer change where this project's bugs are filed.",
       "folderGone": "That folder no longer exists. Choose another."
+    },
+    "environment": {
+      "title": "Environment",
+      "lede": "Values your app reads when it runs. Set them once per environment; Motir passes them to the app on its next deploy.",
+      "repositoryLabel": "Repository",
+      "role": {
+        "web": "Web app",
+        "api": "API",
+        "mobile": "Mobile app",
+        "shared": "Shared code",
+        "infra": "Infrastructure",
+        "other": "Other"
+      },
+      "tablistLabel": "Environment",
+      "tab": {
+        "production": "Production",
+        "preview": "Preview",
+        "release": "Release"
+      },
+      "column": {
+        "name": "Name",
+        "value": "Value"
+      },
+      "set": "Set",
+      "secretHidden": "Secret · value hidden",
+      "edit": "Edit",
+      "replace": "Replace",
+      "delete": "Delete",
+      "editAria": "Edit {name}",
+      "replaceAria": "Replace {name}",
+      "deleteAria": "Delete {name}",
+      "saving": "Saving",
+      "add": {
+        "heading": "Add a value",
+        "namePlaceholder": "NAME",
+        "valuePlaceholder": "Value",
+        "secret": "Secret",
+        "save": "Save",
+        "helper": "A secret can be replaced or deleted, never shown again — not to you, not to anyone."
+      },
+      "error": {
+        "nameRequired": "Enter a name.",
+        "duplicate": "{name} is already set in {environment}. Edit it in the list instead.",
+        "invalidName": "Use letters, digits and underscores, not starting with a digit.",
+        "reserved": "{name} is reserved: PORT, DATABASE_URL and MOTIR_* names are set by Motir. Choose another name."
+      },
+      "saved": {
+        "secret": "{name} saved as a secret. Its value is hidden from now on.",
+        "plain": "{name} saved."
+      },
+      "replaceFlow": {
+        "placeholder": "New value",
+        "aria": "New value for {name}",
+        "helper": "The current value stays hidden. Saving replaces it on the next deploy.",
+        "cancel": "Cancel"
+      },
+      "deleteDialog": {
+        "title": "Delete {name} from {environment}?",
+        "body": "The app stops receiving {name} in {environment} on its next deploy. {count, plural, one {{others} keeps its own value.} other {{others} keep their own values.}} This cannot be undone.",
+        "confirm": "Delete",
+        "cancel": "Cancel"
+      },
+      "empty": {
+        "title": "No values in {environment} yet",
+        "production": "Your live app gets these. Add the first one below.",
+        "preview": "Every pull request’s preview gets these. Add the first one below.",
+        "release": "The release your train builds gets these. Add the first one below."
+      },
+      "loading": "Loading values…",
+      "loadError": {
+        "title": "Couldn’t load the values",
+        "body": "Nothing was changed. Try again in a moment."
+      },
+      "retry": "Try again",
+      "saveError": "Couldn’t save {name}. Nothing was changed.",
+      "deleteError": "Couldn’t delete {name}. It is still set.",
+      "readOnly": {
+        "note": "You can read these values. Only project administrators can change them.",
+        "tooltip": "Only project administrators can change environment values."
+      },
+      "changes": {
+        "heading": "Recent changes · {environment}",
+        "added": "added",
+        "replaced": "replaced",
+        "deleted": "deleted",
+        "secret": "Secret",
+        "unknownActor": "A former member",
+        "loadError": "Couldn’t load the recent changes.",
+        "empty": "No changes yet. Each change to this environment is listed here — who made it and when, never the value."
+      },
+      "notFound": {
+        "title": "Repository not found",
+        "body": "Motir keeps no environment for this repository. Choose one of the project’s repositories that Motir hosts.",
+        "back": "Back to Environment"
+      }
     }
   },
   "boards": {

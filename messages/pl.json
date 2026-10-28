@@ -1958,6 +1958,7 @@
       "translation": "Tłumaczenie",
       "rules": "Reguły",
       "repositories": "Repozytoria",
+      "environment": "Środowisko",
       "monitoring": "Monitorowanie",
       "approvals": "Zatwierdzenia",
       "bugs": "Błędy"
@@ -4203,7 +4204,8 @@
         "hosted-agent": "Informacja o tym, którego modelu używa hostowane uruchomienie, jest widoczna dla osób, które mogą uruchamiać hostowane uruchomienia w tym projekcie. Poproś administratora projektu, jeśli musisz ją zobaczyć.",
         "translation": "To, czy treść pracy w tym projekcie jest tłumaczona dla każdego czytelnika, widzą osoby, które mogą czytać elementy pracy projektu. Zapytaj administratora projektu, jeśli potrzebujesz to zobaczyć.",
         "automation": "Automatyzacją projektu zarządzają administratorzy projektu. Poproś administratora, jeśli reguła wymaga zmiany.",
-        "monitoring": "Połączeniem z monitorem błędów tego projektu zarządzają osoby, które mogą zarządzać integracjami. Poproś administratora projektu, jeśli Sentry trzeba połączyć lub połączyć ponownie."
+        "monitoring": "Połączeniem z monitorem błędów tego projektu zarządzają osoby, które mogą zarządzać integracjami. Poproś administratora projektu, jeśli Sentry trzeba połączyć lub połączyć ponownie.",
+        "environment": "Wartości środowiska repozytorium widzą osoby, które mogą przeglądać ten projekt. Zapytaj administratora projektu, jeśli potrzebujesz je zobaczyć."
       }
     },
     "organization": {
@@ -4274,6 +4276,101 @@
       "saveError": "Coś poszło nie tak. Spróbuj ponownie.",
       "saveForbidden": "Nie możesz już zmieniać miejsca docelowego błędów tego projektu.",
       "folderGone": "Ten folder już nie istnieje. Wybierz inny."
+    },
+    "environment": {
+      "title": "Środowisko",
+      "lede": "Wartości, które aplikacja odczytuje podczas działania. Ustaw je raz dla każdego środowiska; Motir przekaże je aplikacji przy następnym wdrożeniu.",
+      "repositoryLabel": "Repozytorium",
+      "role": {
+        "web": "Aplikacja webowa",
+        "api": "API",
+        "mobile": "Aplikacja mobilna",
+        "shared": "Kod współdzielony",
+        "infra": "Infrastruktura",
+        "other": "Inne"
+      },
+      "tablistLabel": "Środowisko",
+      "tab": {
+        "production": "Produkcja",
+        "preview": "Podgląd",
+        "release": "Wydanie"
+      },
+      "column": {
+        "name": "Nazwa",
+        "value": "Wartość"
+      },
+      "set": "Ustawiono",
+      "secretHidden": "Sekret · wartość ukryta",
+      "edit": "Edytuj",
+      "replace": "Zastąp",
+      "delete": "Usuń",
+      "editAria": "Edytuj {name}",
+      "replaceAria": "Zastąp {name}",
+      "deleteAria": "Usuń {name}",
+      "saving": "Zapisywanie",
+      "add": {
+        "heading": "Dodaj wartość",
+        "namePlaceholder": "NAZWA",
+        "valuePlaceholder": "Wartość",
+        "secret": "Sekret",
+        "save": "Zapisz",
+        "helper": "Sekret można zastąpić lub usunąć, ale nigdy nie zostanie ponownie pokazany — ani tobie, ani nikomu innemu."
+      },
+      "error": {
+        "nameRequired": "Wpisz nazwę.",
+        "duplicate": "{name} jest już ustawione w środowisku {environment}. Edytuj je na liście.",
+        "invalidName": "Użyj liter, cyfr i podkreśleń; nazwa nie może zaczynać się od cyfry.",
+        "reserved": "{name} jest zarezerwowane: PORT, DATABASE_URL i nazwy MOTIR_* ustawia Motir. Wybierz inną nazwę."
+      },
+      "saved": {
+        "secret": "Zapisano {name} jako sekret. Od teraz jego wartość jest ukryta.",
+        "plain": "Zapisano {name}."
+      },
+      "replaceFlow": {
+        "placeholder": "Nowa wartość",
+        "aria": "Nowa wartość dla {name}",
+        "helper": "Obecna wartość pozostaje ukryta. Zapisanie zastąpi ją przy następnym wdrożeniu.",
+        "cancel": "Anuluj"
+      },
+      "deleteDialog": {
+        "title": "Usunąć {name} ze środowiska {environment}?",
+        "body": "Od następnego wdrożenia aplikacja przestanie otrzymywać {name} w środowisku {environment}. {count, plural, one {Środowisko {others} zachowuje własną wartość.} few {Środowiska {others} zachowują własne wartości.} many {Środowiska {others} zachowują własne wartości.} other {Środowiska {others} zachowują własne wartości.}} Tej operacji nie można cofnąć.",
+        "confirm": "Usuń",
+        "cancel": "Anuluj"
+      },
+      "empty": {
+        "title": "Brak wartości w środowisku {environment}",
+        "production": "Otrzymuje je działająca aplikacja. Dodaj pierwszą poniżej.",
+        "preview": "Otrzymuje je podgląd każdego pull requesta. Dodaj pierwszą poniżej.",
+        "release": "Otrzymuje je wydanie budowane przez twój pociąg. Dodaj pierwszą poniżej."
+      },
+      "loading": "Wczytywanie wartości…",
+      "loadError": {
+        "title": "Nie udało się wczytać wartości",
+        "body": "Nic nie zostało zmienione. Spróbuj ponownie za chwilę."
+      },
+      "retry": "Spróbuj ponownie",
+      "saveError": "Nie udało się zapisać {name}. Nic nie zostało zmienione.",
+      "deleteError": "Nie udało się usunąć {name}. Wartość nadal jest ustawiona.",
+      "readOnly": {
+        "note": "Możesz czytać te wartości. Tylko administratorzy projektu mogą je zmieniać.",
+        "tooltip": "Tylko administratorzy projektu mogą zmieniać wartości środowiska."
+      },
+      "changes": {
+        "heading": "Ostatnie zmiany · {environment}",
+        "added": "dodał(a)",
+        "replaced": "zastąpił(a)",
+        "deleted": "usunął(ęła)",
+        "secret": "Sekret",
+        "unknownActor": "Były członek",
+        "loadError": "Nie udało się wczytać ostatnich zmian.",
+        "empty": "Brak zmian. Każda zmiana w tym środowisku jest tu wymieniona — kto ją wprowadził i kiedy, nigdy wartość."
+      },
+      "notFound": {
+        "title": "Nie znaleziono repozytorium",
+        "body": "Motir nie przechowuje środowiska dla tego repozytorium. Wybierz jedno z repozytoriów projektu hostowanych przez Motir.",
+        "back": "Wróć do Środowiska"
+      }
     }
   },
   "boards": {

@@ -29,6 +29,7 @@ import { PermissionDeniedError } from '@/lib/projects/errors';
 import { environmentConfigChangeRepository } from '@/lib/repositories/environmentConfigChangeRepository';
 import { environmentConfigEntryRepository } from '@/lib/repositories/environmentConfigEntryRepository';
 import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
+import { userRepository } from '@/lib/repositories/userRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
@@ -54,7 +55,7 @@ interface RepositoryScope {
   projectId: string;
 }
 
-/** Load the row and gate the caller: browse to read, `repository:manage` to
+/** Load the row and gate the caller: `project:browse` to read, `repository:manage` to
  *  write. A customer repository is refused for both, after the gate. */
 async function gate(
   projectRepositoryId: string,
@@ -68,7 +69,7 @@ async function gate(
   if (mode === 'manage') {
     await assertCanManage(row.projectId, projectRepositoryId, ctx);
   } else {
-    await projectAccessService.assertCanBrowse(row.projectId, ctx);
+    await projectAccessService.assertPermission(row.projectId, ctx, 'project:browse');
   }
   if (isOrganizationSeedSource(row.seedSource)) {
     throw new CustomerRepositoryError(projectRepositoryId);
@@ -261,14 +262,20 @@ export const environmentConfigService = {
     ctx: ServiceContext,
   ): Promise<EnvironmentChangeDto[]> {
     const scope = await gate(projectRepositoryId, ctx, 'browse');
-    const rows = await inRepository(scope, ctx, (tx) =>
-      environmentConfigChangeRepository.listRecent(
+    return inRepository(scope, ctx, async (tx) => {
+      const rows = await environmentConfigChangeRepository.listRecent(
         projectRepositoryId,
         environment,
         RECENT_CHANGES_LIMIT,
         tx,
-      ),
-    );
-    return rows.map(toEnvironmentChangeDto);
+      );
+      // The actor is stored by id and named when read, so a change outlives the
+      // account that made it: an actor that no longer resolves keeps its row and
+      // loses only the name.
+      const actorIds = [...new Set(rows.flatMap((r) => (r.actorId ? [r.actorId] : [])))];
+      const users = await userRepository.findByIds(actorIds, tx);
+      const names = new Map(users.map((u) => [u.id, u.name]));
+      return rows.map((row) => toEnvironmentChangeDto(row, names));
+    });
   },
 };

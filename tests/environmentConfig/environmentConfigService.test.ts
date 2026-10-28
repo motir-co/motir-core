@@ -311,6 +311,9 @@ describe('one change record and one event per change', () => {
     );
     const listed = await environmentConfigService.listChanges(repoId, env, admin);
     expect(listed.map((c) => c.action)).toEqual(['deleted', 'replaced', 'added']);
+    // The actor is named when read, from the account that made the change.
+    const actor = await adminDb.user.findUniqueOrThrow({ where: { id: admin.userId } });
+    expect(listed.map((c) => c.actorName)).toEqual([actor.name, actor.name, actor.name]);
     for (const c of listed) expect(c).not.toHaveProperty('value');
   });
 

@@ -30,5 +30,7 @@ export interface EnvironmentChangeDto {
   action: EnvironmentConfigActionName;
   isSecret: boolean;
   actorId: string | null;
+  /** The actor's display name when read; null once the account is gone. */
+  actorName: string | null;
   createdAt: string;
 }

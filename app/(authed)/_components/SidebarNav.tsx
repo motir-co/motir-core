@@ -180,6 +180,12 @@ export interface SidebarNavProps {
    */
   hostedRunsAvailable?: boolean;
   /**
+   * Whether the active project holds a repository Motir hosts (MOTIR-9966) — the
+   * registry's project axis, which drops the **Environment** room from a project
+   * holding only customer repositories. Defaults FALSE, like the flags above.
+   */
+  motirRepositoriesPresent?: boolean;
+  /**
    * The Help control for the rail's FOOTER (MOTIR-4239) — a ready-made
    * `<HelpMenu placement="footer" />`, built by the layout so this component
    * stays agnostic of `docsIndexUrl` / `legalIndexUrl` (the Docs and Legal
@@ -219,6 +225,7 @@ export function SidebarNav({
   workspaceTierRevealed = false,
   publicProjectsAvailable = false,
   hostedRunsAvailable = false,
+  motirRepositoriesPresent = false,
   helpMenu,
 }: SidebarNavProps) {
   const t = useTranslations('shell');
@@ -257,7 +264,7 @@ export function SidebarNav({
   // The registry's SECOND axis (MOTIR-4243) — what this BUILD has, beside what
   // this actor holds. Built here with `held`, for the same reason: the rail and
   // the area door must filter on one answer, not two.
-  const availability = { publicProjectsAvailable, hostedRunsAvailable };
+  const availability = { publicProjectsAvailable, hostedRunsAvailable, motirRepositoriesPresent };
 
   // WORKSPACE-settings AREA (Story MOTIR-4843 · MOTIR-4846): the FOURTH and last
   // settings tier to become an area. Like the account and organisation branches

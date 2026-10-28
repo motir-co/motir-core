@@ -1958,6 +1958,7 @@
       "translation": "Traduzione",
       "rules": "Regole",
       "repositories": "Repository",
+      "environment": "Ambiente",
       "monitoring": "Monitoraggio",
       "approvals": "Approvazioni",
       "bugs": "Bug"
@@ -4203,7 +4204,8 @@
         "hosted-agent": "Il modello usato da un’esecuzione ospitata è visibile a chi può avviare un’esecuzione ospitata in questo progetto. Chiedi a un amministratore del progetto se devi vederlo.",
         "translation": "Se i contenuti di lavoro di questo progetto vengono tradotti per ogni lettore è mostrato alle persone che possono leggere gli elementi di lavoro del progetto. Chiedi a un amministratore del progetto se hai bisogno di vederlo.",
         "automation": "L’automazione del progetto è gestita dagli amministratori del progetto. Chiedi a un amministratore se devi modificare una regola.",
-        "monitoring": "Il collegamento al sistema di monitoraggio degli errori di questo progetto è gestito da chi può gestire le integrazioni. Chiedi a un amministratore del progetto se Sentry va collegato o ricollegato."
+        "monitoring": "Il collegamento al sistema di monitoraggio degli errori di questo progetto è gestito da chi può gestire le integrazioni. Chiedi a un amministratore del progetto se Sentry va collegato o ricollegato.",
+        "environment": "I valori di ambiente di un repository sono mostrati alle persone che possono consultare questo progetto. Chiedi a un amministratore del progetto se hai bisogno di vederli."
       }
     },
     "organization": {
@@ -4274,6 +4276,101 @@
       "saveError": "Si è verificato un errore. Riprova.",
       "saveForbidden": "Non puoi più modificare dove vengono archiviati i bug di questo progetto.",
       "folderGone": "Quella cartella non esiste più. Scegline un’altra."
+    },
+    "environment": {
+      "title": "Ambiente",
+      "lede": "Valori che la tua app legge quando è in esecuzione. Impostali una volta per ambiente; Motir li passa all’app al suo prossimo deploy.",
+      "repositoryLabel": "Repository",
+      "role": {
+        "web": "App web",
+        "api": "API",
+        "mobile": "App mobile",
+        "shared": "Codice condiviso",
+        "infra": "Infrastruttura",
+        "other": "Altro"
+      },
+      "tablistLabel": "Ambiente",
+      "tab": {
+        "production": "Produzione",
+        "preview": "Anteprima",
+        "release": "Release"
+      },
+      "column": {
+        "name": "Nome",
+        "value": "Valore"
+      },
+      "set": "Impostato",
+      "secretHidden": "Segreto · valore nascosto",
+      "edit": "Modifica",
+      "replace": "Sostituisci",
+      "delete": "Elimina",
+      "editAria": "Modifica {name}",
+      "replaceAria": "Sostituisci {name}",
+      "deleteAria": "Elimina {name}",
+      "saving": "Salvataggio in corso",
+      "add": {
+        "heading": "Aggiungi un valore",
+        "namePlaceholder": "NOME",
+        "valuePlaceholder": "Valore",
+        "secret": "Segreto",
+        "save": "Salva",
+        "helper": "Un segreto può essere sostituito o eliminato, ma non viene mai più mostrato: né a te né a nessun altro."
+      },
+      "error": {
+        "nameRequired": "Inserisci un nome.",
+        "duplicate": "{name} è già impostato in {environment}. Modificalo nell’elenco.",
+        "invalidName": "Usa lettere, cifre e trattini bassi, senza iniziare con una cifra.",
+        "reserved": "{name} è riservato: PORT, DATABASE_URL e i nomi MOTIR_* sono impostati da Motir. Scegli un altro nome."
+      },
+      "saved": {
+        "secret": "{name} è stato salvato come segreto. Da ora il suo valore è nascosto.",
+        "plain": "{name} è stato salvato."
+      },
+      "replaceFlow": {
+        "placeholder": "Nuovo valore",
+        "aria": "Nuovo valore per {name}",
+        "helper": "Il valore attuale resta nascosto. Salvando, viene sostituito al prossimo deploy.",
+        "cancel": "Annulla"
+      },
+      "deleteDialog": {
+        "title": "Eliminare {name} da {environment}?",
+        "body": "Dal prossimo deploy l’app non riceve più {name} in {environment}. {count, plural, one {{others} mantiene il proprio valore.} other {{others} mantengono i propri valori.}} L’operazione non può essere annullata.",
+        "confirm": "Elimina",
+        "cancel": "Annulla"
+      },
+      "empty": {
+        "title": "Ancora nessun valore in {environment}",
+        "production": "La tua app in produzione li riceve. Aggiungi il primo qui sotto.",
+        "preview": "L’anteprima di ogni pull request li riceve. Aggiungi il primo qui sotto.",
+        "release": "La release costruita dal tuo train li riceve. Aggiungi il primo qui sotto."
+      },
+      "loading": "Caricamento dei valori…",
+      "loadError": {
+        "title": "Impossibile caricare i valori",
+        "body": "Non è stato modificato nulla. Riprova tra un momento."
+      },
+      "retry": "Riprova",
+      "saveError": "Impossibile salvare {name}. Non è stato modificato nulla.",
+      "deleteError": "Impossibile eliminare {name}. È ancora impostato.",
+      "readOnly": {
+        "note": "Puoi leggere questi valori. Solo gli amministratori del progetto possono modificarli.",
+        "tooltip": "Solo gli amministratori del progetto possono modificare i valori di ambiente."
+      },
+      "changes": {
+        "heading": "Modifiche recenti · {environment}",
+        "added": "ha aggiunto",
+        "replaced": "ha sostituito",
+        "deleted": "ha eliminato",
+        "secret": "Segreto",
+        "unknownActor": "Un ex membro",
+        "loadError": "Impossibile caricare le modifiche recenti.",
+        "empty": "Ancora nessuna modifica. Ogni modifica a questo ambiente è elencata qui: chi l’ha fatta e quando, mai il valore."
+      },
+      "notFound": {
+        "title": "Repository non trovato",
+        "body": "Motir non conserva alcun ambiente per questo repository. Scegli uno dei repository del progetto ospitati da Motir.",
+        "back": "Torna ad Ambiente"
+      }
     }
   },
   "boards": {

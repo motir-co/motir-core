@@ -14,7 +14,11 @@ export function toEnvironmentEntryDto(row: EnvironmentConfigEntry): EnvironmentE
   };
 }
 
-export function toEnvironmentChangeDto(row: EnvironmentConfigChange): EnvironmentChangeDto {
+/** `names` maps actor ids to display names; an id it lacks reads as no name. */
+export function toEnvironmentChangeDto(
+  row: EnvironmentConfigChange,
+  names: ReadonlyMap<string, string | null> = new Map(),
+): EnvironmentChangeDto {
   return {
     id: row.id,
     environment: row.environment,
@@ -22,6 +26,7 @@ export function toEnvironmentChangeDto(row: EnvironmentConfigChange): Environmen
     action: row.action,
     isSecret: row.isSecret,
     actorId: row.actorId,
+    actorName: row.actorId ? (names.get(row.actorId) ?? null) : null,
     createdAt: row.createdAt.toISOString(),
   };
 }

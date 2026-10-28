@@ -1958,6 +1958,7 @@
       "translation": "Vertaling",
       "rules": "Regels",
       "repositories": "Repository's",
+      "environment": "Omgeving",
       "monitoring": "Monitoring",
       "approvals": "Goedkeuringen",
       "bugs": "Bugs"
@@ -4203,7 +4204,8 @@
         "hosted-agent": "Welk model een gehoste run gebruikt, wordt getoond aan personen die in dit project een gehoste run kunnen starten. Vraag het een projectbeheerder als je het wilt zien.",
         "translation": "Of de werkinhoud van dit project voor elke lezer wordt vertaald, wordt getoond aan mensen die de werkitems van het project kunnen lezen. Vraag het een projectbeheerder als je dit wilt zien.",
         "automation": "Projectautomatisering wordt beheerd door projectbeheerders. Vraag het een beheerder als je een regel wilt laten wijzigen.",
-        "monitoring": "De koppeling met de foutmonitor van dit project wordt beheerd door personen die integraties kunnen beheren. Vraag het een projectbeheerder als Sentry moet worden gekoppeld of opnieuw gekoppeld."
+        "monitoring": "De koppeling met de foutmonitor van dit project wordt beheerd door personen die integraties kunnen beheren. Vraag het een projectbeheerder als Sentry moet worden gekoppeld of opnieuw gekoppeld.",
+        "environment": "De omgevingswaarden van een repository worden getoond aan mensen die dit project kunnen bekijken. Vraag het een projectbeheerder als je ze wilt zien."
       }
     },
     "organization": {
@@ -4274,6 +4276,101 @@
       "saveError": "Er ging iets mis. Probeer het opnieuw.",
       "saveForbidden": "Je kunt niet meer wijzigen waar de bugs van dit project worden opgeslagen.",
       "folderGone": "Die map bestaat niet meer. Kies een andere."
+    },
+    "environment": {
+      "title": "Omgeving",
+      "lede": "Waarden die je app leest wanneer hij draait. Stel ze één keer per omgeving in; Motir geeft ze bij de volgende deploy door aan de app.",
+      "repositoryLabel": "Repository",
+      "role": {
+        "web": "Webapp",
+        "api": "API",
+        "mobile": "Mobiele app",
+        "shared": "Gedeelde code",
+        "infra": "Infrastructuur",
+        "other": "Overig"
+      },
+      "tablistLabel": "Omgeving",
+      "tab": {
+        "production": "Productie",
+        "preview": "Preview",
+        "release": "Release"
+      },
+      "column": {
+        "name": "Naam",
+        "value": "Waarde"
+      },
+      "set": "Ingesteld",
+      "secretHidden": "Geheim · waarde verborgen",
+      "edit": "Bewerken",
+      "replace": "Vervangen",
+      "delete": "Verwijderen",
+      "editAria": "{name} bewerken",
+      "replaceAria": "{name} vervangen",
+      "deleteAria": "{name} verwijderen",
+      "saving": "Opslaan",
+      "add": {
+        "heading": "Een waarde toevoegen",
+        "namePlaceholder": "NAAM",
+        "valuePlaceholder": "Waarde",
+        "secret": "Geheim",
+        "save": "Opslaan",
+        "helper": "Een geheim kan worden vervangen of verwijderd, maar wordt nooit meer getoond — niet aan jou, aan niemand."
+      },
+      "error": {
+        "nameRequired": "Vul een naam in.",
+        "duplicate": "{name} is al ingesteld in {environment}. Bewerk het in de lijst.",
+        "invalidName": "Gebruik letters, cijfers en underscores, niet beginnend met een cijfer.",
+        "reserved": "{name} is gereserveerd: PORT, DATABASE_URL en MOTIR_*-namen stelt Motir in. Kies een andere naam."
+      },
+      "saved": {
+        "secret": "{name} is opgeslagen als geheim. De waarde is vanaf nu verborgen.",
+        "plain": "{name} is opgeslagen."
+      },
+      "replaceFlow": {
+        "placeholder": "Nieuwe waarde",
+        "aria": "Nieuwe waarde voor {name}",
+        "helper": "De huidige waarde blijft verborgen. Opslaan vervangt hem bij de volgende deploy.",
+        "cancel": "Annuleren"
+      },
+      "deleteDialog": {
+        "title": "{name} verwijderen uit {environment}?",
+        "body": "De app ontvangt {name} in {environment} niet meer vanaf de volgende deploy. {count, plural, one {{others} houdt een eigen waarde.} other {{others} houden hun eigen waarden.}} Dit kan niet ongedaan worden gemaakt.",
+        "confirm": "Verwijderen",
+        "cancel": "Annuleren"
+      },
+      "empty": {
+        "title": "Nog geen waarden in {environment}",
+        "production": "Je live app krijgt deze. Voeg hieronder de eerste toe.",
+        "preview": "De preview van elke pull request krijgt deze. Voeg hieronder de eerste toe.",
+        "release": "De release die je train bouwt, krijgt deze. Voeg hieronder de eerste toe."
+      },
+      "loading": "Waarden laden…",
+      "loadError": {
+        "title": "De waarden konden niet worden geladen",
+        "body": "Er is niets gewijzigd. Probeer het zo opnieuw."
+      },
+      "retry": "Opnieuw proberen",
+      "saveError": "{name} kon niet worden opgeslagen. Er is niets gewijzigd.",
+      "deleteError": "{name} kon niet worden verwijderd. Het is nog steeds ingesteld.",
+      "readOnly": {
+        "note": "Je kunt deze waarden lezen. Alleen projectbeheerders kunnen ze wijzigen.",
+        "tooltip": "Alleen projectbeheerders kunnen omgevingswaarden wijzigen."
+      },
+      "changes": {
+        "heading": "Recente wijzigingen · {environment}",
+        "added": "heeft toegevoegd",
+        "replaced": "heeft vervangen",
+        "deleted": "heeft verwijderd",
+        "secret": "Geheim",
+        "unknownActor": "Een voormalig lid",
+        "loadError": "De recente wijzigingen konden niet worden geladen.",
+        "empty": "Nog geen wijzigingen. Elke wijziging aan deze omgeving staat hier — wie hem maakte en wanneer, nooit de waarde."
+      },
+      "notFound": {
+        "title": "Repository niet gevonden",
+        "body": "Motir houdt geen omgeving bij voor deze repository. Kies een van de repository’s van het project die Motir host.",
+        "back": "Terug naar Omgeving"
+      }
     }
   },
   "boards": {
