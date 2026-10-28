@@ -278,7 +278,7 @@ async function refuse(deps: Deps, options: DeployCheckOptions): Promise<void> {
   const port = deps.serverless.port();
   // The repository the adapter names for the app; any one in the account's own
   // registry passes the artifact check, which is all the placeholder must do.
-  const repository = `${SERVERLESS_DEPLOY_CHECK_APP_PREFIX.replace(/-+$/, '')}/${repositoryId}/production`;
+  const repository = `${SERVERLESS_DEPLOY_CHECK_APP_PREFIX.slice(0, -1)}/${repositoryId}/production`;
   let refusal: unknown = null;
   try {
     await port.deploy({

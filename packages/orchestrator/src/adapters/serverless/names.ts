@@ -30,9 +30,12 @@ function kindOf(environment: HostingEnvironment): ServerlessNamespaceKind {
   return environment.kind === 'production' ? 'production' : 'preview';
 }
 
-/** `mh-` → `mh`: the prefix as the first path segment of an ECR name. */
+/** `mh-` → `mh`: the prefix as the first path segment of an ECR name. A loop,
+ *  not `/-+$/`, which is quadratic on a long run of dashes (CodeQL). */
 function prefixSegment(prefix: string): string {
-  return prefix.replace(/-+$/, '');
+  let end = prefix.length;
+  while (end > 0 && prefix[end - 1] === '-') end -= 1;
+  return prefix.slice(0, end);
 }
 
 export interface ServerlessAppNames {

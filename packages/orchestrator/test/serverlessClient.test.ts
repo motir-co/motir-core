@@ -5,7 +5,7 @@ import {
   defaultServerlessClientFactory,
   serverlessCredentialProvider,
 } from '../src/adapters/serverless/client';
-import { environmentOfLabel, unitOf } from '../src/adapters/serverless/names';
+import { environmentOfLabel, serverlessAppNames, unitOf } from '../src/adapters/serverless/names';
 import { computeSecondsOf, metricPeriodSeconds } from '../src/adapters/serverless/usage';
 import {
   OrchestratorApiError,
@@ -293,6 +293,16 @@ describe('serverless names and usage arithmetic', () => {
     expect(unitOf('mh-', 'other')).toBeNull();
     expect(environmentOfLabel(undefined)).toEqual({ kind: 'production' });
     expect(environmentOfLabel('pr-12')).toEqual({ kind: 'preview', pullRequest: 12 });
+  });
+
+  it('names the ECR repository from the prefix without its trailing dashes', () => {
+    const production = { kind: 'production' } as const;
+    expect(serverlessAppNames('mh-', 'r1', production).pushNamespace).toBe('mh/r1/production');
+    expect(serverlessAppNames('mh-deploy-check-', 'r1', production).pushNamespace).toBe(
+      'mh-deploy-check/r1/production',
+    );
+    expect(serverlessAppNames('mh', 'r1', production).pushNamespace).toBe('mh/r1/production');
+    expect(serverlessAppNames('mh---', 'r1', production).pushNamespace).toBe('mh/r1/production');
   });
 
   it('picks a period CloudWatch still holds at the window’s start', () => {
