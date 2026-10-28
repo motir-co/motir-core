@@ -402,9 +402,9 @@ export const it: McpSummaryTranslations = {
   },
   record_run_discrepancy: {
     summary:
-      'Un runner che ha costruito un elemento di lavoro con un piano sbagliato solo sul COME registra ciò che ha costruito in modo diverso: un commento sull’elemento e un record dell’esecuzione, con presa d’atto.',
+      'Un runner registra ciò che ha costruito diversamente da un piano sbagliato solo sul COME, e le decisioni prese dove il piano taceva: un commento sull’elemento e un record dell’esecuzione, con presa d’atto.',
     source:
-      'A runner that built a card through a plan wrong only about the HOW records what it built differently — a card comment and a run record, acknowledged.',
+      'A runner records what it built differently from a plan wrong only about the HOW, and the decisions it made where the plan was silent — a card comment and a run record, acknowledged.',
   },
   report_unbuildable_target: {
     summary:

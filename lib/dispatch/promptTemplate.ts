@@ -560,6 +560,13 @@ export interface DispatchPromptSource {
    * NO MOTIR TOOLS file route. See {@link agentReportStep}.
    */
   runnerPostsAgentReport?: boolean;
+  /**
+   * Does that runner ALSO post the `decisions` the agent writes into `$MOTIR_AGENT_REPORT`
+   * (MOTIR-10000)? Only `true` together with {@link runnerPostsAgentReport} names that file
+   * route in {@link decideWhatIsOpen}; a CLI that posts discrepancies but predates decisions
+   * would drop them, so it is a capability of its own.
+   */
+  runnerPostsDecisions?: boolean;
 }
 
 /** The assembled prompt plus the workflow variant it ended up carrying. */
@@ -2509,6 +2516,98 @@ function openPullRequestStep(): string[] {
 }
 
 /**
+ * DECIDE WHAT THE CARD LEAVES OPEN — the never-ask rule and the decision record (MOTIR-10000).
+ *
+ * ⚠️ A RUN NEVER ASKS ABOUT THE IMPLEMENTATION. Nobody is there to answer mid-run, and a
+ * question an agent cannot have answered turns into the nearest thing that ships. So a detail
+ * the card and its plan leave open is the RUN's to decide — the repository's conventions
+ * first, then the established industry best practice for the stack — the same line the planner
+ * already holds (MOTIR-2222: it asks about WHAT, never HOW).
+ *
+ * ⚠️ NO "SIMPLEST OPTION" ESCAPE HATCH. The text says to take the best-practice option even
+ * when it is more work, and that ease is never a reason. A fallback to the easiest option would
+ * be read as permission to be lazy, and it is the one a tired agent reaches for.
+ *
+ * ⚠️ A DECISION IS RECORDED, NOT ONLY MADE. It rides `record_run_discrepancy` as `decisions`,
+ * in the SAME one call as any build-through points (the door keeps one record per leg), so it
+ * lands as a card comment and on the run's findings; the pull request lists it too. The block
+ * is self-contained: THE CARD IS WRONG and FOUND A DEFECT are not touched by it, so the
+ * build-through and the bug paths read exactly as they did.
+ *
+ * Rendered for every agent lane — code and decision page — and never for a MANUAL item, which
+ * a person does and which has no run to record on.
+ */
+function decideWhatIsOpen(src: DispatchPromptSource, lane: 'code' | 'decision'): string[] {
+  const beforeDelivery = lane === 'decision' ? 'publish_decision_page' : 'you commit';
+  const where =
+    lane === 'decision'
+      ? ['  List the same decisions in your FINISHED report.']
+      : src.sessionBranch
+        ? [
+            `  List the same decisions for ${src.key} in a "## Decisions the run made"`,
+            '  section of the BODY of the session pull request.',
+          ]
+        : [
+            '  List the same decisions in the pull request body, under a',
+            '  "## Decisions the run made" section.',
+          ];
+  const fileRoute =
+    src.runnerPostsAgentReport === true && src.runnerPostsDecisions === true
+      ? [
+          '',
+          '  NO MOTIR TOOLS? If the record_run_discrepancy tool is not available to you and',
+          '  the environment variable MOTIR_AGENT_REPORT is set, put the decisions into the',
+          '  JSON file at that path instead, as "decisions" beside "model" (and beside',
+          '  "discrepancy", when you built through):',
+          '',
+          '         {"model": "<as above>", "decisions": [{"planSaid": "…", "chose": "…", "why": "…", "alternatives": "…"}]}',
+          '',
+          '  and the run records them on the card and its run when you exit.',
+        ]
+      : [];
+  return [
+    'A detail the card and its plan leave open is YOURS to decide. Never ask anyone',
+    'about the implementation: nobody is there to answer mid-run. Do not use',
+    'AskUserQuestion, do not ask to confirm the scope, and do not offer options and',
+    'wait for a choice.',
+    '',
+    'Decide it in this order:',
+    "  1. The repository's own conventions — its coding convention, its instruction",
+    '     files, and the patterns of the code around your change.',
+    '  2. Where they are silent, the established industry best practice for the',
+    '     stack: the option an experienced reviewer of that stack expects to see.',
+    'Take the best-practice option even when it is more work. Never choose an option',
+    'because it is the easiest, the smallest or the quickest to ship.',
+    '',
+    'This is about the HOW. An open question that would change the WHAT — the',
+    "card's outcome or an acceptance criterion — is not yours to decide: that is",
+    'THE CARD IS WRONG below, and its STOP is an action you take, not a question.',
+    '',
+    `RECORD every decision you made, ONCE, after you have built and before ${beforeDelivery},`,
+    `with the ${RECORD_DISCREPANCY_TOOL_NAME} tool:`,
+    '',
+    `         key:       ${src.key}`,
+    '         decisions: one entry per decision, each',
+    '                    { planSaid, chose, why, alternatives } — what the card said',
+    '                    about it ("nothing" when it was silent), what you chose, why',
+    '                    (the convention or the best practice you followed), and the',
+    '                    options you considered and did not take',
+    '',
+    '  1–20 decisions, each field 1–2000 characters; alternatives may be left out.',
+    '  If you also BUILT THROUGH (THE CARD IS WRONG below), send the decisions in',
+    '  that SAME call beside its points: the record is one call per run, and a',
+    '  second call is refused DISCREPANCY_ALREADY_RECORDED. A run that decided',
+    '  nothing the card left open sends no decisions.',
+    ...where,
+    '  A missing record never stops delivery: if the call errors or is refused, still',
+    '  deliver, and write the exact line',
+    '         Decision record missing: <the error code or message>',
+    '  in that list and in your FINISHED report.',
+    ...fileRoute,
+  ];
+}
+
+/**
  * THE CARD IS WRONG, in two ways (Story MOTIR-8651 · MOTIR-8658; the decision page _A run builds
  * through a wrong HOW — the discrepancy record_, MOTIR-8654, which wins wherever this text and it
  * differ).
@@ -3591,6 +3690,17 @@ export function assembleDispatchPrompt(src: DispatchPromptSource): AssembledDisp
     // criteria, before the git workflow — and renders NOTHING for a card with no
     // monitor link, so every other prompt is byte-identical to before.
     ...errorEvidenceBlock(src.errorEvidence ?? []),
+    // DECIDE WHAT THE CARD LEAVES OPEN (MOTIR-10000) — the never-ask rule, for every agent
+    // lane, after the card's own WHAT and before the closing that reports on it.
+    ...(manual
+      ? []
+      : [
+          ...section(
+            'DECIDE WHAT THE CARD LEAVES OPEN — never ask',
+            decideWhatIsOpen(src, agentDecision ? 'decision' : 'code'),
+          ),
+          '',
+        ]),
     ...closing,
   ];
 
