@@ -53,9 +53,12 @@ import { createTestUser } from '../fixtures/userFixtures';
 import { JobTestEngine } from '../helpers/jobs';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
+import { runnerRole, stubAwsManagementCredential } from '../helpers/awsRunnerRoleFake';
 import {
   ADD_SHARD_ENTERPRISE_SLUG,
   FakeOrganization,
+  buildStacksInto,
+  stubPoolDefinitionEnv,
   installAddShardGithub,
   newGithubWorld,
 } from '../helpers/addShardFakes';
@@ -112,7 +115,7 @@ interface Ec2Fake extends Ec2Api {
 type FakeFleet = ContainerOrchestrator & FakeOrchestratorControls;
 
 const fakes = vi.hoisted(() => ({
-  /** Each account's EC2, by the RUNTIME access key id its credential names. */
+  /** Each account's EC2, by the access key id of its runner-role session. */
   ec2ByKeyId: new Map<string, unknown>(),
   fly: null as unknown,
 }));
@@ -124,11 +127,9 @@ vi.mock('@motir/orchestrator', async () => {
   fakes.fly = source.createFakeOrchestrator({ idPrefix: 'fly-machine' });
   return {
     ...source,
-    createEc2Api: (config: { accessKeyId: string }) => {
-      const ec2 = fakes.ec2ByKeyId.get(config.accessKeyId);
-      if (!ec2) throw new Error(`no EC2 fake for ${config.accessKeyId}`);
-      return ec2;
-    },
+    createAwsManagementApi: () => runnerRole.management(),
+    createEc2Api: (config: Parameters<typeof runnerRole.ec2For>[0]) =>
+      runnerRole.ec2For(config, (keyId) => fakes.ec2ByKeyId.get(keyId) as object | undefined),
     flyOrchestrator: fakes.fly,
   };
 });
@@ -189,26 +190,23 @@ async function addShard(name: string, fleetKind: string, operator: string) {
 }
 
 /**
- * One account through add-shard to `active`: the first run builds it and stops on
- * the person's two steps (quota, runtime key); the operator does both and runs the
- * command again. Returns its row and the EC2 its network was built in.
+ * One account through add-shard to `active`: the run builds it from the
+ * definition and confirms its runner role, so no person's step is left
+ * (MOTIR-9847). Returns its row and the EC2 its network was built in.
  */
 async function provision(name: string, fleetKind: string, operator: string): Promise<Account> {
   const ec2 = new AwsEc2Fake();
   idRange += 0x10000;
   ec2.idsFrom(idRange);
   building = ec2;
-  const first = await addShard(name, fleetKind, operator);
-  expect(first.code, first.err).toBe(2);
-  const { credentialRef } = (await fleetShardService.findShardByName(name))!;
-  const runtimeKeyId = `AKIA_RUNTIME_${name.toUpperCase().replace(/-/g, '_')}`;
-  vi.stubEnv(`${credentialRef}_ACCESS_KEY_ID`, runtimeKeyId);
-  vi.stubEnv(`${credentialRef}_SECRET_ACCESS_KEY`, `secret-${name}`);
-  fakes.ec2ByKeyId.set(runtimeKeyId, ec2);
-  const second = await addShard(name, fleetKind, operator);
-  expect(second.code, second.err).toBe(0);
+  const run = await addShard(name, fleetKind, operator);
+  expect(run.code, run.err).toBe(0);
   building = null;
-  return { shard: (await fleetShardService.findShardByName(name))!, ec2 };
+  const shard = (await fleetShardService.findShardByName(name))!;
+  const runtimeKeyId = `AKIA_RUNTIME_${name.toUpperCase().replace(/-/g, '_')}`;
+  runnerRole.grant(shard.aws!.accountId!, runtimeKeyId);
+  fakes.ec2ByKeyId.set(runtimeKeyId, ec2);
+  return { shard, ec2 };
 }
 
 /** Occupy `count` units of an account with live index slots of another tenant. */
@@ -339,6 +337,8 @@ beforeEach(async () => {
   await adminDb.fleetShard.deleteMany({});
   fly().reset();
   fakes.ec2ByKeyId.clear();
+  runnerRole.reset();
+  stubAwsManagementCredential();
   fleetShardOrchestratorService.resetCache();
   _resetInstallationTokenCache();
   _resetProvisioningInstallationCache();
@@ -358,8 +358,10 @@ beforeEach(async () => {
   vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', 'AKIA_MANAGEMENT_E2E');
   vi.stubEnv('AWS_ORG_ADMIN_SECRET_ACCESS_KEY', 'MANAGEMENT_SECRET_E2E');
   vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', 'arn:aws:iam::576360162297:role/motir-add-shard');
+  stubPoolDefinitionEnv();
   installAddShardGithub(newGithubWorld(), 'ghs_INSTALL_E2E');
   organization = new FakeOrganization(SESSION);
+  buildStacksInto(organization, () => building);
   // The operator does the quota step before the second run.
   organization.quota = SHARD_VCPU_QUOTA_TARGET;
   unregister = registerShardProvisioningProvider(

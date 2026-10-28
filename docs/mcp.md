@@ -3699,13 +3699,16 @@ of the six carry `criterionIndex`, so narrow on `severity` before reading one.
 
 One more `shape` member is reported by `validate_work_item` and `validate_plan`
 only, never on the dispatch wire: **`likely-mislabelled-link`** (MOTIR-9007). A
-body link `[label](motir:<id>)` whose `label` names one or more work-item keys
+link `[label](motir:<id>)` in the card's description OR its explanation (both
+bodies are scanned, MOTIR-9938) whose `label` names one or more work-item keys
 (a token whose prefix is a project identifier in the workspace) none of which
 is the key `<id>` actually opens — or whose `<id>` opens no work item the caller
-can read. It carries the link's `label`, its `targetId`, and `targetKey`: the
+can read. It carries the link's `label`, its `targetId`, `targetKey`: the
 key the id resolves to, or `null` when it resolves to nothing (an unknown id,
 another workspace's id and an unbrowsable id all read the same, so the advisory
-leaks no existence). A label that names no key — `[the export flow](motir:…)` —
+leaks no existence), and `field`: the body the link sits in, `descriptionMd` or
+`explanationMd`, so the right one is fixed. A link quoted inside Markdown code,
+in either body, is not a link and is never judged (MOTIR-9825). A label that names no key — `[the export flow](motir:…)` —
 is never checked. Fix the id (resolve the key you meant with `get_work_item`) or
 the label; a link that opens the wrong card is consumed by every agent that
 reads the body.
@@ -4781,11 +4784,12 @@ had the most expensive remedy in this surface: withdraw every proposal (which EN
 proposal with every `planItem:` ref rebuilt, re-close it. One wrong sentence cost the
 whole plan.
 
-| Input     | Type           | Required | Notes                                                        |
-| --------- | -------------- | -------- | ------------------------------------------------------------ |
-| `planId`  | string         | yes      | The id `create_plan` returned.                               |
-| `title`   | string \| null | no       | The plan's own short label. `null` clears it.                |
-| `summary` | string \| null | no       | The Markdown summary shown above the tree. `null` clears it. |
+| Input           | Type           | Required | Notes                                                                          |
+| --------------- | -------------- | -------- | ------------------------------------------------------------------------------ |
+| `planId`        | string         | yes      | The id `create_plan` returned.                                                 |
+| `title`         | string \| null | no       | The plan's own short label. `null` clears it.                                  |
+| `summary`       | string \| null | no       | The Markdown summary shown above the tree. `null` clears it.                   |
+| `plannerRecord` | object \| null | no       | YOUR machine state on the plan (MOTIR-9978). Replaced whole; `null` clears it. |
 
 **Sparse, and a call that sends neither is refused.** An omitted field is left
 exactly as it was; an explicit `null` clears it. `INVALID_PROPOSAL` for a call that
@@ -4806,6 +4810,15 @@ and model that made it. That is a decision rather than a side effect: a `planned
 is a thing a person is deciding about, and silently rewriting the sentence they are
 reading would trade one honesty problem for another. It is deliberately not the
 `edited` verb, which means _a proposal changed_ and renders as a proposal count.
+
+**`plannerRecord` is the AUTHOR's own record, kept as data (MOTIR-9978).** Machine
+state an agent keeps on a plan between its runs — plan.py's targets and how each walk
+left them — belongs here, never in `summary`: the summary is prose a person reads and
+may correct, and the review rail renders it as Markdown, so a JSON fence there is drawn
+as a code block and a person's edit can break the next resume. A JSON object of at most
+64 KiB, replaced whole. `get_plan` returns it as `plannerRecord` (`null` when the plan
+keeps none); it is on no plan DTO, so neither `/api/v1` nor the review surface receives
+it, and a call that writes only the record puts nothing on the timeline.
 
 ```jsonc
 // The summary said the org was the billing unit for code indexing. It is not.
@@ -5042,8 +5055,9 @@ MOTIR-6509). `valid` is `true` only when all four lists are empty.
 
 **`advisories` rides beside the verdict and never changes it (MOTIR-9007).** It
 lists every `likely-mislabelled-link` shape advisory in a body the plan
-PROPOSES — an `add`'s body, or a `modify` that rewrites one — as
-`{ kind: "shape", item, severity, label, targetId, targetKey }`: a
+PROPOSES — an `add`'s description or explanation, or a `modify` that rewrites
+either — as `{ kind: "shape", item, severity, label, targetId, targetKey, field }`
+(`field` is `descriptionMd` or `explanationMd`, MOTIR-9938): a
 `[label](motir:<id>)` link whose label names a work-item key the id does not
 open, or whose id opens no card at all (`targetKey: null`). Fix the id before
 sealing. The internal `validate-plan-forest` route answers the same

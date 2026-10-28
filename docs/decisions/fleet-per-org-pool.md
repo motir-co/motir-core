@@ -466,7 +466,7 @@ per GitHub org beside the per-5-minute count, and defers rather than mint past
   agent runner account, and **one merged account for the indexer and the agent hoster**. In the merged
   account the indexer has priority: **10 machine spots (20 vCPU)** are always kept for index
   containers, used or not, and agent instances use only the rest. Hosted-agent caps on these plans are
-  **10 per user and 50 running per org**. Built by the Host-accounts story **MOTIR-9365** (and
+  **10 per user and 50 per org** (live agents, running or asleep — `agent-instances.md` AMENDMENT 7). Built by the Host-accounts story **MOTIR-9365** (and
   MOTIR-9366 for the larger pool plans).
 
 ### A1.7 · The measured results

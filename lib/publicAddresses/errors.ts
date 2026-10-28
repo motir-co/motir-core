@@ -16,20 +16,20 @@ import { PRISMA_UNIQUE_VIOLATION, uniqueViolationConstraints } from '@/lib/prism
 /**
  * Somebody else already holds this hostname.
  *
- * The `hostname` unique index is GLOBAL, so this is raised for three different
- * situations that are one situation to the database, and the caller must not
- * assume which:
+ * The `hostname` unique index is GLOBAL, so this is raised for situations that
+ * are one situation to the database, and the caller must not assume which:
  *
  *   1. another workspace has claimed the label;
  *   2. another project has connected the domain;
- *   3. **a RETIRED alias still holds the name** — the ADR §8 never-released
- *      rule, which is the case a customer will not expect and the one the
- *      settings copy is written to explain.
+ *   3. a legacy `workspace_subdomain_alias` row still holds the name, until the
+ *      one-off alias cleanup (MOTIR-9520) turns it into an expiring hold.
  *
- * The three are deliberately NOT distinguished. Telling a claimer *which*
- * workspace holds a name, or that it is held by a workspace that no longer uses
- * it, is an existence leak across the tenancy boundary for no gain — the answer
- * they need is the same in all three cases: pick another name.
+ * They are deliberately NOT distinguished. Telling a claimer *which* workspace
+ * holds a name is an existence leak across the tenancy boundary for no gain —
+ * the answer they need is the same in every case: pick another name. A name
+ * held by a RESERVATION is the one exception, and it is a separate error
+ * ({@link NameQuarantinedError}) because that hold ends on a date the claimer is
+ * owed (§8 Amendment 3).
  *
  * The `IdentifierTakenError` precedent (`projectsService.changeKey`) is the same
  * shape one level down.
@@ -142,21 +142,44 @@ export class SubdomainNotFoundError extends Error {
 }
 
 /**
- * The workspace has renamed its subdomain as many times as the ADR §8 cap
- * allows.
+ * The workspace changed its subdomain less than 30 days ago (§8 Amendment 3
+ * rule 4, Story MOTIR-4528). Answered **409** with the date the next change is
+ * allowed.
  *
- * The cap exists because every rename permanently burns a name in a shared
- * namespace — a retired label is never released — so it is a namespace
- * protection rather than a UX limit, and the error says how many were used.
+ * A rename and a release count alike, and there is no cap on how many changes a
+ * workspace makes over time: the limit exists so a name cannot be cycled through
+ * the pool faster than a quarantine can hold it, not to ration names. The date
+ * travels with the refusal because "not yet" without "when" is a refusal the
+ * customer can only retry blindly.
  */
-export class SubdomainRenameCapReachedError extends Error {
-  readonly code = 'SUBDOMAIN_RENAME_CAP_REACHED' as const;
+export class SubdomainChangeLimitError extends Error {
+  readonly code = 'SUBDOMAIN_CHANGE_LIMIT' as const;
+  constructor(readonly nextAllowedAt: Date) {
+    super(`This workspace can change its subdomain again on ${nextAllowedAt.toISOString()}.`);
+    this.name = 'SubdomainChangeLimitError';
+  }
+}
+
+/**
+ * The hostname was released by a workspace and is quarantined until
+ * `returnsAt` (§8 Amendment 3 rule 3). Answered **409** with that date.
+ *
+ * ⚠️ DELIBERATELY NOT {@link HostnameTakenError}. A name a LIVE row holds says
+ * nothing about when it frees up, and must not say whose it is. A quarantined
+ * name returns to the pool on a known date, and story rule 5 promises the
+ * claimer that date: it tells them whether to wait or pick another name. The
+ * date is all it carries. The reserving workspace stays unnamed, because the
+ * reservation table stores a digest and the provenance column is never read
+ * back to a claimer.
+ */
+export class NameQuarantinedError extends Error {
+  readonly code = 'NAME_QUARANTINED' as const;
   constructor(
-    readonly used: number,
-    readonly cap: number,
+    readonly hostname: string,
+    readonly returnsAt: Date,
   ) {
-    super(`This workspace has used all ${cap} subdomain renames.`);
-    this.name = 'SubdomainRenameCapReachedError';
+    super(`The hostname ${hostname} is held until ${returnsAt.toISOString()}.`);
+    this.name = 'NameQuarantinedError';
   }
 }
 

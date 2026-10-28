@@ -35,7 +35,7 @@ const { accountDeletionService } = await import('@/lib/services/accountDeletionS
 const { accountErasureSweepService } = await import('@/lib/services/accountErasureSweepService');
 const { hostnameReservationHash, reservesItsHostname } =
   await import('@/lib/publicAddresses/hostnameReservation');
-const { HostnameTakenError } = await import('@/lib/publicAddresses/errors');
+const { NameQuarantinedError } = await import('@/lib/publicAddresses/errors');
 const { createTestUser, createTestProject } = await import('../fixtures');
 
 const BASE = 'motir.example';
@@ -64,8 +64,12 @@ afterAll(async () => {
 
 /**
  * A user who SOLELY owns a workspace holding a live subdomain and one retired
- * alias — the exact shape §8's rename produces, and the exact shape the erasure
- * sweep deletes.
+ * alias, the exact shape the erasure sweep deletes.
+ *
+ * ⚠️ THE ALIAS IS WRITTEN DIRECTLY. A rename no longer leaves one (§8 Amendment
+ * 3, MOTIR-9507), but alias rows written before it are still in the database
+ * until the one-off cleanup (MOTIR-9520) turns them into expiring holds — and a
+ * workspace deleted before that runs must still hold every one of them.
  *
  * Built through `workspacesService.createWorkspace` rather than the workspace
  * fixture, because the erasure arm selects on `memberCount <= 1` and the thing
@@ -77,8 +81,9 @@ async function soleOwnerWithRenamedSubdomain(label = 'acme', renamedTo = 'acme-i
     name: 'Personal',
     ownerUserId: user.id,
   });
-  await publicSubdomainService.claim(workspace.id, label, user.id);
-  await publicSubdomainService.rename(workspace.id, renamedTo, user.id);
+  await publicSubdomainService.claim(workspace.id, renamedTo, user.id);
+  await ageLiveSubdomain(workspace.id);
+  await giveLegacyAlias(workspace.id, `${label}.${BASE}`);
   return {
     userId: user.id,
     workspaceId: workspace.id,
@@ -87,6 +92,25 @@ async function soleOwnerWithRenamedSubdomain(label = 'acme', renamedTo = 'acme-i
     liveLabel: renamedTo,
     aliasLabel: label,
   };
+}
+
+/**
+ * Move the live subdomain's claim two days back, so the delete holds it: a label
+ * held under 24 hours returns to the pool at once (§8 Amendment 3 rule 3), and
+ * that case is `workspaceDeleteReservation.test.ts`'s.
+ */
+async function ageLiveSubdomain(workspaceId: string) {
+  await adminDb.publicAddress.updateMany({
+    where: { workspaceId, kind: 'workspace_subdomain' },
+    data: { createdAt: new Date(Date.now() - 2 * DAY_MS) },
+  });
+}
+
+/** A legacy `workspace_subdomain_alias` row, as the retired rename wrote them. */
+async function giveLegacyAlias(workspaceId: string, hostname: string) {
+  return adminDb.publicAddress.create({
+    data: { workspaceId, hostname, kind: 'workspace_subdomain_alias', status: 'alias' },
+  });
 }
 
 /** A second workspace, with its own owner, ready to try to claim a freed name. */
@@ -137,8 +161,8 @@ async function scheduleDue(userId: string, daysOverdue = 1): Promise<AccountDele
 
 describe('the workspace delete holds the workspace’s subdomain out of the namespace', () => {
   it('refuses another workspace’s claim of BOTH the live name and the retired alias', async () => {
-    // The card's own criterion, and the whole defect in one test: claim, rename
-    // once so a retained alias exists, delete the workspace, then try to take
+    // The card's own criterion, and the whole defect in one test: a workspace
+    // holding a live name and a retained alias is deleted, then we try to take
     // both names from a workspace that has nothing to do with it.
     const gone = await soleOwnerWithRenamedSubdomain();
     await workspacesService.removeWorkspaceAsOrgAdmin({
@@ -154,10 +178,10 @@ describe('the workspace delete holds the workspace’s subdomain out of the name
     const next = await squatter();
     await expect(
       publicSubdomainService.claim(next.workspaceId, gone.liveLabel, next.userId),
-    ).rejects.toBeInstanceOf(HostnameTakenError);
+    ).rejects.toBeInstanceOf(NameQuarantinedError);
     await expect(
       publicSubdomainService.claim(next.workspaceId, gone.aliasLabel, next.userId),
-    ).rejects.toBeInstanceOf(HostnameTakenError);
+    ).rejects.toBeInstanceOf(NameQuarantinedError);
   });
 
   it('leaves the refused claimant NOTHING — the rollback is the whole refusal', async () => {
@@ -174,7 +198,7 @@ describe('the workspace delete holds the workspace’s subdomain out of the name
     const next = await squatter();
     await expect(
       publicSubdomainService.claim(next.workspaceId, gone.liveLabel, next.userId),
-    ).rejects.toBeInstanceOf(HostnameTakenError);
+    ).rejects.toBeInstanceOf(NameQuarantinedError);
 
     expect(
       await adminDb.publicAddress.count({ where: { workspaceId: next.workspaceId } }),
@@ -200,25 +224,27 @@ describe('the workspace delete holds the workspace’s subdomain out of the name
     await publicSubdomainService.claim(next.workspaceId, 'starting-here', next.userId);
     await expect(
       publicSubdomainService.rename(next.workspaceId, gone.liveLabel, next.userId),
-    ).rejects.toBeInstanceOf(HostnameTakenError);
+    ).rejects.toBeInstanceOf(NameQuarantinedError);
 
-    // And no rename was spent on the refusal.
+    // And no change was spent on the refusal, and the old name is still served.
+    expect(await adminDb.publicSubdomainChange.count()).toBe(0);
     const dto = await publicSubdomainService.getForWorkspace(next.workspaceId, next.userId);
-    expect(dto?.aliases).toEqual([]);
+    expect(dto?.label).toBe('starting-here');
   });
 
   it('reserves EVERY retired alias, not just the last one', async () => {
-    // A workspace may retire up to `MAX_SUBDOMAIN_RENAMES` labels. Reserving
-    // only the live one would leave the older links — the ones most likely to be
-    // out in the world — free to be inherited.
+    // A workspace that renamed before §8 Amendment 3 may hold several legacy
+    // aliases. Reserving only the live one would leave the older links — the ones
+    // most likely to be out in the world — free to be inherited.
     const user = await createTestUser();
     const { workspace } = await workspacesService.createWorkspace({
       name: 'Serial renamer',
       ownerUserId: user.id,
     });
-    await publicSubdomainService.claim(workspace.id, 'first', user.id);
-    await publicSubdomainService.rename(workspace.id, 'second', user.id);
-    await publicSubdomainService.rename(workspace.id, 'third', user.id);
+    await publicSubdomainService.claim(workspace.id, 'third', user.id);
+    await ageLiveSubdomain(workspace.id);
+    await giveLegacyAlias(workspace.id, `first.${BASE}`);
+    await giveLegacyAlias(workspace.id, `second.${BASE}`);
     await workspacesService.removeWorkspaceAsOrgAdmin({
       workspaceId: workspace.id,
       actorUserId: user.id,
@@ -231,7 +257,7 @@ describe('the workspace delete holds the workspace’s subdomain out of the name
       await expect(
         publicSubdomainService.claim(next.workspaceId, label, next.userId),
         label,
-      ).rejects.toBeInstanceOf(HostnameTakenError);
+      ).rejects.toBeInstanceOf(NameQuarantinedError);
     }
   });
 
@@ -253,6 +279,7 @@ describe('the workspace delete holds the workspace’s subdomain out of the name
       data: after.map((row) => ({
         hostnameHash: row.hostnameHash,
         retiredFromWorkspaceId: row.retiredFromWorkspaceId,
+        expiresAt: row.expiresAt,
       })),
       skipDuplicates: true,
     });
@@ -283,10 +310,10 @@ describe('the account-erasure sweep does not release the departed workspace’s 
     const next = await squatter();
     await expect(
       publicSubdomainService.claim(next.workspaceId, 'leaver-inc', next.userId),
-    ).rejects.toBeInstanceOf(HostnameTakenError);
+    ).rejects.toBeInstanceOf(NameQuarantinedError);
     await expect(
       publicSubdomainService.claim(next.workspaceId, 'leaver', next.userId),
-    ).rejects.toBeInstanceOf(HostnameTakenError);
+    ).rejects.toBeInstanceOf(NameQuarantinedError);
   });
 
   it('is unaffected by a re-run of the sweep', async () => {
@@ -334,6 +361,7 @@ describe('the retained row satisfies the erasure obligation', () => {
       // Every column, named. A test asserting only "the hostname column is
       // absent" would pass on a schema that added one back.
       expect(Object.keys(row).sort()).toEqual([
+        'expiresAt',
         'hostnameHash',
         'id',
         'retiredAt',

@@ -81,6 +81,7 @@ const OPERATIONS_AT_1_5_0 = 18;
 // 1.7.0 (MOTIR-7676) added three operations — the idea store's public reads —
 // and deprecated none, so the five above are still the only deprecated ones.
 // 1.8.0 (MOTIR-8350) declared a 503 on those three and added no operation.
+// 2.0.0 (MOTIR-9511) reshaped resolvePublicHost's outcomes and added none.
 const OPERATIONS_ADDED_SINCE = 3;
 
 type Operation = Record<string, unknown> & { operationId: string };
@@ -106,10 +107,10 @@ describe('the SERVED contract document — GET /api/openapi/public.json', () => 
     }
   });
 
-  it('reads 1.8.0, with the operation count 1.5.0 served plus the three added since', async () => {
+  it('reads 2.0.0, with the operation count 1.5.0 served plus the three added since', async () => {
     const { doc, operations } = await servedOperations();
-    expect(doc.info.version).toBe('1.8.0');
-    expect(PUBLIC_CONTRACT_VERSION).toBe('1.8.0');
+    expect(doc.info.version).toBe('2.0.0');
+    expect(PUBLIC_CONTRACT_VERSION).toBe('2.0.0');
     expect(operations).toHaveLength(OPERATIONS_AT_1_5_0 + OPERATIONS_ADDED_SINCE);
   });
 

@@ -300,6 +300,11 @@ async function projectedProseAdvisories(
       descriptionMd: proj.projectedDescription.has(node.id)
         ? (proj.projectedDescription.get(node.id) ?? null)
         : (stored?.descriptionMd ?? null),
+      // The MISLABELLED-LINK check's second body (MOTIR-9938), layered the same
+      // way: the plan's explanation where it sets one, the stored one otherwise.
+      explanationMd: proj.projectedExplanation.has(node.id)
+        ? (proj.projectedExplanation.get(node.id) ?? null)
+        : (stored?.explanationMd ?? null),
       exemptIds,
       // Projected shape wins where the plan sets one; stored otherwise.
       type: proj.projectedType.has(node.id)
@@ -998,8 +1003,11 @@ export const planValidityService = {
     opts: { caller?: 'actor' | 'system' } = {},
   ): Promise<WorkItemProseMislabelledLinkAdvisoryDto[]> {
     const proj = await buildProjection(planId, ctx, opts);
+    // A plan proposes a body when it sets a description OR an explanation
+    // (MOTIR-9938): a `modify` that rewrites only the explanation is still the
+    // plan's text, and a link in it is the plan's finding.
     const proposedBodies = new Set(
-      [...proj.projectedDescription.keys()].filter(
+      [...proj.projectedDescription.keys(), ...proj.projectedExplanation.keys()].filter(
         (id) => proj.nodes.get(id)?.projectId === proj.projectId,
       ),
     );

@@ -5,9 +5,12 @@ import { Button } from '../src/index';
 
 // MOTIR-9758 — `boardWidth`: the board used to be hard-coded to a 64rem column,
 // so a mock of a page that ships wider was drawn squeezed into the middle, and
-// authors string-replaced the class in the rendered HTML to widen it.
+// authors string-replaced the class in the rendered HTML to widen it. Since 0.19
+// the board is full width unless a mock asks for less: a design result is
+// reviewed at the width of the screen it is opened on.
 
 const NARROW = 'mx-auto flex max-w-[64rem] flex-col gap-8 p-8';
+const FULL = 'mx-auto flex w-full flex-col gap-8 p-8';
 
 const base: RenderMockOptions = {
   title: 'Board width',
@@ -36,19 +39,25 @@ function styleText(html: string): string {
 }
 
 describe('renderMock boardWidth', () => {
-  it('omitted, the board is the 64rem column it has always been — byte for byte the same as "narrow"', async () => {
+  it('omitted, the board is full width — byte for byte the same as "full"', async () => {
     const omitted = await renderMock(base);
-    expect(boardClass(omitted)).toBe(NARROW);
-    expect(await renderMock({ ...base, boardWidth: 'narrow' })).toBe(omitted);
+    expect(boardClass(omitted)).toBe(FULL);
+    expect(await renderMock({ ...base, boardWidth: 'full' })).toBe(omitted);
     expect(omitted).not.toContain('<!-- renderMock: boardWidth');
   });
 
   it('"full" draws the board at the viewport width, with no 64rem cap anywhere', async () => {
     const html = await renderMock({ ...base, boardWidth: 'full' });
-    expect(boardClass(html)).toBe('mx-auto flex w-full flex-col gap-8 p-8');
+    expect(boardClass(html)).toBe(FULL);
     expect(html).not.toContain('max-w-[64rem]');
     expect(styleText(html)).not.toContain('64rem');
     expect(styleText(html)).toMatch(/\.w-full\s*\{\s*width:\s*100%/);
+  });
+
+  it('"narrow" keeps the 64rem column mocks had before 0.19', async () => {
+    const html = await renderMock({ ...base, boardWidth: 'narrow' });
+    expect(boardClass(html)).toBe(NARROW);
+    expect(styleText(html)).toMatch(/\.max-w-\\\[64rem\\\]\s*\{\s*max-width:\s*64rem/);
   });
 
   it('a max-width class is put on the board and COMPILED, so the page ships at that width', async () => {
@@ -62,11 +71,11 @@ describe('renderMock boardWidth', () => {
     ['an empty string', ''],
     ['two classes', 'max-w-[1400px] px-0'],
     ['a non-string', 1400 as never],
-  ])('%s falls back to "narrow" and says so, never throws', async (_name, boardWidth) => {
+  ])('%s falls back to "full" and says so, never throws', async (_name, boardWidth) => {
     const html = await renderMock({ ...base, boardWidth });
-    expect(boardClass(html)).toBe(NARROW);
+    expect(boardClass(html)).toBe(FULL);
     expect(html).toMatch(
-      /^<!doctype html>\n<!-- renderMock: boardWidth .* fell back to "narrow" -->\n/,
+      /^<!doctype html>\n<!-- renderMock: boardWidth .* fell back to "full" -->\n/,
     );
   });
 });

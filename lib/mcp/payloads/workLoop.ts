@@ -257,6 +257,14 @@ export const mcpPlanSchema = planSchema.omit({ proposals: true, proposalCount: t
       settledAt: z.string(),
     })
     .nullable(),
+  /**
+   * The PLANNER's own record (MOTIR-9978) — machine state the authoring agent
+   * keeps on the plan through `update_plan`, as data rather than in the summary.
+   * MCP-only, and not on `PlanWithItemsDto` at all, so neither v1 nor the review
+   * surface receives it. Present (null when none) on `get_plan` and
+   * `update_plan`; absent on the other plan payloads.
+   */
+  plannerRecord: z.record(z.string(), z.unknown()).nullable().optional(),
   items: z.array(z.unknown()),
   /**
    * The OPTIONAL sections view (MOTIR-9033): each `add` proposal's body parsed at

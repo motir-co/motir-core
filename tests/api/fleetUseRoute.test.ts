@@ -114,7 +114,7 @@ describe('GET fleet-use', () => {
         noFleet: false,
       });
       expect(fleetUse.figures.agentRunsInParallel.figure).toBe(figures.agentRunsInParallel);
-      expect(fleetUse.figures.agentsRunningInOrg.figure).toBe(figures.agentsRunningPerOrg);
+      expect(fleetUse.figures.agentsInOrg.figure).toBe(figures.agentsPerOrg);
       expect(fleetUse.figures.agentsPerPerson.figure).toBe(figures.agentsPerUser);
       expect(fleetUse.figures.ciJobsInFlight.figure).toBe(figures.ciBurstCap);
       const text = JSON.stringify(fleetUse);

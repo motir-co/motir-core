@@ -26,6 +26,8 @@ import { truncateAuthTables } from '../helpers/db';
 import {
   ADD_SHARD_ENTERPRISE_SLUG as SLUG,
   FakeOrganization,
+  buildStacksInto,
+  stubPoolDefinitionEnv,
   installAddShardGithub,
   newGithubWorld,
   type GithubWorld,
@@ -408,6 +410,7 @@ beforeAll(async () => {
   vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', SECRETS.managementKey);
   vi.stubEnv('AWS_ORG_ADMIN_SECRET_ACCESS_KEY', SECRETS.managementSecret);
   vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', 'arn:aws:iam::576360162297:role/motir-add-shard');
+  stubPoolDefinitionEnv();
   vi.spyOn(console, 'warn').mockImplementation(() => undefined);
   vi.spyOn(console, 'error').mockImplementation(() => undefined);
   _resetInstallationTokenCache();
@@ -417,6 +420,7 @@ beforeAll(async () => {
   github = newGithubWorld();
   github.orgs.add(GITHUB_ORG);
   organization = new FakeOrganization(SESSION);
+  buildStacksInto(organization, () => ec2);
   organization.quota = 5; // a new account's AWS default
   const ec2 = new AwsEc2Fake();
   installAddShardGithub(github, SECRETS.installation);
@@ -626,11 +630,11 @@ describe('the larger-pool recipe, steps 5–8, for one pool_600k org', () => {
 
   it('recipe 8 — a member creates agents: the tenth is created, the eleventh refused naming the plan; 10 / 50 as on the floor', async () => {
     const read = await caps(rung.organizationId);
-    expect([read.agentsPerUser, read.agentsRunningPerOrg]).toEqual([
+    expect([read.agentsPerUser, read.agentsPerOrg]).toEqual([
       LARGER_POOL_FLOOR_CAPS.agentsPerUser,
-      LARGER_POOL_FLOOR_CAPS.agentsRunningPerOrg,
+      LARGER_POOL_FLOOR_CAPS.agentsPerOrg,
     ]);
-    expect([read.agentsPerUser, read.agentsRunningPerOrg]).toEqual([10, 50]);
+    expect([read.agentsPerUser, read.agentsPerOrg]).toEqual([10, 50]);
 
     const project = await adminDb.project.findUniqueOrThrow({ where: { id: rung.projectId } });
     const ctx = { userId: rung.userId, workspaceId: rung.workspaceId };

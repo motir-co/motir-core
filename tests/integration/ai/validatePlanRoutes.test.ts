@@ -480,6 +480,7 @@ describe('POST /api/internal/ai/validate-plan-forest', () => {
         label: 'PROD-404',
         targetId: 'cl_no_such_card',
         targetKey: null,
+        field: 'descriptionMd',
       },
     ]);
 

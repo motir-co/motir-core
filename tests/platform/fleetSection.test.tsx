@@ -41,7 +41,7 @@ const fleet = en.platformAdmin.monitoring.fleet;
 const capped = (
   planKey: string,
   planName: string,
-  figures: [runs: number, perUser: number, running: number, ci: number],
+  figures: [runs: number, perUser: number, perOrg: number, ci: number],
   ciBurstSource: 'plan' | 'override' | 'unreadable' = 'plan',
 ): FleetOrgPlanDTO => ({
   kind: 'capped',
@@ -49,7 +49,7 @@ const capped = (
   planName,
   agentRunsInParallel: figures[0],
   agentsPerUser: figures[1],
-  agentsRunningPerOrg: figures[2],
+  agentsPerOrg: figures[2],
   ciBurstCap: ciBurstSource === 'unreadable' ? null : figures[3],
   ciBurstSource,
 });
@@ -64,6 +64,7 @@ function row(overrides: Partial<FleetOrgRowDTO> = {}): FleetOrgRowDTO {
     isMeta: false,
     internalBilling: false,
     byWorkload: { ci_runner: 42, hosted_agent: 6, code_graph_index: 2, agent_instance: 3 },
+    agentsLive: 3,
     plan: MAX,
     accruedMinutesInWindow: 386,
     confirmedCreditsThisMonth: 18_420,
@@ -296,12 +297,15 @@ describe('organisations card', () => {
           name: 'Halcyon',
           plan: STANDARD,
           byWorkload: { ci_runner: 4, hosted_agent: 1, code_graph_index: 2, agent_instance: 0 },
+          agentsLive: 0,
         }),
         row({
           organizationId: 'org_pro',
           name: 'Initech',
           plan: PRO,
+          // 4 running, 7 live: the agent-instance cell reads the LIVE count (MOTIR-9954).
           byWorkload: { ci_runner: 2, hosted_agent: 2, code_graph_index: 0, agent_instance: 4 },
+          agentsLive: 7,
         }),
       ]),
       kills: kills([]),
@@ -323,7 +327,7 @@ describe('organisations card', () => {
       'Pro · 5 per person',
       '2 of 10',
       '2 of 3',
-      '4 of 30',
+      '7 of 30',
       '0',
     ]);
     // At the figure the bar is full and takes the warning fill; under it, the accent.

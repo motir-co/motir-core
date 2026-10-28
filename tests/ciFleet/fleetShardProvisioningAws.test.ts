@@ -1,6 +1,7 @@
 import { generateKeyPairSync } from 'node:crypto';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  AwsManagementApiError,
   type AwsCredentialsConfig,
   type AwsSessionCredentials,
   type Ec2Api,
@@ -22,6 +23,9 @@ import { truncateAuthTables } from '../helpers/db';
 import {
   ADD_SHARD_ENTERPRISE_SLUG as SLUG,
   FakeOrganization,
+  POOL_DEFINITION,
+  buildStacksInto,
+  stubPoolDefinitionEnv,
   installAddShardGithub,
   newGithubWorld,
   type GithubWorld,
@@ -30,7 +34,8 @@ import {
 // `fleet-admin add-shard --provider aws` (Story MOTIR-9270 · MOTIR-9278), against
 // a real database for the row and the audit entry, GitHub stubbed at `fetch`, the
 // AWS management calls behind an in-memory organization, and the network built by
-// the REAL `ensureAwsShardNetwork` over the in-memory EC2 of the network card.
+// the pool-account definition's stack instance (MOTIR-9845), seeded into the
+// in-memory EC2 of the network card and read back by the REAL `readAwsShardNetwork`.
 
 const ec2FakePath = '../../packages/orchestrator/test/contract/awsEc2Fake';
 
@@ -51,8 +56,6 @@ const SECRETS = {
   installation: 'ghs_INSTALL_SECRET_never_printed',
   managementKey: 'AKIA_MANAGEMENT_never_printed',
   managementSecret: 'MANAGEMENT_SECRET_never_printed',
-  runtimeKeyId: 'AKIA_RUNTIME_never_printed',
-  runtimeSecret: 'RUNTIME_SECRET_never_printed',
   sessionKeyId: 'ASIA_SESSION_never_printed',
   sessionSecret: 'SESSION_SECRET_never_printed',
   sessionToken: 'SESSION_TOKEN_never_printed',
@@ -111,18 +114,12 @@ async function shardRow() {
   return adminDb.fleetShard.findUnique({ where: { name: NAME } });
 }
 
-/** The person's step, exactly as add-shard words it. */
-function credentialStep(accountId: string): string {
+/** The step add-shard words when the runner role cannot be assumed yet. */
+function roleStep(accountId: string): string {
   return (
-    `create an access key for the IAM user motir-fleet-runner in AWS account ${accountId} ` +
-    '(IAM console → Users → motir-fleet-runner → Security credentials → Create access key), ' +
-    `then run: flyctl secrets set -a motir-core ${PREFIX}_ACCESS_KEY_ID=… ${PREFIX}_SECRET_ACCESS_KEY=…`
+    `the role motir-fleet-runner in AWS account ${accountId} could not be assumed yet ` +
+    '(IAM propagates within minutes); the next growth pass resumes this account'
   );
-}
-
-function setRuntimeKey(): void {
-  vi.stubEnv(`${PREFIX}_ACCESS_KEY_ID`, SECRETS.runtimeKeyId);
-  vi.stubEnv(`${PREFIX}_SECRET_ACCESS_KEY`, SECRETS.runtimeSecret);
 }
 
 beforeAll(async () => {
@@ -145,12 +142,12 @@ beforeEach(async () => {
   vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', SECRETS.managementKey);
   vi.stubEnv('AWS_ORG_ADMIN_SECRET_ACCESS_KEY', SECRETS.managementSecret);
   vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', 'arn:aws:iam::576360162297:role/motir-add-shard');
-  vi.stubEnv(`${PREFIX}_ACCESS_KEY_ID`, '');
-  vi.stubEnv(`${PREFIX}_SECRET_ACCESS_KEY`, '');
+  stubPoolDefinitionEnv();
   _resetInstallationTokenCache();
   _resetProvisioningInstallationCache();
   github = newGithubWorld();
   organization = new FakeOrganization(SESSION);
+  buildStacksInto(organization, () => ec2);
   ec2 = new AwsEc2Fake();
   ec2Keys = [];
   installAddShardGithub(github, SECRETS.installation);
@@ -185,9 +182,17 @@ describe('add-shard --provider aws, first run', () => {
     expect(result.code).toBe(2);
     expect(organization.calls.filter((c) => c === 'createOrganizationAccount')).toHaveLength(1);
     const account = organization.accounts.get(NAME)!;
-    // The network: one VPC, built in the member account with its session.
-    expect(ec2.count('createVpc')).toBe(1);
-    expect(ec2Keys).toEqual([SECRETS.sessionKeyId]);
+    // The network: built by the definition — the account joins its kind's unit
+    // and gets one stack instance — and read back in the member account with its
+    // session. No EC2 create call is made.
+    expect(organization.accountUnits.get(account.accountId)).toBe(
+      POOL_DEFINITION.unitId('ci_runner'),
+    );
+    expect([...organization.stackInstances.keys()]).toEqual([
+      `${POOL_DEFINITION.stackSetName}/${account.accountId}/us-east-1`,
+    ]);
+    expect(ec2.mutations()).toEqual([]);
+    expect(new Set(ec2Keys)).toEqual(new Set([SECRETS.sessionKeyId]));
 
     const row = await shardRow();
     expect(row).toMatchObject({
@@ -209,13 +214,22 @@ describe('add-shard --provider aws, first run', () => {
     });
 
     expect(result.out).toMatch(/^provider_account\s+done — created AWS account/m);
-    expect(result.out).toMatch(/^network\s+done — created vpc:/m);
+    expect(result.out).toMatch(
+      /^network\s+done — created unit-membership:.*stack-instance:.*; vpc vpc-/m,
+    );
     expect(result.out).toContain('Pending manual steps:');
     expect(result.out).toContain(
       `raise the account's vCPU quota from ${SHARD_VCPU_QUOTA_TARGET - 1_000} to at least ` +
         `${SHARD_VCPU_QUOTA_TARGET}`,
     );
-    expect(result.out).toContain(credentialStep(account.accountId));
+    // The runner role the stack built is confirmed by assuming it: no person is
+    // asked to mint a key (MOTIR-9847).
+    expect(result.out).toMatch(
+      /^runtime_credential\s+already — the runtime credential is confirmed/m,
+    );
+    expect(organization.calls).toContain(`assumeRunnerRole:${account.accountId}`);
+    expect(result.out).not.toContain('access key');
+    expect(result.out).not.toContain('flyctl secrets set');
   });
 
   it('a re-run files no create and reports every completed step already', async () => {
@@ -252,19 +266,19 @@ describe('add-shard --provider aws, first run', () => {
     expect((await shardRow())!.awsAccountId).toBe(organization.accounts.get(NAME)!.accountId);
   });
 
-  it('with the quota at target and the runtime key accepted, a resume makes the row active and exits 0', async () => {
+  it('with the quota at target, a resume makes the row active and exits 0', async () => {
     await run(args());
     organization.quota = SHARD_VCPU_QUOTA_TARGET;
-    setRuntimeKey();
-    ec2Keys = [];
+    organization.calls.length = 0;
 
     const result = await run(args());
 
     expect(result.code).toBe(0);
     expect(result.out).not.toContain('Pending manual steps');
     expect(result.out).toMatch(/^runtime_credential\s+already/m);
-    // The key was tried read-only, with itself.
-    expect(ec2Keys).toContain(SECRETS.runtimeKeyId);
+    // The role was confirmed by assuming it; no EC2 call is made with a runner key.
+    const accountId = organization.accounts.get(NAME)!.accountId;
+    expect(organization.calls).toContain(`assumeRunnerRole:${accountId}`);
     expect(ec2.mutations().some((m) => /run|terminate/.test(m.method))).toBe(false);
     expect(await shardRow()).toMatchObject({
       state: 'active',
@@ -272,16 +286,21 @@ describe('add-shard --provider aws, first run', () => {
     });
   });
 
-  it('a runtime key EC2 refuses stays pending', async () => {
+  it('a runner role that cannot be assumed yet stays pending, with the role step', async () => {
+    // The first run creates the account; the role is refused on the second.
     await run(args());
     organization.quota = SHARD_VCPU_QUOTA_TARGET;
-    setRuntimeKey();
-    ec2.failNext('describeInstances', 'AuthFailure', 401);
+    const accountId = organization.accounts.get(NAME)!.accountId;
+    organization.runnerAssumeFailures.set(
+      accountId,
+      new AwsManagementApiError('sts', 'AccessDenied', 403),
+    );
 
     const result = await run(args());
 
     expect(result.code).toBe(2);
     expect(result.out).toMatch(/^runtime_credential\s+pending/m);
+    expect(result.out).toContain(roleStep(accountId));
     expect((await shardRow())!.state).toBe('provisioning');
   });
 });
@@ -294,6 +313,24 @@ describe('refusals', () => {
 
     expect(result.code).toBe(1);
     expect(result.err).toContain('missing env: AWS_ORG_ADMIN_ROLE_ARN');
+    expect(github.calls).toEqual([]);
+    expect(organization.calls).toEqual([]);
+  });
+
+  // MOTIR-9839: the role ARN alone is a whole management credential.
+  it('preflight passes with the role ARN alone, and names the missing half of a half-set key', async () => {
+    vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', '');
+    vi.stubEnv('AWS_ORG_ADMIN_SECRET_ACCESS_KEY', '');
+    const roleOnly = await run(args({ region: 'Mars' }));
+    expect(roleOnly.code).toBe(1);
+    expect(roleOnly.err).toContain('--region Mars is not an AWS region id');
+    expect(roleOnly.err).not.toContain('missing env');
+
+    vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', SECRETS.managementKey);
+    const halfKey = await run(args());
+    expect(halfKey.code).toBe(1);
+    expect(halfKey.err).toContain('missing env: AWS_ORG_ADMIN_SECRET_ACCESS_KEY');
+    expect(halfKey.err).not.toContain('AWS_ORG_ADMIN_ACCESS_KEY_ID');
     expect(github.calls).toEqual([]);
     expect(organization.calls).toEqual([]);
   });
@@ -379,7 +416,6 @@ describe('the secrets', () => {
   it('mints no key, and no secret or session credential reaches stdout, stderr or the audit row', async () => {
     const first = await run(args());
     organization.quota = SHARD_VCPU_QUOTA_TARGET;
-    setRuntimeKey();
     const second = await run(args());
 
     expect(organization.calls.some((c) => /AccessKey/i.test(c))).toBe(false);

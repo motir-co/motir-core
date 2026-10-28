@@ -98,9 +98,7 @@ describe('figureView', () => {
   });
 
   it('reads use alone under no plan limits', () => {
-    expect(
-      figureView('agentsRunningInOrg', { ...row, figure: null, inUse: 7 }, 'en', true),
-    ).toEqual({
+    expect(figureView('agentsInOrg', { ...row, figure: null, inUse: 7 }, 'en', true)).toEqual({
       reading: { key: 'running', values: { count: '7' } },
       pct: null,
     });

@@ -21,6 +21,7 @@ import { withOrgServiceWriteContext } from '@/lib/organizations/context';
 import { ciLiveAccrualRepository } from '@/lib/repositories/ciLiveAccrualRepository';
 import { ciPeriodChargeRepository } from '@/lib/repositories/ciPeriodChargeRepository';
 import { ciRunnerProvisioningIntentRepository as intents } from '@/lib/repositories/ciRunnerProvisioningIntentRepository';
+import { agentInstanceRepository } from '@/lib/repositories/agentInstanceRepository';
 import { fleetInFlightSlotRepository } from '@/lib/repositories/fleetInFlightSlotRepository';
 import { fleetMachineKillRepository } from '@/lib/repositories/fleetMachineKillRepository';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
@@ -206,6 +207,9 @@ export interface FleetOrgReading {
   facts: FleetFacts;
   verdicts: FleetVerdict[];
   byWorkload: Record<FleetWorkloadKind, number>;
+  /** The org's live agent instances, running or hibernating — what its plan's
+   *  `agentsPerOrg` counts (MOTIR-9954). The census counts only running ones. */
+  agentsLive: number;
   plan: FleetOrgPlanDTO;
   accruedMinutesInWindow: number;
   /** The balance figure the zero-stop read returned, when it was read and answered. */
@@ -272,6 +276,7 @@ function toRow(
     isMeta: org?.isMeta ?? reading.facts.isMeta,
     internalBilling: reading.internalBilling,
     byWorkload: reading.byWorkload,
+    agentsLive: reading.agentsLive,
     plan: reading.plan,
     accruedMinutesInWindow: reading.accruedMinutesInWindow,
     confirmedCreditsThisMonth: charge?.debitedCredits ?? 0,
@@ -365,6 +370,7 @@ export const platformFleetMonitorService = {
           tx,
         ),
         census: await fleetCeilingService.orgCensus(organizationId, now, tx),
+        agentsLive: await agentInstanceRepository.countLiveOrAdmitting(organizationId, [], tx),
       };
     });
     const org = await withOrgServiceWriteContext(organizationId, async (tx) => {
@@ -425,6 +431,7 @@ export const platformFleetMonitorService = {
       facts,
       verdicts: classify(facts, now),
       byWorkload: fleet.census.byWorkload,
+      agentsLive: fleet.agentsLive,
       plan,
       accruedMinutesInWindow: Math.floor(fleet.accruedSeconds / 60),
       balanceCredits: balanceRead.credits,

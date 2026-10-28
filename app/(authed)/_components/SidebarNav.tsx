@@ -272,7 +272,7 @@ export function SidebarNav({
   // nothing marks the gap: no empty heading, no disabled row.
   if (isWorkspaceSettingsPath(pathname)) {
     const workspaceSections: SidebarSection[] = groupWorkspaceSettingsNav(
-      visibleWorkspaceSettingsNav(workspaceTierRevealed),
+      visibleWorkspaceSettingsNav(workspaceTierRevealed, undefined, availability),
     ).map(({ group, entries }) => ({
       id: `workspace-settings-${group}`,
       label: ts(`workspace.nav.group.${group}`),

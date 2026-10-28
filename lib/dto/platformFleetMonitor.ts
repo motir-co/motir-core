@@ -52,6 +52,9 @@ export interface FleetOrgRowDTO {
   internalBilling: boolean;
   /** Running containers per workload — the census the admission reads. */
   byWorkload: Record<FleetWorkloadKind, number>;
+  /** The org's live agent instances, running or hibernating — what the plan's
+   *  `agentsPerOrg` counts, so the agent-instance cell reads against it (MOTIR-9954). */
+  agentsLive: number;
   /** The plan's figures each workload is read against (MOTIR-9377). */
   plan: FleetOrgPlanDTO;
   /** Whole minutes the live charge accrued for the org in the window. */

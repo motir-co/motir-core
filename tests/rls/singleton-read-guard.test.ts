@@ -133,10 +133,6 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
     'public',
     'public_address_public_read (20260903010000) · publicAddressRepository.test "the public read arm" (5 cases, both directions under SET LOCAL ROLE motir_app) + publicHostResolution.test',
   ],
-  'publicAddressRepository.ts#findLiveSubdomainForWorkspacePublic': [
-    'public',
-    'public_address_public_read (20260903010000) · publicHostResolution.test "a retired subdomain reports where to redirect" — the alias hop',
-  ],
   'publicAddressRepository.ts#listForWorkspace': [
     'public',
     'public_address_public_read (20260903010000) · publicHostResolution.test "addressesForProject — the ADR §7 default rule" (6 cases)',
@@ -144,10 +140,6 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
   'publicAddressRepository.ts#listForWorkspaces': [
     'public',
     'public_address_public_read (20260903010000) · publicHostResolution.test "primaryHostsForProjects — the batched crawl read" (3 cases)',
-  ],
-  'projectRepository.ts#listPublicByWorkspace': [
-    'public',
-    'project_public_read (20260811230000) · publicHostResolution.test "a workspace subdomain lists that workspace\u2019s public projects" + "a subdomain whose workspace holds NO public project"',
   ],
   'projectRepository.ts#findPublicByIdInternal': [
     'public',

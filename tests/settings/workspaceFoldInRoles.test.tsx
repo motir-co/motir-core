@@ -11,7 +11,9 @@ import { cleanup, render, screen } from '@testing-library/react';
 //   * the migration notice mounts only when a report page has rows;
 //   * an org Owner / Admin's Leave is locked by the org role, naming both tiers;
 //   * the Roles door counts the workspace's custom roles;
-//   * a workspace that went away between the reads renders nothing.
+//   * a workspace that went away between the reads renders nothing;
+//   * the Public address door (Story MOTIR-4528 · MOTIR-9514) mounts only on
+//     cloud with a base domain, and names the workspace's host when it has one.
 
 vi.mock('next-intl/server', () => ({
   getTranslations: async () => (key: string) => key,
@@ -27,11 +29,35 @@ const svc = vi.hoisted(() => ({
     customRoles: [] as { id: string; name: string }[],
   },
   lockedByOrganization: false,
+  cloud: false,
+  tenantDomain: false,
+  subdomain: null as { hostname: string } | null,
+  subdomainReads: 0,
 }));
 const props = vi.hoisted(() => ({
   danger: null as Record<string, unknown> | null,
   twoFactor: null as Record<string, unknown> | null,
   door: null as Record<string, unknown> | null,
+  addressDoor: null as Record<string, unknown> | null,
+}));
+
+vi.mock('@/lib/billing/availability', () => ({ isCloud: () => svc.cloud }));
+vi.mock('@/lib/publicAddresses/tenantDomain', () => ({
+  isTenantDomainConfigured: () => svc.tenantDomain,
+}));
+vi.mock('@/lib/services/publicSubdomainService', () => ({
+  publicSubdomainService: {
+    getForWorkspace: async () => {
+      svc.subdomainReads += 1;
+      return svc.subdomain;
+    },
+  },
+}));
+vi.mock('@/app/(authed)/settings/organization/_components/PublicAddressDoorCard', () => ({
+  PublicAddressDoorCard: (p: Record<string, unknown>) => {
+    props.addressDoor = p;
+    return <div data-testid="address-door" />;
+  },
 }));
 
 vi.mock('@/lib/services/roleMigrationReportService', () => ({
@@ -105,7 +131,11 @@ beforeEach(() => {
     customRoles: [],
   };
   svc.lockedByOrganization = false;
-  props.danger = props.twoFactor = props.door = null;
+  svc.cloud = false;
+  svc.tenantDomain = false;
+  svc.subdomain = null;
+  svc.subdomainReads = 0;
+  props.danger = props.twoFactor = props.door = props.addressDoor = null;
 });
 afterEach(() => cleanup());
 
@@ -161,5 +191,30 @@ describe('the fold-in’s role branches', () => {
   it('a workspace that went away between the reads renders nothing', async () => {
     svc.summary = null;
     expect(await section()).toBeNull();
+  });
+
+  it('the Public address door mounts only on cloud with a base domain, and reads nothing otherwise', async () => {
+    render(<>{await section()}</>);
+    expect(screen.queryByTestId('address-door')).toBeNull();
+    cleanup();
+
+    svc.cloud = true;
+    render(<>{await section()}</>);
+    expect(screen.queryByTestId('address-door')).toBeNull();
+    expect(svc.subdomainReads).toBe(0);
+    cleanup();
+
+    svc.tenantDomain = true;
+    render(<>{await section()}</>);
+    expect(screen.getByTestId('address-door')).toBeTruthy();
+    expect(props.addressDoor).toEqual({ hostname: null });
+    expect(svc.subdomainReads).toBe(1);
+  });
+
+  it('the Public address door names the workspace’s host once one is claimed', async () => {
+    svc.cloud = svc.tenantDomain = true;
+    svc.subdomain = { hostname: 'acme.motir.site' };
+    render(<>{await section()}</>);
+    expect(props.addressDoor).toEqual({ hostname: 'acme.motir.site' });
   });
 });

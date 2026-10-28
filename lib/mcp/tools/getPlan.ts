@@ -511,6 +511,8 @@ export async function runGetPlan(
   // the same reading `/api/v1` presents beside `parentRef`.
   const folders = await planReviewService.resolveProposalFolders(plan, ctx);
   const marks = await resolveMarks(plan, ctx);
+  // The authoring agent's own record (MOTIR-9978) — on THIS payload, never on the plan DTO.
+  const plannerRecord = await plansService.getPlannerRecord(args.planId, ctx);
   // The sections view (MOTIR-9033): every `add`'s proposed body parsed with the
   // kind the plan doors default an unsaid kind to. `modify` / `remove` carry a
   // patch on a card whose kind and type may sit outside it, so they are not parsed.
@@ -536,6 +538,7 @@ export async function runGetPlan(
     summarizePlan(plan, placements, marks, sections),
     derived(planPayload, {
       ...presentMcpPlan(plan, folders),
+      plannerRecord,
       ...(sections ? { parsedSections: Object.fromEntries(sections) } : {}),
     }),
   );

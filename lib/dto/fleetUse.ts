@@ -90,7 +90,7 @@ export interface FleetUseDTO {
   countsRead: boolean;
   figures: {
     agentRunsInParallel: FleetUseFigureDTO;
-    agentsRunningInOrg: FleetUseFigureDTO;
+    agentsInOrg: FleetUseFigureDTO;
     agentsPerPerson: FleetUseFigureDTO;
     ciJobsInFlight: FleetUseFigureDTO;
   };

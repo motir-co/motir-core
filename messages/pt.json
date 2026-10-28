@@ -2071,7 +2071,8 @@
         "workspace": "Espaço de trabalho",
         "security": "Segurança",
         "roles": "Funções e permissões",
-        "jobs": "Execuções de jobs"
+        "jobs": "Execuções de jobs",
+        "publicAddress": "Endereço público"
       }
     },
     "name": {
@@ -2706,43 +2707,6 @@
         "title": "Nenhum namespace público está configurado",
         "description": "Esta implantação não tem um domínio base de tenant definido, então ainda não é possível reivindicar um subdomínio. Um operador define MOTIR_PUBLIC_TENANT_DOMAIN."
       },
-      "subdomain": {
-        "title": "Subdomínio do espaço de trabalho",
-        "subtitle": "Um endereço para todo o espaço de trabalho. Cada projeto público nele responde abaixo desse endereço.",
-        "label": "Subdomínio",
-        "helper": "Seus projetos ficarão em {preview}. Letras minúsculas, dígitos e hífens; de 3 a 63 caracteres.",
-        "claim": "Reivindicar subdomínio",
-        "claimable": "Ele pode ser renomeado depois, um número limitado de vezes.",
-        "active": "Ativo",
-        "alias": "Redireciona para cá",
-        "aliasShort": "Redireciona",
-        "copy": "Copiar endereço",
-        "copied": "Endereço copiado",
-        "open": "Abrir em uma nova aba",
-        "rename": "Renomear",
-        "renamesLeft": "{count, plural, =0 {Não restam renomeações.} one {Resta # renomeação.} other {Restam # renomeações.}}",
-        "readOnly": "Gerenciado por um proprietário ou administrador do espaço de trabalho.",
-        "none": "Nenhum subdomínio reivindicado ainda."
-      },
-      "rename": {
-        "title": "Renomear este subdomínio?",
-        "warningTitle": "O endereço antigo continua funcionando e nunca é liberado.",
-        "warningBody": "{old} redirecionará para cá permanentemente e não poderá ser reivindicado por mais ninguém — nem por você, depois.",
-        "remaining": "Você terá {count, plural, one {# renomeação restante} other {# renomeações restantes}} depois desta.",
-        "cancel": "Cancelar",
-        "confirm": "Renomear"
-      },
-      "release": {
-        "remove": "Remover",
-        "title": "Remover {hostname}?",
-        "lead": "{count, plural, one {Este endereço deixará de responder:} other {Estes # endereços deixarão de responder:}}",
-        "warningTitle": "{count, plural, one {Este nome fica reservado para sempre. Ninguém pode reivindicá-lo novamente — nem você.} other {Estes nomes ficam reservados para sempre. Ninguém pode reivindicá-los novamente — nem você.}}",
-        "warningBody": "O Motir mantém todo nome liberado fora do namespace permanentemente, para que nenhum outro espaço de trabalho herde links que apontavam para o seu.",
-        "renamesAfter": "Você terá {count, plural, =0 {nenhuma renomeação restante} one {# renomeação restante} other {# renomeações restantes}} se reivindicar um subdomínio novamente — liberar não as devolve.",
-        "fallback": "Seus projetos públicos voltam para {url} e aparecem em {site} novamente.",
-        "cancel": "Cancelar",
-        "confirm": "Remover subdomínio"
-      },
       "domains": {
         "title": "Seu próprio domínio",
         "subtitle": "Sirva este projeto a partir de um domínio seu.",
@@ -2831,17 +2795,6 @@
         },
         "lastChecked": "Última verificação {when}",
         "error": "Não deu certo. Tente novamente em instantes."
-      },
-      "error": {
-        "reserved": "{label} está reservado. O Motir mantém um pequeno conjunto de nomes para os próprios hosts e para nomes que um leitor poderia confundir com eles.",
-        "structurallyReserved": "{label} está reservado. Nomes que começam com sublinhado, xn-- ou motir- pertencem ao Motir ou ao próprio DNS.",
-        "tooShort": "Curto demais — um subdomínio tem pelo menos 3 caracteres.",
-        "tooLong": "Longo demais — um subdomínio tem no máximo 63 caracteres.",
-        "badGrammar": "Apenas letras minúsculas, dígitos e hífens, começando e terminando com uma letra ou dígito.",
-        "taken": "{label} já está em uso. Um subdomínio que foi renomeado também mantém o nome, então este pode pertencer a um espaço de trabalho que não responde mais nele.",
-        "capReached": "Você usou todas as renomeações deste espaço de trabalho. O endereço não pode ser alterado novamente.",
-        "forbidden": "Somente um proprietário ou administrador do espaço de trabalho pode alterar este endereço.",
-        "generic": "Não deu certo. Tente novamente em instantes."
       }
     },
     "codeAccess": {
@@ -4274,6 +4227,92 @@
       "saveError": "Algo deu errado. Tente novamente.",
       "saveForbidden": "Você não pode mais alterar onde os Bugs deste projeto são registrados.",
       "folderGone": "Essa Pasta não existe mais. Escolha outra."
+    },
+    "workspaceAddress": {
+      "door": {
+        "title": "Endereço público",
+        "claimed": "{host} — um nome para o espaço de trabalho.",
+        "none": "Nenhum nome reivindicado ainda.",
+        "manage": "Gerenciar →",
+        "claim": "Reivindicar um nome →"
+      },
+      "title": "Endereço público",
+      "subtitle": "O único nome pelo qual seu espaço de trabalho responde.",
+      "readOnly": "Somente proprietários e administradores do espaço de trabalho podem alterar isso.",
+      "none": "Nenhum nome reivindicado ainda.",
+      "unavailable": {
+        "title": "Endereços públicos não estão configurados neste servidor",
+        "description": "Um operador precisa definir MOTIR_PUBLIC_TENANT_DOMAIN antes que um espaço de trabalho possa reivindicar um nome."
+      },
+      "field": {
+        "label": "Nome",
+        "renameLabel": "Novo nome",
+        "hint": "Letras minúsculas, dígitos e hifens simples; de {min} a {max} caracteres. Um espaço de trabalho tem um nome.",
+        "preview": "Os leitores vão encontrar você em {host}"
+      },
+      "claim": "Reivindicar nome",
+      "refusal": {
+        "tooShort": "Use pelo menos {min} caracteres.",
+        "badGrammar": "Use apenas letras minúsculas, dígitos e hifens.",
+        "doubleHyphen": "Um nome não pode ter dois hifens seguidos — isso é reservado para endereços de aplicativos.",
+        "tooLong": "Use no máximo {max} caracteres.",
+        "taken": "{host} já está em uso. Tente outro nome.",
+        "reserved": "“{label}” é reservado. Escolha outro nome.",
+        "quarantined": "{host} foi liberado recentemente e está retido até {date}. A partir daí, qualquer pessoa pode reivindicá-lo.",
+        "generic": "Não foi possível salvar o nome. Tente novamente."
+      },
+      "row": {
+        "live": "No ar",
+        "copy": "Copiar endereço",
+        "copied": "Endereço copiado",
+        "open": "Abrir em uma nova aba"
+      },
+      "rename": "Renomear",
+      "release": "Liberar",
+      "lock": "Você poderá alterar o nome novamente em {date}. Uma renomeação e uma liberação contam como uma alteração cada, uma vez a cada 30 dias.",
+      "lockShort": "Você poderá alterar o nome novamente em {date}.",
+      "review": "Revisar",
+      "cancel": "Cancelar",
+      "confirm": {
+        "renameTitle": "Renomear para {host}?",
+        "releaseTitle": "Liberar {host}?",
+        "stops": "{host} deixa de responder agora.",
+        "returnsOn": "Qualquer pessoa poderá reivindicá-lo a partir de {date}.",
+        "returnsNow": "Qualquer pessoa pode reivindicá-lo imediatamente — você o manteve por menos de 24 horas.",
+        "noRedirectRename": "Nada redireciona do endereço antigo para o novo, então atualize os links que você compartilhou.",
+        "noRedirectRelease": "Nada redireciona. Seus projetos públicos continuam em seus endereços motir.co.",
+        "lockAfterRename": "Você não poderá alterar o nome novamente até {date}.",
+        "lockAfterRelease": "Você pode reivindicar um novo nome imediatamente. A próxima alteração depois disso será permitida a partir de {date}.",
+        "rename": "Renomear",
+        "renaming": "Renomeando…",
+        "release": "Liberar nome",
+        "releasing": "Liberando…"
+      },
+      "toast": {
+        "claimed": "{host} é seu",
+        "renamed": "Renomeado para {host}",
+        "renamedBody": "{old} não responde mais.",
+        "released": "{host} liberado",
+        "refusedTitle": "Nome não alterado",
+        "refusedLimit": "Você poderá alterá-lo novamente em {date}.",
+        "refusedTaken": "{host} acabou de ser reivindicado. Tente outro nome.",
+        "refusedQuarantined": "{host} está retido até {date}."
+      },
+      "released": {
+        "held": "{host} foi liberado. Ele está retido até {date}; depois, qualquer pessoa pode reivindicá-lo.",
+        "free": "{host} foi liberado. Qualquer pessoa pode reivindicá-lo agora.",
+        "lock": "Você pode reivindicar um nome agora. Depois disso, a próxima alteração será permitida a partir de {date}."
+      },
+      "loadError": "Não foi possível carregar o endereço.",
+      "retry": "Tentar novamente",
+      "echo": {
+        "title": "Endereço do espaço de trabalho",
+        "claimedSub": "O nome pelo qual seu espaço de trabalho responde.",
+        "noneSub": "Seu espaço de trabalho ainda não tem nome.",
+        "projectPage": "A página pública deste projeto está em {url}.",
+        "change": "Alterar nas configurações do espaço de trabalho →",
+        "claim": "Reivindicar um nome para o espaço de trabalho →"
+      }
     }
   },
   "boards": {
@@ -6805,13 +6844,13 @@
       "loading": "Carregando…",
       "label": {
         "agentRunsInParallel": "Execuções de agente em paralelo",
-        "agentsRunningInOrg": "Agentes hospedados por organização",
+        "agentsInOrg": "Agentes hospedados por organização",
         "agentsPerPerson": "Agentes hospedados por pessoa",
         "ciJobsInFlight": "Jobs de CI em andamento"
       },
       "explain": {
         "agentRunsInParallel": "Jobs de agentes hospedados executados ao mesmo tempo. Os que passam do limite esperam na fila.",
-        "agentsRunningInOrg": "Agentes hospedados ativos ao mesmo tempo em toda a organização. Acima do limite, um início é recusado, não vai para a fila.",
+        "agentsInOrg": "Agentes hospedados ativos em toda a organização, em execução ou hibernados. Acima do limite, um novo é recusado, não vai para a fila.",
         "agentsPerPerson": "Agentes hospedados ativos que uma pessoa pode ter. Acima do limite, um novo é recusado, não vai para a fila.",
         "ciJobsInFlight": "Jobs de CI executados ao mesmo tempo nos runners do Motir. Os que passam do limite esperam na fila."
       },
@@ -11813,8 +11852,8 @@
           "override": "substituição"
         },
         "facts": {
-          "plan": "Plano <strong>{plan}</strong> · {runs} execuções hospedadas ao mesmo tempo · {perUser} agentes por pessoa · {running} agentes em execução · {ci} jobs de CI ao mesmo tempo",
-          "planCiUnreadable": "Plano <strong>{plan}</strong> · {runs} execuções hospedadas ao mesmo tempo · {perUser} agentes por pessoa · {running} agentes em execução · limite de CI ilegível",
+          "plan": "Plano <strong>{plan}</strong> · {runs} execuções hospedadas ao mesmo tempo · {perUser} agentes por pessoa · {agents} agentes · {ci} jobs de CI ao mesmo tempo",
+          "planCiUnreadable": "Plano <strong>{plan}</strong> · {runs} execuções hospedadas ao mesmo tempo · {perUser} agentes por pessoa · {agents} agentes · limite de CI ilegível",
           "planExempt": "Plano <strong>Sem limite de plano</strong>",
           "planExemptOverride": "Plano <strong>Sem limite de plano</strong> · {ci} jobs de CI ao mesmo tempo (substituição)",
           "planUnknown": "Plano <strong>desconhecido · {key}</strong> · novos contêineres recusados",
@@ -12715,8 +12754,8 @@
       "creditsUnknown": "O Motir não conseguiu verificar os créditos da sua organização agora. Tente novamente em instantes.",
       "userCap": "O plano {plan} da sua organização permite {limit, plural, one {# agente} other {# agentes}} por pessoa. Cada um é cobrado pelo armazenamento todos os dias, mesmo hibernado. Exclua um para criar outro.",
       "userCapNoFigure": "Você já tem tantos agentes quanto o plano da sua organização permite por pessoa. Cada um é cobrado pelo armazenamento todos os dias, mesmo hibernado. Exclua um para criar outro.",
-      "orgRunningLimit": "O plano {plan} da sua organização executa {limit, plural, one {# agente} other {# agentes}} ao mesmo tempo, e todos já estão em execução. Hiberne um para iniciar outro.",
-      "orgRunningLimitNoFigure": "Sua organização já está executando tantos agentes ao mesmo tempo quanto o plano permite. Hiberne um para iniciar outro.",
+      "orgCap": "O plano {plan} da sua organização permite {limit, plural, one {# agente} other {# agentes}} na organização, em execução ou hibernados. Cada um é cobrado pelo armazenamento todos os dias, mesmo hibernado. Exclua um para criar outro.",
+      "orgCapNoFigure": "Sua organização já tem tantos agentes quanto o plano permite, em execução ou hibernados. Cada um é cobrado pelo armazenamento todos os dias, mesmo hibernado. Exclua um para criar outro.",
       "busy": "O Motir está executando o máximo de máquinas que pode agora. Tente novamente em alguns minutos.",
       "notOffered": "Esse agente de código não é oferecido: os termos dele ainda não permitem que uma plataforma o hospede. Escolha outro agente de código.",
       "nameTaken": "Você já tem um agente com o nome {name} neste projeto.",
@@ -12730,7 +12769,7 @@
       "aiPlanUnknown": "Não foi possível verificar seu plano de IA",
       "credits": "Sem créditos",
       "userCap": "Seu limite",
-      "orgRunningLimit": "Limite da sua organização"
+      "orgCap": "Limite da sua organização"
     },
     "lapse": {
       "bannerLead": "O plano de IA da sua organização terminou.",

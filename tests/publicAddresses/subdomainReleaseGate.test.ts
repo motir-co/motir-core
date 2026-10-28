@@ -123,6 +123,21 @@ async function claimAndRename(...labels: readonly string[]): Promise<void> {
   }
 }
 
+/**
+ * Age the live subdomain by `days`, so a release holds its name (§8 Amendment 3
+ * rule 3: a label held 24 hours or more is quarantined). The route reads the real
+ * clock, so the row is moved instead.
+ */
+async function ageLiveSubdomain(days: number): Promise<void> {
+  const live = await adminDb.publicAddress.findFirstOrThrow({
+    where: { workspaceId: fx.workspaceId, kind: 'workspace_subdomain' },
+  });
+  await adminDb.publicAddress.update({
+    where: { id: live.id },
+    data: { createdAt: new Date(live.createdAt.getTime() - days * 24 * 60 * 60 * 1000) },
+  });
+}
+
 async function addressRows() {
   return adminDb.publicAddress.findMany({
     where: { workspaceId: fx.workspaceId },
@@ -138,21 +153,19 @@ async function reservedHashes(): Promise<string[]> {
 }
 
 describe('the release, driven through DELETE', () => {
-  it('answers 204 with no body, takes the live label AND both aliases, and reserves each', async () => {
-    await claimAndRename('acme', 'acme-inc', 'acme-ltd');
-    expect(await addressRows()).toHaveLength(3);
+  it('answers 200 with the return date, stops serving the live label, and holds its name', async () => {
+    await claimAndRename('acme');
+    await ageLiveSubdomain(2);
 
     const res = await DELETE(req('DELETE'), params(fx.workspaceId));
-    expect(res.status).toBe(204);
-    expect(await res.text()).toBe('');
-
-    expect(
-      await addressRows(),
-      'releasing only the live label would leave aliases 301ing to a host that no longer resolves',
-    ).toHaveLength(0);
-    expect(await reservedHashes()).toEqual(
-      [`acme.${BASE}`, `acme-inc.${BASE}`, `acme-ltd.${BASE}`].map(hostnameReservationHash).sort(),
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { returnsAt: string };
+    expect(new Date(body.returnsAt).getTime()).toBeGreaterThan(
+      Date.now() + 89 * 24 * 60 * 60 * 1000,
     );
+
+    expect(await addressRows()).toHaveLength(0);
+    expect(await reservedHashes()).toEqual([hostnameReservationHash(`acme.${BASE}`)]);
   });
 
   it('RESERVES BEFORE IT DELETES — a failing reserve leaves every row standing', async () => {
@@ -161,13 +174,14 @@ describe('the release, driven through DELETE', () => {
     // it into a 2xx. A release that committed the delete and lost the reserve
     // would hand the label back to the global namespace — §8's exact prohibition
     // — and there is no repair, because the row that knew the hostname is gone.
-    await claimAndRename('acme', 'acme-inc');
+    await claimAndRename('acme');
+    await ageLiveSubdomain(2);
     const boom = new Error('reserveMany exploded');
     vi.spyOn(publicHostnameReservationRepository, 'reserveMany').mockRejectedValueOnce(boom);
 
     await expect(DELETE(req('DELETE'), params(fx.workspaceId))).rejects.toBe(boom);
 
-    expect(await addressRows()).toHaveLength(2);
+    expect(await addressRows()).toHaveLength(1);
     expect(await reservedHashes()).toEqual([]);
   });
 
@@ -187,7 +201,7 @@ describe('the release, driven through DELETE', () => {
       data: { primaryAddressId: custom.id },
     });
 
-    expect((await DELETE(req('DELETE'), params(fx.workspaceId))).status).toBe(204);
+    expect((await DELETE(req('DELETE'), params(fx.workspaceId))).status).toBe(200);
 
     const rows = await addressRows();
     expect(rows.map((r) => r.kind)).toEqual(['custom_domain']);
@@ -205,8 +219,8 @@ describe('the release, driven through DELETE', () => {
   });
 
   it('makes NO certificate-provider call — the wildcard issued nothing to withdraw', async () => {
-    await claimAndRename('acme', 'acme-inc');
-    expect((await DELETE(req('DELETE'), params(fx.workspaceId))).status).toBe(204);
+    await claimAndRename('acme');
+    expect((await DELETE(req('DELETE'), params(fx.workspaceId))).status).toBe(200);
     expect(certificateProviderSpy).not.toHaveBeenCalled();
   });
 });
@@ -215,18 +229,19 @@ describe('what the rest of the system then says — through the SERVICES, never 
   it('returns the projects to the motir.co path, and reports no host for them', async () => {
     // A row read would pass while the resolution disagreed, and the resolution
     // is the thing a visitor meets.
+    // Since the address decision (MOTIR-9790) a workspace subdomain serves no
+    // project: the project already answers at its motir.co path while the name
+    // is held, and the release must leave it exactly there.
     await claimAndRename('acme');
-    expect(
-      (
-        await publicAddressesService.addressesForProject(
-          fx.projectId,
-          fx.workspaceId,
-          fx.identifier,
-        )
-      ).primary,
-    ).toBe(`https://acme.${BASE}/${fx.identifier}`);
+    const before = await publicAddressesService.addressesForProject(
+      fx.projectId,
+      fx.workspaceId,
+      fx.identifier,
+    );
+    expect(before.primary).toBe(`${publicSiteOrigin()}${publicProjectPath(fx.identifier)}`);
+    expect(before.alternates).toEqual([]);
 
-    expect((await DELETE(req('DELETE'), params(fx.workspaceId))).status).toBe(204);
+    expect((await DELETE(req('DELETE'), params(fx.workspaceId))).status).toBe(200);
 
     const after = await publicAddressesService.addressesForProject(
       fx.projectId,
@@ -247,23 +262,23 @@ describe('what the rest of the system then says — through the SERVICES, never 
 });
 
 describe('the reservation doing its job, through PUT', () => {
-  it('refuses a re-claim of the released LIVE label and of a released ALIAS label', async () => {
-    // The ALIAS case is the one a kind-filter mistake would let through.
-    await claimAndRename('acme', 'acme-inc');
-    expect((await DELETE(req('DELETE'), params(fx.workspaceId))).status).toBe(204);
+  it('refuses a re-claim of a held name with 409 and the date it returns', async () => {
+    await claimAndRename('acme');
+    await ageLiveSubdomain(2);
+    expect((await DELETE(req('DELETE'), params(fx.workspaceId))).status).toBe(200);
 
-    for (const label of ['acme-inc', 'acme']) {
-      const other = await createTestWorkspace({ name: `Rival ${label}` });
-      ctxRef.current = { userId: other.owner.id, workspaceId: other.workspace.id };
-      const res = await PUT(req('PUT', { label }), params(other.workspace.id));
-      expect(res.status, `${label} must stay unclaimable for ever`).toBe(409);
-      expect(await res.json()).toMatchObject({ code: 'HOSTNAME_TAKEN' });
-    }
+    const other = await createTestWorkspace({ name: 'Rival' });
+    ctxRef.current = { userId: other.owner.id, workspaceId: other.workspace.id };
+    const res = await PUT(req('PUT', { label: 'acme' }), params(other.workspace.id));
+    expect(res.status, 'a held name stays unclaimable until its hold ends').toBe(409);
+    const body = (await res.json()) as { code: string; returnsAt: string };
+    expect(body.code).toBe('NAME_QUARANTINED');
+    expect(new Date(body.returnsAt).getTime()).toBeGreaterThan(Date.now());
   });
 
   it('leaves a DIFFERENT label claimable, so the refusal is specific and not a lock', async () => {
     await claimAndRename('acme');
-    expect((await DELETE(req('DELETE'), params(fx.workspaceId))).status).toBe(204);
+    expect((await DELETE(req('DELETE'), params(fx.workspaceId))).status).toBe(200);
     const other = await createTestWorkspace({ name: 'Rival' });
     ctxRef.current = { userId: other.owner.id, workspaceId: other.workspace.id };
     expect((await PUT(req('PUT', { label: 'acme-two' }), params(other.workspace.id))).status).toBe(
@@ -311,43 +326,56 @@ describe('the route contract, and the two verbs it joins', () => {
     expect(await addressRows()).toHaveLength(1);
   });
 
-  it('leaves GET and PUT behaving exactly as before — this is the only place a regression shows', async () => {
+  it('drives claim, rename, the 30-day limit and release through GET, PUT and DELETE', async () => {
     const claim = await PUT(req('PUT', { label: 'acme' }), params(fx.workspaceId));
     expect(claim.status).toBe(201);
-    expect(await claim.json()).toMatchObject({ hostname: `acme.${BASE}`, aliases: [] });
+    expect(await claim.json()).toMatchObject({
+      hostname: `acme.${BASE}`,
+      nextChangeAllowedAt: null,
+    });
 
     const rename = await PUT(req('PUT', { label: 'acme-inc' }), params(fx.workspaceId));
     expect(rename.status).toBe(200);
-    expect(await rename.json()).toMatchObject({
-      hostname: `acme-inc.${BASE}`,
-      aliases: [{ hostname: `acme.${BASE}` }],
-    });
+    const renamed = (await rename.json()) as { hostname: string; nextChangeAllowedAt: string };
+    expect(renamed.hostname).toBe(`acme-inc.${BASE}`);
+    expect(renamed.nextChangeAllowedAt).toEqual(expect.any(String));
 
     const read = await GET(req('GET'), params(fx.workspaceId));
     expect(read.status).toBe(200);
     expect(await read.json()).toMatchObject({ hostname: `acme-inc.${BASE}` });
 
-    expect((await DELETE(req('DELETE'), params(fx.workspaceId))).status).toBe(204);
+    // A release right after the rename is a second change inside 30 days.
+    const early = await DELETE(req('DELETE'), params(fx.workspaceId));
+    expect(early.status).toBe(409);
+    expect(await early.json()).toMatchObject({
+      code: 'SUBDOMAIN_CHANGE_LIMIT',
+      nextAllowedAt: renamed.nextChangeAllowedAt,
+    });
+
+    await adminDb.publicSubdomainChange.update({
+      where: { workspaceId: fx.workspaceId },
+      data: { lastChangedAt: new Date(Date.now() - 31 * 24 * 60 * 60 * 1000) },
+    });
+    expect((await DELETE(req('DELETE'), params(fx.workspaceId))).status).toBe(200);
     const afterRelease = await GET(req('GET'), params(fx.workspaceId));
     expect(afterRelease.status).toBe(200);
     expect(await afterRelease.json(), 'the pane reads back as unclaimed').toBeNull();
   });
 });
 
-describe('the rename cap after a release (ADR §8 Amendment 2)', () => {
-  it('does NOT reset — a fresh claim starts from what is left, end to end', async () => {
-    // Left to the default, `renamesLeft` is derived from alias ROWS and a release
-    // deletes them, which would make claim → rename ×5 → release an unbounded
-    // burn of names out of a shared namespace. Asserted through the route so the
-    // number the PANE receives is the one under test.
-    await claimAndRename('a-one', 'a-two');
-    expect((await DELETE(req('DELETE'), params(fx.workspaceId))).status).toBe(204);
+describe('the 30-day limit after a release (§8 Amendment 3 rule 4)', () => {
+  it('is not reset by release then claim — the claim is free, the next rename is refused', async () => {
+    // Asserted through the route, so the refusal the PANE receives is the one
+    // under test.
+    await claimAndRename('a-one');
+    expect((await DELETE(req('DELETE'), params(fx.workspaceId))).status).toBe(200);
 
     const reclaim = await PUT(req('PUT', { label: 'b-one' }), params(fx.workspaceId));
     expect(reclaim.status).toBe(201);
-    expect(
-      await reclaim.json(),
-      'two names were burnt — the live label AND its alias — so two of the five are spent',
-    ).toMatchObject({ renamesLeft: 3 });
+    expect(await reclaim.json()).toMatchObject({ nextChangeAllowedAt: expect.any(String) });
+
+    const rename = await PUT(req('PUT', { label: 'b-two' }), params(fx.workspaceId));
+    expect(rename.status).toBe(409);
+    expect(await rename.json()).toMatchObject({ code: 'SUBDOMAIN_CHANGE_LIMIT' });
   });
 });

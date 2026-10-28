@@ -1,4 +1,3 @@
-import { vi } from 'vitest';
 import type {
   AwsHostAgentConfig,
   Ec2Api,
@@ -16,6 +15,7 @@ import type {
 import type { FleetShard } from '@/generated/prisma/client';
 import type { FleetShardDTO } from '@/lib/dto/fleetShard';
 import { adminDb } from './adminDb';
+import { runnerRole, stubAwsManagementCredential } from './awsRunnerRoleFake';
 
 // THE AGENT HOSTER, ASSEMBLED (Story MOTIR-9361 · MOTIR-9477). Two (or more) AWS
 // hoster accounts, each the REAL AWS persistent adapter over its own in-memory
@@ -111,16 +111,19 @@ async function source(): Promise<Source> {
   return world.source;
 }
 
-/** `@motir/orchestrator`, the source, with each account's EC2 answered by its key id. */
+/** `@motir/orchestrator`, the source, with each account's EC2 answered by the
+ *  key id of its runner-role session (MOTIR-9847). */
 export async function hosterOrchestratorPackage(): Promise<Source> {
   const pkg = await source();
   return {
     ...pkg,
-    createEc2Api: ((credentials: { accessKeyId: string }) => {
-      const account = world.byKeyId.get(credentials.accessKeyId);
-      if (!account) throw new Error(`no hoster account answers key ${credentials.accessKeyId}`);
-      return account.ec2;
-    }) as Source['createEc2Api'],
+    createAwsManagementApi: (() =>
+      runnerRole.management()) as unknown as Source['createAwsManagementApi'],
+    createEc2Api: ((config: Parameters<typeof runnerRole.ec2For>[0]) =>
+      runnerRole.ec2For(
+        config,
+        (keyId) => world.byKeyId.get(keyId)?.ec2,
+      )) as unknown as Source['createEc2Api'],
   };
 }
 
@@ -266,6 +269,7 @@ export async function configureHoster(options: {
     world.hostAgentConfig = testHostAgentConfig;
   }
   world.byKeyId.clear();
+  runnerRole.reset();
   world.byShardId.clear();
   world.orchestrators.clear();
   world.homes.clear();
@@ -276,13 +280,14 @@ export async function configureHoster(options: {
 
 let seq = 0;
 
-/** Register an agent-hoster AWS account: its row, its key's env vars, its EC2 and network. */
+/** Register an agent-hoster AWS account: its row, its runner role, its EC2 and network. */
 export async function seedHosterAccount(name: string, machineLimit = 10): Promise<HosterAccount> {
   seq += 1;
   const credentialRef = `FLEET_SHARD_HOSTER_GATE_${seq}`;
   const keyId = `AKIA-GATE-${seq}`;
-  vi.stubEnv(`${credentialRef}_ACCESS_KEY_ID`, keyId);
-  vi.stubEnv(`${credentialRef}_SECRET_ACCESS_KEY`, 'not-a-secret');
+  const awsAccountId = `7777${String(seq).padStart(8, '0')}`;
+  stubAwsManagementCredential();
+  runnerRole.grant(awsAccountId, keyId, 'not-a-secret');
   const shard = await adminDb.fleetShard.create({
     data: {
       name,
@@ -291,7 +296,7 @@ export async function seedHosterAccount(name: string, machineLimit = 10): Promis
       state: 'active',
       githubOrg: 'motir-co',
       githubInstallationId: '556677',
-      awsAccountId: `7777${String(seq).padStart(8, '0')}`,
+      awsAccountId,
       awsRegion: 'us-east-1',
       credentialRef,
       machineLimit,

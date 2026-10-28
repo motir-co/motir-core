@@ -35,12 +35,13 @@ import { truncateAuthTables } from '../helpers/db';
  * It names `enterpriseRequest*`, `story-7602-coverage` and
  * `/admin/enterprise-requests` literally because it asserts their absence.
  *
- * ⚠️ THE TABLE IS IN ITS SCHEMA-ONLY PHASE. The repository's three-phase drop rule
- * (`tests/contract-phase-guard.test.ts`) keeps `enterprise_request` and its five
- * enums in `prisma/schema.prisma` this release, the model `@@ignore`d so the
- * generated client no longer names it; MOTIR-9394 drops them in a later release.
- * So the client's data model is asserted clean here, and the RLS inventory is
- * asserted to agree with the migrated database rather than to omit the table.
+ * ⚠️ THE TABLE WAS DROPPED IN THREE PHASES. The repository's drop rule
+ * (`tests/contract-phase-guard.test.ts`) kept `enterprise_request` and its five
+ * enums in `prisma/schema.prisma` for one release, the model `@@ignore`d so the
+ * generated client no longer named it; MOTIR-9394's CONTRACT migration then
+ * dropped them. So the client's data model is asserted clean here, and the RLS
+ * inventory is asserted to agree with the migrated database rather than to omit
+ * the table, which holds on either side of that migration.
  */
 
 vi.mock('@/lib/platform/auth', async () => {
@@ -413,8 +414,8 @@ describe('the RLS table inventory', () => {
     const rows = await adminDb.$queryRaw<{ present: boolean }[]>`
       SELECT to_regclass('public.enterprise_request') IS NOT NULL AS present`;
     const present = rows[0]?.present ?? false;
-    // SCHEMA-ONLY phase: the table is still migrated, so the inventory must still
-    // classify it; MOTIR-9394's drop flips both together.
+    // The inventory classifies the table exactly while it is migrated; MOTIR-9394's
+    // drop removed both together.
     expect(inventory.includes("'enterprise_request'")).toBe(present);
   });
 });

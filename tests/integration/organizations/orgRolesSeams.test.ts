@@ -179,6 +179,12 @@ describe('seam 2 — a workspace removed at the org tier, its survivals read bac
     process.env['MOTIR_CLOUD'] = 'true';
     process.env['MOTIR_PUBLIC_TENANT_DOMAIN'] = 'motir.test';
     await publicSubdomainService.claim(spare.id, 'spare-co', org.owner.id);
+    // Held two days, so the delete must reserve it: a label held under 24 hours
+    // returns to the pool at once (§8 Amendment 3 rule 3).
+    await adminDb.publicAddress.updateMany({
+      where: { workspaceId: spare.id, kind: 'workspace_subdomain' },
+      data: { createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000) },
+    });
     expect(
       await adminDb.workspaceMembership.count({
         where: { workspaceId: spare.id, userId: org.admin.id },
