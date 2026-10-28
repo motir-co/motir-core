@@ -57,6 +57,10 @@ export interface FakeHostingControls {
   app(appRef: string): FakeHostedApp | undefined;
   /** Every push credential minted, in order. */
   readonly mintedFor: readonly string[];
+  /** The next call of that operation fails at the "provider" with an
+   *  `OrchestratorApiError` and changes nothing — a destroy that destroyed
+   *  nothing, for the usage-always rule's error path. */
+  failNext(operation: 'destroy' | 'destroyApp'): void;
 }
 
 export interface FakeHostingOptions {
@@ -74,6 +78,12 @@ export function createFakeHostingDeployPort(
   let sequence = 0;
   const apps = new Map<string, FakeHostedApp>();
   const mintedFor: string[] = [];
+  const failing = new Set<'destroy' | 'destroyApp'>();
+
+  function injectedFailure(operation: 'destroy' | 'destroyApp'): void {
+    if (!failing.delete(operation)) return;
+    throw new OrchestratorApiError('fake', 503, `injected ${operation} failure`);
+  }
 
   const now = () => new Date(clock);
 
@@ -144,6 +154,9 @@ export function createFakeHostingDeployPort(
       setRunning(appOf(appRef), true);
     },
     app: (appRef) => apps.get(appRef),
+    failNext(operation) {
+      failing.add(operation);
+    },
 
     async ensureApp({ repositoryId, environment }) {
       const names = hostingAppNames(prefix, repositoryId, environment);
@@ -220,6 +233,7 @@ export function createFakeHostingDeployPort(
     },
 
     async destroy(handle) {
+      injectedFailure('destroy');
       const app = apps.get(handle.appRef);
       if (!app || !app.live) {
         return {
@@ -240,7 +254,11 @@ export function createFakeHostingDeployPort(
     },
 
     async destroyApp({ appRef }) {
+      injectedFailure('destroyApp');
+      const app = apps.get(appRef);
       apps.delete(appRef);
+      if (!app?.live) return [];
+      return [usage(app, app.live.releaseId, app.transitions[0]?.at ?? now())];
     },
 
     async listReleases({ appRef }): Promise<ReleaseSummary[]> {

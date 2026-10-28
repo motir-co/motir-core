@@ -13,30 +13,19 @@ import {
   type FlyHostingConfig,
   type HostingDeployPort,
 } from '../src/index';
+import {
+  createHostingFlySim,
+  flyJson,
+  type FlyCall,
+  type SimMachine,
+} from './contract/hostingFlySim';
 
 // The FLY adapter of the HOSTING DEPLOY PORT on the wire (MOTIR-5773) — what each
 // operation turns into on `api.machines.dev`, against an in-memory Machines API
-// that keeps apps, Machines, their config versions and events. `fetch` is the
-// only fake; every request is recorded so a test can assert the body Fly got.
+// that keeps apps, Machines, their config versions and events
+// (`contract/hostingFlySim.ts`). `fetch` is the only fake; every request is
+// recorded so a test can assert the body Fly got.
 
-interface Call {
-  path: string;
-  method: string;
-  body: Record<string, unknown> | null;
-  auth: string | null;
-}
-
-interface SimMachine {
-  id: string;
-  state: string;
-  version: string;
-  config: Record<string, unknown>;
-  versions: Array<{ version: string; user_config: Record<string, unknown> }>;
-  events: Array<{ type: string; status: string; timestamp: number }>;
-  checks: Array<{ name: string; status: string }>;
-}
-
-const API = 'https://api.machines.dev/v1';
 const CONFIG: FlyHostingConfig = {
   token: 'hosting-token',
   org: 'motir-hosting',
@@ -46,95 +35,10 @@ const CONFIG: FlyHostingConfig = {
 const RID = 'cmrepo1';
 const PROD = 'mh-cmrepo1';
 
-let calls: Call[];
+let calls: FlyCall[];
 let apps: Map<string, SimMachine[]>;
-let seq: number;
 let clock: number;
-let overrides: Array<(call: Call) => Response | null>;
-
-function json(status: number, body: unknown): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'content-type': 'application/json' },
-  });
-}
-
-function machineBody(m: SimMachine) {
-  return {
-    id: m.id,
-    name: 'release',
-    state: m.state,
-    region: 'iad',
-    version: m.version,
-    created_at: '2026-10-28T00:00:00.000Z',
-    config: m.config,
-    events: m.events,
-    checks: m.checks,
-  };
-}
-
-function simulate(call: Call): Response {
-  for (const o of overrides) {
-    const res = o(call);
-    if (res) return res;
-  }
-  const parts = call.path.split('?')[0]!.split('/').filter(Boolean).map(decodeURIComponent);
-  // ['apps'] · ['apps', app] · ['apps', app, 'machines', id?, 'versions'?]
-  if (parts.length === 1 && call.method === 'POST') {
-    const name = String(call.body?.['app_name']);
-    if (apps.has(name)) return json(422, { error: 'app name already taken' });
-    apps.set(name, []);
-    return json(201, { id: name });
-  }
-  const app = parts[1]!;
-  const machines = apps.get(app);
-  if (parts.length === 2) {
-    if (call.method === 'GET')
-      return machines ? json(200, { name: app }) : json(404, { error: 'not found' });
-    if (call.method === 'DELETE') {
-      if (!machines) return json(404, { error: 'not found' });
-      apps.delete(app);
-      return json(202, {});
-    }
-  }
-  if (!machines) return json(404, { error: 'app not found' });
-  if (parts[2] === 'ip_assignments') return json(200, call.method === 'GET' ? { ips: [] } : {});
-  if (parts[2] === 'deploy_token') return json(200, { token: `fly-deploy-${app}` });
-  if (parts[2] !== 'machines') return json(500, { error: `unhandled ${call.path}` });
-  const id = parts[3];
-  if (!id) {
-    if (call.method === 'GET') return json(200, machines.map(machineBody));
-    seq += 1;
-    const config = call.body?.['config'] as Record<string, unknown>;
-    const m: SimMachine = {
-      id: `m-${seq}`,
-      state: 'started',
-      version: `v${seq}`,
-      config,
-      versions: [{ version: `v${seq}`, user_config: config }],
-      events: [{ type: 'start', status: 'started', timestamp: clock }],
-      checks: [{ name: 'health', status: 'passing' }],
-    };
-    machines.push(m);
-    return json(200, machineBody(m));
-  }
-  const m = machines.find((x) => x.id === id);
-  if (!m) return json(404, { error: 'machine not found' });
-  if (parts[4] === 'versions') return json(200, [...m.versions].reverse());
-  if (call.method === 'GET') return json(200, machineBody(m));
-  if (call.method === 'DELETE') {
-    machines.splice(machines.indexOf(m), 1);
-    return json(200, { ok: true });
-  }
-  const current = call.body?.['current_version'];
-  if (current && current !== m.version) return json(409, { error: 'version mismatch' });
-  seq += 1;
-  m.version = `v${seq}`;
-  m.config = call.body?.['config'] as Record<string, unknown>;
-  m.versions.push({ version: m.version, user_config: m.config });
-  m.events.push({ type: 'start', status: 'started', timestamp: clock });
-  return json(200, machineBody(m));
-}
+let overrides: Array<(call: FlyCall) => Response | null>;
 
 function input(over: Partial<DeployReleaseInput> = {}): DeployReleaseInput {
   return {
@@ -165,24 +69,11 @@ const writes = () =>
   calls.filter((c) => c.method === 'POST' && /\/machines(\/[^/]+)?$/.test(c.path));
 
 beforeEach(() => {
-  calls = [];
-  apps = new Map();
-  seq = 0;
   ids = 0;
   clock = Date.parse('2026-10-28T00:00:00.000Z');
-  overrides = [];
-  vi.stubGlobal('fetch', async (url: string, init: RequestInit) => {
-    const headers = (init.headers ?? {}) as Record<string, string>;
-    const call: Call = {
-      path: url.slice(API.length),
-      method: init.method ?? 'GET',
-      body:
-        typeof init.body === 'string' ? (JSON.parse(init.body) as Record<string, unknown>) : null,
-      auth: headers['authorization'] ?? null,
-    };
-    calls.push(call);
-    return simulate(call);
-  });
+  const sim = createHostingFlySim(() => clock);
+  ({ calls, apps, overrides } = sim);
+  vi.stubGlobal('fetch', sim.fetch);
 });
 
 afterEach(() => {
@@ -249,7 +140,7 @@ describe('ensureApp', () => {
     expect(calls.filter((c) => c.path === '/apps')).toHaveLength(0);
     // A concurrent create between the read and the write: "already taken".
     overrides.push((c) =>
-      c.path === '/apps/mh-cmrepo1-pr8' && c.method === 'GET' ? json(404, {}) : null,
+      c.path === '/apps/mh-cmrepo1-pr8' && c.method === 'GET' ? flyJson(404, {}) : null,
     );
     apps.set('mh-cmrepo1-pr8', []);
     await expect(
@@ -274,10 +165,10 @@ describe('mintDeployCredential', () => {
   });
 
   it('refuses a response without a token, and a refusal', async () => {
-    overrides.push((c) => (c.path.endsWith('/deploy_token') ? json(200, {}) : null));
+    overrides.push((c) => (c.path.endsWith('/deploy_token') ? flyJson(200, {}) : null));
     await expect(port().mintDeployCredential({ pushNamespace: PROD })).rejects.toThrow(/no token/);
     overrides.unshift((c) =>
-      c.path.endsWith('/deploy_token') ? json(403, { error: 'denied' }) : null,
+      c.path.endsWith('/deploy_token') ? flyJson(403, { error: 'denied' }) : null,
     );
     await expect(port().mintDeployCredential({ pushNamespace: PROD })).rejects.toBeInstanceOf(
       OrchestratorApiError,
@@ -433,7 +324,7 @@ describe('deploy, describe, rollback', () => {
   it('surfaces a refused write and a refused versions read', async () => {
     overrides.push((c) =>
       c.method === 'POST' && c.path.endsWith('/machines')
-        ? json(422, { error: 'bad config' })
+        ? flyJson(422, { error: 'bad config' })
         : null,
     );
     await expect(port().deploy(input())).rejects.toThrow(/bad config/);
@@ -441,13 +332,13 @@ describe('deploy, describe, rollback', () => {
     const p = port();
     await p.deploy(input());
     await p.deploy(input());
-    overrides.push((c) => (c.path.endsWith('/versions') ? json(500, { error: 'boom' }) : null));
+    overrides.push((c) => (c.path.endsWith('/versions') ? flyJson(500, { error: 'boom' }) : null));
     await expect(
       p.rollback({ appRef: PROD, environment: { kind: 'production' } }),
     ).rejects.toBeInstanceOf(OrchestratorApiError);
     overrides.length = 0;
     overrides.push((c) =>
-      c.method === 'POST' && c.path.endsWith('/m-1') ? json(200, { nope: true }) : null,
+      c.method === 'POST' && c.path.endsWith('/m-1') ? flyJson(200, { nope: true }) : null,
     );
     await expect(p.deploy(input())).rejects.toThrow(/unexpected shape/);
   });
@@ -510,7 +401,7 @@ describe('usage and destroy', () => {
     const p = port();
     const handle = await p.deploy(input());
     overrides.push((c) =>
-      c.method === 'GET' && c.path.endsWith('/m-1') ? json(500, { error: 'boom' }) : null,
+      c.method === 'GET' && c.path.endsWith('/m-1') ? flyJson(500, { error: 'boom' }) : null,
     );
     await expect(p.describe(handle)).rejects.toBeInstanceOf(OrchestratorApiError);
   });
@@ -520,8 +411,26 @@ describe('usage and destroy', () => {
     await p.destroyApp({ appRef: PROD });
     expect(apps.has(PROD)).toBe(false);
     await p.destroyApp({ appRef: PROD });
-    overrides.push((c) => (c.method === 'DELETE' ? json(403, { error: 'denied' }) : null));
+    overrides.push((c) => (c.method === 'DELETE' ? flyJson(403, { error: 'denied' }) : null));
     await expect(p.destroyApp({ appRef: PROD })).rejects.toBeInstanceOf(OrchestratorApiError);
+  });
+
+  it('destroyApp settles the live release’s usage before the app goes', async () => {
+    const p = port();
+    apps.set(PROD, []);
+    await p.deploy(input());
+    clock += 45_000;
+    const usage = await p.destroyApp({ appRef: PROD });
+    expect(usage).toEqual([expect.objectContaining({ appRef: PROD, runningSeconds: 45 })]);
+    expect(apps.has(PROD)).toBe(false);
+    expect(await p.listReleases({ appRef: PROD })).toEqual([]);
+  });
+
+  it('a listing Fly refuses for any reason but a gone app surfaces', async () => {
+    const p = port();
+    apps.set(PROD, []);
+    overrides.push((c) => (c.method === 'GET' ? flyJson(500, { error: 'boom' }) : null));
+    await expect(p.listReleases({ appRef: PROD })).rejects.toBeInstanceOf(OrchestratorApiError);
   });
 });
 
@@ -548,10 +457,10 @@ describe('sparse provider bodies', () => {
     };
     overrides.push((c) =>
       c.method === 'GET' && /\/machines(\/m-1)?$/.test(c.path)
-        ? json(200, c.path.endsWith('/machines') ? [sparse] : sparse)
+        ? flyJson(200, c.path.endsWith('/machines') ? [sparse] : sparse)
         : null,
     );
-    overrides.push((c) => (c.path.endsWith('/versions') ? json(200, { not: 'a list' }) : null));
+    overrides.push((c) => (c.path.endsWith('/versions') ? flyJson(200, { not: 'a list' }) : null));
     expect(await p.describe(handle)).toMatchObject({
       state: 'deploying',
       releaseId: null,
@@ -573,7 +482,7 @@ describe('sparse provider bodies', () => {
     const p = port();
     const handle = await p.deploy(input());
     overrides.push((c) =>
-      c.method === 'GET' && c.path.endsWith('/m-1') ? json(200, { no: 'id' }) : null,
+      c.method === 'GET' && c.path.endsWith('/m-1') ? flyJson(200, { no: 'id' }) : null,
     );
     expect((await p.describe(handle)).state).toBe('destroyed');
   });

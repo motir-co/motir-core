@@ -296,6 +296,17 @@ export function createFlyHostingDeployPort(
     return machine.id;
   }
 
+  /** The app's release Machines; an app Fly no longer has has none. */
+  async function releaseMachines(app: string): Promise<FlyMachine[]> {
+    try {
+      const machines = await clientFor(app).listMachines();
+      return machines.filter((m) => m.metadata[HOSTING_RELEASE_METADATA.marker] === 'release');
+    } catch (err) {
+      if (err instanceof OrchestratorApiError && err.status === 404) return [];
+      throw err;
+    }
+  }
+
   function handleOf(app: string, machine: FlyMachine): ReleaseHandle {
     return {
       target: 'fly',
@@ -462,16 +473,20 @@ export function createFlyHostingDeployPort(
     },
 
     async destroyApp({ appRef }) {
+      // Settle the live release's usage BEFORE the app goes: deleting a Fly app
+      // takes its Machines and their events with it.
+      const live = (await releaseMachines(appRef)).filter((m) => m.state !== 'destroyed');
+      const usage = await Promise.all(live.map((m) => usageOf(handleOf(appRef, m), m, null)));
       const res = await flyRequest(appPath(appRef), { method: 'DELETE', token });
-      if (res.ok || res.status === 404) return;
-      await refuse(res);
+      if (res.ok || res.status === 404) return usage;
+      return refuse(res);
     },
 
     async listReleases({ appRef }): Promise<ReleaseSummary[]> {
-      const machines = await clientFor(appRef).listMachines();
-      return machines
-        .filter((m) => m.metadata[HOSTING_RELEASE_METADATA.marker] === 'release')
-        .map((m) => ({ handle: handleOf(appRef, m), state: releaseStateOf(m.state, []) }));
+      return (await releaseMachines(appRef)).map((m) => ({
+        handle: handleOf(appRef, m),
+        state: releaseStateOf(m.state, []),
+      }));
     },
   };
 }

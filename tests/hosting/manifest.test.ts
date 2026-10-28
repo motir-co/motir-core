@@ -159,6 +159,22 @@ describe('parseHostingManifest', () => {
     expect(err.message).toMatch(/and 1 more/);
   });
 
+  it('sorts unknown keys after every record field, in the order they were found (MOTIR-9806)', () => {
+    const doc = fixture();
+    doc['zeta'] = 1;
+    doc['alpha'] = 2;
+    delete doc['port'];
+    const err = refusal(JSON.stringify(doc));
+    expect(err.issues.map((i) => i.field)).toEqual(['port', 'zeta', 'alpha']);
+  });
+
+  it('an invalid-manifest error with no issues still reads as one (MOTIR-9806)', () => {
+    const err = new HostingManifestInvalidError([]);
+    expect(err.field).toBeNull();
+    expect(err.reason).toBe('invalid');
+    expect(err.message).toBe('Invalid hosting manifest: the document — invalid');
+  });
+
   it('infers nothing: the parser module has no fetch, no fs and no defaults', () => {
     const source = readFileSync(resolve(process.cwd(), 'lib/hosting/manifest.ts'), 'utf8');
     expect(source).not.toMatch(/\bfetch\s*\(/);

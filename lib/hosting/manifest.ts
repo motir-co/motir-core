@@ -92,9 +92,9 @@ export function parseHostingManifest(text: string | null): HostingManifest {
   try {
     raw = JSON.parse(text);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    // `JSON.parse` throws only a SyntaxError.
     throw new HostingManifestInvalidError([
-      { field: null, reason: `is not valid JSON: ${message}` },
+      { field: null, reason: `is not valid JSON: ${(err as SyntaxError).message}` },
     ]);
   }
   const parsed = hostingManifestSchema.safeParse(raw);
@@ -132,10 +132,12 @@ function reasonFor(issue: ZodIssue): string {
 }
 
 function orderOf(field: string | null): number {
-  if (field === null) return -1;
+  // A document-level issue (`field: null`) is only ever raised alone — the root
+  // is not an object, so no field was checked — and so is never compared.
+  const name = String(field);
   // The most specific match wins (a parent is listed before its children);
   // array elements (`targets.0`) sort with their field.
-  const index = FIELD_ORDER.findLastIndex((f) => field === f || field.startsWith(`${f}.`));
+  const index = FIELD_ORDER.findLastIndex((f) => name === f || name.startsWith(`${f}.`));
   return index === -1 ? FIELD_ORDER.length : index;
 }
 

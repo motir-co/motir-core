@@ -73,6 +73,7 @@
     "coverage:provider-limit": "vitest run --config vitest.coverage.provider-limit.config.ts --coverage",
     "coverage:mid-run-turns": "vitest run --config vitest.coverage.mid-run-turns.config.ts --coverage",
     "coverage:guide-replan-offer": "vitest run --config vitest.coverage.guide-replan-offer.config.ts --coverage",
+    "coverage:deploy-port": "vitest run --config vitest.coverage.deploy-port.config.ts --coverage",
     "coverage:to-resume": "vitest run --config vitest.coverage.to-resume.config.ts --coverage",
     "coverage:live-push": "vitest run --config vitest.coverage.live-push.config.ts --coverage",
     "coverage:bug-filing": "vitest run --config vitest.coverage.bug-filing.config.ts --coverage",

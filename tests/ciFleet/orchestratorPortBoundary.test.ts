@@ -60,6 +60,15 @@ const ADAPTER_DIRS = [
  * The guard therefore proves the leak set is {adapter, selector} — nothing else.
  */
 const COMPOSITION_ROOT = join('lib', 'orchestrator', 'index.ts');
+/**
+ * The HOSTING deploy port's half of the same composition root (MOTIR-9805). It
+ * was split out of `index.ts` only because that file loads the database and the
+ * operator deploy check runs from a laptop with a Fly token and nothing else;
+ * `index.ts` re-exports it, so it is still "one branch here", in a file of its
+ * own. It is registered by name like `index.ts`, never by directory.
+ */
+const HOSTING_COMPOSITION_ROOT = join('lib', 'orchestrator', 'hosting.ts');
+const COMPOSITION_ROOTS = [COMPOSITION_ROOT, HOSTING_COMPOSITION_ROOT];
 // ⚠️ IT IS STILL THIS FILE AFTER THE EXTRACTION (MOTIR-4299), and that is the
 // point rather than an accident: the port moved to `@motir/orchestrator` and the
 // SELECTOR did not, because choosing an adapter reads this deployment's
@@ -99,6 +108,13 @@ const FLY_TELLS: ReadonlyArray<{ pattern: RegExp; what: string }> = [
   // The HOSTING deploy port's Fly lane (MOTIR-5773) has its own token and org
   // variables; like `FLY_*`, only its adapter and the composition root read them.
   { pattern: /\bMOTIR_HOSTING_FLY_[A-Z_]+\b/, what: "the hosting lane's Fly variable" },
+  // …and its adapter's own names (MOTIR-9806): the factory, its config and the
+  // app provisioning it reuses. Only the hosting composition root may say them.
+  {
+    pattern:
+      /\b(createFlyHostingDeployPort|flyHostingConfig|FlyHostingConfig|flyAppProvisioning)\b/,
+    what: 'a Fly hosting adapter symbol',
+  },
 ];
 
 /**
@@ -224,7 +240,7 @@ function violations(): Array<{ file: string; what: string; line: string }> {
       // The adapter itself is where Fly lives; the selector is where it is
       // chosen. Those two, and nothing else.
       if (ADAPTER_DIRS.some((dir) => rel.startsWith(dir + sep))) continue;
-      if (rel === COMPOSITION_ROOT) continue;
+      if (COMPOSITION_ROOTS.includes(rel)) continue;
       const source = stripComments(readFileSync(file, 'utf8'));
       for (const { pattern, what } of FLY_TELLS) {
         for (const line of source.split('\n')) {
@@ -296,6 +312,8 @@ describe('§4 rule 1 — no `fly` escapes the adapter directory', () => {
     expect([...namingFly]).toEqual([]);
     const selector = stripComments(readFileSync(join(root, COMPOSITION_ROOT), 'utf8'));
     expect(selector).toMatch(/flyOrchestrator/);
+    const hosting = stripComments(readFileSync(join(root, HOSTING_COMPOSITION_ROOT), 'utf8'));
+    expect(hosting).toMatch(/createFlyHostingDeployPort/);
   });
 
   it('every sanctioned exception still points at a real file and a live tell', () => {
@@ -326,12 +344,51 @@ describe('the HOSTING deploy port is inside the same boundary (MOTIR-5773)', () 
       "const token = process.env['MOTIR_HOSTING_FLY_API_TOKEN'];",
       "const base = 'https://api.machines.dev/v1/apps/mh-x/deploy_token';",
       "const guest = { cpu_kind: 'shared' };",
+      'const port = createFlyHostingDeployPort(flyHostingConfig());',
+      'const config: FlyHostingConfig = { ...base };',
+      'await flyAppProvisioning.ensureApp(config, app);',
     ];
     for (const leak of leaks) {
       expect(
         FLY_TELLS.some(({ pattern }) => pattern.test(stripComments(leak))),
         leak,
       ).toBe(true);
+    }
+  });
+  /** An import (or re-export) whose source path passes through an adapter directory. */
+  const ADAPTER_IMPORT = /\bfrom\s+['"][^'"]*\badapters\//;
+
+  it('the port’s own modules import nothing from any adapters/ directory', () => {
+    const files = walk(join(root, HOSTING_PORT));
+    expect(files.map((f) => relative(root, f))).toContain(join(HOSTING_PORT, 'types.ts'));
+    for (const file of files) {
+      const source = stripComments(readFileSync(file, 'utf8'));
+      expect(ADAPTER_IMPORT.test(source), relative(root, file)).toBe(false);
+    }
+  });
+
+  it('would fail on an adapter import in the port (mutation check)', () => {
+    for (const leak of [
+      "import type { FakeHostedApp } from '../adapters/fake/hosting';",
+      "export { releaseStateOf } from '../adapters/fly/hosting';",
+    ]) {
+      expect(ADAPTER_IMPORT.test(leak), leak).toBe(true);
+    }
+    expect(ADAPTER_IMPORT.test("import { hostingAppNames } from './names';")).toBe(false);
+  });
+
+  it('the operator deploy check reaches the target through the accessor alone (MOTIR-9805)', () => {
+    // `scripts/` is not a scanned root (other operator scripts read FLY_* by
+    // design), so the check's two files are named here.
+    for (const file of [
+      join('scripts', 'hosting-deploy-check.ts'),
+      join('lib', 'hosting', 'deployCheck.ts'),
+    ]) {
+      const source = stripComments(readFileSync(join(root, file), 'utf8'));
+      for (const { pattern, what } of FLY_TELLS) {
+        expect(pattern.test(source), `${file}: ${what}`).toBe(false);
+      }
+      expect(/@aws-sdk\//.test(source), `${file}: an AWS SDK import`).toBe(false);
     }
   });
 });

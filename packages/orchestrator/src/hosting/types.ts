@@ -162,7 +162,10 @@ export interface HostingDeployPort {
    *  `usageSince` charges only the part after them. An already-gone release is
    *  destroyed, with zero running seconds. */
   destroy(handle: ReleaseHandle, reason: ReleaseDestroyReason): Promise<ReleaseUsage>;
-  /** Remove the whole isolation unit (a reaper's or a closed preview's step). */
-  destroyApp(input: { appRef: string }): Promise<void>;
+  /** Remove the whole isolation unit (a reaper's or a closed preview's step).
+   *  Returns the usage of every release still live in it, so removing an app
+   *  never loses running time; an already-gone app returns none. */
+  destroyApp(input: { appRef: string }): Promise<ReleaseUsage[]>;
+  /** The app's releases; an app that does not exist has none. */
   listReleases(input: { appRef: string }): Promise<ReleaseSummary[]>;
 }

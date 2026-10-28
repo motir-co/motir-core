@@ -155,7 +155,7 @@ describe('destroy', () => {
     expect(usage).toMatchObject({ appRef: APP, releaseId: 'rel-1', runningSeconds: 90 });
     expect(h.calls).toContain('destroyApp');
     expect(h.fake.app(APP)).toBeUndefined();
-    expect(h.block('destroyApp')).toEqual({ app: APP, releases: '[]' });
+    expect(h.block('destroyApp')).toEqual({ app: APP, usage: '[]', releases: '[]' });
     expect(await h.port.listReleases({ appRef: APP })).toEqual([]);
   });
 

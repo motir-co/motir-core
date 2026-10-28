@@ -208,9 +208,14 @@ async function destroy(deps: DeployCheckDeps, options: DeployCheckOptions): Prom
     app: appRef,
     usage: usage ? JSON.stringify(usage) : 'none (no release)',
   });
-  await port.destroyApp({ appRef });
+  // Usage of anything still live when the app goes; empty after the destroy above.
+  const remaining = await port.destroyApp({ appRef });
   const listing = await port.listReleases({ appRef });
-  deps.print('destroyApp', { app: appRef, releases: JSON.stringify(listing) });
+  deps.print('destroyApp', {
+    app: appRef,
+    usage: JSON.stringify(remaining),
+    releases: JSON.stringify(listing),
+  });
 }
 
 /** Run one step (or `all` of them in order). Throws the typed error a step
