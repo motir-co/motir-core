@@ -3,9 +3,11 @@
 // object operations and this file owns endpoint/credential/bucket policy.
 //
 // Provider: Tigris (Fly's S3-compatible store), per
-// `docs/decisions/application-hosting.md` Q2. Nothing here is Tigris-specific
-// beyond the endpoint value — the API is S3, which is also what a self-hoster
-// is most likely to have (`attachment-access-control.md` Amendment 2).
+// `docs/decisions/application-hosting.md` Q2, with a static key; or Amazon S3
+// on AWS, with no key and no endpoint, signing as the task role (MOTIR-9925).
+// Nothing here is Tigris-specific beyond the endpoint value — the API is S3,
+// which is also what a self-hoster is most likely to have
+// (`attachment-access-control.md` Amendment 2).
 //
 // TWO BUCKETS, not one bucket with per-object ACLs: a PUBLIC bucket for
 // avatars/public assets (directly fetchable, CDN-cacheable) and a PRIVATE one
@@ -83,31 +85,48 @@ export function installObjectStoreTransport(handler: unknown): void {
 
 /**
  * The shared S3 client, built on first use and re-built if the configuration
- * changes (which only happens in tests — the cache key is the credential tuple,
- * so a suite that re-points the env gets a client for the NEW endpoint rather
- * than a stale one).
+ * changes (which only happens in tests — the cache key covers the credential
+ * mode, the endpoint, the region and the transport, so a suite that re-points
+ * the env gets a client for the NEW configuration rather than a stale one).
  *
- * `forcePathStyle` is deliberate: it keeps every request on ONE host (the
- * endpoint) with the bucket in the PATH, instead of `https://<bucket>.<endpoint>`.
- * Tigris serves both, and one stable host with a readable bucket segment is what
- * lets the E2E transport (and a self-hosted MinIO) work without per-bucket wiring.
+ * TWO credential modes:
+ *   - **Keys** (Tigris, a self-hosted MinIO): `MOTIR_S3_ACCESS_KEY_ID` and
+ *     `MOTIR_S3_SECRET_ACCESS_KEY` both set — signed with that static pair.
+ *   - **Chain** (AWS): both unset — no `credentials` option at all, so the SDK's
+ *     default chain resolves them (on Fargate, the ECS task role; locally,
+ *     `AWS_PROFILE` or the `AWS_*` variables). Presigned URLs then carry the
+ *     session token and stop working when that session expires.
+ *   Exactly ONE of the pair set is a mistake, not a request for the chain, and
+ *   throws naming the missing one.
+ *
+ * `MOTIR_S3_ENDPOINT` is optional. Set, it is used with `forcePathStyle`: every
+ * request on ONE host with the bucket in the PATH, which is what lets the E2E
+ * transport (and a self-hosted MinIO) work without per-bucket wiring; the region
+ * defaults to `auto`, Tigris being region-less. Unset, the SDK addresses the
+ * regional AWS endpoint, and the region is `MOTIR_S3_REGION` or the chain's
+ * (`AWS_REGION`) — never `auto`, which is no AWS region.
  */
 export function s3Client(): S3Client {
-  const endpoint = required(S3_ENV.endpoint);
-  const accessKeyId = required(S3_ENV.accessKeyId);
-  const secretAccessKey = required(S3_ENV.secretAccessKey);
-  // Tigris is region-less; `auto` is the conventional value and the SDK
-  // requires SOMETHING to sign with, so it is defaulted rather than required.
-  const region = process.env[S3_ENV.region] || 'auto';
+  const endpoint = process.env[S3_ENV.endpoint] || undefined;
+  const accessKeyId = process.env[S3_ENV.accessKeyId] || undefined;
+  const secretAccessKey = process.env[S3_ENV.secretAccessKey] || undefined;
+  if (Boolean(accessKeyId) !== Boolean(secretAccessKey)) {
+    const missing = accessKeyId ? S3_ENV.secretAccessKey : S3_ENV.accessKeyId;
+    throw new Error(
+      `${missing} is not set but its pair is — set both (a static key) or neither (the AWS credential chain). See .env.example.`,
+    );
+  }
+  const region = process.env[S3_ENV.region] || (endpoint ? 'auto' : undefined);
   const transport = e2eTransport();
-  const key = `${endpoint}|${region}|${accessKeyId}|${secretAccessKey}|${transport ? 'e2e' : 'net'}`;
+  const credentialKey =
+    accessKeyId && secretAccessKey ? `${accessKeyId}|${secretAccessKey}` : 'chain';
+  const key = `${endpoint ?? 'aws'}|${region ?? ''}|${credentialKey}|${transport ? 'e2e' : 'net'}`;
 
   if (cached && cached.key === key) return cached.client;
   const client = new S3Client({
-    endpoint,
-    region,
-    forcePathStyle: true,
-    credentials: { accessKeyId, secretAccessKey },
+    ...(region ? { region } : {}),
+    ...(endpoint ? { endpoint, forcePathStyle: true } : {}),
+    ...(accessKeyId && secretAccessKey ? { credentials: { accessKeyId, secretAccessKey } } : {}),
     ...(transport ? { requestHandler: transport as S3ClientConfig['requestHandler'] } : {}),
   });
   cached = { client, key };
