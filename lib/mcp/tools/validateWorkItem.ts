@@ -363,8 +363,8 @@ export function mislabelledLinkLines(
   return advisories.flatMap((a) => [
     '',
     a.targetKey === null
-      ? `Advisory (${unaffected}): ${a.item} links "${a.label}" to motir:${a.targetId}, which opens NO work item. Fix the id — resolve the key you meant with get_work_item.`
-      : `Advisory (${unaffected}): ${a.item} links "${a.label}" to motir:${a.targetId}, which is ${a.targetKey}. The label and the card disagree — fix the id or the label.`,
+      ? `Advisory (${unaffected}): ${a.item} links "${a.label}" to motir:${a.targetId} in its ${a.field}, which opens NO work item. Fix the id — resolve the key you meant with get_work_item.`
+      : `Advisory (${unaffected}): ${a.item} links "${a.label}" to motir:${a.targetId} in its ${a.field}, which is ${a.targetKey}. The label and the card disagree — fix the id or the label.`,
   ]);
 }
 
@@ -634,9 +634,10 @@ export function registerValidateWorkItem(
         'has no enumerated acceptance criterion AND null `storyPoints`, `estimateMinutes`, `type` ' +
         'and `executor` (with `criteria`: `no-heading` or `no-criterion` — a pure null check, ' +
         'never a gate, because a card is routinely saved mid-authoring), or ' +
-        '`likely-mislabelled-link` when a `[label](motir:<id>)` link in the body opens a ' +
-        'different card than the key its label names, or opens no card at all (with the ' +
-        '`label`, the `targetId`, and the `targetKey` it really opens, `null` for none). A `coverage` ' +
+        '`likely-mislabelled-link` when a `[label](motir:<id>)` link in the description OR the ' +
+        'explanation opens a different card than the key its label names, or opens no card at ' +
+        'all (with the `label`, the `targetId`, the `targetKey` it really opens, `null` for none, ' +
+        'and the `field` it sits in: `descriptionMd` or `explanationMd`). A `coverage` ' +
         'advisory (`kind: "coverage"`, `likely-unowned-criterion`) names a CONTAINER one of whose ' +
         "acceptance criteria no direct child's TITLE carries, reported only when a child was " +
         'created BEFORE the container (adopted) — with the `criterionIndex` and the ' +

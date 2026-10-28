@@ -353,7 +353,7 @@ const DEADLINE_IRRELEVANT: ReadonlyMap<string, string> = new Map([
     'tests/agentInstances/agentInstanceUnits.test.ts',
     'Its 429s are not rate limits: they are `mapAgentInstanceError`’s status for the ' +
       'agent lane’s CAPS (`AgentInstanceStartRefusedError` `user_cap`, `fleet_busy`, ' +
-      '`org_running_cap` — `lib/agentInstances/errorResponse.ts`), asserted on a constructed ' +
+      '`org_cap` — `lib/agentInstances/errorResponse.ts`), asserted on a constructed ' +
       'error with no request and no store. It started to REACH the resolver when the storage ' +
       'charge began enqueuing its platform meter report (MOTIR-7294: ' +
       '`agentInstanceStorageChargeService` → `platformMeterReportEnqueue` → `sendEvent` → the ' +

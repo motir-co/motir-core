@@ -27,7 +27,7 @@ function proAtLimit(over: Partial<FleetUseDTO> = {}): FleetUseDTO {
         waiting: { planLimit: 2, poolFull: 0, other: 0 },
         figureSource: 'plan',
       },
-      agentsRunningInOrg: { figure: 10, inUse: 10, waiting: null, figureSource: 'plan' },
+      agentsInOrg: { figure: 10, inUse: 10, waiting: null, figureSource: 'plan' },
       agentsPerPerson: { figure: 2, inUse: 1, waiting: null, figureSource: 'plan' },
       ciJobsInFlight: {
         figure: 3,
@@ -106,7 +106,7 @@ describe('FleetUseSection — the figures', () => {
     expect(within(runs).getByText('3 of 3')).toBeTruthy();
     expect(within(runs).getByText('2 waiting')).toBeTruthy();
     expect(within(runs).getByText(/for your plan's limit/)).toBeTruthy();
-    const org = screen.getByTestId('fleet-figure-agentsRunningInOrg');
+    const org = screen.getByTestId('fleet-figure-agentsInOrg');
     expect(within(org).getByText('10 of 10')).toBeTruthy();
     expect(within(org).queryByText(/waiting/)).toBeNull();
     const person = screen.getByTestId('fleet-figure-agentsPerPerson');
@@ -169,12 +169,7 @@ describe('FleetUseSection — the figures', () => {
     const notice = await screen.findByRole('status');
     expect(notice.textContent).toContain('Nothing here is zero; it is unknown.');
     expect(screen.getByText('Plan not read')).toBeTruthy();
-    for (const key of [
-      'agentRunsInParallel',
-      'agentsRunningInOrg',
-      'agentsPerPerson',
-      'ciJobsInFlight',
-    ]) {
+    for (const key of ['agentRunsInParallel', 'agentsInOrg', 'agentsPerPerson', 'ciJobsInFlight']) {
       expect(within(screen.getByTestId(`fleet-figure-${key}`)).getByText('Not read')).toBeTruthy();
     }
     expect(screen.queryByText(/^0 of/)).toBeNull();
@@ -207,7 +202,7 @@ describe('FleetUseSection — the figures', () => {
           plan: { kind: 'no_plan_limits' },
           figures: {
             agentRunsInParallel: { figure: null, inUse: 4, waiting: null, figureSource: 'plan' },
-            agentsRunningInOrg: { figure: null, inUse: 12, waiting: null, figureSource: 'plan' },
+            agentsInOrg: { figure: null, inUse: 12, waiting: null, figureSource: 'plan' },
             agentsPerPerson: { figure: null, inUse: 0, waiting: null, figureSource: 'plan' },
             ciJobsInFlight: { figure: null, inUse: 7, waiting: null, figureSource: 'plan' },
           },

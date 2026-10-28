@@ -75,7 +75,7 @@ describe('planCapsService.capsFor — capped', () => {
       kind: 'capped',
       planKey: 'pro',
       planName: 'Pro',
-      caps: { agentRunsInParallel: 3, agentsPerUser: 2, agentsRunningPerOrg: 10, ciBurstCap: 5 },
+      caps: { agentRunsInParallel: 3, agentsPerUser: 2, agentsPerOrg: 10, ciBurstCap: 5 },
     });
     expect(getOrgSubscriptionMock).toHaveBeenCalledWith({ coreOrganizationId: orgId });
   });

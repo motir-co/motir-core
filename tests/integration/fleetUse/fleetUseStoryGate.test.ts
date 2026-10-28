@@ -273,8 +273,8 @@ async function otherOrg() {
 const censusOf = (organizationId: string) =>
   withSystemContext((tx) => fleetCeilingService.orgCensus(organizationId, new Date(), tx));
 
-/** The org's running agents — the running-cap guard's own count. */
-const runningAgentsOf = (organizationId: string) =>
+/** The org’s live agents — the org figure’s create guard, its own count (MOTIR-9954). */
+const liveAgentsOf = (organizationId: string) =>
   withSystemContext(async (tx) => {
     const live = await fleetInFlightSlotRepository.listLiveForOrganization(
       organizationId,
@@ -282,7 +282,7 @@ const runningAgentsOf = (organizationId: string) =>
       new Date(),
       tx,
     );
-    return agentInstanceRepository.countRunningOrAdmitting(
+    return agentInstanceRepository.countLiveOrAdmitting(
       organizationId,
       live.map((slot) => slot.ref),
       tx,
@@ -710,9 +710,9 @@ describe('the page reads the figures and counts the gates enforce', () => {
       figureSource: 'plan',
     });
     expect(membersAt).toBe(1);
-    expect(fleetUse.figures.agentsRunningInOrg).toEqual({
-      figure: caps.agentsRunningPerOrg,
-      inUse: await runningAgentsOf(orgId()),
+    expect(fleetUse.figures.agentsInOrg).toEqual({
+      figure: caps.agentsPerOrg,
+      inUse: await liveAgentsOf(orgId()),
       waiting: null,
       figureSource: 'plan',
     });

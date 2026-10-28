@@ -9907,6 +9907,8 @@ async function computeSubtreeProseAdvisories(
     return {
       item: member.identifier,
       descriptionMd: row?.descriptionMd ?? null,
+      // The MISLABELLED-LINK check scans the explanation too (MOTIR-9938).
+      explanationMd: row?.explanationMd ?? null,
       kind: membersById.get(member.id)?.kind,
       exemptIds,
       // The ORDERING exemption's inputs (MOTIR-2175) and the REPO-STRADDLE

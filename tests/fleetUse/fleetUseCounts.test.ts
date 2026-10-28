@@ -26,7 +26,7 @@ import { randomInt } from '../helpers/random';
 
 // PER-ORG FLEET USE COUNTS (Story MOTIR-9368 · MOTIR-9660) — the in-flight counts
 // are admission's own statements (asserted side by side with `orgCensus` and
-// `countRunningOrAdmitting`), the waits follow the reason admission recorded
+// `countLiveOrAdmitting`), the waits follow the reason admission recorded
 // (MOTIR-9666), and one org's rows never move another's numbers. Real Postgres;
 // rows are seeded as admission and the hosted boot leave them.
 
@@ -220,20 +220,24 @@ describe('in flight, by admission’s own statements', () => {
     ]);
   });
 
-  it('agents running equals the running-cap guard’s count, a wake in flight included', async () => {
+  it('agents live equals the org figure’s create guard: running and hibernating, a create in flight included, a deleted one not (MOTIR-9954)', async () => {
     const fx = await seedTenant();
     await agent(fx, fx.ownerId, 'running');
-    // A wake in flight: its slot is held while the row still reads hibernated.
     const waking = await agent(fx, fx.ownerId, 'hibernated');
+    // A wake in flight holds a slot on a row that exists: it counts once.
     await slot(fx, 'agent_instance', waking.id);
     await agent(fx, fx.ownerId, 'hibernated');
+    // A create in flight: its slot is held before its row is inserted.
+    const creating = await slot(fx, 'agent_instance');
+    const gone = await agent(fx, fx.ownerId, 'deleting');
+    await adminDb.agentInstance.update({ where: { id: gone.id }, data: { deletedAt: NOW } });
 
     const counts = await countsFor(fx);
     const guard = await withSystemContext(async (tx) =>
-      agentInstanceRepository.countRunningOrAdmitting(fx.organizationId, [waking.id], tx),
+      agentInstanceRepository.countLiveOrAdmitting(fx.organizationId, [waking.id, creating], tx),
     );
-    expect(counts.agentsRunning).toEqual({ inFlight: 2, waiting: null });
-    expect(counts.agentsRunning.inFlight).toBe(guard);
+    expect(counts.agentsLive).toEqual({ inFlight: 4, waiting: null });
+    expect(counts.agentsLive.inFlight).toBe(guard);
   });
 });
 
@@ -280,7 +284,7 @@ describe('waiting work, split by the reason admission recorded', () => {
   it('agent instances refuse rather than queue: their waits are null, never 0', async () => {
     const fx = await seedTenant();
     const counts = await countsFor(fx, 2);
-    expect(counts.agentsRunning.waiting).toBeNull();
+    expect(counts.agentsLive.waiting).toBeNull();
     expect(counts.agentsPerUser.waiting).toBeNull();
   });
 });
@@ -348,7 +352,7 @@ describe('isolation and failure', () => {
     expect(await countsFor(b, 1)).toEqual({
       agentRuns: { inFlight: 1, waiting: { planLimit: 1, poolFull: 0, other: 0 } },
       ciJobs: { inFlight: 1, waiting: { planLimit: 0, poolFull: 1, other: 0 } },
-      agentsRunning: { inFlight: 1, waiting: null },
+      agentsLive: { inFlight: 1, waiting: null },
       agentsPerUser: { membersAtFigure: 1, waiting: null },
       codeGraphIndex: { inFlight: 1 },
     });

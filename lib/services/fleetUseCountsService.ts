@@ -14,8 +14,9 @@ import { fleetCeilingService } from '@/lib/services/fleetCeilingService';
 // into waits its own plan limit causes and waits a full pool causes.
 //
 // ⚠️ ADMISSION'S OWN STATEMENTS, never look-alikes. The in-flight counts are
-// `fleetCeilingService.orgCensus` (agent runs, CI, indexing) and the running-cap
-// guard's `countRunningOrAdmitting` over the org's live `agent_instance` slots,
+// `fleetCeilingService.orgCensus` (agent runs, CI, indexing) and the org figure's
+// create guard, `countLiveOrAdmitting` — the org's live agents, running or
+// hibernating, plus the creates holding a slot (MOTIR-9954) —
 // so the page and the gates cannot disagree. The waits are read from the reason
 // admission itself recorded (MOTIR-9666), never parsed from words or guessed
 // from today's counts.
@@ -39,9 +40,10 @@ export interface FleetWaitingCounts {
 export interface FleetUseCounts {
   agentRuns: { inFlight: number; waiting: FleetWaitingCounts };
   ciJobs: { inFlight: number; waiting: FleetWaitingCounts };
-  /** Agent instances are REFUSED at create and wake, never queued: no waits
-   *  exist to count, which is not the same as zero waiting. */
-  agentsRunning: { inFlight: number; waiting: null };
+  /** The org's live agent instances, running or hibernating. A create beyond the
+   *  figure is REFUSED, never queued: no waits exist to count, which is not the
+   *  same as zero waiting. */
+  agentsLive: { inFlight: number; waiting: null };
   /** Null when the plan sets no per-person figure (or could not be read). */
   agentsPerUser: { membersAtFigure: number | null; waiting: null };
   /** Held to no plan figure. */
@@ -119,7 +121,7 @@ export const fleetUseCountsService = {
         now,
         tx,
       );
-      const agentsRunning = await agentInstanceRepository.countRunningOrAdmitting(
+      const agentsLive = await agentInstanceRepository.countLiveOrAdmitting(
         organizationId,
         agentSlots.map((slot) => slot.ref),
         tx,
@@ -153,7 +155,7 @@ export const fleetUseCountsService = {
             ciWaiting.map((row) => ({ reason: row.waitingReason, count: row.count })),
           ),
         },
-        agentsRunning: { inFlight: agentsRunning, waiting: null },
+        agentsLive: { inFlight: agentsLive, waiting: null },
         agentsPerUser: { membersAtFigure, waiting: null },
         codeGraphIndex: { inFlight: census.byWorkload.code_graph_index },
       };

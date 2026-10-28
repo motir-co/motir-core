@@ -154,7 +154,7 @@ describe('planCapsService.capsFor — a Host org', () => {
     expect(answer.agentRunsInParallel).toBe(16);
     expect(answer.ciBurstCap).toBe(FLOOR.ciBurstCap);
     expect(answer.agentsPerUser).toBe(FLOOR.agentsPerUser);
-    expect(answer.agentsRunningPerOrg).toBe(FLOOR.agentsRunningPerOrg);
+    expect(answer.agentsPerOrg).toBe(FLOOR.agentsPerOrg);
   });
 
   it('rounds an odd grant down — 33 → 16', async () => {
@@ -191,7 +191,7 @@ describe('planCapsService.capsFor — a Host org', () => {
 
   it('the merged indexer + agent hoster account lifts the agents to 10 / 50 and moves neither run nor CI figure (MOTIR-9668)', async () => {
     await own(org, ['code_graph_index', 'agent_instance'], { granted: 120 });
-    expect(await caps(org)).toEqual({ ...FLOOR, agentsPerUser: 10, agentsRunningPerOrg: 50 });
+    expect(await caps(org)).toEqual({ ...FLOOR, agentsPerUser: 10, agentsPerOrg: 50 });
   });
 
   it('the merged account not yet live keeps the floor’s agents', async () => {

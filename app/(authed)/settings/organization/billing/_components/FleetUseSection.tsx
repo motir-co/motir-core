@@ -381,7 +381,7 @@ const EMPTY_FLEET_USE: FleetUseDTO = {
   countsRead: false,
   figures: {
     agentRunsInParallel: NOT_READ_ROW,
-    agentsRunningInOrg: NOT_READ_ROW,
+    agentsInOrg: NOT_READ_ROW,
     agentsPerPerson: NOT_READ_ROW,
     ciJobsInFlight: NOT_READ_ROW,
   },
@@ -555,7 +555,7 @@ function SharedFloorNote({
             : data.figures.agentRunsInParallel,
         ),
         perPerson: n(data.figures.agentsPerPerson),
-        perOrg: n(data.figures.agentsRunningInOrg),
+        perOrg: n(data.figures.agentsInOrg),
       }),
     );
   }
