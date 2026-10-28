@@ -634,17 +634,17 @@ describe('the fixture app and its manifest', () => {
     return { statements, query, failOnce: () => (failNext = true) };
   }
 
-  async function start(db: ReturnType<typeof stubDatabase>): Promise<string> {
+  async function start(database: ReturnType<typeof stubDatabase>): Promise<string> {
     const path = resolve(process.cwd(), DEPLOY_CHECK_AWS_FIXTURE_DIR, 'server.mjs');
     const { createFixtureServer } = (await import(pathToFileURL(path).href)) as FixtureModule;
-    server = createFixtureServer({ release: '2', query: db.query });
+    server = createFixtureServer({ release: '2', query: database.query });
     await new Promise<void>((done) => server!.listen(0, '127.0.0.1', done));
     return `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   }
 
   it('serves /health and the same single seeded row on every /row', async () => {
-    const db = stubDatabase();
-    const url = await start(db);
+    const database = stubDatabase();
+    const url = await start(database);
     const health = await fetch(`${url}/health`);
     expect(health.status).toBe(200);
     const first = (await (await fetch(`${url}/row`)).json()) as unknown;
@@ -652,15 +652,20 @@ describe('the fixture app and its manifest', () => {
     const row = { id: 1, note: 'seeded by the deploy check fixture' };
     expect(first).toEqual({ release: '2', row });
     expect(second).toEqual(first);
-    expect(db.statements).toEqual(['CREATE TABLE', 'INSERT INTO', 'SELECT id,', 'SELECT id,']);
+    expect(database.statements).toEqual([
+      'CREATE TABLE',
+      'INSERT INTO',
+      'SELECT id,',
+      'SELECT id,',
+    ]);
     expect((await fetch(`${url}/nope`)).status).toBe(404);
     expect((await fetch(`${url}/row`, { method: 'POST' })).status).toBe(405);
   });
 
   it('answers 503 without the connection string while the database wakes, then seeds', async () => {
-    const db = stubDatabase();
-    const url = await start(db);
-    db.failOnce();
+    const database = stubDatabase();
+    const url = await start(database);
+    database.failOnce();
     const waking = await fetch(`${url}/row`);
     expect(waking.status).toBe(503);
     expect(await waking.text()).not.toContain('postgres://');
