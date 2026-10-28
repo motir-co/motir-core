@@ -73,20 +73,20 @@ export default async function WorkspaceSettingsPage() {
   // MOTIR-6168 · MOTIR-6465) join the same wave: who may change roles is decided
   // on the SERVER and passed down as a boolean, and the report is null for a
   // reader who is not a Manager.
-  const [members, canRemoveWorkspace, roleContext, migration] = await allSettledOrThrow([
+  // Pending invitations (MOTIR-9997) join the wave too: the read refuses a
+  // viewer who may not invite, and any failure draws the card without the block
+  // rather than failing the page.
+  const [members, canRemoveWorkspace, roleContext, migration, invites] = await allSettledOrThrow([
     workspacesService.listMembers(ctx.workspaceId, ctx.userId),
     orgCanForWorkspace(ctx.userId, ctx.workspaceId, 'manageWorkspaces'),
     workspacesService.getMemberRoleContext(ctx.workspaceId, ctx.userId),
     roleMigrationReportService.firstPageForViewer(ctx.workspaceId, ctx.userId),
+    workspaceInvitesService
+      .listPendingInvites({ userId: ctx.userId, workspaceId: ctx.workspaceId })
+      .catch(() => []),
   ]);
   const memberCount = members.length;
-  // Pending invitations (MOTIR-9997) — only for a viewer who may invite, and a
-  // failed read draws the card without the block rather than failing the page.
-  const pendingInvites = roleContext.canInvite
-    ? await workspaceInvitesService
-        .listPendingInvites({ userId: ctx.userId, workspaceId: ctx.workspaceId })
-        .catch(() => [])
-    : [];
+  const pendingInvites = roleContext.canInvite ? invites : [];
 
   return (
     <div className="mx-auto flex max-w-[42rem] flex-col gap-6">
