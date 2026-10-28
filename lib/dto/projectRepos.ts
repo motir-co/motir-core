@@ -5,6 +5,8 @@
 // (MOTIR-1782), the derivation (MOTIR-1881) and the dispatch resolver
 // (MOTIR-1783) bind to these.
 
+import type { HostingSize, HostingTarget, HostingUseCase } from '@/lib/hosting/vocabulary';
+
 /** Wire form of the Prisma `ProjectRepoRole` enum (ADR §1.1). */
 export type ProjectRepoRoleDto = 'web' | 'api' | 'mobile' | 'shared' | 'infra' | 'other';
 
@@ -316,6 +318,15 @@ export interface ProjectRepoDto {
    *  (MOTIR-1900). Always present — `not_invited` is the honest answer for a row
    *  nobody has been invited to, including every row that predates this card. */
   access: ProjectRepoAccessDto;
+  /**
+   * Where this Motir repo's app runs, what it is for and how big it is
+   * (MOTIR-9808) — the one home the deploy port and seed matching read. Each is
+   * NULL until the plan's hosting decision or build directly sets it, and stays
+   * NULL forever on a customer (`organization`) row, which Motir never hosts.
+   */
+  hostingTarget: HostingTarget | null;
+  hostingUseCase: HostingUseCase | null;
+  hostingSize: HostingSize | null;
   /** Fractional order key. The FIRST row of the ordered set is the project's
    *  PRIMARY repo (ADR §1.3); order carries no dispatch meaning. */
   position: string;

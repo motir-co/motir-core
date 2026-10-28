@@ -10269,6 +10269,20 @@ model ProjectRepo {
   /// Why a `failed` takeover failed, so a stalled handoff is RECORDED rather
   /// than inferred. Cleared on every retry, exactly like `failureReason`.
   takeoverFailureReason String?                   @map("takeover_failure_reason")
+  /// ── HOSTING (Story MOTIR-9791 · MOTIR-9808) ─────────────────────────────
+  ///
+  /// Where this Motir repo's app runs, what it is for and how big it is — the
+  /// one home every hosting consumer reads: the deploy port picks its adapter by
+  /// target, seed matching (MOTIR-709) picks a starter by all three. Written once
+  /// by the plan's hosting decision or by build directly, through
+  /// `projectRepoSetService.setHosting`, which refuses a customer repo (D1: a
+  /// repository whose `seedSource` is `organization` is never hosted by Motir)
+  /// and refuses a different target on a row that has one (D3: moving targets is
+  /// a migration, not an overwrite). NULL until then, and on every row that
+  /// predates this card. Vocabulary: `lib/hosting/vocabulary.ts`.
+  hostingTarget         HostingTarget?            @map("hosting_target")
+  hostingUseCase        HostingUseCase?           @map("hosting_use_case")
+  hostingSize           HostingSize?              @map("hosting_size")
   /// ── COLLABORATOR ACCESS — the TEAM's way IN to their own code ──────────────
   ///
   /// Every repository Motir creates lives in Motir's own org and is PRIVATE (ADR
@@ -11940,6 +11954,36 @@ model FleetCapacityRequest {
   @@index([organizationId, createdAt])
   @@index([status, createdAt])
   @@map("fleet_capacity_request")
+}
+
+/// Where a Motir repo's app runs (MOTIR-5769, requirement D3). Mirrors
+/// `HOSTING_TARGETS` in `lib/hosting/vocabulary.ts`.
+enum HostingTarget {
+  serverless
+  fly
+  aws
+
+  @@map("hosting_target")
+}
+
+/// What a Motir repo's app is for (requirement R3/D4). Mirrors
+/// `HOSTING_USE_CASES` in `lib/hosting/vocabulary.ts`.
+enum HostingUseCase {
+  internal_tool
+  mvp
+  planned_product
+
+  @@map("hosting_use_case")
+}
+
+/// How big a Motir repo's app is; each adapter maps it to machine sizes
+/// (MOTIR-9808). Mirrors `HOSTING_SIZES` in `lib/hosting/vocabulary.ts`.
+enum HostingSize {
+  small
+  medium
+  large
+
+  @@map("hosting_size")
 }
 
 /// The repo-role vocabulary (`docs/decisions/project-repository-set.md` §1.1).

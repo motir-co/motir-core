@@ -340,7 +340,7 @@ function toFlyVolume(body: unknown): FlyVolume | null {
 /** The instance app's Machines-API calls, with the INSTANCE token. */
 const flyInstancesClient = {
   /** Create the organisation's app with its own network, unless it exists. */
-  async ensureApp(config: FlyInstancesConfig, app: string): Promise<void> {
+  async ensureApp(config: Pick<FlyInstancesConfig, 'token' | 'org'>, app: string): Promise<void> {
     const existing = await flyRequest(path(app), { method: 'GET', token: config.token });
     if (existing.ok) return;
     if (existing.status !== 404) await fail(existing);
@@ -372,7 +372,7 @@ const flyInstancesClient = {
    * (`allocateIpAddress`); the OpenAPI is the newer source, and it keeps this
    * adapter on one API and one token.
    */
-  async ensureAddresses(config: FlyInstancesConfig, app: string): Promise<void> {
+  async ensureAddresses(config: Pick<FlyInstancesConfig, 'token'>, app: string): Promise<void> {
     const res = await flyRequest(path(app, '/ip_assignments'), {
       method: 'GET',
       token: config.token,
@@ -642,6 +642,17 @@ const flyInstancesClient = {
       return parsed ? [parsed] : [];
     });
   },
+};
+
+/**
+ * Creating a Fly app on its own network, and giving it public addresses — shared
+ * with the HOSTING deploy port (MOTIR-5773), which creates one app per hosted
+ * (repository, environment) in its own organisation with its own token. One copy
+ * of each call, so the two lanes cannot drift on what "already exists" means.
+ */
+export const flyAppProvisioning = {
+  ensureApp: flyInstancesClient.ensureApp,
+  ensureAddresses: flyInstancesClient.ensureAddresses,
 };
 
 /**

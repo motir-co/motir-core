@@ -1,5 +1,8 @@
 import {
   Prisma,
+  type HostingSize,
+  type HostingTarget,
+  type HostingUseCase,
   type ProjectRepo,
   type ProjectRepoCollaboratorPermission,
   type ProjectRepoRole,
@@ -73,6 +76,9 @@ interface JoinedRow {
   takeoverTransferredAt: Date | null;
   takeoverCompletedAt: Date | null;
   takeoverFailureReason: string | null;
+  hostingTarget: HostingTarget | null;
+  hostingUseCase: HostingUseCase | null;
+  hostingSize: HostingSize | null;
   // The APPROVING USER's collaborator record (the `admin` one — ADR §3 Q2), or
   // all-NULL when the row has none. Only that record is joined here: this read
   // feeds the establish step, which asks "can *I* reach my code?", and joining a
@@ -142,6 +148,9 @@ function toNested(r: JoinedRow): ProjectRepoWithRealized {
     takeoverTransferredAt: r.takeoverTransferredAt,
     takeoverCompletedAt: r.takeoverCompletedAt,
     takeoverFailureReason: r.takeoverFailureReason,
+    hostingTarget: r.hostingTarget,
+    hostingUseCase: r.hostingUseCase,
+    hostingSize: r.hostingSize,
     // Zero or one record — the mapper then picks the `admin` one out of it, which
     // is exactly what the JOIN already selected. Keeping the shape a LIST (rather
     // than a nullable field) means this read and the Prisma-`include` reads below
@@ -254,6 +263,9 @@ export const projectRepoRepository = {
         pr."takeover_transferred_at" AS "takeoverTransferredAt",
         pr."takeover_completed_at" AS "takeoverCompletedAt",
         pr."takeover_failure_reason" AS "takeoverFailureReason",
+        pr."hosting_target"    AS "hostingTarget",
+        pr."hosting_use_case"  AS "hostingUseCase",
+        pr."hosting_size"      AS "hostingSize",
         oc."github_login"      AS "ownerLogin",
         oc."permission"        AS "ownerPermission",
         oc."invited_at"        AS "ownerInvitedAt",
@@ -812,6 +824,24 @@ export const projectRepoRepository = {
       takeoverTransferredAt?: Date | null;
       takeoverCompletedAt?: Date | null;
       takeoverFailureReason?: string | null;
+    },
+    tx: Prisma.TransactionClient,
+  ): Promise<ProjectRepo> {
+    return tx.projectRepo.update({ where: { id }, data });
+  },
+
+  /**
+   * Write a row's HOSTING columns — target, use case and size (MOTIR-9808). A
+   * narrow writer, like `setTakeover`, so the three columns move only through
+   * `projectRepoSetService.setHosting`, which owns the set-once rule and keeps
+   * customer rows out.
+   */
+  async setHosting(
+    id: string,
+    data: {
+      hostingTarget: HostingTarget;
+      hostingUseCase: HostingUseCase;
+      hostingSize: HostingSize;
     },
     tx: Prisma.TransactionClient,
   ): Promise<ProjectRepo> {

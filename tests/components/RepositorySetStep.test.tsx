@@ -48,6 +48,9 @@ function row(
   return {
     ...ROW_DEFAULTS,
     state: 'proposed' as ProjectRepoStateDto,
+    hostingTarget: null,
+    hostingUseCase: null,
+    hostingSize: null,
     position: 'a0',
     ...over,
   };
