@@ -167,7 +167,8 @@ export const publicSubdomainService = {
     await assertAddressAdmin(workspaceId, actorUserId);
     return withWorkspaceContext({ userId: actorUserId, workspaceId }, async (tx) => {
       const live = await publicAddressRepository.findLiveSubdomainForWorkspace(workspaceId, tx);
-      if (!live) throw new NoSubdomainClaimedError();
+      // A GET of a resource that is not there: 404, the release path's answer.
+      if (!live) throw new SubdomainNotFoundError();
       const lastChangedAt = await readLastChange(workspaceId, tx);
       const hold = holdOf(live, now);
       return {

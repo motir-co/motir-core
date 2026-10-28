@@ -342,10 +342,10 @@ describe("previewChange — the confirm dialog's dated preview", () => {
     ).toBe(plus(changed, 30 * DAY).toISOString());
   });
 
-  it('is admin-only, and answers no-subdomain when there is nothing to change', async () => {
+  it('is admin-only, and answers not-found when there is nothing to change', async () => {
     await expect(
       publicSubdomainService.previewChange(fx.workspaceId, fx.ownerId),
-    ).rejects.toBeInstanceOf(NoSubdomainClaimedError);
+    ).rejects.toBeInstanceOf(SubdomainNotFoundError);
     const member = await createTestUser();
     await adminDb.workspaceMembership.create({
       data: { userId: member.id, workspaceId: fx.workspaceId, workspaceRole: 'member' },

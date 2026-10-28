@@ -153,13 +153,16 @@ async function reservedHashes(): Promise<string[]> {
 }
 
 describe('the release, driven through DELETE', () => {
-  it('answers 204 with no body, stops serving the live label, and holds its name', async () => {
+  it('answers 200 with the return date, stops serving the live label, and holds its name', async () => {
     await claimAndRename('acme');
     await ageLiveSubdomain(2);
 
     const res = await DELETE(req('DELETE'), params(fx.workspaceId));
-    expect(res.status).toBe(204);
-    expect(await res.text()).toBe('');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { returnsAt: string };
+    expect(new Date(body.returnsAt).getTime()).toBeGreaterThan(
+      Date.now() + 89 * 24 * 60 * 60 * 1000,
+    );
 
     expect(await addressRows()).toHaveLength(0);
     expect(await reservedHashes()).toEqual([hostnameReservationHash(`acme.${BASE}`)]);
@@ -198,7 +201,7 @@ describe('the release, driven through DELETE', () => {
       data: { primaryAddressId: custom.id },
     });
 
-    expect((await DELETE(req('DELETE'), params(fx.workspaceId))).status).toBe(204);
+    expect((await DELETE(req('DELETE'), params(fx.workspaceId))).status).toBe(200);
 
     const rows = await addressRows();
     expect(rows.map((r) => r.kind)).toEqual(['custom_domain']);
@@ -217,7 +220,7 @@ describe('the release, driven through DELETE', () => {
 
   it('makes NO certificate-provider call — the wildcard issued nothing to withdraw', async () => {
     await claimAndRename('acme');
-    expect((await DELETE(req('DELETE'), params(fx.workspaceId))).status).toBe(204);
+    expect((await DELETE(req('DELETE'), params(fx.workspaceId))).status).toBe(200);
     expect(certificateProviderSpy).not.toHaveBeenCalled();
   });
 });
@@ -237,7 +240,7 @@ describe('what the rest of the system then says — through the SERVICES, never 
       ).primary,
     ).toBe(`https://acme.${BASE}/${fx.identifier}`);
 
-    expect((await DELETE(req('DELETE'), params(fx.workspaceId))).status).toBe(204);
+    expect((await DELETE(req('DELETE'), params(fx.workspaceId))).status).toBe(200);
 
     const after = await publicAddressesService.addressesForProject(
       fx.projectId,
@@ -261,7 +264,7 @@ describe('the reservation doing its job, through PUT', () => {
   it('refuses a re-claim of a held name with 409 and the date it returns', async () => {
     await claimAndRename('acme');
     await ageLiveSubdomain(2);
-    expect((await DELETE(req('DELETE'), params(fx.workspaceId))).status).toBe(204);
+    expect((await DELETE(req('DELETE'), params(fx.workspaceId))).status).toBe(200);
 
     const other = await createTestWorkspace({ name: 'Rival' });
     ctxRef.current = { userId: other.owner.id, workspaceId: other.workspace.id };
@@ -274,7 +277,7 @@ describe('the reservation doing its job, through PUT', () => {
 
   it('leaves a DIFFERENT label claimable, so the refusal is specific and not a lock', async () => {
     await claimAndRename('acme');
-    expect((await DELETE(req('DELETE'), params(fx.workspaceId))).status).toBe(204);
+    expect((await DELETE(req('DELETE'), params(fx.workspaceId))).status).toBe(200);
     const other = await createTestWorkspace({ name: 'Rival' });
     ctxRef.current = { userId: other.owner.id, workspaceId: other.workspace.id };
     expect((await PUT(req('PUT', { label: 'acme-two' }), params(other.workspace.id))).status).toBe(
@@ -352,7 +355,7 @@ describe('the route contract, and the two verbs it joins', () => {
       where: { workspaceId: fx.workspaceId },
       data: { lastChangedAt: new Date(Date.now() - 31 * 24 * 60 * 60 * 1000) },
     });
-    expect((await DELETE(req('DELETE'), params(fx.workspaceId))).status).toBe(204);
+    expect((await DELETE(req('DELETE'), params(fx.workspaceId))).status).toBe(200);
     const afterRelease = await GET(req('GET'), params(fx.workspaceId));
     expect(afterRelease.status).toBe(200);
     expect(await afterRelease.json(), 'the pane reads back as unclaimed').toBeNull();
@@ -364,7 +367,7 @@ describe('the 30-day limit after a release (§8 Amendment 3 rule 4)', () => {
     // Asserted through the route, so the refusal the PANE receives is the one
     // under test.
     await claimAndRename('a-one');
-    expect((await DELETE(req('DELETE'), params(fx.workspaceId))).status).toBe(204);
+    expect((await DELETE(req('DELETE'), params(fx.workspaceId))).status).toBe(200);
 
     const reclaim = await PUT(req('PUT', { label: 'b-one' }), params(fx.workspaceId));
     expect(reclaim.status).toBe(201);
