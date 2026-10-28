@@ -82,6 +82,7 @@ async function soleOwnerWithRenamedSubdomain(label = 'acme', renamedTo = 'acme-i
     ownerUserId: user.id,
   });
   await publicSubdomainService.claim(workspace.id, renamedTo, user.id);
+  await ageLiveSubdomain(workspace.id);
   await giveLegacyAlias(workspace.id, `${label}.${BASE}`);
   return {
     userId: user.id,
@@ -91,6 +92,18 @@ async function soleOwnerWithRenamedSubdomain(label = 'acme', renamedTo = 'acme-i
     liveLabel: renamedTo,
     aliasLabel: label,
   };
+}
+
+/**
+ * Move the live subdomain's claim two days back, so the delete holds it: a label
+ * held under 24 hours returns to the pool at once (§8 Amendment 3 rule 3), and
+ * that case is `workspaceDeleteReservation.test.ts`'s.
+ */
+async function ageLiveSubdomain(workspaceId: string) {
+  await adminDb.publicAddress.updateMany({
+    where: { workspaceId, kind: 'workspace_subdomain' },
+    data: { createdAt: new Date(Date.now() - 2 * DAY_MS) },
+  });
 }
 
 /** A legacy `workspace_subdomain_alias` row, as the retired rename wrote them. */
@@ -229,6 +242,7 @@ describe('the workspace delete holds the workspace’s subdomain out of the name
       ownerUserId: user.id,
     });
     await publicSubdomainService.claim(workspace.id, 'third', user.id);
+    await ageLiveSubdomain(workspace.id);
     await giveLegacyAlias(workspace.id, `first.${BASE}`);
     await giveLegacyAlias(workspace.id, `second.${BASE}`);
     await workspacesService.removeWorkspaceAsOrgAdmin({
