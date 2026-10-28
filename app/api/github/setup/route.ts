@@ -18,6 +18,7 @@ import {
 } from '@/lib/github/returnSurface';
 import { onboardingReturnContextParams } from '@/lib/planning/onboardingHandoff';
 import {
+  GithubIdentityRefusedError,
   InstallationNotAccessibleError,
   InstallationNotLinkableError,
   RepoSelectionRequiredError,
@@ -252,6 +253,9 @@ export async function GET(req: NextRequest): Promise<Response> {
 function orgBranchOutcome(err: unknown): GithubBannerStatus {
   if (err instanceof RepoSelectionRequiredError) return 'select_repos';
   if (err instanceof RepositoryOwnedByOtherOrganizationError) return 'repo_unavailable';
+  // GitHub refused the actor's own sign-in (Bug MOTIR-8984): "couldn't reach
+  // GitHub" would send them to a retry that cannot work.
+  if (err instanceof GithubIdentityRefusedError) return 'identity_refused';
   if (
     err instanceof InstallationNotAccessibleError ||
     err instanceof InstallationNotLinkableError

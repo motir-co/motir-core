@@ -9,6 +9,7 @@ import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
 import type { JobCodeContext } from '@/lib/ai/codeContext';
 import { githubInstallationOrgLinkRepository } from '@/lib/repositories/githubInstallationOrgLinkRepository';
 import {
+  GithubIdentityRefusedError,
   InstallationNotAccessibleError,
   InstallationNotLinkableError,
   RepoSelectionRequiredError,
@@ -24,6 +25,7 @@ import { OrgForbiddenError } from '@/lib/organizations/errors';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { githubIdentityService } from '@/lib/services/githubIdentityService';
 import {
+  GithubUserInstallationsError,
   userInstallationsClient,
   type GithubUserInstallation,
 } from '@/lib/github/userInstallations';
@@ -458,14 +460,26 @@ export const githubInstallationService = {
    * deleted when an account's last organisation disconnects, and an account
    * the actor can see is a fact about GitHub. Stored rows only decide the link
    * state and EXCLUDE Motir's shared provisioning installation. With no linked
-   * identity the answer is `identity_required`, a state rather than an error.
+   * identity the answer is `identity_required`, a state rather than an error —
+   * and so it is, with `reason: 'refused'`, when GitHub refuses the linked
+   * identity's token (Bug MOTIR-8984).
    */
   async listAccountsForOrganization(ctx: {
     organizationId: string;
     actorUserId: string;
   }): Promise<GithubAccountsForOrganizationDTO> {
     await authoriseOrgAdmin(ctx.actorUserId, ctx.organizationId);
-    const accounts = await accessibleInstallations(ctx.actorUserId);
+    let accounts: GithubUserInstallation[] | null;
+    try {
+      accounts = await accessibleInstallations(ctx.actorUserId);
+    } catch (err) {
+      // A linked identity GitHub no longer accepts (Bug MOTIR-8984) is the
+      // same state as none, told apart so the prompt can say "reconnect".
+      if (err instanceof GithubIdentityRefusedError) {
+        return { state: 'identity_required', reason: 'refused' };
+      }
+      throw err;
+    }
     if (accounts === null) return { state: 'identity_required' };
 
     const linkable = await withSystemContext(async (tx) => {
@@ -1186,17 +1200,34 @@ async function authoriseOrgAdmin(actorUserId: string, organizationId: string): P
 }
 
 /** The installations the actor's linked GitHub identity can access, or null
- *  when the actor has no linked identity. */
+ *  when the actor has no linked identity.
+ *
+ *  ⚠️ A 401 IS A DEAD CREDENTIAL, NOT AN UNREACHABLE GITHUB (Bug MOTIR-8984).
+ *  GitHub answers `Bad credentials` for a token that was revoked, replaced or
+ *  has expired, and no retry revives it — so it becomes
+ *  {@link GithubIdentityRefusedError}, which every caller answers with
+ *  "reconnect". Network failures, 5xx and every other status stay
+ *  `GithubUserInstallationsError`: for those, "couldn't reach GitHub" is true. */
 async function accessibleInstallations(
   actorUserId: string,
 ): Promise<GithubUserInstallation[] | null> {
   const live = await githubIdentityService.getLiveToken(actorUserId);
   if (!live) return null;
-  return userInstallationsClient.listForToken(live.accessToken);
+  try {
+    return await userInstallationsClient.listForToken(live.accessToken);
+  } catch (err) {
+    if (err instanceof GithubUserInstallationsError && err.status === 401) {
+      throw new GithubIdentityRefusedError();
+    }
+    throw err;
+  }
 }
 
 /** Refuse an installation the actor cannot see on GitHub. See
- *  `linkExistingInstallation` for the one bounded `install_return` relaxation. */
+ *  `linkExistingInstallation` for the one bounded `install_return` relaxation —
+ *  which covers an actor with NO identity only: one whose identity GitHub
+ *  refuses can be asked to reconnect, so {@link GithubIdentityRefusedError}
+ *  propagates on both paths (Bug MOTIR-8984). */
 async function assertInstallationAccessible(
   actorUserId: string,
   installationId: string,

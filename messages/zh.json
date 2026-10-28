@@ -7528,7 +7528,8 @@
       "install_error": "未能完成 Motir GitHub App 的设置，请重新尝试安装。",
       "select_repos": "已安装 Motir GitHub App。请选择此组织要连接该账号下的哪些仓库。",
       "repo_unavailable": "该仓库已连接到另一个组织，因此未在此添加。其他内容均未更改。",
-      "installation_not_accessible": "你在 GitHub 上看不到该 GitHub 账号，因此它未关联到此组织。未做任何更改。"
+      "installation_not_accessible": "你在 GitHub 上看不到该 GitHub 账号，因此它未关联到此组织。未做任何更改。",
+      "identity_refused": "GitHub 不再接受你的 GitHub 登录，因此 Motir 无法完成 App 的连接。请在“设置 → 账户 → Git 账户”中断开你的账户并重新连接，然后再试一次。"
     },
     "connect": {
       "title": "连接 GitHub",
@@ -7926,7 +7927,9 @@
       "identity": {
         "title": "请先连接你的 GitHub 账户",
         "body": "Motir 通过你自己的 GitHub 身份列出你可见的 GitHub 账户。请在“设置 → 账户 → Git 账户”中连接，然后返回此处。",
-        "action": "前往 Git 账户"
+        "action": "前往 Git 账户",
+        "refusedTitle": "重新连接你的 GitHub 账户",
+        "refusedBody": "GitHub 不再接受 Motir 为你保存的登录：它已被撤销或已过期。请在“设置 → 账户 → Git 账户”中断开连接并重新连接，然后返回此处。未做任何更改。"
       },
       "cancel": "取消",
       "back": "所有账户",
