@@ -14,3 +14,4 @@ export {
   type TenantSdkCredentials,
   type TenantSdkService,
 } from './sdk';
+export * from './registry';

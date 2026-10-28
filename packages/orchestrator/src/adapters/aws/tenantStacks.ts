@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -31,3 +31,20 @@ export const AWS_TENANT_STACKS_DIR: string = locateTenantStacks(
   dirname(fileURLToPath(import.meta.url)),
   process.cwd(),
 );
+
+/** The six templates, by file name. */
+export type TenantStackTemplate =
+  | 'network.yaml'
+  | 'registry.yaml'
+  | 'database.yaml'
+  | 'preview-database.yaml'
+  | 'function-release.yaml'
+  | 'container-release.yaml';
+
+/** A template's body, exactly as the stack runner submits it. */
+export function readTenantStackTemplate(
+  template: TenantStackTemplate,
+  dir: string = AWS_TENANT_STACKS_DIR,
+): string {
+  return readFileSync(join(dir, template), 'utf8');
+}
