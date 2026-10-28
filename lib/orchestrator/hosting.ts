@@ -1,0 +1,79 @@
+// The composition root of the HOSTING DEPLOY PORT. A module of its own, beside
+// `./index`, because it loads no database: the operator deploy check
+// (`pnpm hosting:deploy-check`, MOTIR-9805) runs from a laptop with only the Fly
+// token set. `./index` re-exports everything here.
+import {
+  createFakeHostingDeployPort,
+  createFlyHostingDeployPort,
+  flyHostingConfig,
+  OrchestratorNotConfiguredError,
+  type HostingDeployPort,
+  type HostingDeployTarget,
+} from '@motir/orchestrator';
+import { selectedOrchestratorProvider } from './provider';
+
+// ── The HOSTING DEPLOY PORT (Story MOTIR-9791 · MOTIR-5773) ─────────────────
+//
+// One port for a hosted app's releases, keyed by the repository's hosting
+// TARGET (MOTIR-9808). The fake while `MOTIR_FLEET_ORCHESTRATOR=fake`, so a suite
+// that selects the fake gets every fake; Fly's adapter otherwise, with its OWN
+// token (`MOTIR_HOSTING_FLY_API_TOKEN`, read at call time); any other target
+// through a registry, so the serverless and AWS adapters each land as one file
+// and one `registerHostingAdapter` call rather than a second port.
+
+/** How a caller narrows the adapter it gets. `appPrefix` replaces the target's
+ *  configured app-name prefix, so a caller that owns its own apps (the operator
+ *  deploy check, `motir-deploy-check-`) cannot name a tenant's (MOTIR-9805). */
+export interface HostingPortOptions {
+  readonly appPrefix?: string;
+}
+
+/** Builds a target's adapter, at call time. */
+export type HostingAdapterFactory = (options: HostingPortOptions) => HostingDeployPort;
+
+const hostingAdapters = new Map<HostingDeployTarget, HostingAdapterFactory>();
+const hostingFakes = new Map<string, HostingDeployPort>();
+
+/** Register (or replace) the adapter for a target. */
+export function registerHostingAdapter(
+  target: HostingDeployTarget,
+  factory: HostingAdapterFactory,
+): void {
+  hostingAdapters.set(target, factory);
+}
+
+/** Forget a registration — for tests. */
+export function unregisterHostingAdapter(target: HostingDeployTarget): void {
+  hostingAdapters.delete(target);
+}
+
+/** The deploy port for a target, or the typed not-configured error. */
+export function getHostingDeployPort(
+  target: HostingDeployTarget,
+  options: HostingPortOptions = {},
+): HostingDeployPort {
+  const { appPrefix } = options;
+  if (selectedOrchestratorProvider() === 'fake') {
+    const key = `${target}:${appPrefix ?? ''}`;
+    let fake = hostingFakes.get(key);
+    if (!fake) {
+      fake = createFakeHostingDeployPort({ target, ...(appPrefix ? { appPrefix } : {}) });
+      hostingFakes.set(key, fake);
+    }
+    return fake;
+  }
+  const registered = hostingAdapters.get(target);
+  if (registered) return registered(options);
+  if (target === 'fly') {
+    return createFlyHostingDeployPort({
+      ...flyHostingConfig(),
+      ...(appPrefix ? { appPrefix } : {}),
+    });
+  }
+  throw new OrchestratorNotConfiguredError(`no ${target} hosting adapter is registered`);
+}
+
+/** Drop the per-target fakes — for tests. */
+export function resetHostingFakes(): void {
+  hostingFakes.clear();
+}

@@ -45,6 +45,24 @@ describe('getHostingDeployPort', () => {
     registerHostingAdapter('aws', () => aws);
     expect(getHostingDeployPort('aws')).toBe(aws);
   });
+
+  it('narrows the app prefix for a caller that owns its own apps', async () => {
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fake');
+    const own = getHostingDeployPort('fly', { appPrefix: 'motir-deploy-check-' });
+    expect(own).not.toBe(getHostingDeployPort('fly'));
+    expect(getHostingDeployPort('fly', { appPrefix: 'motir-deploy-check-' })).toBe(own);
+    const app = await own.ensureApp({ repositoryId: 'x', environment: { kind: 'production' } });
+    expect(app.appRef).toBe('motir-deploy-check-x');
+
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', '');
+    const factory = vi.fn(() => createFakeHostingDeployPort({ target: 'aws' }));
+    registerHostingAdapter('aws', factory);
+    getHostingDeployPort('aws', { appPrefix: 'motir-deploy-check-' });
+    expect(factory).toHaveBeenCalledWith({ appPrefix: 'motir-deploy-check-' });
+
+    vi.stubEnv('MOTIR_HOSTING_FLY_API_TOKEN', 'token');
+    expect(getHostingDeployPort('fly', { appPrefix: 'motir-deploy-check-' }).target).toBe('fly');
+  });
 });
 
 describe('the manifest is the port’s runtime input', () => {

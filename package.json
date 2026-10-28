@@ -34,6 +34,7 @@
     "db:backfill:boards": "tsx --tsconfig tsconfig.node.json scripts/backfill-default-boards.ts",
     "db:backfill:provenance": "tsx --tsconfig tsconfig.node.json scripts/backfill-work-item-provenance.ts",
     "db:backfill:code-graph-index": "tsx --tsconfig tsconfig.node.json scripts/backfill-code-graph-index.ts",
+    "hosting:deploy-check": "tsx --tsconfig tsconfig.node.json scripts/hosting-deploy-check.ts",
     "db:backfill:pull-requests": "tsx --tsconfig tsconfig.node.json scripts/backfill-historical-pull-requests.ts",
     "db:backfill:pr-base-ref": "tsx --tsconfig tsconfig.node.json scripts/backfill-pull-request-base-ref.ts",
     "db:backfill:ci-state": "tsx --tsconfig tsconfig.node.json scripts/backfill-work-item-ci-state.ts",

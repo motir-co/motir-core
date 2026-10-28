@@ -11,9 +11,7 @@ import {
   createAwsPersistentOrchestrator,
   createEc2Api,
   Ec2ApiError,
-  createFakeHostingDeployPort,
   createFakeOrchestrator,
-  createFlyHostingDeployPort,
   createFlyOrchestrator,
   createHostAgentClient,
   createUsageSink,
@@ -25,7 +23,6 @@ import {
   OrchestratorCapacityError,
   type FakeCapacityOperation,
   flyFleetConfig,
-  flyHostingConfig,
   flyIndexerImage,
   flyOrchestrator,
   flyPersistentOrchestrator,
@@ -40,8 +37,6 @@ import {
   type Ec2Api,
   type FakeOrchestratorControls,
   type FleetInventory,
-  type HostingDeployPort,
-  type HostingDeployTarget,
   type OrchestratorProvider,
   type PersistentContainerHandle,
   type PersistentContainerOrchestrator,
@@ -56,6 +51,7 @@ import {
   shardFakeJournalShared,
   shardHeldShared,
 } from '@/lib/orchestrator/shardFakeJournal';
+import { selectedOrchestratorProvider } from './provider';
 import { ciFleetCostMeterService } from '@/lib/services/ciFleetCostMeterService';
 import { withPlatformMeterReport } from '@/lib/services/platformMeterReportEnqueue';
 
@@ -89,15 +85,9 @@ import { withPlatformMeterReport } from '@/lib/services/platformMeterReportEnque
 // token — it must simply be unable to reach this path. Same contract
 // `appAuth.ts` and `ciMetering/config.ts` hold.
 
-/** The selector's env var. Unset means `fly`, which is §1's decision; `fake` is
- *  what the test suites and MOTIR-1927's gate select. */
-const SELECTOR_ENV = 'MOTIR_FLEET_ORCHESTRATOR';
-
-/** Which adapter this deployment has selected, whether or not it is configured. */
-export function selectedOrchestratorProvider(): OrchestratorProvider {
-  const raw = process.env[SELECTOR_ENV]?.trim().toLowerCase();
-  return raw === 'fake' ? 'fake' : 'fly';
-}
+// The selector itself lives in `./provider`, which loads no database, so a
+// DB-free caller (the hosting accessor, `./hosting`) can read it too.
+export { selectedOrchestratorProvider } from './provider';
 
 /**
  * The orchestrator, or the typed not-configured error.
@@ -204,55 +194,6 @@ export function isOrchestratorConfigured(): boolean {
 // Any other provider resolves through a REGISTRY keyed on provider: an adapter
 // registers `{ orchestrator(shard), inventory(shard) }` and is handed the WHOLE
 // account (fleet kind, provider, location, `credentialRef`).
-
-// ── The HOSTING DEPLOY PORT (Story MOTIR-9791 · MOTIR-5773) ─────────────────
-//
-// One port for a hosted app's releases, keyed by the repository's hosting
-// TARGET (MOTIR-9808). The fake while `MOTIR_FLEET_ORCHESTRATOR=fake`, so a suite
-// that selects the fake gets every fake; Fly's adapter otherwise, with its OWN
-// token (`MOTIR_HOSTING_FLY_API_TOKEN`, read at call time); any other target
-// through a registry, so the serverless and AWS adapters each land as one file
-// and one `registerHostingAdapter` call rather than a second port.
-
-/** Builds a target's adapter, at call time. */
-export type HostingAdapterFactory = () => HostingDeployPort;
-
-const hostingAdapters = new Map<HostingDeployTarget, HostingAdapterFactory>();
-const hostingFakes = new Map<HostingDeployTarget, HostingDeployPort>();
-
-/** Register (or replace) the adapter for a target. */
-export function registerHostingAdapter(
-  target: HostingDeployTarget,
-  factory: HostingAdapterFactory,
-): void {
-  hostingAdapters.set(target, factory);
-}
-
-/** Forget a registration — for tests. */
-export function unregisterHostingAdapter(target: HostingDeployTarget): void {
-  hostingAdapters.delete(target);
-}
-
-/** The deploy port for a target, or the typed not-configured error. */
-export function getHostingDeployPort(target: HostingDeployTarget): HostingDeployPort {
-  if (selectedOrchestratorProvider() === 'fake') {
-    let fake = hostingFakes.get(target);
-    if (!fake) {
-      fake = createFakeHostingDeployPort({ target });
-      hostingFakes.set(target, fake);
-    }
-    return fake;
-  }
-  const registered = hostingAdapters.get(target);
-  if (registered) return registered();
-  if (target === 'fly') return createFlyHostingDeployPort(flyHostingConfig());
-  throw new OrchestratorNotConfiguredError(`no ${target} hosting adapter is registered`);
-}
-
-/** Drop the per-target fakes — for tests. */
-export function resetHostingFakes(): void {
-  hostingFakes.clear();
-}
 
 /** What a provider adapter registers: how to reach one account's containers,
  *  and how to list its machines (null when another inventory already covers it). */
@@ -1202,3 +1143,4 @@ export const recordContainerAccrual = usageSink.recordContainerAccrual;
 // So that `@/lib/orchestrator` remains one import for a consumer, and so that
 // moving a symbol across the boundary later is not a change at every call site.
 export * from '@motir/orchestrator';
+export * from './hosting';
