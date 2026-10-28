@@ -128,11 +128,15 @@ describe('get_plan — the transport contract', () => {
     // `folderId` / `folderPath`, the folder it names — `null` on this folder-free
     // proposal. The property this test exists for still holds field for field:
     // every DTO key arrives unchanged, and the only keys added are those two.
+    // AND ONE MORE (MOTIR-9978): the payload carries the authoring agent's own
+    // `plannerRecord`, kept off the plan DTO — `null` on this plan, which has none.
     const fromService = await plansService.getPlan(plan.id, fx.ctx);
     const expected = JSON.parse(JSON.stringify(fromService)) as {
       items: Record<string, unknown>[];
+      plannerRecord?: unknown;
     };
     expected.items = expected.items.map((item) => ({ ...item, folderId: null, folderPath: null }));
+    expected.plannerRecord = null;
     expect(struct(res)).toEqual(expected);
     await client.close();
   });

@@ -173,6 +173,23 @@ describe('the overlay rail', () => {
   });
 });
 
+describe('a plan.py briefing written since MOTIR-9978', () => {
+  // plan.py keeps its target record in `plannerRecord` now; the summary carries
+  // one readable line per target and no `motir-targets` JSON fence.
+  const SUMMARY = `${BRIEFING}\n\n## Targets the planner settled\n\n- MOTIR-9793 (lay): planned in plan-1`;
+
+  it('shows one readable line per target, and no JSON code block', () => {
+    renderRail(SUMMARY);
+    const briefing = screen.getByTestId('plan-change-briefing');
+    expect(briefing.textContent).toContain('MOTIR-9793 (lay): planned in plan-1');
+    expect(briefing.querySelector('pre')).toBeNull();
+    expect(briefing.querySelector('code')).toBeNull();
+    for (const key of ['"slice"', '"conflict"', 'motir-targets']) {
+      expect(briefing.textContent).not.toContain(key);
+    }
+  });
+});
+
 describe('the plan detail rail', () => {
   it.each([
     ['en', enMessages],
