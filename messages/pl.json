@@ -4227,10 +4227,6 @@
         "security": "Zabezpieczenia",
         "usage": "Użycie i koszty",
         "billing": "Rozliczenia i plany"
-      },
-      "jobRunsFoldIn": {
-        "title": "Uruchomienia zadań",
-        "subtitle": "Praca w tle dla tego obszaru roboczego — co zostało uruchomione, co się nie powiodło i co czeka w kolejce niedostarczonych."
       }
     },
     "gitAccounts": {

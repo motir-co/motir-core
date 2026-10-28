@@ -4227,10 +4227,6 @@
         "security": "安全",
         "usage": "用量与费用",
         "billing": "账单与套餐"
-      },
-      "jobRunsFoldIn": {
-        "title": "任务运行",
-        "subtitle": "该工作区的后台任务——运行了什么、失败了什么，以及死信队列中还有什么在等待。"
       }
     },
     "gitAccounts": {

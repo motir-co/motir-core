@@ -4227,10 +4227,6 @@
         "security": "보안",
         "usage": "사용량 및 비용",
         "billing": "결제 및 요금제"
-      },
-      "jobRunsFoldIn": {
-        "title": "작업 실행",
-        "subtitle": "이 워크스페이스의 백그라운드 작업 — 실행된 작업, 실패한 작업, 데드 레터 대기열에서 대기 중인 작업입니다."
       }
     },
     "gitAccounts": {

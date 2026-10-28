@@ -20,7 +20,8 @@ import { renderWithIntl } from '../helpers/renderWithIntl';
 // every count — they are workspace-SCOPED but not workspace-NAMED". That was
 // MOTIR-3502's AC 6, and it was the tell rather than the exception: a surface
 // exempted from a hiding rule BECAUSE IT STILL ANSWERS is one that was never
-// given a relocation. Job runs has one now (MOTIR-4861's `JobRunsFoldInSection`)
+// given a relocation. Job runs got one (MOTIR-4861's fold-in, since retired with
+// the tenant surface by Story MOTIR-9982)
 // and Git changed tier (MOTIR-4680), so all of them are gone from this section.
 //
 // What is unchanged is the REASON: this pane is workspace-named and

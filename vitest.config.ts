@@ -838,7 +838,6 @@ export default defineConfig({
         //
         //   workspaceSettingsNav.ts     93.33 / 91.66 / 100 / 100
         //   WorkspaceSidebarHeader.tsx  100   / 100   / 100 / 100
-        //   JobRunsFoldInSection.tsx    100   / 100   / 100 / 100
         //   WorkspaceSwitcher.tsx        40   /  61.11/  26.66 / 40.42
         //
         // The registry's one uncovered line is its `if (!entry.href)` guard, an
@@ -847,7 +846,7 @@ export default defineConfig({
         // initial fallback were undriven — and MOTIR-4848 wrote the four missing
         // cases rather than pinning three axes and leaving the fourth off, which
         // is the remedy this list's own rule prescribes (MOTIR-4368's precedent
-        // on `SidebarNav`). All three are GATED in `thresholds` below.
+        // on `SidebarNav`). Both are GATED in `thresholds` below.
         //
         // ⚠️ `WorkspaceSwitcher.tsx` IS REPORT-ONLY, deliberately — it is in this
         // list and NOT in `thresholds`. This story added one row to it and the
@@ -859,7 +858,6 @@ export default defineConfig({
         // undertake. It publishes a number until a card owns the gap.
         'lib/settings/workspaceSettingsNav.ts',
         'app/**/_components/WorkspaceSidebarHeader.tsx',
-        'app/**/_components/JobRunsFoldInSection.tsx',
         'app/**/_components/WorkspaceSwitcher.tsx',
         // ⚠️ `app/**/settings/workspace/layout.tsx` is NOT here. It is an async
         // Server Component whose whole body is a session check and a redirect,
@@ -5503,12 +5501,6 @@ export default defineConfig({
           statements: 90,
         },
         'app/**/_components/WorkspaceSidebarHeader.tsx': {
-          lines: 90,
-          functions: 90,
-          branches: 90,
-          statements: 90,
-        },
-        'app/**/_components/JobRunsFoldInSection.tsx': {
           lines: 90,
           functions: 90,
           branches: 90,

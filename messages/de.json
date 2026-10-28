@@ -4227,10 +4227,6 @@
         "security": "Sicherheit",
         "usage": "Nutzung & Kosten",
         "billing": "Abrechnung & Pläne"
-      },
-      "jobRunsFoldIn": {
-        "title": "Auftragsausführungen",
-        "subtitle": "Hintergrundarbeit für diesen Arbeitsbereich – was ausgeführt wurde, was fehlgeschlagen ist und was in der Dead-Letter-Queue wartet."
       }
     },
     "gitAccounts": {

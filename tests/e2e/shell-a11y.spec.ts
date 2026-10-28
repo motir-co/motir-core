@@ -83,15 +83,10 @@ const SHELL_ROUTES: { path: string; ready: (page: Page) => Promise<void> }[] = [
     // instead. So this entry sweeps strictly MORE markup than it used to: the
     // org-scoped cards plus the three folded-in workspace cards.
     //
-    // ⚠️ AND THE OPERATOR DASHBOARD, since Story MOTIR-4843 · MOTIR-4861. There
-    // was a `/settings/workspace/jobs` entry of its own in this list until then;
-    // that route now `notFound()`s at this fixture's workspace count, and its
-    // dashboard is a section HERE. The entry is REMOVED rather than repaired
-    // with a second workspace, because the markup it swept is in this sweep
-    // already — tabs, status filter, run table and DLQ badge — and adding a
-    // workspace to keep a second entry alive would sweep the SAME component
-    // twice while changing the shell every other route in this list renders in
-    // (a workspace switcher appears in the top bar at two workspaces).
+    // ⚠️ THE OPERATOR DASHBOARD WAS SWEPT HERE from Story MOTIR-4843 · MOTIR-4861
+    // until Story MOTIR-9982 retired it: the tenant Job runs section left this
+    // page with `/settings/workspace/jobs`, and the ledger is staff-only at
+    // `/admin/jobs`. Neither tenant address returns to this list.
     path: '/settings/organization',
     ready: async (page) =>
       expect(page.getByRole('heading', { name: 'Organization settings' })).toBeVisible(),

@@ -25,7 +25,8 @@ import { SidebarNav } from '@/app/(authed)/_components/SidebarNav';
 // `Job runs` LEFT this section for the workspace area's own rail, `Git` left a
 // tier earlier (MOTIR-4680), and §6d is satisfied by RELOCATION rather than by
 // exemption — below the reveal both are reached through `/settings/organization`,
-// where `WorkspaceFoldInSection` and `JobRunsFoldInSection` host them. Its own
+// where `WorkspaceFoldInSection` and the Job runs fold-in hosted them (the latter
+// since retired with the tenant Job runs surface, Story MOTIR-9982). Its own
 // half is equally gone: it closed "the door itself is unchanged and still
 // re-pointed rather than removed", and the re-pointing is what MOTIR-4873
 // removed.

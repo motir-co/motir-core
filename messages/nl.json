@@ -4227,10 +4227,6 @@
         "security": "Beveiliging",
         "usage": "Gebruik en kosten",
         "billing": "Facturering en abonnementen"
-      },
-      "jobRunsFoldIn": {
-        "title": "Taakuitvoeringen",
-        "subtitle": "Achtergrondwerk voor deze werkruimte — wat er is uitgevoerd, wat er is mislukt en wat er in de dead-letter-wachtrij wacht."
       }
     },
     "gitAccounts": {

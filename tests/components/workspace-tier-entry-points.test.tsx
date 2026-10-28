@@ -34,7 +34,8 @@ import {
 // was never given a relocation. All three are now equally absent below the
 // reveal — Git moved a tier (MOTIR-4680), Security folds in via
 // `WorkspaceFoldInSection` (MOTIR-3502), and Job runs gained its own gate and
-// `JobRunsFoldInSection` (MOTIR-4861).
+// the Job runs fold-in (MOTIR-4861; retired with the tenant Job runs surface,
+// Story MOTIR-9982).
 //
 // The href anchor below (`"/settings/workspace"` followed by a quote) is KEPT
 // anyway, because it is the tighter assertion: it asks about the AREA's own

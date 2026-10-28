@@ -23,8 +23,15 @@ import { REPO_ROOT, stripComments } from '../helpers/importGraph';
 // (MOTIR-4859). A set assertion is what makes the hole visible.
 //
 // ⚠️ This card asserts the SET IS COMPLETE. It does NOT re-assert each
-// section's gates — `tests/settings/jobRunsFoldIn.test.tsx` (MOTIR-4861) owns
-// the audience arm for `Job runs`, and the workspace cards own theirs.
+// section's gates — the workspace cards own theirs.
+//
+// ⚠️ THE SET WAS FIVE AND IS FOUR (Story MOTIR-9982 · MOTIR-10042). `Job runs`
+// was the fifth, folded in by MOTIR-4861, and it was RETIRED rather than lost:
+// decision MOTIR-4896 found the tenant ledger to be operator noise, moved it to
+// staff-only `/admin/jobs`, and gave tenants the one thing the dead-letter page
+// was their only door for — pending invitations with Resend, on the Members
+// card this set already carries. A removal by decision is not the hidden-tier
+// omission §6d forbids, and the last describe below pins that it stays gone.
 
 vi.mock('next-intl/server', () => ({
   getTranslations: async () => (key: string) => key,
@@ -86,7 +93,7 @@ vi.mock('@/app/(authed)/settings/organization/_components/RolesDoorCard', () => 
 
 import { WorkspaceFoldInSection } from '@/app/(authed)/settings/organization/_components/WorkspaceFoldInSection';
 
-/** The FIVE capabilities a single-workspace org must still reach. */
+/** The FOUR capabilities a single-workspace org must still reach (Job runs, the fifth, was retired). */
 const CAPABILITY_SET = ['cap-name', 'cap-members', 'cap-two-factor', 'cap-danger'] as const;
 
 afterEach(() => {
@@ -110,7 +117,7 @@ describe('the below-reveal capability SET — what a plain workspace member can 
     });
   }
 
-  it('hosts FOUR of the five sections itself — and the set is asserted whole, not one by one', async () => {
+  it('hosts all FOUR sections itself — and the set is asserted whole, not one by one', async () => {
     seedPlainMember();
     render(
       await WorkspaceFoldInSection({
@@ -171,30 +178,22 @@ describe('the below-reveal capability SET — what a plain workspace member can 
   });
 });
 
-// The FIFTH capability lives in a sibling section rather than inside the one
-// above, because `Job runs` is an operator surface rather than workspace CONFIG
-// — which is also why the area rail gives it a group of its own. So the claim
-// "all five appear together" is about the HOST PAGE, and the host page is an
-// async Server Component over a session, a workspace context and half a dozen
-// service reads: there is no unit render of it, and the seam it owns is one
-// conditional wide.
-//
-// That conditional is exactly what a pair of green section tests cannot see, so
-// it is asserted from the SOURCE, with comments blanked so a sentence about a
-// section is never mistaken for the section.
-describe('the FIFTH capability — the host page mounts both fold-ins on ONE condition', () => {
+// The host page is an async Server Component over a session, a workspace
+// context and half a dozen service reads: there is no unit render of it, and
+// the seam it owns is one conditional wide. That conditional is exactly what a
+// green section test cannot see, so it is asserted from the SOURCE, with
+// comments blanked so a sentence about a section is never mistaken for the
+// section.
+describe('the host page mounts the fold-in on ONE condition, and no Job runs section', () => {
   const source = stripComments(
     readFileSync(join(REPO_ROOT, 'app/(authed)/settings/organization/page.tsx'), 'utf8'),
   );
 
-  it.each([['WorkspaceFoldInSection'], ['JobRunsFoldInSection']])(
-    '%s is rendered, and guarded by `foldInWorkspace`',
-    (component) => {
-      expect(source).toMatch(new RegExp(`\\{foldInWorkspace \\? \\(\\s*<${component}\\b`));
-    },
-  );
+  it('`WorkspaceFoldInSection` is rendered, and guarded by `foldInWorkspace`', () => {
+    expect(source).toMatch(/\{foldInWorkspace \? \(\s*<WorkspaceFoldInSection\b/);
+  });
 
-  it('⚠️ NEITHER is inside the `isAdmin` branch — that is the whole §6d correction', () => {
+  it('⚠️ it is NOT inside the `isAdmin` branch — that is the whole §6d correction', () => {
     // The failure this guards reads as conservative and is the defect: gating a
     // relocated section on the HOST's org-admin check instead of on the SOURCE
     // surface's membership check closes it to exactly the smallest customers —
@@ -204,15 +203,17 @@ describe('the FIFTH capability — the host page mounts both fold-ins on ONE con
       source.indexOf('{foldInWorkspace ? ('),
     );
     expect(adminBranch).not.toContain('WorkspaceFoldInSection');
-    expect(adminBranch).not.toContain('JobRunsFoldInSection');
   });
 
-  it('both read the SAME `foldInWorkspace`, so the set hides and reappears together', () => {
-    // Two conditions that agree today can drift; one condition cannot. The
-    // count is the assertion: exactly two guarded mounts, no third spelling.
+  it('reads ONE `foldInWorkspace`, derived from the reveal predicate', () => {
+    // Exactly one guarded mount: the retired `Job runs` section was the second.
     const guards = source.match(/\{foldInWorkspace \? \(/g) ?? [];
-    expect(guards).toHaveLength(2);
-    // …and it is derived from the reveal predicate, not from a second literal.
+    expect(guards).toHaveLength(1);
     expect(source).toMatch(/const foldInWorkspace = isWorkspaceTierRevealed\(/);
+  });
+
+  it('hosts no Job runs section and carries no job-dashboard query (MOTIR-9982)', () => {
+    expect(source).not.toMatch(/JobRunsFoldInSection|JobsPane|jobsParams/);
+    expect(source).not.toContain('/settings/workspace/jobs');
   });
 });

@@ -4227,10 +4227,6 @@
         "security": "Security",
         "usage": "Usage & cost",
         "billing": "Billing & plans"
-      },
-      "jobRunsFoldIn": {
-        "title": "Job runs",
-        "subtitle": "Background work for this workspace — what ran, what failed, and what is waiting in the dead-letter queue."
       }
     },
     "gitAccounts": {

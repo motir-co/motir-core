@@ -682,7 +682,6 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   // the same basis — so 30.0, again rounded up.
   'item-plan-history.spec.ts': 30.0,
   'issue-list-flow.spec.ts': 51.7,
-  'jobs-dashboard.spec.ts': 8.6,
   'jobs-fanout-engine.spec.ts': 11.7,
   'jobs-flow.spec.ts': 25.7,
   'jobs-postgres-engine.spec.ts': 24.8,

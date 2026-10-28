@@ -4227,10 +4227,6 @@
         "security": "Segurança",
         "usage": "Uso e custo",
         "billing": "Faturamento e planos"
-      },
-      "jobRunsFoldIn": {
-        "title": "Execuções de jobs",
-        "subtitle": "Trabalho em segundo plano deste espaço de trabalho — o que foi executado, o que falhou e o que está aguardando na fila de dead-letter."
       }
     },
     "gitAccounts": {

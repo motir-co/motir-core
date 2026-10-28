@@ -4227,10 +4227,6 @@
         "security": "Sécurité",
         "usage": "Utilisation et coûts",
         "billing": "Facturation et forfaits"
-      },
-      "jobRunsFoldIn": {
-        "title": "Exécutions de tâches",
-        "subtitle": "Le travail d’arrière-plan de cet espace de travail : ce qui s’est exécuté, ce qui a échoué et ce qui attend dans la file de lettres mortes."
       }
     },
     "gitAccounts": {

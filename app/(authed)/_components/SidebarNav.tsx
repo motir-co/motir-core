@@ -678,9 +678,11 @@ export function SidebarNav({
   // `organization-tier.md` §6 requires of a hiding rule: above the reveal they
   // are rows in the workspace area's own rail (`lib/settings/workspaceSettingsNav.ts`),
   // and below it they are folded into `/settings/organization` — Security by
-  // `WorkspaceFoldInSection` (MOTIR-3502) and Job runs by `JobRunsFoldInSection`
+  // `WorkspaceFoldInSection` (MOTIR-3502) and Job runs by its own fold-in
   // (MOTIR-4861, the fold-in this card waited on). The door into both is the
-  // workspace SWITCHER's new `Workspace settings` row.
+  // workspace SWITCHER's new `Workspace settings` row. (Job runs was later
+  // RETIRED for tenants by decision — Story MOTIR-9982: the ledger is
+  // staff-only at `/admin/jobs`, so neither its rail row nor its fold-in exists.)
   //
   // ⚠️ AND `Git` HAS NOW LEFT IT TOO (Story MOTIR-1754 · MOTIR-1768). MOTIR-4640
   // took it out of the design asset above; MOTIR-4643 folded Code health + Git

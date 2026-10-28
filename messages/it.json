@@ -4227,10 +4227,6 @@
         "security": "Sicurezza",
         "usage": "Utilizzo e costi",
         "billing": "Fatturazione e piani"
-      },
-      "jobRunsFoldIn": {
-        "title": "Esecuzioni dei job",
-        "subtitle": "Il lavoro in background di questa area di lavoro: cosa è stato eseguito, cosa non è riuscito e cosa attende nella coda dead-letter."
       }
     },
     "gitAccounts": {
