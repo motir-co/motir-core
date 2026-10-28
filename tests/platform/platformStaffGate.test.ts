@@ -183,6 +183,21 @@ describe('requirePlatformStaff — the three DENIAL cases', () => {
     await expect(gate()).rejects.toBeInstanceOf(NotPlatformStaffError);
   });
 
+  it('ignores the retired admin-email env var, even when it names the caller', async () => {
+    // Moved here from the jobs resolver's suite when that resolver was deleted
+    // with the tenant Job runs surface (MOTIR-10044): the env var was the
+    // stopgap this gate replaced (MOTIR-8200), and naming a tenant owner in it
+    // must still grant nothing. Named in pieces so the repository grep for the
+    // retired gate stays clean.
+    const owner = await createTestUser({ email: 'owner@tenant.test' });
+    vi.stubEnv('PLATFORM_ADMIN' + '_EMAIL', 'owner@tenant.test');
+    currentSession = { user: { id: owner.id } };
+
+    const { requirePlatformStaff: gate, NotPlatformStaffError } = await freshGate();
+    await expect(gate()).rejects.toBeInstanceOf(NotPlatformStaffError);
+    vi.unstubAllEnvs();
+  });
+
   it('answers all three with ONE indistinguishable error — no reason, no discriminant', async () => {
     // ADR §2: a caller able to tell "no session" from "not staff" from "below
     // the minimum" could probe the admin area's existence. So the assertion is

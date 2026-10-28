@@ -1,11 +1,11 @@
 // E2E: the story's operator journey ON THE POSTGRES ENGINE
 // (Story MOTIR-3414 · Subtask MOTIR-3427 — closes the Story).
 //
-// @smoke — the story's `verification_recipe`, automated: open the jobs
-// dashboard (see `gotoJobs` — the address moved for this fixture in
-// MOTIR-4861), trigger the pilot job on the NEW engine, watch its
-// run appear and succeed, force it to fail until it dead-letters, press Replay,
-// watch the replay succeed.
+// @smoke — the story's `verification_recipe`, automated: trigger the pilot job
+// on the NEW engine, watch its run land in the ledger and succeed, then force it
+// to fail until it dead-letters. (The dashboard steps and the tenant Replay
+// scenario were retired with the tenant Job runs surface — see the note at the
+// end of the file.)
 //
 // ⚠️ WHY THIS IS A SEPARATE SPEC FROM `jobs-flow.spec.ts` RATHER THAN AN EDIT TO
 // IT. That spec proves the same journey on INNGEST, and this story does not
@@ -116,20 +116,9 @@ async function sendInvite(page: Page, inviteeEmail: string): Promise<void> {
   ).toBeVisible();
 }
 
-// ⚠️ THE DOOR MOVED FOR THIS FIXTURE (Story MOTIR-4843 · MOTIR-4861). A fresh
-// sign-up gets ONE auto-created workspace — the COLLAPSED state — and
-// `/settings/workspace/jobs` `notFound()`s there now, joining the three sibling
-// workspace routes MOTIR-3502 folded in. The dashboard is a section on the one
-// settings home instead (`JobRunsFoldInSection`): same component, same reads,
-// same tabs and filters, with its links built from THIS address.
-async function gotoJobs(page: Page): Promise<void> {
-  await page.goto('/settings/organization');
-  await expect(page.getByRole('heading', { name: 'Job runs', exact: true })).toBeVisible();
-}
-
 // ── scenarios ──────────────────────────────────────────────────────────────
 
-test('@smoke the pilot job runs on the POSTGRES ENGINE and the dashboard is unchanged', async ({
+test('@smoke the pilot job runs on the POSTGRES ENGINE and lands in the same ledger', async ({
   page,
 }) => {
   test.setTimeout(90_000);
@@ -174,12 +163,6 @@ test('@smoke the pilot job runs on the POSTGRES ENGINE and the dashboard is unch
     )
     .toBe(1);
   expect(await adminDb.jobRun.count({ where: { workspaceId, status: 'failed' } })).toBe(0);
-
-  // ── and the operator dashboard renders it, untouched by this story ───────
-  await gotoJobs(page);
-  await expect(page.getByText(PILOT_JOB).first()).toBeVisible();
-  await page.getByRole('link', { name: 'Succeeded' }).click();
-  await expect(page.getByText(PILOT_JOB).first()).toBeVisible();
 });
 
 test('@smoke a failing pilot run retries on the engine’s own backoff, then dead-letters', async ({
@@ -228,128 +211,19 @@ test('@smoke a failing pilot run retries on the engine’s own backoff, then dea
   const dlqRow = await adminDb.jobRunDlq.findFirstOrThrow({ where: { workspaceId } });
   expect(dlqRow.attempts).toBe(3);
   expect(dlqRow.replayedAt).toBeNull();
-
-  // ── the operator surface, unchanged ──────────────────────────────────────
-  await gotoJobs(page);
-  await page.getByRole('link', { name: 'Failed' }).click();
-  await expect(page.getByText(PILOT_JOB).first()).toBeVisible();
-
-  await expect(page.getByRole('main').getByLabel('1 in dead-letter queue')).toBeVisible();
-  await page.getByRole('link', { name: /Dead letter/ }).click();
-  await expect(page.getByRole('cell', { name: '3', exact: true })).toBeVisible();
 });
 
-test('@smoke an operator replays a dead-lettered run and the REPLAY succeeds on the engine', async ({
-  page,
-}) => {
-  test.setTimeout(150_000);
-
-  const owner = 'pge-replay-owner@example.com';
-  const invitee = 'pge-replay-forcefail@example.com';
-  await signUp(page, owner);
-  const workspaceId = await workspaceIdFor(owner);
-
-  // ⚠️ THE DLQ ROW IS EARNED, NOT SEEDED. The Inngest spec seeds one (a fair
-  // fixture for an action surface), but this story's claim is that the WHOLE
-  // path works on the new engine — so the row that gets replayed here is one the
-  // engine itself dead-lettered a moment ago.
-  await armEmailFault('forcefail');
-  await sendInvite(page, invitee);
-  await expect
-    .poll(async () => adminDb.jobRunDlq.count({ where: { workspaceId } }), {
-      timeout: 90_000,
-      intervals: [1_000],
-    })
-    .toBe(1);
-
-  // Disarm, so the replay can actually deliver.
-  await clearEmailFault();
-  const runsBefore = await adminDb.jobQueueRun.count({ where: { jobId: PILOT_JOB } });
-
-  await gotoJobs(page);
-  await page.getByRole('link', { name: /Dead letter/ }).click();
-  const replay = page.getByRole('button', { name: 'Replay', exact: true });
-  await expect(replay).toBeEnabled();
-  await replay.click();
-  await expect(page.getByText('Job replayed', { exact: true })).toBeVisible();
-
-  // The replay enqueued a FRESH run on the engine rather than resetting the dead
-  // one — the original's step ledger records work that completed, and re-running
-  // that row would skip exactly the steps an operator is replaying to re-do.
-  await expect
-    .poll(async () => adminDb.jobQueueRun.count({ where: { jobId: PILOT_JOB } }), {
-      timeout: 30_000,
-      intervals: [500],
-    })
-    .toBe(runsBefore + 1);
-
-  // …and it succeeds: a new succeeded run, and the email actually delivered.
-  await expect
-    .poll(
-      async () => adminDb.jobQueueRun.count({ where: { jobId: PILOT_JOB, state: 'succeeded' } }),
-      {
-        timeout: 60_000,
-        intervals: [1_000],
-      },
-    )
-    .toBe(1);
-  const delivered = await waitForEmail(invitee);
-  expect(delivered.subject).toContain('invited to join');
-
-  // The DLQ row is stamped, so the action is auditable.
-  const row = await adminDb.jobRunDlq.findFirstOrThrow({ where: { workspaceId } });
-  expect(row.replayedAt).not.toBeNull();
-});
-
-test('the runs table renders its EMPTY state before any job has run', async ({ page }) => {
-  const owner = 'pge-empty-owner@example.com';
-  await signUp(page, owner);
-
-  // A workspace whose jobs have never run is the first thing a new operator
-  // sees, and it is the state most likely to be left unstyled.
-  await gotoJobs(page);
-  await expect(page.getByText('No job runs yet')).toBeVisible();
-  // The dead-letter tab carries no badge when the queue is empty.
-  await expect(page.getByRole('main').getByLabel(/in dead-letter queue/)).toBeHidden();
-});
-
-test('the runs table renders its EMPTY-FOR-THIS-FILTER state', async ({ page }) => {
-  const owner = 'pge-filter-owner@example.com';
-  const invitee = 'pge-filter-invitee@example.com';
-  await signUp(page, owner);
-  const workspaceId = await workspaceIdFor(owner);
-
-  await sendInvite(page, invitee);
-  await expect
-    .poll(
-      async () =>
-        adminDb.jobRun.count({
-          where: { workspaceId, functionId: PILOT_JOB, status: 'succeeded' },
-        }),
-      { timeout: 30_000, intervals: [500] },
-    )
-    .toBe(1);
-
-  await gotoJobs(page);
-  // One succeeded run exists, so the FAILED filter must show the empty state
-  // rather than the unfiltered list — the bug a filter that silently no-ops has.
-  //
-  // ⚠️ WAIT FOR THE NAVIGATION, then assert. The filter is a `<Link>`, so the
-  // click starts a client navigation and asserting straight after it races the
-  // re-render — the assertion then reads the UNFILTERED page and sees the run it
-  // is checking is gone. The URL carrying the filter is the authoritative signal
-  // that the new render is the one on screen.
-  await page.getByRole('link', { name: 'Failed' }).click();
-  await page.waitForURL(/status=failed/);
-
-  // ⚠️ AND SCOPE THE LOCATOR TO THE TABLE. A bare `getByText('email.send')`
-  // resolves to TWO elements on the unfiltered page (the row cell and the
-  // run-detail trigger), which is a strict-mode violation rather than a failed
-  // assertion — it throws before it can evaluate `toBeHidden`. Counting cells
-  // says the thing actually meant: the table has no row for this job.
-  await expect(page.getByRole('cell', { name: PILOT_JOB })).toHaveCount(0);
-  await expect(page.getByText('No job runs yet')).toBeVisible();
-});
+// ⚠️ FOUR DASHBOARD STEPS AND THREE SCENARIOS STOOD HERE, AND THEIR SURFACE IS
+// GONE (Story MOTIR-9982 · MOTIR-10042).
+//
+// The two scenarios above each finished on the tenant Job runs dashboard, and
+// three more were driven through it alone: an owner pressing Replay on a
+// dead letter the engine had earned, and the runs table's two empty states. The
+// tenant dashboard and its replay action are retired; the ledger is staff-only
+// at `/admin/jobs`. The ledger rows those scenarios read are asserted above
+// through the database, which is what this spec proves about the engine. An
+// operator replaying a real dead letter that the worker then re-runs is
+// `acceptance-admin-jobs.spec.ts`'s journey, on the surface that owns it now.
 
 // ⚠️ A SCENARIO STOOD HERE AND ITS SUBJECT IS GONE (MOTIR-3418).
 //
@@ -362,7 +236,6 @@ test('the runs table renders its EMPTY-FOR-THIS-FILTER state', async ({ page }) 
 // the function and invoke it over HTTP.
 //
 // There is no second lane for a job to run on instead, so the assertion cannot be
-// written. What it protected — that a job's runs reach the ledger and the operator
-// surface, and that the email actually lands — is the POSITIVE scenario above,
+// written. What it protected — that a job's runs reach the ledger, and that the email actually lands — is the POSITIVE scenario above,
 // which drives the same invite through the same seam and now covers every job
 // rather than the one that had been routed.

@@ -376,36 +376,13 @@ export const jobRunRepository = {
   },
 
   /**
-   * Dashboard read (1.6.5): a workspace's runs, newest-first, optionally
-   * filtered by status, with limit/offset paging. Takes `tx` because the read
-   * runs inside withWorkspaceContext so the job_run RLS policy scopes it; the
-   * explicit `where.workspaceId` is the in-query scope that also holds in
-   * dev/CI where the superuser bypasses RLS (defense-in-depth, mirrors
-   * workspaceMembershipRepository.findMembersByWorkspace). Serves the
-   * `[workspaceId, startedAt desc]` / `[workspaceId, status, startedAt desc]`
-   * indexes from the 1.6.2 schema.
-   */
-  async listByWorkspace(
-    workspaceId: string,
-    opts: { status?: JobRunStatus; limit: number; offset: number },
-    tx: Prisma.TransactionClient,
-  ): Promise<JobRun[]> {
-    return tx.jobRun.findMany({
-      where: { workspaceId, ...(opts.status ? { status: opts.status } : {}) },
-      orderBy: { startedAt: 'desc' },
-      take: opts.limit,
-      skip: opts.offset,
-    });
-  },
-
-  /**
    * The idempotency keys, among `idempotencyKeys`, that have a `failed` run of
    * `functionId` in `workspaceId` (MOTIR-9995) — a dead-lettered send: the
    * ledger flips a run to `failed` only once its retries are exhausted.
    * `abandoned` is not a dead letter and is not read. Takes `tx` because the
    * caller runs it under `withWorkspaceContext` (the job_run RLS policy); the
    * explicit `workspaceId` is the in-query scope that also holds where RLS is
-   * bypassed, as `listByWorkspace` does.
+   * bypassed.
    */
   async listFailedKeysByFunctionAndIdempotencyKeys(
     workspaceId: string,

@@ -17,7 +17,8 @@ import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 //
 // The criterion this file exists for is PARITY: the `job_run` ledger and the
 // dead-letter queue must behave on the new engine exactly as they do on Inngest,
-// so `/settings/workspace/jobs` and `jobRunsService` keep working untouched. So
+// so the operator ledger (staff-only at `/admin/jobs` since Story MOTIR-9982)
+// and `jobRunsService` keep working untouched. So
 // the assertions are about ROWS — what an operator's dashboard reads — rather
 // than about the engine's internals.
 

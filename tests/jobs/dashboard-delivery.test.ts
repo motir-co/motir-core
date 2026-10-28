@@ -7,7 +7,7 @@ import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import { randomToken } from '../helpers/random';
 
-// The operator dashboard's DELIVERY join (Bug MOTIR-3507 · Subtask MOTIR-3517),
+// The platform job ledger's DELIVERY join (Bug MOTIR-3507 · Subtask MOTIR-3517),
 // against a real Postgres.
 //
 // The property under test is a distinction: `job_run.status` says whether the
@@ -63,13 +63,11 @@ async function seedDelivery(opts: {
   });
 }
 
+// The runs read /admin/jobs pages through (`platformJobsLedgerService`); the
+// tenant dashboard's workspace read this suite was written against was deleted
+// with that dashboard (MOTIR-10044), and the join it proves is the same helper.
 function listRuns() {
-  return jobsDashboardService.listJobRuns({
-    userId: owner.id,
-    workspaceId,
-    limit: 50,
-    offset: 0,
-  });
+  return jobsDashboardService.listSystemRuns({ limit: 50, offset: 0 });
 }
 
 beforeEach(async () => {
@@ -92,7 +90,7 @@ afterAll(async () => {
   await adminDb.$disconnect();
 });
 
-describe('the jobs dashboard joins each send to its delivery', () => {
+describe('the runs read joins each send to its delivery', () => {
   it('shows a SUCCEEDED run whose message BOUNCED — the whole point of the column', async () => {
     const key = await seedRun({ status: 'succeeded' });
     await seedDelivery({ idempotencyKey: key, state: 'bounced', providerMessageId: 'msg_bounced' });

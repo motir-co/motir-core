@@ -737,9 +737,6 @@
       "pickProjectFirst": "Najpierw wybierz projekt.",
       "unknownRelationship": "Nieznana relacja.",
       "pickIssueToLink": "Wybierz element roboczy do powiązania.",
-      "missingDlqId": "Brak identyfikatora wpisu w kolejce niedostarczonych.",
-      "ownerOnlyReplay": "Tylko menedżer obszaru roboczego może ponownie uruchamiać zadania.",
-      "dlqGone": "Ten wpis w kolejce niedostarczonych już nie istnieje.",
       "workspaceNameEmpty": "Nazwa obszaru roboczego nie może być pusta.",
       "useLeaveToRemoveSelf": "Aby usunąć siebie, użyj opcji Opuść.",
       "cannotRemoveLastMember": "Nie można usunąć ostatniego członka.",
@@ -765,9 +762,7 @@
       "workspaceSecurityForbidden": "Tylko właściciele i administratorzy obszaru roboczego mogą zmieniać jego ustawienia zabezpieczeń.",
       "refused": "Nie udało się: {reason}",
       "organizationClosing": "Ta organizacja jest zaplanowana do usunięcia i jest tylko do odczytu. Tylko jej właściciel może anulować usunięcie.",
-      "memberProjectsFailed": "Nie udało się załadować projektów tej osoby.",
-      "systemReplayWorkspaceRow": "Ten wpis w kolejce niedostarczonych należy do przestrzeni roboczej — uruchom go ponownie na karcie Niedostarczone tej przestrzeni.",
-      "systemReplayOperatorOnly": "Tylko operator platformy może ponownie uruchamiać systemowe niedostarczone wpisy."
+      "memberProjectsFailed": "Nie udało się załadować projektów tej osoby."
     },
     "links": {
       "notFound": "Ten element roboczy już nie istnieje.",
@@ -2066,13 +2061,11 @@
       "nav": {
         "group": {
           "general": "Ogólne",
-          "access": "Dostęp",
-          "operations": "Operacje"
+          "access": "Dostęp"
         },
         "workspace": "Obszar roboczy",
         "security": "Zabezpieczenia",
         "roles": "Role i uprawnienia",
-        "jobs": "Uruchomienia zadań",
         "publicAddress": "Adres publiczny"
       }
     },
@@ -2971,86 +2964,6 @@
       "heroOverviewSubheading": "Hasło, tagi i README, które odwiedzający widzą na Twojej stronie publicznej.",
       "editOnPublicPage": "Edytuj stronę publiczną",
       "heroOverviewNote": "Otwiera Ustawienia › Strona publiczna. Możesz ją przygotować, zanim projekt stanie się publiczny."
-    },
-    "jobs": {
-      "title": "Uruchomienia zadań",
-      "subtitle": "Zadania w tle dla tego obszaru roboczego — dostarczanie zaproszeń i resetów hasła oraz wszelka zaplanowana praca. Nieudane zadania trafiają do kolejki niedostarczonych, gdzie właściciel może je ponownie uruchomić.",
-      "tab": {
-        "runs": "Ostatnie uruchomienia",
-        "dlq": "Niedostarczone",
-        "system": "System"
-      },
-      "tabNavLabel": "Widoki uruchomień zadań",
-      "dlqBadgeLabel": "W kolejce niedostarczonych: {count}",
-      "filterGroupLabel": "Filtruj według statusu",
-      "filter": {
-        "all": "Wszystkie",
-        "succeeded": "Udane",
-        "failed": "Nieudane",
-        "running": "W trakcie",
-        "abandoned": "Porzucone"
-      },
-      "runsTableCaption": "Uruchomienia zadań w tle",
-      "col": {
-        "status": "Status",
-        "delivery": "Dostarczenie",
-        "function": "Funkcja",
-        "event": "Zdarzenie",
-        "attempts": "Próby",
-        "started": "Rozpoczęto",
-        "duration": "Czas trwania",
-        "failure": "Niepowodzenie",
-        "details": "Szczegóły",
-        "firstFailed": "Pierwsze niepowodzenie",
-        "lastFailed": "Ostatnie niepowodzenie",
-        "replayed": "Uruchomiono ponownie",
-        "actions": "Akcje"
-      },
-      "view": "Wyświetl",
-      "runDetailTitle": "Szczegóły uruchomienia",
-      "dlqTableCaption": "Kolejka niedostarczonych",
-      "replay": "Uruchom ponownie",
-      "replayTooltip": "Tylko menedżer obszaru roboczego może ponownie uruchamiać zadania",
-      "alreadyReplayedToastTitle": "Już uruchomiono ponownie",
-      "alreadyReplayedToastDesc": "Ten wpis został już wcześniej uruchomiony ponownie — nic nowego nie zostało dodane do kolejki.",
-      "replayedToastTitle": "Zadanie uruchomiono ponownie",
-      "replayedToastDesc": "Pierwotne zdarzenie zostało wyemitowane ponownie.",
-      "replayErrorTitle": "Nie udało się uruchomić ponownie",
-      "dlqDetailTitle": "Szczegóły wpisu niedostarczonego",
-      "dlqDetailDesc": "Niepowodzenie i pierwotny ładunek zdarzenia (można go ponownie uruchomić bez zmian).",
-      "failureHeading": "Niepowodzenie",
-      "eventPayloadHeading": "Ładunek zdarzenia",
-      "pageLabel": "Strona {page}",
-      "previous": "Poprzednia",
-      "next": "Następna",
-      "refresh": "Odśwież",
-      "dlqEmptyTitle": "Kolejka niedostarczonych jest pusta",
-      "dlqEmptyDesc": "Każde zadanie zakończyło się powodzeniem lub jest wciąż ponawiane.",
-      "runsEmptyTitle": "Brak uruchomień zadań",
-      "runsEmptyDesc": "Gdy zadanie w tle zostanie uruchomione, pojawi się tutaj.",
-      "delivery": {
-        "accepted": "przyjęto",
-        "delivered": "dostarczono",
-        "bounced": "odrzucono",
-        "complained": "oznaczono jako spam",
-        "delayed": "opóźniono"
-      },
-      "deliveryNone": "Brak rekordu dostarczenia",
-      "deliveryDetail": {
-        "heading": "Dostarczenie",
-        "state": "Stan",
-        "messageId": "Identyfikator wiadomości",
-        "recipient": "Odbiorca",
-        "template": "Szablon",
-        "lastEvent": "Ostatnie zdarzenie",
-        "never": "Brak zdarzeń od dostawcy"
-      },
-      "systemDlqTitle": "Niedostarczone bez przestrzeni roboczej",
-      "systemDlqSummary": "{waiting} czeka na ponowne uruchomienie · {replayed} uruchomionych ponownie w ostatnich 7 dniach",
-      "systemDlqTableCaption": "Systemowe niedostarczone",
-      "systemDlqEmptyTitle": "Brak systemowych niedostarczonych",
-      "systemDlqEmptyDesc": "Każde zadanie bez przestrzeni roboczej zakończyło się powodzeniem albo jest nadal ponawiane.",
-      "systemRunsTitle": "Uruchomienia systemowe"
     },
     "account": {
       "eyebrow": "Ustawienia konta",
@@ -4227,10 +4140,6 @@
         "security": "Zabezpieczenia",
         "usage": "Użycie i koszty",
         "billing": "Rozliczenia i plany"
-      },
-      "jobRunsFoldIn": {
-        "title": "Uruchomienia zadań",
-        "subtitle": "Praca w tle dla tego obszaru roboczego — co zostało uruchomione, co się nie powiodło i co czeka w kolejce niedostarczonych."
       }
     },
     "gitAccounts": {

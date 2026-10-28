@@ -737,9 +737,6 @@
       "pickProjectFirst": "请先选择一个项目。",
       "unknownRelationship": "未知的关系类型。",
       "pickIssueToLink": "请选择要关联的工作项。",
-      "missingDlqId": "缺少死信队列ID。",
-      "ownerOnlyReplay": "只有工作区管理者才能重放任务。",
-      "dlqGone": "该死信队列条目已不存在。",
       "workspaceNameEmpty": "工作区名称不能为空。",
       "useLeaveToRemoveSelf": "请使用“离开”来移除你自己。",
       "cannotRemoveLastMember": "无法移除最后一名成员。",
@@ -765,9 +762,7 @@
       "workspaceSecurityForbidden": "只有工作区的所有者或管理员才能更改其安全设置。",
       "refused": "操作未完成：{reason}",
       "organizationClosing": "该组织已计划删除，目前为只读状态。只有组织所有者可以取消删除。",
-      "memberProjectsFailed": "无法加载其项目。",
-      "systemReplayWorkspaceRow": "该死信属于某个工作区——请在该工作区的“死信”标签页中重放。",
-      "systemReplayOperatorOnly": "只有平台运营者才能重放系统死信。"
+      "memberProjectsFailed": "无法加载其项目。"
     },
     "links": {
       "notFound": "该工作项已不存在。",
@@ -2066,13 +2061,11 @@
       "nav": {
         "group": {
           "general": "通用",
-          "access": "访问与权限",
-          "operations": "运维"
+          "access": "访问与权限"
         },
         "workspace": "工作区",
         "security": "安全",
         "roles": "角色与权限",
-        "jobs": "任务运行",
         "publicAddress": "公开地址"
       }
     },
@@ -2971,86 +2964,6 @@
       "heroOverviewSubheading": "访客在你的公开页面上看到的标语、标签和 README。",
       "editOnPublicPage": "编辑公开页面",
       "heroOverviewNote": "打开“设置 › 公开页面”。项目公开前也可以先写好。"
-    },
-    "jobs": {
-      "title": "任务运行",
-      "subtitle": "该工作区的后台任务——邀请和密码重置邮件的投递，以及各类计划任务。失败的任务会进入死信队列，所有者可在那里重放它们。",
-      "tab": {
-        "runs": "最近运行",
-        "dlq": "死信",
-        "system": "系统"
-      },
-      "tabNavLabel": "任务运行视图",
-      "dlqBadgeLabel": "死信队列中有 {count} 个",
-      "filterGroupLabel": "按状态筛选",
-      "filter": {
-        "all": "全部",
-        "succeeded": "成功",
-        "failed": "失败",
-        "running": "运行中",
-        "abandoned": "已放弃"
-      },
-      "runsTableCaption": "后台任务运行",
-      "col": {
-        "status": "状态",
-        "delivery": "送达",
-        "function": "函数",
-        "event": "事件",
-        "attempts": "尝试次数",
-        "started": "开始时间",
-        "duration": "耗时",
-        "failure": "失败原因",
-        "details": "详情",
-        "firstFailed": "首次失败",
-        "lastFailed": "最近失败",
-        "replayed": "已重放",
-        "actions": "操作"
-      },
-      "view": "查看",
-      "runDetailTitle": "运行详情",
-      "dlqTableCaption": "死信队列",
-      "replay": "重放",
-      "replayTooltip": "只有工作区管理者才能重放任务",
-      "alreadyReplayedToastTitle": "已重放过",
-      "alreadyReplayedToastDesc": "该条目此前已重放，未新建任务。",
-      "replayedToastTitle": "任务已重放",
-      "replayedToastDesc": "原始事件已重新发出。",
-      "replayErrorTitle": "无法重放",
-      "dlqDetailTitle": "死信详情",
-      "dlqDetailDesc": "失败原因和原始事件载荷（可原样重放）。",
-      "failureHeading": "失败原因",
-      "eventPayloadHeading": "事件载荷",
-      "pageLabel": "第 {page} 页",
-      "previous": "上一页",
-      "next": "下一页",
-      "refresh": "刷新",
-      "dlqEmptyTitle": "死信队列为空",
-      "dlqEmptyDesc": "每个任务都已成功或仍在重试。",
-      "runsEmptyTitle": "还没有任务运行",
-      "runsEmptyDesc": "当后台任务运行时，会显示在这里。",
-      "delivery": {
-        "accepted": "已受理",
-        "delivered": "已送达",
-        "bounced": "已退信",
-        "complained": "被举报为垃圾邮件",
-        "delayed": "投递延迟"
-      },
-      "deliveryNone": "无送达记录",
-      "deliveryDetail": {
-        "heading": "送达情况",
-        "state": "状态",
-        "messageId": "消息 ID",
-        "recipient": "收件人",
-        "template": "模板",
-        "lastEvent": "最近事件",
-        "never": "尚未收到服务商事件"
-      },
-      "systemDlqTitle": "无工作区的死信",
-      "systemDlqSummary": "{waiting} 条等待重放 · 最近 7 天内已重放 {replayed} 条",
-      "systemDlqTableCaption": "系统死信",
-      "systemDlqEmptyTitle": "没有系统死信",
-      "systemDlqEmptyDesc": "所有无工作区的作业均已成功，或仍在重试中。",
-      "systemRunsTitle": "系统运行"
     },
     "account": {
       "eyebrow": "账户设置",
@@ -4227,10 +4140,6 @@
         "security": "安全",
         "usage": "用量与费用",
         "billing": "账单与套餐"
-      },
-      "jobRunsFoldIn": {
-        "title": "任务运行",
-        "subtitle": "该工作区的后台任务——运行了什么、失败了什么，以及死信队列中还有什么在等待。"
       }
     },
     "gitAccounts": {
