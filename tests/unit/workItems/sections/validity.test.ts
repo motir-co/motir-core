@@ -34,12 +34,23 @@ describe('sectionFindingFor (MOTIR-9032)', () => {
     expect(f?.missing).toEqual(['scopeBoundary']);
   });
 
-  it('lists headings the registry does not define as otherHeadings', () => {
-    const f = sectionFindingFor({ ...card, descriptionMd: 'Why.\n\n## Appendix\n\nExtra.\n' });
+  // MOTIR-9835: every section set allows `otherSections`, so an extra heading on an
+  // otherwise complete body is not a finding.
+  it('is silent for a complete body whose only departure is an extra heading', () => {
+    const body = `${renderSections('task', 'code', fixture('task', 'code'))}\n## Appendix\n\nExtra.\n`;
+    expect(sectionFindingFor({ ...card, descriptionMd: body })).toBeNull();
+  });
+
+  it('lists extra headings beside a missing required section', () => {
+    const { scopeBoundary: _dropped, ...rest } = fixture('task', 'code');
+    const body = `${renderSections('task', 'code', rest)}\n## Appendix\n\nExtra.\n`;
+    const f = sectionFindingFor({ ...card, descriptionMd: body });
+    expect(f?.state).toBe('incomplete');
+    expect(f?.missing).toEqual(['scopeBoundary']);
     expect(f?.otherHeadings).toEqual(['Appendix']);
   });
 
-  it("names an epic body's `## Acceptance criteria` heading as an other heading", () => {
+  it('is silent for a complete epic body carrying an `## Acceptance criteria` heading', () => {
     const f = sectionFindingFor({
       item: 'MOTIR-3',
       kind: 'epic',
@@ -48,8 +59,14 @@ describe('sectionFindingFor (MOTIR-9032)', () => {
         renderSections('epic', null, fixture('epic', null)) +
         '\n## Acceptance criteria\n\n- done\n',
     });
-    expect(f?.otherHeadings).toEqual(['Acceptance criteria']);
-    expect(f?.missing).toEqual([]);
+    expect(f).toBeNull();
+  });
+
+  it('is silent for a complete manual body carrying the templates’ `## Steps` heading', () => {
+    const body = `${renderSections('subtask', 'manual', fixture('subtask', 'manual'))}\n## Steps\n\n1. Open the console.\n`;
+    expect(
+      sectionFindingFor({ item: 'MOTIR-8', kind: 'subtask', type: 'manual', descriptionMd: body }),
+    ).toBeNull();
   });
 
   it('names the hidden sections of an all-gutter body and carries quoted-gutter', () => {
@@ -128,7 +145,7 @@ The whole direction.
     expect(f?.otherHeadings).toEqual([]);
   });
 
-  it('still lists an undefined heading on a decision card as an other heading', () => {
+  it('is silent for a complete decision card carrying an undefined heading', () => {
     const body = `${renderSections('task', 'decision', fixture('task', 'decision'))}
 ## Notes
 
@@ -140,7 +157,7 @@ Extra.
       type: 'decision',
       descriptionMd: body,
     });
-    expect(f?.otherHeadings).toEqual(['Notes']);
+    expect(f).toBeNull();
   });
 
   it('is silent for a kind or type the registry has no cell for', () => {

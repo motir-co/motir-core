@@ -4,8 +4,9 @@ import { HOST_PLAN_KEY, planCarriesOwnAccounts } from '@/lib/billing/ownAccountP
 // lets it run on Motir's fleets at once. Pure: no `db`, no `process.env`. The read
 // that turns an organisation into one of these rows is `planCapsService.capsFor`.
 //
-// The figures are the owner's (2026-10-23), recorded by the fleet-capacity
-// direction change, MOTIR-9357, which amends `docs/decisions/fleet-per-org-pool.md`
+// The figures are the owner's — MOTIR-9357 as corrected at its gate (2026-10-23),
+// with the CI burst caps of Pro, Max and Max ×2 raised on 2026-10-26 (MOTIR-9668).
+// That fleet-capacity direction change amends `docs/decisions/fleet-per-org-pool.md`
 // §2: the flat 500-container pool every paid org shared across CI, indexing and
 // hosted runs is replaced by one figure PER WORKLOAD, read from the plan the org
 // pays for. Each figure is counted from Motir's own slot and instance records, so
@@ -57,12 +58,13 @@ function caps(
 }
 
 /**
- * HOST'S SHARED FLOOR (MOTIR-9587): Max ×2's agent figures with a CI burst of 50. A
- * Host org runs at these until its own account of a kind is live; then
- * `planCapsService` replaces that kind's figure (agent runs, CI burst) with the
- * account's granted vCPU ÷ 2. Not the larger pools' floor: the two differ.
+ * HOST'S SHARED FLOOR (MOTIR-9587 · MOTIR-9668): 5 runs, agents 5 per user and 20
+ * running per org, and a CI burst of 20. A Host org runs at these until its own
+ * account of a kind is live; then `planCapsService` replaces that kind's figure
+ * with the account's own (`hostOwnAccountCaps.ts`). Not the larger pools' floor:
+ * the two differ.
  */
-export const HOST_FLOOR_CAPS: PlanCaps = caps(5, 10, 50, 50);
+export const HOST_FLOOR_CAPS: PlanCaps = caps(5, 5, 20, 20);
 
 /**
  * THE LARGER POOLS' SHARED FLOOR (MOTIR-9366 · MOTIR-9653): every rung on sale runs
@@ -77,10 +79,10 @@ export const LARGER_POOL_FLOOR_CAPS: PlanCaps = caps(5, 10, 50, 20);
  *  paid-plan gate refuses it before any figure is read. */
 export const PLAN_CAPS: Readonly<Record<string, PlanCaps>> = Object.freeze({
   free: caps(0, 0, 0, 0),
-  standard: caps(1, 1, 5, 5),
-  pro: caps(3, 5, 30, 10),
-  max: caps(5, 10, 50, 25),
-  max_x2: caps(5, 10, 50, 25),
+  standard: caps(1, 1, 2, 2),
+  pro: caps(3, 2, 10, 5),
+  max: caps(5, 3, 20, 10),
+  max_x2: caps(5, 3, 20, 15),
   [HOST_PLAN_KEY]: HOST_FLOOR_CAPS,
 });
 

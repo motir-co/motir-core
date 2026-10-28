@@ -3598,7 +3598,9 @@ cross-workspace key returns a `WORK_ITEM_NOT_FOUND` tool error.
 subtree card whose body, parsed against the section registry for its kind × type,
 misses a required section or carries one it cannot read is reported as
 `{ item, state: "unstructured" | "incomplete", missing, invalid, otherHeadings, signals }`,
-sorted by `item`. It never changes `valid` (a VALID verdict states the count and says
+sorted by `item`. A heading the registry does not define for the cell is an allowed
+`otherSections` entry: it is listed in `otherHeadings` beside a real finding, and never
+makes a finding on its own (MOTIR-9835). It never changes `valid` (a VALID verdict states the count and says
 so), and with a `planId` the body is the projected one. Fix a finding by re-writing the
 card with `sections` (see `get_section_sets`).
 
@@ -4343,6 +4345,18 @@ Each proposal is `{ op, proposedFields?, workItemId?, patch?, parentRef?, blocke
 - **`parentRef`** / **`blockedByRefs`** — a work-item **key** (`ACME-7`, resolved
   to its id at the append — keys are accepted, not refused), a real
   `work_item.id`, **or** an intra-plan temp-ref `planItem:<id>`.
+- **An edge may carry its REASON** (MOTIR-9827). Each entry of `blockedByRefs`
+  and of a `modify`'s `patch.blockedByAdd` is a bare ref **or** `{ ref, reason }`:
+  `reason` is ONE short line (at most 120 characters, no line break) saying what
+  the waiting card **consumes** from that blocker — and, when it consumes an
+  interface, the interface itself (_"consumes: the `AWS*ORG_ADMIN*_`secrets"*).
+The append splits it off onto the plan item's`edgeReasons`(ref → reason,
+re-keyed with the ref when a key resolves to an id),`get_plan`prints it beside
+the edge,`get_work_item`with`planId`shows it on the projected blocker row,
+and approve writes it onto the`work_item_link.reason`it creates, so the card's`blockedBy`row says why it waits. A blank, multi-line or over-long reason is
+refused as`INVALID_PROPOSAL`, naming the edge. `update_plan_proposal`'s
+`blockedByRefs` takes the same entries and replaces the reasons with the edges.
+  A bare ref stays accepted and carries no reason.
 - **`parentRef` may instead be `folder:<folderId>`** — FILE the proposal into a
   folder of the plan's project rather than under a work item (MOTIR-5414). A filed
   card is a root, and a folder admits **any** kind, `subtask` included. The same
@@ -5052,7 +5066,7 @@ this plan's to fix. An old edge the plan touches nothing of is reported by
 `validate_plan` also returns `sectionFindings` (MOTIR-9032), the same advisory
 channel as on `validate_work_item`, over the cards the plan adds or modifies: the
 projected body parsed against the section registry, a missing required section
-named by `item`. It never changes `valid`.
+named by `item`. An extra heading alone is not a finding (MOTIR-9835). It never changes `valid`.
 
 ```jsonc
 validate_plan({ planId })

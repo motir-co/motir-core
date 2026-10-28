@@ -6,6 +6,11 @@
 // reads `parseSections`' answer, so a section added to the registry is validated
 // with no edit here. ADVISORY — a finding never changes a verdict.
 //
+// A heading the registry does not define is NOT a finding on its own (MOTIR-9835):
+// every section set allows `otherSections`, and both planners are told to write
+// one for what a type owes beyond its set. It is listed as information beside a
+// real finding, and `get_work_item { includeSections }` still shows it.
+//
 // PURE: no DB, no `tx`. The caller supplies the body (stored, or projected from a
 // plan) and the card's kind and type.
 
@@ -24,8 +29,8 @@ export interface SectionFindingInput {
 }
 
 /**
- * The finding for one card, or `null` when its body reads clean (nothing missing,
- * unreadable or undefined for its cell) — or when the
+ * The finding for one card, or `null` when its body reads clean (nothing required
+ * missing or unreadable; extra headings alone are allowed) — or when the
  * registry has no cell for its kind × type (nothing to judge it against).
  */
 export function sectionFindingFor(card: SectionFindingInput): SectionFindingDto | null {
@@ -34,10 +39,8 @@ export function sectionFindingFor(card: SectionFindingInput): SectionFindingDto 
   if (type !== null && !(WORK_ITEM_TYPES as readonly string[]).includes(type)) return null;
 
   const parsed = parseSections(card.descriptionMd, card.kind as IssueType, type as SectionType);
+  if (parsed.missing.length === 0 && parsed.invalid.length === 0) return null;
   const otherHeadings = (parsed.sections.otherSections ?? []).map((o) => o.heading);
-  if (parsed.missing.length === 0 && parsed.invalid.length === 0 && otherHeadings.length === 0) {
-    return null;
-  }
 
   return {
     item: card.item,

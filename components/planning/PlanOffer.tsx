@@ -284,8 +284,9 @@ export function PlanOffer({
   }
 
   const long = offer.requestMd.length > CLAMP_AT;
-  // The requirement's page and failed save exist only on a no-target plan offer.
-  const requirementNoTarget = offer.kind === 'plan' && target === null;
+  // The requirement's page and failed save exist only on a plan offer carrying a
+  // requirement — with no target, or a targeted one (MOTIR-9878).
+  const requirementOffer = offer.kind === 'plan';
   const decided = state === 'confirmed' || state === 'declined';
   const live = state === 'undecided' && answerable;
   // Logging a bug ends no plan, so a bug offer never draws the mid-planning variant.
@@ -374,7 +375,7 @@ export function PlanOffer({
           ) : null}
           {/* A bug offer's result is the outcome line in the answer above. */}
           {bug ? null : <p className="text-xs text-(--el-text-secondary)">{t('startedHere')}</p>}
-          {requirementNoTarget && offer.requirementPage ? (
+          {requirementOffer && offer.requirementPage ? (
             <p
               className="text-xs text-(--el-text-secondary)"
               data-testid="plan-offer-requirement-page"
@@ -462,7 +463,7 @@ export function PlanOffer({
               {declining ? t('declining') : t('decline')}
             </Button>
           </div>
-          {requirementNoTarget && offer.requirementSaveFailed ? (
+          {requirementOffer && offer.requirementSaveFailed ? (
             // NOT the cannot-start line: nothing here is refused and Confirm stays.
             <p
               role="alert"

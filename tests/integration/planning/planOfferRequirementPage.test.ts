@@ -409,21 +409,51 @@ describe('offers the page does not touch', () => {
     },
   );
 
-  it('a targeted offer calls no writer and sends no requirement or page', T, async () => {
+  it('a targeted offer with no requirement calls no writer and sends no page', T, async () => {
     const target = await workItemsService.createWorkItem(
       { projectId: fx.projectId, kind: 'task', title: 'CSV export' },
       fx.ctx,
     );
     const { conversationId, offerTurnId } = await offered({
       targetKey: target.identifier,
-      requirement: REQUIREMENT,
+      requirement: undefined,
     });
-    expect(await rawOffer(offerTurnId)).not.toHaveProperty('requirement');
 
     await planOfferStartService.confirmPlanOffer(me(), { conversationId, offerTurnId });
 
     expect(writeSpy).not.toHaveBeenCalled();
+    expect(planContext()).not.toHaveProperty('requirement');
     expect(planContext()).not.toHaveProperty('requirementPage');
+  });
+});
+
+// MOTIR-9878: the requirement is the planner's decision on a targeted offer too. Its
+// target is a reference, not the WHAT, so a targeted offer carrying a requirement is
+// stored, saved as one page on Confirm and submitted exactly as a no-target one is.
+describe('a confirmed targeted offer with a requirement', () => {
+  it('stores it, saves one page, and sends requirement + page on the target’s run', T, async () => {
+    const target = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Reports' },
+      fx.ctx,
+    );
+    const { conversationId, offerTurnId } = await offered({ targetKey: target.identifier });
+    expect(await rawOffer(offerTurnId)).toMatchObject({
+      targetKey: target.identifier,
+      requirement: REQUIREMENT,
+    });
+
+    await planOfferStartService.confirmPlanOffer(me(), { conversationId, offerTurnId });
+
+    expect(writeSpy).toHaveBeenCalledTimes(1);
+    expect(writeSpy.mock.calls[0]![0]).toMatchObject({ requirement: REQUIREMENT });
+    const pages = await requirementPages();
+    expect(pages).toHaveLength(1);
+    const recorded = { pageId: pages[0]!.id, title: pages[0]!.title };
+    expect(planCalls()).toHaveLength(1);
+    expect(planContext()['requirement']).toEqual(REQUIREMENT);
+    expect(planContext()['requirementPage']).toEqual(recorded);
+    expect(planContext()).not.toHaveProperty('carriedAnswers');
+    expect(await rawOffer(offerTurnId)).toMatchObject({ requirementPage: recorded });
   });
 });
 

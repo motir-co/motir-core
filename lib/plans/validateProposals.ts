@@ -1737,7 +1737,8 @@ export function assertSupersedesGraphAcyclic(
 // Each end's position is read from the PROJECTION the plan would leave: an
 // `add` sits under its `parentRef` (a proposal or a live row; a folder or none
 // makes it a root), a `modify` that re-parents (`patch.parentRef`) sits under its
-// new parent, and any other live row keeps its committed ancestor chain
+// new parent, and any other live row keeps its committed ancestor chain up to
+// the nearest ancestor the plan re-parents, above which it follows that move
 // (`ancestorsById`, one batched read by the caller). `blockedByRemove` is never
 // judged, so a plan can always take a bad edge away.
 //
@@ -1772,7 +1773,16 @@ function projectedChain(
     return add ? under(add.parentRef) : undefined;
   }
   if (reparentOf.has(ref)) return under(reparentOf.get(ref));
-  return ancestorsById.get(ref);
+  // A live row the plan does not move keeps its committed chain only up to the
+  // nearest ancestor the plan DOES move; above that it sits where the move puts
+  // it (MOTIR-9756). Read raw, the chain would place a committed child of a
+  // moved card at its pre-move depth while a new sibling is placed after it.
+  const committed = ancestorsById.get(ref);
+  if (committed === undefined) return undefined;
+  const moved = committed.findIndex((ancestor) => reparentOf.has(ancestor));
+  if (moved === -1) return committed;
+  const above = projectedChain(committed[moved]!, addsById, reparentOf, ancestorsById, visiting);
+  return above === undefined ? undefined : [...committed.slice(0, moved + 1), ...above];
 }
 
 /**

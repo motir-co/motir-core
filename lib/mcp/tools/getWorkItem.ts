@@ -156,7 +156,8 @@ function projectedLine(row: ProjectedRowDto): string {
   // so it takes no fallback. `kind` genuinely may be absent: `proposedFields.kind`
   // is optional and materialize defaults it, so a proposal can legitimately not
   // have said one yet.
-  return `  ${id} [${row.kind ?? '?'}] ${row.title} — ${row.status}`;
+  const reason = row.edgeReason ? ` · waits for: ${row.edgeReason}` : '';
+  return `  ${id} [${row.kind ?? '?'}] ${row.title} — ${row.status}${reason}`;
 }
 
 /** Compact human-readable summary of a PROJECTED detail. */

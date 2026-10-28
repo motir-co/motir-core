@@ -12,7 +12,8 @@
 //   headings and its provenance line, in ONE root folder "Requirements Docs" created
 //   by the Motir system account; and "plan this" on a card still starts at once.
 //
-//   THE REST (unrecorded). An offer with no requirement shows the notice; a save that
+//   THE REST (unrecorded). An offer with no requirement shows the notice; a targeted
+//   offer carrying a requirement shows it and plans from its page (MOTIR-9878); a save that
 //   fails starts nothing and Confirm is still there; Confirm twice, and Confirm then a
 //   typed yes, plan once; Grill me on shows no settled list over the pane; zh.
 //
@@ -381,6 +382,47 @@ test('an offer composed with no requirement shows the notice, and Confirm still 
   expect(planEntries()[0]!.requirement).toBeUndefined();
   // Nothing was composed, so nothing was saved.
   expect(await pagesOf(seed.projectId)).toHaveLength(0);
+});
+
+// MOTIR-9878: the requirement is the planner's decision on a targeted offer too — the
+// target is a reference, not the WHAT. So a targeted offer carrying a requirement shows it
+// in the pane, Confirm saves ONE Requirements Docs page, and ONE plan job carries both.
+test('a targeted offer carrying a requirement shows it, saves one page, and plans from it', async ({
+  page,
+}) => {
+  await provisionSystemAccount();
+  await page.goto('/dashboard');
+  await openProjectThread(page);
+  queueAsk({
+    intent: 'ask',
+    answer: 'Notifications needs a real requirement before it is planned.',
+    offer: {
+      kind: 'plan',
+      requestText: REQUEST,
+      targetKey: seed.notifKey,
+      immediate: false,
+      requirement: REQUIREMENT,
+    },
+  });
+  await ask(page, 'plan notifications properly');
+  await expect(pane(page)).toContainText(REQUIREMENT.outcome!);
+  await expect(paneSections(page)).not.toHaveCount(0);
+  const confirmed = posted(page, CONFIRM);
+  await confirmButton(page).click();
+  expect((await confirmed).status()).toBe(200);
+  await expect.poll(() => planEntries().length).toBe(1);
+  const pages = await pagesOf(seed.projectId);
+  expect(pages).toHaveLength(1);
+  expect(await foldersOf(seed.projectId)).toHaveLength(1);
+  const sent = planEntries()[0]!;
+  expect(sent.requirement).toEqual(REQUIREMENT);
+  expect(sent.requirementPage?.pageId).toBe(pages[0]!.id);
+  // A targeted confirm hands the overlay to the card's own planning session, so the
+  // saved-page line is not on screen here: the offer that drew it records the page.
+  const offerRows = await adminDb.planChangeTurn.findMany({
+    where: { answerOffer: { path: ['requirementPage', 'pageId'], equals: pages[0]!.id } },
+  });
+  expect(offerRows).toHaveLength(1);
 });
 
 test('a save that fails starts nothing, keeps Confirm, and succeeds once the account is back', async ({

@@ -190,7 +190,8 @@ export function registerValidatePlan(server: McpServer, resolveContext: McpConte
         'ADVISORY `sectionFindings` name each card the plan adds or modifies whose projected body, ' +
         'parsed against the section registry for its kind and type, misses a required section ' +
         '(`{ item, state, missing, invalid, otherHeadings, signals }`); they never change ' +
-        '`valid`. This is the ' +
+        '`valid`. An extra heading alone (an allowed `otherSections` entry, listed in ' +
+        '`otherHeadings`) is not a finding. This is the ' +
         'WHOLE-plan verdict and takes no target — use `validate_work_item` with a `planId` for ' +
         'one subtree. Do NOT approximate it by looping that call per root: a blocked_by edge ' +
         'between two sibling roots is valid here and a false positive per-root, because both ' +

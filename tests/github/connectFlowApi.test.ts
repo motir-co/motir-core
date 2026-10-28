@@ -216,11 +216,13 @@ describe('the install state carries the organisation', () => {
     const withOrg = encodeInstallState({ workspaceId: 'w', userId: 'u', organizationId: 'org_1' });
     expect(decodeInstallStateResult(withOrg)).toEqual({
       ok: true,
+      issuedAt: expect.any(Number),
       state: { workspaceId: 'w', userId: 'u', organizationId: 'org_1' },
     });
     const old = encodeInstallState({ workspaceId: 'w', userId: 'u' });
     expect(decodeInstallStateResult(old)).toEqual({
       ok: true,
+      issuedAt: expect.any(Number),
       state: { workspaceId: 'w', userId: 'u' },
     });
     const [b64, sig] = withOrg.split('.');

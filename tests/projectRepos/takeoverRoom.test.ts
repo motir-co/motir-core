@@ -7,6 +7,8 @@ import { projectsService } from '@/lib/services/projectsService';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { userOrgsClient, GithubUserOrgsError } from '@/lib/github/userOrgs';
 import { encryptToken } from '@/lib/github/tokenCrypto';
+import { decodeInstallStateResult } from '@/lib/github/installState';
+import { ORGANIZATION_ROLE } from '@/lib/organizations/roles';
 import { GET as getOrganizations } from '@/app/api/github/organizations/route';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
@@ -234,6 +236,56 @@ describe('projectRepoRoomService.getRoomView', () => {
     expect(view.installHref).toBe('https://github.com/apps/motir/installations/new');
   });
 
+  // Bug MOTIR-9828 — `Connect a new one` linked out to the bare install URL, so
+  // nothing on the round trip named the project and the repository was never
+  // linked into it. Given the project's key, an org admin's link is SIGNED and
+  // names the project, its organisation and this room.
+  it('signs the install link with a state naming the project, for an org admin', async () => {
+    const fx = await makeWorkItemFixture();
+
+    const view = await projectRepoRoomService.getRoomView(fx.projectId, fx.ctx, {
+      projectKey: fx.project.identifier,
+    });
+
+    const url = new URL(view.installHref!);
+    expect(`${url.origin}${url.pathname}`).toBe('https://github.com/apps/motir/installations/new');
+    const decoded = decodeInstallStateResult(url.searchParams.get('state')!);
+    expect(decoded.ok).toBe(true);
+    if (!decoded.ok) return;
+    expect(decoded.state).toEqual({
+      workspaceId: fx.workspaceId,
+      userId: fx.ctx.userId,
+      organizationId: fx.workspace.organizationId,
+      origin: 'projectRepositories',
+      projectKey: fx.project.identifier,
+    });
+  });
+
+  it('keeps the bare install link for an actor who does not administer the organisation', async () => {
+    const fx = await makeWorkItemFixture();
+    const user = await adminDb.user.create({
+      data: { email: `m-${Date.now()}@example.com`, name: 'Member', emailVerified: true },
+    });
+    await adminDb.workspaceMembership.create({
+      data: { workspaceId: fx.workspaceId, userId: user.id, workspaceRole: 'manager' },
+    });
+    await adminDb.organizationMembership.create({
+      data: {
+        organizationId: fx.workspace.organizationId,
+        userId: user.id,
+        role: ORGANIZATION_ROLE.member,
+      },
+    });
+
+    const view = await projectRepoRoomService.getRoomView(
+      fx.projectId,
+      { userId: user.id, workspaceId: fx.workspaceId },
+      { projectKey: fx.project.identifier },
+    );
+
+    expect(view.installHref).toBe('https://github.com/apps/motir/installations/new');
+  });
+
   it('carries the connected account’s avatar for the identity the picker shows', async () => {
     const fx = await makeWorkItemFixture();
     await connectIdentity(fx, 'https://avatars/yue');
@@ -248,6 +300,17 @@ describe('projectRepoRoomService.getRoomView', () => {
     // No org means no entitlement to read, and the room still renders — the
     // banner is org-wide context, never a precondition for the set.
     expect(view.ciPaused).toBe(false);
+  });
+
+  // Bug MOTIR-9828 — with no organisation there is nobody to sign the state for,
+  // so the project-keyed link falls back to the bare install URL, never to none.
+  it('keeps the bare install link when the workspace resolves to no organization', async () => {
+    const fx = await makeWorkItemFixture();
+    vi.spyOn(workspaceRepository, 'findByIdInTx').mockResolvedValue(null);
+    const view = await projectRepoRoomService.getRoomView(fx.projectId, fx.ctx, {
+      projectKey: fx.project.identifier,
+    });
+    expect(view.installHref).toBe('https://github.com/apps/motir/installations/new');
   });
 
   it('drops the install hand-off on a deployment with no App slug', async () => {

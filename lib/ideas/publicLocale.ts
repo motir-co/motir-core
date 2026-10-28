@@ -18,17 +18,26 @@ import {
  * was asked for is NAMED, so motir.co can mark exactly those `lang="en"`.
  */
 
-/** The locale a public read serves: English, or one of the ten translations. */
+/** The locale a public read serves: English, or one of the eleven translations. */
 export type PublicIdeaLocale = 'en' | IdeaTranslationLocale;
 
+/** A served locale as the public contract spells it: `zh_tw` is `zh-tw`, as motir.co's URLs are. */
+export type PublicIdeaLocaleCode = 'en' | Exclude<IdeaTranslationLocale, 'zh_tw'> | 'zh-tw';
+
 /**
- * The served locale for a raw `?locale=` value. One of the ten exact codes is
- * served as itself; `en`, nothing, an empty string, an unknown code or a
- * differently-cased one is English. It NEVER throws: an unsupported locale is
- * answered in English, not refused.
+ * The served locale for a raw `?locale=` value. One of the eleven public codes
+ * (`zh-tw` for Traditional Chinese) is served as itself; `en`, nothing, an empty
+ * string, an unknown code or a differently-cased one is English. It NEVER throws:
+ * an unsupported locale is answered in English, not refused.
  */
 export function resolvePublicIdeaLocale(raw: string | null | undefined): PublicIdeaLocale {
-  return isIdeaTranslationLocale(raw) ? raw : 'en';
+  if (raw === 'zh-tw') return 'zh_tw';
+  return raw !== 'zh_tw' && isIdeaTranslationLocale(raw) ? raw : 'en';
+}
+
+/** The public code for a served locale. */
+export function publicIdeaLocaleCode(locale: PublicIdeaLocale): PublicIdeaLocaleCode {
+  return locale === 'zh_tw' ? 'zh-tw' : locale;
 }
 
 /** An idea's translatable fields as served. */

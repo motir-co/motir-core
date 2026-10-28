@@ -281,7 +281,7 @@ async function autoRelateForBody(
         projectId: item.projectId,
         projectIdentifier: project.identifier,
       },
-      text: bodyMd,
+      bodies: [bodyMd],
       ctx,
     },
     tx,

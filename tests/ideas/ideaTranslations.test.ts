@@ -64,8 +64,10 @@ function translationOf(ideaId: string, locale: 'ja' | 'ko') {
 }
 
 describe('the translatable-field list', () => {
-  it('names exactly the ten non-English UI locales', () => {
-    expect([...IDEA_TRANSLATION_LOCALES].sort()).toEqual(locales.filter((l) => l !== 'en').sort());
+  it("names the ten non-English UI locales, and motir.co's Traditional Chinese", () => {
+    expect([...IDEA_TRANSLATION_LOCALES].sort()).toEqual(
+      [...locales.filter((l) => l !== 'en'), 'zh_tw'].sort(),
+    );
     expect(isIdeaTranslationLocale('ja')).toBe(true);
     expect(isIdeaTranslationLocale('en')).toBe(false);
     expect(isIdeaTranslationLocale(7)).toBe(false);

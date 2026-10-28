@@ -9,7 +9,7 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
-import { parseWorkItemRefs } from '@/lib/mentions/workItemRefs';
+import { parseWorkItemKeys, parseWorkItemProseRefs } from '@/lib/mentions/workItemRefs';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
 // Auto-relate-on-mention (Story 5.8 · Subtask 5.8.3). When a work-item text
@@ -109,12 +109,17 @@ export interface AutoRelateSource {
 }
 
 /**
- * Parse the work-item references in `text` and auto-create a `relates_to` link
+ * Parse the work-item references in `title` and `bodies` and auto-create a `relates_to` link
  * (`source = mention`) from `source` to each referenced target — inside the
  * caller's write transaction (Subtask 5.8.3). The rules:
  *
  *  - Token ids (`[KEY](motir:<id>)`) ∪ bare keys (`KEY-N`, resolved within the
  *    SAME project) form the candidate set.
+ *  - **Only what renders as a reference relates** (bug MOTIR-9825). Each body is
+ *    Markdown and is parsed on its own (`parseWorkItemProseRefs`): a key or token
+ *    quoted in an inline code span or a code block is literal text and relates
+ *    nothing. The `title` is plain text — the title chips every bare key
+ *    (`WorkItemTitle`) — so its keys are read raw.
  *  - **Self** is dropped (an item never relates to itself).
  *  - A candidate is dropped silently when it doesn't resolve, lives in another
  *    workspace, or sits in a project the author can't browse — reusing the exact
@@ -129,11 +134,26 @@ export interface AutoRelateSource {
  *    serialises concurrent saves so exactly one edge survives a race.
  */
 export async function autoRelateWorkItemMentions(
-  args: { source: AutoRelateSource; text: string; ctx: ServiceContext },
+  args: {
+    source: AutoRelateSource;
+    /** The item's plain-text title, when it is part of the write. */
+    title?: string | null;
+    /** The Markdown bodies saved — each parsed separately, so one body's unclosed fence never swallows the next. */
+    bodies: ReadonlyArray<string | null | undefined>;
+    ctx: ServiceContext;
+  },
   tx: Prisma.TransactionClient,
 ): Promise<void> {
-  const { source, text, ctx } = args;
-  const refs = parseWorkItemRefs(text, source.projectIdentifier);
+  const { source, title, bodies, ctx } = args;
+  const refIds = new Set<string>();
+  const refKeys = new Set<string>(title ? parseWorkItemKeys(title, source.projectIdentifier) : []);
+  for (const body of bodies) {
+    if (!body) continue;
+    const refs = parseWorkItemProseRefs(body, source.projectIdentifier);
+    for (const id of refs.ids) refIds.add(id);
+    for (const key of refs.keys) refKeys.add(key);
+  }
+  const refs = { ids: [...refIds], keys: [...refKeys] };
   if (refs.ids.length === 0 && refs.keys.length === 0) return;
 
   // Same-project bare keys → ids (the key parser only matches this project's
