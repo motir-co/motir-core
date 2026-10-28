@@ -260,13 +260,14 @@ export const PUBLIC_OPERATIONS: readonly PublicOperation[] = [
     summary: 'Resolve a HOST to the tenant content served at it',
     description:
       'Turns a `Host` header into what should be rendered at it — the one read a renderer makes ' +
-      'before a page exists. Answers one of three shapes: a WORKSPACE subdomain (its public ' +
-      "projects, listed at the root), an ALIAS (a renamed-away-from subdomain, to be 301'd), or " +
-      'a customer DOMAIN serving one project at its root. ' +
-      '**Every other case is the same 404** — an unknown host, a customer domain whose ' +
+      'before a page exists. Answers one of two shapes: a live workspace host with NO ' +
+      'APPLICATION to serve yet, or a customer DOMAIN serving one project at its root. ' +
+      '**Every other case is the same 404** — an unknown host, a renamed-away-from or released ' +
+      'subdomain (it stops answering at once, with no redirect), a customer domain whose ' +
       'certificate has not issued, the base domain itself, and `motir.co`. That is deliberate: a ' +
       'caller must not be able to tell "no such tenant" from "a tenant exists but is not serving ' +
       'yet", because that difference is what would make walking hostnames worth doing. ' +
+      'A 200 may be cached for 30 seconds with no revalidate window; a 404 is `no-store`. ' +
       'Anonymous, and no session could change the answer — every address it can resolve points ' +
       "at a public project by the read's own row-level filter (MOTIR-4217).",
     parameters: [

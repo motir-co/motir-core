@@ -16,6 +16,7 @@ import {
   hostnameReservationHash,
   reservesItsHostname,
 } from '@/lib/publicAddresses/hostnameReservation';
+import { addDays, holdOutcome, QUARANTINE_DAYS } from '@/lib/publicAddresses/nameHold';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
 import { organizationMembershipRepository } from '@/lib/repositories/organizationMembershipRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
@@ -396,16 +397,20 @@ async function deleteWorkspaceCascade(input: {
     },
   );
 
-  // ⚠️ RESERVE THE PUBLIC HOSTNAMES IN THE SAME TRANSACTION AS THE DELETE
-  // (Bug MOTIR-4366 · `docs/decisions/public-tenant-addresses.md` §8, as
-  // amended).
+  // ⚠️ HOLD THE PUBLIC HOSTNAMES IN THE SAME TRANSACTION AS THE DELETE
+  // (Bug MOTIR-4366 · `docs/decisions/public-tenant-addresses.md` §8
+  // Amendments 1 and 3).
   //
   // `public_address.workspace_id` is `ON DELETE CASCADE`, so this delete frees
-  // the workspace's live subdomain AND every label it ever retired back into a
-  // GLOBALLY unique namespace — where the next workspace to ask inherits every
-  // inbound link the departed one accumulated. §8 says a subdomain is never
-  // released, and the mechanism it relies on ("a retired label keeps its row,
-  // the row keeps the name") has no answer for the row's owner going away.
+  // the workspace's subdomain back into a GLOBALLY unique namespace — where the
+  // next workspace to ask would inherit every inbound link the departed one
+  // accumulated. A workspace delete is a release for §8 Amendment 3 rule 3, so
+  // the same hold applies (`lib/publicAddresses/nameHold.ts`): a label held
+  // under 24 hours returns to the pool at once, one held longer is reserved for
+  // 90 days. A legacy `workspace_subdomain_alias` row (written before Amendment
+  // 3, until MOTIR-9520 cleans them up) has no recoverable hold clock, so it is
+  // always held the full 90 days — a name somebody may have linked is never
+  // freed early.
   //
   // ⚠️ AND THIS IS THE PATH THAT RUNS IT AUTOMATICALLY.
   // `accountErasureSweepService` deletes a sole-membership workspace THROUGH
@@ -429,15 +434,25 @@ async function deleteWorkspaceCascade(input: {
     async (tx) => {
       await input.guard(tx);
       const addresses = await publicAddressRepository.listForWorkspaceInTx(input.workspaceId, tx);
-      await publicHostnameReservationRepository.reserveMany(
-        addresses
-          .filter((address) => reservesItsHostname(address.kind))
-          .map((address) => ({
+      // ONE clock for the whole delete, so every hold it writes is measured
+      // from the same instant.
+      const now = new Date();
+      const held = addresses.flatMap((address) => {
+        if (!reservesItsHostname(address.kind)) return [];
+        const hold =
+          address.kind === 'workspace_subdomain_alias'
+            ? { kind: 'quarantine' as const, returnsAt: addDays(now, QUARANTINE_DAYS) }
+            : holdOutcome({ claimedAt: address.createdAt, releasedAt: now });
+        if (hold.kind === 'return_now') return [];
+        return [
+          {
             hostnameHash: hostnameReservationHash(address.hostname),
             retiredFromWorkspaceId: input.workspaceId,
-          })),
-        tx,
-      );
+            expiresAt: hold.returnsAt,
+          },
+        ];
+      });
+      await publicHostnameReservationRepository.reserveMany(held, now, tx);
       await workspaceRepository.delete(input.workspaceId, tx);
     },
   );

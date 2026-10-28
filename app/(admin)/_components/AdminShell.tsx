@@ -19,6 +19,7 @@ import {
   Shield,
   Sparkles,
   UserSearch,
+  Workflow,
 } from 'lucide-react';
 import { Sidebar, type SidebarSection } from '@/components/ui/Sidebar';
 import type { PlatformOperatorDTO } from '@/lib/dto/platform';
@@ -56,6 +57,8 @@ export interface AdminShellLabels {
   navTenants: string;
   navUsers: string;
   navMonitoring: string;
+  /** Operations → Jobs (MOTIR-9987), visible to every staff role. */
+  navJobs: string;
   /** Operations → Fleet settings (MOTIR-8715), superadmin only. */
   navFleetSettings: string;
   /** Operations → Provider capacity (MOTIR-9614), visible to every staff role. */
@@ -158,6 +161,15 @@ export function AdminShell({ operator, labels, children }: AdminShellProps) {
           label: labels.navMonitoring,
           href: '/admin/monitoring',
           active: pathname === '/admin/monitoring',
+        },
+        // The platform job ledger (MOTIR-9987, design `platform-admin`
+        // AMENDMENT 2026-10-28 § Jobs): directly after Monitoring, for every
+        // staff role, lit on the page and below it.
+        {
+          icon: <Workflow />,
+          label: labels.navJobs,
+          href: '/admin/jobs',
+          active: pathname === '/admin/jobs' || pathname.startsWith('/admin/jobs/'),
         },
         // The fleet's one WRITE beside its read surface (MOTIR-8715, design
         // `platform-admin` AMENDMENT 2026-10 § Fleet settings): directly after

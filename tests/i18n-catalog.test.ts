@@ -398,6 +398,8 @@ const TYPE_LABEL_COLLISION_ALLOWLIST: Record<'en' | 'zh', Record<string, string>
       'clipboard verb — copies a How to test command block (MOTIR-5336)',
     'publicProjects.copyFeed': 'clipboard verb — copies the public feed URL',
     'settings.apiTokens.created.copy': 'clipboard verb — copies the new API token',
+    'settings.workspaceAddress.review':
+      'button verb — opens the dated confirm for a workspace rename (MOTIR-9514)',
     'settings.public.copy': 'clipboard verb — copies the public project URL',
     // Named inside an explicit frame on a surface with no type chip.
     'codeHealth.convention.defaultRepo':
@@ -1040,7 +1042,7 @@ const BANNED_WORD_ALLOWLIST: Partial<Record<Locale, Record<string, string>>> = {
       'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
     'pages.embed.insertCard':
       'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
-    'settings.publicAddress.subdomain.open': 'browser tab — "open in a new tab"',
+    'settings.workspaceAddress.row.open': 'browser tab — "open in a new tab"',
     'workbench.group.count': 'UI tab — a Workbench tab, "on this tab" (MOTIR-8016)',
     'workbench.group.context': 'UI tab — a Workbench tab, "not on this tab" (MOTIR-8016)',
   },

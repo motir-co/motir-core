@@ -39,10 +39,15 @@ type Block = { label: string; fields: Record<string, unknown> };
 
 /** The fake, with the check's prefix, behind a spy that counts every port call. */
 function harness(options: { target?: HostingDeployTarget; fetch?: DeployCheckDeps['fetch'] } = {}) {
-  const fake = createFakeHostingDeployPort({
-    appPrefix: DEPLOY_CHECK_APP_PREFIX,
-    ...(options.target ? { target: options.target } : {}),
-  });
+  // The AWS check names its app `mh-<repositoryId>`, the AWS adapter's own name.
+  const fake = createFakeHostingDeployPort(
+    options.target === 'aws'
+      ? { target: 'aws' }
+      : {
+          appPrefix: DEPLOY_CHECK_APP_PREFIX,
+          ...(options.target ? { target: options.target } : {}),
+        },
+  );
   const calls: string[] = [];
   const port = new Proxy(fake, {
     get(target, prop, receiver) {
@@ -248,15 +253,36 @@ describe('probe (MOTIR-9947)', () => {
     });
   });
 
+  // An AWS function release is reached with SigV4, not the origin secret
+  // (MOTIR-10011): the probe sends no secret and stops with its refusal.
   it('fails, sending no secret, when the release has no origin-secret guard', async () => {
     const h = harness({ target: 'aws' });
-    await h.run('deploy');
-    expect(await h.run('probe')).toBe(1);
-    expect(h.block('probe')).toMatchObject({ originCredential: 'none' });
+    const aws = ['--target', 'aws', '--repository', 'probe1', '--shape', 'function'];
+    expect(await h.run('deploy', ...aws)).toBe(0);
+    expect(await h.run('probe', ...aws)).toBe(1);
+    expect(h.block('probe')).toMatchObject({ originCredential: 'aws_sigv4' });
     expect(h.requests.map((r) => r.headers)).toEqual([{}, {}]);
     expect(h.block('refused')).toMatchObject({
-      message: expect.stringMatching(/origin credential is none/),
+      message: expect.stringMatching(/origin credential is aws_sigv4/),
     });
+  });
+
+  it('proves an AWS container release’s load-balancer rule as it proves Fly’s guard', async () => {
+    const h = harness({ target: 'aws' });
+    const aws = ['--target', 'aws', '--repository', 'probe2', '--shape', 'container'];
+    expect(await h.run('deploy', ...aws)).toBe(0);
+    expect(await h.run('probe', ...aws)).toBe(0);
+    expect(h.block('probe')).toEqual({
+      app: 'mh-probe2',
+      url: 'https://mh-probe2.alb.fake.invalid/health',
+      originCredential: 'origin_secret',
+      withSecret: '200 OK',
+      withoutSecret: '403 Forbidden',
+    });
+    expect(h.requests.map((r) => r.headers)).toEqual([
+      { 'X-Motir-Origin-Secret': deriveOriginSecret(KEY, 'mh-probe2') },
+      {},
+    ]);
   });
 
   it('fails when nothing is served, without calling the release', async () => {

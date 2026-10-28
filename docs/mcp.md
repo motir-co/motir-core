@@ -4187,10 +4187,18 @@ acceptance criteria held (`docs/decisions/run-findings-protocol.md`, the
 MOTIR-8654 amendment). It is called **once, after building and before the pull
 request**.
 
-| Input    | Type   | Required | Notes                                                                                                             |
-| -------- | ------ | -------- | ----------------------------------------------------------------------------------------------------------------- |
-| `key`    | string | yes      | The card the run built (`ACME-7`). Case-insensitive.                                                              |
-| `points` | array  | yes      | 1–20 entries of `planAsked`, `built` and `why`; each field is non-empty text of at most 2000 characters, trimmed. |
+The same call also records the **decisions the run made where the card left the
+HOW open** (MOTIR-10000). A run never asks the user about the implementation: it
+decides by the repository's conventions first, then the established industry
+best practice for the stack, and writes each decision down here — beside any
+build-through points, or alone. The comment lists them in a section of their
+own, and the run's finding counts them (`decisionCount`, and in `pointCount`).
+
+| Input       | Type   | Required | Notes                                                                                                                                                    |
+| ----------- | ------ | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `key`       | string | yes      | The card the run built (`ACME-7`). Case-insensitive.                                                                                                     |
+| `points`    | array  | no       | Up to 20 entries of `planAsked`, `built` and `why`; each field is non-empty text of at most 2000 characters, trimmed.                                    |
+| `decisions` | array  | no       | Up to 20 entries of `planSaid`, `chose` and `why`, and optionally `alternatives`; the same field bounds. At least one point or one decision is required. |
 
 **Output** — the id of the card comment the server wrote, and whether the run
 record was written too:
@@ -4205,8 +4213,8 @@ the comment is still written, and nothing is put on a run.
 **One record per leg**: a second call on the same leg is refused with
 `DISCREPANCY_ALREADY_RECORDED` and writes nothing more. Other refusals:
 
-- an empty `points`, more than 20, or a field that is empty or over 2000
-  characters → `RUN_DISCREPANCY_INVALID`;
+- no points and no decisions, more than 20 of either, or a field that is empty
+  or over 2000 characters → `RUN_DISCREPANCY_INVALID`;
 - an unknown key, or a key in another workspace → `WORK_ITEM_NOT_FOUND`
   (404-not-403);
 - a caller who may read but not edit the card → `PERMISSION_DENIED`.

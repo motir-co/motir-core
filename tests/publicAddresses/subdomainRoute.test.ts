@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   HostnameTakenError,
+  NameQuarantinedError,
   NoSubdomainClaimedError,
   ReservedLabelError,
+  SubdomainChangeLimitError,
   SubdomainForbiddenError,
   SubdomainNotFoundError,
-  SubdomainRenameCapReachedError,
   WorkspaceNotVisibleError,
 } from '@/lib/publicAddresses/errors';
 import { TenantDomainNotConfiguredError } from '@/lib/publicAddresses/tenantDomain';
@@ -49,8 +50,7 @@ const DTO = {
   hostname: 'acme.motir.site',
   url: 'https://acme.motir.site',
   claimedAt: '2026-09-01T00:00:00.000Z',
-  aliases: [],
-  renamesLeft: 5,
+  nextChangeAllowedAt: null,
 };
 
 beforeEach(() => {
@@ -68,6 +68,13 @@ describe('GET', () => {
     const res = await GET(new Request('https://app.motir.co/x'), params);
     expect(res.status).toBe(200);
     expect(await res.json()).toBeNull();
+  });
+
+  it('carries the next-change date, so the pane can say when a change is allowed', async () => {
+    getForWorkspace.mockResolvedValue({ ...DTO, nextChangeAllowedAt: '2026-11-27T00:00:00.000Z' });
+    expect(await (await GET(new Request('https://app.motir.co/x'), params)).json()).toMatchObject({
+      nextChangeAllowedAt: '2026-11-27T00:00:00.000Z',
+    });
   });
 
   it('401s with no session and asks the service nothing', async () => {
@@ -113,6 +120,22 @@ describe('PUT — ONE verb, two acts, decided by server state', () => {
     expect(getForWorkspace).not.toHaveBeenCalled();
   });
 
+  it('passes the two DATED refusals through with their dates', async () => {
+    getForWorkspace.mockResolvedValue(DTO);
+    rename.mockRejectedValue(new SubdomainChangeLimitError(new Date('2026-11-27T00:00:00Z')));
+    const limited = await PUT(put({ label: 'acme-inc' }), params);
+    expect(limited.status).toBe(409);
+    expect(await limited.json()).toMatchObject({ nextAllowedAt: '2026-11-27T00:00:00.000Z' });
+
+    getForWorkspace.mockResolvedValue(null);
+    claim.mockRejectedValue(
+      new NameQuarantinedError('held.motir.site', new Date('2027-01-26T00:00:00Z')),
+    );
+    const held = await PUT(put({ label: 'held' }), params);
+    expect(held.status).toBe(409);
+    expect(await held.json()).toMatchObject({ returnsAt: '2027-01-26T00:00:00.000Z' });
+  });
+
   it('is held by the compliance gate before it reads anything', async () => {
     refuseIfNonCompliant.mockResolvedValue(new Response(null, { status: 451 }));
     expect((await PUT(put({ label: 'acme' }), params)).status).toBe(451);
@@ -127,7 +150,8 @@ describe('the mapper, on this surface', () => {
     [new HostnameTakenError('acme.motir.site'), 409],
     [new NoSubdomainClaimedError(), 409],
     [new ReservedLabelError('admin', 'reserved'), 422],
-    [new SubdomainRenameCapReachedError(5, 5), 422],
+    [new NameQuarantinedError('acme.motir.site', new Date('2027-01-01T00:00:00Z')), 409],
+    [new SubdomainChangeLimitError(new Date('2026-11-01T00:00:00Z')), 409],
     // An OPERATOR problem, never the caller's — and the one case here where
     // retrying later may work.
     [new TenantDomainNotConfiguredError(), 503],
@@ -147,11 +171,23 @@ describe('the mapper, on this surface', () => {
     expect(await res.json()).toMatchObject({ code: 'RESERVED_LABEL', refusal: 'bad_grammar' });
   });
 
-  it('and the CAP refusal carries the numbers the pane shows', async () => {
-    getForWorkspace.mockRejectedValue(new SubdomainRenameCapReachedError(5, 5));
+  it('and the two DATED refusals carry their dates as ISO strings', async () => {
+    // A refusal that ends on a known date says when (§8 Amendment 3). Dropping
+    // the date at the route would leave the pane able to say only "no".
+    getForWorkspace.mockRejectedValue(
+      new NameQuarantinedError('acme.motir.site', new Date('2027-01-01T00:00:00Z')),
+    );
     expect(await (await GET(new Request('https://app.motir.co/x'), params)).json()).toMatchObject({
-      used: 5,
-      cap: 5,
+      code: 'NAME_QUARANTINED',
+      hostname: 'acme.motir.site',
+      returnsAt: '2027-01-01T00:00:00.000Z',
+    });
+    getForWorkspace.mockRejectedValue(
+      new SubdomainChangeLimitError(new Date('2026-11-01T00:00:00Z')),
+    );
+    expect(await (await GET(new Request('https://app.motir.co/x'), params)).json()).toMatchObject({
+      code: 'SUBDOMAIN_CHANGE_LIMIT',
+      nextAllowedAt: '2026-11-01T00:00:00.000Z',
     });
   });
 
@@ -168,12 +204,19 @@ describe('the mapper, on this surface', () => {
 describe('DELETE', () => {
   const del = () => new Request('https://app.motir.co/x', { method: 'DELETE' });
 
-  it('answers 204 with NO body, and calls release exactly once', async () => {
-    release.mockResolvedValue(undefined);
+  it('answers 200 with the date the name returns, and calls release exactly once', async () => {
+    // The pane states the date (story rule 5), and once the row is gone GET has
+    // nothing to read it from — so DELETE carries it.
+    release.mockResolvedValue({ returnsAt: '2027-01-26T00:00:00.000Z' });
     const res = await DELETE(del(), params);
-    expect(res.status).toBe(204);
-    expect(await res.text()).toBe('');
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ returnsAt: '2027-01-26T00:00:00.000Z' });
     expect(release).toHaveBeenCalledExactlyOnceWith('ws_1', 'u_1');
+  });
+
+  it('answers `returnsAt: null` when the name returned at once', async () => {
+    release.mockResolvedValue({ returnsAt: null });
+    expect(await (await DELETE(del(), params)).json()).toEqual({ returnsAt: null });
   });
 
   it('answers 404 when the workspace has no subdomain — NOT the rename path 409', async () => {

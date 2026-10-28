@@ -440,6 +440,11 @@ export interface JobContextBag {
   //
   // ABSENT (not empty) when the project records no repositories — the reserved-hole
   // convention, so "this project has none" and "nobody asked" stay tellable apart.
+  // Each row also carries its raw `seedSource` and its recorded hosting target,
+  // use case and size (null when none is recorded), and the unit carries
+  // `starterByTarget` — the seed matching's answer for each hosting target,
+  // computed at request time (MOTIR-10014). The owner (Motir repo / customer
+  // repo) is derived from `seedSource` on the reading side, never sent.
   // Loosely typed here by design, like `discovery` and `code`: each side declares
   // its own types against the shared contract. Optional in BOTH directions, so the
   // two repositories' halves merge in either order.

@@ -1,6 +1,8 @@
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { normalizeTargetRepo } from '@/lib/workItems/targetRepo';
 import type { ProjectRepoRoleDto, ProjectRepoStateDto } from '@/lib/dto/projectRepos';
+import type { HostingSize, HostingTarget, HostingUseCase } from '@/lib/hosting/vocabulary';
+import { starterByHostingTarget } from '@/lib/projectRepos/seedMatching';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
 // The PROJECT's repository SET as it rides a planning-job envelope (Story
@@ -64,11 +66,32 @@ export interface JobProjectRepo {
    *  `skipped` / `failed`. A planner that cannot see this cannot tell a
    *  repository that exists from one the plan is about to ask for. */
   state: ProjectRepoStateDto;
+  /**
+   * The row's raw seed source (Story MOTIR-9796 · MOTIR-10014). `organization`
+   * marks a repository the organisation brought (`isOrganizationSeedSource`);
+   * every other value one Motir created. Sent RAW — motir-ai derives the Motir
+   * repo / customer repo label from it with the same rule, so there is no owner
+   * column and no second source of truth for it.
+   */
+  seedSource: string;
+  /** Where this Motir repo's app runs (MOTIR-9808), or null when none is recorded. */
+  hostingTarget: HostingTarget | null;
+  /** What the app is for, or null when none is recorded. */
+  hostingUseCase: HostingUseCase | null;
+  /** How big it is, or null when none is recorded. */
+  hostingSize: HostingSize | null;
 }
 
 /** The `context.repositories` unit of a planning-job envelope. */
 export interface JobProjectRepoContext {
   repos: JobProjectRepo[];
+  /**
+   * The seed matching's answer per hosting target (MOTIR-10014), computed at
+   * request time through `seedSourceForHostingTarget` — the starter the planner
+   * names in a hosting decision card, so that card names what the MATCHING
+   * returns rather than a starter written into a rule.
+   */
+  starterByTarget: Record<HostingTarget, string>;
 }
 
 /**
@@ -102,7 +125,11 @@ export async function resolveProjectRepoContext(
       role: row.role,
       label: row.label,
       state: row.state,
+      seedSource: row.seedSource,
+      hostingTarget: row.hostingTarget,
+      hostingUseCase: row.hostingUseCase,
+      hostingSize: row.hostingSize,
     });
   }
-  return repos.length === 0 ? undefined : { repos };
+  return repos.length === 0 ? undefined : { repos, starterByTarget: starterByHostingTarget() };
 }

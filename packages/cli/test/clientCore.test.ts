@@ -582,6 +582,20 @@ describe('typed wrappers — each names its operation and forwards its arguments
   });
 
   // ── The run's build-through record and STOP report (MOTIR-8722) ───────────
+  it('posts the decisions beside the points, and leaves out an empty list (MOTIR-10000)', async () => {
+    const decisions = [{ planSaid: 'nothing', chose: 'c', why: 'w', alternatives: 'a' }];
+    server.scriptV1({
+      'POST /api/v1/dispatch-runs/{id}/discrepancy': { body: { commentId: 'c1', recorded: true } },
+    });
+    await connected().recordDispatchRunDiscrepancy({
+      runId: 'run_1',
+      key: 'PROD-1',
+      points: [],
+      decisions,
+    });
+    expect(server.v1Calls[0]?.body).toEqual({ key: 'PROD-1', decisions });
+  });
+
   it('posts a run’s discrepancy points and its STOP on the run’s own paths', async () => {
     const points = [{ planAsked: 'a', built: 'b', why: 'c' }];
     server.scriptV1({
@@ -1145,6 +1159,8 @@ describe('typed wrappers — each names its operation and forwards its arguments
     // without it the server routes the unbuildable report through the MCP tool,
     // which is right for 0.12.0 and wrong for a CLI that makes the post itself.
     expect(server.v1Calls.map((c) => c.query.get('agentReport'))).toEqual(['1', '1', '1']);
+    // …and that it posts the agent's `decisions` too (MOTIR-10000).
+    expect(server.v1Calls.map((c) => c.query.get('agentReportDecisions'))).toEqual(['1', '1', '1']);
     // The field-with-no-reader rule, and what it looks like once a reader
     // arrives. The two SCALAR repo-plumbing fields were dropped while nothing
     // routed on them; MOTIR-3588 made the resolution read them — a missing

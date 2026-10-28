@@ -147,9 +147,32 @@ describe('the fake hosting deploy port', () => {
     expect((await port.ensureApp({ repositoryId: 'r', environment: PRODUCTION })).appRef).toBe(
       'x-r',
     );
-    // Another target's origin credential is its own adapter's, not the guard's.
-    const handle = await port.deploy(input('x-r', PRODUCTION));
-    expect((await port.describe(handle)).originCredential).toBe('none');
+    // An AWS release answers with its shape's credential and host.
+    const fn = await port.deploy({ ...input('x-r', PRODUCTION), shape: 'function' });
+    expect(await port.describe(fn)).toMatchObject({
+      originCredential: 'aws_sigv4',
+      upstreamAddress: 'https://x-r.lambda-url.fake.invalid',
+    });
+    const box = await port.deploy({
+      ...input('x-r', PRODUCTION),
+      shape: 'container',
+      idle: { mode: 'always_on' },
+    });
+    expect(await port.describe(box)).toMatchObject({
+      originCredential: 'origin_secret',
+      upstreamAddress: 'https://x-r.alb.fake.invalid',
+    });
+  });
+
+  it('a target with no guard and no shapes answers no origin credential', async () => {
+    const port = createFakeHostingDeployPort({ target: 'serverless', appPrefix: 'x-' });
+    const { appRef } = await port.ensureApp({ repositoryId: 'r', environment: PRODUCTION });
+    const handle = await port.deploy(input(appRef, PRODUCTION));
+    expect(await port.describe(handle)).toMatchObject({
+      originCredential: 'none',
+      upstreamAddress: 'https://x-r.fake.invalid',
+    });
+    expect((await port.destroy(handle, 'operator')).compute).toBeUndefined();
   });
 });
 

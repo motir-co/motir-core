@@ -392,9 +392,11 @@ describe('the run-found report rides the leg, before any verdict settles it (MOT
 describe('the agent’s build-through and STOP ride the leg, before the verdict (MOTIR-8722)', () => {
   const POINTS = [{ planAsked: 'a', built: 'b', why: 'c' }];
   const STOP = { comment: 'no such table', toPlanning: true, requirement: null };
+  const DECISIONS = [{ planSaid: 'nothing', chose: 'x', why: 'y' }];
 
   async function legWith(report: {
     discrepancy?: typeof POINTS | null;
+    decisions?: typeof DECISIONS | null;
     stop?: typeof STOP | null;
   }) {
     const order: string[] = [];
@@ -420,9 +422,13 @@ describe('the agent’s build-through and STOP ride the leg, before the verdict 
       run: git(true),
       reporter: {
         event: (e: { kind: string }) => order.push(e.kind),
-        reportDiscrepancy: async (key: string, points: unknown) => {
+        reportDiscrepancy: async (key: string, points: unknown, decisions?: unknown[]) => {
           order.push('discrepancy');
-          calls.push(['discrepancy', key, points]);
+          calls.push(
+            decisions && decisions.length > 0
+              ? ['discrepancy', key, points, decisions]
+              : ['discrepancy', key, points],
+          );
         },
         reportStop: async (key: string, stop: unknown) => {
           order.push('stop');
@@ -449,5 +455,14 @@ describe('the agent’s build-through and STOP ride the leg, before the verdict 
   it('makes neither when the agent wrote neither', async () => {
     const { calls } = await legWith({});
     expect(calls).toHaveLength(0);
+  });
+
+  it('records the DECISIONS in the same one record, beside the points or alone (MOTIR-10000)', async () => {
+    expect((await legWith({ decisions: DECISIONS })).calls).toEqual([
+      ['discrepancy', 'PROD-1', [], DECISIONS],
+    ]);
+    expect((await legWith({ discrepancy: POINTS, decisions: DECISIONS })).calls).toEqual([
+      ['discrepancy', 'PROD-1', POINTS, DECISIONS],
+    ]);
   });
 });

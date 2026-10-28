@@ -33,18 +33,37 @@ const { withWorkspaceContext } = await import('@/lib/workspaces/context');
 const { createTestWorkspace, createTestUser, createTestProject } = await import('../fixtures');
 const {
   HostnameTakenError,
+  NameQuarantinedError,
   NoSubdomainClaimedError,
   PublicAddressesUnavailableError,
   ReservedLabelError,
+  SubdomainChangeLimitError,
   SubdomainForbiddenError,
   SubdomainNotFoundError,
-  SubdomainRenameCapReachedError,
   WorkspaceNotVisibleError,
 } = await import('@/lib/publicAddresses/errors');
 const { TenantDomainNotConfiguredError } = await import('@/lib/publicAddresses/tenantDomain');
-const { MAX_SUBDOMAIN_RENAMES } = await import('@/lib/publicAddresses/reservedNames');
 
 const BASE = 'motir.example';
+const HOUR = 60 * 60 * 1000;
+const DAY = 24 * HOUR;
+
+/** `ms` after `from`. */
+function plus(from: Date, ms: number): Date {
+  return new Date(from.getTime() + ms);
+}
+
+/**
+ * When the workspace took its CURRENT label — the live row's `createdAt`, the
+ * clock rule 3's 24 hours run from. Read from the row so the boundary tests are
+ * exact to the millisecond, whatever the database clock said at the insert.
+ */
+async function claimedAtOf(workspaceId: string): Promise<Date> {
+  const live = await adminDb.publicAddress.findFirstOrThrow({
+    where: { workspaceId, kind: 'workspace_subdomain' },
+  });
+  return live.createdAt;
+}
 
 interface Fixture {
   workspaceId: string;
@@ -78,8 +97,7 @@ describe('claim', () => {
       label: 'acme',
       hostname: `acme.${BASE}`,
       url: `https://acme.${BASE}`,
-      aliases: [],
-      renamesLeft: MAX_SUBDOMAIN_RENAMES,
+      nextChangeAllowedAt: null,
     });
   });
 
@@ -115,13 +133,13 @@ describe('claim', () => {
   });
 
   it('refuses a second claim rather than silently renaming', async () => {
-    // A claim is not a rename. Turning one into the other would spend a rename
-    // from the cap without the customer asking for it.
+    // A claim is not a rename. Turning one into the other would spend a change
+    // from the 30-day limit without the customer asking for it.
     await publicSubdomainService.claim(fx.workspaceId, 'acme', fx.ownerId);
     await expect(
       publicSubdomainService.claim(fx.workspaceId, 'acme-two', fx.ownerId),
     ).rejects.toBeInstanceOf(HostnameTakenError);
-    // And no alias was written — the refusal cost nothing.
+    // And no second row was written — the refusal cost nothing.
     const rows = await adminDb.publicAddress.findMany({ where: { workspaceId: fx.workspaceId } });
     expect(rows).toHaveLength(1);
   });
@@ -133,41 +151,88 @@ describe('claim', () => {
       publicSubdomainService.claim(fx.workspaceId, 'acme', fx.ownerId),
     ).rejects.toBeInstanceOf(HostnameTakenError);
   });
+
+  it('refuses a QUARANTINED label with the date it returns, and admits it once lapsed', async () => {
+    // Rule 3 seen from the claimer's side. The refusal is NOT `HostnameTakenError`:
+    // a reservation ends on a date, and the claimer is owed it (story rule 5).
+    const now = new Date();
+    const returnsAt = plus(now, 10 * DAY);
+    await adminDb.publicHostnameReservation.create({
+      data: {
+        hostnameHash: hostnameReservationHash(`held.${BASE}`),
+        retiredFromWorkspaceId: fx.workspaceId,
+        expiresAt: returnsAt,
+      },
+    });
+    const err = await publicSubdomainService
+      .claim(fx.workspaceId, 'held', fx.ownerId, now)
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(NameQuarantinedError);
+    expect((err as InstanceType<typeof NameQuarantinedError>).returnsAt.toISOString()).toBe(
+      returnsAt.toISOString(),
+    );
+    expect(await adminDb.publicAddress.count({ where: { workspaceId: fx.workspaceId } })).toBe(0);
+
+    // The instant the hold ends, the name is claimable — the sweep has not run.
+    await expect(
+      publicSubdomainService.claim(fx.workspaceId, 'held', fx.ownerId, returnsAt),
+    ).resolves.toMatchObject({ hostname: `held.${BASE}` });
+  });
+
+  it('does not read or write the change ledger', async () => {
+    await publicSubdomainService.claim(fx.workspaceId, 'acme', fx.ownerId);
+    expect(await adminDb.publicSubdomainChange.count()).toBe(0);
+  });
 });
 
 describe('rename', () => {
-  it('retires the old label to an alias and claims the new one, in one go', async () => {
+  it('deletes the old row and creates the new one — one name, no alias', async () => {
     await publicSubdomainService.claim(fx.workspaceId, 'acme', fx.ownerId);
-    const dto = await publicSubdomainService.rename(fx.workspaceId, 'acme-inc', fx.ownerId);
+    const now = new Date();
+    const dto = await publicSubdomainService.rename(fx.workspaceId, 'acme-inc', fx.ownerId, now);
 
-    expect(dto.hostname).toBe(`acme-inc.${BASE}`);
-    expect(dto.aliases.map((a) => a.hostname)).toEqual([`acme.${BASE}`]);
-    expect(dto.renamesLeft).toBe(MAX_SUBDOMAIN_RENAMES - 1);
-
-    const rows = await adminDb.publicAddress.findMany({
-      where: { workspaceId: fx.workspaceId },
-      orderBy: { createdAt: 'asc' },
+    expect(dto).toEqual({
+      label: 'acme-inc',
+      hostname: `acme-inc.${BASE}`,
+      url: `https://acme-inc.${BASE}`,
+      claimedAt: expect.any(String),
+      nextChangeAllowedAt: plus(now, 30 * DAY).toISOString(),
     });
+
+    const rows = await adminDb.publicAddress.findMany({ where: { workspaceId: fx.workspaceId } });
     expect(rows.map((r) => [r.hostname, r.kind, r.status])).toEqual([
-      [`acme.${BASE}`, 'workspace_subdomain_alias', 'alias'],
       [`acme-inc.${BASE}`, 'workspace_subdomain', 'active'],
     ]);
+    // Stop serving at once: nothing answers the old hostname any more.
+    expect(await adminDb.publicAddress.count({ where: { hostname: `acme.${BASE}` } })).toBe(0);
   });
 
-  it('leaves the OLD hostname unclaimable by anyone, for ever', async () => {
-    // The ADR §8 promise, proved from the other side: the alias row holds the
-    // name against the whole namespace, including the workspace that used to
-    // hold it.
+  it('frees a label held UNDER 24 hours at once — no hold, claimable by anyone', async () => {
     await publicSubdomainService.claim(fx.workspaceId, 'acme', fx.ownerId);
-    await publicSubdomainService.rename(fx.workspaceId, 'acme-inc', fx.ownerId);
+    const now = plus(await claimedAtOf(fx.workspaceId), DAY - 1);
+    await publicSubdomainService.rename(fx.workspaceId, 'acme-inc', fx.ownerId, now);
+
+    expect(await adminDb.publicHostnameReservation.count()).toBe(0);
+    const other = await createTestWorkspace({ name: 'Taker' });
+    await expect(
+      publicSubdomainService.claim(other.workspace.id, 'acme', other.owner.id, now),
+    ).resolves.toMatchObject({ hostname: `acme.${BASE}` });
+  });
+
+  it('holds a label held EXACTLY 24 hours for 90 days, against everyone', async () => {
+    await publicSubdomainService.claim(fx.workspaceId, 'acme', fx.ownerId);
+    const now = plus(await claimedAtOf(fx.workspaceId), DAY);
+    await publicSubdomainService.rename(fx.workspaceId, 'acme-inc', fx.ownerId, now);
+
+    const held = await adminDb.publicHostnameReservation.findMany();
+    expect(held.map((r) => [r.hostnameHash, r.expiresAt.toISOString()])).toEqual([
+      [hostnameReservationHash(`acme.${BASE}`), plus(now, 90 * DAY).toISOString()],
+    ]);
 
     const other = await createTestWorkspace({ name: 'Squatter' });
     await expect(
-      publicSubdomainService.claim(other.workspace.id, 'acme', other.owner.id),
-    ).rejects.toBeInstanceOf(HostnameTakenError);
-    await expect(
-      publicSubdomainService.rename(fx.workspaceId, 'acme', fx.ownerId),
-    ).rejects.toBeInstanceOf(HostnameTakenError);
+      publicSubdomainService.claim(other.workspace.id, 'acme', other.owner.id, now),
+    ).rejects.toBeInstanceOf(NameQuarantinedError);
   });
 
   it('refuses a rename on a workspace that never claimed one', async () => {
@@ -176,48 +241,118 @@ describe('rename', () => {
     ).rejects.toBeInstanceOf(NoSubdomainClaimedError);
   });
 
-  it('refuses renaming to the name already held, rather than burning a rename', async () => {
+  it('refuses renaming to the name already held, and spends no change on it', async () => {
     await publicSubdomainService.claim(fx.workspaceId, 'acme', fx.ownerId);
     await expect(
       publicSubdomainService.rename(fx.workspaceId, 'acme', fx.ownerId),
     ).rejects.toBeInstanceOf(HostnameTakenError);
-    const aliases = await adminDb.publicAddress.count({
-      where: { workspaceId: fx.workspaceId, kind: 'workspace_subdomain_alias' },
-    });
-    expect(aliases, 'the refused rename must not have written an alias').toBe(0);
+    expect(await adminDb.publicAddress.count({ where: { workspaceId: fx.workspaceId } })).toBe(1);
+    expect(await adminDb.publicSubdomainChange.count()).toBe(0);
   });
 
-  it('refuses the rename PAST the cap, and admits every one up to it', async () => {
-    // Both directions. A cap that refuses the first rename would pass a test
-    // asserting only that the sixth is refused.
-    await publicSubdomainService.claim(fx.workspaceId, 'acme-0', fx.ownerId);
-    for (let i = 1; i <= MAX_SUBDOMAIN_RENAMES; i += 1) {
-      const dto = await publicSubdomainService.rename(fx.workspaceId, `acme-${i}`, fx.ownerId);
-      expect(dto.renamesLeft, `after rename ${i}`).toBe(MAX_SUBDOMAIN_RENAMES - i);
-    }
-    const err = await publicSubdomainService
-      .rename(fx.workspaceId, 'acme-last', fx.ownerId)
-      .catch((e: unknown) => e);
-    expect(err).toBeInstanceOf(SubdomainRenameCapReachedError);
-    expect((err as InstanceType<typeof SubdomainRenameCapReachedError>).cap).toBe(
-      MAX_SUBDOMAIN_RENAMES,
-    );
-  });
-
-  it('dates an alias by its RETIREMENT, not by when it was claimed', async () => {
-    // The two are different dates and are often months apart. A pane showing
-    // "retired on" would otherwise show the day the label was first taken.
+  it('refuses a second change inside 30 days with its date, and admits it at 30 days', async () => {
+    // Both directions: a limit that refused at exactly 30 days would pass a test
+    // asserting only the refusal.
     await publicSubdomainService.claim(fx.workspaceId, 'acme', fx.ownerId);
-    const claimed = await adminDb.publicAddress.findFirstOrThrow({
-      where: { workspaceId: fx.workspaceId },
-    });
-    await adminDb.publicAddress.update({
-      where: { id: claimed.id },
-      data: { createdAt: new Date('2020-01-01T00:00:00Z') },
-    });
+    const first = new Date();
+    await publicSubdomainService.rename(fx.workspaceId, 'acme-one', fx.ownerId, first);
 
-    const dto = await publicSubdomainService.rename(fx.workspaceId, 'acme-inc', fx.ownerId);
-    expect(dto.aliases[0]!.retiredAt.startsWith('2020-01-01')).toBe(false);
+    const err = await publicSubdomainService
+      .rename(fx.workspaceId, 'acme-two', fx.ownerId, plus(first, 30 * DAY - 1))
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(SubdomainChangeLimitError);
+    expect(
+      (err as InstanceType<typeof SubdomainChangeLimitError>).nextAllowedAt.toISOString(),
+    ).toBe(plus(first, 30 * DAY).toISOString());
+    expect(
+      (await adminDb.publicAddress.findMany({ where: { workspaceId: fx.workspaceId } })).map(
+        (r) => r.hostname,
+      ),
+      'the refused rename wrote nothing',
+    ).toEqual([`acme-one.${BASE}`]);
+
+    await expect(
+      publicSubdomainService.rename(fx.workspaceId, 'acme-two', fx.ownerId, plus(first, 30 * DAY)),
+    ).resolves.toMatchObject({ hostname: `acme-two.${BASE}` });
+  });
+
+  it('rolls the whole change back when the new name is quarantined — no change is spent', async () => {
+    await publicSubdomainService.claim(fx.workspaceId, 'acme', fx.ownerId);
+    const now = new Date();
+    await adminDb.publicHostnameReservation.create({
+      data: {
+        hostnameHash: hostnameReservationHash(`held.${BASE}`),
+        retiredFromWorkspaceId: fx.workspaceId,
+        expiresAt: plus(now, DAY),
+      },
+    });
+    await expect(
+      publicSubdomainService.rename(fx.workspaceId, 'held', fx.ownerId, now),
+    ).rejects.toBeInstanceOf(NameQuarantinedError);
+    expect(
+      (await adminDb.publicAddress.findMany({ where: { workspaceId: fx.workspaceId } })).map(
+        (r) => r.hostname,
+      ),
+      'the old name is still served — the delete rolled back with the refused claim',
+    ).toEqual([`acme.${BASE}`]);
+    expect(await adminDb.publicSubdomainChange.count()).toBe(0);
+  });
+});
+
+describe("previewChange — the confirm dialog's dated preview", () => {
+  it('says what the next release applies, for the same instant, and writes nothing', async () => {
+    await publicSubdomainService.claim(fx.workspaceId, 'acme', fx.ownerId);
+    const now = plus(await claimedAtOf(fx.workspaceId), 2 * DAY);
+
+    const preview = await publicSubdomainService.previewChange(fx.workspaceId, fx.ownerId, now);
+    expect(preview).toEqual({
+      host: `acme.${BASE}`,
+      outcome: 'quarantine',
+      returnsAt: plus(now, 90 * DAY).toISOString(),
+      changeAllowed: true,
+      nextChangeAllowedAt: null,
+    });
+    expect(await adminDb.publicHostnameReservation.count()).toBe(0);
+    expect(await adminDb.publicSubdomainChange.count()).toBe(0);
+
+    const released = await publicSubdomainService.release(fx.workspaceId, fx.ownerId, now);
+    expect(released.returnsAt).toBe(preview.returnsAt);
+    const held = await adminDb.publicHostnameReservation.findFirstOrThrow();
+    expect(held.expiresAt.toISOString()).toBe(preview.returnsAt);
+  });
+
+  it("says return_now for a fresh label, and the limit's date inside 30 days", async () => {
+    await publicSubdomainService.claim(fx.workspaceId, 'acme', fx.ownerId);
+    const changed = new Date();
+    await publicSubdomainService.rename(fx.workspaceId, 'acme-inc', fx.ownerId, changed);
+    const now = plus(changed, HOUR);
+
+    expect(await publicSubdomainService.previewChange(fx.workspaceId, fx.ownerId, now)).toEqual({
+      host: `acme-inc.${BASE}`,
+      outcome: 'return_now',
+      returnsAt: null,
+      changeAllowed: false,
+      nextChangeAllowedAt: plus(changed, 30 * DAY).toISOString(),
+    });
+    const err = await publicSubdomainService
+      .release(fx.workspaceId, fx.ownerId, now)
+      .catch((e: unknown) => e);
+    expect(
+      (err as InstanceType<typeof SubdomainChangeLimitError>).nextAllowedAt.toISOString(),
+    ).toBe(plus(changed, 30 * DAY).toISOString());
+  });
+
+  it('is admin-only, and answers not-found when there is nothing to change', async () => {
+    await expect(
+      publicSubdomainService.previewChange(fx.workspaceId, fx.ownerId),
+    ).rejects.toBeInstanceOf(SubdomainNotFoundError);
+    const member = await createTestUser();
+    await adminDb.workspaceMembership.create({
+      data: { userId: member.id, workspaceId: fx.workspaceId, workspaceRole: 'member' },
+    });
+    await expect(
+      publicSubdomainService.previewChange(fx.workspaceId, member.id),
+    ).rejects.toBeInstanceOf(SubdomainForbiddenError);
   });
 });
 
@@ -344,6 +479,20 @@ describe('concurrency', () => {
     });
     expect(live, 'a workspace must never end up with two live subdomains').toBe(1);
   });
+
+  it('lets exactly ONE of two concurrent renames win — the second meets the limit', async () => {
+    // The ledger is read UNDER the workspace lock, so the second rename sees the
+    // first one's change. Read before the lock, both would pass the limit.
+    await publicSubdomainService.claim(fx.workspaceId, 'acme', fx.ownerId);
+    const results = await Promise.allSettled([
+      publicSubdomainService.rename(fx.workspaceId, 'acme-one', fx.ownerId),
+      publicSubdomainService.rename(fx.workspaceId, 'acme-two', fx.ownerId),
+    ]);
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    const rejected = results.filter((r) => r.status === 'rejected');
+    expect((rejected[0] as PromiseRejectedResult).reason).toBeInstanceOf(SubdomainChangeLimitError);
+    expect(await adminDb.publicAddress.count({ where: { workspaceId: fx.workspaceId } })).toBe(1);
+  });
 });
 
 describe('the repository seam', () => {
@@ -358,49 +507,54 @@ describe('the repository seam', () => {
   });
 });
 
-// ── RELEASE (ADR §8 Amendment 2 · Story MOTIR-4451 · Subtask MOTIR-4454) ────
+// ── RELEASE (ADR §8 Amendments 2 and 3 · MOTIR-4454, MOTIR-9507) ─────────
 //
-// Q7's never-released rule is about who may take a name NEXT, so a workspace may
-// un-claim its own. What must hold is that the NAMES stay gone from the
-// namespace while the ADDRESSES disappear — which is a claim about ORDER inside
-// one transaction, and only a forced failure can assert it.
+// A workspace may un-claim its own name. The address stops being served in the
+// release's transaction, and the NAME is held for 90 days when it was held 24
+// hours or more — which is a claim about ORDER inside one transaction, and only
+// a forced failure can assert it.
 
 describe('release', () => {
-  it('takes the live label AND every alias, and reserves the digest of each', async () => {
+  it('stops serving the live label and holds its name for 90 days, saying until when', async () => {
     await publicSubdomainService.claim(fx.workspaceId, 'acme', fx.ownerId);
-    await publicSubdomainService.rename(fx.workspaceId, 'acme-inc', fx.ownerId);
-    await publicSubdomainService.rename(fx.workspaceId, 'acme-ltd', fx.ownerId);
+    const now = plus(await claimedAtOf(fx.workspaceId), 2 * DAY);
 
-    await publicSubdomainService.release(fx.workspaceId, fx.ownerId);
+    const released = await publicSubdomainService.release(fx.workspaceId, fx.ownerId, now);
 
-    expect(
-      await adminDb.publicAddress.count({ where: { workspaceId: fx.workspaceId } }),
-      'the live subdomain and BOTH aliases go — releasing only the live one would leave ' +
-        'aliases 301ing to a host that no longer resolves',
-    ).toBe(0);
-
+    expect(released).toEqual({ returnsAt: plus(now, 90 * DAY).toISOString() });
+    expect(await adminDb.publicAddress.count({ where: { workspaceId: fx.workspaceId } })).toBe(0);
     const reserved = await adminDb.publicHostnameReservation.findMany({
       where: { retiredFromWorkspaceId: fx.workspaceId },
     });
-    expect(reserved.map((r) => r.hostnameHash).sort()).toEqual(
-      [`acme.${BASE}`, `acme-inc.${BASE}`, `acme-ltd.${BASE}`].map(hostnameReservationHash).sort(),
-    );
+    expect(reserved.map((r) => [r.hostnameHash, r.expiresAt.toISOString()])).toEqual([
+      [hostnameReservationHash(`acme.${BASE}`), released.returnsAt],
+    ]);
   });
 
-  it('RESERVES BEFORE IT DELETES — a failing reserve leaves every address row standing', async () => {
-    // THE criterion of this card, and it cannot be written as a happy path. A
-    // release that commits the delete and loses the reserve hands the label back
-    // to the global namespace — §8's exact prohibition — and is unrepairable,
-    // because the row that knew the hostname is the one that was deleted.
+  it('frees a label held under 24 hours at once — no hold, and no date', async () => {
     await publicSubdomainService.claim(fx.workspaceId, 'acme', fx.ownerId);
-    await publicSubdomainService.rename(fx.workspaceId, 'acme-inc', fx.ownerId);
+    const now = plus(await claimedAtOf(fx.workspaceId), DAY - 1);
+    await expect(publicSubdomainService.release(fx.workspaceId, fx.ownerId, now)).resolves.toEqual({
+      returnsAt: null,
+    });
+    expect(await adminDb.publicHostnameReservation.count()).toBe(0);
+  });
+
+  it('RESERVES BEFORE IT DELETES — a failing reserve leaves the address standing', async () => {
+    // A release that commits the delete and loses the reserve hands a held name
+    // back to the global namespace, and is unrepairable, because the row that
+    // knew the hostname is the one that was deleted.
+    await publicSubdomainService.claim(fx.workspaceId, 'acme', fx.ownerId);
+    const now = plus(await claimedAtOf(fx.workspaceId), 2 * DAY);
 
     const boom = new Error('reserveMany exploded');
     const spy = vi
       .spyOn(publicHostnameReservationRepository, 'reserveMany')
       .mockRejectedValueOnce(boom);
     try {
-      await expect(publicSubdomainService.release(fx.workspaceId, fx.ownerId)).rejects.toBe(boom);
+      await expect(publicSubdomainService.release(fx.workspaceId, fx.ownerId, now)).rejects.toBe(
+        boom,
+      );
     } finally {
       spy.mockRestore();
     }
@@ -408,12 +562,9 @@ describe('release', () => {
     expect(
       await adminDb.publicAddress.count({ where: { workspaceId: fx.workspaceId } }),
       'the transaction must roll the delete back with the reserve',
-    ).toBe(2);
-    expect(
-      await adminDb.publicHostnameReservation.count({
-        where: { retiredFromWorkspaceId: fx.workspaceId },
-      }),
-    ).toBe(0);
+    ).toBe(1);
+    expect(await adminDb.publicHostnameReservation.count()).toBe(0);
+    expect(await adminDb.publicSubdomainChange.count(), 'and spend no change').toBe(0);
   });
 
   it('leaves a CUSTOM DOMAIN on the same workspace untouched — still issued, still primary', async () => {
@@ -479,18 +630,20 @@ describe('release', () => {
     expect(after?.primaryAddressId).toBeNull();
   });
 
-  it('refuses to re-claim a released LIVE label, and a released ALIAS label', async () => {
+  it('refuses to re-claim a held name — to another workspace AND to itself', async () => {
+    // Rule 3 returns the name to the pool only at expiry, so the releasing
+    // workspace is refused too.
     await publicSubdomainService.claim(fx.workspaceId, 'acme', fx.ownerId);
-    await publicSubdomainService.rename(fx.workspaceId, 'acme-inc', fx.ownerId);
-    await publicSubdomainService.release(fx.workspaceId, fx.ownerId);
+    const now = plus(await claimedAtOf(fx.workspaceId), 2 * DAY);
+    await publicSubdomainService.release(fx.workspaceId, fx.ownerId, now);
 
-    // The ALIAS case is the one a kind-filter mistake would let through.
-    for (const label of ['acme-inc', 'acme']) {
-      const other = await createTestWorkspace({ name: `Rival ${label}` });
-      await expect(
-        publicSubdomainService.claim(other.workspace.id, label, other.owner.id),
-      ).rejects.toBeInstanceOf(HostnameTakenError);
-    }
+    const other = await createTestWorkspace({ name: 'Rival' });
+    await expect(
+      publicSubdomainService.claim(other.workspace.id, 'acme', other.owner.id, now),
+    ).rejects.toBeInstanceOf(NameQuarantinedError);
+    await expect(
+      publicSubdomainService.claim(fx.workspaceId, 'acme', fx.ownerId, now),
+    ).rejects.toBeInstanceOf(NameQuarantinedError);
   });
 
   it('leaves a DIFFERENT label claimable, so the refusal is specific and not a lock', async () => {
@@ -508,8 +661,9 @@ describe('release', () => {
     // for a label the wildcard `*.<base>` already covers (ADR §6).
     certificateProviderSpy.mockClear();
     await publicSubdomainService.claim(fx.workspaceId, 'acme', fx.ownerId);
-    await publicSubdomainService.rename(fx.workspaceId, 'acme-inc', fx.ownerId);
-    await publicSubdomainService.release(fx.workspaceId, fx.ownerId);
+    const renamedAt = new Date();
+    await publicSubdomainService.rename(fx.workspaceId, 'acme-inc', fx.ownerId, renamedAt);
+    await publicSubdomainService.release(fx.workspaceId, fx.ownerId, plus(renamedAt, 30 * DAY));
     expect(certificateProviderSpy).not.toHaveBeenCalled();
   });
 
@@ -554,69 +708,52 @@ describe('release', () => {
   });
 });
 
-describe('release and the rename cap (Amendment 2 — the cap counts names BURNT)', () => {
-  it('does NOT reset the cap: a claim after a release starts from what is left', async () => {
-    // The default an implementation falls into is the opposite — `renamesLeft`
-    // was derived from alias ROWS, and a release deletes them — which would make
-    // claim → rename ×5 → release an unbounded name burn.
+describe('release and the 30-day limit (rule 4 — renames and releases count alike)', () => {
+  it('cannot be bypassed by release then claim: the claim is free, the next change is not', async () => {
     await publicSubdomainService.claim(fx.workspaceId, 'a-one', fx.ownerId);
-    await publicSubdomainService.rename(fx.workspaceId, 'a-two', fx.ownerId);
-    await publicSubdomainService.release(fx.workspaceId, fx.ownerId);
+    const releasedAt = new Date();
+    await publicSubdomainService.release(fx.workspaceId, fx.ownerId, releasedAt);
 
-    const dto = await publicSubdomainService.claim(fx.workspaceId, 'b-one', fx.ownerId);
-    expect(
-      dto.renamesLeft,
-      'two names were burnt — the live label AND its alias — so two of the five are spent',
-    ).toBe(MAX_SUBDOMAIN_RENAMES - 2);
-    expect(await publicSubdomainService.getForWorkspace(fx.workspaceId, fx.ownerId)).toMatchObject({
-      renamesLeft: MAX_SUBDOMAIN_RENAMES - 2,
-    });
-  });
+    // A first claim is not a change: it is not refused, and it writes no ledger.
+    const dto = await publicSubdomainService.claim(
+      fx.workspaceId,
+      'b-one',
+      fx.ownerId,
+      plus(releasedAt, HOUR),
+    );
+    expect(dto.nextChangeAllowedAt).toBe(plus(releasedAt, 30 * DAY).toISOString());
+    const ledger = await adminDb.publicSubdomainChange.findFirstOrThrow();
+    expect(ledger.lastChangedAt.toISOString()).toBe(releasedAt.toISOString());
 
-  it('refuses the rename PAST the cap counting released names, not only live aliases', async () => {
-    // Burn three by releasing (one label + two aliases), then two by renaming.
-    await publicSubdomainService.claim(fx.workspaceId, 'c-one', fx.ownerId);
-    await publicSubdomainService.rename(fx.workspaceId, 'c-two', fx.ownerId);
-    await publicSubdomainService.rename(fx.workspaceId, 'c-three', fx.ownerId);
-    await publicSubdomainService.release(fx.workspaceId, fx.ownerId);
-
-    await publicSubdomainService.claim(fx.workspaceId, 'd-one', fx.ownerId);
-    await publicSubdomainService.rename(fx.workspaceId, 'd-two', fx.ownerId);
-    const dto = await publicSubdomainService.rename(fx.workspaceId, 'd-three', fx.ownerId);
-    expect(dto.renamesLeft).toBe(0);
-
-    await expect(
-      publicSubdomainService.rename(fx.workspaceId, 'd-four', fx.ownerId),
-    ).rejects.toBeInstanceOf(SubdomainRenameCapReachedError);
-  });
-
-  it('leaves the number UNCHANGED for a workspace that has never released', async () => {
-    // The generalisation has to agree with the old rule everywhere the old rule
-    // was defined, or it is a behaviour change wearing a bug fix.
-    const dto = await publicSubdomainService.claim(fx.workspaceId, 'acme', fx.ownerId);
-    expect(dto.renamesLeft).toBe(MAX_SUBDOMAIN_RENAMES);
-    const renamed = await publicSubdomainService.rename(fx.workspaceId, 'acme-inc', fx.ownerId);
-    expect(renamed.renamesLeft).toBe(MAX_SUBDOMAIN_RENAMES - 1);
-  });
-
-  it('lets a workspace at the cap still RELEASE — the cap bounds coming back, not leaving', async () => {
-    await publicSubdomainService.claim(fx.workspaceId, 'e-zero', fx.ownerId);
-    for (const label of ['e-one', 'e-two', 'e-three', 'e-four', 'e-five']) {
-      await publicSubdomainService.rename(fx.workspaceId, label, fx.ownerId);
+    for (const attempt of [
+      () =>
+        publicSubdomainService.rename(fx.workspaceId, 'b-two', fx.ownerId, plus(releasedAt, HOUR)),
+      () => publicSubdomainService.release(fx.workspaceId, fx.ownerId, plus(releasedAt, HOUR)),
+    ]) {
+      await expect(attempt()).rejects.toBeInstanceOf(SubdomainChangeLimitError);
     }
-    await expect(
-      publicSubdomainService.rename(fx.workspaceId, 'e-six', fx.ownerId),
-    ).rejects.toBeInstanceOf(SubdomainRenameCapReachedError);
+    expect(
+      (await adminDb.publicAddress.findMany({ where: { workspaceId: fx.workspaceId } })).map(
+        (r) => r.hostname,
+      ),
+    ).toEqual([`b-one.${BASE}`]);
+  });
 
-    await expect(
-      publicSubdomainService.release(fx.workspaceId, fx.ownerId),
-    ).resolves.toBeUndefined();
-    expect(await adminDb.publicAddress.count({ where: { workspaceId: fx.workspaceId } })).toBe(0);
+  it('has no cap: a workspace changes as often as the limit allows', async () => {
+    await publicSubdomainService.claim(fx.workspaceId, 'e-0', fx.ownerId);
+    let at = new Date();
+    for (let i = 1; i <= 7; i += 1) {
+      await publicSubdomainService.rename(fx.workspaceId, `e-${i}`, fx.ownerId, at);
+      at = plus(at, 30 * DAY);
+    }
+    await expect(publicSubdomainService.release(fx.workspaceId, fx.ownerId, at)).resolves.toEqual({
+      returnsAt: expect.any(String),
+    });
   });
 });
 
 describe('release and how the rest of the system then ADDRESSES the projects', () => {
-  it('returns the projects to motir.co/p/<identifier>, asserted through the services', async () => {
+  it('keeps the projects at motir.co/p/<identifier> before and after, asserted through the services', async () => {
     // Through `publicAddressesService`, never by reading rows: the point is that
     // the RESOLUTION agrees, and a row read would pass while the service did not.
     //
@@ -642,16 +779,15 @@ describe('release and how the rest of the system then ADDRESSES the projects', (
       fx.workspaceId,
       project.identifier,
     );
-    expect(claimed.primary).toBe(`https://acme.${BASE}/${project.identifier}`);
-    expect(
-      claimed.alternates.some((u) => u.includes(publicProjectPath(project.identifier))),
-      'while claimed, motir.co/p/<id> is only an ALTERNATE — it 301s to the subdomain',
-    ).toBe(true);
+    // MOTIR-9790: a claimed workspace subdomain serves no project, so the
+    // project's address is motir.co/p/<id> while claimed AND after release.
+    expect(claimed.primary).toBe(`${publicSiteOrigin()}${publicProjectPath(project.identifier)}`);
+    expect(claimed.alternates).toEqual([]);
     expect(
       await publicAddressesService.primaryHostsForProjects([
         { id: project.id, workspaceId: fx.workspaceId, identifier: project.identifier },
       ]),
-    ).toEqual(new Map([[project.id, `acme.${BASE}`]]));
+    ).toEqual(new Map());
 
     await publicSubdomainService.release(fx.workspaceId, fx.ownerId);
 

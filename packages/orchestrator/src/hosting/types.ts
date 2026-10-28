@@ -13,8 +13,11 @@
 // fake ships beside every adapter, and destroying a release RETURNS its usage.
 //
 // The port never knows which caller is asking (preview lifecycle, production
-// deploy, the operator deploy check), and it is told nothing about ownership: a
-// customer repository (D1) is refused by the callers before it gets here.
+// deploy, the operator deploy check). A customer repository (D1) is never
+// deployed: an adapter that can be asked to run one — the AWS adapter, which
+// reads the repository's seed source — refuses it by name with
+// `CustomerRepositoryRefusedError` (`./errors`), rather than trusting every
+// caller to have filtered it out first.
 
 /** The targets a Motir repo can run on (MOTIR-5769 §2). Each registers one
  *  adapter on this port; none adds a second port. */
@@ -75,6 +78,12 @@ export type ReleaseSize = 'small' | 'medium' | 'large';
  *  an adapter whose provider picks its own idle window does not apply it. */
 export type ReleaseIdlePolicy = { mode: 'always_on' } | { mode: 'suspend'; idleSeconds: number };
 
+/** Which AWS shape a release takes (MOTIR-5769 §4): a Lambda function for a
+ *  small app, an ECS Fargate service for a long-running one. An INPUT, never a
+ *  guess — the caller reads it from the repository's recorded hosting decision,
+ *  and the AWS adapter refuses a release without one (`requireReleaseShape`). */
+export type ReleaseShape = 'function' | 'container';
+
 export interface DeployReleaseInput {
   readonly appRef: string;
   readonly environment: HostingEnvironment;
@@ -86,6 +95,8 @@ export interface DeployReleaseInput {
   /** Absent means the adapter's configured region. */
   readonly region?: string;
   readonly idle: ReleaseIdlePolicy;
+  /** The AWS shape. Required by the `aws` target; every other target ignores it. */
+  readonly shape?: ReleaseShape;
 }
 
 /** A live (or once-live) release. `providerRef` is opaque above the adapter. */
@@ -97,7 +108,16 @@ export interface ReleaseHandle {
   readonly providerRef: string;
 }
 
-export type ReleaseState = 'deploying' | 'healthy' | 'unhealthy' | 'stopped' | 'destroyed';
+/** `waiting_for_account`: the release is held until its organisation's AWS
+ *  tenant account is ready; deploying the same input again once it is completes
+ *  it, as the same release. */
+export type ReleaseState =
+  | 'waiting_for_account'
+  | 'deploying'
+  | 'healthy'
+  | 'unhealthy'
+  | 'stopped'
+  | 'destroyed';
 
 /** What a forwarder must send to reach the upstream (MOTIR-5769 §4): the derived
  *  `X-Motir-Origin-Secret`, a SigV4 signature, or nothing yet. */
@@ -115,6 +135,12 @@ export interface ReleaseDescription {
   readonly originCredential: OriginCredentialKind;
 }
 
+/** Compute a release consumed, in its provider's billing units: Lambda
+ *  GB-seconds, or Fargate vCPU-seconds and GB-seconds (MOTIR-5769 §4). */
+export type ReleaseComputeUsage =
+  | { readonly unit: 'lambda'; readonly gbSeconds: number }
+  | { readonly unit: 'fargate'; readonly vcpuSeconds: number; readonly gbSeconds: number };
+
 /** Running time of one environment's release over a window. Stopped and
  *  suspended time is not running time. */
 export interface ReleaseUsage {
@@ -124,6 +150,9 @@ export interface ReleaseUsage {
   readonly since: Date;
   readonly until: Date;
   readonly runningSeconds: number;
+  /** The same window in compute units. Set by the AWS shapes; absent on the
+   *  targets that bill by running time alone. */
+  readonly compute?: ReleaseComputeUsage;
 }
 
 export type ReleaseDestroyReason =

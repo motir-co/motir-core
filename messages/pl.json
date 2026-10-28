@@ -2071,7 +2071,8 @@
         "workspace": "Obszar roboczy",
         "security": "Zabezpieczenia",
         "roles": "Role i uprawnienia",
-        "jobs": "Uruchomienia zadań"
+        "jobs": "Uruchomienia zadań",
+        "publicAddress": "Adres publiczny"
       }
     },
     "name": {
@@ -2757,43 +2758,6 @@
         "title": "Nie skonfigurowano publicznej przestrzeni nazw",
         "description": "To wdrożenie nie ma ustawionej domeny bazowej dzierżawców, więc nie można jeszcze zarezerwować subdomeny. Operator ustawia MOTIR_PUBLIC_TENANT_DOMAIN."
       },
-      "subdomain": {
-        "title": "Subdomena obszaru roboczego",
-        "subtitle": "Jeden adres dla całego obszaru roboczego. Każdy publiczny projekt w nim jest dostępny pod tym adresem.",
-        "label": "Subdomena",
-        "helper": "Twoje projekty będą dostępne pod adresem {preview}. Małe litery, cyfry i myślniki; 3–63 znaki.",
-        "claim": "Zarezerwuj subdomenę",
-        "claimable": "Nazwę można później zmienić ograniczoną liczbę razy.",
-        "active": "Aktywna",
-        "alias": "Przekierowuje tutaj",
-        "aliasShort": "Przekierowuje",
-        "copy": "Kopiuj adres",
-        "copied": "Skopiowano adres",
-        "open": "Otwórz w nowej karcie",
-        "rename": "Zmień nazwę",
-        "renamesLeft": "{count, plural, =0 {Nie pozostały żadne zmiany nazwy.} one {Pozostała # zmiana nazwy.} few {Pozostały # zmiany nazwy.} many {Pozostało # zmian nazwy.} other {Pozostało # zmiany nazwy.}}",
-        "readOnly": "Zarządzane przez właściciela lub administratora obszaru roboczego.",
-        "none": "Nie zarezerwowano jeszcze subdomeny."
-      },
-      "rename": {
-        "title": "Zmienić nazwę tej subdomeny?",
-        "warningTitle": "Stary adres nadal działa i nigdy nie zostanie zwolniony.",
-        "warningBody": "{old} będzie trwale przekierowywać tutaj i nikt inny nie będzie mógł go zarezerwować — nawet Twój obszar roboczy w przyszłości.",
-        "remaining": "Po tej zmianie {count, plural, one {pozostanie # zmiana nazwy} few {pozostaną # zmiany nazwy} many {pozostanie # zmian nazwy} other {pozostanie # zmiany nazwy}}.",
-        "cancel": "Anuluj",
-        "confirm": "Zmień nazwę"
-      },
-      "release": {
-        "remove": "Usuń",
-        "title": "Usunąć {hostname}?",
-        "lead": "{count, plural, one {Ten adres przestanie działać:} few {Te # adresy przestaną działać:} many {Tych # adresów przestanie działać:} other {Te # adresu przestaną działać:}}",
-        "warningTitle": "{count, plural, one {Ta nazwa jest zablokowana na zawsze. Nikt nie może jej ponownie zarezerwować — nawet Twój obszar roboczy.} few {Te nazwy są zablokowane na zawsze. Nikt nie może ich ponownie zarezerwować — nawet Twój obszar roboczy.} many {Te nazwy są zablokowane na zawsze. Nikt nie może ich ponownie zarezerwować — nawet Twój obszar roboczy.} other {Te nazwy są zablokowane na zawsze. Nikt nie może ich ponownie zarezerwować — nawet Twój obszar roboczy.}}",
-        "warningBody": "Motir trwale wyklucza każdą zwolnioną nazwę ze swojej przestrzeni nazw, aby żaden inny obszar roboczy nie przejął linków, które wskazywały na Twój.",
-        "renamesAfter": "Jeśli ponownie zarezerwujesz subdomenę, {count, plural, =0 {nie pozostaną żadne zmiany nazwy} one {pozostanie # zmiana nazwy} few {pozostaną # zmiany nazwy} many {pozostanie # zmian nazwy} other {pozostanie # zmiany nazwy}} — zwolnienie ich nie przywraca.",
-        "fallback": "Twoje publiczne projekty wrócą pod adres {url} i ponownie pojawią się w {site}.",
-        "cancel": "Anuluj",
-        "confirm": "Usuń subdomenę"
-      },
       "domains": {
         "title": "Własna domena",
         "subtitle": "Udostępniaj ten projekt z domeny, która należy do Ciebie.",
@@ -2882,17 +2846,6 @@
         },
         "lastChecked": "Ostatnio sprawdzono {when}",
         "error": "To się nie udało. Spróbuj ponownie za chwilę."
-      },
-      "error": {
-        "reserved": "{label} jest zarezerwowana. Motir zachowuje niewielki zestaw nazw dla własnych hostów oraz nazw, które czytelnik mógłby z nimi pomylić.",
-        "structurallyReserved": "{label} jest zarezerwowana. Nazwy zaczynające się od podkreślenia, xn-- lub motir- należą do Motir lub samego DNS.",
-        "tooShort": "Za krótka — subdomena ma co najmniej 3 znaki.",
-        "tooLong": "Za długa — subdomena ma maksymalnie 63 znaki.",
-        "badGrammar": "Tylko małe litery, cyfry i myślniki; musi zaczynać się i kończyć literą lub cyfrą.",
-        "taken": "{label} jest już używana. Subdomena, której nazwę zmieniono, również zachowuje swoją nazwę, więc ta może należeć do obszaru roboczego, który już pod nią nie odpowiada.",
-        "capReached": "Wykorzystano wszystkie zmiany nazwy dla tego obszaru roboczego. Adresu nie można już zmienić.",
-        "forbidden": "Tylko właściciel lub administrator obszaru roboczego może zmienić ten adres.",
-        "generic": "To się nie udało. Spróbuj ponownie za chwilę."
       }
     },
     "codeAccess": {
@@ -4325,6 +4278,92 @@
       "saveError": "Coś poszło nie tak. Spróbuj ponownie.",
       "saveForbidden": "Nie możesz już zmieniać miejsca docelowego błędów tego projektu.",
       "folderGone": "Ten folder już nie istnieje. Wybierz inny."
+    },
+    "workspaceAddress": {
+      "door": {
+        "title": "Adres publiczny",
+        "claimed": "{host} — jedna nazwa obszaru roboczego.",
+        "none": "Nie zajęto jeszcze żadnej nazwy.",
+        "manage": "Zarządzaj →",
+        "claim": "Zajmij nazwę →"
+      },
+      "title": "Adres publiczny",
+      "subtitle": "Jedyna nazwa, pod którą odpowiada obszar roboczy.",
+      "readOnly": "Tylko właściciele i administratorzy obszaru roboczego mogą to zmienić.",
+      "none": "Nie zajęto jeszcze żadnej nazwy.",
+      "unavailable": {
+        "title": "Adresy publiczne nie są skonfigurowane na tym serwerze",
+        "description": "Operator musi ustawić MOTIR_PUBLIC_TENANT_DOMAIN, zanim obszar roboczy będzie mógł zająć nazwę."
+      },
+      "field": {
+        "label": "Nazwa",
+        "renameLabel": "Nowa nazwa",
+        "hint": "Małe litery, cyfry i pojedyncze łączniki; od {min} do {max} znaków. Obszar roboczy ma jedną nazwę.",
+        "preview": "Czytelnicy znajdą cię pod adresem {host}"
+      },
+      "claim": "Zajmij nazwę",
+      "refusal": {
+        "tooShort": "Użyj co najmniej {min} znaków.",
+        "badGrammar": "Używaj tylko małych liter, cyfr i łączników.",
+        "doubleHyphen": "Nazwa nie może zawierać dwóch łączników z rzędu — są zarezerwowane dla adresów aplikacji.",
+        "tooLong": "Użyj najwyżej {max} znaków.",
+        "taken": "{host} jest zajęty. Spróbuj innej nazwy.",
+        "reserved": "„{label}” jest zarezerwowana. Wybierz inną nazwę.",
+        "quarantined": "{host} został niedawno zwolniony i jest wstrzymany do {date}. Od tego dnia każdy może go zająć.",
+        "generic": "Nie udało się zapisać nazwy. Spróbuj ponownie."
+      },
+      "row": {
+        "live": "Aktywny",
+        "copy": "Kopiuj adres",
+        "copied": "Skopiowano adres",
+        "open": "Otwórz w nowej karcie"
+      },
+      "rename": "Zmień nazwę",
+      "release": "Zwolnij",
+      "lock": "Nazwę można zmienić ponownie {date}. Zmiana nazwy i zwolnienie liczą się jako jedna zmiana, raz na 30 dni.",
+      "lockShort": "Nazwę można zmienić ponownie {date}.",
+      "review": "Sprawdź",
+      "cancel": "Anuluj",
+      "confirm": {
+        "renameTitle": "Zmienić nazwę na {host}?",
+        "releaseTitle": "Zwolnić {host}?",
+        "stops": "{host} przestaje odpowiadać od teraz.",
+        "returnsOn": "Każdy może go zająć od {date}.",
+        "returnsNow": "Każdy może go zająć od razu — był używany krócej niż 24 godziny.",
+        "noRedirectRename": "Stary adres nie przekierowuje na nowy, więc zaktualizuj udostępnione linki.",
+        "noRedirectRelease": "Nie ma przekierowania. Projekty publiczne pozostają pod adresami motir.co.",
+        "lockAfterRename": "Nazwy nie można zmienić ponownie przed {date}.",
+        "lockAfterRelease": "Nową nazwę możesz zająć od razu. Kolejna zmiana po tym będzie możliwa od {date}.",
+        "rename": "Zmień nazwę",
+        "renaming": "Zmienianie nazwy…",
+        "release": "Zwolnij nazwę",
+        "releasing": "Zwalnianie…"
+      },
+      "toast": {
+        "claimed": "{host} jest twój",
+        "renamed": "Zmieniono nazwę na {host}",
+        "renamedBody": "{old} już nie odpowiada.",
+        "released": "Zwolniono {host}",
+        "refusedTitle": "Nazwa nie została zmieniona",
+        "refusedLimit": "Możesz ją zmienić ponownie {date}.",
+        "refusedTaken": "{host} został właśnie zajęty. Spróbuj innej nazwy.",
+        "refusedQuarantined": "{host} jest wstrzymany do {date}."
+      },
+      "released": {
+        "held": "Zwolniono {host}. Jest wstrzymany do {date}, potem każdy może go zająć.",
+        "free": "Zwolniono {host}. Każdy może go teraz zająć.",
+        "lock": "Możesz teraz zająć nazwę. Kolejna zmiana po tym będzie możliwa od {date}."
+      },
+      "loadError": "Nie udało się wczytać adresu.",
+      "retry": "Spróbuj ponownie",
+      "echo": {
+        "title": "Adres obszaru roboczego",
+        "claimedSub": "Nazwa, pod którą odpowiada obszar roboczy.",
+        "noneSub": "Obszar roboczy nie ma jeszcze nazwy.",
+        "projectPage": "Publiczna strona tego projektu jest pod adresem {url}.",
+        "change": "Zmień w ustawieniach obszaru roboczego →",
+        "claim": "Zajmij nazwę dla obszaru roboczego →"
+      }
     }
   },
   "boards": {
@@ -10097,7 +10136,8 @@
       "navIdeas": "Pomysły",
       "navRunModels": "Modele hostowanych uruchomień",
       "navFleetSettings": "Ustawienia floty",
-      "navCapacity": "Pojemność dostawców"
+      "navCapacity": "Pojemność dostawców",
+      "navJobs": "Zadania"
     },
     "nav": {
       "overview": "Przegląd",
@@ -10319,6 +10359,9 @@
             "limits": {
               "edit": "Edytowano limity pojemności modelu dostawcy"
             }
+          },
+          "jobs": {
+            "dlq_replay": "Ponownie uruchomiono niedostarczony wpis"
           }
         }
       }
@@ -12613,6 +12656,104 @@
         "unreachable": "Brama nie odpowiedziała. Nic nie zostało zapisane; spróbuj ponownie.",
         "notPermitted": "Twoja rola nie może edytować limitów, więc nic nie zostało zapisane.",
         "failed": "Nie udało się zapisać limitów. Nic nie zostało zmienione; spróbuj ponownie."
+      }
+    },
+    "jobs": {
+      "breadcrumb": "Platforma · Zadania",
+      "title": "Zadania",
+      "subtitle": "Każde zadanie w tle uruchomione przez platformę, w każdym obszarze roboczym i poza nimi, oraz każdy wpis niedostarczony czekający na ponowne uruchomienie.",
+      "tabsLabel": "Widoki rejestru zadań",
+      "tabs": {
+        "runs": "Uruchomienia",
+        "dlq": "Niedostarczone",
+        "waiting": "Oczekujące: {count}"
+      },
+      "status": {
+        "label": "Status",
+        "all": "Wszystkie",
+        "running": "W toku",
+        "succeeded": "Powodzenie",
+        "failed": "Niepowodzenie",
+        "abandoned": "Porzucone"
+      },
+      "columns": {
+        "function": "Funkcja",
+        "event": "Zdarzenie",
+        "functionEvent": "Funkcja · zdarzenie",
+        "workspace": "Obszar roboczy",
+        "status": "Status",
+        "attempt": "Próba",
+        "attempts": "Próby",
+        "started": "Rozpoczęto",
+        "duration": "Czas trwania",
+        "failure": "Błąd",
+        "lastFailed": "Ostatni błąd",
+        "replay": "Uruchom ponownie"
+      },
+      "runsCaption": "Uruchomienia zadań w tle",
+      "dlqCaption": "Niedostarczone",
+      "noWorkspace": "Brak obszaru roboczego",
+      "pageLabel": "Strona {page}",
+      "pagerLabel": "Strony uruchomień",
+      "previous": "Poprzednia",
+      "next": "Następna",
+      "runsEmpty": {
+        "titleAll": "Brak uruchomień",
+        "bodyAll": "Zadania w tle pojawiają się tutaj po uruchomieniu.",
+        "titleStatus": "Brak uruchomień o tym statusie",
+        "bodyStatus": "Nic w rejestrze nie ma tego statusu. Wybierz Wszystkie, aby zobaczyć każde uruchomienie."
+      },
+      "runsError": {
+        "title": "Nie udało się odczytać rejestru zadań"
+      },
+      "dlqError": {
+        "title": "Nie udało się odczytać niedostarczonych"
+      },
+      "error": {
+        "body": "Baza danych nie odpowiedziała. Nic nie zostało zmienione."
+      },
+      "retry": "Spróbuj ponownie",
+      "loadingRuns": "Wczytywanie uruchomień",
+      "readOnly": "Tylko do odczytu. Ponowne uruchomienie wpisu niedostarczonego wymaga roli operatora.",
+      "fn": {
+        "label": "Funkcja",
+        "all": "Wszystkie funkcje"
+      },
+      "waitingLine": "Oczekujące: {waiting} · uruchomione ponownie w ostatnich 7 dniach: {replayed}",
+      "capped": "Wyświetlono {shown} z {count}. Lista pokazuje 200 najnowszych.",
+      "replay": "Uruchom ponownie",
+      "replayAria": "Uruchom ponownie niedostarczony wpis {function}",
+      "replayedAt": "Uruchomiono ponownie {time}",
+      "toast": {
+        "replayedTitle": "Wpis niedostarczony uruchomiono ponownie",
+        "replayedBody": "{function} wysłano ponownie.",
+        "alreadyTitle": "Już uruchomiono ponownie",
+        "alreadyBody": "Ktoś inny uruchomił już ponownie ten wpis. Nic nie zostało wysłane ponownie.",
+        "failedTitle": "Ponowne uruchomienie nie powiodło się",
+        "failedBody": "Nic nie zostało wysłane. Spróbuj ponownie.",
+        "notPermittedBody": "Ponowne uruchomienie wpisu niedostarczonego wymaga roli operatora.",
+        "notFoundBody": "Ten wpis niedostarczony już nie istnieje."
+      },
+      "replayAll": {
+        "button": "Uruchom ponownie wszystkie ({count})",
+        "title": "Uruchomić ponownie {count} niedostarczonych wpisów {function}?",
+        "body": "Każdy zostanie wysłany ponownie jako nowe uruchomienie i zapisany w dzienniku audytu platformy. Wpis, który ktoś inny uruchomi wcześniej, zostanie pominięty.",
+        "confirm": "Uruchom ponownie ({count})",
+        "cancel": "Anuluj",
+        "running": "Trwa ponowne uruchamianie…",
+        "runningLine": "Trwa ponowne uruchamianie wpisów ({count}), po 50 naraz. Nie zamykaj tego okna do końca.",
+        "doneTitle": "Ponowne uruchamianie zakończone",
+        "doneWithFailuresTitle": "Ponowne uruchamianie zakończone z błędami",
+        "replayed": "Uruchomiono ponownie: {count}",
+        "already": "Już uruchomione ponownie przez kogoś innego: {count}",
+        "nothingLeft": "Uruchomiono ponownie: 0 — wszystkie ({count}) były już uruchomione",
+        "failed": "Nie udało się uruchomić ponownie: {count}. Pozostają na liście; uruchom je ponownie pojedynczo.",
+        "error": "Nie udało się rozpocząć ponownego uruchamiania. Nic nie zostało zmienione.",
+        "close": "Gotowe"
+      },
+      "dlqEmpty": {
+        "title": "Nic nie czeka",
+        "body": "Żadne zadanie nie wyczerpało prób. Wpisy niedostarczone pojawią się tutaj, gdy to nastąpi."
       }
     }
   },

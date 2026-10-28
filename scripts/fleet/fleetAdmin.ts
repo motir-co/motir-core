@@ -93,6 +93,7 @@ const USAGE = [
   '  fleet-admin capacity-request-link <request> <quota request> --operator <email>',
   '  fleet-admin capacity-request-close <request> <note> --operator <email>',
   '  fleet-admin hosting-tenant ensure <organization id>',
+  '  fleet-admin hosting-tenant converge-deploy-policy [--organization <id>]',
 ].join('\n');
 
 /** Where the command writes — stdout and stderr in production, a buffer in tests. */

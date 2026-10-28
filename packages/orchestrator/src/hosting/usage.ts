@@ -3,6 +3,8 @@
 // one implementation: an adapter turns its provider's events into transitions,
 // and this sums the running intervals inside a window.
 
+import type { HostingEnvironment, ReleaseComputeUsage, ReleaseShape, ReleaseSize } from './types';
+
 /** One change of a release's running state, at an instant. */
 export interface RunTransition {
   readonly at: Date;
@@ -41,4 +43,58 @@ export function runningSecondsBetween(
   }
   if (running) totalMs += end - cursor;
   return Math.floor(totalMs / 1000);
+}
+
+// ── The AWS SIZE TABLE (MOTIR-5769 §4, MOTIR-10002) ─────────────────────────
+//
+// ONE table, read by the fake and by the real function and container shapes, so
+// the compute units a release reports are derived from the same numbers it was
+// sized with. A function is 1,769 MB (one vCPU on x86_64) whatever its size or
+// environment. A container preview runs at 0.25 vCPU / 0.5 GB whatever its input
+// says; a production container is sized by the repository row's size.
+
+/** A Lambda function's memory, in MB, for every release. */
+export const AWS_FUNCTION_MEMORY_MB = 1769;
+
+/** A Fargate task's vCPU and memory (GB). */
+export interface FargateSize {
+  readonly vcpu: number;
+  readonly memoryGb: number;
+}
+
+/** A preview container, whatever size its input names. */
+export const AWS_CONTAINER_PREVIEW_SIZE: FargateSize = { vcpu: 0.25, memoryGb: 0.5 };
+
+/** A production container, by the row's size. */
+export const AWS_CONTAINER_PRODUCTION_SIZES: Readonly<Record<ReleaseSize, FargateSize>> = {
+  small: { vcpu: 0.25, memoryGb: 0.5 },
+  medium: { vcpu: 0.5, memoryGb: 1 },
+  large: { vcpu: 1, memoryGb: 2 },
+};
+
+/** The Fargate size a container release runs at. Absent size means `small`. */
+export function awsContainerSize(
+  size: ReleaseSize | undefined,
+  environment: HostingEnvironment,
+): FargateSize {
+  if (environment.kind === 'preview') return AWS_CONTAINER_PREVIEW_SIZE;
+  return AWS_CONTAINER_PRODUCTION_SIZES[size ?? 'small'];
+}
+
+/** The compute units `runningSeconds` of a release of that shape amount to. */
+export function computeUsageFor(
+  shape: ReleaseShape,
+  size: ReleaseSize | undefined,
+  environment: HostingEnvironment,
+  runningSeconds: number,
+): ReleaseComputeUsage {
+  if (shape === 'function') {
+    return { unit: 'lambda', gbSeconds: (runningSeconds * AWS_FUNCTION_MEMORY_MB) / 1024 };
+  }
+  const { vcpu, memoryGb } = awsContainerSize(size, environment);
+  return {
+    unit: 'fargate',
+    vcpuSeconds: runningSeconds * vcpu,
+    gbSeconds: runningSeconds * memoryGb,
+  };
 }

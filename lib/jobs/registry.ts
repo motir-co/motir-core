@@ -72,6 +72,7 @@ import { jobRunReap } from './definitions/jobRunReap';
 import { jobQueueRetention } from './definitions/jobQueueRetention';
 import { dataExportBuild } from './definitions/dataExportBuild';
 import { dataExportExpirySweep } from './definitions/dataExportExpirySweep';
+import { publicHostnameReservationSweep } from './definitions/publicHostnameReservationSweep';
 import { dispatchRunSweep } from './definitions/dispatchRunSweep';
 import { runLivenessSweep } from './definitions/runLivenessSweep';
 import { pullRequestReconcile } from './definitions/pullRequestReconcile';
@@ -182,6 +183,7 @@ export const jobDefinitions = [
   jobQueueRetention,
   dataExportBuild,
   dataExportExpirySweep,
+  publicHostnameReservationSweep,
   dispatchRunSweep,
   runLivenessSweep,
   accountErasureSweep,

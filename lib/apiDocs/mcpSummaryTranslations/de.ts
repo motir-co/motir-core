@@ -403,9 +403,9 @@ export const de: McpSummaryTranslations = {
   },
   record_run_discrepancy: {
     summary:
-      'Ein Runner, der ein Arbeitselement über einen nur im WIE falschen Plan gebaut hat, hält fest, was er anders gebaut hat – ein Kommentar am Element und ein Laufeintrag, bestätigt.',
+      'Ein Runner hält fest, was er anders gebaut hat als ein nur im WIE falscher Plan, und welche Entscheidungen er traf, wo der Plan schwieg – ein Kommentar am Element und ein Laufeintrag, bestätigt.',
     source:
-      'A runner that built a card through a plan wrong only about the HOW records what it built differently — a card comment and a run record, acknowledged.',
+      'A runner records what it built differently from a plan wrong only about the HOW, and the decisions it made where the plan was silent — a card comment and a run record, acknowledged.',
   },
   report_unbuildable_target: {
     summary:

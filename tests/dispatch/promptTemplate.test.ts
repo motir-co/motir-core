@@ -3431,3 +3431,143 @@ describe('the run prompt states the product’s approval and receipt rules (MOTI
     }
   });
 });
+
+// ── DECIDE WHAT THE CARD LEAVES OPEN — the never-ask rule and the decision record (MOTIR-10000) ──
+
+describe('DECIDE WHAT THE CARD LEAVES OPEN — a run never asks, decides by best practice, records it (MOTIR-10000)', () => {
+  const HEADING = 'DECIDE WHAT THE CARD LEAVES OPEN — never ask';
+  /** The block's own text: its heading up to the next rule-barred heading. */
+  const blockOf = (prompt: string): string => {
+    const at = prompt.indexOf(HEADING);
+    expect(at, 'a DECIDE WHAT THE CARD LEAVES OPEN section').toBeGreaterThan(-1);
+    // Past the heading's own closing rule, up to the next section's opening rule.
+    const rest = prompt.slice(at + HEADING.length).replace(/^\n═+\n/, '');
+    const next = rest.search(/\n═+\n[A-Z]/);
+    return next === -1 ? rest : rest.slice(0, next);
+  };
+  const DECISION_CARD = {
+    type: 'decision' as const,
+    title: 'Pick the queue',
+    kind: 'task' as const,
+  };
+
+  it('says never ask, how to decide, and that ease is never a reason — on the code lane', () => {
+    const block = blockOf(assembleDispatchPrompt(source()).prompt);
+    expect(block).toContain(
+      'A detail the card and its plan leave open is YOURS to decide. Never ask anyone',
+    );
+    expect(block).toContain(
+      'about the implementation: nobody is there to answer mid-run. Do not use',
+    );
+    expect(block).toContain(
+      'AskUserQuestion, do not ask to confirm the scope, and do not offer options and',
+    );
+    expect(block).toContain(
+      "  1. The repository's own conventions — its coding convention, its instruction",
+    );
+    expect(block).toContain(
+      '  2. Where they are silent, the established industry best practice for the',
+    );
+    expect(block).toContain(
+      'Take the best-practice option even when it is more work. Never choose an option',
+    );
+    expect(block).toContain('because it is the easiest, the smallest or the quickest to ship.');
+    // No "simplest option" escape hatch anywhere in the block.
+    expect(block).not.toMatch(/simplest|if in doubt, (pick|choose) the/i);
+  });
+
+  it('keeps the WHAT out of it: a question that changes the WHAT is THE CARD IS WRONG, not a question', () => {
+    const block = blockOf(assembleDispatchPrompt(source()).prompt);
+    expect(block).toContain(
+      "card's outcome or an acceptance criterion — is not yours to decide: that is",
+    );
+    expect(block).toContain(
+      'THE CARD IS WRONG below, and its STOP is an action you take, not a question.',
+    );
+  });
+
+  it('records the decisions ONCE through record_run_discrepancy, before committing, in the SAME call as a build-through', () => {
+    const block = blockOf(assembleDispatchPrompt(source({ key: 'PROD-42' })).prompt);
+    expect(RECORD_DISCREPANCY_TOOL_NAME).toBe(RECORD_RUN_DISCREPANCY_TOOL_NAME);
+    expect(block).toContain(
+      'RECORD every decision you made, ONCE, after you have built and before you commit,',
+    );
+    expect(block).toContain(`with the ${RECORD_RUN_DISCREPANCY_TOOL_NAME} tool:`);
+    expect(block).toContain('         key:       PROD-42');
+    expect(block).toContain(
+      '                    { planSaid, chose, why, alternatives } — what the card said',
+    );
+    expect(block).toContain(
+      '  that SAME call beside its points: the record is one call per run, and a',
+    );
+    expect(block).toContain(
+      '  second call is refused DISCREPANCY_ALREADY_RECORDED. A run that decided',
+    );
+    expect(block).toContain('  "## Decisions the run made" section.');
+    expect(block).toContain('         Decision record missing: <the error code or message>');
+  });
+
+  it('sits after the card’s own WHAT and before the closing sections', () => {
+    const prompt = assembleDispatchPrompt(source()).prompt;
+    const at = prompt.indexOf(HEADING);
+    expect(at).toBeGreaterThan(prompt.indexOf('\nACCEPTANCE CRITERIA'));
+    expect(at).toBeLessThan(prompt.indexOf('\nREPORTING YOUR STEPS'));
+    expect(at).toBeLessThan(prompt.indexOf('\nGIT WORKFLOW'));
+  });
+
+  it('a session-lineage card lists the decisions in the session pull request body', () => {
+    const block = blockOf(
+      assembleDispatchPrompt(source({ sessionBranch: 'session/PROD-1-x' })).prompt,
+    );
+    expect(block).toContain(
+      '  List the same decisions for PROD-7 in a "## Decisions the run made"',
+    );
+    expect(block).toContain('  section of the BODY of the session pull request.');
+  });
+
+  it('a decision card records before publish_decision_page and lists them in its report', () => {
+    const block = blockOf(assembleDispatchPrompt(source(DECISION_CARD)).prompt);
+    expect(block).toContain('before publish_decision_page,');
+    expect(block).toContain('  List the same decisions in your FINISHED report.');
+    expect(block).not.toContain('pull request');
+  });
+
+  it('a MANUAL item has no such section — a person does it, and there is no run to record on', () => {
+    const prompt = assembleDispatchPrompt(source({ type: 'manual', executor: 'human' })).prompt;
+    expect(prompt).not.toContain(HEADING);
+  });
+
+  it('names the "decisions" file route ONLY to a runner that declares it posts them', () => {
+    const route = '"decisions" beside "model"';
+    const withBoth = blockOf(
+      assembleDispatchPrompt(source({ runnerPostsAgentReport: true, runnerPostsDecisions: true }))
+        .prompt,
+    );
+    expect(withBoth).toContain(route);
+    expect(withBoth).toContain(
+      '         {"model": "<as above>", "decisions": [{"planSaid": "…", "chose": "…", "why": "…", "alternatives": "…"}]}',
+    );
+    // A CLI that posts the other findings but predates decisions would drop them.
+    for (const over of [
+      { runnerPostsAgentReport: true },
+      { runnerPostsDecisions: true },
+      {},
+    ] as Partial<DispatchPromptSource>[]) {
+      expect(blockOf(assembleDispatchPrompt(source(over)).prompt)).not.toContain(route);
+    }
+  });
+
+  it('leaves BUILD THROUGH, STOP and FOUND A DEFECT byte-identical', () => {
+    // The block is self-contained: removing it gives back exactly the prompt without it.
+    for (const over of [
+      {},
+      DECISION_CARD,
+      { runnerPostsAgentReport: true },
+    ] as Partial<DispatchPromptSource>[]) {
+      const prompt = assembleDispatchPrompt(source(over)).prompt;
+      const outcome = prompt.slice(prompt.indexOf('THE CARD IS WRONG — its premise is false'));
+      expect(outcome).not.toContain(HEADING);
+      expect(outcome).not.toContain('decisions');
+    }
+  });
+});

@@ -2071,7 +2071,8 @@
         "workspace": "工作区",
         "security": "安全",
         "roles": "角色与权限",
-        "jobs": "任务运行"
+        "jobs": "任务运行",
+        "publicAddress": "公开地址"
       }
     },
     "name": {
@@ -2757,43 +2758,6 @@
         "title": "尚未配置公开命名空间",
         "description": "此部署未设置租户基础域名，因此暂时无法认领子域名。请由运维人员设置 MOTIR_PUBLIC_TENANT_DOMAIN。"
       },
-      "subdomain": {
-        "title": "工作区子域名",
-        "subtitle": "整个工作区共用一个地址，其中每个公开项目都在它下面提供访问。",
-        "label": "子域名",
-        "helper": "你的项目将位于 {preview}。仅限小写字母、数字和连字符；3–63 个字符。",
-        "claim": "认领子域名",
-        "claimable": "之后可以重命名，但次数有限。",
-        "active": "使用中",
-        "alias": "重定向至此",
-        "aliasShort": "重定向",
-        "copy": "复制地址",
-        "copied": "地址已复制",
-        "open": "在新标签页中打开",
-        "rename": "重命名",
-        "renamesLeft": "{count, plural, =0 {没有剩余的重命名次数。} other {还可重命名 # 次。}}",
-        "readOnly": "由工作区所有者或管理员管理。",
-        "none": "尚未认领子域名。"
-      },
-      "rename": {
-        "title": "要重命名此子域名吗？",
-        "warningTitle": "旧地址将继续有效，并且永不释放。",
-        "warningBody": "{old} 将永久重定向到此处，任何人都无法再认领它——包括你自己。",
-        "remaining": "此次之后你还可重命名 {count, plural, other {#}} 次。",
-        "cancel": "取消",
-        "confirm": "重命名"
-      },
-      "release": {
-        "remove": "移除",
-        "title": "要移除 {hostname} 吗？",
-        "lead": "{count, plural, other {以下 # 个地址将停止提供访问：}}",
-        "warningTitle": "{count, plural, other {这些名称将被永久保留，任何人都无法再认领它们——包括你自己。}}",
-        "warningBody": "Motir 会把每个已释放的名称永久排除在命名空间之外，因此其他工作区无法继承指向你的链接。",
-        "renamesAfter": "若你再次认领子域名，将只剩 {count, plural, =0 {0} other {#}} 次重命名机会——释放不会把它们还给你。",
-        "fallback": "你的公开项目将回到 {url}，并重新出现在 {site} 上。",
-        "cancel": "取消",
-        "confirm": "移除子域名"
-      },
       "domains": {
         "title": "你自己的域名",
         "subtitle": "使用你拥有的域名来提供此项目。",
@@ -2882,17 +2846,6 @@
         },
         "lastChecked": "上次检查：{when}",
         "error": "操作未成功，请稍后重试。"
-      },
-      "error": {
-        "reserved": "{label} 是保留名称。Motir 保留了一小组名称，用于自己的主机以及读者可能误认的名称。",
-        "structurallyReserved": "{label} 是保留名称。以下划线、xn-- 或 motir- 开头的名称属于 Motir 或 DNS 本身。",
-        "tooShort": "太短——子域名至少需要 3 个字符。",
-        "tooLong": "太长——子域名最多 63 个字符。",
-        "badGrammar": "仅限小写字母、数字和连字符，且需以字母或数字开头和结尾。",
-        "taken": "{label} 已被使用。被重命名后的子域名同样会保留其名称，因此它可能属于一个已不再使用它的工作区。",
-        "capReached": "此工作区的重命名次数已用完，地址无法再更改。",
-        "forbidden": "只有工作区所有者或管理员才能更改此地址。",
-        "generic": "操作未成功，请稍后重试。"
       }
     },
     "codeAccess": {
@@ -4325,6 +4278,92 @@
       "saveError": "出错了，请重试。",
       "saveForbidden": "你已无法更改此项目缺陷的归档位置。",
       "folderGone": "该文件夹已不存在，请选择其他文件夹。"
+    },
+    "workspaceAddress": {
+      "door": {
+        "title": "公开地址",
+        "claimed": "{host} — 工作区唯一的名称。",
+        "none": "尚未认领名称。",
+        "manage": "管理 →",
+        "claim": "认领名称 →"
+      },
+      "title": "公开地址",
+      "subtitle": "工作区对外使用的唯一名称。",
+      "readOnly": "只有工作区所有者和管理员可以更改此项。",
+      "none": "尚未认领名称。",
+      "unavailable": {
+        "title": "此服务器未配置公开地址",
+        "description": "运维人员需要先设置 MOTIR_PUBLIC_TENANT_DOMAIN，工作区才能认领名称。"
+      },
+      "field": {
+        "label": "名称",
+        "renameLabel": "新名称",
+        "hint": "小写字母、数字和单个连字符；{min}–{max} 个字符。一个工作区只有一个名称。",
+        "preview": "访问者将通过 {host} 找到你"
+      },
+      "claim": "认领名称",
+      "refusal": {
+        "tooShort": "至少使用 {min} 个字符。",
+        "badGrammar": "只能使用小写字母、数字和连字符。",
+        "doubleHyphen": "名称不能包含连续两个连字符——这留给应用地址使用。",
+        "tooLong": "最多使用 {max} 个字符。",
+        "taken": "{host} 已被占用。请换一个名称。",
+        "reserved": "“{label}” 是保留名称。请选择其他名称。",
+        "quarantined": "{host} 最近被释放，保留至 {date}。届时任何人都可以认领。",
+        "generic": "无法保存名称。请重试。"
+      },
+      "row": {
+        "live": "已上线",
+        "copy": "复制地址",
+        "copied": "地址已复制",
+        "open": "在新标签页中打开"
+      },
+      "rename": "重命名",
+      "release": "释放",
+      "lock": "你可以在 {date} 再次更改名称。重命名和释放各算一次更改，每 30 天一次。",
+      "lockShort": "你可以在 {date} 再次更改名称。",
+      "review": "检查",
+      "cancel": "取消",
+      "confirm": {
+        "renameTitle": "重命名为 {host}？",
+        "releaseTitle": "释放 {host}？",
+        "stops": "{host} 将立即停止响应。",
+        "returnsOn": "任何人都可以从 {date} 起认领它。",
+        "returnsNow": "任何人都可以立即认领它——你持有它不到 24 小时。",
+        "noRedirectRename": "旧地址不会重定向到新地址，请更新你分享过的链接。",
+        "noRedirectRelease": "不会有任何重定向。你的公开项目仍保留在其 motir.co 地址。",
+        "lockAfterRename": "在 {date} 之前你无法再次更改名称。",
+        "lockAfterRelease": "你可以立即认领新名称。之后的下一次更改要到 {date} 才允许。",
+        "rename": "重命名",
+        "renaming": "正在重命名…",
+        "release": "释放名称",
+        "releasing": "正在释放…"
+      },
+      "toast": {
+        "claimed": "{host} 归你了",
+        "renamed": "已重命名为 {host}",
+        "renamedBody": "{old} 已不再响应。",
+        "released": "已释放 {host}",
+        "refusedTitle": "名称未更改",
+        "refusedLimit": "你可以在 {date} 再次更改。",
+        "refusedTaken": "{host} 刚刚被占用。请换一个名称。",
+        "refusedQuarantined": "{host} 保留至 {date}。"
+      },
+      "released": {
+        "held": "{host} 已被释放。它将保留至 {date}，之后任何人都可以认领。",
+        "free": "{host} 已被释放。现在任何人都可以认领。",
+        "lock": "你现在可以认领名称。之后的下一次更改要到 {date} 才允许。"
+      },
+      "loadError": "无法加载地址。",
+      "retry": "重试",
+      "echo": {
+        "title": "工作区地址",
+        "claimedSub": "工作区对外使用的名称。",
+        "noneSub": "你的工作区还没有名称。",
+        "projectPage": "此项目的公开页面位于 {url}。",
+        "change": "在工作区设置中更改 →",
+        "claim": "为工作区认领名称 →"
+      }
     }
   },
   "boards": {
@@ -10088,7 +10127,8 @@
       "navIdeas": "创意",
       "navRunModels": "托管运行模型",
       "navFleetSettings": "集群设置",
-      "navCapacity": "服务商容量"
+      "navCapacity": "服务商容量",
+      "navJobs": "任务"
     },
     "nav": {
       "overview": "总览",
@@ -10310,6 +10350,9 @@
             "limits": {
               "edit": "编辑了服务商模型的容量限额"
             }
+          },
+          "jobs": {
+            "dlq_replay": "重放了一条死信"
           }
         }
       }
@@ -12604,6 +12647,104 @@
         "unreachable": "网关没有响应，没有保存任何内容，请重试。",
         "notPermitted": "你的角色无法编辑限额，因此没有保存任何内容。",
         "failed": "限额未能保存，没有任何更改，请重试。"
+      }
+    },
+    "jobs": {
+      "breadcrumb": "平台 · 任务",
+      "title": "任务",
+      "subtitle": "平台运行过的每个后台任务（无论是否属于工作区），以及每条等待重放的死信。",
+      "tabsLabel": "任务台账视图",
+      "tabs": {
+        "runs": "运行",
+        "dlq": "死信",
+        "waiting": "{count} 条等待中"
+      },
+      "status": {
+        "label": "状态",
+        "all": "全部",
+        "running": "运行中",
+        "succeeded": "成功",
+        "failed": "失败",
+        "abandoned": "已放弃"
+      },
+      "columns": {
+        "function": "函数",
+        "event": "事件",
+        "functionEvent": "函数 · 事件",
+        "workspace": "工作区",
+        "status": "状态",
+        "attempt": "尝试",
+        "attempts": "尝试次数",
+        "started": "开始",
+        "duration": "耗时",
+        "failure": "失败原因",
+        "lastFailed": "最后失败",
+        "replay": "重放"
+      },
+      "runsCaption": "后台任务运行",
+      "dlqCaption": "死信",
+      "noWorkspace": "无工作区",
+      "pageLabel": "第 {page} 页",
+      "pagerLabel": "运行分页",
+      "previous": "上一页",
+      "next": "下一页",
+      "runsEmpty": {
+        "titleAll": "暂无运行",
+        "bodyAll": "后台任务运行后会显示在这里。",
+        "titleStatus": "没有此状态的运行",
+        "bodyStatus": "台账中没有此状态的记录。选择“全部”以查看所有运行。"
+      },
+      "runsError": {
+        "title": "无法读取任务台账"
+      },
+      "dlqError": {
+        "title": "无法读取死信"
+      },
+      "error": {
+        "body": "数据库没有响应。未做任何更改。"
+      },
+      "retry": "重试",
+      "loadingRuns": "正在加载运行",
+      "readOnly": "只读。重放死信需要运维人员角色。",
+      "fn": {
+        "label": "函数",
+        "all": "所有函数"
+      },
+      "waitingLine": "{waiting} 条等待中 · 最近 7 天内已重放 {replayed} 条",
+      "capped": "显示 {count} 条中的 {shown} 条。列表显示最新的 200 条。",
+      "replay": "重放",
+      "replayAria": "重放 {function} 的死信",
+      "replayedAt": "{time}已重放",
+      "toast": {
+        "replayedTitle": "死信已重放",
+        "replayedBody": "已重新发送 {function}。",
+        "alreadyTitle": "已重放过",
+        "alreadyBody": "已有人先重放了这条死信。未重新发送任何内容。",
+        "failedTitle": "重放失败",
+        "failedBody": "未发送任何内容。请重试。",
+        "notPermittedBody": "重放死信需要运维人员角色。",
+        "notFoundBody": "这条死信已不存在。"
+      },
+      "replayAll": {
+        "button": "全部重放（{count}）",
+        "title": "要重放 {function} 的 {count} 条死信吗？",
+        "body": "每条都会作为新的运行重新发送，并写入平台审计日志。已被他人先重放的死信将被跳过。",
+        "confirm": "重放 {count} 条",
+        "cancel": "取消",
+        "running": "正在重放…",
+        "runningLine": "正在重放 {count} 条死信，每次 50 条。完成前请保持此窗口打开。",
+        "doneTitle": "重放完成",
+        "doneWithFailuresTitle": "重放完成，但有失败",
+        "replayed": "已重放 {count} 条",
+        "already": "{count} 条已由他人重放",
+        "nothingLeft": "已重放 0 条，全部 {count} 条此前均已重放",
+        "failed": "{count} 条无法重放，仍保留在列表中，请逐条重放。",
+        "error": "无法开始重放。未做任何更改。",
+        "close": "完成"
+      },
+      "dlqEmpty": {
+        "title": "没有等待中的死信",
+        "body": "没有任务用尽重试次数。出现时，死信会显示在这里。"
       }
     }
   },

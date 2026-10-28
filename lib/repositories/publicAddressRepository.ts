@@ -58,23 +58,6 @@ export const publicAddressRepository = {
   },
 
   /**
-   * The workspace's LIVE subdomain, read ANONYMOUSLY — the alias-redirect half
-   * of host resolution (MOTIR-4217).
-   *
-   * Separate from {@link findLiveSubdomainForWorkspace}, which takes a `tx`
-   * because it guards a write. This one answers a public request that has no
-   * workspace bound at all, so it goes through the `db` singleton and is
-   * admitted by the migration's `public_address_public_read` arm — which means
-   * a workspace holding no public project resolves to `null` here rather than
-   * leaking that it has a subdomain.
-   */
-  async findLiveSubdomainForWorkspacePublic(workspaceId: string): Promise<PublicAddress | null> {
-    return db.publicAddress.findFirst({
-      where: { workspaceId, kind: 'workspace_subdomain' },
-    });
-  },
-
-  /**
    * Every address across SEVERAL workspaces, in one query — the batched read
    * behind the crawl index's per-row canonical host (MOTIR-4217).
    *
@@ -160,16 +143,6 @@ export const publicAddressRepository = {
     });
   },
 
-  /** How many aliases a workspace has retired — the ADR §8 rename cap's input. */
-  async countAliasesForWorkspace(
-    workspaceId: string,
-    tx: Prisma.TransactionClient,
-  ): Promise<number> {
-    return tx.publicAddress.count({
-      where: { workspaceId, kind: 'workspace_subdomain_alias' },
-    });
-  },
-
   /**
    * How many CUSTOM DOMAINS an organization holds — the entitlement cap's count
    * (MOTIR-4228, ADR §9).
@@ -239,24 +212,6 @@ export const publicAddressRepository = {
       if (isHostnameUniqueViolation(err)) throw new HostnameTakenError(input.hostname);
       throw err;
     }
-  },
-
-  /**
-   * Retire the live subdomain to an alias row — half of a rename, and it MUST
-   * run in the same transaction as the `createSubdomain` that replaces it.
-   *
-   * The alias keeps the hostname, which is the whole mechanism of the ADR §8
-   * never-released rule: the unique index goes on holding the name against every
-   * other workspace, and against this one later. Nothing deletes it.
-   */
-  async retireSubdomainToAlias(
-    addressId: string,
-    tx: Prisma.TransactionClient,
-  ): Promise<PublicAddress> {
-    return tx.publicAddress.update({
-      where: { id: addressId },
-      data: { kind: 'workspace_subdomain_alias', status: 'alias' },
-    });
   },
 
   /**
@@ -336,9 +291,10 @@ export const publicAddressRepository = {
   /**
    * Remove an address.
    *
-   * Legitimate for a `custom_domain` only; the service is what refuses it for an
-   * alias, since the never-released rule is a rule about the PRODUCT and this
-   * layer holds no rules. The `SET NULL` on `project.primary_address_id` means a
+   * A removed custom domain, and a workspace subdomain that is renamed or
+   * released (§8 Amendment 3 rule 2: it stops being served in that
+   * transaction). Which hostnames are HELD when they go is the service's rule,
+   * not this layer's. The `SET NULL` on `project.primary_address_id` means a
    * project whose primary this was falls back to the default rather than being
    * deleted with it.
    */
@@ -347,14 +303,25 @@ export const publicAddressRepository = {
   },
 
   /**
-   * Remove a SET of addresses in one statement — the release path's delete
-   * (ADR §8 Amendment 2, MOTIR-4454).
+   * Up to `limit` legacy `workspace_subdomain_alias` rows, oldest first — the
+   * one-off cleanup's batch read (Story MOTIR-4528 · MOTIR-9520).
    *
-   * A release takes the live subdomain AND every retained alias, so the loop
-   * that would otherwise sit in the service is one `deleteMany` here instead:
-   * still a single Prisma operation, still no rule about WHICH ids belong in
-   * the set. The service chooses them through `reservesItsHostname`, which is
-   * where the custom-domain exclusion lives.
+   * Selected by KIND, explicitly, so the cleanup that deletes what this returns
+   * can never reach a live subdomain or a custom domain. Read under the system
+   * arm: the rows belong to every workspace.
+   */
+  async listAliasesInTx(limit: number, tx: Prisma.TransactionClient): Promise<PublicAddress[]> {
+    return tx.publicAddress.findMany({
+      where: { kind: 'workspace_subdomain_alias' },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      take: limit,
+    });
+  },
+
+  /**
+   * Remove a SET of addresses in one statement — a bulk delete with no rule
+   * about WHICH ids belong in the set (ADR §8 Amendment 2, MOTIR-4454). The
+   * caller chooses them, through `reservesItsHostname` where a hold is owed.
    *
    * The `SET NULL` on `project.primary_address_id` applies exactly as it does
    * to {@link remove}, so a project whose primary was the released subdomain
