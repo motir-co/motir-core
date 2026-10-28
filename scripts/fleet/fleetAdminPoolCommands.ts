@@ -31,6 +31,7 @@ import {
   fleetQuotaRaiseService,
   type FleetQuotaRaiseDeps,
 } from '@/lib/services/fleetQuotaRaiseService';
+import type { HostingTenantCommandDeps } from './fleetAdminHostingTenantCommands';
 
 /** Where the command writes, as `fleetAdmin.ts`'s `FleetAdminIo`. */
 export interface PoolCommandIo {
@@ -43,6 +44,8 @@ export interface PoolCommandIo {
 export interface FleetAdminPoolDeps {
   raise?: FleetQuotaRaiseDeps;
   status?: FleetPoolStatusDeps;
+  /** The hosting-tenant command's seam (MOTIR-9943). */
+  hostingTenant?: HostingTenantCommandDeps;
 }
 
 const EXIT_OK = 0;

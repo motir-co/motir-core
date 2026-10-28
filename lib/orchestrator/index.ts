@@ -50,6 +50,7 @@ import {
   shardFakeJournalShared,
   shardHeldShared,
 } from '@/lib/orchestrator/shardFakeJournal';
+import { selectedOrchestratorProvider } from './provider';
 import { ciFleetCostMeterService } from '@/lib/services/ciFleetCostMeterService';
 import { withPlatformMeterReport } from '@/lib/services/platformMeterReportEnqueue';
 
@@ -83,15 +84,9 @@ import { withPlatformMeterReport } from '@/lib/services/platformMeterReportEnque
 // token — it must simply be unable to reach this path. Same contract
 // `appAuth.ts` and `ciMetering/config.ts` hold.
 
-/** The selector's env var. Unset means `fly`, which is §1's decision; `fake` is
- *  what the test suites and MOTIR-1927's gate select. */
-const SELECTOR_ENV = 'MOTIR_FLEET_ORCHESTRATOR';
-
-/** Which adapter this deployment has selected, whether or not it is configured. */
-export function selectedOrchestratorProvider(): OrchestratorProvider {
-  const raw = process.env[SELECTOR_ENV]?.trim().toLowerCase();
-  return raw === 'fake' ? 'fake' : 'fly';
-}
+// The selector itself lives in `./provider`, which loads no database, so a
+// DB-free caller (the hosting accessor, `./hosting`) can read it too.
+export { selectedOrchestratorProvider } from './provider';
 
 /**
  * The orchestrator, or the typed not-configured error.
@@ -1144,3 +1139,4 @@ export const recordContainerAccrual = usageSink.recordContainerAccrual;
 // So that `@/lib/orchestrator` remains one import for a consumer, and so that
 // moving a symbol across the boundary later is not a change at every call site.
 export * from '@motir/orchestrator';
+export * from './hosting';

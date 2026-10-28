@@ -620,8 +620,8 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   },
   read_file: {
     summary:
-      "One file's text from a repository in the project's set, at a ref — capped and line-ranged like the hosted planner's read, every absence a named outcome.",
-    descriptionFingerprint: '8cca00253741',
+      "One file's text, or a directory's immediate entries, from a repository in the project's set, at a ref — capped and line-ranged like the hosted planner's read, every absence a named outcome.",
+    descriptionFingerprint: '8c24af03ed4e',
   },
   code_explore: {
     summary:
@@ -834,7 +834,15 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // is another severity on the channel, not part of the verdict this line names.
     // Re-pinned for MOTIR-9007, summary UNCHANGED: the new `likely-mislabelled-link`
     // advisory is another severity on the channel, outside the verdict.
-    descriptionFingerprint: '94d73c229405',
+    // Re-pinned for MOTIR-9835, summary UNCHANGED: an extra heading alone is not a
+    // section finding — advisory channel only, outside the verdict.
+    descriptionFingerprint: '3810aa68df89',
+  },
+  get_plan_authoring_state: {
+    // MOTIR-9821: the live read an author session makes before it wires an edge onto a sibling.
+    summary:
+      'Which proposals are being written, which are written, and which no author session has started — read before wiring an edge onto a sibling.',
+    descriptionFingerprint: '1dbc96fc1142',
   },
   validate_plan: {
     // ⚠️ SUMMARY REWRITTEN, not merely re-pinned (MOTIR-3575). The old line —
@@ -861,7 +869,9 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Re-pinned for MOTIR-9032's advisory `sectionFindings`, summary UNCHANGED.
     // Re-pinned for MOTIR-9007, summary UNCHANGED: `advisories` (mislabelled links in
     // proposed bodies) rides beside the verdict and never touches it.
-    descriptionFingerprint: 'f10d745aade7',
+    // Re-pinned for MOTIR-9835, summary UNCHANGED: an extra heading alone is not a
+    // section finding — advisory channel only, outside the verdict.
+    descriptionFingerprint: '17faf9b75460',
   },
   get_plan_status: {
     // Re-pinned for MOTIR-3064, summary UNCHANGED and deliberately so: the tool
@@ -1231,9 +1241,12 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // planner starts knowing the problem. That is read AFTER a caller has chosen
     // this tool: it changes how you call it, never whether this is the call. The
     // line still says what the tool is for, and it is the only thing it owes.
+    // Re-pinned for MOTIR-9878, summary UNCHANGED: the description now says the
+    // `requirement` and `targetKeys` are input the planner settles from; the call
+    // is still the one that hands the conversation's intent to the planner.
     summary: "Send the conversation's accumulated intent to the planner as one change set.",
     // Regenerated from a live `tools/list` handshake, never from the source.
-    descriptionFingerprint: 'da07e05ffb16',
+    descriptionFingerprint: '2fe93c5a3739',
   },
   link_work_items: {
     summary:

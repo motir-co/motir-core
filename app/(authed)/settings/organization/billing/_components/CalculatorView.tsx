@@ -25,10 +25,12 @@ import {
   fetchCalculatorEstimate,
   type CalculatorOutcome,
 } from '@/lib/billing/calculatorClient';
+import { dragShare, evenShares, maxShare, MIN_SHARE } from '@/lib/billing/calculatorShares';
 import { largerPoolRefusalFor, type LargerPoolRefusal } from '@/lib/billing/largerPoolRefusal';
 import { UpgradeDialog, type PlanNames } from './PlanChangeDialog';
 import { RungEntitlements, isOnSaleRung } from './RungEntitlements';
 import { fmt } from './billingFormat';
+import { exampleModels } from '@/lib/billing/modelExamples';
 
 // The Calculator view on Billing & plans (Story MOTIR-8381 · MOTIR-8639 · MOTIR-9224 ·
 // MOTIR-8997) — the fourth view of the page. It computes nothing: the categories, the
@@ -39,6 +41,11 @@ import { fmt } from './billingFormat';
 //
 // Two ranges (MOTIR-9224): items PLANNED in Motir and items RUN on Motir's runner. The
 // picked categories are the RUNNER's models; the planning lane is the engine's own.
+//
+// With two or three picked, each carries a share of the run set on a slider (MOTIR-9832,
+// § "Amendment 2026-10-27 — each category's share of the run"). They start even, reset to
+// even when the set changes, and a drag takes the difference from the others equally
+// (`dragShare`), so they always total 100 and are sent as `shares`.
 //
 // The answer sells the larger pool itself (design/billing § "Amendment 2026-10-21 — the
 // larger credit pool plan", approved 2026-10-22): Choose starts Checkout here, and an
@@ -138,6 +145,8 @@ export function CalculatorView(props: CalculatorViewProps) {
   // that runs everything on Motir gets the single-range estimate without retyping.
   const runTouched = useRef(false);
   const [picked, setPicked] = useState<string[]>([]);
+  // Each picked category's share, keyed by category; set only with two or more picked.
+  const [shares, setShares] = useState<Record<string, number>>({});
   const [issues, setIssues] = useState<Partial<Record<Lane, FormIssue>>>({});
   const [categoryIssue, setCategoryIssue] = useState<CategoryIssue | null>(null);
   const [result, setResult] = useState<ResultState>({ kind: 'idle' });
@@ -192,11 +201,12 @@ export function CalculatorView(props: CalculatorViewProps) {
       plannedPerMonth: p,
       runPerMonth: r,
       categories: picked,
+      ...(picked.length > 1 ? { shares } : {}),
       cadence,
     });
     if (mine !== seq.current) return;
     applyOutcome(out, { planned: p, run: r }, setResult, setIssues, setCategoryIssue);
-  }, [planned, run, picked, orgId, cadence]);
+  }, [planned, run, picked, shares, orgId, cadence]);
 
   const editPlanned = (field: keyof Range, value: string) => {
     clear();
@@ -209,11 +219,32 @@ export function CalculatorView(props: CalculatorViewProps) {
     setRun((current) => ({ ...current, [field]: value }));
   };
 
+  // Picked categories in the tiles' order — the order the share sliders are listed in,
+  // and the order the even split's remainder follows.
+  const tileOrder =
+    categories.kind === 'ready' ? categories.value.categories.map((c) => c.key) : [];
+  const inTileOrder = (keys: string[]) =>
+    [...keys].sort((a, b) => tileOrder.indexOf(a) - tileOrder.indexOf(b));
+
   const togglePicked = (key: string) => {
     clear();
-    setPicked((current) =>
-      current.includes(key) ? current.filter((k) => k !== key) : [...current, key],
+    const next = inTileOrder(
+      picked.includes(key) ? picked.filter((k) => k !== key) : [...picked, key],
     );
+    setPicked(next);
+    // A changed set starts the shares even again.
+    const even = evenShares(next.length);
+    setShares(next.length > 1 ? Object.fromEntries(next.map((k, i) => [k, even[i]!])) : {});
+  };
+
+  const dragTo = (key: string, to: number) => {
+    clear();
+    const values = dragShare(
+      picked.map((k) => shares[k] ?? MIN_SHARE),
+      picked.indexOf(key),
+      to,
+    );
+    setShares(Object.fromEntries(picked.map((k, i) => [k, values[i]!])));
   };
 
   const asking = result.kind === 'loading';
@@ -299,6 +330,10 @@ export function CalculatorView(props: CalculatorViewProps) {
               issue={categoryIssue}
               locale={locale}
             />
+
+            {picked.length > 1 ? (
+              <SharesField picked={picked} shares={shares} onDrag={dragTo} />
+            ) : null}
 
             <div>
               <Button
@@ -392,9 +427,9 @@ function CategoryGroup({
 }) {
   const t = useTranslations('billing');
   const percent = new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 0 });
-  // The share each picked category would carry — the engine's equal split, shown before
-  // anyone asks; the answer then states the split it actually used.
-  const share = picked.length > 0 ? percent.format(1 / picked.length) : null;
+  // With one category picked the tile says it carries the whole run; with two or three
+  // the share sliders below say what each carries.
+  const share = picked.length === 1 ? percent.format(1) : null;
   const ready = categories.kind === 'ready' ? categories.value : null;
   return (
     <div className="flex flex-col gap-2">
@@ -457,10 +492,10 @@ function CategoryGroup({
                   {empty
                     ? t('calculator.categories.empty')
                     : t('calculator.inputs.categoryExamples', {
-                        models: category.models
-                          .slice(0, CATEGORY_MODEL_EXAMPLES)
-                          .map((m) => m.id)
-                          .join(', '),
+                        models: exampleModels(
+                          category.models.map((m) => m.id),
+                          CATEGORY_MODEL_EXAMPLES,
+                        ).join(', '),
                       })}
                 </span>
               </button>
@@ -477,6 +512,83 @@ function CategoryGroup({
         </p>
       ) : null}
     </div>
+  );
+}
+
+// The split bar's segment fills, in the sliders' order: three distinct pastel tints.
+const SHARE_TINTS = ['var(--el-tint-sky)', 'var(--el-tint-mint)', 'var(--el-tint-lavender)'];
+
+function SharesField({
+  picked,
+  shares,
+  onDrag,
+}: {
+  picked: string[];
+  shares: Record<string, number>;
+  onDrag: (key: string, to: number) => void;
+}) {
+  const t = useTranslations('billing');
+  const id = useId();
+  const max = maxShare(picked.length);
+  return (
+    <fieldset
+      className="flex flex-col gap-3"
+      aria-describedby={`${id}-help`}
+      data-testid="calculator-shares"
+    >
+      <legend className="font-sans text-sm font-medium text-(--el-text)">
+        {t('calculator.inputs.sharesLabel')}
+      </legend>
+      <div className="flex flex-col gap-3">
+        {picked.map((key) => {
+          const label = categoryLabel(key);
+          const value = shares[key] ?? MIN_SHARE;
+          return (
+            <div key={key} className="grid grid-cols-[6rem_1fr_3rem] items-center gap-3">
+              <label htmlFor={`${id}-${key}`} className="font-sans text-sm text-(--el-text)">
+                {label}
+              </label>
+              <input
+                id={`${id}-${key}`}
+                type="range"
+                min={MIN_SHARE}
+                max={max}
+                step={1}
+                value={value}
+                aria-valuetext={t('calculator.inputs.shareValue', {
+                  category: label,
+                  share: value,
+                })}
+                onChange={(event) => onDrag(key, Number(event.target.value))}
+                className="h-6 w-full cursor-grab focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--focus-ring-color)"
+                style={{ accentColor: 'var(--el-accent)' }}
+              />
+              <span
+                data-testid="calculator-share-value"
+                className="text-right font-sans text-sm font-medium text-(--el-text-strong) tabular-nums"
+              >
+                {value}%
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      <div className="flex h-2 w-full overflow-hidden rounded-full bg-(--el-muted)" aria-hidden>
+        {picked.map((key, i) => (
+          <span
+            key={key}
+            style={{
+              width: `${shares[key] ?? MIN_SHARE}%`,
+              backgroundColor: SHARE_TINTS[i % SHARE_TINTS.length],
+              borderRight: i < picked.length - 1 ? '2px solid var(--el-surface)' : undefined,
+            }}
+          />
+        ))}
+      </div>
+      <p id={`${id}-help`} className="font-sans text-xs text-(--el-text-secondary)">
+        {t('calculator.inputs.sharesHelp')}
+      </p>
+    </fieldset>
   );
 }
 
@@ -660,8 +772,6 @@ function Estimate({
     entryPool > currentPool;
 
   const percent = new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 0 });
-  const list = new Intl.ListFormat(locale, { style: 'long', type: 'conjunction' });
-  const shares = [...new Set(split.categories.map((c) => percent.format(c.weight)))];
   const names = split.categories.map((c) => categoryLabel(c.key));
   const pool = arm === 'larger' || arm === 'largest';
   // Only a rung on sale is offered: a pool key the catalog does not sell (unlisted, or
@@ -689,9 +799,10 @@ function Estimate({
         <p className="font-sans text-sm text-(--el-text)">
           {split.count === 1
             ? t('calculator.split.one', { category: names[0] ?? '' })
-            : t('calculator.split.even', {
-                categories: list.format(names),
-                shares: list.format(shares),
+            : t('calculator.split.shares', {
+                shares: split.categories
+                  .map((c) => `${categoryLabel(c.key)} ${percent.format(c.weight)}`)
+                  .join(' · '),
               })}
         </p>
         <div className="flex flex-wrap gap-1.5">

@@ -329,7 +329,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **105 tools**.
+`initialize` handshake and registers **106 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -3598,7 +3598,9 @@ cross-workspace key returns a `WORK_ITEM_NOT_FOUND` tool error.
 subtree card whose body, parsed against the section registry for its kind × type,
 misses a required section or carries one it cannot read is reported as
 `{ item, state: "unstructured" | "incomplete", missing, invalid, otherHeadings, signals }`,
-sorted by `item`. It never changes `valid` (a VALID verdict states the count and says
+sorted by `item`. A heading the registry does not define for the cell is an allowed
+`otherSections` entry: it is listed in `otherHeadings` beside a real finding, and never
+makes a finding on its own (MOTIR-9835). It never changes `valid` (a VALID verdict states the count and says
 so), and with a `planId` the body is the projected one. Fix a finding by re-writing the
 card with `sections` (see `get_section_sets`).
 
@@ -4343,6 +4345,18 @@ Each proposal is `{ op, proposedFields?, workItemId?, patch?, parentRef?, blocke
 - **`parentRef`** / **`blockedByRefs`** — a work-item **key** (`ACME-7`, resolved
   to its id at the append — keys are accepted, not refused), a real
   `work_item.id`, **or** an intra-plan temp-ref `planItem:<id>`.
+- **An edge may carry its REASON** (MOTIR-9827). Each entry of `blockedByRefs`
+  and of a `modify`'s `patch.blockedByAdd` is a bare ref **or** `{ ref, reason }`:
+  `reason` is ONE short line (at most 120 characters, no line break) saying what
+  the waiting card **consumes** from that blocker — and, when it consumes an
+  interface, the interface itself (_"consumes: the `AWS*ORG_ADMIN*_`secrets"*).
+The append splits it off onto the plan item's`edgeReasons`(ref → reason,
+re-keyed with the ref when a key resolves to an id),`get_plan`prints it beside
+the edge,`get_work_item`with`planId`shows it on the projected blocker row,
+and approve writes it onto the`work_item_link.reason`it creates, so the card's`blockedBy`row says why it waits. A blank, multi-line or over-long reason is
+refused as`INVALID_PROPOSAL`, naming the edge. `update_plan_proposal`'s
+`blockedByRefs` takes the same entries and replaces the reasons with the edges.
+  A bare ref stays accepted and carries no reason.
 - **`parentRef` may instead be `folder:<folderId>`** — FILE the proposal into a
   folder of the plan's project rather than under a work item (MOTIR-5414). A filed
   card is a root, and a folder admits **any** kind, `subtask` included. The same
@@ -5032,8 +5046,9 @@ PROPOSES — an `add`'s body, or a `modify` that rewrites one — as
 `{ kind: "shape", item, severity, label, targetId, targetKey }`: a
 `[label](motir:<id>)` link whose label names a work-item key the id does not
 open, or whose id opens no card at all (`targetKey: null`). Fix the id before
-sealing. Only the MCP tool carries it; the internal `validate-plan-forest`
-verdict is unchanged.
+sealing. The internal `validate-plan-forest` route answers the same
+`advisories` beside its verdict (MOTIR-9873), so motir-ai's forest close can
+re-open on one; its verdict is otherwise unchanged.
 
 **Both edge lists hold only the findings the PLAN introduces (MOTIR-7727).** The
 projection holds every edge anyone ever drew in the project, so judging all of
@@ -5052,7 +5067,7 @@ this plan's to fix. An old edge the plan touches nothing of is reported by
 `validate_plan` also returns `sectionFindings` (MOTIR-9032), the same advisory
 channel as on `validate_work_item`, over the cards the plan adds or modifies: the
 projected body parsed against the section registry, a missing required section
-named by `item`. It never changes `valid`.
+named by `item`. An extra heading alone is not a finding (MOTIR-9835). It never changes `valid`.
 
 ```jsonc
 validate_plan({ planId })
@@ -5092,6 +5107,32 @@ the plan DECISIONS (approve / decline / append), and this one decides nothing.
 
 Errors: an unknown / other-tenant `planId` returns `PLAN_NOT_FOUND`
 (404-not-403, no existence leak).
+
+##### `get_plan_authoring_state` — WHICH SIBLINGS have not started (MOTIR-9821)
+
+An author session may hand not-done work in its `## Scope BOUNDARY` only to a card
+`blocked_by` its own, because only that card's author session reads the boundary.
+The one edge a session may wire onto a SIBLING to make such a hand-off legal is
+"that sibling `blocked_by` me" — and only while the sibling's own author session
+has NOT STARTED. The level view a session opened on is a snapshot that cannot tell
+"being written now" from "not started", so the session reads this, live, first.
+
+```jsonc
+get_plan_authoring_state({ planId })
+// → { planId: "cm…", status: "generating", proposals: [
+//      { ref: "planItem:ck_email", op: "add", title: "Send the invoice email", state: "authoring" },
+//      { ref: "planItem:ck_retry", op: "add", title: "Retry a bounced email",  state: "not_started" } ] }
+```
+
+`authoring` — an `author` step reported through `report_plan_step` targets the
+card and has not ended. `authored` — an author session that targeted it has
+ended, or it was appended COMPLETE and never needed one (a `modify` always is).
+`not_started` — no author session, live or ended, and the card is still
+incomplete: a missing body or explanation, a `validate_plan` section finding, or,
+on a childless leaf, a missing type, executor, size or difficulty. "Complete" is
+plan.py's own `author_gaps` test, so a card the surgical add appended complete
+reads `authored` rather than `not_started` for ever. `project:browse`, read
+through the same reader gate as `get_plan`; it writes nothing.
 
 ##### The PROJECTED mode on the existing validators
 
@@ -5493,22 +5534,30 @@ the planner's tool, so both planners read the same evidence in the same shape.
 **Output** — `structuredContent.outcome` names what happened, and every outcome is
 a **non-error** result with its own summary sentence:
 
-| `outcome`              | Meaning                                                                                | Extra fields                                                    |
-| ---------------------- | -------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| `found`                | The file's text (ranged, then capped).                                                 | `repoRef`, `path`, `ref`, `bytes`, `lines`, `truncated`, `text` |
-| `not_found`            | The ref resolved and the path is not there. A fact about the PATH, not the repository. | `repoRef`, `path`, `ref`                                        |
-| `ref_not_found`        | The ref does not exist. Says nothing about the path.                                   | `repoRef`, `path`, `ref`                                        |
-| `too_large`            | The file exists and is over what the host serves inline.                               | `repoRef`, `path`, `ref`, `limitBytes`                          |
-| `binary`               | The file exists and holds a NUL character, so no text is returned.                     | `repoRef`, `path`, `ref`, `bytes`                               |
-| `unauthorized`         | The host refused the stored credential. The file's existence is unknown.               | `repoRef`, `path`, `ref`                                        |
-| `invalid_path`         | The path was refused before any request.                                               | `repoRef`, `path`, `reason`                                     |
-| `unreachable`          | The host did not answer — a failure to ASK, not an answer.                             | `repoRef`, `path`, `ref`, `failure`                             |
-| `repo_not_connected`   | The repository is in the set but not connected to the organisation.                    | `repoRef`                                                       |
-| `provider_unavailable` | The repository's git provider cannot be used on this deployment.                       | `repoRef`, `detail`                                             |
-| `repo_not_in_project`  | `repo` matches no repository in the project's set. Answered **before** any host call.  | `repo`, `repoSet`                                               |
+| `outcome`              | Meaning                                                                                                                    | Extra fields                                                    |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `found`                | The file's text (ranged, then capped).                                                                                     | `repoRef`, `path`, `ref`, `bytes`, `lines`, `truncated`, `text` |
+| `directory`            | The path is a directory: its immediate entries (`name`, `type` file/dir/symlink/submodule), sorted by name, at most 1,000. | `repoRef`, `path`, `ref`, `entries`, `truncated`                |
+| `not_found`            | The ref resolved and the path is not there. A fact about the PATH, not the repository.                                     | `repoRef`, `path`, `ref`                                        |
+| `ref_not_found`        | The ref does not exist. Says nothing about the path.                                                                       | `repoRef`, `path`, `ref`                                        |
+| `too_large`            | The file exists and is over what the host serves inline.                                                                   | `repoRef`, `path`, `ref`, `limitBytes`                          |
+| `binary`               | The file exists and holds a NUL character, so no text is returned.                                                         | `repoRef`, `path`, `ref`, `bytes`                               |
+| `unauthorized`         | The host refused the stored credential. The file's existence is unknown.                                                   | `repoRef`, `path`, `ref`                                        |
+| `invalid_path`         | The path was refused before any request.                                                                                   | `repoRef`, `path`, `reason`                                     |
+| `unreachable`          | The host did not answer — a failure to ASK, not an answer.                                                                 | `repoRef`, `path`, `ref`, `failure`                             |
+| `repo_not_connected`   | The repository is in the set but not connected to the organisation.                                                        | `repoRef`                                                       |
+| `provider_unavailable` | The repository's git provider cannot be used on this deployment.                                                           | `repoRef`, `detail`                                             |
+| `repo_not_in_project`  | `repo` matches no repository in the project's set. Answered **before** any host call.                                      | `repo`, `repoSet`                                               |
 
 None of them means the project has no code, and none carries a provider
 credential or a download URL.
+
+**Listing a directory (MOTIR-9868).** A `path` naming a directory is LISTED, not
+read: the outcome is `directory`, never the host's own listing JSON as `found`
+text (which is what GitHub's contents endpoint used to hand back). GitLab answers
+the same path the same way, from its repository tree. It is how a file that is not
+code — a CI workflow, a Dockerfile, a config — is found when its exact path is not
+known and `code_search` on its name did not return it.
 
 **Permission: `ai:plan`, at the door and in the service** — the same gate as
 `get_code_health`, on the same argument: the hosted planner already shows this

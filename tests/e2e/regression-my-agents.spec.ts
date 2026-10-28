@@ -28,7 +28,7 @@ import en from '@/messages/en.json';
 //
 // ── THE CARD'S "ORGANISATION CAP" REFUSAL IS GONE ────────────────────────────
 // `agent-instances.md` AMENDMENT 2 removed the per-organisation cap (credits decide
-// how many agents an organisation runs). The personal limit — 10 agents a person
+// how many agents an organisation runs). The personal limit — 3 agents a person on Max ×2
 // may keep — is the cap a person meets, and it is what this spec asserts instead.
 
 test.describe.configure({ timeout: 120_000 });
@@ -202,19 +202,19 @@ test.describe('My agents', () => {
     expect(res?.status()).toBe(404);
   });
 
-  test('the personal limit refuses the eleventh agent', async ({ page }) => {
-    await seedAgents(seed, 10);
+  test('the personal limit refuses the fourth agent', async ({ page }) => {
+    await seedAgents(seed, 3);
     await signIn(page, seed.email, seed.password);
     await goToMyAgents(page);
     await page.getByRole('button', { name: copy.newAgent }).first().click();
     const dialog = page.getByRole('dialog', { name: copy.create.title });
-    await dialog.getByLabel(copy.create.name).fill('eleven');
+    await dialog.getByLabel(copy.create.name).fill('four');
     const created = instancesResponse(page, 'POST', '/instances');
     await dialog.getByRole('button', { name: copy.create.submit }).click();
     expect((await created).status()).toBe(429);
     await expect(dialog.getByRole('alert')).toContainText(
-      // The seed's plan is Max ×2: 10 agents per person (MOTIR-9374 · MOTIR-9376).
-      'Your organization’s Max ×2 plan allows 10 agents per person. Each one is charged for its storage every day, even asleep. Delete one to create another.',
+      // The seed's plan is Max ×2: 3 agents per person (MOTIR-9374, figures of MOTIR-9668).
+      'Your organization’s Max ×2 plan allows 3 agents per person. Each one is charged for its storage every day, even asleep. Delete one to create another.',
     );
   });
 

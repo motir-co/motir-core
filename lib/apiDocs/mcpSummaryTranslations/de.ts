@@ -373,9 +373,9 @@ export const de: McpSummaryTranslations = {
   },
   read_file: {
     summary:
-      'Der Text einer Datei aus einem Repository in der Repository-Menge des Projekts bei einem ref – begrenzt und zeilenweise wie der Abruf des gehosteten Planers, jede Abwesenheit ein benanntes Ergebnis.',
+      'Der Text einer Datei oder die direkten Einträge eines Verzeichnisses aus einem Repository in der Repository-Menge des Projekts bei einem ref – begrenzt und zeilenweise wie der Abruf des gehosteten Planers, jede Abwesenheit ein benanntes Ergebnis.',
     source:
-      "One file's text from a repository in the project's set, at a ref — capped and line-ranged like the hosted planner's read, every absence a named outcome.",
+      "One file's text, or a directory's immediate entries, from a repository in the project's set, at a ref — capped and line-ranged like the hosted planner's read, every absence a named outcome.",
   },
   record_plan_revision_reason: {
     summary:

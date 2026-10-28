@@ -3,7 +3,8 @@ import { assumptionRowsOf, requirementPaneOf } from '@/lib/planning/requirementP
 import type { PlanOfferRecord, PlanOfferTurn } from '@/lib/planChange/planOffer';
 
 // THE LEFT PANE'S REQUIREMENT, the pure half (MOTIR-9437): the layer is up exactly when the
-// live offer is a plan offer with no target — the one rule the rail reads.
+// live offer is a plan offer with no target, or a targeted one carrying a requirement
+// (MOTIR-9878) — the one rule the rail reads.
 
 const REQUIREMENT = {
   outcome: 'Managers export a report.',
@@ -52,8 +53,17 @@ describe('requirementPaneOf', () => {
     });
   });
 
+  it('answers a targeted offer that carries a requirement (MOTIR-9878)', () => {
+    const o = offer({ targetKey: 'ACME-1', requirement: REQUIREMENT });
+    expect(requirementPaneOf([turn('a1', 1, { offer: o })])).toEqual({
+      turnId: 'a1',
+      requestMd: 'Plan the export.',
+      requirement: REQUIREMENT,
+    });
+  });
+
   it.each([
-    ['a targeted offer', offer({ targetKey: 'ACME-1', requirement: REQUIREMENT })],
+    ['a targeted offer with no requirement', offer({ targetKey: 'ACME-1' })],
     ['a log_bug offer', offer({ kind: 'log_bug', requirement: REQUIREMENT })],
     ['a declined offer', offer({ declinedAt: '2026-10-24T10:00:00Z', requirement: REQUIREMENT })],
     [

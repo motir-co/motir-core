@@ -370,9 +370,9 @@ export const fr: McpSummaryTranslations = {
   },
   read_file: {
     summary:
-      "Le texte d'un fichier d'un dépôt de l'ensemble du Projet, à une ref — plafonné et limité en lignes comme la lecture du planificateur hébergé, chaque absence étant un résultat nommé.",
+      "Le texte d'un fichier, ou les entrées immédiates d'un répertoire, d'un dépôt de l'ensemble du Projet, à une ref — plafonné et limité en lignes comme la lecture du planificateur hébergé, chaque absence étant un résultat nommé.",
     source:
-      "One file's text from a repository in the project's set, at a ref — capped and line-ranged like the hosted planner's read, every absence a named outcome.",
+      "One file's text, or a directory's immediate entries, from a repository in the project's set, at a ref — capped and line-ranged like the hosted planner's read, every absence a named outcome.",
   },
   record_plan_revision_reason: {
     summary:

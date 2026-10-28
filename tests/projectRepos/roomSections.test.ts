@@ -185,6 +185,9 @@ function row(opts: {
         }
       : null,
     access: { state: 'accepted', login: 'yue-personal', invitationUrl: null },
+    hostingTarget: null,
+    hostingUseCase: null,
+    hostingSize: null,
     position: 'a0',
     createdAt: '2026-08-19T00:00:00.000Z',
     updatedAt: '2026-08-19T00:00:00.000Z',

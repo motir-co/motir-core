@@ -542,7 +542,8 @@ describe('purchase, and a replayed pass', () => {
       expect(await placed(kind, host)).toEqual({ shardId: shared[kind]!.id });
     }
     const floor = await caps(host.organizationId);
-    expect([floor.agentRunsInParallel, floor.ciBurstCap]).toEqual([5, 50]);
+    expect([floor.agentRunsInParallel, floor.ciBurstCap]).toEqual([5, 20]);
+    expect([floor.agentsPerUser, floor.agentsRunningPerOrg]).toEqual([5, 20]);
   });
 
   it('a replayed reconcile and state pass create nothing and move no time already set', async () => {
@@ -581,14 +582,14 @@ describe('an account granted', () => {
     expect(results.slice(16)).toEqual(Array(4).fill(ownFull('hosted_agent')));
   });
 
-  it('CI pending, then granted at 200: shared at 50, then own at 100, the agent runner unaffected', async () => {
+  it('CI pending, then granted at 200: shared at 20, then own at 100, the agent runner unaffected', async () => {
     const host = await purchase();
     await answer(host.organizationId, 'hosted_agent', 'APPROVED', 32);
     await statePass();
     const runner = await row(host.organizationId, 'hosted_agent');
 
     expect(await placed('ci_runner', host)).toEqual({ shardId: shared.ci_runner!.id });
-    expect((await caps(host.organizationId)).ciBurstCap).toBe(50);
+    expect((await caps(host.organizationId)).ciBurstCap).toBe(20);
     expect(await placed('hosted_agent', host)).toEqual({ shardId: runner.id });
 
     await answer(host.organizationId, 'ci_runner', 'APPROVED', 200);
@@ -630,6 +631,10 @@ describe('an account granted', () => {
       b!.liveAt,
     ]);
     expect(a!.liveAt).not.toBeNull();
+    // Live, the merged account lifts the plan's agents from the floor's 5 / 20 to
+    // 10 / 50 (MOTIR-9668); what the grant holds stays the account's own bound.
+    const lifted = await caps(host.organizationId);
+    expect([lifted.agentsPerUser, lifted.agentsRunningPerOrg]).toEqual([10, 50]);
     const hoster = await row(host.organizationId, 'agent_instance');
 
     // No index running: 10 agents and no 11th — the index spots are not lent.

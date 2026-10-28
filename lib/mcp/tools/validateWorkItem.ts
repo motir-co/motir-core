@@ -653,6 +653,8 @@ export function registerValidateWorkItem(
         'card whose BODY, parsed against the section registry for its kind and type, misses a ' +
         'required section or carries one it cannot read, as `{ item, state: "unstructured" | ' +
         '"incomplete", missing, invalid, otherHeadings, signals }` — it never changes `valid`. ' +
+        'A heading the registry does not define is an allowed `otherSections` entry, listed in ' +
+        '`otherHeadings` beside a real finding and never a finding on its own. ' +
         'Pass `planId` to ask the SAME question over a plan you are authoring: the verdict is ' +
         'then computed over the project’s live tree ⊕ that plan’s proposals, so you can check a ' +
         'subtree you have PROPOSED before anybody reviews it. With a `planId`, `invalidEdges` ' +

@@ -275,6 +275,39 @@ describe('read_file — the read', () => {
     expect(summaryOf(res)).not.toContain('PK');
   });
 
+  // MOTIR-9868 — a DIRECTORY is listed, never handed over as the host's raw JSON.
+  it('a directory path lists its immediate entries, not the host’s listing JSON', async () => {
+    const item = (name: string, type: string) => ({
+      name,
+      path: `.github/workflows/${name}`,
+      sha: 'a'.repeat(40),
+      type,
+      _links: { self: 'x' },
+    });
+    reply = () =>
+      new Response(JSON.stringify([item('release.yml', 'file'), item('shared', 'dir')]), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    const res = await callTool(fx.ctx, args({ path: '.github/workflows' }));
+    expect(outcomeOf(res)).toEqual({
+      outcome: 'directory',
+      repoRef: 'acme/alpha',
+      path: '.github/workflows',
+      ref: 'main',
+      entries: [
+        { name: 'release.yml', type: 'file' },
+        { name: 'shared', type: 'dir' },
+      ],
+      truncated: false,
+    });
+    const summary = summaryOf(res);
+    expect(summary).toContain('is a DIRECTORY');
+    expect(summary).toContain('release.yml (file)');
+    expect(summary).toContain('\nshared/');
+    expect(summary).not.toContain('_links');
+  });
+
   it('a repo outside the project’s set is repo_not_in_project, naming the set, and the host is never asked', async () => {
     const res = await callTool(fx.ctx, args({ repo: 'someone/else' }));
     expect(outcomeOf(res)).toEqual({
@@ -417,5 +450,25 @@ describe('read_file — every other outcome is named, non-error and distinct', (
     } as never);
     expect(structured).toEqual({ outcome: 'quarantined', repoRef: 'acme/alpha' });
     expect(summary).toContain('"quarantined"');
+  });
+
+  // MOTIR-9868 — a listing the host cut at the cap says so, and tells the
+  // reader an unlisted file is not thereby absent.
+  it('a truncated directory listing ends in the TRUNCATED sentence', () => {
+    const { summary, structured } = renderReadFile({
+      outcome: 'directory',
+      repoRef: 'acme/alpha',
+      path: 'vendor',
+      ref: 'main',
+      entries: [
+        { name: 'current', type: 'symlink' },
+        { name: 'lib', type: 'dir' },
+      ],
+      truncated: true,
+    });
+    expect(structured).toMatchObject({ outcome: 'directory', truncated: true });
+    expect(summary).toContain('current (symlink)\nlib/');
+    expect(summary).toContain('[TRUNCATED — the host listed only the first 2 entries.');
+    expect(summary).toContain('do NOT conclude a file is absent');
   });
 });

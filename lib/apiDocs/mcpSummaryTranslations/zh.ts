@@ -336,9 +336,9 @@ export const zh: McpSummaryTranslations = {
   },
   read_file: {
     summary:
-      '读取项目 repository 集合中某个仓库在指定 ref 下的一个文件的文本，与托管规划器的读取一样有长度上限并按行范围读取，每种缺失都是一个有名称的结果。',
+      '读取项目 repository 集合中某个仓库在指定 ref 下的一个文件的文本或一个目录的直接条目，与托管规划器的读取一样有长度上限并按行范围读取，每种缺失都是一个有名称的结果。',
     source:
-      "One file's text from a repository in the project's set, at a ref — capped and line-ranged like the hosted planner's read, every absence a named outcome.",
+      "One file's text, or a directory's immediate entries, from a repository in the project's set, at a ref — capped and line-ranged like the hosted planner's read, every absence a named outcome.",
   },
   record_plan_revision_reason: {
     summary:

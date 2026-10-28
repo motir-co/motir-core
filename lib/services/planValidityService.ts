@@ -40,7 +40,7 @@ import type {
   WorkItemValidityDto,
 } from '@/lib/dto/workItems';
 import { isMislabelledLinkAdvisory } from '@/lib/dto/workItems';
-import type { PlanValidityDto } from '@/lib/dto/plans';
+import type { PlanValidityDto, PlanWithItemsDto } from '@/lib/dto/plans';
 import type { SectionFindingDto } from '@/lib/dto/workItems';
 import { sectionFindingsFor } from '@/lib/workItems/sections/validity';
 import type { SprintBlockerDto, SprintValidityDto } from '@/lib/dto/sprints';
@@ -958,22 +958,46 @@ export const planValidityService = {
   },
 
   /**
+   * The SECTION findings alone (MOTIR-9821) — the `sectionFindings` half of
+   * {@link validateProjectedPlan}, over the same cards (every `add`, and every real
+   * card a `modify` patches), for the authoring-state read. That read asks only
+   * whether a proposal is complete, so it pays for the parse and none of the graph
+   * verdicts. `plan` is the plan the caller already read and admitted.
+   */
+  async projectedPlanSectionFindings(
+    planId: string,
+    ctx: ServiceContext,
+    plan?: PlanWithItemsDto,
+  ): Promise<SectionFindingDto[]> {
+    const proj = await buildProjection(planId, ctx, plan ? { plan } : {});
+    const proposed = [...proj.nodes.keys()].filter(
+      (id) =>
+        proj.nodes.get(id)!.projectId === proj.projectId &&
+        (proj.proposalByRef.has(id) || proj.patchByWorkItemId.has(id)),
+    );
+    return projectedSectionFindings(proj, proposed, ctx);
+  },
+
+  /**
    * The MISLABELLED-LINK advisories (MOTIR-9007) over every body this plan
-   * PROPOSES — an `add`'s body and a `modify`'s patched one — for `validate_plan`.
+   * PROPOSES — an `add`'s body and a `modify`'s patched one — for `validate_plan`
+   * and the internal `validate-plan-forest` route (MOTIR-9873).
    *
-   * Deliberately NOT part of {@link validateProjectedPlan}'s verdict: that DTO is
-   * also the internal `validate-plan-forest` contract motir-ai reads, and the
+   * Deliberately NOT part of {@link validateProjectedPlan}'s verdict: the
    * forest's no-advisory rule exists because a body-vs-EDGES gap has no single
    * subject there. A mislabelled link has no such problem — it is a property of
    * one body, decided by what its id opens — so it is reported per proposed card,
-   * beside the verdict and never inside it. Untouched committed cards are not
-   * scanned: they are not the plan's finding (`validate_work_item` reports them).
+   * BESIDE the verdict and never inside it: both callers answer
+   * `{ ...verdict, advisories }`. Untouched committed cards are not scanned: they
+   * are not the plan's finding (`validate_work_item` reports them). `opts.caller`
+   * is passed to the projection exactly as {@link validateProjectedPlan} takes it.
    */
   async projectedLinkAdvisories(
     planId: string,
     ctx: ServiceContext,
+    opts: { caller?: 'actor' | 'system' } = {},
   ): Promise<WorkItemProseMislabelledLinkAdvisoryDto[]> {
-    const proj = await buildProjection(planId, ctx);
+    const proj = await buildProjection(planId, ctx, opts);
     const proposedBodies = new Set(
       [...proj.projectedDescription.keys()].filter(
         (id) => proj.nodes.get(id)?.projectId === proj.projectId,

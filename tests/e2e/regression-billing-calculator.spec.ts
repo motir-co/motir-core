@@ -27,6 +27,7 @@ import {
   PINNED_CATEGORIES_ANSWER,
   PINNED_ESTIMATE_ANSWER,
 } from '../fixtures/calculatorPinnedVector';
+import { exampleModels } from '@/lib/billing/modelExamples';
 
 // The picker names at most this many models per category (CalculatorView's
 // CATEGORY_MODEL_EXAMPLES).
@@ -315,10 +316,10 @@ test.describe('The Calculator on Billing & plans', () => {
           const b = pickerButton(page, c.key);
           await expect(b).toContainText(
             t('calculator.inputs.categoryExamples', {
-              models: c.models
-                .slice(0, CATEGORY_MODEL_EXAMPLES)
-                .map((m) => m.id)
-                .join(', '),
+              models: exampleModels(
+                c.models.map((m) => m.id),
+                CATEGORY_MODEL_EXAMPLES,
+              ).join(', '),
             }),
           );
         }
@@ -362,11 +363,13 @@ test.describe('The Calculator on Billing & plans', () => {
     });
     await beat();
 
-    await chapter('Two categories split evenly; three split in thirds', async () => {
+    await chapter('Two categories start even; three start in thirds', async () => {
       await pickOnly(page, [first!, second!]);
       await ask(page);
       let sent = stub.estimates.at(-1)!.body;
       expect([...(sent['categories'] as string[])].sort()).toEqual([first, second].sort());
+      // An untouched form sends the even split (MOTIR-9832).
+      expect(Object.values(sent['shares'] as Record<string, number>)).toEqual([50, 50]);
       expect(JSON.stringify(sent)).not.toMatch(/"(planning|running|modelIds)"/);
       let split = result(page)
         .locator('p', { hasText: label(first!) })
@@ -378,6 +381,7 @@ test.describe('The Calculator on Billing & plans', () => {
       await ask(page);
       sent = stub.estimates.at(-1)!.body;
       expect(sent['categories']).toHaveLength(3);
+      expect(Object.values(sent['shares'] as Record<string, number>)).toEqual([34, 33, 33]);
       split = result(page)
         .locator('p', { hasText: label(third!) })
         .first();
@@ -565,7 +569,11 @@ test.describe('The Calculator on Billing & plans', () => {
       'A category with no live model cannot be picked; a withdrawn model drops off',
       async () => {
         const emptied = KEYS[KEYS.length - 1]!;
-        const withdrawn = CATEGORIES.categories[0]!.models[0]!.id;
+        // A model the picker NAMES, so its dropping off is visible.
+        const withdrawn = exampleModels(
+          CATEGORIES.categories[0]!.models.map((m) => m.id),
+          CATEGORY_MODEL_EXAMPLES,
+        )[0]!;
         stub.categories = () =>
           ok({
             ...CATEGORIES,

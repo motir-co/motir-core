@@ -136,8 +136,11 @@ describe('toPlanChangeTurnDto — the composed requirement (MOTIR-9432)', () => 
     }
   });
 
-  it('never serves one on an offer with a target', () => {
-    expect(offerOf({ ...UNDECIDED, requirement: REQUIREMENT })).toEqual(UNDECIDED);
+  it('serves one on an offer with a target too (MOTIR-9878)', () => {
+    expect(offerOf({ ...UNDECIDED, requirement: REQUIREMENT })).toEqual({
+      ...UNDECIDED,
+      requirement: REQUIREMENT,
+    });
   });
 
   it('never serves one on a log_bug offer', () => {
@@ -183,9 +186,11 @@ describe('toPlanChangeTurnDto — the saved page and failed save (MOTIR-9436)', 
     }
   });
 
-  it('never serves either on an offer with a target', () => {
-    expect(offerOf({ ...UNDECIDED, requirementPage: PAGE, requirementSaveFailed: true })).toEqual(
-      UNDECIDED,
-    );
+  it('serves both on an offer with a target too (MOTIR-9878)', () => {
+    expect(offerOf({ ...UNDECIDED, requirementPage: PAGE, requirementSaveFailed: true })).toEqual({
+      ...UNDECIDED,
+      requirementPage: PAGE,
+      requirementSaveFailed: true,
+    });
   });
 });

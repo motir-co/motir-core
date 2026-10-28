@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   WORKITEM_TOKEN_RE,
-  WORKITEM_LINK_RE,
   WORKITEM_HREF_RE,
   buildWorkItemKeyRe,
   parseWorkItemTokenIds,
   parseWorkItemLinks,
   parseWorkItemKeys,
   parseWorkItemRefs,
+  parseWorkItemProseRefs,
   normalizeWorkItemRefs,
   INTRA_PLAN_REF_TOKEN_RE,
   parseIntraPlanRefIds,
@@ -57,15 +57,6 @@ describe('parseWorkItemTokenIds', () => {
 });
 
 describe('parseWorkItemLinks (MOTIR-9007)', () => {
-  it('keeps the MOTIR-4202 label class — no `[` inside a label, the same as WORKITEM_TOKEN_RE', () => {
-    // The ONLY difference is the capture group around the label.
-    expect(WORKITEM_LINK_RE.source).toBe(
-      WORKITEM_TOKEN_RE.source.replace('\\[[^\\]\\[]*\\]', '\\[([^\\]\\[]*)\\]'),
-    );
-    expect(WORKITEM_LINK_RE.source).toContain('[^\\]\\[]*');
-    expect(WORKITEM_LINK_RE.flags).toBe(WORKITEM_TOKEN_RE.flags);
-  });
-
   it('captures each link as its label and its id', () => {
     expect(
       parseWorkItemLinks('See [MOTIR-7656](motir:cmA) and [the export flow](motir:cmB).'),
@@ -92,6 +83,44 @@ describe('parseWorkItemLinks (MOTIR-9007)', () => {
     expect(
       parseWorkItemLinks('[a](motir:) [b(motir:c) [Story](motir-ref:planItem:pi_1) [d](https://x)'),
     ).toEqual([]);
+  });
+});
+
+describe('parseWorkItemLinks — judged by Markdown structure (bug MOTIR-9825)', () => {
+  const token = '[MOTIR-1](motir:cmDead)';
+
+  it('stays linear on a body of unclosed openers that does carry a `motir:` link', () => {
+    // The parse is micromark's, linear by design; a quadratic scan of 80k
+    // openers would take minutes, so a bound this loose still catches one.
+    const started = Date.now();
+    expect(parseWorkItemLinks(`${'['.repeat(80_000)}[MOTIR-1](motir:cltreal)`)).toEqual([
+      { label: 'MOTIR-1', id: 'cltreal' },
+    ]);
+    expect(Date.now() - started).toBeLessThan(10_000);
+  });
+
+  it('finds no link in an inline code span, whatever the backtick run length', () => {
+    expect(parseWorkItemLinks(`Quoted: \`${token}\`.`)).toEqual([]);
+    expect(parseWorkItemLinks(`Quoted: \`\` a \` and ${token} \`\`.`)).toEqual([]);
+  });
+
+  it('finds no link in a fenced or an indented code block', () => {
+    expect(parseWorkItemLinks(['```md', token, '```'].join('\n'))).toEqual([]);
+    expect(parseWorkItemLinks(['~~~', token, '~~~'].join('\n'))).toEqual([]);
+    expect(parseWorkItemLinks(['Para.', '', `    ${token}`].join('\n'))).toEqual([]);
+  });
+
+  it('keeps the real link beside a quoted one to the same id', () => {
+    expect(parseWorkItemLinks(`Bad: \`${token}\`. Real: ${token}.`)).toEqual([
+      { label: 'MOTIR-1', id: 'cmDead' },
+    ]);
+  });
+
+  it('reads the label a reader sees — markup stripped, a title ignored', () => {
+    expect(parseWorkItemLinks('[**MOTIR-2**](motir:cmA) and [`MOTIR-3`](motir:cmB "t")')).toEqual([
+      { label: 'MOTIR-2', id: 'cmA' },
+      { label: 'MOTIR-3', id: 'cmB' },
+    ]);
   });
 });
 
@@ -125,6 +154,33 @@ describe('parseWorkItemRefs', () => {
   it('returns both token ids and bare keys, each deduped first-seen', () => {
     const body = 'This [MOTIR-805](motir:cltX) blocks MOTIR-11 and also MOTIR-11 again.';
     expect(parseWorkItemRefs(body, 'MOTIR')).toEqual({ ids: ['cltX'], keys: ['MOTIR-11'] });
+  });
+});
+
+describe('parseWorkItemProseRefs (bug MOTIR-9825)', () => {
+  it('reads keys and token ids from prose, as parseWorkItemRefs does', () => {
+    const body = 'This [MOTIR-805](motir:cltX) blocks MOTIR-11 and also MOTIR-11 again.';
+    expect(parseWorkItemProseRefs(body, 'MOTIR')).toEqual({ ids: ['cltX'], keys: ['MOTIR-11'] });
+  });
+
+  it('reads nothing a code span or code block quotes', () => {
+    const body = [
+      'Quote `MOTIR-12` and `[MOTIR-13](motir:cltY)` inline.',
+      '',
+      '```',
+      'MOTIR-14 [MOTIR-15](motir:cltZ)',
+      '```',
+      '',
+      '    MOTIR-16',
+    ].join('\n');
+    expect(parseWorkItemProseRefs(body, 'MOTIR')).toEqual({ ids: [], keys: [] });
+    // The raw read-side scan still sees all of them.
+    expect(parseWorkItemRefs(body, 'MOTIR').keys).toEqual(['MOTIR-12', 'MOTIR-14', 'MOTIR-16']);
+  });
+
+  it('reads a key in a heading, a list and a table cell — prose that chips', () => {
+    const body = ['# MOTIR-1', '', '- MOTIR-2', '', '| a |', '| - |', '| MOTIR-3 |'].join('\n');
+    expect(parseWorkItemProseRefs(body, 'MOTIR').keys).toEqual(['MOTIR-1', 'MOTIR-2', 'MOTIR-3']);
   });
 });
 

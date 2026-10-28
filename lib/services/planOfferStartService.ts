@@ -7,7 +7,10 @@ import { MotirAiOutOfCreditsError } from '@/lib/ai/errors';
 import { toPlanChangeTurnDto } from '@/lib/mappers/planChangeMappers';
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
 import { planChangeTurnRepository } from '@/lib/repositories/planChangeTurnRepository';
-import { contextualPlanningService } from '@/lib/services/contextualPlanningService';
+import {
+  contextualPlanningService,
+  type ComposedSubmit,
+} from '@/lib/services/contextualPlanningService';
 import { appendWithin, planChangeSessionsService } from '@/lib/services/planChangeSessionsService';
 import { planOfferService } from '@/lib/services/planOfferService';
 import { requirementPageService } from '@/lib/services/requirementPageService';
@@ -204,20 +207,31 @@ function recordedStartOf(offer: Record<string, unknown>): RecordedStart | null {
  */
 async function landTargeted(
   pctx: ProjectContext,
-  input: { conversationId: string; target: { id: string; identifier: string }; prompt: string },
+  input: {
+    conversationId: string;
+    target: { id: string; identifier: string };
+    prompt: string;
+    /** A confirmed targeted offer's saved requirement (MOTIR-9878), submitted with the
+     *  run exactly as a no-target one's is: the requirement and its page, no carried
+     *  answers. */
+    composed?: ComposedStart;
+  },
 ): Promise<PlanOfferStartResult> {
   const scope = buildScope([input.target.identifier]);
   const landed = await planChangeSessionsService.findResumable(pctx, scope.scopeKey);
   const last = landed?.turns.at(-1);
+  const submitWith = input.composed ? composedSubmit(input.composed) : undefined;
   if (landed && last?.role === 'user' && last.body === input.prompt.trim()) {
     return contextualPlanningService.resubmitFromWorkItem(
       { anchorId: input.target.id, sessionId: landed.id },
       pctx,
+      submitWith,
     );
   }
   return contextualPlanningService.planFromWorkItem(
     { anchorId: input.target.id, prompt: input.prompt, sessionId: input.conversationId },
     pctx,
+    submitWith,
   );
 }
 
@@ -338,10 +352,20 @@ async function claimOffer(
   });
 }
 
-/** What a no-target offer's start hands the run beyond its request (MOTIR-9436). */
+/** What an offer's start hands the run beyond its request (MOTIR-9436; a targeted
+ *  offer's too, MOTIR-9878). */
 interface ComposedStart {
   requirement: SubmittedRequirement;
   requirementPage: { pageId: string; title: string };
+}
+
+/** What a composed start adds to the shipped submit: the requirement, its page, and NO
+ *  carried answers — Grill me's answers are already inside the requirement (MOTIR-9436). */
+function composedSubmit(composed: ComposedStart): ComposedSubmit {
+  return {
+    requirement: composed.requirement,
+    opts: { requirementPage: composed.requirementPage, omitCarriedAnswers: true },
+  };
 }
 
 /** THE one call site of the shipped submit this seam adds (MOTIR-9291): every start
@@ -354,10 +378,12 @@ async function submitOn(
   composed?: ComposedStart,
 ): Promise<PlanOfferStartResult> {
   const submitted = composed
-    ? await planChangeSessionsService.submit(pctx, { sessionId }, composed.requirement, {
-        requirementPage: composed.requirementPage,
-        omitCarriedAnswers: true,
-      })
+    ? await planChangeSessionsService.submit(
+        pctx,
+        { sessionId },
+        composed.requirement,
+        composedSubmit(composed).opts,
+      )
     : await planChangeSessionsService.submit(pctx, { sessionId });
   return {
     sessionId: submitted.session.id,
@@ -651,21 +677,22 @@ async function confirm(
     return confirm(pctx, input, attempts - 1);
   }
 
-  // A NO-TARGET offer that carries its composed requirement saves it as a page now, after
-  // the claim and before any start, on all three paths (MOTIR-9436). One without a
-  // requirement (an older offer, or one the read could not compose) starts as it always did.
-  const composed: ComposedStart | undefined =
-    !target && offer.requirement
-      ? {
+  // An offer that carries its composed requirement saves it as a page now, after the
+  // claim and before any start, on every path (MOTIR-9436) — a TARGETED one too
+  // (MOTIR-9878): the target is where the planning starts, the requirement what it builds.
+  // One without a requirement (an older offer, a targeted one whose description already
+  // states the WHAT, or one the read could not compose) starts as it always did.
+  const composed: ComposedStart | undefined = offer.requirement
+    ? {
+        requirement: offer.requirement,
+        requirementPage: await ensureRequirementPage(pctx, {
+          conversationId: input.conversationId,
+          offerTurnId: input.offerTurnId,
+          requestMd: offer.requestMd,
           requirement: offer.requirement,
-          requirementPage: await ensureRequirementPage(pctx, {
-            conversationId: input.conversationId,
-            offerTurnId: input.offerTurnId,
-            requestMd: offer.requestMd,
-            requirement: offer.requirement,
-          }),
-        }
-      : undefined;
+        }),
+      }
+    : undefined;
 
   // The scope the plan runs in: the target's, or the conversation's own.
   const scope = target ? buildScope([target.identifier]) : buildScope(thread.targetKeys);
@@ -695,6 +722,7 @@ async function confirm(
         conversationId: input.conversationId,
         target,
         prompt: offer.requestMd,
+        ...(composed ? { composed } : {}),
       });
     } else {
       started = await submitOn(pctx, input.conversationId, composed);

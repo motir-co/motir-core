@@ -145,6 +145,9 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // `project:browse` after gaining their optional `planId`: the projected reach
   // is exactly the reach of the two browse-gated calls it replaces.
   validate_plan: 'project:browse',
+  // The AUTHORING-STATE read (MOTIR-9821) — the same reader gate as `get_plan`
+  // (`plansService.getPlanForReader`), and a pure read, so `project:browse`.
+  get_plan_authoring_state: 'project:browse',
   // ⚠️ THE PLAN READS' ROW IS A FLOOR, NOT THE WHOLE ANSWER (Story MOTIR-6179 ·
   // MOTIR-6330). `get_plan`, `get_plan_status` and `validate_plan` stay
   // `project:browse` here, because every reader may read their OWN plans. Whether

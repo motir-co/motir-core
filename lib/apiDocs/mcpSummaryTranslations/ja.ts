@@ -366,9 +366,9 @@ export const ja: McpSummaryTranslations = {
   },
   read_file: {
     summary:
-      'プロジェクトの集合に含まれるリポジトリから、ref を指定して1ファイルのテキストを読みます。ホスト型計画者の読み取りと同様に上限と行範囲があり、見つからない場合もすべて名前付きの結果で示されます。',
+      'プロジェクトの集合に含まれるリポジトリから、ref を指定して1ファイルのテキスト、またはディレクトリの直下のエントリを読みます。ホスト型計画者の読み取りと同様に上限と行範囲があり、見つからない場合もすべて名前付きの結果で示されます。',
     source:
-      "One file's text from a repository in the project's set, at a ref — capped and line-ranged like the hosted planner's read, every absence a named outcome.",
+      "One file's text, or a directory's immediate entries, from a repository in the project's set, at a ref — capped and line-ranged like the hosted planner's read, every absence a named outcome.",
   },
   record_plan_revision_reason: {
     summary:

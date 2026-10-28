@@ -6677,9 +6677,12 @@
         "lowLabel": "Minimo",
         "highLabel": "Massimo",
         "runCategoriesLabel": "Modelli usati dal runner",
-        "runCategoriesHelp": "Scegline da una a tre. L'esecuzione viene divisa in parti uguali tra quelle che scegli: una prende il 100%, due il 50% ciascuna, tutte e tre il 33% ciascuna. Non scegli mai un modello: ogni categoria elenca come esempio i modelli che offre.",
+        "runCategoriesHelp": "Scegline da una a tre. Con due o tre, trascina qui sotto la quota dell'esecuzione di ciascuna: partono in parti uguali. Non scegli mai un modello: ogni categoria elenca come esempi i modelli che serve.",
         "categoryShare": "{share} dell'esecuzione",
         "categoryExamples": "Ad esempio: {models}",
+        "sharesLabel": "La quota dell'esecuzione di ogni categoria",
+        "sharesHelp": "Trascina una quota e le altre cedono o prendono la differenza in parti uguali, così il totale è sempre 100%. Aggiungendo o togliendo una categoria ripartono in parti uguali.",
+        "shareValue": "{category}: {share}% dell'esecuzione",
         "submit": "Stima i crediti"
       },
       "categories": {
@@ -6688,7 +6691,7 @@
       },
       "split": {
         "one": "Una sola categoria, quindi tutta l'esecuzione ricade su {category}.",
-        "even": "L'esecuzione è divisa in parti uguali tra {categories}: {shares} ciascuna."
+        "shares": "L'esecuzione è ripartita così: {shares}."
       },
       "result": {
         "idle": "Non viene stimato nulla finché non lo chiedi: inserisci l'intervallo, scegli da una a tre categorie, poi seleziona «Stima i crediti».",

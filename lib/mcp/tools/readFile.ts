@@ -80,8 +80,9 @@ const inputSchema = {
     .string()
     .min(1)
     .describe(
-      'The file path RELATIVE TO THE REPOSITORY ROOT, e.g. "lib/git/provider.ts". Not a URL, not an ' +
-        'absolute path, and never containing "..".',
+      'The file path RELATIVE TO THE REPOSITORY ROOT, e.g. "lib/git/provider.ts" — or a directory ' +
+        'path, e.g. ".github/workflows", to list it. Not a URL, not an absolute path, and never ' +
+        'containing "..".',
     ),
   ref: z
     .string()
@@ -179,6 +180,30 @@ export function renderReadFile(
           bytes: result.bytes,
         },
       };
+    case 'directory': {
+      // A DIRECTORY is LISTED, never read (MOTIR-9868) — the supported way to
+      // find a file the code graph does not parse. Mirrors motir-ai
+      // `renderDirectory`.
+      const lines = result.entries.map((e) =>
+        e.type === 'dir' ? `${e.name}/` : `${e.name} (${e.type})`,
+      );
+      const cut = result.truncated
+        ? `\n\n… [TRUNCATED — the host listed only the first ${result.entries.length} entries. The directory holds more; do NOT conclude a file is absent because it is not listed here. Read a deeper path, or find the file by name with code_search.]`
+        : '';
+      return {
+        summary:
+          `"${result.path}" in ${repoRef} at ${result.ref} is a DIRECTORY, so it has no text; its ${result.entries.length} immediate entries follow (a trailing "/" is a subdirectory). Read one with read_file at its full path:\n\n` +
+          `${lines.join('\n')}${cut}`,
+        structured: {
+          outcome: result.outcome,
+          repoRef,
+          path: result.path,
+          ref: result.ref,
+          entries: result.entries,
+          truncated: result.truncated,
+        },
+      };
+    }
     case 'not_found':
       return {
         summary: `There is no file at "${result.path}" in ${repoRef} at ${result.ref}. The REF resolved, so this is a statement about the path: the file is not there. It is NOT a statement about the repository or the project.`,
@@ -278,11 +303,15 @@ export function registerReadFile(server: McpServer, resolveContext: McpContextRe
       description:
         "Read the TEXT of one file in one of a project's repositories, as the git host holds it at a " +
         'ref (the repository’s default branch unless you name another) — the same read the hosted ' +
-        'planner makes. Use it to CHECK a code fact before you write it into a card. `repo` is the ' +
+        'planner makes. Use it to CHECK a code fact before you write it into a card. Pointed at a ' +
+        'DIRECTORY it LISTS the immediate entries (names and file / dir / symlink / submodule) — the ' +
+        'way to find a file that is not code (a CI workflow, a Dockerfile, a config) when ' +
+        '`code_search` on its name did not. `repo` is the ' +
         'bare name or `owner/name` of a repository in the project’s set. Ask for a line RANGE ' +
         '(`startLine` / `endLine`, 1-based, inclusive) when you know where to look: output is capped ' +
         'at 24,000 characters and a cut read ends with a sentence saying so. Every result names its ' +
-        '`outcome` — `found`, `not_found` (the path is absent at a ref that exists), `ref_not_found`, ' +
+        '`outcome` — `found`, `directory` (with `entries` and `truncated`), `not_found` (the path is ' +
+        'absent at a ref that exists), `ref_not_found`, ' +
         '`too_large`, `binary`, `unauthorized`, `invalid_path`, `unreachable` (a failure to ask, not ' +
         'an answer), `repo_not_connected`, `provider_unavailable`, or `repo_not_in_project` (with the ' +
         'set) — and none of them means the project has no code. Read-only; gated on the planning ' +

@@ -103,10 +103,21 @@ function steps(todos: readonly unknown[] | null | undefined): string {
   return n > 0 ? ` · ${n} step${n === 1 ? '' : 's'}` : '';
 }
 
-/** ` · blocked_by: <ref>, <ref>` — the proposed dependency edges, verbatim (a
- *  real work-item id or an intra-plan `planItem:` temp-ref). */
-function blockers(refs: string[]): string {
-  return refs.length > 0 ? ` · blocked_by: ${refs.join(', ')}` : '';
+/** ` · blocked_by: <ref> (<reason>), <ref>` — the proposed dependency edges,
+ *  verbatim (a real work-item id or an intra-plan `planItem:` temp-ref), each with
+ *  the reason it was drawn for when it carries one (MOTIR-9827). */
+function blockers(refs: readonly string[], reasons?: Readonly<Record<string, string>>): string {
+  const edge = (ref: string) => (reasons?.[ref] ? `${ref} (${reasons[ref]})` : ref);
+  return refs.length > 0 ? ` · blocked_by: ${refs.map(edge).join(', ')}` : '';
+}
+
+/** ` · reasons: <ref> (<reason>)` — the reasons a `modify`'s added edges carry
+ *  (MOTIR-9827); the refs themselves are listed by the patch key above. */
+function modifyEdgeReasons(item: PlanItemDto): string {
+  const refs = (item.patch?.blockedByAdd ?? []).filter((ref) => item.edgeReasons?.[ref]);
+  return refs.length > 0
+    ? ` · blockedByAdd reasons: ${refs.map((ref) => `${ref} (${item.edgeReasons[ref]})`).join(', ')}`
+    : '';
 }
 
 /**
@@ -244,7 +255,7 @@ function describeItem(
       sizing(fields?.storyPoints, fields?.estimateMinutes, fields?.difficulty) +
       repoPin(fields?.targetRepo) +
       steps(fields?.todos) +
-      blockers(item.blockedByRefs) +
+      blockers(item.blockedByRefs, item.edgeReasons) +
       addSupersedes(item.supersedesRefs, marks) +
       sectionsSuffix(sections?.get(item.id))
     );
@@ -263,7 +274,8 @@ function describeItem(
     (changed.length > 0 ? ` — ${changed.join(', ')}` : '') +
     modifySteps(item, marks) +
     modifyMark(item, marks) +
-    blockers(item.blockedByRefs)
+    modifyEdgeReasons(item) +
+    blockers(item.blockedByRefs, item.edgeReasons)
   );
 }
 

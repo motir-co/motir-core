@@ -6674,9 +6674,12 @@
         "lowLabel": "Low",
         "highLabel": "High",
         "runCategoriesLabel": "Models the runner uses",
-        "runCategoriesHelp": "Pick one to three. The run is split evenly across what you pick: one takes 100%, two take 50% each, all three take 33% each. You never choose a model — each category lists the models it serves as examples.",
+        "runCategoriesHelp": "Pick one to three. With two or three, drag each one's share of the run below — they start even. You never choose a model — each category lists the models it serves as examples.",
         "categoryShare": "{share} of the run",
         "categoryExamples": "For example: {models}",
+        "sharesLabel": "Each category's share of the run",
+        "sharesHelp": "Drag a share and the others give or take the difference equally, so they always total 100%. Adding or removing a category starts them even again.",
+        "shareValue": "{category}: {share}% of the run",
         "submit": "Estimate credits"
       },
       "categories": {
@@ -6685,7 +6688,7 @@
       },
       "split": {
         "one": "One category, so the whole run sits on {category}.",
-        "even": "The run is split evenly across {categories} — {shares} each."
+        "shares": "The run is split {shares}."
       },
       "result": {
         "idle": "Nothing is estimated until you ask: enter the range, pick one to three categories, then choose Estimate credits.",

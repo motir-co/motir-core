@@ -368,9 +368,9 @@ export const nl: McpSummaryTranslations = {
   },
   read_file: {
     summary:
-      'De tekst van één bestand uit een repository in de set van het Project, bij een ref — begrensd en per regelbereik zoals de leesactie van de gehoste planner, elke afwezigheid een benoemde uitkomst.',
+      'De tekst van één bestand, of de directe items van een map, uit een repository in de set van het Project, bij een ref — begrensd en per regelbereik zoals de leesactie van de gehoste planner, elke afwezigheid een benoemde uitkomst.',
     source:
-      "One file's text from a repository in the project's set, at a ref — capped and line-ranged like the hosted planner's read, every absence a named outcome.",
+      "One file's text, or a directory's immediate entries, from a repository in the project's set, at a ref — capped and line-ranged like the hosted planner's read, every absence a named outcome.",
   },
   record_plan_revision_reason: {
     summary:

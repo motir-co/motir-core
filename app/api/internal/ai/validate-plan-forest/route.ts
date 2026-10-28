@@ -10,8 +10,8 @@ import type { ValidityCondition } from '@/lib/dto/sprints';
 // (forest) analogue of the pre-commit finishability check. Body
 // `{ planId, condition? }` (NO targetKey — it validates the ENTIRE projected
 // forest, not one subtree) → `planValidityService.validateProjectedPlan` → the
-// `{ planId, valid, rejections, blockers }` validity DTO. This is the entry the `generate_tree`
-// /replan worker (MOTIR-1398) runs as its pre-commit post-condition over the
+// `{ planId, valid, rejections, blockers, … }` validity DTO, plus `advisories`.
+// This is the entry the `generate_tree` /replan worker (MOTIR-1398) runs as its pre-commit post-condition over the
 // multi-root epic forest it proposes: a cross-root `blocked_by` edge (a story
 // under epic B gated by a story under epic A) is VALID here, whereas iterating
 // the single-target `validate-plan` per root would false-positive it.
@@ -24,10 +24,19 @@ import type { ValidityCondition } from '@/lib/dto/sprints';
 // plan closed on a `valid: true` that only meant finishable is exactly the dead
 // plan MOTIR-3560 reported.
 //
+// ⚠️ AND IT ANSWERS THE MISLABELLED-LINK ADVISORIES BESIDE THE VERDICT (MOTIR-9873):
+// `{ ...verdict, advisories }`, the same shape the PAT `validate_plan` tool answers.
+// `advisories` lists every `likely-mislabelled-link` in a body the plan PROPOSES
+// (`planValidityService.projectedLinkAdvisories`, MOTIR-9007) and never changes
+// `valid`. motir-ai's forest close (`generate_tree` / `revise_plan`) reads it to
+// re-open the phase on a link that opens the wrong card, or none (MOTIR-9820);
+// without it that close read the field as absent and sealed the broken link.
+//
 // Read-only, server-to-server only (§4a service bearer + §4b job-scoped token,
 // via authenticateJobRequest) — never reachable from the browser and NEVER
 // touches the write path. Thin transport, mirroring `validate-plan-sprint`:
-// authenticate, parse, ONE service call, map typed errors.
+// authenticate, parse, the verdict and its advisories (one service, read side by
+// side), map typed errors.
 //
 // Typed errors → status:
 //   JobAuthError              → 401
@@ -76,15 +85,20 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   try {
+    // A SYSTEM caller (MOTIR-6330): motir-ai validating a plan its own job
+    // wrote, so the Plans room's reader scope does not apply — browse only.
+    const opts = { caller: 'system' } as const;
+    // In turn, not `Promise.all`: an unknown plan rejects the verdict while the
+    // advisories read still holds a transaction open, and the 404 would answer
+    // before that read settled.
     const result = await planValidityService.validateProjectedPlan(
       planId,
       auth.ctx,
       condition as ValidityCondition | undefined,
-      // A SYSTEM caller (MOTIR-6330): motir-ai validating a plan its own job
-      // wrote, so the Plans room's reader scope does not apply — browse only.
-      { caller: 'system' },
+      opts,
     );
-    return NextResponse.json(result);
+    const advisories = await planValidityService.projectedLinkAdvisories(planId, auth.ctx, opts);
+    return NextResponse.json({ ...result, advisories });
   } catch (err) {
     if (err instanceof PlanNotFoundError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });

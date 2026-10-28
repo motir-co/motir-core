@@ -3712,6 +3712,57 @@ jobs:
       - run: pnpm -r --filter './packages/*' build
       - run: pnpm coverage:pages
 
+  # Story MOTIR-9791 (one deploy interface) — MOTIR-9806's story gate: a per-file
+  # floor over the app files the story added (`vitest.coverage.deploy-port.config.ts`):
+  # the hosting manifest, its vocabulary, the hosting port's composition root and
+  # the operator deploy check, measured by the parse-then-deploy seam plus each
+  # card's suites. The port and its adapters are floored by the `orchestrator` job.
+  # Needs Postgres (the repo row's hosting columns) and the package build, like
+  # `story-5752-coverage`.
+  story-9791-coverage:
+    name: Coverage (deploy interface)
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
+    # A new lane with no CI run to quote yet. Locally the 6 spec files ran in
+    # ~0.5 min against Postgres, coverage-instrumented; the ceiling bounds a hang
+    # rather than setting a target — replace it with a measured figure.
+    timeout-minutes: 20
+    needs: changes
+    if: ${{ needs.changes.outputs.app == 'true' && github.event_name != 'push' }}
+    permissions:
+      contents: read
+    env:
+      DATABASE_URL: postgresql://prodect:prodect@localhost:5432/prodect
+      BETTER_AUTH_SECRET: ci-test-only-not-a-real-secret-do-not-reuse
+      GOOGLE_CLIENT_ID: ci-test-placeholder
+      GOOGLE_CLIENT_SECRET: ci-test-placeholder
+      HUSKY: '0'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Start Postgres
+        uses: ./.github/actions/postgres
+      - uses: ./.github/actions/pnpm
+      - name: Cache node_modules
+        id: cache-node-modules-story-9791
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Cache Prisma client
+        id: cache-prisma-story-9791
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules/.prisma
+            node_modules/@prisma/client
+          key: ${{ runner.os }}-prisma-client-${{ hashFiles('prisma/schema.prisma') }}
+      - run: pnpm install --frozen-lockfile
+        if: steps.cache-node-modules-story-9791.outputs.cache-hit != 'true'
+      - run: pnpm prisma generate
+        if: steps.cache-prisma-story-9791.outputs.cache-hit != 'true'
+      - run: pnpm prisma migrate deploy
+      - run: pnpm -r --filter './packages/*' build
+      - run: pnpm coverage:deploy-port
+
   ci-complete:
     name: CI complete
     # WHY `always()` AND an explicit result assertion — neither alone works:
@@ -3767,6 +3818,7 @@ jobs:
         story-7990-coverage,
         story-8684-coverage,
         story-7738-coverage,
+        story-9791-coverage,
         e2e,
         e2e-at-scale,
         sandbox,

@@ -6677,9 +6677,12 @@
         "lowLabel": "Basse",
         "highLabel": "Haute",
         "runCategoriesLabel": "Modèles utilisés par le runner",
-        "runCategoriesHelp": "Choisissez-en une à trois. L'exécution est répartie à parts égales entre vos choix : une prend 100 %, deux 50 % chacune, les trois 33 % chacune. Vous ne choisissez jamais de modèle — chaque catégorie indique à titre d'exemple les modèles qu'elle propose.",
+        "runCategoriesHelp": "Choisissez-en une à trois. Avec deux ou trois, faites glisser ci-dessous la part de l’exécution de chacune ; elles partent à égalité. Vous ne choisissez jamais de modèle : chaque catégorie cite en exemple les modèles qu’elle sert.",
         "categoryShare": "{share} de l'exécution",
         "categoryExamples": "Par exemple : {models}",
+        "sharesLabel": "La part de l’exécution de chaque catégorie",
+        "sharesHelp": "Faites glisser une part et les autres cèdent ou reprennent la différence à parts égales, pour toujours totaliser 100 %. Ajouter ou retirer une catégorie les remet à égalité.",
+        "shareValue": "{category} : {share} % de l’exécution",
         "submit": "Estimer les crédits"
       },
       "categories": {
@@ -6688,7 +6691,7 @@
       },
       "split": {
         "one": "Une seule catégorie : toute l'exécution porte donc sur {category}.",
-        "even": "L'exécution est répartie à parts égales entre {categories} — {shares} chacune."
+        "shares": "L’exécution est répartie ainsi : {shares}."
       },
       "result": {
         "idle": "Rien n'est estimé tant que vous ne lancez pas l'estimation : saisissez la fourchette, choisissez une à trois catégories, puis sélectionnez « Estimer les crédits ».",

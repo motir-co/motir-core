@@ -44,6 +44,10 @@ const { announceGateDecided } = vi.hoisted(() => ({ announceGateDecided: vi.fn()
 vi.mock('@/lib/approvals/decidedGates', () => ({
   announceGateDecided,
   useDecidedGate: () => null,
+  // The press-in-flight mark (MOTIR-9696) has nothing to tell a list here.
+  markGatePressPending: () => {},
+  clearGatePressPending: () => {},
+  useGatePressPending: () => false,
 }));
 
 const { ApprovalOverlay } = await import('@/components/approvals/ApprovalOverlay');
