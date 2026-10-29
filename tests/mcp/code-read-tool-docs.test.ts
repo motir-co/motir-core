@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest';
 // imports nothing from `lib/` (the registry pulls in the auth wiring) and can
 // run in the docs-guard lane, which a docs-only pull request still executes.
 
-const CODE_READ_TOOLS = ['read_file', 'code_explore', 'code_search'] as const;
+const CODE_READ_TOOLS = ['read_file', 'list_changed_files', 'code_explore', 'code_search'] as const;
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const read = (rel: string) => readFileSync(join(ROOT, rel), 'utf8');

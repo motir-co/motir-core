@@ -250,9 +250,9 @@ export const fr: McpSummaryTranslations = {
   },
   get_work_item: {
     summary:
-      'Un élément en détail — description, statut, parent ou Dossier, enfants, liens de dépendance, un verdict de disponibilité, les erreurs qui lui sont liées et le dernier refus renvoyé à son sujet.',
+      "Un élément en détail — description, statut, parent ou Dossier, enfants, liens de dépendance, un verdict de disponibilité, les erreurs qui lui sont liées, le dernier refus renvoyé à son sujet et l'emplacement de son code pas encore fusionné.",
     source:
-      'One item in full — description, status, parent or folder, children, dependency edges, a readiness verdict, the errors linked to it, and the latest refusal sent back on it.',
+      'One item in full — description, status, parent or folder, children, dependency edges, a readiness verdict, the errors linked to it, the latest refusal sent back on it, and where its unmerged code is.',
   },
   get_work_item_activity: {
     summary:
@@ -373,6 +373,12 @@ export const fr: McpSummaryTranslations = {
       "Le texte d'un fichier, ou les entrées immédiates d'un répertoire, d'un dépôt de l'ensemble du Projet, à une ref — plafonné et limité en lignes comme la lecture du planificateur hébergé, chaque absence étant un résultat nommé.",
     source:
       "One file's text, or a directory's immediate entries, from a repository in the project's set, at a ref — capped and line-ranged like the hosted planner's read, every absence a named outcome.",
+  },
+  list_changed_files: {
+    summary:
+      "Les chemins qu'une branche a modifiés dans un dépôt de l'ensemble du Projet, par rapport à sa branche par défaut ou à une base nommée — plafonné comme la liste du planificateur hébergé, chaque absence étant un résultat nommé.",
+    source:
+      "The paths a branch changed in a repository in the project's set, against its default branch or a named base — bounded like the hosted planner's listing, every absence a named outcome.",
   },
   record_plan_revision_reason: {
     summary:

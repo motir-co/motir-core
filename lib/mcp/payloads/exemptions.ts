@@ -99,6 +99,12 @@ export const EXEMPT_TOOLS = {
     'ref_not_found / too_large / binary / \u2026 / repo_not_in_project) \u2014 a read made against the ' +
     'git host for an agent planning over the MCP. No `/api/v1` operation returns repository file ' +
     'text, and no REST client has asked for it (MOTIR-7861).',
+  list_changed_files:
+    'Returns the PATHS a branch changed in one repository against a base, plus a named `outcome` ' +
+    '(ok / no_such_ref / not_connected / revoked / too_large / host_error / repo_not_connected / ' +
+    'repo_not_in_project) \u2014 a listing made against the git host for an agent planning over the ' +
+    'MCP, the same reason as `read_file`. No `/api/v1` operation returns a branch comparison, and ' +
+    'no REST client has asked for one (MOTIR-10069).',
   code_explore:
     'Returns the hosted planner\u2019s own `code_explore` TEXT verbatim, or a named `state` \u2014 a ' +
     'graph read assembled in motir-ai for an agent planning over the MCP. No `/api/v1` operation ' +

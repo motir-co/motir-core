@@ -48,6 +48,8 @@ export function mcpToolArgs(t: McpToolTargets): Record<McpToolName, Record<strin
     // MOTIR-7861 — project-keyed, so a non-member reads tenant A's key as
     // not-found before the repo is resolved or any host is asked.
     read_file: { projectKey: t.projectKey, repo: 'motir-core', path: 'README.md' },
+    // MOTIR-10069 — project-keyed the same way: not-found before any host is asked.
+    list_changed_files: { projectKey: t.projectKey, repo: 'motir-core', head: 'feat/x' },
     // MOTIR-7862 — project-keyed graph reads: a non-member reads A's key as
     // not-found before any repository set is read or motir-ai is called.
     code_explore: { projectKey: t.projectKey, query: 'readFile' },

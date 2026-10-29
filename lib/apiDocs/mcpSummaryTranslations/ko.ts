@@ -245,9 +245,9 @@ export const ko: McpSummaryTranslations = {
   },
   get_work_item: {
     summary:
-      '항목 하나의 전체 정보 — 설명, 상태, 부모 또는 폴더, 하위 항목, 의존 엣지, 준비 상태 판정, 연결된 오류, 그리고 마지막으로 반환된 거부 내용입니다.',
+      '항목 하나의 전체 정보 — 설명, 상태, 부모 또는 폴더, 하위 항목, 의존 엣지, 준비 상태 판정, 연결된 오류, 마지막으로 반환된 거부 내용, 그리고 아직 병합되지 않은 코드의 위치입니다.',
     source:
-      'One item in full — description, status, parent or folder, children, dependency edges, a readiness verdict, the errors linked to it, and the latest refusal sent back on it.',
+      'One item in full — description, status, parent or folder, children, dependency edges, a readiness verdict, the errors linked to it, the latest refusal sent back on it, and where its unmerged code is.',
   },
   get_work_item_activity: {
     summary:
@@ -366,6 +366,12 @@ export const ko: McpSummaryTranslations = {
       '프로젝트 세트에 속한 리포지토리의 파일 하나의 텍스트 또는 디렉터리의 바로 아래 항목을 ref 기준으로 읽습니다 — 호스팅된 계획자의 읽기처럼 크기가 제한되고 줄 범위를 지정하며, 모든 부재는 이름이 있는 outcome으로 표시됩니다.',
     source:
       "One file's text, or a directory's immediate entries, from a repository in the project's set, at a ref — capped and line-ranged like the hosted planner's read, every absence a named outcome.",
+  },
+  list_changed_files: {
+    summary:
+      '프로젝트 세트에 속한 리포지토리에서 브랜치가 기본 브랜치 또는 지정한 기준에 대해 변경한 경로 목록입니다 — 호스팅된 계획자의 목록처럼 크기가 제한되며, 모든 부재는 이름이 있는 outcome으로 표시됩니다.',
+    source:
+      "The paths a branch changed in a repository in the project's set, against its default branch or a named base — bounded like the hosted planner's listing, every absence a named outcome.",
   },
   record_plan_revision_reason: {
     summary:

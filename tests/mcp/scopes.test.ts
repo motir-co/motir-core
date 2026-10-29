@@ -278,6 +278,8 @@ describe('LEGACY_SCOPE_PERMISSIONS (the forward map)', () => {
       // under `read` whose service asserts `ai:plan`, and a tool that postdates
       // the six strings.
       read_file: true,
+      // MOTIR-10069 — `list_changed_files`, the same loss and the same reason.
+      list_changed_files: true,
       // MOTIR-7862 — the two graph reads, the same loss and the same reason.
       code_explore: true,
       code_search: true,

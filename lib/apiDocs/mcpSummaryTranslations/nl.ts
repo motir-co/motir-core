@@ -249,9 +249,9 @@ export const nl: McpSummaryTranslations = {
   },
   get_work_item: {
     summary:
-      'Eén item in zijn geheel — beschrijving, status, bovenliggend item of Map, onderliggende items, afhankelijkheidsrelaties, een gereedheidsoordeel, de gekoppelde fouten en de laatste weigering die erop is teruggestuurd.',
+      'Eén item in zijn geheel — beschrijving, status, bovenliggend item of Map, onderliggende items, afhankelijkheidsrelaties, een gereedheidsoordeel, de gekoppelde fouten, de laatste weigering die erop is teruggestuurd en waar zijn nog niet gemergede code staat.',
     source:
-      'One item in full — description, status, parent or folder, children, dependency edges, a readiness verdict, the errors linked to it, and the latest refusal sent back on it.',
+      'One item in full — description, status, parent or folder, children, dependency edges, a readiness verdict, the errors linked to it, the latest refusal sent back on it, and where its unmerged code is.',
   },
   get_work_item_activity: {
     summary:
@@ -371,6 +371,12 @@ export const nl: McpSummaryTranslations = {
       'De tekst van één bestand, of de directe items van een map, uit een repository in de set van het Project, bij een ref — begrensd en per regelbereik zoals de leesactie van de gehoste planner, elke afwezigheid een benoemde uitkomst.',
     source:
       "One file's text, or a directory's immediate entries, from a repository in the project's set, at a ref — capped and line-ranged like the hosted planner's read, every absence a named outcome.",
+  },
+  list_changed_files: {
+    summary:
+      'De paden die een branch heeft gewijzigd in een repository in de set van het Project, ten opzichte van zijn standaardbranch of een benoemde basis — begrensd zoals de lijst van de gehoste planner, elke afwezigheid een benoemde uitkomst.',
+    source:
+      "The paths a branch changed in a repository in the project's set, against its default branch or a named base — bounded like the hosted planner's listing, every absence a named outcome.",
   },
   record_plan_revision_reason: {
     summary:

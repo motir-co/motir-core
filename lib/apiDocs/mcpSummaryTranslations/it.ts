@@ -252,9 +252,9 @@ export const it: McpSummaryTranslations = {
   },
   get_work_item: {
     summary:
-      'Un elemento per intero: descrizione, stato, genitore o Cartella, figli, archi di dipendenza, un verdetto di prontezza, gli errori collegati e l’ultimo rifiuto rimandato indietro su di esso.',
+      'Un elemento per intero: descrizione, stato, genitore o Cartella, figli, archi di dipendenza, un verdetto di prontezza, gli errori collegati, l’ultimo rifiuto rimandato indietro su di esso e dove si trova il suo codice non ancora unito.',
     source:
-      'One item in full — description, status, parent or folder, children, dependency edges, a readiness verdict, the errors linked to it, and the latest refusal sent back on it.',
+      'One item in full — description, status, parent or folder, children, dependency edges, a readiness verdict, the errors linked to it, the latest refusal sent back on it, and where its unmerged code is.',
   },
   get_work_item_activity: {
     summary:
@@ -375,6 +375,12 @@ export const it: McpSummaryTranslations = {
       'Il testo di un file, o le voci immediate di una directory, di un repository dell’insieme del Progetto, a un ref, con limiti di dimensione e intervalli di righe come la lettura del planner ospitato, con ogni assenza come esito nominato.',
     source:
       "One file's text, or a directory's immediate entries, from a repository in the project's set, at a ref — capped and line-ranged like the hosted planner's read, every absence a named outcome.",
+  },
+  list_changed_files: {
+    summary:
+      'I percorsi che un branch ha modificato in un repository dell’insieme del Progetto, rispetto al suo branch predefinito o a una base indicata, con limiti come l’elenco del planner ospitato, con ogni assenza come esito nominato.',
+    source:
+      "The paths a branch changed in a repository in the project's set, against its default branch or a named base — bounded like the hosted planner's listing, every absence a named outcome.",
   },
   record_plan_revision_reason: {
     summary:
