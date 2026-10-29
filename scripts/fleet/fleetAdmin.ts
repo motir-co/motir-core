@@ -11,6 +11,16 @@
  *   fly ssh console -a motir-core -C "node fleet/fleet-admin.mjs refresh-limits \
  *     --name <account> --operator <email>"
  *
+ *   fly ssh console -a motir-core -C "node fleet/fleet-admin.mjs add-spare \
+ *     --fleet-kind <kind> --operator <email>"
+ *
+ * `add-spare` (MOTIR-10065) gives a fleet kind its Motir spare on AWS, before or
+ * after the kind is switched, through the same `addSpareShard` path the pool
+ * growth job runs: the name and member email are derived, the GitHub org and
+ * region come from the kind's AWS primary, and the kind's quota raise is filed.
+ * It refuses while the kind already has a spare (ready or in flight) or an
+ * unfinished pool growth, and re-running it resumes an interrupted account.
+ *
  * and the account controls beside it (MOTIR-8972): `set-ceiling --name <account>
  * (--ceiling <n> | --clear)`, `disable --name <account> --reason <text>` and
  * `enable --name <account>`, each with `--operator <email>`.
@@ -33,7 +43,7 @@
  * **Pending manual steps** list. Re-running the same command resumes.
  *
  * Exit codes: 0 when nothing is pending, 2 when the row is written but steps are
- * pending, 1 on a refusal or an error.
+ * pending or one failed (run it again), 1 on a refusal or an error.
  *
  * ⚠️ IT IS BUNDLED, NOT RUN FROM SOURCE — `pnpm build:fleet-admin` esbuilds this
  * file into `.fleet-admin/fleet-admin.mjs`, which the Dockerfile stages at
@@ -85,6 +95,9 @@ const USAGE = [
   '      and an account serves only the kind it was added with',
   '    --provider aws: --region defaults to us-east-1; --account-email <email> is the new',
   "      member account's root email, required only when no AWS account has the name",
+  '  fleet-admin add-spare --fleet-kind <kind> --operator <email>',
+  "    the kind's Motir spare on AWS, through the pool growth's own path; refused",
+  '    while the kind has a spare or an unfinished growth, and resumable',
   '  fleet-admin refresh-limits --name <account> --operator <email>',
   '  fleet-admin set-ceiling --name <account> (--ceiling <n> | --clear) --operator <email>',
   '  fleet-admin disable --name <account> --reason <text> --operator <email>',
@@ -130,7 +143,9 @@ function printResult(result: ShardProvisioningResult, io: FleetAdminIo): number 
     );
   }
   io.out(`account ${result.shard.name} (${result.shard.fleetKind}) is ${result.shard.state}`);
-  if (result.pendingManualSteps.length === 0) return EXIT_OK;
+  // A failed step (the spare's quota raise) is retried by running it again.
+  const failed = result.steps.some((step) => step.outcome === 'failed');
+  if (result.pendingManualSteps.length === 0) return failed ? EXIT_PENDING : EXIT_OK;
   io.out('');
   io.out('Pending manual steps:');
   result.pendingManualSteps.forEach((step, i) => io.out(`  ${i + 1}. ${step}`));
@@ -197,6 +212,25 @@ async function addShard(args: string[], io: FleetAdminIo): Promise<number> {
   return printResult(result, io);
 }
 
+/** `add-spare` (MOTIR-10065): the kind's Motir spare, made by a person. */
+async function addSpare(
+  args: string[],
+  io: FleetAdminIo,
+  deps: FleetAdminPoolDeps['addSpare'],
+): Promise<number> {
+  const { values } = parseArgs({
+    args,
+    options: { 'fleet-kind': { type: 'string' }, operator: { type: 'string' } },
+    strict: true,
+    allowPositionals: false,
+  });
+  const result = await fleetShardProvisioningService.addSpareShardByOperator(
+    { fleetKind: values['fleet-kind'] ?? '', operatorEmail: values.operator ?? '' },
+    deps,
+  );
+  return printResult(result, io);
+}
+
 async function refreshLimits(args: string[], io: FleetAdminIo): Promise<number> {
   const { values } = parseArgs({
     args,
@@ -259,7 +293,8 @@ async function control(command: string, args: string[], io: FleetAdminIo): Promi
 }
 
 /** Run one `fleet-admin` command; answers its exit code. `pool` carries the pool
- *  commands' service seams for a test, `check` the quota check's. */
+ *  commands' service seams for a test (`add-spare`'s among them), `check` the
+ *  quota check's. */
 export async function runFleetAdmin(
   argv: string[],
   io: FleetAdminIo,
@@ -278,6 +313,7 @@ export async function runFleetAdmin(
     if (command === 'capacity-request-close') return await capacityRequestClose(args, io);
     if (command === 'hosting-tenant') return await hostingTenant(args, io, pool.hostingTenant);
     if (command === 'add-shard') return await addShard(args, io);
+    if (command === 'add-spare') return await addSpare(args, io, pool.addSpare);
     if (command === 'refresh-limits') return await refreshLimits(args, io);
     if (command === 'set-ceiling' || command === 'disable' || command === 'enable') {
       return await control(command, args, io);
