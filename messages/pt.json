@@ -4149,14 +4149,20 @@
         "github": "GitHub"
       },
       "state": {
-        "connected": "Conectada"
+        "connected": "Conectada",
+        "needsReauth": "Requer nova autenticação"
       },
       "connectedOn": "Conectada em {date}",
       "connect": "Conectar o GitHub",
       "disconnect": "Desconectar",
+      "reconnect": "Reconectar",
       "empty": {
         "title": "Nenhuma conta Git conectada",
         "description": "Conectar uma permite que o Motir convide você para os repositórios em que seus projetos trabalham e assine o trabalho que você faz. Ela lê apenas seu perfil público — não concede acesso a nenhum código."
+      },
+      "reauth": {
+        "title": "Reconecte sua conta do GitHub.",
+        "body": "O GitHub não aceita mais este login, então o Motir não consegue mais confirmar quem você é lá. Nada mais mudou na sua conta."
       },
       "noInstallation": {
         "title": "Sua conta está conectada. A da sua organização não está.",

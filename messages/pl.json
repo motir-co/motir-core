@@ -4149,14 +4149,20 @@
         "github": "GitHub"
       },
       "state": {
-        "connected": "Połączono"
+        "connected": "Połączono",
+        "needsReauth": "Wymaga ponownego uwierzytelnienia"
       },
       "connectedOn": "Połączono {date}",
       "connect": "Połącz z GitHub",
       "disconnect": "Rozłącz",
+      "reconnect": "Połącz ponownie",
       "empty": {
         "title": "Brak połączonego konta Git",
         "description": "Połączenie konta pozwala Motir zapraszać Cię do repozytoriów, nad którymi pracują Twoje projekty, i podpisywać wykonaną pracę. Odczytuje tylko Twój publiczny profil — nie daje dostępu do żadnego kodu."
+      },
+      "reauth": {
+        "title": "Połącz ponownie swoje konto GitHub.",
+        "body": "GitHub nie akceptuje już tego logowania, więc Motir nie może już potwierdzić, kim jesteś na GitHubie. Nic innego na Twoim koncie się nie zmieniło."
       },
       "noInstallation": {
         "title": "Twoje konto jest połączone. Konto organizacji — nie.",

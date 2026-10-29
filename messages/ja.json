@@ -4149,14 +4149,20 @@
         "github": "GitHub"
       },
       "state": {
-        "connected": "接続済み"
+        "connected": "接続済み",
+        "needsReauth": "再認証が必要"
       },
       "connectedOn": "{date} に接続",
       "connect": "GitHub を接続",
       "disconnect": "接続を解除",
+      "reconnect": "再接続",
       "empty": {
         "title": "接続された Git アカウントはありません",
         "description": "接続すると、Motir がプロジェクトのリポジトリにあなたを招待し、あなたの作業に署名できるようになります。読み取るのは公開プロフィールだけで、コードへのアクセス権は付与されません。"
+      },
+      "reauth": {
+        "title": "GitHub アカウントを再接続してください。",
+        "body": "GitHub がこのサインインを受け付けなくなったため、Motir は GitHub 上のあなたを確認できなくなりました。アカウントのその他の設定は変わっていません。"
       },
       "noInstallation": {
         "title": "あなたのアカウントは接続済みですが、組織のアカウントは未接続です。",

@@ -4149,14 +4149,20 @@
         "github": "GitHub"
       },
       "state": {
-        "connected": "Collegato"
+        "connected": "Collegato",
+        "needsReauth": "Nuova autenticazione richiesta"
       },
       "connectedOn": "Collegato il {date}",
       "connect": "Collega GitHub",
       "disconnect": "Scollega",
+      "reconnect": "Ricollega",
       "empty": {
         "title": "Nessun account Git collegato",
         "description": "Collegandone uno, Motir può invitarti ai repository su cui lavorano i tuoi progetti e firmare il lavoro che svolgi. Legge solo il tuo profilo pubblico: non concede accesso ad alcun codice."
+      },
+      "reauth": {
+        "title": "Ricollega il tuo account GitHub.",
+        "body": "GitHub non accetta più questo accesso, quindi Motir non può più confermare chi sei su GitHub. Nient’altro è cambiato nel tuo account."
       },
       "noInstallation": {
         "title": "Il tuo account è collegato. Quello della tua organizzazione no.",

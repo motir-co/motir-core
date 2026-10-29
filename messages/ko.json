@@ -4149,14 +4149,20 @@
         "github": "GitHub"
       },
       "state": {
-        "connected": "연결됨"
+        "connected": "연결됨",
+        "needsReauth": "재인증 필요"
       },
       "connectedOn": "{date}에 연결됨",
       "connect": "GitHub 연결",
       "disconnect": "연결 해제",
+      "reconnect": "다시 연결",
       "empty": {
         "title": "연결된 Git 계정 없음",
         "description": "연결하면 Motir가 프로젝트에서 작업하는 저장소에 회원님을 초대하고 회원님의 작업에 서명할 수 있습니다. 공개 프로필만 읽으며 코드에 대한 액세스 권한은 부여하지 않습니다."
+      },
+      "reauth": {
+        "title": "GitHub 계정을 다시 연결하세요.",
+        "body": "GitHub가 더 이상 이 로그인을 받아들이지 않아, Motir가 GitHub에서 회원님이 누구인지 확인할 수 없습니다. 계정의 다른 부분은 바뀌지 않았습니다."
       },
       "noInstallation": {
         "title": "회원님의 계정은 연결되었지만 조직의 계정은 연결되지 않았습니다.",
