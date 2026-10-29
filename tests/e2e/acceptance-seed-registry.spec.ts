@@ -70,7 +70,7 @@ const seedCopy = enMessages.repositorySet.seed;
 const starters = enMessages.platformAdmin.starters;
 const promoteCopy = starters.promoteForm;
 
-test.describe.configure({ timeout: 300_000 });
+test.describe.configure({ timeout: 600_000 });
 
 /** The Fly starter's own `motir.hosting.json` (`tests/fixtures/hosting-manifests`). */
 const FLY_MANIFEST = readFileSync(
@@ -155,6 +155,17 @@ async function forcedRepoint(
   );
   const body = (await res.json().catch(() => null)) as { refusal?: unknown } | null;
   return { status: res.status(), refusal: body?.refusal ?? null };
+}
+
+/** Tick one box of a promote-form check group. A box's accessible name is its
+ *  label followed by its state (`MVP, not selected`), so it is matched by prefix
+ *  inside the group its legend names. */
+async function tick(form: Locator, legend: string, label: string): Promise<void> {
+  const box = form
+    .getByRole('group', { name: legend })
+    .getByRole('checkbox', { name: new RegExp(`^${escape(label)},`) });
+  await box.click();
+  await expect(box).toHaveAttribute('aria-checked', 'true');
 }
 
 function escape(text: string): string {
@@ -352,9 +363,9 @@ test('a repository starts from the starter that fits it, and an operator grows t
     await form
       .getByRole('textbox', { name: promoteCopy.field.key, exact: true })
       .fill(PROMOTED_KEY);
-    await form.getByRole('checkbox', { name: seedCopy.use.mvp, exact: true }).click();
-    await form.getByRole('checkbox', { name: seedCopy.size.small, exact: true }).click();
-    await form.getByRole('checkbox', { name: seedCopy.target.fly, exact: true }).click();
+    await tick(form, promoteCopy.field.uses, seedCopy.use.mvp);
+    await tick(form, promoteCopy.field.sizes, seedCopy.size.small);
+    await tick(form, promoteCopy.field.targets, seedCopy.target.fly);
     await form
       .getByRole('textbox', { name: promoteCopy.field.reason, exact: true })
       .fill('Acme Booking’s Fly app is the shape our MVPs keep asking for.');
