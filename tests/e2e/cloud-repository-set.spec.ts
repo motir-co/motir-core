@@ -266,11 +266,15 @@ test('approve a plan with two parts, get a repository for each, and be INVITED w
   for (const call of creates) {
     expect(call.body?.['private'], 'every created repository is PRIVATE').toBe(true);
   }
-  // The `web` row seeds from the platform starter (a template `generate`); the
-  // `api` row is an initialised repo in Motir's org. Both land under Motir's org.
+  // The `web` row seeds from the platform starter and, since MOTIR-9813, the
+  // `api` row from the Spring API foundation: both are template `generate`s,
+  // and both land under Motir's org.
   expect(creates[0]!.path, 'the web row is templated from the starter').toMatch(/\/generate$/);
   expect(creates[0]!.body?.['owner']).toBe(E2E_PROVISIONING_ORG);
-  expect(creates[1]!.path).toBe(`/orgs/${E2E_PROVISIONING_ORG}/repos`);
+  expect(creates[1]!.path, 'the api row is templated from its foundation').toMatch(
+    /\/spring-api-foundation\/generate$/,
+  );
+  expect(creates[1]!.body?.['owner']).toBe(E2E_PROVISIONING_ORG);
   // NOT ONE call went to a user account — the whole ownership decision, asserted.
   expect(githubJournal().some((c) => c.path.startsWith('/user/repos'))).toBe(false);
 
