@@ -79,6 +79,8 @@ export default defineConfig({
       // the two floored files above are reached by these suites.
       'tests/hosting/hostedVocabulary.test.ts',
       'tests/hosting/hostedApplicationService.test.ts',
+      // MOTIR-10027 — production enablement's error, beside them in errors.ts.
+      'tests/hosting/productionEnablement.test.ts',
     ],
     coverage: {
       provider: 'v8',

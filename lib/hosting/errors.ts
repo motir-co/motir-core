@@ -113,3 +113,33 @@ export class ApplicationNotFoundError extends Error {
     this.name = 'ApplicationNotFoundError';
   }
 }
+
+/** The step of production enablement that failed (MOTIR-10027). */
+export type ProductionEnablementStep =
+  | 'repository'
+  | 'manifest'
+  | 'application'
+  | 'app'
+  | 'credential'
+  | 'environment'
+  | 'secret'
+  | 'variables'
+  | 'record';
+
+/**
+ * Production enablement stopped at `step`. Every step is idempotent, so running
+ * enablement again repairs it; the target variable is written last, so a failure
+ * never leaves the workflow able to run. `detail` never carries a credential.
+ * → 502
+ */
+export class ProductionEnablementFailedError extends Error {
+  readonly code = 'PRODUCTION_ENABLEMENT_FAILED' as const;
+  constructor(
+    readonly projectRepositoryId: string,
+    readonly step: ProductionEnablementStep,
+    readonly detail: string,
+  ) {
+    super(`Production enablement of ${projectRepositoryId} failed at ${step}: ${detail}`);
+    this.name = 'ProductionEnablementFailedError';
+  }
+}

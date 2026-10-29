@@ -975,7 +975,33 @@ export const projectRepoRepository = {
         seedSource: true,
         state: true,
         hostingTarget: true,
+        githubRepo: { select: { owner: true, name: true, defaultBranch: true } },
       },
+    });
+  },
+
+  /**
+   * One page of the repositories production enablement's backfill walks
+   * (MOTIR-10027): established, not a customer repository, Fly-targeted and
+   * realized on GitHub, in id order after `afterId`. A platform read across
+   * workspaces — the caller holds a `withSystemContext` transaction.
+   */
+  async listProductionCandidatesInTx(
+    afterId: string | null,
+    take: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string }>> {
+    return tx.projectRepo.findMany({
+      where: {
+        ...(afterId ? { id: { gt: afterId } } : {}),
+        state: { in: [...ESTABLISHED_PROJECT_REPO_STATES] },
+        hostingTarget: 'fly',
+        seedSource: { not: SEED_SOURCE_ORGANIZATION },
+        githubRepoId: { not: null },
+      },
+      select: { id: true },
+      orderBy: { id: 'asc' },
+      take,
     });
   },
 

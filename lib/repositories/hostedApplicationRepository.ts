@@ -107,6 +107,23 @@ export const hostedApplicationRepository = {
     await tx.hostedApplication.update({ where: { id }, data: pointers });
   },
 
+  /** Record production switched on (MOTIR-10027): the app, when it was first
+   *  enabled and when its deploy token was last minted. */
+  async markProductionEnabled(
+    id: string,
+    input: { appName: string; enabledAt: Date; mintedAt: Date },
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await tx.hostedApplication.update({
+      where: { id },
+      data: {
+        productionAppName: input.appName,
+        productionEnabledAt: input.enabledAt,
+        productionTokenMintedAt: input.mintedAt,
+      },
+    });
+  },
+
   /**
    * Take the application row's `FOR UPDATE` lock, and report whether it matched.
    * A lock over zero rows locks nothing and reports success, so the caller turns

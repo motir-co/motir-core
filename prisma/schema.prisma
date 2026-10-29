@@ -12092,25 +12092,32 @@ enum HostedReleaseCause {
 /// write from webhooks and jobs under `withSystemContext`, a member's session
 /// reads its own workspace's rows.
 model HostedApplication {
-  id                    String        @id @default(cuid())
-  workspaceId           String        @map("workspace_id")
-  projectId             String        @map("project_id")
-  projectRepositoryId   String        @unique @map("project_repository_id")
-  target                HostingTarget
+  id                      String        @id @default(cuid())
+  workspaceId             String        @map("workspace_id")
+  projectId               String        @map("project_id")
+  projectRepositoryId     String        @unique @map("project_repository_id")
+  target                  HostingTarget
   /// The application's label in its host, `<slug>--<workspace label>`; unique in
   /// the workspace (ADR public-tenant-addresses §8 AMENDMENT 4).
-  slug                  String
+  slug                    String
   /// The production host without scheme, e.g. `shop--acme.motir.site`. Stored
   /// and looked up, never parsed; null while the workspace has no claimed label.
-  productionAddress     String?       @unique @map("production_address")
-  currentReleaseId      String?       @unique @map("current_release_id")
-  previousReleaseId     String?       @unique @map("previous_release_id")
+  productionAddress       String?       @unique @map("production_address")
+  currentReleaseId        String?       @unique @map("current_release_id")
+  previousReleaseId       String?       @unique @map("previous_release_id")
   /// The production database (written by the database card, MOTIR-10028). The
   /// URL is stored only encrypted, and no DTO carries it.
-  databaseProjectId     String?       @map("database_project_id")
-  databaseUrlCiphertext String?       @map("database_url_ciphertext")
-  createdAt             DateTime      @default(now()) @map("created_at")
-  updatedAt             DateTime      @updatedAt @map("updated_at")
+  databaseProjectId       String?       @map("database_project_id")
+  databaseUrlCiphertext   String?       @map("database_url_ciphertext")
+  /// Production switched on (MOTIR-10027): the Fly app (`mh-<rid>`), when it was
+  /// first enabled, and when its deploy token was last minted (re-minted when
+  /// fewer than 14 of its 90 days remain, ADR MOTIR-5769 §4). The token itself is
+  /// never stored.
+  productionAppName       String?       @map("production_app_name")
+  productionEnabledAt     DateTime?     @map("production_enabled_at")
+  productionTokenMintedAt DateTime?     @map("production_token_minted_at")
+  createdAt               DateTime      @default(now()) @map("created_at")
+  updatedAt               DateTime      @updatedAt @map("updated_at")
 
   workspace         Workspace       @relation("HostedApplicationWorkspace", fields: [workspaceId], references: [id], onDelete: Cascade)
   project           Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
