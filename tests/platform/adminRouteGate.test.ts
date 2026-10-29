@@ -184,7 +184,7 @@ describe('the 404 posture, asserted as absence', () => {
     const { readFileSync } = await import('node:fs');
     const { config } = await import('@/proxy');
     expect(config.matcher).not.toContain('/admin');
-    expect(config.matcher.some((m) => m.startsWith('/admin'))).toBe(false);
+    expect(config.matcher.some((m) => typeof m === 'string' && m.startsWith('/admin'))).toBe(false);
     // And the reasoning stays attached to the list, so the next person adding a
     // route does not "complete" it.
     expect(readFileSync('proxy.ts', 'utf8')).toContain('DELIBERATELY NOT HERE');

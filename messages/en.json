@@ -15960,5 +15960,85 @@
     "pendingMark": "Translating",
     "showOriginal": "Show original",
     "showTranslation": "Show translation"
+  },
+  "previewGate": {
+    "frame": {
+      "tag": "Preview",
+      "brand": "Motir",
+      "footer": "You are on <chip>{host}</chip>, a preview Motir runs for a pull request. Motir never asks for your password on this address. Signing in happens only on app.motir.co."
+    },
+    "signIn": {
+      "banner": "Sign in to open the preview at <chip>{host}</chip>. Previews open only for members of the project."
+    },
+    "refused": {
+      "metaTitle": "No access to this preview",
+      "pill": "Preview",
+      "title": "You don't have access to this preview",
+      "body": "Previews open only for members of the project they belong to. If someone shared this link with you, ask them to add you to the project, then open the link again.",
+      "signedInAs": "Signed in as <strong>{email}</strong>",
+      "home": "Go to Motir",
+      "switch": "Sign in with a different account",
+      "switchHint": "You'll come back to this preview after you sign in."
+    },
+    "building": {
+      "pill": "Building",
+      "title": "This preview is being built",
+      "body": "The repository's CI is building the preview image for this pull request's latest commit. It usually takes a few minutes.",
+      "refresh": "This page checks again every 10 seconds and opens the preview when it is ready."
+    },
+    "starting": {
+      "pill": "Starting",
+      "title": "This preview is starting",
+      "body": "The image is built. Motir is starting it and waiting for its health check to pass."
+    },
+    "steps": {
+      "label": "Progress",
+      "build": "Building the image",
+      "start": "Starting the preview",
+      "ready": "Ready"
+    },
+    "facts": {
+      "workItem": "Work item",
+      "pullRequest": "Pull request",
+      "pullRequestValue": "{repo} · #{n}"
+    },
+    "action": {
+      "openWorkItem": "Open {key} in Motir",
+      "openPullRequest": "Open pull request #{n} on GitHub"
+    },
+    "failed": {
+      "pill": "Failed",
+      "title": "This preview didn't start",
+      "body": "Nothing is running for this pull request's latest commit. A new push builds it again.",
+      "reasonTitle": "What went wrong",
+      "checks": "The work item shows this pull request's checks and their logs.",
+      "reason": {
+        "imageBuild": "The preview image did not build: the \"Preview image\" workflow ended with \"{conclusion}\". Its run log on GitHub says why.",
+        "healthTimeout": "The preview did not pass its health check within {minutes} minutes.",
+        "healthFailed": "The preview started but failed its health check.",
+        "fallback": "The preview could not start."
+      }
+    },
+    "unsupported": {
+      "pill": "Not available in previews",
+      "title": "Previews can't do this",
+      "websocket": "Live connections (websockets) don't pass through the preview gate. The rest of the preview works as usual.",
+      "tooLarge": "Requests larger than 10 MB can't be sent to a preview.",
+      "noLength": "This request didn't say how large it is, so the preview gate can't accept it."
+    },
+    "closed": {
+      "pill": "Closed",
+      "title": "This preview has been shut down",
+      "merged": "Pull request #{n} was merged, so Motir shut its preview down and deleted its database.",
+      "closed": "Pull request #{n} was closed without merging, so Motir shut its preview down and deleted its database.",
+      "takenOver": "This repository has left Motir, so Motir shut its previews down and deleted their databases.",
+      "unknown": "Motir shut this preview down and deleted its database."
+    },
+    "notFound": {
+      "pill": "Not available",
+      "title": "There is no preview here",
+      "body": "This address doesn't belong to a running preview. It may have been shut down, or the link may be mistyped.",
+      "home": "Go to Motir"
+    }
   }
 }

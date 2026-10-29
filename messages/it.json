@@ -15963,5 +15963,85 @@
     "pendingMark": "Traduzione in corso",
     "showOriginal": "Mostra originale",
     "showTranslation": "Mostra traduzione"
+  },
+  "previewGate": {
+    "frame": {
+      "tag": "Anteprima",
+      "brand": "Motir",
+      "footer": "Sei su <chip>{host}</chip>, un’anteprima che Motir esegue per una pull request. Motir non ti chiede mai la password su questo indirizzo. L’accesso avviene solo su app.motir.co."
+    },
+    "signIn": {
+      "banner": "Accedi per aprire l’anteprima su <chip>{host}</chip>. Le anteprime sono aperte solo ai membri del progetto."
+    },
+    "refused": {
+      "metaTitle": "Nessun accesso a questa anteprima",
+      "pill": "Anteprima",
+      "title": "Non hai accesso a questa anteprima",
+      "body": "Le anteprime sono aperte solo ai membri del progetto a cui appartengono. Se qualcuno ti ha condiviso questo link, chiedigli di aggiungerti al progetto, poi riapri il link.",
+      "signedInAs": "Accesso effettuato come <strong>{email}</strong>",
+      "home": "Vai a Motir",
+      "switch": "Accedi con un altro account",
+      "switchHint": "Dopo l’accesso tornerai a questa anteprima."
+    },
+    "building": {
+      "pill": "In compilazione",
+      "title": "Questa anteprima è in compilazione",
+      "body": "La CI del repository sta compilando l’immagine di anteprima per l’ultimo commit di questa pull request. Di solito richiede qualche minuto.",
+      "refresh": "Questa pagina ricontrolla ogni 10 secondi e apre l’anteprima quando è pronta."
+    },
+    "starting": {
+      "pill": "In avvio",
+      "title": "Questa anteprima si sta avviando",
+      "body": "L’immagine è compilata. Motir la sta avviando e attende che superi il controllo di integrità."
+    },
+    "steps": {
+      "label": "Avanzamento",
+      "build": "Compilazione dell’immagine",
+      "start": "Avvio dell’anteprima",
+      "ready": "Pronta"
+    },
+    "facts": {
+      "workItem": "Elemento di lavoro",
+      "pullRequest": "Pull request",
+      "pullRequestValue": "{repo} · #{n}"
+    },
+    "action": {
+      "openWorkItem": "Apri {key} in Motir",
+      "openPullRequest": "Apri la pull request #{n} su GitHub"
+    },
+    "failed": {
+      "pill": "Non riuscita",
+      "title": "Questa anteprima non si è avviata",
+      "body": "Non c’è nulla in esecuzione per l’ultimo commit di questa pull request. Un nuovo push la compila di nuovo.",
+      "reasonTitle": "Cosa è andato storto",
+      "checks": "L’elemento di lavoro mostra i controlli di questa pull request e i relativi log.",
+      "reason": {
+        "imageBuild": "L’immagine di anteprima non è stata compilata: il workflow «Preview image» è terminato con «{conclusion}». Il suo log di esecuzione su GitHub spiega perché.",
+        "healthTimeout": "L’anteprima non ha superato il controllo di integrità entro {minutes} minuti.",
+        "healthFailed": "L’anteprima si è avviata, ma non ha superato il controllo di integrità.",
+        "fallback": "Impossibile avviare l’anteprima."
+      }
+    },
+    "unsupported": {
+      "pill": "Non disponibile nelle anteprime",
+      "title": "Le anteprime non possono farlo",
+      "websocket": "Le connessioni in tempo reale (websocket) non passano attraverso il gateway delle anteprime. Il resto dell’anteprima funziona normalmente.",
+      "tooLarge": "Non è possibile inviare a un’anteprima richieste più grandi di 10 MB.",
+      "noLength": "Questa richiesta non ha indicato la sua dimensione, quindi il gateway delle anteprime non può accettarla."
+    },
+    "closed": {
+      "pill": "Chiusa",
+      "title": "Questa anteprima è stata spenta",
+      "merged": "La pull request #{n} è stata unita, quindi Motir ha spento la sua anteprima ed eliminato il suo database.",
+      "closed": "La pull request #{n} è stata chiusa senza unione, quindi Motir ha spento la sua anteprima ed eliminato il suo database.",
+      "takenOver": "Questo repository ha lasciato Motir, quindi Motir ha spento le sue anteprime ed eliminato i loro database.",
+      "unknown": "Motir ha spento questa anteprima ed eliminato il suo database."
+    },
+    "notFound": {
+      "pill": "Non disponibile",
+      "title": "Qui non c’è nessuna anteprima",
+      "body": "Questo indirizzo non appartiene a un’anteprima in esecuzione. Potrebbe essere stata spenta, oppure il link potrebbe essere sbagliato.",
+      "home": "Vai a Motir"
+    }
   }
 }

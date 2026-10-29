@@ -9017,6 +9017,21 @@ model PreviewDeployment {
   @@map("preview_deployment")
 }
 
+/// A consumed preview-gate ADMISSION (Story MOTIR-5766 · Subtask MOTIR-5779,
+/// MOTIR-5769 §9). The admission preview-access mints is signed, host-bound and
+/// valid for 60 seconds; its id is inserted here when the preview host sets the
+/// gate cookie, so a second use of the same admission is refused. Expired rows
+/// carry no meaning and are deleted by the consume path. System-only RLS.
+model PreviewGateAdmission {
+  jti        String   @id
+  host       String
+  expiresAt  DateTime @map("expires_at")
+  consumedAt DateTime @default(now()) @map("consumed_at")
+
+  @@index([expiresAt])
+  @@map("preview_gate_admission")
+}
+
 /// What a preview's usage is measured in (MOTIR-5777, MOTIR-5769 §9): a Fly
 /// Machine's running seconds, a Lambda's GB-seconds and requests, and a Neon
 /// branch's compute-unit hours. AWS previews run in the tenant's own account and

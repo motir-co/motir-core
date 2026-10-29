@@ -1113,6 +1113,28 @@ export const projectRepoRepository = {
     });
   },
 
+  /**
+   * What the preview GATE needs of a preview's repository (MOTIR-5779): the
+   * project whose `project:browse` admits a viewer, the hosting target its
+   * release runs on, whether a takeover moved it, and its GitHub name. The
+   * oldest row for the mirror, as {@link findPreviewLifecycleSubjectByGithubRepoInTx}
+   * picks it, so the gate and the lifecycle agree on which project owns a
+   * preview. Inside withSystemContext.
+   */
+  async findPreviewGateSubjectByGithubRepoInTx(githubRepoId: string, tx: Prisma.TransactionClient) {
+    return tx.projectRepo.findFirst({
+      where: { githubRepoId },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        projectId: true,
+        workspaceId: true,
+        hostingTarget: true,
+        takeoverState: true,
+        githubRepo: { select: { owner: true, name: true } },
+      },
+    });
+  },
+
   /** {@link findPreviewLifecycleSubjectByGithubRepoInTx}, by the row's own id —
    *  what the takeover saga holds. */
   async findPreviewLifecycleSubjectInTx(id: string, tx: Prisma.TransactionClient) {
