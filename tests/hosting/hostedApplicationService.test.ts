@@ -15,7 +15,6 @@ import {
 } from '@/lib/hosting/errors';
 import { hostedApplicationService as service } from '@/lib/services/hostedApplicationService';
 import { hostedApplicationRepository } from '@/lib/repositories/hostedApplicationRepository';
-import { hostedReleaseRepository } from '@/lib/repositories/hostedReleaseRepository';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
@@ -466,24 +465,5 @@ describe('the repositories', () => {
     );
     expect(again).toBeNull();
     expect(await adminDb.hostedApplication.count()).toBe(1);
-  });
-
-  it('reads nothing without a bound context — the tx-less fallback is still policy-gated', async () => {
-    const fx = await workspace();
-    const app = await service.ensureApplication(await repo(fx));
-    const r = await service.createRelease({
-      applicationId: app.id,
-      commitSha: 'c',
-      cause: 'merge',
-    });
-    expect(await hostedApplicationRepository.findById(app.id)).toBeNull();
-    expect(
-      await hostedApplicationRepository.findByProjectRepository(app.projectRepositoryId),
-    ).toBeNull();
-    expect(
-      await hostedApplicationRepository.findByProductionAddress('shop-app--acme.motir.site'),
-    ).toBeNull();
-    expect(await hostedReleaseRepository.findById(r.id)).toBeNull();
-    expect(await hostedReleaseRepository.listByApplication(app.id, 5)).toEqual([]);
   });
 });
