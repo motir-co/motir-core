@@ -1297,7 +1297,46 @@ const DESIGN_ASSET_MATCHERS: ReadonlyArray<RegExp> = [
 // followed by what a double records (*the mock's arguments / calls / identity /
 // invocations*) is a double too. *"the mock's P3 panel"* names a drawing's part
 // and stays a tell.
+//
+// ⚠️ A `mock` INSIDE A FILE NAME is judged by what the FILE is, not by the words
+// around it (MOTIR-10088). *"`lib/test-ai-jobs-mock.ts` passes a declared
+// `offer.requirement`…"* fired as a design asset — the third filed false positive
+// of this tell after MOTIR-9077 and MOTIR-9263 — because `\b` splits
+// `jobs-mock.ts` at the hyphen and the dot, and no phrasing arm can know that the
+// word is part of a path. So {@link stripTestDoubleFileTokens} removes every token
+// that is a CODE file (`.ts`, `.tsx`, `.py`, …) or sits under a test or helper
+// directory (`tests/`, `__mocks__/`, `helpers/`, …) before the bare-`mock` test
+// runs. A drawing never has that shape: it is a `design/` path or a `.mock.html`
+// / `.pen` file, which {@link DESIGN_ASSET_MATCHERS} read first and on the whole
+// line. The phrasing arms still read the WHOLE line, because *"mocks lib/x"* is
+// a double by its verb and its path together.
 const BARE_MOCK_RE = /\bmocks?\b/i;
+
+/**
+ * A file-like token, slash or not: word characters plus the punctuation a module
+ * path carries. Wider than {@link PATH_TOKEN_RE}, which needs a `/`.
+ */
+const FILE_TOKEN_RE = /[\w@.()[\]/-]+/g;
+
+/** A file whose extension makes it code, data or a test snapshot — never a drawing. */
+const CODE_FILE_RE =
+  /\.(?:[cm]?[jt]sx?|py|rb|go|rs|java|kts?|swift|php|cs|sh|sql|json|ya?ml|toml|snap)$/i;
+
+/** A directory a test double lives under. A drawing lives under `design/`. */
+const TEST_DOUBLE_DIR_RE =
+  /(?:^|\/)(?:__mocks__|__tests__|__fixtures__|tests?|specs?|e2e|fixtures|helpers|test-utils|testing)\//i;
+
+/**
+ * The line with every token that names a test double BY ITS FILE removed — a
+ * code file, or any path under a test or helper directory — so the bare-`mock`
+ * tell reads only the prose around it (MOTIR-10088).
+ */
+export function stripTestDoubleFileTokens(text: string): string {
+  return text.replace(FILE_TOKEN_RE, (token) => {
+    const path = token.replace(/[.)\]]+$/, '');
+    return CODE_FILE_RE.test(path) || TEST_DOUBLE_DIR_RE.test(path) ? ' ' : token;
+  });
+}
 
 const TEST_DOUBLE_MOCK_RE =
   /\b(?:vi|jest)\.mock\b|\bmock(?:ed|ing)\b|\bmocks?\s+(?:the|a|an|its|every|each|out)\b|\b(?:boundary|test|stub|fake|spy|http|fetch|network|transport|server|client|module)\s+mocks?\b|\b(?:asserted|asserts?|recorded|seen|checked|counted)\s+(?:on|by)\s+(?:the\s+)?(?:[\w-]+\s+)?mocks?\b|\bmock['’]s\s+(?:arguments?|calls?|identity|identities|invocations?)\b|\bmocks?\s+(?:@\/|\.{1,2}\/|(?!and\/or\b)[\w@.()[\]-]+\/[\w@.()[\]-]+)|\bmocks?\s+(?:clients?|servers?|fetch|calls?|responses?|requests?|modules?|helpers?|leaf|leaves|routes?|boundar(?:y|ies)|transports?|gateways?|adapters?|implementations?|functions?|handlers?)\b/i;
@@ -1457,7 +1496,7 @@ const COMPONENT_PATH_RE = /[A-Za-z0-9_.@()[\]-]+(?:\/[A-Za-z0-9_.@()[\]-]+)*\.[j
  */
 export function namesDesignAsset(text: string): boolean {
   if (DESIGN_ASSET_MATCHERS.some((re) => re.test(text))) return true;
-  return BARE_MOCK_RE.test(text) && !TEST_DOUBLE_MOCK_RE.test(text);
+  return BARE_MOCK_RE.test(stripTestDoubleFileTokens(text)) && !TEST_DOUBLE_MOCK_RE.test(text);
 }
 
 /**
