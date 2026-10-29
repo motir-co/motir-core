@@ -31,6 +31,8 @@ import {
 import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
 import { publicAddressRepository } from '@/lib/repositories/publicAddressRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
+import { releaseDeploymentStatusService } from '@/lib/services/releaseDeploymentStatusService';
+import { deferUntilCommit } from '@/lib/workspaces/afterCommit';
 import {
   bindWorkspaceContext,
   withSystemContext,
@@ -140,6 +142,26 @@ async function moveRelease(
   if (moved === 0) {
     const actual = await hostedReleaseRepository.findById(releaseId, tx);
     throw new IllegalReleaseTransitionError(releaseId, from, to, actual?.state ?? null);
+  }
+  announceRelease(releaseId);
+}
+
+/**
+ * Ask for the release's GitHub deployment status once the transaction that
+ * created or moved it COMMITS (MOTIR-10033). Every state change of a release
+ * passes through `createRelease` or `moveRelease`, so every release — merge,
+ * config redeploy, rollback — announces itself without its caller doing so.
+ */
+function announceRelease(releaseId: string): void {
+  const deferred = deferUntilCommit(() =>
+    releaseDeploymentStatusService.enqueueReleaseStatusPost(releaseId),
+  );
+  if (!deferred) {
+    console.warn(
+      '[hostedApplicationService] a release changed outside a transaction scope; ' +
+        'no deployment status was requested for it',
+      { releaseId },
+    );
   }
 }
 
@@ -288,6 +310,7 @@ export const hostedApplicationService = {
         },
         tx,
       );
+      announceRelease(row.id);
       return toHostedReleaseDto(row);
     });
   },

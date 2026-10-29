@@ -293,7 +293,10 @@ export type DeploymentState = (typeof DEPLOYMENT_STATES)[number];
 
 /** A deployment-status webhook, normalized across providers — the PREVIEW a
  *  repository's own CI reported for a commit (Story MOTIR-4906 · MOTIR-5329).
- *  Motir only LISTENS: it creates no deployment and posts no status.
+ *  For a repository's own deploys Motir only LISTENS: it creates no deployment
+ *  and posts no status. The one exception is a PRODUCTION release of a Motir
+ *  repository (MOTIR-10033), whose deployment and statuses Motir posts — and
+ *  whose statuses come back through this same webhook.
  *
  *  `environmentUrl` is the APP the deployment serves (GitHub's
  *  `environment_url`), never the log link (`target_url`), and is not yet

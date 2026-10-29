@@ -244,3 +244,25 @@ export class ReleaseDeployFailedError extends Error {
     this.name = 'ReleaseDeployFailedError';
   }
 }
+
+/** Where posting a release's GitHub deployment status stopped (MOTIR-10033). */
+export type ReleaseStatusPostStep = 'repository' | 'deployment' | 'status';
+
+/**
+ * Posting a release's GitHub deployment status failed — the step and the HTTP
+ * status ONLY. Thrown out of the status job so the job retries; it never reaches
+ * the release's own state change, which committed before the job was enqueued.
+ */
+export class ReleaseStatusPostError extends Error {
+  readonly code = 'RELEASE_STATUS_POST_FAILED' as const;
+  constructor(
+    readonly releaseId: string,
+    readonly step: ReleaseStatusPostStep,
+    readonly status: number | null,
+  ) {
+    super(
+      `Release ${releaseId}: posting its deployment status failed at ${step}${status === null ? '' : ` (HTTP ${status})`}.`,
+    );
+    this.name = 'ReleaseStatusPostError';
+  }
+}

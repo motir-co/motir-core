@@ -8,6 +8,7 @@ import { gateResumeService } from '@/lib/services/gateResumeService';
 import { pullRequestMergeabilityService } from '@/lib/services/pullRequestMergeabilityService';
 import { productionMergeReleaseService } from '@/lib/services/productionMergeReleaseService';
 import { productionConfigRedeployService } from '@/lib/services/productionConfigRedeployService';
+import { releaseDeploymentStatusService } from '@/lib/services/releaseDeploymentStatusService';
 import { monitorIngestionService } from '@/lib/services/monitorIngestionService';
 import { dlqStandingDepthService } from '@/lib/services/dlqStandingDepthService';
 import { monitorSyncService } from '@/lib/services/monitorSyncService';
@@ -223,6 +224,8 @@ export const jobServices = {
   productionMergeRelease: productionMergeReleaseService,
   // A production config change redeploys the live release (MOTIR-10032).
   productionConfigRedeploy: productionConfigRedeployService,
+  // Every production release posts its GitHub deployment status (MOTIR-10033).
+  releaseDeploymentStatus: releaseDeploymentStatusService,
   // The monitor-issue reconciler (Story MOTIR-4929 · MOTIR-5581): the tick's
   // discovery, one binding's poll, and the terminal write onto that binding.
   monitorIngestion: monitorIngestionService,

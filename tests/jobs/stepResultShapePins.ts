@@ -202,6 +202,12 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ outcome: "deferred_in_progress" } | { outcome: "failed_release"; releaseId: string } | { outcome: "gave_up_in_progress" } | { outcome: "redeployed"; releaseId: string } | { outcome: "skipped_customer_repository" } | { outcome: "skipped_no_live_release" }',
   },
+  // Every production release posts its GitHub deployment status (MOTIR-10033).
+  'post-release-status': {
+    file: 'lib/jobs/definitions/releaseDeploymentStatus.ts',
+    shape:
+      '{ outcome: "posted"; statuses: Array<"failure" | "in_progress" | "inactive" | "pending" | "success"> } | { outcome: "release_not_found" } | { outcome: "up_to_date" }',
+  },
   '`settle-${pass}`': {
     file: 'lib/jobs/definitions/pullRequestBaseMoved.ts',
     shape:

@@ -12135,24 +12135,29 @@ model HostedApplication {
 /// One release of a commit on a hosted application. A config redeploy of the
 /// same commit is a NEW row, so `(application_id, commit_sha)` is not unique.
 model HostedRelease {
-  id                String             @id @default(cuid())
-  workspaceId       String             @map("workspace_id")
-  applicationId     String             @map("application_id")
-  commitSha         String             @map("commit_sha")
+  id                 String             @id @default(cuid())
+  workspaceId        String             @map("workspace_id")
+  applicationId      String             @map("application_id")
+  commitSha          String             @map("commit_sha")
   /// The tag or branch the release was asked for, when it was asked by ref.
-  ref               String?
-  cause             HostedReleaseCause
-  state             HostedReleaseState @default(building)
-  artifactRef       String?            @map("artifact_ref")
+  ref                String?
+  cause              HostedReleaseCause
+  state              HostedReleaseState @default(building)
+  artifactRef        String?            @map("artifact_ref")
   /// The deploy port's handle for this release.
-  providerReleaseId String?            @map("provider_release_id")
-  failureReason     String?            @map("failure_reason")
+  providerReleaseId  String?            @map("provider_release_id")
+  failureReason      String?            @map("failure_reason")
   /// Seconds the release ran live (written by the usage card, MOTIR-10034).
-  usageSeconds      Int?               @map("usage_seconds")
-  createdAt         DateTime           @default(now()) @map("created_at")
-  liveAt            DateTime?          @map("live_at")
-  endedAt           DateTime?          @map("ended_at")
-  updatedAt         DateTime           @updatedAt @map("updated_at")
+  usageSeconds       Int?               @map("usage_seconds")
+  /// The GitHub deployment Motir created for this release on its repository
+  /// (MOTIR-10033), set once.
+  githubDeploymentId String?            @map("github_deployment_id")
+  /// The last deployment status posted for it (a `ReleaseDeploymentState`).
+  statusPostedState  String?            @map("status_posted_state")
+  createdAt          DateTime           @default(now()) @map("created_at")
+  liveAt             DateTime?          @map("live_at")
+  endedAt            DateTime?          @map("ended_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
 
   workspace   Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   application HostedApplication  @relation("HostedApplicationReleases", fields: [applicationId], references: [id], onDelete: Cascade)

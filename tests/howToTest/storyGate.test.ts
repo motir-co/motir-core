@@ -379,6 +379,18 @@ export function findProvisioningCalls(
 
 const ROOT = resolve(__dirname, '..', '..');
 
+/**
+ * The ONE place Motir creates a deployment: a PRODUCTION release of a Motir
+ * repository (Story MOTIR-9797 · MOTIR-10033), which Motir itself deploys and so
+ * announces on GitHub. Its statuses still reach `repo_deployment` only through
+ * the webhook, so the ingestion path above stays a pure listener. Nothing here
+ * provisions a customer's preview — a new file is a new exception to justify.
+ */
+const PRODUCTION_RELEASE_POSTERS: ReadonlySet<string> = new Set([
+  'lib/github/repoDeployments.ts',
+  'lib/services/releaseDeploymentStatusService.ts',
+]);
+
 function sourceFiles(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir).sort()) {
     if (entry === 'node_modules' || entry === 'dist') continue;
@@ -391,7 +403,7 @@ function sourceFiles(dir: string, out: string[] = []): string[] {
   return out;
 }
 
-describe('seam 6 — no provisioning: nothing under lib/ or packages/cli/ creates a deployment', () => {
+describe('seam 6 — no provisioning: nothing under lib/ or packages/cli/ creates a deployment but a production release', () => {
   it('the guard FIRES on each provisioning shape (the negative fixture)', () => {
     const fixture: Record<string, string> = {
       'lib/fake/octokit.ts':
@@ -431,7 +443,12 @@ describe('seam 6 — no provisioning: nothing under lib/ or packages/cli/ create
     expect(files).toContain('lib/services/repoDeploymentService.ts');
     expect(files).toContain('packages/cli/src/closeOutHowToTest.ts');
     const hits = findProvisioningCalls(files, (f) => readFileSync(join(ROOT, f), 'utf8'));
-    expect(hits).toEqual([]);
+    expect(hits.filter((h) => !PRODUCTION_RELEASE_POSTERS.has(h.slice(0, h.indexOf(':'))))).toEqual(
+      [],
+    );
+    // Not vacuous either: the exception is real, and the ingestion writer is not in it.
+    expect(hits.some((h) => h.startsWith('lib/github/repoDeployments.ts:'))).toBe(true);
+    expect(PRODUCTION_RELEASE_POSTERS.has('lib/services/repoDeploymentService.ts')).toBe(false);
   });
 });
 

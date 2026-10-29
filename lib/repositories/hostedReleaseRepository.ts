@@ -23,6 +23,16 @@ export type HostedReleaseStamp = Partial<
   Pick<HostedRelease, 'liveAt' | 'endedAt' | 'failureReason' | 'artifactRef' | 'providerReleaseId'>
 >;
 
+/** The facts posting a release's GitHub deployment status reads (MOTIR-10033). */
+export interface ReleaseStatusTarget {
+  state: HostedReleaseState;
+  commitSha: string;
+  githubDeploymentId: string | null;
+  statusPostedState: string | null;
+  projectRepositoryId: string;
+  productionAddress: string | null;
+}
+
 export const hostedReleaseRepository = {
   async create(input: HostedReleaseInsert, tx: Prisma.TransactionClient): Promise<HostedRelease> {
     return tx.hostedRelease.create({ data: input });
@@ -76,5 +86,74 @@ export const hostedReleaseRepository = {
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take,
     });
+  },
+
+  /**
+   * Serialize the posting of ONE release's GitHub deployment status
+   * (MOTIR-10033): a transaction-scoped advisory lock, released when `tx` ends.
+   */
+  async lockStatusPost(id: string, tx: Prisma.TransactionClient): Promise<void> {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`hosted-release-status:${id}`}, 0))`;
+  },
+
+  /** What posting the release's deployment status reads: its state, commit,
+   *  stored handle and its application's repository and address. */
+  async findStatusTarget(
+    id: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<ReleaseStatusTarget | null> {
+    const row = await tx.hostedRelease.findUnique({
+      where: { id },
+      select: {
+        state: true,
+        commitSha: true,
+        githubDeploymentId: true,
+        statusPostedState: true,
+        application: { select: { projectRepositoryId: true, productionAddress: true } },
+      },
+    });
+    if (!row) return null;
+    return {
+      state: row.state,
+      commitSha: row.commitSha,
+      githubDeploymentId: row.githubDeploymentId,
+      statusPostedState: row.statusPostedState,
+      projectRepositoryId: row.application.projectRepositoryId,
+      productionAddress: row.application.productionAddress,
+    };
+  },
+
+  /** Store the release's GitHub deployment id — only while none is stored, so
+   *  the first handle wins. Returns the count written (0 or 1). */
+  async setDeploymentHandle(
+    id: string,
+    handle: { githubDeploymentId: string },
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const { count } = await tx.hostedRelease.updateMany({
+      where: { id, githubDeploymentId: null },
+      data: { githubDeploymentId: handle.githubDeploymentId },
+    });
+    return count;
+  },
+
+  /** Record the last deployment status posted, conditional on the one the
+   *  poster read (`from`, null for none). Returns the count written. */
+  async markStatusPosted(
+    id: string,
+    move: { from: string | null; to: string },
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const { count } = await tx.hostedRelease.updateMany({
+      where: { id, statusPostedState: move.from },
+      data: { statusPostedState: move.to },
+    });
+    return count;
+  },
+
+  /** The release's workspace, or null when the release is gone. */
+  async findWorkspaceId(id: string, tx: Prisma.TransactionClient): Promise<string | null> {
+    const row = await tx.hostedRelease.findUnique({ where: { id }, select: { workspaceId: true } });
+    return row?.workspaceId ?? null;
   },
 };

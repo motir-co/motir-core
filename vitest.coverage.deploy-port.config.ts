@@ -87,6 +87,8 @@ export default defineConfig({
       // repository access it reads the manifest through.
       'tests/hosting/productionReleaseService.test.ts',
       'tests/hosting/hostedRepositoryAccessService.test.ts',
+      // MOTIR-10033 — the release status post's error.
+      'tests/hosting/releaseDeploymentStatus.test.ts',
     ],
     coverage: {
       provider: 'v8',
