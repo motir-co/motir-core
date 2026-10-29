@@ -151,7 +151,11 @@ The container needs to call Motir to report through the shared ingest and to rea
 
 **Permissions.** Opening a pull request needs `pull_requests: write` under both branches, so the Motir Agent App needs **`contents: write` + `pull_requests: write`**. MOTIR-1894's title currently says _`Contents: write` — the ONLY permission_, and that is amended (Consequences).
 
-**`workflows: write` is deliberately NOT requested.** A token holding it lets an autonomous agent rewrite the CI that runs with the repository's secrets. A run whose change touches `.github/workflows/` therefore fails at push. GitHub refuses it with _"refusing to allow a GitHub App to create or update workflow … without `workflows` permission"_, and that message becomes the run's failure reason.
+> **AMENDED 2026-10-29** — withdrawn: run tokens carry `workflows: write` when the installation
+> holds it ([`hosted-run-runs-the-cli-as-the-app.md`](hosted-run-runs-the-cli-as-the-app.md)
+> AMENDMENT 2026-10-29). The paragraph below is the original reasoning.
+
+~~**`workflows: write` is deliberately NOT requested.**~~ A token holding it lets an autonomous agent rewrite the CI that runs with the repository's secrets. A run whose change touches `.github/workflows/` therefore fails at push. GitHub refuses it with _"refusing to allow a GitHub App to create or update workflow … without `workflows` permission"_, and that message becomes the run's failure reason.
 
 ### 5 · Timeout and stall
 

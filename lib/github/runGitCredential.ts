@@ -44,7 +44,8 @@ import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces
 // and all-permission, none of which may reach a container — ONE PER INSTALLATION
 // the run's repositories span, narrowed with `repository_ids` to exactly the run's
 // repositories in that installation and to `contents: write` + `pull_requests:
-// write`. GitHub fixes its life at one hour; the run asks again through its
+// write`, plus `workflows: write` when the installation holds it
+// (`hosted-run-runs-the-cli-as-the-app.md` AMENDMENT 2026-10-29). GitHub fixes its life at one hour; the run asks again through its
 // git-credential route (MOTIR-6538) for as long as it runs. Every token minted is
 // RECORDED (encrypted) so the end path can revoke it — `DELETE /installation/token`
 // authenticates with the token itself, so a token nobody kept cannot be revoked.
@@ -64,9 +65,16 @@ const APP_LABEL: Record<RunGitApp, string> = {
   'motir-integration': 'Motir Integration',
 };
 
-/** The permissions every run token is narrowed to (§5). Never `workflows`,
- *  never `administration`. */
+/** The permissions every run token is narrowed to (§5). Never `administration`. */
 export const RUN_GIT_PERMISSIONS = { contents: 'write', pull_requests: 'write' } as const;
+
+/**
+ * Added to a build run's narrowing when the installation holds it (AMENDMENT 2026-10-29),
+ * so a run can push `.github/workflows/` changes. Not required: an installation that has
+ * not accepted it still runs, and a workflow change fails at push as before. Asking for a
+ * permission the installation lacks would fail the whole mint, hence "when held".
+ */
+export const RUN_GIT_WORKFLOWS_PERMISSION = { workflows: 'write' } as const;
 
 /**
  * A REVIEW run's narrowing (MOTIR-6820; `hosted-agent-run.md` §8.3): it pushes nothing,
@@ -78,9 +86,16 @@ export const RUN_GIT_REVIEW_PERMISSIONS = { contents: 'read' } as const;
 /** What a run needs of a repository: a build writes it, a review only reads it. */
 export type RunGitNeed = 'write' | 'read';
 
-/** The permissions a run's token is narrowed to, by what its command does. */
-function permissionsFor(command: string): Record<string, string> {
-  return command === 'review' ? RUN_GIT_REVIEW_PERMISSIONS : RUN_GIT_PERMISSIONS;
+/** The permissions a run's token is narrowed to, by what its command does and what the
+ *  installation holds. */
+function permissionsFor(
+  command: string,
+  installationPermissions: Record<string, string>,
+): Record<string, string> {
+  if (command === 'review') return RUN_GIT_REVIEW_PERMISSIONS;
+  return canWrite(installationPermissions['workflows'])
+    ? { ...RUN_GIT_PERMISSIONS, ...RUN_GIT_WORKFLOWS_PERMISSION }
+    : RUN_GIT_PERMISSIONS;
 }
 
 /**
@@ -492,11 +507,21 @@ export async function mintRunGitCredentials(
 
   const groups = new Map<
     string,
-    { app: RunGitApp; installationId: string; repos: RunRepository[] }
+    {
+      app: RunGitApp;
+      installationId: string;
+      installationPermissions: Record<string, string>;
+      repos: RunRepository[];
+    }
   >();
   for (const { repo, installation } of resolved) {
     const key = `${repo.app}:${installation.id}`;
-    const group = groups.get(key) ?? { app: repo.app, installationId: installation.id, repos: [] };
+    const group = groups.get(key) ?? {
+      app: repo.app,
+      installationId: installation.id,
+      installationPermissions: installation.permissions,
+      repos: [],
+    };
     group.repos.push(repo);
     groups.set(key, group);
   }
@@ -504,6 +529,7 @@ export async function mintRunGitCredentials(
   const minted: {
     app: RunGitApp;
     installationId: string;
+    installationPermissions: Record<string, string>;
     repos: RunRepository[];
     token: string;
     expiresAt: Date;
@@ -515,7 +541,7 @@ export async function mintRunGitCredentials(
       body: {
         // By id, not name: a rename between resolve and mint cannot widen it.
         repository_ids: group.repos.map((r) => Number(r.providerRepoId)),
-        permissions: permissionsFor(run.command),
+        permissions: permissionsFor(run.command, group.installationPermissions),
       },
     });
     if (!res.ok) {
