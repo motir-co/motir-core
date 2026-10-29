@@ -35,6 +35,18 @@ export interface HostingApp {
   readonly pushNamespace: string;
 }
 
+/** Which of a repository's two push namespaces: its previews' (shared by every
+ *  pull request) or its production's. */
+export type PushNamespaceKind = 'preview' | 'production';
+
+/** A push namespace `ensurePushNamespace` made, and the image repository a
+ *  `docker push` into it names (`registry.fly.io/mh-<rid>-pv`, an ECR URI) —
+ *  the value enablement writes for the repository's CI (MOTIR-5769 §11). */
+export interface PushNamespace {
+  readonly pushNamespace: string;
+  readonly imageRepository: string;
+}
+
 /**
  * A credential that may push to ONE push namespace. A static secret (an
  * app-scoped deploy token) or a federated identity (a GitHub-OIDC role) — two
@@ -182,8 +194,22 @@ export interface HostingDeployPort {
   /** Create (or find) the isolation unit for one (repository, environment).
    *  Idempotent: an existing unit is success. */
   ensureApp(input: { repositoryId: string; environment: HostingEnvironment }): Promise<HostingApp>;
+  /** Create (or find) ONE push namespace of a repository and nothing else — no
+   *  release unit. What switching a repository's previews on needs before any
+   *  pull request exists (MOTIR-5775). Idempotent. */
+  ensurePushNamespace(input: {
+    repositoryId: string;
+    kind: PushNamespaceKind;
+  }): Promise<PushNamespace>;
   /** A credential that may push to that one namespace and no other. */
   mintDeployCredential(input: { pushNamespace: string }): Promise<DeployCredential>;
+  /** Revoke every static credential that may push to the namespace, so a
+   *  repository leaving Motir keeps no way to push (MOTIR-5775). A federated
+   *  credential is not revocable here — its trust binds the repository's
+   *  immutable ids, which stop matching once it leaves — so a federated target
+   *  revokes nothing. Idempotent: a second call, or a namespace that does not
+   *  exist, revokes nothing. */
+  revokeDeployCredentials(input: { pushNamespace: string }): Promise<{ revoked: number }>;
   /** Run a release. Deploying the same (app, environment) again REPLACES the live
    *  release in place and keeps the one it replaced as the rollback target —
    *  never two live releases for one environment. */

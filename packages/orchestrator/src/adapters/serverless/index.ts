@@ -28,6 +28,7 @@ import {
   overflowSecretName,
   pushRoleArn,
   serverlessAppNames,
+  serverlessPushNamespace,
   unitOf,
 } from './names';
 import { assertServerlessRunnable } from './preflight';
@@ -195,6 +196,23 @@ export function createServerlessHostingDeployPort(
       const names = serverlessAppNames(config.appPrefix, repositoryId, environment);
       await api.ensureRepository(names.pushNamespace);
       return names;
+    },
+
+    async ensurePushNamespace({ repositoryId, kind }) {
+      // The same DNS-label check a unit's name gets, so a bad id fails by name.
+      serverlessAppNames(config.appPrefix, repositoryId, { kind: 'production' });
+      const pushNamespace = serverlessPushNamespace(config.appPrefix, repositoryId, kind);
+      await api.ensureRepository(pushNamespace);
+      return {
+        pushNamespace,
+        imageRepository: `${config.accountId}.dkr.ecr.${config.region}.amazonaws.com/${pushNamespace}`,
+      };
+    },
+
+    /** Federated: the push role's trust binds the repository's immutable ids,
+     *  so there is no static credential to revoke. */
+    async revokeDeployCredentials() {
+      return { revoked: 0 };
     },
 
     async mintDeployCredential({ pushNamespace }): Promise<DeployCredential> {

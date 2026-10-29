@@ -15,6 +15,7 @@ import { SeedResolutionError } from '@/lib/seedRegistry/errors';
 import { projectRunnerGroupService } from '@/lib/services/projectRunnerGroupService';
 import { fleetRunnerVariableService } from '@/lib/services/fleetRunnerVariableService';
 import { fleetGithubOrgAssignmentService } from '@/lib/services/fleetGithubOrgAssignmentService';
+import { previewEnablementService } from '@/lib/services/previewEnablementService';
 import type { GithubOrgTarget } from '@/lib/github/orgTarget';
 import { enqueueCodeGraphIndex } from '@/lib/github/indexEnqueue';
 import { getPreplanState } from '@/lib/ai/motirAiClient';
@@ -477,6 +478,14 @@ async function establishRow(
         defaultBranch: mirrored.defaultBranch,
       });
     }
+
+    // PREVIEWS ON, POST-COMMIT AND QUIET (MOTIR-5775). A Motir-hosted web
+    // repository's pull requests get a push credential and the variables the
+    // starter's `preview-image` workflow reads; `enable` itself decides
+    // eligibility (a non-web seed, a row with no hosting target yet answer
+    // `ineligible` with no call). A failure leaves a working repository whose
+    // previews the daily sweep switches on, so it never fails the row.
+    await previewEnablementService.enableQuietly(row.id);
 
     return {
       rowId: row.id,

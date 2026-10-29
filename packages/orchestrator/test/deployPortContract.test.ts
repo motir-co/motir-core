@@ -229,6 +229,30 @@ describe.each(ADAPTERS)('the hosting deploy port contract — %s', (_name, make)
     expect(await h.port.listReleases({ appRef: prod })).toEqual([]);
     expect(await h.port.destroyApp({ appRef: prod })).toEqual([]);
   });
+
+  it('ensures a push namespace alone — the one every preview of the repository pushes to — idempotently (MOTIR-5775)', async () => {
+    const first = await h.port.ensurePushNamespace({ repositoryId: R, kind: 'preview' });
+    expect(await h.port.ensurePushNamespace({ repositoryId: R, kind: 'preview' })).toEqual(first);
+    const { pushNamespace } = await h.port.ensureApp({ repositoryId: R, environment: PREVIEW });
+    expect(first.pushNamespace).toBe(pushNamespace);
+    expect(first.imageRepository.endsWith(`/${pushNamespace}`)).toBe(true);
+    const production = await h.port.ensurePushNamespace({ repositoryId: R, kind: 'production' });
+    expect(production.pushNamespace).not.toBe(first.pushNamespace);
+    expect(production.pushNamespace).toBe(
+      (await h.port.ensureApp({ repositoryId: R, environment: PRODUCTION })).pushNamespace,
+    );
+  });
+
+  it('revokes every static push credential of a namespace; a second revoke revokes nothing (MOTIR-5775)', async () => {
+    const { pushNamespace } = await h.port.ensurePushNamespace({
+      repositoryId: R,
+      kind: 'preview',
+    });
+    const credential = await h.port.mintDeployCredential({ pushNamespace });
+    const first = await h.port.revokeDeployCredentials({ pushNamespace });
+    expect(first.revoked).toBe(credential.kind === 'secret' ? 1 : 0);
+    expect(await h.port.revokeDeployCredentials({ pushNamespace })).toEqual({ revoked: 0 });
+  });
 });
 
 describe.each(AWS_ADAPTERS)('the hosting deploy port contract, AWS shapes — %s', (_name, make) => {
@@ -251,6 +275,9 @@ describe.each(AWS_ADAPTERS)('the hosting deploy port contract, AWS shapes — %s
   it('refuses a customer repository by name', async () => {
     await expect(
       h.port.ensureApp({ repositoryId: CUSTOMER, environment: PRODUCTION }),
+    ).rejects.toBeInstanceOf(CustomerRepositoryRefusedError);
+    await expect(
+      h.port.ensurePushNamespace({ repositoryId: CUSTOMER, kind: 'preview' }),
     ).rejects.toBeInstanceOf(CustomerRepositoryRefusedError);
   });
 

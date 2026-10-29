@@ -84,6 +84,9 @@ interface JoinedRow {
   hostingTarget: HostingTarget | null;
   hostingUseCase: HostingUseCase | null;
   hostingSize: HostingSize | null;
+  previewPushNamespace: string | null;
+  previewEnabledAt: Date | null;
+  previewCredentialExpiresAt: Date | null;
   // The APPROVING USER's collaborator record (the `admin` one — ADR §3 Q2), or
   // all-NULL when the row has none. Only that record is joined here: this read
   // feeds the establish step, which asks "can *I* reach my code?", and joining a
@@ -156,6 +159,9 @@ function toNested(r: JoinedRow): ProjectRepoWithRealized {
     hostingTarget: r.hostingTarget,
     hostingUseCase: r.hostingUseCase,
     hostingSize: r.hostingSize,
+    previewPushNamespace: r.previewPushNamespace,
+    previewEnabledAt: r.previewEnabledAt,
+    previewCredentialExpiresAt: r.previewCredentialExpiresAt,
     seedHeadSha: r.seedHeadSha,
     seedMatch: r.seedMatch,
     // Zero or one record — the mapper then picks the `admin` one out of it, which
@@ -332,6 +338,9 @@ export const projectRepoRepository = {
         pr."hosting_target"    AS "hostingTarget",
         pr."hosting_use_case"  AS "hostingUseCase",
         pr."hosting_size"      AS "hostingSize",
+        pr."preview_push_namespace" AS "previewPushNamespace",
+        pr."preview_enabled_at" AS "previewEnabledAt",
+        pr."preview_credential_expires_at" AS "previewCredentialExpiresAt",
         pr."seed_head_sha"     AS "seedHeadSha",
         pr."seed_match"        AS "seedMatch",
         oc."github_login"      AS "ownerLogin",
@@ -1009,5 +1018,74 @@ export const projectRepoRepository = {
       select: { id: true },
     });
     return row !== null;
+  },
+  /**
+   * The facts preview enablement decides on for ONE row (MOTIR-5775): whether it
+   * is Motir-hosted and a web starter, its hosting target, whether a takeover has
+   * begun, its enablement record, and the repository's coordinates with GitHub's
+   * numeric installation id. A read by id alone, inside `withSystemContext` (the
+   * `project_repository_system_read` arm) — the backfill names rows across
+   * workspaces, and establishment hands over a row id.
+   */
+  async findPreviewSubjectInTx(id: string, tx: Prisma.TransactionClient) {
+    return tx.projectRepo.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        workspaceId: true,
+        seedSource: true,
+        state: true,
+        hostingTarget: true,
+        takeoverState: true,
+        previewPushNamespace: true,
+        previewEnabledAt: true,
+        previewCredentialExpiresAt: true,
+        githubRepo: {
+          select: { owner: true, name: true, installation: { select: { installationId: true } } },
+        },
+      },
+    });
+  },
+
+  /**
+   * The rows the preview backfill visits: Motir-created, realized, with a hosting
+   * target, no takeover, seeded from one of `seedSources`, and either never
+   * enabled or holding a credential that expires before `renewBefore`. Oldest
+   * first, at most `limit`. System context, like {@link findPreviewSubjectInTx}.
+   */
+  async listPreviewBackfillCandidatesInTx(
+    input: { seedSources: readonly string[]; renewBefore: Date; limit: number },
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string }>> {
+    return tx.projectRepo.findMany({
+      where: {
+        state: 'created',
+        githubRepoId: { not: null },
+        hostingTarget: { not: null },
+        takeoverState: null,
+        seedSource: { in: [...input.seedSources] },
+        OR: [{ previewEnabledAt: null }, { previewCredentialExpiresAt: { lt: input.renewBefore } }],
+      },
+      select: { id: true },
+      orderBy: { createdAt: 'asc' },
+      take: input.limit,
+    });
+  },
+
+  /**
+   * Write a row's preview enablement record — set by enable, cleared (all null)
+   * by disable. A narrow writer, like `setHosting`, so the columns move only
+   * through `previewEnablementService`.
+   */
+  async setPreviewEnablement(
+    id: string,
+    data: {
+      previewPushNamespace: string | null;
+      previewEnabledAt: Date | null;
+      previewCredentialExpiresAt: Date | null;
+    },
+    tx: Prisma.TransactionClient,
+  ): Promise<ProjectRepo> {
+    return tx.projectRepo.update({ where: { id }, data });
   },
 };

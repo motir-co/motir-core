@@ -67,6 +67,7 @@ import { impersonationExpirySweep } from './definitions/impersonationExpirySweep
 import { supervisionSweep } from './definitions/supervisionSweep';
 import { abandonedPlanSweep } from './definitions/abandonedPlanSweep';
 import { codeGraphDriftSweep } from './definitions/codeGraphDriftSweep';
+import { previewEnablementSweep } from './definitions/previewEnablementSweep';
 import { codeGraphIndexCatchUp } from './definitions/codeGraphIndexCatchUp';
 import { jobRunReap } from './definitions/jobRunReap';
 import { jobQueueRetention } from './definitions/jobQueueRetention';
@@ -178,6 +179,8 @@ export const jobDefinitions = [
   supervisionSweep,
   abandonedPlanSweep,
   codeGraphDriftSweep,
+  // The preview enablement sweep (Story MOTIR-5766 · MOTIR-5775).
+  previewEnablementSweep,
   codeGraphIndexCatchUp,
   jobRunReap,
   jobQueueRetention,

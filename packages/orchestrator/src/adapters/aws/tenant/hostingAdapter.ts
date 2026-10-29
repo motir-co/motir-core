@@ -270,6 +270,34 @@ export function createAwsHostingDeployPort(deps: AwsHostingDeps): HostingDeployP
       return { appRef, pushNamespace };
     },
 
+    async ensurePushNamespace({ repositoryId, kind }) {
+      await refuseCustomer(repositoryId);
+      const pushNamespace = registryPushNamespace(repositoryId, kind);
+      const account = await accountOf(repositoryId);
+      // The registry lives in the tenant account; until it is ready there is no
+      // namespace to name, and the caller retries.
+      if (!account) throw new RegistryNotReadyError(registryNames(repositoryId).stackName);
+      const ids = await deps.githubIdsOf(repositoryId);
+      if (!ids) throw new GithubRepositoryIdsMissingError(repositoryId);
+      const { outputs } = await ensureRegistry({
+        runner: account.runner,
+        organizationId: account.organizationId,
+        repositoryId,
+        lookup: async () => ids,
+      });
+      const imageRepository =
+        outputs[kind === 'preview' ? 'PreviewRepositoryUri' : 'ProductionRepositoryUri'];
+      if (!imageRepository) throw new RegistryNotReadyError(registryNames(repositoryId).stackName);
+      log('registry ensured', pushNamespace);
+      return { pushNamespace, imageRepository };
+    },
+
+    /** Federated: the push roles trust the repository's immutable ids, so there
+     *  is no static credential to revoke. */
+    async revokeDeployCredentials() {
+      return { revoked: 0 };
+    },
+
     async mintDeployCredential({ pushNamespace }) {
       const { repositoryId } = parseRegistryPushNamespace(pushNamespace);
       await refuseCustomer(repositoryId);

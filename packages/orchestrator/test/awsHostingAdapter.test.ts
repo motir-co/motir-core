@@ -418,6 +418,43 @@ describe('ensureApp and the push credential', () => {
   });
 });
 
+describe('ensurePushNamespace (MOTIR-5775)', () => {
+  it('applies the registry alone and answers its repository URI; revoking is a no-op', async () => {
+    const h = harness();
+    const made = await h.port.ensurePushNamespace({ repositoryId: RID, kind: 'preview' });
+    expect(made).toEqual({
+      pushNamespace: 'mh/cmrepo1/preview',
+      imageRepository: expect.stringMatching(/\.dkr\.ecr\..+\/mh\/cmrepo1\/preview$/),
+    });
+    expect(creates(h)).toEqual(['createStack:motir-registry-cmrepo1']);
+    await expect(
+      h.port.revokeDeployCredentials({ pushNamespace: made.pushNamespace }),
+    ).resolves.toEqual({ revoked: 0 });
+  });
+
+  it('refuses while the account is not ready, with no AWS call', async () => {
+    const h = harness({ ready: false });
+    await expect(
+      h.port.ensurePushNamespace({ repositoryId: RID, kind: 'production' }),
+    ).rejects.toBeInstanceOf(RegistryNotReadyError);
+    expect(h.clientsFor).toEqual([]);
+  });
+
+  it('fails a repository with no GitHub ids, and a registry stack with no repository URI', async () => {
+    const h = harness();
+    const noIds = createAwsHostingDeployPort({ ...h.deps, githubIdsOf: async () => null });
+    await expect(
+      noIds.ensurePushNamespace({ repositoryId: RID, kind: 'preview' }),
+    ).rejects.toBeInstanceOf(GithubRepositoryIdsMissingError);
+    await h.port.ensurePushNamespace({ repositoryId: RID, kind: 'production' });
+    const stack = h.clients.cloudformation.stacks.get('motir-registry-cmrepo1')!;
+    delete (stack.outputs as Record<string, string>)['ProductionRepositoryUri'];
+    await expect(
+      h.port.ensurePushNamespace({ repositoryId: RID, kind: 'production' }),
+    ).rejects.toBeInstanceOf(RegistryNotReadyError);
+  });
+});
+
 describe('rollback', () => {
   it('answers NoPreviousReleaseError for a first release and ReleaseNotFoundError for none', async () => {
     const h = harness();

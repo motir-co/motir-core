@@ -5,7 +5,7 @@ import {
   NoPreviousReleaseError,
   ReleaseNotFoundError,
 } from '../../hosting/errors';
-import { hostingAppNames, sameEnvironment } from '../../hosting/names';
+import { hostingAppNames, pushNamespaceName, sameEnvironment } from '../../hosting/names';
 import { requireReleaseShape } from '../../hosting/shape';
 import type {
   DeployReleaseInput,
@@ -79,15 +79,26 @@ export interface FakeHostingControls {
   app(appRef: string): FakeHostedApp | undefined;
   /** Every push credential minted, in order. */
   readonly mintedFor: readonly string[];
+  /** Every push namespace `ensurePushNamespace` made, in order of creation. */
+  pushNamespaces(): readonly string[];
+  /** The credentials minted for a namespace and not yet revoked. */
+  liveCredentials(pushNamespace: string): number;
   /** The next call of that operation fails at the "provider" with an
    *  `OrchestratorApiError` and changes nothing — a destroy that destroyed
    *  nothing, for the usage-always rule's error path. */
-  failNext(operation: 'destroy' | 'destroyApp'): void;
+  failNext(operation: FakeHostingFailure): void;
   /** Whether the organisation's AWS tenant account is ready. Ready unless a test
    *  sets it false; while not ready an `aws` deploy waits in
    *  `waiting_for_account`. */
   setAccountReady(ready: boolean): void;
 }
+
+/** The operations a test can make fail once at the "provider". */
+export type FakeHostingFailure =
+  | 'destroy'
+  | 'destroyApp'
+  | 'ensurePushNamespace'
+  | 'revokeDeployCredentials';
 
 export interface FakeHostingOptions {
   readonly target?: HostingDeployTarget;
@@ -126,14 +137,16 @@ export function createFakeHostingDeployPort(
   let sequence = 0;
   const apps = new Map<string, FakeHostedApp>();
   const mintedFor: string[] = [];
-  const failing = new Set<'destroy' | 'destroyApp'>();
+  const failing = new Set<FakeHostingFailure>();
+  const namespaces = new Set<string>();
+  const liveTokens = new Map<string, number>();
   const refused = new Set(options.refuseRepositories ?? []);
   // Every release's shape, kept past its destroy so a repeated destroy still
   // reports usage in the unit of the release it names.
   const shapes = new Map<string, FakeHostedRelease>();
   let accountReady = true;
 
-  function injectedFailure(operation: 'destroy' | 'destroyApp'): void {
+  function injectedFailure(operation: FakeHostingFailure): void {
     if (!failing.delete(operation)) return;
     throw new OrchestratorApiError('fake', 503, `injected ${operation} failure`);
   }
@@ -241,6 +254,8 @@ export function createFakeHostingDeployPort(
       setRunning(appOf(appRef), true);
     },
     app: (appRef) => apps.get(appRef),
+    pushNamespaces: () => [...namespaces],
+    liveCredentials: (pushNamespace) => liveTokens.get(pushNamespace) ?? 0,
     failNext(operation) {
       failing.add(operation);
     },
@@ -266,8 +281,24 @@ export function createFakeHostingDeployPort(
       return names;
     },
 
+    async ensurePushNamespace({ repositoryId, kind }) {
+      if (refused.has(repositoryId)) throw new CustomerRepositoryRefusedError(repositoryId);
+      injectedFailure('ensurePushNamespace');
+      const pushNamespace = pushNamespaceName(prefix, repositoryId, kind);
+      namespaces.add(pushNamespace);
+      return { pushNamespace, imageRepository: `registry.fake.invalid/${pushNamespace}` };
+    },
+
+    async revokeDeployCredentials({ pushNamespace }) {
+      injectedFailure('revokeDeployCredentials');
+      const revoked = liveTokens.get(pushNamespace) ?? 0;
+      liveTokens.delete(pushNamespace);
+      return { revoked };
+    },
+
     async mintDeployCredential({ pushNamespace }) {
       mintedFor.push(pushNamespace);
+      liveTokens.set(pushNamespace, (liveTokens.get(pushNamespace) ?? 0) + 1);
       return {
         kind: 'secret',
         pushNamespace,

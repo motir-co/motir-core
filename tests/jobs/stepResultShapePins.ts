@@ -500,6 +500,11 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ accounts: number; apps: number; failures: number; killed: Array<{ action: "destroyed" | "stopped"; app: string; machineId: string; reason: "foreign_org" | "no_record" | "org_stopped" | "record_ended"; workload: "agent_instance" | "ci_runner" | "code_graph_index" | "hosted_agent" | null }>; listed: number; matched: number; orphanedVolumesDestroyed: number; outcome: "reconciled"; spared: number; unavailableApps: Array<string>; undated: number } | { detail: string; outcome: "inventory_unavailable" } | { outcome: "disabled" }',
   },
+  'preview-enablement-sweep': {
+    file: 'lib/jobs/definitions/previewEnablementSweep.ts',
+    shape:
+      '{ rows: Array<{ errorCode?: string | undefined; outcome: "already_enabled" | "enabled" | "failed" | "ineligible" | "not_found" | "renewed"; repositoryId: string }> }',
+  },
   'recompute-code-graph-drift': {
     file: 'lib/jobs/definitions/codeGraphDriftSweep.ts',
     shape: '{ counted: number; indeterminate: number; scanned: number; skipped: number }',

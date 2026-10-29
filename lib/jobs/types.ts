@@ -631,6 +631,7 @@ export interface JobEventDataMap {
   /** The DRIFT RECOMPUTE sweep (MOTIR-4644) — counts commits between the graph's
    *  head and the default branch's, off every render path. */
   'system.code-graph-drift-sweep': SystemScheduledData;
+  'system.preview-enablement-sweep': SystemScheduledData;
   /** The index CATCH-UP sweep (MOTIR-5290) — re-asks the internal index allowance
    *  for repositories paused by a hard stop, and refreshes only where the head
    *  moved. Cross-tenant by design. */

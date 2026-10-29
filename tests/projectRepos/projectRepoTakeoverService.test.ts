@@ -19,6 +19,18 @@ import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemF
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { createRunnerGroupFake, type RunnerGroupFake } from '../helpers/runnerGroupFake';
+import {
+  createActionsVariableFake,
+  type ActionsVariableFake,
+} from '../helpers/actionsVariableFake';
+import {
+  createRepositoryActionsConfigFake,
+  type RepositoryActionsConfigFake,
+} from '../helpers/repositoryActionsConfigFake';
+import type { FakeHostingControls, HostingDeployPort } from '@motir/orchestrator';
+import { getHostingDeployPort, resetHostingFakes } from '@/lib/orchestrator/hosting';
+import { resetDatabaseFakes } from '@/lib/orchestrator/database';
+import { previewEnablementService } from '@/lib/services/previewEnablementService';
 
 // TAKE IT OVER over real Postgres (Story MOTIR-1775 · MOTIR-711) — the handoff that
 // moves a Motir-owned repository into the user's own GitHub.
@@ -61,6 +73,10 @@ let calls: Call[];
 /** The project's own runner group (MOTIR-1972) — the establish/connect
  *  ARRANGEMENT these tests build now syncs it. */
 let runnerGroups: RunnerGroupFake;
+/** The repository's Actions secrets and variables (MOTIR-5775) — what switching
+ *  previews on writes and the saga's step before the transfer withdraws. */
+let repoActions: RepositoryActionsConfigFake;
+let orgVariables: ActionsVariableFake;
 /** Status the fake GitHub answers the transfer with; 202 is the real success. */
 let transferStatus: number;
 /** Whether the transfer response reports the repo ALREADY under the new owner —
@@ -95,6 +111,14 @@ function installGitHub(): void {
       // group (MOTIR-1972), so this suite's GitHub has to serve those endpoints.
       const group = await runnerGroups.handle(u, method, body);
       if (group) return group;
+      const repoConfig = await repoActions.handle(
+        u,
+        method,
+        typeof init?.body === 'string' ? init.body : null,
+      );
+      if (repoConfig) return repoConfig;
+      const orgVariable = orgVariables.handle(u, method, body);
+      if (orgVariable) return orgVariable;
       if (u.endsWith('/actions/permissions') && method === 'PUT') {
         if (actionsStatus !== 204) return json(actionsStatus, { message: 'nope' });
         return new Response(null, { status: 204 });
@@ -158,6 +182,10 @@ function hostCallSequence(): string[] {
   return calls.flatMap((c) => {
     if (c.url.endsWith('/transfer') && c.method === 'POST') return ['transfer'];
     if (c.url.endsWith('/actions/permissions') && c.method === 'PUT') return ['actions'];
+    // MOTIR-5775's step: the preview push secret withdrawn while Motir still can.
+    if (c.url.endsWith('/actions/secrets/MOTIR_FLY_PREVIEW_PUSH_TOKEN') && c.method === 'DELETE') {
+      return ['preview_secret'];
+    }
     return [];
   });
 }
@@ -272,6 +300,8 @@ beforeEach(async () => {
   vi.stubEnv('GITHUB_APP_PRIVATE_KEY', privateKey);
   _resetInstallationTokenCache();
   runnerGroups = createRunnerGroupFake(MOTIR_ORG);
+  repoActions = createRepositoryActionsConfigFake();
+  orgVariables = createActionsVariableFake(MOTIR_ORG);
   installGitHub();
 });
 
@@ -311,6 +341,61 @@ describe('the runner variable needs no unset — the ORG scope is the mechanism 
     // is what will fail, and the unset belongs in this saga, ordered BEFORE the
     // transfer for the same reason §G orders the Actions re-enable before it.
     expect(calls.filter((c) => c.url.includes('/actions/variables'))).toEqual([]);
+  });
+});
+
+describe('previews off before the transfer (MOTIR-5775)', () => {
+  /** A Motir-created Fly-hosted row with previews switched on. */
+  async function previewedRow(fx: WorkItemFixture) {
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fake');
+    resetHostingFakes();
+    resetDatabaseFakes();
+    const { rowId } = await motirOwnedRow(fx, 'acme-web');
+    await projectRepoSetService.setHosting(
+      rowId,
+      { target: 'fly', useCase: 'mvp', size: 'small' },
+      fx.ctx,
+    );
+    expect((await previewEnablementService.enable(rowId)).outcome).toBe('enabled');
+    calls.length = 0;
+    return rowId;
+  }
+  const fly = () => getHostingDeployPort('fly') as HostingDeployPort & FakeHostingControls;
+
+  it('revokes the token and deletes the secret AFTER the re-enable and BEFORE the transfer', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectIdentity(fx);
+    const rowId = await previewedRow(fx);
+
+    await projectRepoTakeoverService.requestTakeover(rowId, NEW_OWNER, fx.ctx);
+
+    // The saga's own step list, in the order it ran.
+    expect(hostCallSequence()).toEqual(['actions', 'preview_secret', 'transfer']);
+    expect(fly().liveCredentials(`mh-${rowId}-pv`)).toBe(0);
+    expect(repoActions.secrets(`${MOTIR_ORG}/acme-web`).size).toBe(0);
+    expect(repoActions.variables(`${MOTIR_ORG}/acme-web`).size).toBe(0);
+    // The org switch serves every hosted repository; it is not touched.
+    expect(orgVariables.variables.get('MOTIR_HOSTING_BUILD')).toMatchObject({ value: 'on' });
+  });
+
+  it.each([
+    ['the revoke', () => fly().failNext('revokeDeployCredentials'), /revoke_push_credentials/],
+    [
+      'the secret delete',
+      () => repoActions.failNext('DELETE', '/secrets/MOTIR_FLY_PREVIEW_PUSH_TOKEN', 403),
+      /delete_push_secret/,
+    ],
+  ])('fails the saga, with no transfer, when %s fails', async (_label, fail, step) => {
+    const fx = await makeWorkItemFixture();
+    await connectIdentity(fx);
+    const rowId = await previewedRow(fx);
+    fail();
+
+    const refusal = projectRepoTakeoverService.requestTakeover(rowId, NEW_OWNER, fx.ctx);
+    await expect(refusal).rejects.toBeInstanceOf(RepoTransferRefusedError);
+    await expect(refusal).rejects.toThrow(step);
+    expect(hostCallSequence()).not.toContain('transfer');
+    expect((await readRow(rowId, fx)).takeover).toMatchObject({ state: 'failed' });
   });
 });
 

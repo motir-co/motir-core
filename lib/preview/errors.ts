@@ -26,3 +26,28 @@ export class PreviewHostInvalidError extends Error {
     this.name = 'PreviewHostInvalidError';
   }
 }
+
+/** The steps that switch a repository's previews off (MOTIR-5775), in order. */
+export type PreviewDisableStep =
+  | 'revoke_push_credentials'
+  | 'delete_push_secret'
+  | 'delete_variables'
+  | 'clear_record';
+
+/**
+ * Switching a repository's previews off did not finish: `step` names the one
+ * that failed. The takeover saga reports it as ITS step failure and does not
+ * transfer, because once the repository leaves Motir's org nothing here can reach
+ * its Actions configuration again. Carries the cause's message, never a
+ * credential. → 502
+ */
+export class PreviewDisableError extends Error {
+  readonly code = 'PREVIEW_DISABLE_FAILED' as const;
+  constructor(
+    readonly step: PreviewDisableStep,
+    detail: string,
+  ) {
+    super(`Could not switch previews off (${step}): ${detail}`);
+    this.name = 'PreviewDisableError';
+  }
+}

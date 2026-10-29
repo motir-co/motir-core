@@ -5,7 +5,7 @@ import {
   ReleaseNotFoundError,
   ReleaseRuntimeRefusedError,
 } from '../../hosting/errors';
-import { hostingAppNames } from '../../hosting/names';
+import { hostingAppNames, pushNamespaceName } from '../../hosting/names';
 import { deriveOriginSecret } from '../../hosting/originSecret';
 import type {
   DeployCredential,
@@ -23,6 +23,7 @@ import type {
 import { runningSecondsBetween, type RunTransition } from '../../hosting/usage';
 import {
   flyErrorDetail,
+  flyGraphqlRequest,
   flyMachinesClientFor,
   flyRequest,
   readFlyJson,
@@ -130,6 +131,22 @@ export interface FlyHostingOptions {
   /** A new release id. */
   readonly newReleaseId?: () => string;
 }
+
+/** Where `docker push` reaches a Fly app's images. */
+export const FLY_REGISTRY = 'registry.fly.io';
+
+/** An app's tokens, and the revocation of one (MOTIR-5775). The Machines API
+ *  mints a deploy token (`POST /apps/{app}/deploy_token`) but neither lists nor
+ *  revokes one; flyctl's `tokens list` / `tokens revoke` use these two calls. */
+const APP_TOKENS_QUERY = `query ($appName: String!) {
+  app(name: $appName) { limitedAccessTokens { nodes { id revokedAt } } }
+}`;
+const REVOKE_TOKEN_MUTATION = `mutation ($input: DeleteLimitedAccessTokenInput!) {
+  deleteLimitedAccessToken(input: $input) { token }
+}`;
+
+/** GraphQL's answer for an app that does not exist. */
+const APP_NOT_FOUND = /could not find app|not found/i;
 
 function appPath(app: string, rest = ''): string {
   return `/apps/${encodeURIComponent(app)}${rest}`;
@@ -430,6 +447,38 @@ export function createFlyHostingDeployPort(
       }
       await flyAppProvisioning.ensureAddresses(config, names.appRef);
       return names;
+    },
+
+    async ensurePushNamespace({ repositoryId, kind }) {
+      // An app with no Machines and no addresses: it holds images, nothing runs
+      // in it, so nothing is reachable through it.
+      const pushNamespace = pushNamespaceName(config.appPrefix, repositoryId, kind);
+      await flyAppProvisioning.ensureApp(config, pushNamespace);
+      return { pushNamespace, imageRepository: `${FLY_REGISTRY}/${pushNamespace}` };
+    },
+
+    async revokeDeployCredentials({ pushNamespace }) {
+      const listed = await flyGraphqlRequest(APP_TOKENS_QUERY, { appName: pushNamespace }, token);
+      const app = asRecord(listed.data?.['app']);
+      if (!app) {
+        if (listed.errors.length === 0 || listed.errors.every((e) => APP_NOT_FOUND.test(e))) {
+          return { revoked: 0 };
+        }
+        throw new OrchestratorApiError('fly', 200, listed.errors.join('; '));
+      }
+      const nodes = asRecord(app['limitedAccessTokens'])?.['nodes'];
+      const live = (Array.isArray(nodes) ? nodes : []).flatMap((node) => {
+        const entry = asRecord(node);
+        const id = entry?.['id'];
+        return typeof id === 'string' && !entry?.['revokedAt'] ? [id] : [];
+      });
+      for (const id of live) {
+        const revoked = await flyGraphqlRequest(REVOKE_TOKEN_MUTATION, { input: { id } }, token);
+        if (revoked.errors.length > 0) {
+          throw new OrchestratorApiError('fly', 200, revoked.errors.join('; '));
+        }
+      }
+      return { revoked: live.length };
     },
 
     async mintDeployCredential({ pushNamespace }): Promise<DeployCredential> {

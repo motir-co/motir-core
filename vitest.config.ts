@@ -3033,6 +3033,10 @@ export default defineConfig({
         'lib/preview/states.ts',
         'lib/preview/previewDatabase.ts',
         'lib/repositories/previewDeploymentRepository.ts',
+        // Switching previews on and off (MOTIR-5775).
+        'lib/preview/enablement.ts',
+        'lib/github/repositoryActionsConfig.ts',
+        'lib/services/previewEnablementService.ts',
         'lib/mappers/testInstructionsMappers.ts',
         'lib/services/testInstructionsService.ts',
         'lib/services/repoDeploymentService.ts',
@@ -8013,6 +8017,24 @@ export default defineConfig({
           statements: 90,
         },
         'lib/repositories/previewDeploymentRepository.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/preview/enablement.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/github/repositoryActionsConfig.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/previewEnablementService.ts': {
           lines: 90,
           functions: 90,
           branches: 90,

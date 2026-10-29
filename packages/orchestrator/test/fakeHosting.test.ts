@@ -255,3 +255,39 @@ describe('runningSecondsBetween', () => {
     expect(runningSecondsBetween([], t(0), t(20))).toBe(0);
   });
 });
+
+describe('the fake push namespace and its credentials (MOTIR-5775)', () => {
+  it('records each namespace once and counts live credentials until a revoke', async () => {
+    const fake = createFakeHostingDeployPort({ refuseRepositories: ['cmcustomer'] });
+    const made = await fake.ensurePushNamespace({ repositoryId: RID, kind: 'preview' });
+    await fake.ensurePushNamespace({ repositoryId: RID, kind: 'preview' });
+    expect(made).toEqual({
+      pushNamespace: 'mh-cmrepo1-pv',
+      imageRepository: 'registry.fake.invalid/mh-cmrepo1-pv',
+    });
+    expect(fake.pushNamespaces()).toEqual(['mh-cmrepo1-pv']);
+    await fake.mintDeployCredential({ pushNamespace: made.pushNamespace });
+    await fake.mintDeployCredential({ pushNamespace: made.pushNamespace });
+    expect(fake.liveCredentials(made.pushNamespace)).toBe(2);
+    expect(await fake.revokeDeployCredentials(made)).toEqual({ revoked: 2 });
+    expect(fake.liveCredentials(made.pushNamespace)).toBe(0);
+    await expect(
+      fake.ensurePushNamespace({ repositoryId: 'cmcustomer', kind: 'preview' }),
+    ).rejects.toMatchObject({ code: 'HOSTING_CUSTOMER_REPOSITORY_REFUSED' });
+  });
+
+  it('fails each operation once on request, changing nothing', async () => {
+    const fake = createFakeHostingDeployPort();
+    fake.failNext('ensurePushNamespace');
+    await expect(
+      fake.ensurePushNamespace({ repositoryId: RID, kind: 'preview' }),
+    ).rejects.toBeInstanceOf(OrchestratorApiError);
+    expect(fake.pushNamespaces()).toEqual([]);
+    await fake.mintDeployCredential({ pushNamespace: 'mh-cmrepo1-pv' });
+    fake.failNext('revokeDeployCredentials');
+    await expect(
+      fake.revokeDeployCredentials({ pushNamespace: 'mh-cmrepo1-pv' }),
+    ).rejects.toBeInstanceOf(OrchestratorApiError);
+    expect(fake.liveCredentials('mh-cmrepo1-pv')).toBe(1);
+  });
+});
