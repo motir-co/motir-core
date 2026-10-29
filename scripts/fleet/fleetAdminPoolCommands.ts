@@ -31,6 +31,7 @@ import {
   fleetQuotaRaiseService,
   type FleetQuotaRaiseDeps,
 } from '@/lib/services/fleetQuotaRaiseService';
+import type { AddSpareShardByOperatorDeps } from '@/lib/services/fleetShardProvisioningService';
 import type { HostingTenantCommandDeps } from './fleetAdminHostingTenantCommands';
 
 /** Where the command writes, as `fleetAdmin.ts`'s `FleetAdminIo`. */
@@ -46,6 +47,8 @@ export interface FleetAdminPoolDeps {
   status?: FleetPoolStatusDeps;
   /** The hosting-tenant command's seam (MOTIR-9943). */
   hostingTenant?: HostingTenantCommandDeps;
+  /** `add-spare`'s seams (MOTIR-10065): the raise's AWS, the env, the clock. */
+  addSpare?: AddSpareShardByOperatorDeps;
 }
 
 const EXIT_OK = 0;
