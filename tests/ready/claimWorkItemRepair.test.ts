@@ -112,6 +112,7 @@ describe('claimRepair — the claim', () => {
         failingChecks: ['Vitest'],
         queueExit: null,
         conflicted: false,
+        outOfDate: false,
       },
     ]);
 
@@ -440,6 +441,7 @@ describe('getRepairView — what the Development block draws', () => {
           ci: 'failing',
           queueExit: null,
           conflict: null,
+          outOfDate: null,
         },
       ],
       lastGaveUp: null,
@@ -559,7 +561,14 @@ describe('getRepairView — what the Development block draws', () => {
     expect(await view(fx, red.id)).toEqual({
       state: 'pointer',
       failing: [
-        { repo: 'acme/web', number: pr.number, ci: 'failing', queueExit: null, conflict: null },
+        {
+          repo: 'acme/web',
+          number: pr.number,
+          ci: 'failing',
+          queueExit: null,
+          conflict: null,
+          outOfDate: null,
+        },
       ],
       runTargetKey: story.identifier,
     });
