@@ -583,6 +583,7 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         // no motir-ai call.
         code_explore: { projectKey: 'PROD', query: 'readFile' },
         code_search: { projectKey: 'PROD', query: 'readFile' },
+        code_grep: { projectKey: 'PROD', pattern: 'readFile' },
         skeleton: { projectKey: 'PROD' },
         // MOTIR-5409 — `list_folders` is a browse read that executes on the caller's own
         // project; the three writes are `work_item:edit`-gated, and a folder id that

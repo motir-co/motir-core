@@ -32,7 +32,9 @@ export function useRunColumns(): string[] {
 
 /**
  * Runs table — every run the platform recorded, in every workspace and in none,
- * newest first. An empty page renders the drawn empty state for All or for the
+ * newest first. The Event column gives up width the way the Dead letters
+ * table's Failure column does (MOTIR-10055), so Duration stays in the frame.
+ * An empty page renders the drawn empty state for All or for the
  * chosen status.
  */
 export function RunsTable({
@@ -91,10 +93,10 @@ export function RunsTable({
       {rows.map((run) => (
         <Tr key={run.id}>
           <Td title={run.functionId}>
-            <span className="block max-w-[16rem] truncate font-mono text-xs">{run.functionId}</span>
+            <span className="block max-w-[12rem] truncate font-mono text-xs">{run.functionId}</span>
           </Td>
-          <Td title={run.eventName} className="text-(--el-text-secondary)">
-            <span className="block max-w-[14rem] truncate">{run.eventName}</span>
+          <Td title={run.eventName} className="w-full max-w-0 text-(--el-text-secondary)">
+            <span className="block truncate">{run.eventName}</span>
           </Td>
           <Td>
             <WorkspaceCell workspaceId={run.workspaceId} />

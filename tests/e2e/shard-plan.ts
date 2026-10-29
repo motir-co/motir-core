@@ -495,6 +495,11 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   // shape (`admin-fleet-selfhost.spec.ts`, above), rounded UP for the same
   // reason. RE-MEASURE from the first green bulk artifact that includes it.
   'admin-ideas-smoke.spec.ts': 4.0,
+  // MOTIR-10055 — the /admin/jobs tables fit a 1280px frame: one sign-up, two
+  // page loads and their bounding boxes. ESTIMATED from its nearest neighbour by
+  // shape (`admin-ideas-smoke.spec.ts`, above), rounded UP for the same reason.
+  // RE-MEASURE from the first green bulk artifact that includes it.
+  'admin-jobs-columns.spec.ts': 4.0,
   'app-role-surfaces.spec.ts': 1.3,
   'ai-callout-gate.spec.ts': 1.9,
   'ai-plan-generation.spec.ts': 10.0,

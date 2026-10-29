@@ -5728,6 +5728,50 @@ than read as a soft state.
 and `read_file`, on the same argument (`docs/decisions/member-facing-permissions.md`
 AMENDMENT 3). **Read-only**, closed-world: the graph is Motir's own.
 
+#### `code_grep`
+
+**A search of the indexed FILE CONTENTS** (MOTIR-10066): the lines inside string
+literals, comments, function bodies and files that are not code (copy, config,
+JSON, YAML), which `code_search` and `code_explore` cannot see — they match symbol
+names and paths only. It is how an agent finds every place that still says
+something before it plans a removal, a rename or a copy change. Like the two graph
+reads it is the hosted planner's own `code_grep`, run in motir-ai behind
+`POST /v1/code-graph/read`, and an `ok` answer's text is that executor's bytes
+verbatim.
+
+Each index run stores the content of every text file in the snapshot, up to
+1 MiB; a binary file (a NUL byte in its first 8 KB) or a larger one is recorded
+as **not searched** instead. A literal is matched byte-for-byte; a `regex` or
+`caseInsensitive` search runs on RE2, which has no backtracking, so a pathological
+pattern such as `(a+)+$` answers in normal time. Lines are decoded as UTF-8,
+falling back to Latin-1, with a trailing carriage return dropped.
+
+**Input**
+
+| Field             | Type    | Required | Notes                                                                                                  |
+| ----------------- | ------- | -------- | ------------------------------------------------------------------------------------------------------ |
+| `projectKey`      | string  | yes      | Project key, e.g. `"ACME"`.                                                                            |
+| `pattern`         | string  | yes      | The text to find, at most 1,000 characters. Not trimmed.                                               |
+| `regex`           | boolean | no       | Treat `pattern` as an RE2 regular expression (no backreferences or lookaround), matched per line.      |
+| `caseInsensitive` | boolean | no       | Match regardless of letter case.                                                                       |
+| `path`            | string  | no       | A path prefix the search is limited to, e.g. `"lib/billing/"`.                                         |
+| `repo`            | string  | no       | ONE repository in the project's set — bare name or `owner/name`, case-insensitively. Omit to read all. |
+| `cursor`          | string  | no       | The `cursor` a page line printed, passed back exactly, with the same other arguments.                  |
+| `limit`           | integer | no       | The page size — matching lines per page.                                                               |
+
+**Output.** The `ok` text lists each match as `path:line: text`, headed by the
+number of matching lines and files and **the commit it searched**, and ends with
+the files under `path` that were **not searched** (binary, or over the cap) —
+read those with `read_file` before calling a list complete. The states are
+`code_explore`'s, plus one:
+
+| `state`               | Meaning                                                                                                                                  | Extra fields                             |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| `content_not_indexed` | The repository is indexed, but its graph was built before file contents were stored. NOT an empty match: its next index run stores them. | `repoRef`, `indexState`, `commitsBehind` |
+
+**Permission: `ai:plan`, at the door and in the service**, as the two graph reads.
+**Read-only**, closed-world.
+
 #### `get_coding_convention`
 
 **One repository's coding convention, in full.** A repository's own rules live in

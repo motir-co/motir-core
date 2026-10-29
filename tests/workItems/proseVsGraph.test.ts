@@ -25,6 +25,7 @@ import {
   namesDesignAsset,
   namesDesignDocumentAmendment,
   namesRenderedSurface,
+  stripTestDoubleFileTokens,
   type RepoCandidate,
 } from '@/lib/workItems/proseVsGraph';
 import {
@@ -1465,6 +1466,80 @@ describe('a server card is not its own design blocker — MOTIR-9263', () => {
     // rather than only through the pair.
     expect(namesDesignAsset(F7)).toBe(false);
     expect(namesRenderedSurface(F2)).toBe(false);
+  });
+});
+
+describe('a test double named by its FILE is not a design asset — MOTIR-10088', () => {
+  /**
+   * The E2E card of plan `cmvm7k7f5000ehmnmxs8zx7vx` (the requirement-pane
+   * story's acceptance receipt), its acceptance criteria as the plan authored
+   * them before `check-plan --fix` reworded criterion 1 to "The motir-ai jobs
+   * test mock (`lib/test-ai-jobs-mock.ts`) …". Criterion 1 names the jobs mock
+   * by its file and criterion 7 is an ordinary render criterion ("shows no
+   * requirement document"), so the detector reported the card as its own
+   * design blocker (`designCriterionIndex: 1`, `surfaceCriterionIndex: 7`).
+   * The card draws nothing.
+   */
+  const E2E_CARD_PRE_FIX = [
+    '## Acceptance criteria',
+    '',
+    '- `lib/test-ai-jobs-mock.ts` passes a declared `offer.requirement` onto `result.ask.offer` and leaves every undeclared reply byte-identical, and journals `requirement`, `requirementPage` and `hasCarriedAnswers` on each `plan` submit and the conversation turns on each `ask_project` submit; `tests/ai/askJobsMock.test.ts` covers each.',
+    "- `tests/e2e/acceptance-requirement-pane.spec.ts` exists, runs under `playwright.acceptance.config.ts`, declares `acceptanceStory()` with the parent story's key, and its recorded test has one chapter per recorded case in the Cases section, in that order.",
+    '- Every case in the Cases section is asserted as written and passes on the acceptance lane.',
+    '- Every "no page", "one page" and "one run" assertion is a count read through `adminDb` or the jobs journal at that moment, never only an absence on screen.',
+    "- The confirmed run's journaled `plan` context carries `requirement` deep-equal to the stored offer's requirement, the recorded `requirementPage`, and no carried answers.",
+    "- The page reached from the rail's link is in a root-level folder named Requirements Docs, created by the Motir system account, and the folder holds exactly one page after the recorded walk.",
+    '- The targeted "plan this" chapter shows no requirement document, no page link and no new page, and its `plan` journal entry carries no `requirement` or `requirementPage`.',
+    "- The spec uses no `page.route` stub and no `waitForTimeout`; each action's response is awaited from a `waitForResponse` armed before it.",
+    '- The spec passes three consecutive runs on the acceptance lane locally, and the shipped `acceptance-plan-offer.spec.ts` still passes unchanged.',
+  ].join('\n');
+
+  it('the E2E card (pre-fix) is not reported as its own design blocker', () => {
+    expect(selfBlockingDesignCriteria(E2E_CARD_PRE_FIX)).toBeNull();
+  });
+
+  it('still pairs the render criterion with a criterion that names a drawing', () => {
+    const drawn = E2E_CARD_PRE_FIX.replace(
+      '- `lib/test-ai-jobs-mock.ts` passes',
+      '- `design/ai-planning/requirement-pane.mock.html` draws the pane, and the jobs mock passes',
+    );
+    expect(selfBlockingDesignCriteria(drawn)).toEqual({
+      designCriterionIndex: 1,
+      surfaceCriterionIndex: 7,
+    });
+  });
+
+  it.each([
+    '`lib/test-ai-jobs-mock.ts` passes a declared `offer.requirement` onto the ask result',
+    'lib/test-ai-jobs-mock.ts journals every plan submit',
+    '`tests/foo.mock.ts` answers every call',
+    '`__mocks__/bar.ts` stands in for the client',
+    'the fixture lives in tests/e2e/_helpers/mock/seam.json',
+    'the double (helpers/mock-gateway.mjs) replies 200',
+    'scripts/plan-mock.py prints the envelope.',
+    'tests/mocks/README.md lists the doubles',
+  ])('a mock named by a code file or a test path is not a design asset: %s', (line) => {
+    expect(namesDesignAsset(line)).toBe(false);
+  });
+
+  it.each([
+    '`design/x/y.mock.html` is added',
+    'the mock draws the panel',
+    'the mock draws the panel that `lib/test-ai-jobs-mock.ts` feeds',
+    'tests/x.test.ts asserts what the mock shows',
+    'the board-mock.png export of the mock is committed',
+  ])('a drawing is still a design asset beside a stripped path: %s', (line) => {
+    expect(namesDesignAsset(line)).toBe(true);
+  });
+
+  it('strips only the file tokens, and leaves the prose and a drawing path', () => {
+    expect(stripTestDoubleFileTokens('lib/test-ai-jobs-mock.ts passes the mock')).toBe(
+      '  passes the mock',
+    );
+    expect(stripTestDoubleFileTokens('see (tests/x.mock.ts).')).toBe('see  ');
+    expect(stripTestDoubleFileTokens('design/x/y.mock.html and @/lib/foo')).toBe(
+      'design/x/y.mock.html and @/lib/foo',
+    );
   });
 });
 

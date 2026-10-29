@@ -112,6 +112,9 @@ export const EXEMPT_TOOLS = {
   code_search:
     'Returns the hosted planner\u2019s own `code_search` TEXT verbatim, or a named `state` \u2014 the ' +
     'same reason as `code_explore` (MOTIR-7862).',
+  code_grep:
+    'Returns the hosted planner\u2019s own `code_grep` TEXT verbatim, or a named `state` \u2014 the ' +
+    'same reason as `code_explore` (MOTIR-10066).',
   publish_design_result:
     'Returns the published RESULT\u2019s receipt \u2014 `{ id, workItemKey, assetCount, ' +
     'noteTruncated, createdAt }`. \u26a0\ufe0f `/api/v1` NOW PUBLISHES DESIGN COMPONENTS ' +

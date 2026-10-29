@@ -106,6 +106,12 @@ export const nl: McpSummaryTranslations = {
     source:
       "Symbols matching a name in the hosted code graph — the hosted planner's own answer, paged.",
   },
+  code_grep: {
+    summary:
+      'Regels die een tekst of patroon raken in de geïndexeerde bestandsinhoud — tekenreeksliteralen, commentaar en bestanden die geen code zijn, die het zoeken op symbolen niet ziet — het eigen antwoord van de gehoste planner, gepagineerd.',
+    source:
+      "Lines matching a text or pattern in the indexed file contents — string literals, comments and non-code files the symbol search cannot see — the hosted planner's own answer, paged.",
+  },
   complete_session: {
     summary:
       'Sluit een sessie-branch af nadat de PR is gemerged: elk item dat erop is vastgelegd gaat naar Klaar.',

@@ -65,6 +65,7 @@ SUMMARIES = {
     "list_changed_files": "The paths a branch changed in a project repository — bounded, every absence a named outcome.",
     "code_explore": "Explore the hosted code graph around a query — the hosted planner's own answer, paged, every absence a named state.",
     "code_search": "Search the hosted code graph for symbols by name — the hosted planner's own answer, paged.",
+    "code_grep": "Search the indexed file contents for text — string literals, comments and non-code files the symbol search cannot see.",
     "list_sprints": "A project's sprints with state, goal, window and issue count, and the ids the sprint tools take.",
     "validate_sprint": "Is this sprint finishable? Names every in-sprint item still gated by work outside it.",
     "validate_work_item": "Is this epic, story, task or bug finishable? Names the out-of-subtree work still gating it.",

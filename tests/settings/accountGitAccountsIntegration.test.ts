@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
@@ -38,6 +38,10 @@ let fx: WorkItemFixture;
 beforeEach(async () => {
   await truncateAuthTables();
   fx = await makeWorkItemFixture();
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
 afterAll(async () => {
@@ -128,6 +132,52 @@ describe('the THREE states the substrate can answer', () => {
       workspaceId: fx.workspaceId,
     });
     expect(installation).not.toBeNull();
+  });
+});
+
+describe('NEEDS RE-AUTH — the fourth state, and the way out of it (Bug MOTIR-10047)', () => {
+  // MOTIR-10021 gave the pane its signal: `github_identity.refresh_refused_at`,
+  // written when GitHub refuses to renew the member's sign-in. The pane renders
+  // the design's Needs re-auth state from `needsReauth` on the identity it
+  // already reads, and `Reconnect` runs the ordinary OAuth round trip — whose
+  // upsert clears the mark. This pins both ends against a real database.
+
+  /** GitHub's two OAuth endpoints, answering a successful reconnect. */
+  function stubGithubReconnect(login: string) {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL | Request) => {
+        const url =
+          typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+        const body = url.includes('/login/oauth/access_token')
+          ? { access_token: 'gho_reconnected' }
+          : { id: 4242, login, avatar_url: null };
+        return new Response(JSON.stringify(body), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }),
+    );
+  }
+
+  it('a refused renewal reads as needsReauth, and reconnecting returns the pane to Connected', async () => {
+    const row = await bindIdentity(fx.ownerId);
+    expect((await githubIdentityService.getIdentityForUser(fx.ownerId))?.needsReauth).toBe(false);
+
+    await adminDb.githubIdentity.update({
+      where: { id: row.id },
+      data: { refreshRefusedAt: new Date() },
+    });
+    expect((await githubIdentityService.getIdentityForUser(fx.ownerId))?.needsReauth).toBe(true);
+
+    // `Reconnect` is `/api/github/oauth/start?from=accountGit`; its callback lands
+    // here. The same member, the same GitHub account, a fresh sign-in.
+    stubGithubReconnect('yue');
+    await githubIdentityService.completeOAuthCallback({ code: 'c', userId: fx.ownerId });
+
+    const identity = await githubIdentityService.getIdentityForUser(fx.ownerId);
+    expect(identity?.githubLogin).toBe('yue');
+    expect(identity?.needsReauth).toBe(false);
   });
 });
 

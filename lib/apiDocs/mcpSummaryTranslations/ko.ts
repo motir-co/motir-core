@@ -105,6 +105,12 @@ export const ko: McpSummaryTranslations = {
     source:
       "Symbols matching a name in the hosted code graph — the hosted planner's own answer, paged.",
   },
+  code_grep: {
+    summary:
+      '색인된 파일 내용에서 텍스트나 패턴과 일치하는 줄 — 심볼 검색으로는 보이지 않는 문자열 리터럴, 주석, 코드가 아닌 파일 포함 — 호스팅된 계획자 자신의 답변이며, 페이지 단위로 제공됩니다.',
+    source:
+      "Lines matching a text or pattern in the indexed file contents — string literals, comments and non-code files the symbol search cannot see — the hosted planner's own answer, paged.",
+  },
   complete_session: {
     summary:
       '풀 리퀘스트가 병합된 후 세션 브랜치를 마무리합니다: 그 브랜치에 기록된 모든 항목이 완료로 이동합니다.',

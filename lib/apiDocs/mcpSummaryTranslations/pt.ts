@@ -106,6 +106,12 @@ export const pt: McpSummaryTranslations = {
     source:
       "Symbols matching a name in the hosted code graph — the hosted planner's own answer, paged.",
   },
+  code_grep: {
+    summary:
+      'Linhas que correspondem a um texto ou padrão no conteúdo indexado dos arquivos — literais de string, comentários e arquivos que não são código, que a busca de símbolos não vê — a própria resposta do planejador hospedado, paginada.',
+    source:
+      "Lines matching a text or pattern in the indexed file contents — string literals, comments and non-code files the symbol search cannot see — the hosted planner's own answer, paged.",
+  },
   complete_session: {
     summary:
       'Encerre uma branch de sessão depois que seu PR foi mesclado: todo item registrado nela passa para Concluído.',

@@ -156,6 +156,30 @@ export const githubInstallationRepository = {
   },
 
   /**
+   * GitHub's numeric installation id for each of these rows, keyed by the row's
+   * own `id` (MOTIR-10062) — the resolve an outbound call owes before it mints a
+   * token for a mirror row's repository.
+   *
+   * ⚠️ `GithubRepo.installationId` is the foreign key to THIS table's `id`, a cuid
+   * GitHub has never issued; `POST /app/installations/<cuid>/access_tokens` is a
+   * 404. The id GitHub knows is the row's `installationId` column, so a caller
+   * holding the foreign key resolves it here. Run it under `withSystemContext`:
+   * Motir's shared provisioning installation has a NULL `workspace_id`, so a
+   * tenant context reads zero rows for it and raises nothing. An id with no row
+   * is simply absent from the map.
+   */
+  async findHostInstallationIdsByIds(
+    ids: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Map<string, string>> {
+    const rows = await tx.githubInstallation.findMany({
+      where: { id: { in: [...new Set(ids)] } },
+      select: { id: true, installationId: true },
+    });
+    return new Map(rows.map((row) => [row.id, row.installationId]));
+  },
+
+  /**
    * Whether the App is installed on a given ACCOUNT — the takeover's completion
    * probe (MOTIR-711): after a repository has moved to the user's own GitHub,
    * this answering non-null is what proves the loop survived the handoff.

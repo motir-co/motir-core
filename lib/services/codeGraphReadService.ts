@@ -13,7 +13,7 @@ import { resolveCodeContextState } from '@/lib/services/codeContextService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
 // The MCP code-graph READ (Story MOTIR-7858 · Subtask MOTIR-7862) — what
-// `code_explore` / `code_search` call. motir-core holds no graph-read credential
+// `code_explore` / `code_search` / `code_grep` call. motir-core holds no graph-read credential
 // and cannot mint one (`docs/decisions/code-graph-service.md` item 2 and its
 // MOTIR-7860 amendment), so the read itself runs in motir-ai, through the hosted
 // planner's OWN executor, behind `POST /v1/code-graph/read`. What stays here is
@@ -25,7 +25,8 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 //   - the REPOSITORY SET: the project's realized set is bound here and sent as
 //     `repoRefs`; an agent's `repo` is checked against it in core, so a miss is
 //     answered with the set and no round trip;
-//   - COMMITS-BEHIND on `not_indexed`, which motir-ai has no figure for;
+//   - COMMITS-BEHIND on `not_indexed` / `content_not_indexed`, which motir-ai has
+//     no figure for;
 //   - the BOUNDARY'S FAILURES, mapped to `graph_unavailable` with a reason code.
 //
 // ⚠️ NO RE-RENDERING. `ok.text` is the planner executor's bytes, and the story's
@@ -69,6 +70,15 @@ function enrich(
         graphTooLarge: repo?.graphTooLarge ?? null,
       };
     }
+    case 'content_not_indexed': {
+      const repo = repos.find((r) => r.repoRef.toLowerCase() === answer.repoRef.toLowerCase());
+      return {
+        state: 'content_not_indexed',
+        repoRef: answer.repoRef,
+        indexState: repo?.indexState ?? null,
+        commitsBehind: repo?.commitsBehind ?? null,
+      };
+    }
     // A defence only: core checked the repo first, so this means motir-ai and
     // core disagree about the set — reported with core's set, the one bound.
     case 'repo_not_in_set':
@@ -90,7 +100,14 @@ function enrich(
 }
 
 export interface CodeGraphReadArgs {
-  query: string;
+  /** `code_explore` / `code_search`. */
+  query?: string;
+  /** `code_grep` (MOTIR-10066): the text or RE2 pattern searched for in file contents. */
+  pattern?: string;
+  regex?: boolean;
+  caseInsensitive?: boolean;
+  /** `code_grep`: a path prefix the search is limited to. */
+  path?: string;
   repo?: string;
   cursor?: string;
   limit?: number;
@@ -126,7 +143,11 @@ export const codeGraphReadService = {
         tool,
         repoRefs: repoSet,
         args: {
-          query: args.query,
+          ...(args.query !== undefined ? { query: args.query } : {}),
+          ...(args.pattern !== undefined ? { pattern: args.pattern } : {}),
+          ...(args.regex !== undefined ? { regex: args.regex } : {}),
+          ...(args.caseInsensitive !== undefined ? { caseInsensitive: args.caseInsensitive } : {}),
+          ...(args.path !== undefined ? { path: args.path } : {}),
           ...(args.cursor !== undefined ? { cursor: args.cursor } : {}),
           ...(repoFilter ? { repos: repoFilter } : {}),
           ...(args.limit !== undefined ? { limit: args.limit } : {}),

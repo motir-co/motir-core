@@ -117,6 +117,7 @@ import { LIST_CHANGED_FILES_TOOL_NAME, registerListChangedFiles } from './tools/
 import {
   CODE_EXPLORE_TOOL_NAME,
   CODE_SEARCH_TOOL_NAME,
+  CODE_GREP_TOOL_NAME,
   registerCodeGraphRead,
 } from './tools/codeGraphRead';
 import { SKELETON_TOOL_NAME, registerSkeleton } from './tools/skeleton';
@@ -273,6 +274,7 @@ export const MCP_TOOL_NAMES = [
   LIST_CHANGED_FILES_TOOL_NAME,
   CODE_EXPLORE_TOOL_NAME,
   CODE_SEARCH_TOOL_NAME,
+  CODE_GREP_TOOL_NAME,
   SKELETON_TOOL_NAME,
   LIST_FOLDERS_TOOL_NAME,
   GET_SECTION_SETS_TOOL_NAME,
@@ -534,7 +536,8 @@ export function registerMcpTools(
   // resolves against the PROJECT's set.
   registerListChangedFiles(target, resolveContext);
   // MOTIR-7862 — the hosted code graph, through motir-ai's graph-read route: the
-  // planner executor's own text for `code_explore` / `code_search`. `ai:plan`.
+  // planner executor's own text for `code_explore` / `code_search`, and (MOTIR-10066)
+  // `code_grep` over the indexed file contents. `ai:plan`.
   registerCodeGraphRead(target, resolveContext);
   // The ORIENTING read (MOTIR-3100) — the whole project's tree shape in one
   // call, over the same `aiBoundaryService.readPlanTree` the internal

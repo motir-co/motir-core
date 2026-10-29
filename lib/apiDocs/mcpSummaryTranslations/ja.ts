@@ -105,6 +105,12 @@ export const ja: McpSummaryTranslations = {
     source:
       "Symbols matching a name in the hosted code graph — the hosted planner's own answer, paged.",
   },
+  code_grep: {
+    summary:
+      'インデックス済みのファイル内容のうち、テキストまたはパターンに一致する行。シンボル検索では見えない文字列リテラル、コメント、コード以外のファイルも含みます。ホスト型計画者自身の回答をページ分けして返します。',
+    source:
+      "Lines matching a text or pattern in the indexed file contents — string literals, comments and non-code files the symbol search cannot see — the hosted planner's own answer, paged.",
+  },
   complete_session: {
     summary:
       'プルリクエストのマージ後にセッションブランチを締めます。そのブランチに記録されたすべての項目が完了に移ります。',

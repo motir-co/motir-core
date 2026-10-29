@@ -911,6 +911,59 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  code_grep: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The project key the sprint belongs to — the prefix chosen for that project at creation (e.g. "ACME"), not a reserved value.',
+      },
+      pattern: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 1000,
+        description:
+          'The text to find in the files, matched literally and case-sensitively unless `regex` or `caseInsensitive` says otherwise. It is NOT trimmed.',
+      },
+      regex: {
+        type: 'boolean',
+        description:
+          'OPTIONAL. Treat `pattern` as a regular expression (RE2 syntax: no backreferences or lookaround). Matched one line at a time.',
+      },
+      caseInsensitive: {
+        type: 'boolean',
+        description: 'OPTIONAL. Match regardless of letter case.',
+      },
+      path: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'OPTIONAL. Limit the search to files under this path prefix, e.g. "lib/billing/" or "app/pricing/page.tsx".',
+      },
+      repo: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'OPTIONAL. Limit the read to ONE repository in the project’s set — its bare name ("motir-core") or `owner/name`, case-insensitively. Omit to read every indexed repository in the set.',
+      },
+      cursor: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'OPTIONAL. Fetch the NEXT PAGE of an earlier result: pass the `cursor` printed on that result’s page line, exactly as printed, with the same other arguments. Omit for page 1.',
+      },
+      limit: {
+        type: 'integer',
+        minimum: 1,
+        description: 'OPTIONAL. The page size — how many matching lines to return per page.',
+      },
+    },
+    required: ['projectKey', 'pattern'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   code_search: {
     type: 'object',
     properties: {
@@ -4359,6 +4412,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   close_work_item_repair: 'Close a repair',
   close_work_item_run: 'Close your run of a work item',
   code_explore: 'Explore the code graph',
+  code_grep: 'Search the file contents',
   code_search: 'Search the code graph',
   complete_session: 'Complete session',
   complete_sprint: 'Complete sprint',
@@ -4566,6 +4620,7 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
     openWorldHint: false,
   },
   code_explore: { title: 'Explore the code graph', readOnlyHint: true, openWorldHint: false },
+  code_grep: { title: 'Search the file contents', readOnlyHint: true, openWorldHint: false },
   code_search: { title: 'Search the code graph', readOnlyHint: true, openWorldHint: false },
   complete_session: {
     title: 'Complete session',

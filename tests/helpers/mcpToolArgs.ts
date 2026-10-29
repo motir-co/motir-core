@@ -54,6 +54,7 @@ export function mcpToolArgs(t: McpToolTargets): Record<McpToolName, Record<strin
     // not-found before any repository set is read or motir-ai is called.
     code_explore: { projectKey: t.projectKey, query: 'readFile' },
     code_search: { projectKey: t.projectKey, query: 'readFile' },
+    code_grep: { projectKey: t.projectKey, pattern: 'readFile' },
     // The ORIENTING read (MOTIR-3100) — project-keyed, so a non-member must
     // read tenant A's tree as not-found rather than receive its SHAPE. A
     // partial skeleton would be the worst possible leak here: it names every

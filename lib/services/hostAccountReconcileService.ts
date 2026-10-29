@@ -108,9 +108,12 @@ function ownAccountsPlanKey(answer: PlanCapsAnswer): string | null {
   return ownAccountPoolCredits(answer.planKey) === null ? null : answer.planKey;
 }
 
+/** The same rule `addOrgOwnedShard` takes the GitHub org by: a non-disabled
+ *  `aws` primary (MOTIR-10065) — a Fly primary is no org to take, so a kind with
+ *  only one is skipped here rather than refused by the walk. */
 async function hasPrimary(fleetKind: string): Promise<boolean> {
   const primaries = await fleetShardService.listShards({ fleetKind, role: 'primary' });
-  return primaries.some((shard) => shard.state !== 'disabled');
+  return primaries.some((shard) => shard.provider === 'aws' && shard.state !== 'disabled');
 }
 
 /** Is (org, slot) clear of its refusal backoff at `now`? */

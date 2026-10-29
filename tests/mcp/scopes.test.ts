@@ -283,6 +283,8 @@ describe('LEGACY_SCOPE_PERMISSIONS (the forward map)', () => {
       // MOTIR-7862 — the two graph reads, the same loss and the same reason.
       code_explore: true,
       code_search: true,
+      // MOTIR-10066 — the file-contents search, the same loss and the same reason.
+      code_grep: true,
       // MOTIR-7410. A FIFTH loss, of the lesson tools' kind: no legacy scope ever
       // gated `get_page`, because `page:view` did not exist when the six strings
       // were written. Its `TOOL_SCOPES` row files it under `read` as the nearest

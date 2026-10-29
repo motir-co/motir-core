@@ -541,6 +541,37 @@ describe('a slot whose kind has no primary account', () => {
     const second = await hostAccountReconcileService.reconcileOrganization(org.id, deps());
     expect(second.slots.agent_runner).toBe('created');
   });
+
+  it('counts only an aws primary: a kind with just a Fly primary is skipped (MOTIR-10065)', async () => {
+    const org = await seedOrg();
+    plans.set(org.id, host());
+    await adminDb.fleetShard.update({
+      where: { name: 'hosted-agent-use1-1' },
+      data: { state: 'disabled' },
+    });
+    await adminDb.fleetShard.create({
+      data: {
+        name: 'hosted-agent-fly-1',
+        fleetKind: 'hosted_agent',
+        provider: 'fly',
+        role: 'primary',
+        state: 'active',
+        githubOrg: 'motir-fly-org',
+        githubInstallationId: '9001',
+        flyOrg: 'motir',
+        flyApp: 'motir-hosted-agent-fly-1',
+        flyRegion: 'iad',
+        credentialRef: 'FLEET_SHARD_FLY_TEST',
+        machineLimit: 4,
+      },
+    });
+
+    const result = await hostAccountReconcileService.reconcileOrganization(org.id, deps());
+
+    expect(result.slots.agent_runner).toBe('no_primary');
+    expect(alerts).toEqual([]);
+    expect((await ownedRows(org.id)).map((r) => r.fleetKind)).not.toContain('hosted_agent');
+  });
 });
 
 describe('the addOrgOwnedShard door', () => {

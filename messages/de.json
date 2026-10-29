@@ -4149,14 +4149,20 @@
         "github": "GitHub"
       },
       "state": {
-        "connected": "Verbunden"
+        "connected": "Verbunden",
+        "needsReauth": "Erneute Anmeldung nötig"
       },
       "connectedOn": "Verbunden am {date}",
       "connect": "GitHub verbinden",
       "disconnect": "Trennen",
+      "reconnect": "Erneut verbinden",
       "empty": {
         "title": "Kein Git-Konto verbunden",
         "description": "Wenn Sie eines verbinden, kann Motir Sie zu den Repositorys einladen, an denen Ihre Projekte arbeiten, und Ihre Arbeit signieren. Es liest nur Ihr öffentliches Profil – es gewährt keinen Zugriff auf Code."
+      },
+      "reauth": {
+        "title": "Verbinden Sie Ihr GitHub-Konto erneut.",
+        "body": "GitHub akzeptiert diese Anmeldung nicht mehr, daher kann Motir nicht mehr bestätigen, wer Sie dort sind. Sonst hat sich an Ihrem Konto nichts geändert."
       },
       "noInstallation": {
         "title": "Ihr Konto ist verbunden. Das Ihrer Organisation nicht.",
@@ -7621,6 +7627,8 @@
         },
         "conflictOn": "<prs></prs> steht im Konflikt mit {base} und kann nicht gemergt werden.",
         "conflictOnNoBase": "<prs></prs> steht im Konflikt mit seinem Basis-Branch und kann nicht gemergt werden.",
+        "outOfDateOn": "<prs></prs> liegt hinter {base}, das einen aktuellen Stand verlangt, und kann nicht gemergt werden.",
+        "outOfDateOnNoBase": "<prs></prs> liegt hinter seinem Basis-Branch, der einen aktuellen Stand verlangt, und kann nicht gemergt werden.",
         "howConflict": "Ein Agent führt auf dem Branch des Pull Requests ein Rebase oder eine Konfliktlösung durch, pusht, und die Checks laufen erneut.",
         "rearm": "Hier gibt es nichts zu genehmigen. Ein Push verschiebt den Head, wodurch die Frage neu gestellt wird, und das nächste Grün löst die Merge-Freigabe einmal aus – über die neuen Commits.",
         "sentBackByAgent": "Der Review-Agent hat diese Commits zurückgewiesen. Ein Agent behebt sie {count, plural, one {im selben Pull Request} other {in denselben Pull Requests}}, mit dessen Befunden im Prompt.",
@@ -9925,6 +9933,8 @@
         "queueFailedBare": "In der Merge-Queue fehlgeschlagen",
         "conflicted": "Konflikt mit <d>{base}</d>",
         "conflictedNoBase": "Konflikt mit seinem Basis-Branch",
+        "outOfDate": "Nicht auf dem Stand von <d>{base}</d>",
+        "outOfDateNoBase": "Nicht auf dem Stand seines Basis-Branches",
         "ciFailed": "CI fehlgeschlagen · <d>{check}</d>",
         "ciFailedBare": "CI fehlgeschlagen",
         "changesRequested": "Änderungen angefordert von <b>{name}</b> – „{note}“",
@@ -14188,6 +14198,10 @@
         "atPress": "{host} meldet, dass {pr} mit {base} in Konflikt steht. Der Klick wurde abgelehnt, bevor etwas geschrieben wurde, daher hat sich {key} nicht bewegt.",
         "atPressNoBase": "{host} meldet, dass {pr} mit seinem Basis-Branch in Konflikt steht. Der Klick wurde abgelehnt, bevor etwas geschrieben wurde, daher hat sich {key} nicht bewegt."
       },
+      "mergeOutOfDate": {
+        "title": "Dieser Pull Request ist nicht auf dem Stand seines Basis-Branches.",
+        "next": "Es wurde nichts gemergt. Der Basis-Branch verlangt, dass Pull Requests vor dem Mergen auf seinem Stand sind, und dieser liegt dahinter. Holen Sie den Basis-Branch in ihn — aktualisieren Sie den Branch, oder lassen Sie motir fix ihn an einen Agenten übergeben —, und Motir fragt erneut, sobald seine Checks grün sind."
+      },
       "mergeBranchProtected": {
         "title": "Die Schutzregeln des Branches erlauben diesen Merge noch nicht.",
         "next": "Erfüllen Sie die Regel auf GitHub, etwa ein erforderliches Review, und genehmigen Sie dann erneut."
@@ -15359,6 +15373,7 @@
       "run_died": "Zu reparieren · Lauf abgestürzt",
       "queue_failed": "Zu reparieren · in der Merge-Queue fehlgeschlagen",
       "conflicted": "Zu reparieren · Konflikt mit dem Basis-Branch",
+      "out_of_date": "Zu reparieren · nicht auf dem Stand des Basis-Branches",
       "ci_failed": "Zu reparieren · CI fehlgeschlagen",
       "changes_requested": "Zu reparieren · Änderungen angefordert",
       "sent_back_by_agent": "Zu reparieren · vom Prüf-Agenten zurückgewiesen",
@@ -15370,6 +15385,8 @@
       "queueFailedBare": "Dies muss repariert werden: Es ist in der Merge-Queue fehlgeschlagen.",
       "conflicted": "Dies muss repariert werden: Es steht in Konflikt mit <code>{base}</code>.",
       "conflictedNoBase": "Dies muss repariert werden: Es steht in Konflikt mit seinem Basis-Branch.",
+      "outOfDate": "Dies muss repariert werden: Es ist nicht auf dem Stand von <code>{base}</code>.",
+      "outOfDateNoBase": "Dies muss repariert werden: Es ist nicht auf dem Stand seines Basis-Branches.",
       "ciFailed": "Dies muss repariert werden: CI ist fehlgeschlagen (Check <code>{check}</code>).",
       "ciFailedBare": "Dies muss repariert werden: CI ist fehlgeschlagen.",
       "changesRequested": "Dies muss repariert werden: <b>{name}</b> hat Änderungen angefordert — „{note}“",

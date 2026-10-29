@@ -536,6 +536,8 @@ export const TOOL_ANNOTATIONS: Record<McpToolName, McpToolAnnotations> = {
   code_explore: { readOnlyHint: true, openWorldHint: false },
   // R: codeGraphRead.ts → codeGraphReadService.read → motir-ai POST /v1/code-graph/read (as code_explore)
   code_search: { readOnlyHint: true, openWorldHint: false },
+  // R: codeGraphRead.ts → codeGraphReadService.read → motir-ai POST /v1/code-graph/read (as code_explore)
+  code_grep: { readOnlyHint: true, openWorldHint: false },
   // R: skeleton.ts → aiBoundaryService.readPlanTree
   skeleton: { readOnlyHint: true, openWorldHint: false },
   // R: listFolders.ts → foldersService.listProjectFolders
