@@ -959,6 +959,27 @@ export const projectRepoRepository = {
   },
 
   /**
+   * The facts a PRODUCTION home is decided from (Story MOTIR-9797 · MOTIR-10026):
+   * tenancy, name, seed source, establish state and hosting target. A read by id
+   * alone, like {@link findHostingIdentityInTx} — the caller holds a
+   * `withSystemContext` transaction (`project_repository_system_read`).
+   */
+  async findDeployFactsInTx(id: string, tx: Prisma.TransactionClient) {
+    return tx.projectRepo.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        workspaceId: true,
+        projectId: true,
+        name: true,
+        seedSource: true,
+        state: true,
+        hostingTarget: true,
+      },
+    });
+  },
+
+  /**
    * A row's HOSTING IDENTITY for the AWS adapter (MOTIR-10010): its seed source
    * (a customer repository is never hosted), the organisation its workspace
    * belongs to, and its realized GitHub repository's id, if any. A platform read

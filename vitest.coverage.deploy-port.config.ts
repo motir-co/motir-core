@@ -75,6 +75,10 @@ export default defineConfig({
       'tests/hosting/hostingGuard.test.ts',
       'tests/hosting/deployPortCoverageLane.test.ts',
       'tests/projectRepos/projectRepoHosting.test.ts',
+      // MOTIR-10026 — the release vocabulary and the hosting errors it adds to
+      // the two floored files above are reached by these suites.
+      'tests/hosting/hostedVocabulary.test.ts',
+      'tests/hosting/hostedApplicationService.test.ts',
     ],
     coverage: {
       provider: 'v8',
