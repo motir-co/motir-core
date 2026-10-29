@@ -441,11 +441,28 @@ export const POST_MERGE_CHILD_PHRASES = [
   'after release',
 ] as const;
 
-const POST_MERGE_CHILD_MATCHERS: ReadonlyArray<{ phrase: string; re: RegExp }> =
-  POST_MERGE_CHILD_PHRASES.map((phrase) => ({
+/**
+ * Tells a body uses once it already TAKES the merge or the deployment as given,
+ * rather than naming the moment it waits for (MOTIR-10057). All five post-deploy
+ * cards MOTIR-9710's lay put inside the story slipped past the phrase list:
+ * "the cards listed in the blockers have merged", "starts from the deployed
+ * state", "deployed to the rehearsal services". The bare "is deployed" is left
+ * out on purpose ("nothing is deployed by this card" is pre-merge): a false
+ * positive here opens a plan.py repair session (MOTIR-9991).
+ */
+const POST_MERGE_CHILD_STATE_TELLS: ReadonlyArray<{ phrase: string; re: RegExp }> = [
+  { phrase: 'have merged', re: /\b(?:has|have)\s+(?:been\s+)?merged\b/i },
+  { phrase: 'the deployed', re: /\bthe\s+deployed\b/i },
+  { phrase: 'deployed to', re: /\bdeployed\s+to\b/i },
+];
+
+const POST_MERGE_CHILD_MATCHERS: ReadonlyArray<{ phrase: string; re: RegExp }> = [
+  ...POST_MERGE_CHILD_PHRASES.map((phrase) => ({
     phrase,
     re: new RegExp(`\\b${phrase.split(' ').join('\\s+')}\\b`, 'i'),
-  }));
+  })),
+  ...POST_MERGE_CHILD_STATE_TELLS,
+];
 
 /** Container kinds whose children may legitimately wait on a SIBLING's merge. */
 export function isPostMergeChildCheckExemptContainer(
