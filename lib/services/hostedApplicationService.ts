@@ -301,6 +301,19 @@ export const hostedApplicationService = {
     });
   },
 
+  /** One page of the application's releases, newest first, after `after`
+   *  (MOTIR-10036). A workspace read: the caller has already been gated. */
+  async listReleasesPage(
+    workspaceId: string,
+    applicationId: string,
+    page: { after: { createdAt: Date; id: string } | null; take: number },
+  ): Promise<HostedReleaseDto[]> {
+    return withWorkspaceServiceContext(workspaceId, async (tx) => {
+      const rows = await hostedReleaseRepository.listPageByApplication(applicationId, page, tx);
+      return rows.map(toHostedReleaseDto);
+    });
+  },
+
   /** A new release of a commit, in `building`. */
   async createRelease(
     input: CreateReleaseInput,

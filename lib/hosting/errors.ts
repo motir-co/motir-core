@@ -309,3 +309,14 @@ export class RollbackFailedError extends Error {
     this.name = 'RollbackFailedError';
   }
 }
+
+/** A release-history cursor that did not decode (MOTIR-10036). Thrown rather
+ *  than swallowed, so the route answers 400 instead of restarting from the
+ *  newest page for ever. → 400 */
+export class InvalidReleaseCursorError extends Error {
+  readonly code = 'INVALID_RELEASE_CURSOR' as const;
+  constructor() {
+    super('Invalid release cursor.');
+    this.name = 'InvalidReleaseCursorError';
+  }
+}

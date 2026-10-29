@@ -233,4 +233,30 @@ export const hostedReleaseRepository = {
          AND "usage_settled_until" IS NOT DISTINCT FROM ${window.expectedSettledUntil}::timestamptz`;
     return changed === 1;
   },
+
+  /** One page of the application's releases, newest first, after the
+   *  `(createdAt, id)` position `after` (MOTIR-10036). */
+  async listPageByApplication(
+    applicationId: string,
+    page: { after: { createdAt: Date; id: string } | null; take: number },
+    tx: Prisma.TransactionClient,
+  ): Promise<HostedReleaseRow[]> {
+    const { after, take } = page;
+    return tx.hostedRelease.findMany({
+      where: {
+        applicationId,
+        ...(after
+          ? {
+              OR: [
+                { createdAt: { lt: after.createdAt } },
+                { createdAt: after.createdAt, id: { lt: after.id } },
+              ],
+            }
+          : {}),
+      },
+      include: RESTORED_BY,
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take,
+    });
+  },
 };
