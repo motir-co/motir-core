@@ -819,6 +819,17 @@ describe('a CONFLICTED member is not a merge candidate (MOTIR-5913)', () => {
     expect(await gatesOf(item.id)).toEqual([]);
   });
 
+  it('a member stored `behind` a strict base at its head is held the same way (MOTIR-10054)', async () => {
+    const s = await makeScenario('mg-behind-hold@example.com');
+    const item = await cardWithPrs(s, 'Out of date', [35]);
+    await storeReading(35, 'behind', 'sha-b');
+
+    await ci({ conclusion: 'success', headSha: 'sha-b', number: 35 });
+
+    expect(await statusOf(item.id)).toBe('implemented');
+    expect(await gatesOf(item.id)).toEqual([]);
+  });
+
   it('a reading at an OLDER head is OWED, not clean (MOTIR-7063): green at the new head waits, and the host’s clean answer there promotes with ONE gate', async () => {
     const s = await makeScenario('mg-conflict-old-head@example.com');
     const item = await cardWithPrs(s, 'Old reading', [32]);

@@ -105,6 +105,7 @@ const PR_GREEN = {
   ci: 'passing' as const,
   queueExit: null,
   conflict: null,
+  outOfDate: null,
 };
 const PR_GREEN_2 = {
   repo: 'acme/ai',
@@ -112,6 +113,7 @@ const PR_GREEN_2 = {
   ci: 'passing' as const,
   queueExit: null,
   conflict: null,
+  outOfDate: null,
 };
 
 function offer(over: Partial<Extract<WorkItemRepairViewDto, { state: 'offer' }>> = {}) {

@@ -296,6 +296,7 @@ describe('the late stack — the fix part sits inside the Development card', () 
           ci: 'failing',
           queueExit: null,
           conflict: null,
+          outOfDate: null,
         },
       ],
       lastGaveUp: null,

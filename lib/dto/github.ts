@@ -12,6 +12,11 @@ export interface GithubIdentityDTO {
   githubLogin: string;
   avatarUrl: string | null;
   createdAt: string;
+  /** GitHub refused to renew this sign-in (`refresh_refused_at` is set — Bug
+   *  MOTIR-10021): it is dead until the member reconnects, and the account Git
+   *  pane renders its *Needs re-auth* state (Bug MOTIR-10047). A boolean, never
+   *  the timestamp or anything about the token behind it. */
+  needsReauth: boolean;
 }
 
 // The installation grant (MOTIR-891) — "Grant 2". What crosses the API boundary

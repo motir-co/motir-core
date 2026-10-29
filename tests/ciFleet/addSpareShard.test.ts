@@ -40,7 +40,8 @@ import { TEST_MANAGEMENT_KEY, stubAwsManagementCredential } from '../helpers/aws
 // database for the rows and the audit entry, GitHub stubbed at `fetch`, the AWS
 // management calls behind an in-memory organization and the network built by
 // the pool-account definition's stack instance, seeded into the in-memory EC2
-// and read back by the REAL `readAwsShardNetwork` (MOTIR-9845).
+// and read back by the REAL `readAwsShardNetwork` (MOTIR-9845) — and its
+// person-run caller, `addSpareShardByOperator` (MOTIR-10065).
 
 const ec2FakePath = '../../packages/orchestrator/test/contract/awsEc2Fake';
 interface Ec2Fake extends Ec2Api {
@@ -70,6 +71,9 @@ let organization: FakeOrganization;
 let ec2: Ec2Fake;
 let unregister: () => void;
 let systemUserId: string;
+let operatorId: string;
+
+const OPERATOR = 'fleet-spare-operator@example.com';
 
 const deps = (): AddSpareShardDeps => ({
   raise: { management: () => organization, now: () => new Date() },
@@ -126,6 +130,8 @@ beforeEach(async () => {
     }),
   );
   systemUserId = (await createTestUser({ email: MOTIR_SYSTEM_USER_EMAIL })).id;
+  operatorId = (await createTestUser({ email: OPERATOR })).id;
+  await adminDb.user.update({ where: { id: operatorId }, data: { platformRole: 'superadmin' } });
   await primaryAccount();
 });
 
@@ -326,5 +332,218 @@ describe('refusals', () => {
     ).rejects.toThrow(/no primary account/);
     expect(organization.calls).toEqual([]);
     expect(github.calls).toEqual([]);
+  });
+});
+
+// `fleet-admin add-spare` (MOTIR-10065): the same spare path, run by a person.
+describe('addSpareShardByOperator', () => {
+  const byOperator = (fleetKind = 'ci_runner', operatorEmail = OPERATOR, d = deps()) =>
+    fleetShardProvisioningService.addSpareShardByOperator({ fleetKind, operatorEmail }, d);
+  const refusal = async (promise: Promise<unknown>) => {
+    const err = await promise.catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(FleetShardProvisioningRefusedError);
+    return (err as FleetShardProvisioningRefusedError).problems.join('\n');
+  };
+  const spare = (name: string, state: 'provisioning' | 'active' | 'disabled', vcpuQuota = 5) =>
+    fleetShardService.createShard({
+      name,
+      fleetKind: 'ci_runner',
+      provider: 'aws',
+      role: 'spare',
+      state,
+      githubOrg: ORG,
+      githubInstallationId: '9001',
+      awsAccountId: '777788889999',
+      awsRegion: 'us-east-1',
+      credentialRef: 'FLEET_SHARD_SPARE',
+      limits: { vcpuQuota },
+    });
+
+  it('creates the kind’s spare through addSpareShard: derived name and email, the primary’s org and region, the raise filed', async () => {
+    const addSpare = vi.spyOn(fleetShardProvisioningService, 'addSpareShard');
+    const result = await byOperator();
+
+    expect(addSpare).toHaveBeenCalledWith(
+      { fleetKind: 'ci_runner', operatorEmail: OPERATOR },
+      expect.anything(),
+    );
+    expect(creates()).toHaveLength(1);
+    expect(organization.usedEmails).toEqual(new Set(['aws+ci-runner-pool-1@motir.co']));
+    expect(result.shard).toMatchObject({
+      name: 'ci-runner-pool-1',
+      role: 'spare',
+      state: 'provisioning',
+      github: { org: ORG },
+      aws: { region: 'us-east-1' },
+    });
+    expect(raises()).toEqual([`requestVcpuQuotaIncrease:${result.shard.aws!.accountId}:200`]);
+    expect(result.pendingManualSteps).toEqual([]);
+    addSpare.mockRestore();
+  });
+
+  it('records the operator as the audit actor, with a fleet-admin add-spare reason', async () => {
+    const result = await byOperator();
+    const audit = await adminDb.platformAuditLog.findFirstOrThrow({
+      where: { action: 'fleet.shard.add', targetId: result.shard.id },
+    });
+    expect(audit.actorUserId).toBe(operatorId);
+    expect(audit.reason).toBe('fleet-admin add-spare ci-runner-pool-1 (ci_runner on aws)');
+  });
+
+  it('leaves the growth path’s actor and reason as they were', async () => {
+    const result = await fleetShardProvisioningService.addSpareShard(
+      { fleetKind: 'ci_runner' },
+      deps(),
+    );
+    const audit = await adminDb.platformAuditLog.findFirstOrThrow({
+      where: { action: 'fleet.shard.add', targetId: result.shard.id },
+    });
+    expect(audit.actorUserId).toBe(systemUserId);
+    expect(audit.reason).toMatch(/^pool growth: add spare ci-runner-pool-1/);
+  });
+
+  it('resumes the same account after an interruption between CreateAccount and the row', async () => {
+    organization.stackInstanceFailure = new Error('the run died waiting for CURRENT');
+    await expect(byOperator()).rejects.toBeTruthy();
+    expect(creates()).toHaveLength(1);
+    expect(await spareRows()).toHaveLength(0);
+
+    const result = await byOperator();
+
+    expect(creates()).toHaveLength(1);
+    expect(result.shard.name).toBe('ci-runner-pool-1');
+    expect(await spareRows()).toHaveLength(1);
+  });
+
+  it('resumes a provisioning spare whose raise was never filed', async () => {
+    organization.requestFailure = new AwsManagementApiError(
+      'service-quotas',
+      'TooManyRequestsException',
+      429,
+    );
+    const first = await byOperator();
+    expect(first.steps.at(-1)).toMatchObject({ step: 'quota_raise', outcome: 'failed' });
+
+    const second = await byOperator();
+    expect(second.shard.id).toBe(first.shard.id);
+    expect(second.steps.at(-1)).toMatchObject({ step: 'quota_raise', outcome: 'done' });
+    expect(creates()).toHaveLength(1);
+  });
+
+  it('refuses a second run after it completed, naming the spare and its open raise, with no external call', async () => {
+    await byOperator();
+    const calls = organization.calls.length;
+    const githubCalls = github.calls.length;
+
+    const problems = await refusal(byOperator());
+
+    expect(problems).toContain('ci-runner-pool-1 is in flight');
+    expect(problems).toContain('its raise to 200 vCPU is pending and still open');
+    expect(problems).toContain('fleet-admin disable --name ci-runner-pool-1');
+    expect(organization.calls).toHaveLength(calls);
+    expect(github.calls).toHaveLength(githubCalls);
+    expect(await spareRows()).toHaveLength(1);
+  });
+
+  it('refuses a spare whose raise has closed', async () => {
+    const { shard } = await byOperator();
+    await adminDb.fleetQuotaRequest.updateMany({
+      where: { shardId: shard.id },
+      data: { status: 'denied', closedAt: new Date() },
+    });
+    expect(await refusal(byOperator())).toContain('its raise to 200 vCPU is denied and closed');
+  });
+
+  it('refuses a provisioning spare already at the target with no raise — the resume cannot pick it up', async () => {
+    await spare('ci-runner-pool-7', 'provisioning', 200);
+    const problems = await refusal(byOperator());
+    expect(problems).toContain('ci-runner-pool-7 is in flight (provisioning; no raise was filed)');
+    expect(creates()).toHaveLength(0);
+  });
+
+  it('refuses while the kind has a ready spare, naming it', async () => {
+    await spare('ci-runner-pool-3', 'active', 200);
+    const problems = await refusal(byOperator());
+    expect(problems).toContain('ci_runner already has a ready spare: ci-runner-pool-3 (active');
+    expect(organization.calls).toEqual([]);
+  });
+
+  it('refuses while a pool growth of the kind is unfinished, naming it', async () => {
+    const primary = await fleetShardService.findShardByName('ci-runner-use1-1');
+    const event = await adminDb.fleetGrowthEvent.create({
+      data: {
+        fleetKind: 'ci_runner',
+        triggeringShardId: primary!.id,
+        vcpuInUse: 450,
+        grantedQuota: 640,
+        outcome: 'waiting_for_quota',
+      },
+    });
+    const problems = await refusal(byOperator());
+    expect(problems).toContain(`a pool growth of ci_runner is unfinished (event ${event.id}`);
+    expect(organization.calls).toEqual([]);
+  });
+
+  it('creates a new spare when the kind’s only spare is disabled', async () => {
+    await spare('ci-runner-pool-1', 'disabled');
+    const result = await byOperator();
+    expect(result.shard.name).toBe('ci-runner-pool-2');
+    expect(creates()).toHaveLength(1);
+  });
+
+  it('refuses a kind with no AWS primary — a Fly primary does not count — naming add-shard --provider aws', async () => {
+    await adminDb.fleetShard.update({
+      where: { name: 'ci-runner-use1-1' },
+      data: { state: 'disabled' },
+    });
+    await adminDb.fleetShard.create({
+      data: {
+        name: 'ci-runner-fly-1',
+        fleetKind: 'ci_runner',
+        provider: 'fly',
+        role: 'primary',
+        state: 'active',
+        githubOrg: 'motir-fly-org',
+        githubInstallationId: '9001',
+        flyOrg: 'motir',
+        flyApp: 'motir-ci-runner-fly-1',
+        flyRegion: 'iad',
+        credentialRef: 'FLEET_SHARD_FLY_TEST',
+        machineLimit: 4,
+      },
+    });
+    const problems = await refusal(byOperator());
+    expect(problems).toContain('ci_runner has no primary account on aws');
+    expect(problems).toContain(
+      'run fleet-admin add-shard --provider aws --fleet-kind ci_runner first',
+    );
+    expect(organization.calls).toEqual([]);
+    expect(github.calls).toEqual([]);
+  });
+
+  it.each([
+    ['unset', undefined],
+    ['without {name}', 'aws@motir.co'],
+  ])(
+    'refuses with the email template %s, naming it, before any external call',
+    async (_, value) => {
+      const problems = await refusal(
+        byOperator('ci_runner', OPERATOR, {
+          ...deps(),
+          env: { ...process.env, [AWS_MEMBER_EMAIL_TEMPLATE_ENV]: value },
+        }),
+      );
+      expect(problems).toContain(AWS_MEMBER_EMAIL_TEMPLATE_ENV);
+      expect(organization.calls).toEqual([]);
+      expect(github.calls).toEqual([]);
+    },
+  );
+
+  it('refuses an operator who is not a platform superadmin, and an unknown fleet kind', async () => {
+    await adminDb.user.update({ where: { id: operatorId }, data: { platformRole: null } });
+    expect(await refusal(byOperator())).toContain(`--operator ${OPERATOR} is not a superadmin`);
+    expect(await refusal(byOperator('nope'))).toContain('--fleet-kind nope is not one of');
+    expect(await refusal(byOperator(''))).toContain('--fleet-kind (none) is not one of');
+    expect(organization.calls).toEqual([]);
   });
 });
