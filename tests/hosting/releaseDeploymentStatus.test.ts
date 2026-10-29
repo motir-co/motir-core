@@ -18,6 +18,7 @@ import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { hostedApplicationService } from '@/lib/services/hostedApplicationService';
 import { hostedRepositoryAccessService } from '@/lib/services/hostedRepositoryAccessService';
 import { productionReleaseService } from '@/lib/services/productionReleaseService';
+import { productionRollbackService } from '@/lib/services/productionRollbackService';
 import {
   releaseDeploymentStatusService as service,
   type ReleaseStatusRequestedData,
@@ -378,6 +379,38 @@ describe('a release that is replaced or rolled back', () => {
       [SHA_B, 'inactive'],
     ]);
     expect(deployments).toHaveLength(2);
+  });
+});
+
+describe('a rollback through the rollback service (MOTIR-10035)', () => {
+  it('announces inactive for the left release and success for the restored one, read back', async () => {
+    const fx = await workspace();
+    const repo = await motirRepo(fx);
+    const first = await release(repo, SHA_A);
+    const second = await release(repo, SHA_B);
+    await service.postReleaseDeploymentStatus(first.id);
+    await service.postReleaseDeploymentStatus(second.id);
+    const announced: string[] = [];
+    vi.spyOn(service, 'enqueueReleaseStatusPost').mockImplementation(async (releaseId) => {
+      announced.push(releaseId);
+    });
+
+    await productionRollbackService.rollbackProduction({
+      projectRepositoryId: repo.projectRepositoryId,
+      actor: fx.ctx,
+    });
+    // The job the announcements enqueue, run for each release they named.
+    for (const releaseId of new Set(announced)) {
+      await service.postReleaseDeploymentStatus(releaseId);
+    }
+    await deliverWebhooks(repo);
+
+    expect([...new Set(announced)].sort()).toEqual([first.id, second.id].sort());
+    const stored = await storedDeployments(repo);
+    expect(stored.map((d) => [d.commitSha, d.state])).toEqual([
+      [SHA_A, 'success'],
+      [SHA_B, 'inactive'],
+    ]);
   });
 });
 

@@ -266,3 +266,46 @@ export class ReleaseStatusPostError extends Error {
     this.name = 'ReleaseStatusPostError';
   }
 }
+
+/** The actor may not roll back production: they do not hold the project's
+ *  administration permission (MOTIR-10035). → 403 */
+export class RollbackNotPermittedError extends Error {
+  readonly code = 'ROLLBACK_NOT_PERMITTED' as const;
+  constructor(readonly projectRepositoryId: string) {
+    super(`Rolling back ${projectRepositoryId} needs the project's administration permission.`);
+    this.name = 'RollbackNotPermittedError';
+  }
+}
+
+/** The application has no release a rollback can restore — no previous
+ *  pointer, or one that never went live (MOTIR-10035). → 409 */
+export class NoPreviousReleaseError extends Error {
+  readonly code = 'NO_PREVIOUS_RELEASE' as const;
+  constructor(readonly applicationId: string) {
+    super(`Application ${applicationId} has no previous release to roll back to.`);
+    this.name = 'NoPreviousReleaseError';
+  }
+}
+
+/** The step of a rollback that failed (MOTIR-10035). */
+export type RollbackStep = 'app' | 'rollback' | 'verify';
+
+/**
+ * The deploy port's rollback failed — the step, the HTTP status and a code ONLY,
+ * never the provider's message. Nothing moved: the previous release is still the
+ * one serving and every row is as it was (MOTIR-10035). → 502
+ */
+export class RollbackFailedError extends Error {
+  readonly code = 'ROLLBACK_FAILED' as const;
+  constructor(
+    readonly applicationId: string,
+    readonly step: RollbackStep,
+    readonly status: number | null,
+    readonly causeCode: string,
+  ) {
+    super(
+      `Rolling back ${applicationId} failed at ${step}: ${causeCode}${status === null ? '' : ` (HTTP ${status})`}.`,
+    );
+    this.name = 'RollbackFailedError';
+  }
+}

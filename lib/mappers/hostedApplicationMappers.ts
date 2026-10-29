@@ -6,7 +6,12 @@ import type { HostedApplicationDto, HostedReleaseDto } from '@/lib/dto/hostedApp
 // copied — the rows these map are read without it (MOTIR-10028) — so no caller
 // of a service can reach the database URL through a DTO.
 
-export function toHostedReleaseDto(row: HostedRelease): HostedReleaseDto {
+/** A release row, with the person who restored it when the read loaded them. */
+export type HostedReleaseRow = HostedRelease & {
+  restoredBy?: { id: string; name: string } | null;
+};
+
+export function toHostedReleaseDto(row: HostedReleaseRow): HostedReleaseDto {
   return {
     id: row.id,
     applicationId: row.applicationId,
@@ -18,6 +23,8 @@ export function toHostedReleaseDto(row: HostedRelease): HostedReleaseDto {
     providerReleaseId: row.providerReleaseId,
     failureReason: row.failureReason,
     usageSeconds: row.usageSeconds,
+    restoredBy: row.restoredBy ? { id: row.restoredBy.id, name: row.restoredBy.name } : null,
+    restoredAt: row.restoredAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
     liveAt: row.liveAt?.toISOString() ?? null,
     endedAt: row.endedAt?.toISOString() ?? null,
@@ -26,8 +33,8 @@ export function toHostedReleaseDto(row: HostedRelease): HostedReleaseDto {
 
 /** An application row with its two release pointers loaded. */
 export type HostedApplicationWithReleases = Omit<HostedApplication, 'databaseUrlCiphertext'> & {
-  currentRelease: HostedRelease | null;
-  previousRelease: HostedRelease | null;
+  currentRelease: HostedReleaseRow | null;
+  previousRelease: HostedReleaseRow | null;
 };
 
 export function toHostedApplicationDto(row: HostedApplicationWithReleases): HostedApplicationDto {

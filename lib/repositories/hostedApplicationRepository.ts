@@ -8,7 +8,12 @@ import type { HostedApplicationWithReleases } from '@/lib/mappers/hostedApplicat
 // the table's `hosted_application_workspace_or_system` policy admits the system
 // context the release paths run under and the bound workspace's own session.
 
-const WITH_RELEASES = { currentRelease: true, previousRelease: true } as const;
+/** Who restored a release, for its DTO (MOTIR-10035). */
+const RESTORED_BY = { restoredBy: { select: { id: true, name: true } } } as const;
+const WITH_RELEASES = {
+  currentRelease: { include: RESTORED_BY },
+  previousRelease: { include: RESTORED_BY },
+} as const;
 /** The default reads never select the database URL's ciphertext: only
  *  `findDatabaseById` does, for the production database service (MOTIR-10028). */
 const WITHOUT_SECRET = { databaseUrlCiphertext: true } as const;
@@ -187,5 +192,14 @@ export const hostedApplicationRepository = {
       SELECT "id" FROM "hosted_application" WHERE "id" = ${id} FOR UPDATE
     `;
     return rows.length > 0;
+  },
+
+  /**
+   * Serialize the rollbacks of ONE application (MOTIR-10035): a
+   * transaction-scoped advisory lock, released when `tx` ends. Held across the
+   * deploy port's rollback, which the row lock must never be.
+   */
+  async lockRollback(id: string, tx: Prisma.TransactionClient): Promise<void> {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`hosted-application-rollback:${id}`}, 0))`;
   },
 };

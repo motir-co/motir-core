@@ -64,7 +64,15 @@ export interface ProductionSwitch {
 /** Optional values a move records beside the new state. */
 export type ReleaseTransitionDetails = Pick<
   HostedReleaseStamp,
-  'failureReason' | 'artifactRef' | 'providerReleaseId' | 'providerRef'
+  | 'failureReason'
+  | 'artifactRef'
+  | 'providerReleaseId'
+  | 'providerRef'
+  // A rollback's restore (MOTIR-10035): who asked, when, and the usage window
+  // restarted at the restore.
+  | 'usageSettledUntil'
+  | 'restoredById'
+  | 'restoredAt'
 >;
 
 export interface CreateReleaseInput {

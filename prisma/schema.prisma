@@ -470,6 +470,8 @@ model User {
   capacityAlertSettingsUpdated     CapacityAlertSetting[]              @relation("CapacityAlertSettingUpdater")
   /// Environment-configuration changes this user made (MOTIR-9960). SetNull on delete.
   environmentConfigChanges         EnvironmentConfigChange[]           @relation("EnvironmentConfigChangeActor")
+  /// Production releases this user restored by a rollback (MOTIR-10035). SetNull on delete.
+  hostedReleasesRestored           HostedRelease[]                     @relation("HostedReleaseRestoredBy")
 
   @@index([lastActiveProjectId])
   @@map("user")
@@ -12155,6 +12157,10 @@ model HostedRelease {
   /// The end of the last window added to `usageSeconds`; the next settle reads
   /// from here (from `liveAt` the first time) (MOTIR-10034).
   usageSettledUntil  DateTime?          @map("usage_settled_until") @db.Timestamptz(3)
+  /// Who restored this release by a rollback, and when (MOTIR-10035); null for
+  /// a release never restored.
+  restoredById       String?            @map("restored_by_id")
+  restoredAt         DateTime?          @map("restored_at") @db.Timestamptz(3)
   /// The GitHub deployment Motir created for this release on its repository
   /// (MOTIR-10033), set once.
   githubDeploymentId String?            @map("github_deployment_id")
@@ -12169,9 +12175,11 @@ model HostedRelease {
   application HostedApplication  @relation("HostedApplicationReleases", fields: [applicationId], references: [id], onDelete: Cascade)
   currentOf   HostedApplication? @relation("HostedApplicationCurrentRelease")
   previousOf  HostedApplication? @relation("HostedApplicationPreviousRelease")
+  restoredBy  User?              @relation("HostedReleaseRestoredBy", fields: [restoredById], references: [id], onDelete: SetNull)
 
   @@index([applicationId, createdAt])
   @@index([workspaceId])
+  @@index([restoredById])
   @@map("hosted_release")
 }
 

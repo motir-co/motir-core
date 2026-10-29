@@ -89,6 +89,8 @@ export default defineConfig({
       'tests/hosting/hostedRepositoryAccessService.test.ts',
       // MOTIR-10033 — the release status post's error.
       'tests/hosting/releaseDeploymentStatus.test.ts',
+      // MOTIR-10035 — rollback's three errors.
+      'tests/hosting/productionRollbackService.test.ts',
     ],
     coverage: {
       provider: 'v8',

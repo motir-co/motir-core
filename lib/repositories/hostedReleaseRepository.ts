@@ -6,10 +6,14 @@ import type {
   Prisma,
 } from '@/generated/prisma/client';
 import { dbRead } from '@/lib/db';
+import type { HostedReleaseRow } from '@/lib/mappers/hostedApplicationMappers';
 
 // Single-op data access for `hosted_release` — one row per release of a commit
 // on a hosted application (Story MOTIR-9797 · MOTIR-10026). Writes take a
 // required `tx`.
+
+/** Who restored a release, for its DTO (MOTIR-10035). */
+const RESTORED_BY = { restoredBy: { select: { id: true, name: true } } } as const;
 
 export interface HostedReleaseInsert {
   workspaceId: string;
@@ -23,7 +27,15 @@ export interface HostedReleaseInsert {
 export type HostedReleaseStamp = Partial<
   Pick<
     HostedRelease,
-    'liveAt' | 'endedAt' | 'failureReason' | 'artifactRef' | 'providerReleaseId' | 'providerRef'
+    | 'liveAt'
+    | 'endedAt'
+    | 'failureReason'
+    | 'artifactRef'
+    | 'providerReleaseId'
+    | 'providerRef'
+    | 'usageSettledUntil'
+    | 'restoredById'
+    | 'restoredAt'
   >
 >;
 
@@ -53,9 +65,9 @@ export const hostedReleaseRepository = {
     return tx.hostedRelease.create({ data: input });
   },
 
-  async findById(id: string, tx?: Prisma.TransactionClient): Promise<HostedRelease | null> {
+  async findById(id: string, tx?: Prisma.TransactionClient): Promise<HostedReleaseRow | null> {
     const client = tx ?? dbRead;
-    return client.hostedRelease.findUnique({ where: { id } });
+    return client.hostedRelease.findUnique({ where: { id }, include: RESTORED_BY });
   },
 
   /**
@@ -94,10 +106,11 @@ export const hostedReleaseRepository = {
     applicationId: string,
     take: number,
     tx?: Prisma.TransactionClient,
-  ): Promise<HostedRelease[]> {
+  ): Promise<HostedReleaseRow[]> {
     const client = tx ?? dbRead;
     return client.hostedRelease.findMany({
       where: { applicationId },
+      include: RESTORED_BY,
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take,
     });

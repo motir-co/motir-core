@@ -19,6 +19,10 @@ export interface HostedReleaseDto {
   providerReleaseId: string | null;
   failureReason: string | null;
   usageSeconds: number | null;
+  /** Who restored the release by a rollback, and when — null for a release
+   *  never restored (MOTIR-10035). */
+  restoredBy: { id: string; name: string } | null;
+  restoredAt: string | null;
   createdAt: string;
   liveAt: string | null;
   endedAt: string | null;
