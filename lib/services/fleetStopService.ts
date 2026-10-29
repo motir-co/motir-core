@@ -4,6 +4,7 @@ import {
   ciRunnerProvisioningIntentRepository as intents,
   CI_RUNNER_INTENT_FAILED,
 } from '@/lib/repositories/ciRunnerProvisioningIntentRepository';
+import { githubInstallationRepository } from '@/lib/repositories/githubInstallationRepository';
 import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
 import { ciActionsGateService } from '@/lib/services/ciActionsGateService';
 import { actionsRunsClient, type ActionsRepoRef } from '@/lib/github/actionsRuns';
@@ -146,13 +147,20 @@ export const fleetStopService = {
    * (`ciActionsGateService.listOwnedWorkspaceIds` says why no other direction is
    * readable from a background path), and the owner is re-checked per row: a
    * repository handed off out of Motir's org is the user's.
+   *
+   * Each ref carries GitHub's NUMERIC installation id (MOTIR-10071). The mirror's
+   * `installationId` is the foreign key to `GithubInstallation.id`, a cuid GitHub
+   * never issued — a token minted for it is a 404, so no run would ever be
+   * listed or cancelled. It is resolved under `withSystemContext`: the
+   * provisioning installation Motir-created repositories live in is shared and
+   * has no `workspace_id`, so a tenant context cannot read it.
    */
   async listHostedRepos(organizationId: string): Promise<ActionsRepoRef[]> {
     if (!provisioningOrgLogin()) return [];
     // Every org Motir owns — a fleet account's too (MOTIR-8974).
     const owners = await motirOwnedOrgLogins();
     const workspaceIds = await ciActionsGateService.listOwnedWorkspaceIds(organizationId, owners);
-    const repos: ActionsRepoRef[] = [];
+    const hosted: { installationRowId: string; owner: string; repo: string }[] = [];
     for (const workspaceId of workspaceIds) {
       const rows = await withWorkspaceServiceContext(workspaceId, (tx) =>
         projectRepoRepository.listMotirCreatedByWorkspace(workspaceId, tx),
@@ -160,8 +168,30 @@ export const fleetStopService = {
       for (const row of rows) {
         const repo = row.githubRepo;
         if (!repo || !isMotirHostedOwner(repo.owner, owners)) continue;
-        repos.push({ installationId: repo.installationId, owner: repo.owner, repo: repo.name });
+        hosted.push({ installationRowId: repo.installationId, owner: repo.owner, repo: repo.name });
       }
+    }
+    if (hosted.length === 0) return [];
+
+    const hostInstallationIds = await withSystemContext((tx) =>
+      githubInstallationRepository.findHostInstallationIdsByIds(
+        hosted.map((row) => row.installationRowId),
+        tx,
+      ),
+    );
+    const repos: ActionsRepoRef[] = [];
+    for (const { installationRowId, owner, repo } of hosted) {
+      const installationId = hostInstallationIds.get(installationRowId);
+      // The mirror row cascades with its installation, so a miss is an
+      // installation removed between the two reads — its repositories with it.
+      if (!installationId) {
+        console.error('[fleetStopService] a hosted repository has no installation on record', {
+          organizationId,
+          repo: `${owner}/${repo}`,
+        });
+        continue;
+      }
+      repos.push({ installationId, owner, repo });
     }
     return repos;
   },

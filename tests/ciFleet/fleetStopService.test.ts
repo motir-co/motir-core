@@ -10,6 +10,7 @@ import { fleetShardOrchestratorService } from '@/lib/services/fleetShardOrchestr
 import { runnerJitConfigClient } from '@/lib/github/runnerJitConfig';
 import { actionsRunsClient } from '@/lib/github/actionsRuns';
 import { ciRunnerProvisioningIntentRepository } from '@/lib/repositories/ciRunnerProvisioningIntentRepository';
+import { githubInstallationRepository } from '@/lib/repositories/githubInstallationRepository';
 import { withSystemContext } from '@/lib/workspaces/context';
 import * as orchestrator from '@/lib/orchestrator';
 import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
@@ -25,9 +26,23 @@ import { randomToken } from '../helpers/random';
 // is real: the intents, their RLS contexts, the mirror → workspace → org
 // traversal and the settle that records why each container ended.
 
+// The token mint answers as GitHub does (MOTIR-10071): only for an installation
+// id GitHub issued — a seeded `GithubInstallation.installationId` — and 404 for
+// any other, Motir's own cuid included. So a run listed or cancelled under the
+// wrong id fails this suite instead of passing behind the fake.
+const minted = vi.hoisted(() => [] as string[]);
+
 vi.mock('@/lib/github/appAuth', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/github/appAuth')>()),
-  mintInstallationToken: vi.fn(async () => ({ token: 'ghs_test', expiresAt: new Date() })),
+  mintInstallationToken: vi.fn(async (installationId: string) => {
+    const { adminDb: admin } = await import('../helpers/adminDb');
+    const issued = await admin.githubInstallation.findUnique({ where: { installationId } });
+    if (!issued) {
+      throw new Error(`installation-token mint failed: token endpoint returned 404`);
+    }
+    minted.push(installationId);
+    return { token: 'ghs_test', expiresAt: new Date() };
+  }),
 }));
 
 const MOTIR_ORG = 'motir-projects';
@@ -64,19 +79,26 @@ async function seedTenant(): Promise<Tenant> {
   };
 }
 
-/** A repository Motir CREATED for the tenant, in Motir's own GitHub org. */
+/** GitHub's numeric id of the installation `seedRepo` puts a tenant's repos in. */
+function hostInstallationIdOf(tenant: Tenant): string {
+  return `inst-${tenant.workspaceId}`;
+}
+
+/** A repository Motir CREATED for the tenant, in Motir's own GitHub org. Its
+ *  installation has a NULL `workspace_id`, as Motir's shared provisioning
+ *  installation does in production — a tenant context cannot read it. */
 async function seedRepo(
   tenant: Tenant,
   name: string,
   opts: { state?: 'created' | 'connected'; owner?: string } = {},
 ): Promise<void> {
   const owner = opts.owner ?? MOTIR_ORG;
-  const installationId = `inst-${tenant.workspaceId}`;
+  const installationId = hostInstallationIdOf(tenant);
   const inst = await adminDb.githubInstallation.upsert({
     where: { installationId },
     create: {
       installationId,
-      workspaceId: tenant.workspaceId,
+      workspaceId: null,
       accountLogin: owner,
       accountType: 'Organization',
       provider: 'github',
@@ -200,6 +222,7 @@ beforeEach(async () => {
   vi.stubEnv('GITHUB_FALLBACK_ORG', MOTIR_ORG);
   liveRuns = new Map();
   cancels = [];
+  minted.length = 0;
   refuse = new Set();
   fakeGithub();
   vi.spyOn(runnerJitConfigClient, 'deleteRunner').mockResolvedValue(undefined);
@@ -231,6 +254,9 @@ describe('fleetStopService.stopOrganization', () => {
 
     expect(result).toEqual({ runsCancelled: 2, containersStopped: 3, failures: 0 });
     expect(cancels.sort()).toEqual([`${MOTIR_ORG}/alpha-api#202`, `${MOTIR_ORG}/alpha-web#101`]);
+    // Every list and cancel minted for GitHub's id, never Motir's cuid (MOTIR-10071).
+    expect(minted.length).toBeGreaterThan(0);
+    expect(new Set(minted)).toEqual(new Set([hostInstallationIdOf(fx)]));
     expect(fakeOrchestrator.liveContainerIds()).toEqual([]);
     expect(fakeOrchestrator.teardowns.map((t) => t.reason)).toEqual([
       'gate_revoked',
@@ -472,6 +498,65 @@ describe('the edges of a stop', () => {
     const result = await fleetStopService.stopOrganization(fx.organizationId, 'admin_stop');
 
     expect(result.containersStopped).toBe(0);
+  });
+});
+
+describe('the installation a stop mints for (MOTIR-10071)', () => {
+  it("lists every hosted repository under GitHub's numeric installation id", async () => {
+    const fx = await seedTenant();
+    const other = await seedTenant();
+    await seedRepo(fx, 'alpha-web');
+    await seedRepo(fx, 'alpha-api');
+    await seedRepo(other, 'theirs');
+    const cuid = (
+      await adminDb.githubInstallation.findUniqueOrThrow({
+        where: { installationId: hostInstallationIdOf(fx) },
+      })
+    ).id;
+
+    const repos = await fleetStopService.listHostedRepos(fx.organizationId);
+
+    expect(repos.map((r) => r.repo).sort()).toEqual(['alpha-api', 'alpha-web']);
+    for (const repo of repos) {
+      expect(repo.installationId).toBe(hostInstallationIdOf(fx));
+      expect(repo.installationId).not.toBe(cuid);
+    }
+  });
+
+  it('a minted cuid is refused, so a run listed under it is a counted failure', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const fx = await seedTenant();
+    await seedRepo(fx, 'alpha-web');
+    liveRuns.set(`${MOTIR_ORG}/alpha-web`, [101]);
+    const cuid = (
+      await adminDb.githubInstallation.findUniqueOrThrow({
+        where: { installationId: hostInstallationIdOf(fx) },
+      })
+    ).id;
+    vi.spyOn(fleetStopService, 'listHostedRepos').mockResolvedValue([
+      { installationId: cuid, owner: MOTIR_ORG, repo: 'alpha-web' },
+    ]);
+
+    const result = await fleetStopService.stopOrganization(fx.organizationId, 'admin_stop');
+
+    expect(result).toEqual({ runsCancelled: 0, containersStopped: 0, failures: 1 });
+    expect(cancels).toEqual([]);
+    expect(minted).toEqual([]);
+  });
+
+  it('a repository whose installation is gone by the resolve is skipped and logged', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const fx = await seedTenant();
+    await seedRepo(fx, 'alpha-web');
+    vi.spyOn(githubInstallationRepository, 'findHostInstallationIdsByIds').mockResolvedValue(
+      new Map(),
+    );
+
+    expect(await fleetStopService.listHostedRepos(fx.organizationId)).toEqual([]);
+    expect(error).toHaveBeenCalledWith(
+      '[fleetStopService] a hosted repository has no installation on record',
+      expect.objectContaining({ repo: `${MOTIR_ORG}/alpha-web` }),
+    );
   });
 });
 
