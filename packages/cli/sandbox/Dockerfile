@@ -235,7 +235,7 @@ RUN apt-get update \
 #
 #   Postgres 16  — motir-core `docker-compose.yml` + `.github/actions/postgres`
 #                  (`image-tag: pg16`), motir-ai `docker-compose.yml` + its
-#                  `ci.yml`, and nextjs-prisma-vercel-starter `docker-compose.yml`
+#                  `ci.yml`, and nextjs-prisma-serverless-starter `docker-compose.yml`
 #                  + `ci.yml` all pin 16. Unanimous across four repositories, so
 #                  a newer major here debugs on an engine no CI ever runs.
 #   pgvector     — motir-core's `work_item_embedding` migration runs

@@ -30,6 +30,7 @@ const ROW_DEFAULTS = {
   seedSource: 'nextjs-prisma-vercel-starter',
   failureReason: null,
   proposalSignal: null,
+  seedMatch: null,
   realizedRepo: null,
   established: false,
   // The TAKE-IT-OVER saga (MOTIR-711) — null is the common case: no handoff has

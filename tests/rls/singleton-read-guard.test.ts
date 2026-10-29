@@ -308,6 +308,35 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
     'public',
     'platform_fleet_kind_switch_read (20261025090000) · platformFleetKindSwitchRead.test "the fleet kind switch read" (under SET LOCAL ROLE motir_app, nothing bound)',
   ],
+  // ── the SEED REGISTRY (Story MOTIR-704 · MOTIR-708) ──────────────────────
+  // Motir's catalogue of what a new repository starts from, read by every
+  // workspace's establish, the planner's request path and the console — no
+  // tenant owns a row. The SELECT arm is `USING (true)`; writes stay behind
+  // `app.platform_staff` and take the caller's `tx`.
+  'seedRegistryEntryRepository.ts#findByKeyOrLegacyKey': [
+    'public',
+    'seed_registry_entry_read (20261028200000_seed_registry) · seedRegistryService.test "ADMITS a read with nothing bound" (under SET LOCAL ROLE motir_app, nothing bound)',
+  ],
+  'seedRegistryEntryRepository.ts#list': [
+    'public',
+    'seed_registry_entry_read (20261028200000_seed_registry) · seedRegistryService.test "ADMITS a read with nothing bound" (under SET LOCAL ROLE motir_app, nothing bound)',
+  ],
+  'seedRegistryEntryRepository.ts#listActive': [
+    'public',
+    'seed_registry_entry_read (20261028200000_seed_registry) · seedRegistryService.test "ADMITS a read with nothing bound" (under SET LOCAL ROLE motir_app, nothing bound)',
+  ],
+  'seedRegistryEntryRepository.ts#findByPromotion': [
+    'public',
+    'seed_registry_entry_read (20261028200000_seed_registry) · seedRegistryService.test "ADMITS a read with nothing bound" (under SET LOCAL ROLE motir_app, nothing bound)',
+  ],
+  'seedRegistryEntryRepository.ts#listCompatible': [
+    'public',
+    'seed_registry_entry_read (20261028200000_seed_registry) · seedRegistryService.test "ADMITS a read with nothing bound" (under SET LOCAL ROLE motir_app, nothing bound)',
+  ],
+  'seedRegistryEntryRepository.ts#listAll': [
+    'public',
+    'seed_registry_entry_read (20261028200000_seed_registry) · seedRegistryService.test "ADMITS a read with nothing bound" (under SET LOCAL ROLE motir_app, nothing bound) — the Repositories room\'s one registry read (MOTIR-712)',
+  ],
   'platformRunModelRepository.ts#findListedModelsForOffer': [
     'public',
     'platform_run_model_read + platform_run_model_list_read (20261004120000) · platformRunModelOfferRead.test "the offer read" (under SET LOCAL ROLE motir_app, nothing bound)',

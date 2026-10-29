@@ -9465,10 +9465,73 @@
     "outcomeNeedsAccess": "Dokończ konfigurację dostępu",
     "connectGithub": "Połącz GitHuba",
     "stateCreated": "Utworzono",
-    "createdDetail": "Hostowane przez Motir · utworzone z szablonu Motir Next.js.",
+    "createdDetail": "Hostowane przez Motir · utworzone z szablonu {seed}.",
     "stateFailed": "Nie udało się utworzyć",
     "actionError": "To się nie udało. Nic nie zostało zmienione — spróbuj ponownie.",
-    "promiseDoor": "Jak działa przenoszenie"
+    "promiseDoor": "Jak działa przenoszenie",
+    "stateProposed": "Jeszcze nie utworzono",
+    "createdDetailInitialised": "Hostowane przez Motir · utworzone jako zainicjowane repozytorium.",
+    "createdDetailNoSeed": "Hostowane przez Motir.",
+    "seed": {
+      "starterPillLabel": "Startuje z {label}",
+      "targetPillLabel": "Hostowane na {target}",
+      "default": "Domyślny",
+      "noTarget": "Brak celu hostingu",
+      "target": {
+        "serverless": "Serverless",
+        "fly": "Fly",
+        "aws": "AWS"
+      },
+      "use": {
+        "internal_tool": "Narzędzie wewnętrzne",
+        "mvp": "MVP",
+        "planned_product": "Planowany produkt"
+      },
+      "size": {
+        "small": "Mały",
+        "medium": "Średni",
+        "large": "Duży"
+      },
+      "why": {
+        "matched": "<b>Dlaczego ten szablon:</b> wdraża się na {target} i jest przeznaczony dla {use, select, internal_tool {narzędzia wewnętrznego} mvp {MVP} planned_product {planowanego produktu} other {tego zastosowania}} tej wielkości.",
+        "matchedTarget": "<b>Dlaczego ten szablon:</b> wdraża się na {target}.",
+        "softUse": "<b>Dlaczego ten szablon:</b> to najbliższy szablon wdrażany na {target}. Żaden szablon {target} nie jest przeznaczony dla {use, select, internal_tool {narzędzia wewnętrznego} mvp {MVP} planned_product {planowanego produktu} other {tego zastosowania}}.",
+        "softSize": "<b>Dlaczego ten szablon:</b> to najbliższy szablon wdrażany na {target}. Żaden szablon {target} nie jest przeznaczony dla repozytorium tej wielkości.",
+        "notDeployed": "<b>Dlaczego ten szablon:</b> to szablon Motir dla aplikacji {role}. Hosting Motir nie wdraża tego repozytorium, więc hosting nie jest pokazywany.",
+        "noStackSignal": "<b>Dlaczego ten szablon:</b> plan nie mówi, jakiego stosu używa to repozytorium, więc startuje ono z typowego szablonu dla repozytorium web na {target}. Wybierz inny, jeśli znasz stos.",
+        "noTarget": "<b>Dlaczego ten szablon:</b> to repozytorium nie ma jeszcze celu hostingu, więc startuje z typowego szablonu dla repozytorium web.",
+        "noMatch": "<b>Dlaczego ten szablon:</b> nie ma szablonu dla repozytorium {role} {where, select, target {na {target}} other {z tym stosem}}, więc startuje ono jako zainicjowane repozytorium: puste repozytorium z plikiem README.",
+        "byHand": "<b>Dlaczego ten szablon:</b> ktoś wybrał go ręcznie dla tego repozytorium."
+      },
+      "fact": {
+        "hosting": "Hosting",
+        "use": "Zastosowanie",
+        "size": "Wielkość",
+        "stack": "Stos",
+        "not_set": "Nie ustawiono",
+        "not_named": "Nie podano",
+        "none": "Brak",
+        "notServed": "· nieobsługiwane",
+        "noRoleStarter": "· żaden szablon {role} nie wdraża się tutaj"
+      },
+      "picker": {
+        "label": "Szablon",
+        "groupTarget": "Szablony {role, select, web {Web} api {API} mobile {Mobile} shared {Shared} infra {Infra} other {Inne}} na {target}",
+        "groupRole": "Szablony {role, select, web {Web} api {API} mobile {Mobile} shared {Shared} infra {Infra} other {Inne}}",
+        "groupAny": "Dowolne repozytorium",
+        "initialisedSub": "Puste repozytorium z plikiem README",
+        "footerTarget": "Tylko szablony dla repozytorium {role}, które wdrażają się na {target}.",
+        "footerNoTarget": "Tylko szablony dla repozytorium {role}. To repozytorium nie ma jeszcze celu hostingu."
+      },
+      "refusal": {
+        "targetMismatch": "<b>Nie można tu użyć {label}.</b> Wdraża się na {targets}, a to repozytorium działa na {target}. Szablon się nie zmienił.",
+        "targetMismatchNoTarget": "<b>Nie można tu użyć {label}.</b> Wdraża się na {targets}, a to repozytorium nie ma celu hostingu. Szablon się nie zmienił.",
+        "retired": "<b>Szablon {label} został wycofany.</b> Motir już go nie oferuje, więc wybierz inny szablon. Szablon się nie zmienił.",
+        "roleMismatch": "<b>Nie można tu użyć {label}.</b> To szablon dla repozytorium {entryRole}, a to repozytorium ma rolę {role}. Szablon się nie zmienił.",
+        "notEditable": "<b>To repozytorium zostało już utworzone,</b> więc nie może już startować z innego szablonu. Odśwież, aby je zobaczyć.",
+        "unknown": "<b>Ten szablon już nie istnieje.</b> Wybierz inny szablon. Szablon się nie zmienił."
+      }
+    }
   },
   "repositoryTakeover": {
     "title": "Repozytoria",
@@ -10146,7 +10209,8 @@
       "navRunModels": "Modele hostowanych uruchomień",
       "navFleetSettings": "Ustawienia floty",
       "navCapacity": "Pojemność dostawców",
-      "navJobs": "Zadania"
+      "navJobs": "Zadania",
+      "navStarters": "Szablony"
     },
     "nav": {
       "overview": "Przegląd",
@@ -10371,6 +10435,10 @@
           },
           "jobs": {
             "dlq_replay": "Ponownie uruchomiono niedostarczony wpis"
+          },
+          "seed_registry": {
+            "promote": "Awansowano repozytorium na szablon startowy",
+            "retire": "Wycofano szablon startowy"
           }
         }
       }
@@ -12763,6 +12831,152 @@
       "dlqEmpty": {
         "title": "Nic nie czeka",
         "body": "Żadne zadanie nie wyczerpało prób. Wpisy niedostarczone pojawią się tutaj, gdy to nastąpi."
+      }
+    },
+    "starters": {
+      "breadcrumb": "Operacje · Szablony",
+      "title": "Szablony",
+      "subtitle": "Od czego startuje repozytorium tworzone przez Motir. Dopasowanie wybiera spośród aktywnych szablonów według roli, celu hostingu, zastosowania i wielkości. Awansuj na szablon repozytorium utworzone przez Motir albo wycofaj szablon.",
+      "promote": "Awansuj repozytorium",
+      "card": {
+        "title": "Biblioteka szablonów",
+        "count": "Najnowsze najpierw · {count, plural, one {# szablon} few {# szablony} many {# szablonów} other {# szablonu}}"
+      },
+      "filter": {
+        "label": "Filtruj szablony",
+        "role": "Rola",
+        "status": "Status",
+        "target": "Cel hostingu",
+        "anyRole": "Dowolna rola",
+        "anyTarget": "Dowolny cel",
+        "all": "Wszystkie"
+      },
+      "status": {
+        "active": "Aktywny",
+        "retired": "Wycofany"
+      },
+      "notDeployed": "Niewdrażany przez hosting Motir",
+      "col": {
+        "starter": "Szablon",
+        "roleStack": "Rola · stos",
+        "serves": "Obsługuje",
+        "hosting": "Hosting",
+        "status": "Status",
+        "provenance": "Pochodzenie",
+        "actions": "Akcje"
+      },
+      "alsoAnswersTo": "Odpowiada też na {keys}",
+      "roleStack": "{role} · {stack}",
+      "anyRoleAnyStack": "dowolna rola · dowolny stos",
+      "everyUse": "Każde zastosowanie",
+      "everySize": "Każda wielkość",
+      "provenance": {
+        "shipped": "Dostarczony z Motir",
+        "promoted": "Awansowany przez <b>{email}</b> dnia {date} z {repo} w <mono>{ref}</mono>",
+        "promotedNoRepo": "Awansowany przez <b>{email}</b> dnia {date} w <mono>{ref}</mono>",
+        "retired": "Wycofany przez <b>{email}</b> dnia {date}: „{reason}”",
+        "removedAccount": "usunięte konto"
+      },
+      "defaultForRole": "Domyślny dla {role}",
+      "defaultForEveryRole": "Domyślny dla każdej roli",
+      "empty": {
+        "title": "Żaden szablon nie pasuje do tych filtrów",
+        "bodyRoleTarget": "Żaden aktywny szablon dla repozytorium {role} nie wdraża się na {target}. Wyczyść filtry, aby zobaczyć całą bibliotekę.",
+        "body": "Żaden szablon nie pasuje do tych filtrów.",
+        "clear": "Wyczyść filtry"
+      },
+      "pager": {
+        "label": "Strony",
+        "showing": "{from}–{to} z {total}",
+        "previous": "Poprzednia strona",
+        "next": "Następna strona"
+      },
+      "retire": {
+        "action": "Wycofaj",
+        "title": "Wycofać {label}?",
+        "body": "Dopasowanie przestaje go wybierać, a wybór szablonu przestaje go oferować. Repozytoria już z niego utworzone zachowują swój kod. Jeszcze nieutworzonego repozytorium, które go wskazuje, nie da się z niego utworzyć, dopóki ktoś nie wybierze innego szablonu.",
+        "reasonLabel": "Powód",
+        "reasonHelp": "Zapisywany w dzienniku audytu wraz z nazwiskiem.",
+        "cancel": "Anuluj",
+        "confirm": "Wycofaj szablon",
+        "done": "Wycofano. {label} nie jest już oferowany nowym repozytoriom.",
+        "failedTitle": "Ten szablon nie został wycofany.",
+        "failed": "Motir nie mógł go wycofać. Spróbuj ponownie.",
+        "defaultTitle": "Tego szablonu nie można wycofać.",
+        "defaultBody": "„{key}” to domyślny szablon dla repozytorium {role}. Zmiana domyślnego to decyzja, a nie akcja operatora.",
+        "defaultBodyEveryRole": "„{key}” to domyślny szablon dla każdej roli. Zmiana domyślnego to decyzja, a nie akcja operatora.",
+        "close": "Zamknij"
+      },
+      "promoteForm": {
+        "breadcrumb": "Operacje · Szablony · Awans",
+        "title": "Awansuj repozytorium",
+        "subtitle": "Motir kopiuje repozytorium w danym ref do własnej organizacji i oferuje kopię jako szablon nowym repozytoriom, które do niego pasują. Istniejące repozytoria się nie zmieniają.",
+        "field": {
+          "source": "Repozytorium utworzone przez Motir",
+          "ref": "Ref",
+          "role": "Rola",
+          "stack": "Stos",
+          "label": "Etykieta",
+          "key": "Klucz",
+          "uses": "Obsługiwane zastosowania",
+          "sizes": "Obsługiwane wielkości",
+          "targets": "Cele hostingu do wdrożenia",
+          "reason": "Powód"
+        },
+        "help": {
+          "ref": "Gałąź, tag lub commit. Szablon jest z niego kopiowany.",
+          "stack": "Jak planista nazywa ten stos, małymi literami.",
+          "label": "To, co ludzie widzą przy swoim repozytorium.",
+          "key": "Małe litery, cyfry i myślniki. To także nazwa kopii w motir-co. Nie można jej później zmienić.",
+          "targets": "Każdy musi być wymieniony w motir.hosting.json repozytorium w danym ref. Nie zaznaczaj żadnego dla szablonu, którego hosting Motir nie wdraża.",
+          "reason": "Zapisywany w dzienniku audytu wraz z nazwiskiem."
+        },
+        "source": {
+          "placeholder": "Wybierz repozytorium",
+          "empty": "Brak pasujących repozytoriów.",
+          "footer": "Tylko repozytoria utworzone przez Motir.",
+          "sub": "{project} · {role} · {state}",
+          "leaving": "przekazywane właścicielowi",
+          "notCreated": "jeszcze nie utworzono"
+        },
+        "rolePlaceholder": "Wybierz rolę",
+        "cancel": "Anuluj",
+        "review": "Sprawdź awans",
+        "confirm": {
+          "title": "Awansować {name} na szablon?",
+          "body": "Motir kopiuje <b>{repo}</b> w <b>{ref}</b> do <b>motir-co/{key}</b> i dodaje <b>{label}</b> do biblioteki. Od tej chwili dopasowanie może go wybrać dla nowego repozytorium {role}, do którego pasuje. Istniejące repozytoria się nie zmieniają.",
+          "roleStack": "Rola · stos",
+          "uses": "Zastosowania",
+          "sizes": "Wielkości",
+          "hosting": "Hosting",
+          "reason": "Powód",
+          "notDeployed": "Niewdrażany przez hosting Motir",
+          "back": "Wstecz",
+          "promote": "Awansuj"
+        },
+        "done": "Awansowano. Nowe repozytoria {role} na {target} mogą teraz startować z {label}.",
+        "doneNoTarget": "Awansowano. Nowe repozytoria {role} mogą teraz startować z {label}.",
+        "refusal": {
+          "sourceTitle": "Tego repozytorium nie można awansować.",
+          "takenOver": "Jest przekazywane właścicielowi lub już zostało przekazane, więc Motir nie może go już kopiować.",
+          "notCreated": "Awansować można tylko repozytorium utworzone przez Motir, a to jest wciąż w stanie {state}.",
+          "organizationRow": "To własne repozytorium organizacji, a Motir nigdy nie kopiuje kodu klienta.",
+          "notMotirHeld": "{repo} nie jest już w organizacji GitHub zarządzanej przez Motir.",
+          "notFound": "Już nie istnieje. Wybierz inne.",
+          "refNotFound": "„{ref}” nie jest gałęzią, tagiem ani commitem {repo}.",
+          "manifestTitle": "motir.hosting.json odrzuca ten awans.",
+          "manifestMissing": "Repozytorium nie ma pliku motir.hosting.json w <b>{ref}</b>, więc nie może deklarować celu hostingu. Dodaj plik w tym ref albo odznacz wszystkie cele hostingu.",
+          "manifestInvalid": "Plik w <b>{ref}</b> jest nieprawidłowy: <b>{field}</b> {reason}",
+          "theDocument": "dokument",
+          "targetNotDeclared": "Nie wymienia <b>{target}</b> w targets (wymienia {declared}). Odznacz {target} albo dodaj go do pliku.",
+          "declaredNone": "nic",
+          "targetNotDeclaredField": "{target} nie ma w motir.hosting.json w {ref}.",
+          "notInList": "„{value}” nie jest {kind, select, role {rolą} useCases {zastosowaniem} sizes {wielkością} other {celem hostingu}}. Wybierz spośród: {list}.",
+          "keyTaken": "Klucz {key} jest już zajęty.",
+          "templateNameTaken": "motir-co/{key} już istnieje i nie jest kopią tego szablonu. Wybierz inny klucz albo najpierw usuń to repozytorium.",
+          "genericTitle": "Motir nie mógł awansować tego repozytorium.",
+          "genericBody": "Nic nie zostało skopiowane. Spróbuj ponownie."
+        }
       }
     }
   },

@@ -10,17 +10,22 @@ import {
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
+import { seedRegistryService } from '@/lib/services/seedRegistryService';
+import { SeedResolutionError } from '@/lib/seedRegistry/errors';
 import { projectRunnerGroupService } from '@/lib/services/projectRunnerGroupService';
 import { fleetRunnerVariableService } from '@/lib/services/fleetRunnerVariableService';
 import { fleetGithubOrgAssignmentService } from '@/lib/services/fleetGithubOrgAssignmentService';
 import type { GithubOrgTarget } from '@/lib/github/orgTarget';
 import { enqueueCodeGraphIndex } from '@/lib/github/indexEnqueue';
+import { getPreplanState } from '@/lib/ai/motirAiClient';
+import type { StoredDesignChoice } from '@/lib/projectRepos/designChoiceSeed';
 import {
   RepoHostOrgUnavailableError,
   RepoNameTakenOnHostError,
   RepoProvisioningError,
   repoProvisioningClient,
   type ProvisionedRepo,
+  type ProvisionRepoInput,
 } from '@/lib/github/repoProvisioning';
 import {
   AiPlanRequiredError,
@@ -225,6 +230,11 @@ export const projectRepoProvisioningService = {
     // which is exactly what the `|| 'ubuntu-latest'` fallback is for.
     await fleetRunnerVariableService.ensureQuietly(hosting.target);
 
+    // THE PROJECT'S DESIGN CHOICE, READ ONCE FOR THE RUN (MOTIR-1529). A row
+    // seeded from a design-system starter wears it from its first commit; every
+    // other row ignores it. Read only when something will be created.
+    const design = willAttempt ? { choice: await readDesignChoice(projectId, ctx) } : undefined;
+
     const results: EstablishRowResult[] = [];
     // SEQUENTIAL on purpose — see the module header.
     for (const row of rows) {
@@ -247,7 +257,7 @@ export const projectRepoProvisioningService = {
         });
         continue;
       }
-      results.push(await establishRow(row, projectName, hosting, ctx));
+      results.push(await establishRow(row, projectName, hosting, design, ctx));
     }
 
     return { projectId, rows: results };
@@ -286,6 +296,35 @@ async function planHosting(organizationId: string, willAttempt: boolean): Promis
   return {};
 }
 
+/**
+ * The project's stored design choice, from the pre-plan session motir-ai keeps
+ * (`GET /v1/preplan`, the read the onboarding wizard resumes from), or null.
+ *
+ * Never fails the run: a project that never reached the design step, an
+ * unreachable motir-ai and a deployment without one all read as "no choice", and
+ * the repository wears the registry defaults — the outcome the card asks for
+ * when no choice is stored. The ids are NOT validated here; the apply resolves
+ * each through the package's own registries and logs any fallback.
+ */
+async function readDesignChoice(
+  projectId: string,
+  ctx: ServiceContext,
+): Promise<StoredDesignChoice | null> {
+  try {
+    const state = await getPreplanState({
+      coreWorkspaceId: ctx.workspaceId,
+      coreProjectId: projectId,
+    });
+    return state.session?.designChoice ?? null;
+  } catch (err) {
+    console.warn(
+      '[projectRepoProvisioningService] design choice not read; the registry defaults apply:',
+      err instanceof Error ? err.message : 'unknown',
+    );
+    return null;
+  }
+}
+
 /** The project's display name — it goes into the repository description, which
  *  GitHub also renders into an initialised repo's README (ADR §2's "a README
  *  naming the project and the row's role"). */
@@ -306,6 +345,7 @@ async function establishRow(
   row: ProjectRepoDto,
   projectName: string,
   hosting: HostingPlan,
+  design: ProvisionRepoInput['design'],
   ctx: ServiceContext,
 ): Promise<EstablishRowResult> {
   // CLAIM the row first (`proposed | failed → creating`). This is the concurrency
@@ -336,12 +376,16 @@ async function establishRow(
   try {
     // Never the fallback org for an organisation assigned another (MOTIR-8966).
     if (hosting.unavailableOrg) throw new RepoHostOrgUnavailableError(hosting.unavailableOrg, null);
+    // The row's seed, through the registry (MOTIR-708). An unknown key or a
+    // retired entry fails THIS row here, before GitHub is asked for anything.
+    const seed = await seedRegistryService.resolveForEstablish(row.seedSource);
     provisioned = await repoProvisioningClient.provisionRepository(
       {
         name: row.name,
         role: row.role,
-        seedSource: row.seedSource,
+        seed,
         projectName,
+        design,
       },
       hosting.target,
     );
@@ -404,19 +448,35 @@ async function establishRow(
     // repository belongs to the ORGANISATION, so two projects using one is the
     // ordinary case. The backstop is now `(project_id, github_repo_id)`, and it
     // catches the mistake that is still a mistake.
-    const settled = await projectRepoSetService.attachRealizedRepo(row.id, mirrored.id, ctx);
-
-    // POST-COMMIT, BEST-EFFORT — the existing chokepoint, per repo (MOTIR-1500).
-    // Nothing is added to the webhook → reconcile → index chain; this is the same
-    // function `enqueueNewlyAddedRepos` calls for a newly-selected repo. A dropped
-    // enqueue self-heals: the job is idempotent and a later push re-triggers it.
-    await enqueueCodeGraphIndex({
-      installationId: provisioned.installationId,
-      workspaceId: ctx.workspaceId,
-      repoOwner: mirrored.owner,
-      repoName: mirrored.name,
-      defaultBranch: mirrored.defaultBranch,
+    const settled = await projectRepoSetService.attachRealizedRepo(row.id, mirrored.id, ctx, {
+      seedHeadSha: provisioned.seedHeadSha,
     });
+
+    // ⚠️ A REPOSITORY MOTIR JUST SEEDED IS NOT INDEXED YET (MOTIR-4589). It holds
+    // exactly its seed, so its graph would be the template's graph — a whole-tree
+    // build attributed to the organisation for nothing the planner cannot be told
+    // for free. Its first index comes from its first push past the seed
+    // (`githubWebhookService.handlePush`), and the reconcile's has-no-graph gate
+    // still offers it every time, so a push that was missed is not a repository
+    // that stays code-blind. Only when the seed head is UNKNOWN (an adopted
+    // repository, an unreadable head) does it index now, as it always did —
+    // POST-COMMIT, best-effort, through the existing chokepoint (MOTIR-1500).
+    if (provisioned.seedHeadSha !== null) {
+      console.warn(
+        '[projectRepoProvisioningService] code graph not indexed yet: no commit beyond the ' +
+          'template. The first push past the seed indexes it. repo / seed head:',
+        `${mirrored.owner}/${mirrored.name}`,
+        provisioned.seedHeadSha,
+      );
+    } else {
+      await enqueueCodeGraphIndex({
+        installationId: provisioned.installationId,
+        workspaceId: ctx.workspaceId,
+        repoOwner: mirrored.owner,
+        repoName: mirrored.name,
+        defaultBranch: mirrored.defaultBranch,
+      });
+    }
 
     return {
       rowId: row.id,
@@ -475,7 +535,7 @@ async function failRow(
  * raw GitHub or database payload must not reach a rendered surface.
  */
 function describeFailure(err: unknown, repoName: string): { reason: string; code: string } {
-  if (err instanceof RepoProvisioningError) {
+  if (err instanceof RepoProvisioningError || err instanceof SeedResolutionError) {
     return { reason: err.reason, code: err.code };
   }
   if (err instanceof RealizedRepoAlreadyClaimedError) {

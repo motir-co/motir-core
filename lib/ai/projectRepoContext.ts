@@ -2,7 +2,7 @@ import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { normalizeTargetRepo } from '@/lib/workItems/targetRepo';
 import type { ProjectRepoRoleDto, ProjectRepoStateDto } from '@/lib/dto/projectRepos';
 import type { HostingSize, HostingTarget, HostingUseCase } from '@/lib/hosting/vocabulary';
-import { starterByHostingTarget } from '@/lib/projectRepos/seedMatching';
+import { seedRegistryService } from '@/lib/services/seedRegistryService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
 // The PROJECT's repository SET as it rides a planning-job envelope (Story
@@ -87,7 +87,8 @@ export interface JobProjectRepoContext {
   repos: JobProjectRepo[];
   /**
    * The seed matching's answer per hosting target (MOTIR-10014), computed at
-   * request time through `seedSourceForHostingTarget` — the starter the planner
+   * request time over the live seed registry (MOTIR-709,
+   * `seedRegistryService.starterByHostingTarget`) — the starter the planner
    * names in a hosting decision card, so that card names what the MATCHING
    * returns rather than a starter written into a rule.
    */
@@ -131,5 +132,7 @@ export async function resolveProjectRepoContext(
       hostingSize: row.hostingSize,
     });
   }
-  return repos.length === 0 ? undefined : { repos, starterByTarget: starterByHostingTarget() };
+  return repos.length === 0
+    ? undefined
+    : { repos, starterByTarget: await seedRegistryService.starterByHostingTarget() };
 }

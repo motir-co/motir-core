@@ -9462,10 +9462,73 @@
     "outcomeNeedsAccess": "アクセスのセットアップを完了する",
     "connectGithub": "GitHub を接続",
     "stateCreated": "作成済み",
-    "createdDetail": "Motir がホスト · Motir Next.js スターターから作成。",
+    "createdDetail": "Motir がホスト · {seed} から作成。",
     "stateFailed": "作成できませんでした",
     "actionError": "うまくいきませんでした。何も変更されていません。もう一度お試しください。",
-    "promiseDoor": "移行の仕組み"
+    "promiseDoor": "移行の仕組み",
+    "stateProposed": "未作成",
+    "createdDetailInitialised": "Motir がホスト · 初期化済みリポジトリとして作成。",
+    "createdDetailNoSeed": "Motir がホスト。",
+    "seed": {
+      "starterPillLabel": "{label} から開始",
+      "targetPillLabel": "{target} でホスト",
+      "default": "デフォルト",
+      "noTarget": "ホスティング先なし",
+      "target": {
+        "serverless": "Serverless",
+        "fly": "Fly",
+        "aws": "AWS"
+      },
+      "use": {
+        "internal_tool": "社内ツール",
+        "mvp": "MVP",
+        "planned_product": "計画済みのプロダクト"
+      },
+      "size": {
+        "small": "小",
+        "medium": "中",
+        "large": "大"
+      },
+      "why": {
+        "matched": "<b>このスターターの理由:</b> {target} にデプロイされ、このサイズの{use, select, internal_tool {社内ツール} mvp {MVP} planned_product {計画済みのプロダクト} other {この用途}}向けに作られています。",
+        "matchedTarget": "<b>このスターターの理由:</b> {target} にデプロイされます。",
+        "softUse": "<b>このスターターの理由:</b> {target} にデプロイされるスターターのうち最も近いものです。{use, select, internal_tool {社内ツール} mvp {MVP} planned_product {計画済みのプロダクト} other {この用途}}向けの {target} スターターはありません。",
+        "softSize": "<b>このスターターの理由:</b> {target} にデプロイされるスターターのうち最も近いものです。このサイズのリポジトリ向けの {target} スターターはありません。",
+        "notDeployed": "<b>このスターターの理由:</b> {role} アプリ向けの Motir のスターターです。Motir ホスティングはこのリポジトリをデプロイしないため、ホスティングは表示されません。",
+        "noStackSignal": "<b>このスターターの理由:</b> 計画にこのリポジトリのスタックが書かれていないため、{target} 上の Web リポジトリ向けの通常のスターターから始めます。スタックがわかっている場合は別のものを選んでください。",
+        "noTarget": "<b>このスターターの理由:</b> このリポジトリにはまだホスティング先がないため、Web リポジトリ向けの通常のスターターから始めます。",
+        "noMatch": "<b>このスターターの理由:</b> {where, select, target {{target} 上の} other {このスタックの}} {role} リポジトリ向けのスターターがないため、初期化済みリポジトリ(README だけの空のリポジトリ)として始めます。",
+        "byHand": "<b>このスターターの理由:</b> このリポジトリ用に誰かが手動で選びました。"
+      },
+      "fact": {
+        "hosting": "ホスティング",
+        "use": "用途",
+        "size": "サイズ",
+        "stack": "スタック",
+        "not_set": "未設定",
+        "not_named": "未指定",
+        "none": "なし",
+        "notServed": "· 対象外",
+        "noRoleStarter": "· ここにデプロイされる {role} スターターはありません"
+      },
+      "picker": {
+        "label": "スターター",
+        "groupTarget": "{target} 上の {role, select, web {Web} api {API} mobile {Mobile} shared {Shared} infra {Infra} other {その他の}} スターター",
+        "groupRole": "{role, select, web {Web} api {API} mobile {Mobile} shared {Shared} infra {Infra} other {その他の}} スターター",
+        "groupAny": "すべてのリポジトリ",
+        "initialisedSub": "README だけの空のリポジトリ",
+        "footerTarget": "{target} にデプロイされる {role} リポジトリ向けのスターターのみです。",
+        "footerNoTarget": "{role} リポジトリ向けのスターターのみです。このリポジトリにはまだホスティング先がありません。"
+      },
+      "refusal": {
+        "targetMismatch": "<b>{label} はここでは使えません。</b> {targets} にデプロイされるスターターですが、このリポジトリは {target} で動作します。スターターは変更されていません。",
+        "targetMismatchNoTarget": "<b>{label} はここでは使えません。</b> {targets} にデプロイされるスターターですが、このリポジトリにはホスティング先がありません。スターターは変更されていません。",
+        "retired": "<b>{label} は廃止されました。</b> Motir はもう提供していないため、別のスターターを選んでください。スターターは変更されていません。",
+        "roleMismatch": "<b>{label} はここでは使えません。</b> {entryRole} リポジトリ向けのスターターですが、このリポジトリは {role} です。スターターは変更されていません。",
+        "notEditable": "<b>このリポジトリはすでに作成されているため、</b>別のスターターから始めることはできません。再読み込みして確認してください。",
+        "unknown": "<b>そのスターターはもう存在しません。</b> 別のスターターを選んでください。スターターは変更されていません。"
+      }
+    }
   },
   "repositoryTakeover": {
     "title": "リポジトリ",
@@ -10143,7 +10206,8 @@
       "navRunModels": "ホスト型実行のモデル",
       "navFleetSettings": "フリート設定",
       "navCapacity": "プロバイダーの容量",
-      "navJobs": "ジョブ"
+      "navJobs": "ジョブ",
+      "navStarters": "スターター"
     },
     "nav": {
       "overview": "概要",
@@ -10368,6 +10432,10 @@
           },
           "jobs": {
             "dlq_replay": "デッドレターを再実行しました"
+          },
+          "seed_registry": {
+            "promote": "リポジトリをスターターに昇格",
+            "retire": "スターターを廃止"
           }
         }
       }
@@ -12760,6 +12828,152 @@
       "dlqEmpty": {
         "title": "待機中のものはありません",
         "body": "試行回数を使い切ったジョブはありません。使い切るとここにデッドレターが表示されます。"
+      }
+    },
+    "starters": {
+      "breadcrumb": "運用 · スターター",
+      "title": "スターター",
+      "subtitle": "Motir が作成するリポジトリの出発点です。マッチングは、ロール、ホスティング先、用途、サイズに応じて有効なスターターから選びます。Motir が作成したリポジトリをスターターに昇格したり、スターターを廃止したりできます。",
+      "promote": "リポジトリを昇格",
+      "card": {
+        "title": "スターターライブラリ",
+        "count": "新しい順 · {count, plural, other {# 件のスターター}}"
+      },
+      "filter": {
+        "label": "スターターを絞り込む",
+        "role": "ロール",
+        "status": "ステータス",
+        "target": "ホスティング先",
+        "anyRole": "すべてのロール",
+        "anyTarget": "すべてのホスティング先",
+        "all": "すべて"
+      },
+      "status": {
+        "active": "有効",
+        "retired": "廃止"
+      },
+      "notDeployed": "Motir ホスティングではデプロイされません",
+      "col": {
+        "starter": "スターター",
+        "roleStack": "ロール · スタック",
+        "serves": "対象",
+        "hosting": "ホスティング",
+        "status": "ステータス",
+        "provenance": "出所",
+        "actions": "操作"
+      },
+      "alsoAnswersTo": "{keys} でも参照できます",
+      "roleStack": "{role} · {stack}",
+      "anyRoleAnyStack": "すべてのロール · すべてのスタック",
+      "everyUse": "すべての用途",
+      "everySize": "すべてのサイズ",
+      "provenance": {
+        "shipped": "Motir に同梱",
+        "promoted": "<b>{email}</b> が {date} に {repo} の <mono>{ref}</mono> から昇格",
+        "promotedNoRepo": "<b>{email}</b> が {date} に <mono>{ref}</mono> から昇格",
+        "retired": "<b>{email}</b> が {date} に廃止:「{reason}」",
+        "removedAccount": "削除されたアカウント"
+      },
+      "defaultForRole": "{role} のデフォルト",
+      "defaultForEveryRole": "すべてのロールのデフォルト",
+      "empty": {
+        "title": "これらのフィルターに一致するスターターはありません",
+        "bodyRoleTarget": "{target} にデプロイされる {role} リポジトリ向けの有効なスターターはありません。フィルターをクリアするとライブラリ全体が表示されます。",
+        "body": "これらのフィルターに一致するスターターはありません。",
+        "clear": "フィルターをクリア"
+      },
+      "pager": {
+        "label": "ページ",
+        "showing": "{total} 件中 {from}–{to} 件を表示",
+        "previous": "前のページ",
+        "next": "次のページ"
+      },
+      "retire": {
+        "action": "廃止",
+        "title": "{label} を廃止しますか?",
+        "body": "マッチングはこのスターターを選ばなくなり、スターターの選択肢にも表示されなくなります。すでに作成されたリポジトリのコードはそのままです。このスターターを指定している未作成のリポジトリは、誰かが別のスターターを選ぶまで作成できません。",
+        "reasonLabel": "理由",
+        "reasonHelp": "あなたの名前とともに監査ログに記録されます。",
+        "cancel": "キャンセル",
+        "confirm": "スターターを廃止",
+        "done": "廃止しました。{label} は新しいリポジトリに提供されなくなりました。",
+        "failedTitle": "このスターターは廃止されませんでした。",
+        "failed": "Motir は廃止できませんでした。もう一度お試しください。",
+        "defaultTitle": "このスターターは廃止できません。",
+        "defaultBody": "「{key}」は {role} リポジトリのデフォルトのスターターです。デフォルトの変更は決定事項であり、オペレーターの操作ではありません。",
+        "defaultBodyEveryRole": "「{key}」はすべてのロールのデフォルトのスターターです。デフォルトの変更は決定事項であり、オペレーターの操作ではありません。",
+        "close": "閉じる"
+      },
+      "promoteForm": {
+        "breadcrumb": "運用 · スターター · 昇格",
+        "title": "リポジトリを昇格",
+        "subtitle": "Motir は指定した ref のリポジトリを自身の組織にコピーし、条件に合う新しいリポジトリにそのコピーをスターターとして提供します。既存のリポジトリは変更されません。",
+        "field": {
+          "source": "Motir が作成したリポジトリ",
+          "ref": "Ref",
+          "role": "ロール",
+          "stack": "スタック",
+          "label": "ラベル",
+          "key": "キー",
+          "uses": "対象の用途",
+          "sizes": "対象のサイズ",
+          "targets": "デプロイ先のホスティング",
+          "reason": "理由"
+        },
+        "help": {
+          "ref": "ブランチ、タグ、またはコミット。スターターはここからコピーされます。",
+          "stack": "プランナーがこのスタックを呼ぶ名前(小文字)。",
+          "label": "リポジトリ上で表示される名前です。",
+          "key": "小文字、数字、ハイフン。motir-co 内のコピーの名前にもなります。後から変更できません。",
+          "targets": "それぞれが ref 時点のリポジトリの motir.hosting.json に記載されている必要があります。Motir ホスティングがデプロイしないスターターの場合は、何も選択しないでください。",
+          "reason": "あなたの名前とともに監査ログに記録されます。"
+        },
+        "source": {
+          "placeholder": "リポジトリを選択",
+          "empty": "一致するリポジトリはありません。",
+          "footer": "Motir が作成したリポジトリのみです。",
+          "sub": "{project} · {role} · {state}",
+          "leaving": "所有者に引き渡し中",
+          "notCreated": "未作成"
+        },
+        "rolePlaceholder": "ロールを選択",
+        "cancel": "キャンセル",
+        "review": "昇格内容を確認",
+        "confirm": {
+          "title": "{name} をスターターに昇格しますか?",
+          "body": "Motir は <b>{repo}</b> の <b>{ref}</b> を <b>motir-co/{key}</b> にコピーし、<b>{label}</b> をライブラリに追加します。以後、マッチングは条件に合う新しい {role} リポジトリにこのスターターを選べるようになります。既存のリポジトリは変更されません。",
+          "roleStack": "ロール · スタック",
+          "uses": "用途",
+          "sizes": "サイズ",
+          "hosting": "ホスティング",
+          "reason": "理由",
+          "notDeployed": "Motir ホスティングではデプロイされません",
+          "back": "戻る",
+          "promote": "昇格"
+        },
+        "done": "昇格しました。{target} 上の新しい {role} リポジトリは {label} から始められるようになりました。",
+        "doneNoTarget": "昇格しました。新しい {role} リポジトリは {label} から始められるようになりました。",
+        "refusal": {
+          "sourceTitle": "このリポジトリは昇格できません。",
+          "takenOver": "所有者への引き渡し中、またはすでに引き渡し済みのため、Motir はもうコピーできません。",
+          "notCreated": "昇格できるのは Motir が作成したリポジトリのみですが、このリポジトリはまだ {state} です。",
+          "organizationRow": "組織自身のリポジトリであり、Motir が顧客のコードをコピーすることはありません。",
+          "notMotirHeld": "{repo} は Motir が管理する GitHub 組織にもうありません。",
+          "notFound": "このリポジトリはもう存在しません。別のものを選んでください。",
+          "refNotFound": "「{ref}」は {repo} のブランチ、タグ、コミットのいずれでもありません。",
+          "manifestTitle": "motir.hosting.json がこの昇格を拒否しています。",
+          "manifestMissing": "このリポジトリには <b>{ref}</b> 時点の motir.hosting.json がないため、ホスティング先を指定できません。その ref にファイルを追加するか、ホスティング先の選択をすべて外してください。",
+          "manifestInvalid": "<b>{ref}</b> 時点のファイルが無効です: <b>{field}</b> {reason}",
+          "theDocument": "ドキュメント",
+          "targetNotDeclared": "targets に <b>{target}</b> が含まれていません({declared} が含まれています)。{target} の選択を外すか、ファイルに追加してください。",
+          "declaredNone": "なし",
+          "targetNotDeclaredField": "{target} は {ref} 時点の motir.hosting.json にありません。",
+          "notInList": "「{value}」は有効な{kind, select, role {ロール} useCases {用途} sizes {サイズ} other {ホスティング先}}ではありません。{list} から選んでください。",
+          "keyTaken": "キー {key} はすでに使われています。",
+          "templateNameTaken": "motir-co/{key} はすでに存在し、このスターターのコピーではありません。別のキーを選ぶか、先にそのリポジトリを削除してください。",
+          "genericTitle": "Motir はこのリポジトリを昇格できませんでした。",
+          "genericBody": "何もコピーされていません。もう一度お試しください。"
+        }
       }
     }
   },

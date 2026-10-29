@@ -613,8 +613,12 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
   },
   'resolve-target-v2': {
     file: 'lib/jobs/indexFleetSteps.ts',
+    // `no_commit_beyond_template` added by MOTIR-4589: a repository Motir created
+    // that still holds only its seed is not indexed yet. Id KEPT — the change only
+    // ADDS a member, so every memo written under the old shape is a valid value of
+    // the new one.
     shape:
-      '{ anchorProjectId: string; indexed: true; organizationId: string; providerId: "github" | "gitlab"; repoRef: string } | { indexed: false; reason: "installation_missing" | "no_projects" | "provider_cannot_index" | "workspace_missing" }',
+      '{ anchorProjectId: string; indexed: true; organizationId: string; providerId: "github" | "gitlab"; repoRef: string } | { indexed: false; reason: "installation_missing" | "no_commit_beyond_template" | "no_projects" | "provider_cannot_index" | "workspace_missing" }',
   },
   'restore-for-revived-target': {
     file: 'lib/jobs/definitions/planDrift.ts',

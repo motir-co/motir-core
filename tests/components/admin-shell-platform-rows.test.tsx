@@ -31,6 +31,7 @@ const LABELS = {
   navAiPlanning: 'AI planning',
   navPlanningLessons: 'Planning lessons',
   navIdeas: 'Ideas',
+  navStarters: 'Starters',
   navRunModels: 'Hosted-run models',
   navAuditLog: 'Audit log',
   staffMarkTitle: 'Platform staff',

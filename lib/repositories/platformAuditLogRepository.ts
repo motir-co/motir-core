@@ -252,6 +252,24 @@ export const platformAuditLogRepository = {
     });
   },
 
+  /**
+   * Every row of one action on any of `targetIds`, newest first, with the
+   * actor's email — the starter library's retirements, one page of entries at a
+   * time (MOTIR-712). The caller keeps the newest per target.
+   */
+  async listByTargetsAndAction(
+    targetKind: PlatformAuditTargetKind,
+    targetIds: string[],
+    action: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<PlatformAuditLogWithActor[]> {
+    return tx.platformAuditLog.findMany({
+      where: { targetKind, targetId: { in: targetIds }, action },
+      orderBy: { createdAt: 'desc' },
+      include: { actor: { select: { name: true, email: true } } },
+    });
+  },
+
   /** The most recent rows for one organization, newest first. */
   async listByOrganization(
     organizationId: string,

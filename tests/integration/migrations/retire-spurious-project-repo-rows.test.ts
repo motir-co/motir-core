@@ -5,7 +5,7 @@ import { db } from '@/lib/db';
 import {
   PROJECT_REPO_PROPOSAL_SIGNALS,
   SEED_SOURCE_INITIALISED,
-  SEED_SOURCE_PLATFORM_STARTER,
+  SEED_SOURCE_LEGACY_PLATFORM_STARTER,
 } from '@/lib/projectRepos/vocabulary';
 import type { ProjectRepoRole, ProjectRepoState } from '@/generated/prisma/client';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
@@ -142,7 +142,7 @@ async function seedRepoRow(
       projectId,
       role: over.role ?? 'web',
       name: `repo-${seq}`,
-      seedSource: over.seedSource ?? SEED_SOURCE_PLATFORM_STARTER,
+      seedSource: over.seedSource ?? SEED_SOURCE_LEGACY_PLATFORM_STARTER,
       state: over.state ?? 'proposed',
       // `?? 'default-web'` would be wrong — an EXPLICIT null is a row a PERSON
       // added, which is precisely one of the shapes under test.
@@ -405,7 +405,9 @@ describe('retire_spurious_project_repo_rows — the SQL literals are a copy, and
 
   it('the `seed_source` list IS the ADR §2 starter-seed pair', async () => {
     expect(inListFor('seed_source').sort()).toEqual(
-      [SEED_SOURCE_PLATFORM_STARTER, SEED_SOURCE_INITIALISED].sort(),
+      // The starter's key AS IT WAS when this migration shipped: a shipped
+      // migration is history, and the rename (MOTIR-706 3.7) does not edit it.
+      [SEED_SOURCE_LEGACY_PLATFORM_STARTER, SEED_SOURCE_INITIALISED].sort(),
     );
   });
 

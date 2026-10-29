@@ -164,6 +164,7 @@ function row(opts: {
     state: opts.state ?? 'created',
     failureReason: null,
     proposalSignal: null,
+    seedMatch: null,
     realizedRepo: {
       id: `gh-${realizedName}`,
       provider: 'github',

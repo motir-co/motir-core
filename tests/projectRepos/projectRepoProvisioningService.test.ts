@@ -13,13 +13,11 @@ import {
 } from '@/lib/github/repoProvisioning';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { MOTIR_RUNNER_LABEL, MOTIR_RUNNER_VARIABLE } from '@/lib/ciFleet/config';
-import {
-  SEED_SOURCE_INITIALISED,
-  SEED_SOURCE_PLATFORM_STARTER,
-} from '@/lib/projectRepos/vocabulary';
+import { SEED_SOURCE_INITIALISED } from '@/lib/projectRepos/vocabulary';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { adminDb } from '../helpers/adminDb';
+import { ORIGINAL_SEED_KEYS, withOnlyOriginalSeeds } from '../helpers/seedRegistryShipped';
 import { truncateAuthTables } from '../helpers/db';
 import { createRunnerGroupFake, type RunnerGroupFake } from '../helpers/runnerGroupFake';
 import {
@@ -73,6 +71,10 @@ let calls: Call[];
 let existingRepos: Map<string, number>;
 /** Repo names the fake GitHub refuses to create, and with which status. */
 let refusals: Map<string, number>;
+/** Repo names whose default-branch head the fake GitHub will not serve. */
+let unreadableHeads: Set<string>;
+/** Template coordinates (`owner/repo`) the fake GitHub no longer serves — `/generate` 404s. */
+let missingTemplates: Set<string>;
 let nextRepoId: number;
 /** The project's own GitHub runner group (MOTIR-1972) — establishing a
  *  repository now syncs it, so this suite's GitHub serves those endpoints too. */
@@ -127,6 +129,10 @@ function installGitHub(): void {
       if (variable) return variable;
       // Create — either endpoint. The template endpoint names the NEW repo in the
       // body, exactly as the real one does.
+      const generate = /\/repos\/([^/]+)\/([^/]+)\/generate$/.exec(u);
+      if (method === 'POST' && generate && missingTemplates.has(`${generate[1]}/${generate[2]}`)) {
+        return json(404, { message: 'Not Found' });
+      }
       if (
         method === 'POST' &&
         (u.includes('/generate') || u.endsWith(`/orgs/${MOTIR_ORG}/repos`))
@@ -152,6 +158,16 @@ function installGitHub(): void {
         const id = nextRepoId++;
         existingRepos.set(name, id);
         return json(201, { id, name, owner: { login: MOTIR_ORG } });
+      }
+      // The default branch's head once seeding finished (MOTIR-4589) — the seed
+      // head the row records. `unreadableHeads` stages a head GitHub will not serve.
+      const branch = /\/repos\/[^/]+\/([^/]+)\/branches\/[^/]+$/.exec(u);
+      if (method === 'GET' && branch) {
+        const name = branch[1]!;
+        if (!existingRepos.has(name) || unreadableHeads.has(name)) {
+          return json(404, { message: 'Branch not found' });
+        }
+        return json(200, { name: 'main', commit: { sha: `seed-${name}` } });
       }
       if (method === 'GET' && u.includes(`/repos/${MOTIR_ORG}/`)) {
         const name = u.split('/').pop()!;
@@ -196,6 +212,8 @@ beforeEach(async () => {
   calls = [];
   existingRepos = new Map();
   refusals = new Map();
+  unreadableHeads = new Set();
+  missingTemplates = new Set();
   nextRepoId = 900_001;
   actionsVariables = createActionsVariableFake(MOTIR_ORG);
   runnerGroups = createRunnerGroupFake(MOTIR_ORG);
@@ -214,7 +232,19 @@ beforeEach(async () => {
   spyOnJobDispatch();
 });
 
-afterEach(() => {
+// These scenarios prove provisioning from the two original seeds, a non-web row
+// initialised; seeding a non-web row from its shipped foundation is
+// MOTIR-713's integration suite. So MOTIR-9813's four starter entries are set
+// aside for this file.
+withOnlyOriginalSeeds();
+
+afterEach(async () => {
+  // The registry is migration-seeded platform data, not truncated: drop only
+  // what a test registered.
+  await adminDb.seedRegistryEntry.deleteMany({
+    where: { key: { notIn: ORIGINAL_SEED_KEYS } },
+  });
+  await adminDb.seedRegistryEntry.updateMany({ data: { status: 'active' } });
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
@@ -262,7 +292,8 @@ describe('a ONE-row set', () => {
     // Seeded from the STARTER — the template endpoint, with the template in the
     // path and Motir's org as the owner.
     const generate = calls.find((c) => c.url.includes('/generate'))!;
-    expect(generate.url).toContain(`/repos/moooon-B-V/${SEED_SOURCE_PLATFORM_STARTER}/generate`);
+    // The template comes from the registry ENTRY's source (MOTIR-708).
+    expect(generate.url).toContain('/repos/motir-co/nextjs-prisma-serverless-starter/generate');
     expect(generate.body).toMatchObject({ owner: MOTIR_ORG, name: 'acme-web', private: true });
   });
 });
@@ -528,28 +559,63 @@ describe('the fleet runner variable (MOTIR-2015)', () => {
 });
 
 describe('the shipped chain is used, not extended', () => {
-  it('enqueues the index job per repo through the EXISTING chokepoint', async () => {
+  it('indexes NOTHING at creation — a created repo holds only its seed (MOTIR-4589)', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
     const fx = await makeWorkItemFixture();
-    await addRow(fx, 'web', 'acme-web');
-    await addRow(fx, 'api', 'acme-api');
+    const webId = await addRow(fx, 'web', 'acme-web');
+    const apiId = await addRow(fx, 'api', 'acme-api');
 
     await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
 
-    // The job the reconcile/bind paths send, one per created repo, carrying the
-    // OWNING workspace — the same event name and payload shape
-    // `enqueueNewlyAddedRepos` produces. Nothing new was added to the chain.
+    // A repository Motir just seeded holds exactly its template, so its graph
+    // would be the template's graph. No index is enqueued for either row...
     const send = vi.mocked(jobDispatcher.dispatchEventToEngine);
-    expect(send).toHaveBeenCalledTimes(2);
-    const sent = dispatchedEvents(send);
-    expect(sent.map((e) => e.name)).toEqual(['system.code-graph-index', 'system.code-graph-index']);
-    expect(sent.map((e) => (e.data as { repoName: string }).repoName)).toEqual([
-      'acme-web',
-      'acme-api',
+    expect(dispatchedEvents(send).map((e) => e.name)).not.toContain('system.code-graph-index');
+    // ...and each row records the head its seed left, which is what a later push
+    // is compared with. Read AFTER the CI stub, so the stub counts as seed.
+    const rows = await adminDb.projectRepo.findMany({
+      where: { id: { in: [webId, apiId] } },
+      orderBy: { name: 'asc' },
+      select: { name: true, seedHeadSha: true },
+    });
+    expect(rows).toEqual([
+      { name: 'acme-api', seedHeadSha: 'seed-acme-api' },
+      { name: 'acme-web', seedHeadSha: 'seed-acme-web' },
     ]);
+    const stubAt = calls.findIndex((c) => c.method === 'PUT' && c.url.includes('acme-api'));
+    const headAt = calls.findIndex((c) =>
+      c.url.endsWith('/repos/motir-projects/acme-api/branches/main'),
+    );
+    expect(stubAt).toBeGreaterThanOrEqual(0);
+    expect(headAt).toBeGreaterThan(stubAt);
+    // The skip is legible: "not indexed yet", never an index failure.
+    expect(vi.mocked(console.warn)).toHaveBeenCalledWith(
+      expect.stringContaining('not indexed yet: no commit beyond the template'),
+      `${MOTIR_ORG}/acme-web`,
+      'seed-acme-web',
+    );
+  });
+
+  it('enqueues the index through the EXISTING chokepoint when the seed head is unknown', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const fx = await makeWorkItemFixture();
+    const rowId = await addRow(fx, 'web', 'acme-web');
+    unreadableHeads.add('acme-web');
+
+    await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
+
+    // Unknown is never a reason to withhold an index: the row records no seed
+    // head and the repository indexes as every repository did before MOTIR-4589 —
+    // the same event name and payload shape `enqueueNewlyAddedRepos` produces.
+    const row = await adminDb.projectRepo.findUniqueOrThrow({ where: { id: rowId } });
+    expect(row.seedHeadSha).toBeNull();
+    const sent = dispatchedEvents(vi.mocked(jobDispatcher.dispatchEventToEngine));
+    expect(sent.map((e) => e.name)).toEqual(['system.code-graph-index']);
     expect(sent[0]!.data).toMatchObject({
       installationId: INSTALLATION_ID,
       workspaceId: fx.workspaceId,
       repoOwner: MOTIR_ORG,
+      repoName: 'acme-web',
       defaultBranch: 'main',
     });
   });
@@ -1238,5 +1304,247 @@ describe('an organisation hosted in its assigned GitHub org (MOTIR-8966)', () =>
       [liveId, 'not_attempted'],
     ]);
     expect(read).toHaveBeenCalled();
+  });
+});
+
+// ── MOTIR-708 — every seed RESOLVES through the registry ────────────────────
+describe('seeds resolve through the seed registry (MOTIR-708)', () => {
+  const TEST_TEMPLATE = { owner: 'motir-co', repo: 'acme-test-template' };
+
+  async function registerTemplate(key: string, status: 'active' | 'retired' = 'active') {
+    await adminDb.seedRegistryEntry.create({
+      data: {
+        key,
+        role: 'web',
+        stack: 'nextjs',
+        label: 'Test starter',
+        templateOwner: TEST_TEMPLATE.owner,
+        templateRepo: TEST_TEMPLATE.repo,
+        useCases: ['mvp'],
+        sizes: ['small'],
+        hostingTargets: ['fly'],
+        status,
+      },
+    });
+  }
+
+  async function rowWithSeed(fx: WorkItemFixture, seedSource: string): Promise<string> {
+    const row = await projectRepoSetService.addRow(
+      fx.projectId,
+      { role: 'web', name: 'acme-web', seedSource },
+      fx.ctx,
+    );
+    return row.id;
+  }
+
+  const creates = () =>
+    calls.filter(
+      (c) =>
+        c.method === 'POST' &&
+        (c.url.includes('/generate') || c.url.endsWith(`/orgs/${MOTIR_ORG}/repos`)),
+    );
+
+  it('a row still storing the OLD starter key establishes exactly as before, from the renamed template', async () => {
+    const fx = await makeWorkItemFixture();
+    const rowId = await rowWithSeed(fx, 'nextjs-prisma-vercel-starter');
+
+    const result = await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
+
+    expect(result.rows.map((r) => r.outcome)).toEqual(['created']);
+    const [generate] = creates();
+    expect(generate!.url).toBe(
+      'https://api.github.com/repos/motir-co/nextjs-prisma-serverless-starter/generate',
+    );
+    expect(generate!.body).toEqual({
+      owner: MOTIR_ORG,
+      name: 'acme-web',
+      description: `The web repository for ${fx.project.name}. Created by Motir.`,
+      private: true,
+      include_all_branches: false,
+    });
+    // The row keeps what it stored; establish resolves, it does not rewrite.
+    expect((await readState(rowId, fx)).seedSource).toBe('nextjs-prisma-vercel-starter');
+  });
+
+  it('an ACTIVE template entry is generated from THAT entry’s owner/repo', async () => {
+    const fx = await makeWorkItemFixture();
+    await registerTemplate('acme-test-starter');
+    await rowWithSeed(fx, 'acme-test-starter');
+
+    const result = await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
+
+    expect(result.rows.map((r) => r.outcome)).toEqual(['created']);
+    expect(creates().map((c) => c.url)).toEqual([
+      'https://api.github.com/repos/motir-co/acme-test-template/generate',
+    ]);
+  });
+
+  it('an UNKNOWN key fails the row naming it, creates nothing, and a retry succeeds once the entry exists', async () => {
+    const fx = await makeWorkItemFixture();
+    const rowId = await rowWithSeed(fx, 'acme-test-starter');
+
+    const first = await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
+    expect(first.rows[0]).toMatchObject({ outcome: 'failed', failureCode: 'SEED_ENTRY_UNKNOWN' });
+    const failed = await readState(rowId, fx);
+    expect(failed.state).toBe('failed');
+    expect(failed.failureReason).toContain('acme-test-starter');
+    // No repository from a guessed default.
+    expect(creates()).toEqual([]);
+
+    await registerTemplate('acme-test-starter');
+    const retry = await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
+    expect(retry.rows.map((r) => r.outcome)).toEqual(['created']);
+    expect(creates().map((c) => c.url)).toEqual([
+      'https://api.github.com/repos/motir-co/acme-test-template/generate',
+    ]);
+  });
+
+  it('a RETIRED entry fails the row naming it, and a retry succeeds once it is active again', async () => {
+    const fx = await makeWorkItemFixture();
+    await registerTemplate('acme-test-starter', 'retired');
+    const rowId = await rowWithSeed(fx, 'acme-test-starter');
+
+    const first = await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
+    expect(first.rows[0]).toMatchObject({ outcome: 'failed', failureCode: 'SEED_ENTRY_RETIRED' });
+    expect((await readState(rowId, fx)).failureReason).toContain('acme-test-starter');
+    expect(creates()).toEqual([]);
+
+    await adminDb.seedRegistryEntry.update({
+      where: { key: 'acme-test-starter' },
+      data: { status: 'active' },
+    });
+    const retry = await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
+    expect(retry.rows.map((r) => r.outcome)).toEqual(['created']);
+  });
+
+  it('a template GitHub REFUSES fails the row naming the entry, and a retry succeeds once it is fixed', async () => {
+    const fx = await makeWorkItemFixture();
+    await registerTemplate('acme-test-starter');
+    missingTemplates.add(`${TEST_TEMPLATE.owner}/${TEST_TEMPLATE.repo}`);
+    const rowId = await rowWithSeed(fx, 'acme-test-starter');
+
+    const first = await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
+    expect(first.rows[0]).toMatchObject({
+      outcome: 'failed',
+      failureCode: 'SEED_TEMPLATE_UNAVAILABLE',
+    });
+    const failed = await readState(rowId, fx);
+    expect(failed.failureReason).toContain('acme-test-starter');
+    expect(failed.failureReason).toContain('motir-co/acme-test-template');
+    // Never an initialised repository instead.
+    expect(calls.some((c) => c.url.endsWith(`/orgs/${MOTIR_ORG}/repos`))).toBe(false);
+
+    missingTemplates.clear();
+    const retry = await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
+    expect(retry.rows.map((r) => r.outcome)).toEqual(['created']);
+  });
+});
+
+describe('the project’s stored design choice reaches a design-system repo (MOTIR-1529)', () => {
+  const CHOICE = { styleId: 'neo-brutalism', paletteId: 'cobalt', typeId: 'grotesk' };
+  const MANIFEST = `${JSON.stringify({ styleId: 'warm-editorial', paletteId: 'motir', typeId: 'motir' }, null, 2)}\n`;
+
+  /** Put a design-system starter and motir-ai in front of the suite's GitHub:
+   *  the template carries the manifest, the git data API accepts one commit, and
+   *  `GET /v1/preplan` answers `preplan` (or fails when it is null). */
+  function wearDesignSystem(preplan: Response | null): void {
+    vi.stubEnv('MOTIR_AI_URL', 'https://ai.test');
+    vi.stubEnv('MOTIR_AI_SERVICE_TOKEN', 'svc');
+    const github = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation(async (url, init) => {
+      const u = String(url);
+      const method = init?.method ?? 'GET';
+      if (u.startsWith('https://ai.test/v1/preplan')) {
+        calls.push({ url: u, method, body: null });
+        if (!preplan) return json(503, { type: 'about:blank', title: 'down', status: 503 });
+        return preplan;
+      }
+      if (u.includes('/contents/motir.design.json')) {
+        return json(200, { content: Buffer.from(MANIFEST).toString('base64') });
+      }
+      if (u.includes('/contents/DESIGN.md')) return json(404, { message: 'Not Found' });
+      if (u.endsWith('/git/ref/heads/main')) return json(200, { object: { sha: 'head1' } });
+      if (u.endsWith('/git/commits/head1')) return json(200, { tree: { sha: 'tree1' } });
+      if (u.includes('/git/')) {
+        calls.push({
+          url: u,
+          method,
+          body: typeof init?.body === 'string' ? JSON.parse(init.body) : null,
+        });
+        return json(method === 'PATCH' ? 200 : 201, { sha: `${method}-sha` });
+      }
+      return github(url as string, init);
+    });
+  }
+
+  function writtenManifest(): unknown {
+    const tree = calls.find((c) => c.url.endsWith('/git/trees'))!;
+    const entries = tree.body?.['tree'] as { path: string; content: string }[];
+    return JSON.parse(entries.find((e) => e.path === 'motir.design.json')!.content);
+  }
+
+  it('reads the choice from the pre-plan session and commits it to the web row', async () => {
+    wearDesignSystem(
+      json(200, { session: { designChoice: CHOICE }, docs: [], revisions: [], diffs: [] }),
+    );
+    const fx = await makeWorkItemFixture();
+    const rowId = await addRow(fx, 'web', 'acme-web');
+
+    const result = await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
+
+    expect(result.rows[0]).toMatchObject({ rowId, outcome: 'created' });
+    const read = calls.find((c) => c.url.startsWith('https://ai.test/v1/preplan'))!;
+    expect(read.url).toContain(`coreProjectId=${fx.projectId}`);
+    expect(writtenManifest()).toEqual(CHOICE);
+    expect(calls.filter((c) => c.url.endsWith('/git/commits') && c.method === 'POST')).toHaveLength(
+      1,
+    );
+  });
+
+  it('an unreachable motir-ai means the registry defaults, and the row is still created', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    wearDesignSystem(null);
+    const fx = await makeWorkItemFixture();
+    const rowId = await addRow(fx, 'web', 'acme-web');
+
+    const result = await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
+
+    expect(result.rows[0]).toMatchObject({ rowId, outcome: 'created' });
+    expect(writtenManifest()).toEqual({
+      styleId: 'warm-editorial',
+      paletteId: 'motir',
+      typeId: 'motir',
+    });
+  });
+
+  it('a failed design commit fails the row with its reason', async () => {
+    wearDesignSystem(json(200, { session: { designChoice: CHOICE }, docs: [] }));
+    const designed = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation(async (url, init) =>
+      String(url).endsWith('/git/refs/heads/main')
+        ? json(500, { message: 'boom' })
+        : designed(url as string, init),
+    );
+    const fx = await makeWorkItemFixture();
+    const rowId = await addRow(fx, 'web', 'acme-web');
+
+    const result = await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
+
+    expect(result.rows[0]).toMatchObject({
+      rowId,
+      outcome: 'failed',
+      failureCode: 'DESIGN_CHOICE_NOT_APPLIED',
+    });
+    expect((await readState(rowId, fx)).state).toBe('failed');
+  });
+
+  it('a row seeded with no template makes no design call and no extra commit', async () => {
+    wearDesignSystem(json(200, { session: { designChoice: CHOICE }, docs: [] }));
+    const fx = await makeWorkItemFixture();
+    await addRow(fx, 'api', 'acme-api');
+
+    await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
+
+    expect(calls.some((c) => c.url.includes('/git/'))).toBe(false);
   });
 });

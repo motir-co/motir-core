@@ -1,5 +1,9 @@
 import type { ProjectRepoRole, ProjectRepoState } from '@/generated/prisma/client';
-import type { ProjectRepoProposalSignalDto, ProjectRepoRoleDto } from '@/lib/dto/projectRepos';
+import type {
+  ProjectRepoProposalSignalDto,
+  ProjectRepoRoleDto,
+  ProjectRepoSeedMatchDto,
+} from '@/lib/dto/projectRepos';
 
 // The repo-SET vocabulary (Story MOTIR-1775 · MOTIR-1780) — the small set of
 // constants `docs/decisions/project-repository-set.md` fixes, in one module so no
@@ -65,6 +69,22 @@ export const ESTABLISHED_PROJECT_REPO_STATES = [
   'connected',
 ] as const satisfies readonly ProjectRepoState[];
 
+/**
+ * The states in which a row's PLAN may still change — its role, name and seed
+ * (`projectRepoSetService.patchRow`): `proposed`, and `failed`, which is retried
+ * from the plan. The room offers the Starter picker on exactly these rows
+ * (MOTIR-712), so the two cannot disagree about which rows can be re-pointed.
+ */
+export const PROJECT_REPO_PLAN_EDITABLE_STATES = [
+  'proposed',
+  'failed',
+] as const satisfies readonly ProjectRepoState[];
+
+/** Whether a row's plan — and so its seed — may still change. */
+export function isPlanEditableState(state: ProjectRepoState): boolean {
+  return (PROJECT_REPO_PLAN_EDITABLE_STATES as readonly ProjectRepoState[]).includes(state);
+}
+
 /** Whether a row is ESTABLISHED — i.e. it names a repository that exists. */
 export function isEstablishedState(state: ProjectRepoState): boolean {
   return (ESTABLISHED_PROJECT_REPO_STATES as readonly ProjectRepoState[]).includes(state);
@@ -104,12 +124,55 @@ export function isProjectRepoProposalSignal(value: unknown): value is ProjectRep
 }
 
 /**
- * The ONE default platform starter (ADR §2) — a full-stack Next.js + Prisma +
- * Vercel web app which imports `@motir/design-system`. Its `-with-design` sibling
- * is retired and archived, so there is exactly one, and only a `web` row can be
- * seeded from it.
+ * Every result the seed matching records on a row (MOTIR-709; decision MOTIR-706
+ * v2 §3.5) — the ONE runtime list the set service checks a written `seedMatch`
+ * against. See {@link ProjectRepoSeedMatchDto} for what each one means.
  */
-export const SEED_SOURCE_PLATFORM_STARTER = 'nextjs-prisma-vercel-starter';
+export const SEED_MATCH_RESULTS = [
+  'matched',
+  'no_stack_signal',
+  'no_target',
+  'no_match',
+] as const satisfies readonly ProjectRepoSeedMatchDto[];
+
+/** Whether a value is one of {@link SEED_MATCH_RESULTS}. */
+export function isSeedMatchResult(value: unknown): value is ProjectRepoSeedMatchDto {
+  return (SEED_MATCH_RESULTS as readonly unknown[]).includes(value);
+}
+
+/**
+ * The registry key of the ONE default platform starter (ADR §2, as amended by the
+ * seed-registry decision MOTIR-706 v2, page cmvsezd8800eihnoikhllqqev): a
+ * full-stack Next.js + Prisma web app that imports `@motir/design-system` and
+ * deploys to the `serverless` target (AWS Lambda, MOTIR-5769 D-2). Its
+ * `-with-design` sibling is retired and archived, so there is exactly one, and
+ * only a `web` row can be seeded from it.
+ *
+ * A KEY, not a repository path: the seed registry entry under this key names its
+ * template repository (`motir-co/nextjs-prisma-serverless-starter`), and
+ * provisioning reads the template from the entry, never by splicing the key
+ * into a URL (706 3.1).
+ */
+export const SEED_SOURCE_PLATFORM_STARTER = 'nextjs-prisma-serverless-starter';
+
+/**
+ * The platform starter's key BEFORE the rename (706 3.7): a legacy key of the
+ * same registry entry. Migration `20261028200100_rename_platform_starter_seed_source`
+ * rewrote every stored row; a row written by an instance still on the old code
+ * during the rollout resolves to the same entry. Never written by new code.
+ */
+export const SEED_SOURCE_LEGACY_PLATFORM_STARTER = 'nextjs-prisma-vercel-starter';
+
+/**
+ * The four starter entries MOTIR-9813 registers (706 3.4): the Fly and AWS web
+ * starters, each deploying to exactly its one target, and the two non-web
+ * foundations, which carry no target and so are their role's default (3.8). Keys,
+ * like {@link SEED_SOURCE_PLATFORM_STARTER}: the entry names its template.
+ */
+export const SEED_SOURCE_FLY_STARTER = 'nextjs-prisma-fly-starter';
+export const SEED_SOURCE_AWS_STARTER = 'nextjs-prisma-aws-starter';
+export const SEED_SOURCE_EXPO_MOBILE_FOUNDATION = 'expo-mobile-foundation';
+export const SEED_SOURCE_SPRING_API_FOUNDATION = 'spring-api-foundation';
 
 /**
  * The honest fallback for a role the single starter does not fit (ADR §2): an
@@ -138,7 +201,8 @@ export const SEED_SOURCE_INITIALISED = 'initialised';
  *
  * The column is a free-form string by design — ADR §2 says so, so that the
  * multi-stack starter registry can add keys without a migration — which is what
- * makes this an addition rather than an enum change.
+ * makes this an addition rather than an enum change. It is NOT a registry entry
+ * (MOTIR-706 3.1): a customer's repository is never seeded.
  */
 export const SEED_SOURCE_ORGANIZATION = 'organization';
 
@@ -149,12 +213,20 @@ export function isOrganizationSeedSource(seedSource: string): boolean {
 }
 
 /**
- * ADR §2's seeding table, encoded once: the default seed source for a role.
+ * The registry's FIXED default map — decision MOTIR-706 v2, 3.8 (page
+ * cmvsezd8800eihnoikhllqqev), which amends ADR §2's seeding table: `web` →
+ * {@link SEED_SOURCE_PLATFORM_STARTER}, every other role → `initialised`.
  *
- * When the multi-stack starter registry lands (MOTIR-709 / 9.3.5) a row's
- * `seedSource` becomes a registry key and this function becomes its DEFAULT map —
- * no migration and no second code path, which is why the column is a string
- * rather than a boolean or a two-value enum.
+ * ⚠️ THIS IS THE PURE, CLIENT-SAFE HALF. The registry READ is
+ * `seedRegistryService.defaultSeedSourceForRole`, which applies the same rule
+ * (`lib/seedRegistry/defaults.ts`) over the ACTIVE entries, so a role whose
+ * foundation is registered later (`expo-mobile-foundation` for `mobile`,
+ * `spring-api-foundation` for `api`, MOTIR-9813) gets it there. A hand-added
+ * row's default (`projectRepoSetService.addRow`) reads the registry; this
+ * function serves the pure derivations that cannot (`proposal.ts`,
+ * `seedMatching.ts`, the client) until MOTIR-709's matching chooses their keys,
+ * and it agrees with the read on every registry that holds only the two shipped
+ * seeds.
  */
 export function defaultSeedSourceForRole(role: ProjectRepoRole): string {
   return role === 'web' ? SEED_SOURCE_PLATFORM_STARTER : SEED_SOURCE_INITIALISED;

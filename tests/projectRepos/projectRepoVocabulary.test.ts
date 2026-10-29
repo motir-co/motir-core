@@ -6,6 +6,7 @@ import {
   PROJECT_REPO_ROLES,
   PROJECT_REPO_STATES,
   SEED_SOURCE_INITIALISED,
+  SEED_SOURCE_LEGACY_PLATFORM_STARTER,
   SEED_SOURCE_PLATFORM_STARTER,
   defaultSeedSourceForRole,
   isEstablishedState,
@@ -41,7 +42,9 @@ function row(over: Partial<ProjectRepoWithRealized> = {}): ProjectRepoWithRealiz
     state: 'created',
     failureReason: null,
     proposalSignal: null,
+    seedMatch: null,
     githubRepoId: 'gr-1',
+    seedHeadSha: null,
     hostingTarget: null,
     hostingUseCase: null,
     hostingSize: null,
@@ -142,10 +145,12 @@ describe('the ADR §4.1 state vocabulary', () => {
   });
 });
 
-describe('the ADR §2 seeding table', () => {
-  it('seeds a web row from the ONE default platform starter', () => {
+describe('the fixed default map (ADR §2 as amended by MOTIR-706 v2, 3.8)', () => {
+  it('seeds a web row from the ONE default platform starter, under its renamed key', () => {
     expect(defaultSeedSourceForRole('web')).toBe(SEED_SOURCE_PLATFORM_STARTER);
-    expect(SEED_SOURCE_PLATFORM_STARTER).toBe('nextjs-prisma-vercel-starter');
+    expect(SEED_SOURCE_PLATFORM_STARTER).toBe('nextjs-prisma-serverless-starter');
+    // The pre-rename key survives only as the registry entry's legacy key.
+    expect(SEED_SOURCE_LEGACY_PLATFORM_STARTER).toBe('nextjs-prisma-vercel-starter');
   });
 
   it('seeds every NON-web role from an initialised repo — the honest fallback', () => {

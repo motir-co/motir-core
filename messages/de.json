@@ -9465,10 +9465,73 @@
     "outcomeNeedsAccess": "Einrichtung des Zugriffs abschließen",
     "connectGithub": "GitHub verbinden",
     "stateCreated": "Erstellt",
-    "createdDetail": "Von Motir gehostet · auf Basis des Motir-Next.js-Starters erstellt.",
+    "createdDetail": "Von Motir gehostet · auf Basis von {seed} erstellt.",
     "stateFailed": "Konnte nicht erstellt werden",
     "actionError": "Das hat nicht funktioniert. Es wurde nichts geändert – versuchen Sie es erneut.",
-    "promiseDoor": "So funktioniert das Verschieben"
+    "promiseDoor": "So funktioniert das Verschieben",
+    "stateProposed": "Noch nicht erstellt",
+    "createdDetailInitialised": "Von Motir gehostet · als initialisiertes Repository erstellt.",
+    "createdDetailNoSeed": "Von Motir gehostet.",
+    "seed": {
+      "starterPillLabel": "Basiert auf {label}",
+      "targetPillLabel": "Gehostet auf {target}",
+      "default": "Standard",
+      "noTarget": "Kein Hosting-Ziel",
+      "target": {
+        "serverless": "Serverless",
+        "fly": "Fly",
+        "aws": "AWS"
+      },
+      "use": {
+        "internal_tool": "Internes Tool",
+        "mvp": "MVP",
+        "planned_product": "Geplantes Produkt"
+      },
+      "size": {
+        "small": "Klein",
+        "medium": "Mittel",
+        "large": "Groß"
+      },
+      "why": {
+        "matched": "<b>Warum dieser Starter:</b> Er wird auf {target} bereitgestellt und ist für {use, select, internal_tool {ein internes Tool} mvp {ein MVP} planned_product {ein geplantes Produkt} other {diesen Zweck}} dieser Größe gemacht.",
+        "matchedTarget": "<b>Warum dieser Starter:</b> Er wird auf {target} bereitgestellt.",
+        "softUse": "<b>Warum dieser Starter:</b> Er ist der passendste Starter, der auf {target} bereitgestellt wird. Kein {target}-Starter ist für {use, select, internal_tool {ein internes Tool} mvp {ein MVP} planned_product {ein geplantes Produkt} other {diesen Zweck}} gemacht.",
+        "softSize": "<b>Warum dieser Starter:</b> Er ist der passendste Starter, der auf {target} bereitgestellt wird. Kein {target}-Starter ist für ein Repository dieser Größe gemacht.",
+        "notDeployed": "<b>Warum dieser Starter:</b> Er ist der Starter von Motir für eine {role}-App. Motir-Hosting stellt dieses Repository nicht bereit, daher wird kein Hosting angezeigt.",
+        "noStackSignal": "<b>Warum dieser Starter:</b> Der Plan nennt keinen Stack für dieses Repository, daher basiert es auf dem üblichen Starter für ein Web-Repository auf {target}. Wählen Sie einen anderen, wenn Sie den Stack kennen.",
+        "noTarget": "<b>Warum dieser Starter:</b> Dieses Repository hat noch kein Hosting-Ziel, daher basiert es auf dem üblichen Starter für ein Web-Repository.",
+        "noMatch": "<b>Warum dieser Starter:</b> Für ein {role}-Repository {where, select, target {auf {target}} other {mit diesem Stack}} gibt es keinen Starter, daher beginnt es als initialisiertes Repository: ein leeres Repository mit einer README.",
+        "byHand": "<b>Warum dieser Starter:</b> Jemand hat ihn für dieses Repository von Hand ausgewählt."
+      },
+      "fact": {
+        "hosting": "Hosting",
+        "use": "Zweck",
+        "size": "Größe",
+        "stack": "Stack",
+        "not_set": "Nicht festgelegt",
+        "not_named": "Nicht genannt",
+        "none": "Keins",
+        "notServed": "· nicht abgedeckt",
+        "noRoleStarter": "· kein {role}-Starter wird hier bereitgestellt"
+      },
+      "picker": {
+        "label": "Starter",
+        "groupTarget": "{role, select, web {Web} api {API} mobile {Mobile} shared {Shared} infra {Infra} other {Andere}}-Starter auf {target}",
+        "groupRole": "{role, select, web {Web} api {API} mobile {Mobile} shared {Shared} infra {Infra} other {Andere}}-Starter",
+        "groupAny": "Jedes Repository",
+        "initialisedSub": "Ein leeres Repository mit einer README",
+        "footerTarget": "Nur Starter für ein {role}-Repository, die auf {target} bereitgestellt werden.",
+        "footerNoTarget": "Nur Starter für ein {role}-Repository. Dieses Repository hat noch kein Hosting-Ziel."
+      },
+      "refusal": {
+        "targetMismatch": "<b>{label} kann hier nicht verwendet werden.</b> Er wird auf {targets} bereitgestellt, und dieses Repository läuft auf {target}. Der Starter bleibt unverändert.",
+        "targetMismatchNoTarget": "<b>{label} kann hier nicht verwendet werden.</b> Er wird auf {targets} bereitgestellt, und dieses Repository hat kein Hosting-Ziel. Der Starter bleibt unverändert.",
+        "retired": "<b>{label} wurde ausgemustert.</b> Motir bietet ihn nicht mehr an, wählen Sie also einen anderen Starter. Der Starter bleibt unverändert.",
+        "roleMismatch": "<b>{label} kann hier nicht verwendet werden.</b> Er ist ein Starter für ein {entryRole}-Repository, und dieses ist {role}. Der Starter bleibt unverändert.",
+        "notEditable": "<b>Dieses Repository wurde bereits erstellt,</b> daher kann es nicht mehr auf einem anderen Starter basieren. Laden Sie die Seite neu, um es zu sehen.",
+        "unknown": "<b>Diesen Starter gibt es nicht mehr.</b> Wählen Sie einen anderen Starter. Der Starter bleibt unverändert."
+      }
+    }
   },
   "repositoryTakeover": {
     "title": "Repositorys",
@@ -10146,7 +10209,8 @@
       "navRunModels": "Modelle für gehostete Läufe",
       "navFleetSettings": "Flotteneinstellungen",
       "navCapacity": "Anbieterkapazität",
-      "navJobs": "Aufträge"
+      "navJobs": "Aufträge",
+      "navStarters": "Starter"
     },
     "nav": {
       "overview": "Übersicht",
@@ -10371,6 +10435,10 @@
           },
           "jobs": {
             "dlq_replay": "Dead Letter erneut ausgeführt"
+          },
+          "seed_registry": {
+            "promote": "Repository zur Startvorlage befördert",
+            "retire": "Startvorlage ausgemustert"
           }
         }
       }
@@ -12763,6 +12831,152 @@
       "dlqEmpty": {
         "title": "Nichts wartet",
         "body": "Kein Auftrag hat seine Versuche aufgebraucht. Dead Letter erscheinen hier, sobald das passiert."
+      }
+    },
+    "starters": {
+      "breadcrumb": "Betrieb · Starter",
+      "title": "Starter",
+      "subtitle": "Worauf ein Repository basiert, das Motir erstellt. Das Matching wählt unter den aktiven Startern nach Rolle, Hosting-Ziel, Zweck und Größe. Machen Sie ein von Motir erstelltes Repository zum Starter oder mustern Sie einen aus.",
+      "promote": "Repository übernehmen",
+      "card": {
+        "title": "Starter-Bibliothek",
+        "count": "Neueste zuerst · {count, plural, one {# Starter} other {# Starter}}"
+      },
+      "filter": {
+        "label": "Starter filtern",
+        "role": "Rolle",
+        "status": "Status",
+        "target": "Hosting-Ziel",
+        "anyRole": "Jede Rolle",
+        "anyTarget": "Jedes Ziel",
+        "all": "Alle"
+      },
+      "status": {
+        "active": "Aktiv",
+        "retired": "Ausgemustert"
+      },
+      "notDeployed": "Nicht von Motir-Hosting bereitgestellt",
+      "col": {
+        "starter": "Starter",
+        "roleStack": "Rolle · Stack",
+        "serves": "Deckt ab",
+        "hosting": "Hosting",
+        "status": "Status",
+        "provenance": "Herkunft",
+        "actions": "Aktionen"
+      },
+      "alsoAnswersTo": "Reagiert auch auf {keys}",
+      "roleStack": "{role} · {stack}",
+      "anyRoleAnyStack": "jede Rolle · jeder Stack",
+      "everyUse": "Jeder Zweck",
+      "everySize": "Jede Größe",
+      "provenance": {
+        "shipped": "Mit Motir ausgeliefert",
+        "promoted": "Übernommen von <b>{email}</b> am {date} aus {repo} bei <mono>{ref}</mono>",
+        "promotedNoRepo": "Übernommen von <b>{email}</b> am {date} bei <mono>{ref}</mono>",
+        "retired": "Ausgemustert von <b>{email}</b> am {date}: „{reason}“",
+        "removedAccount": "einem gelöschten Konto"
+      },
+      "defaultForRole": "Standard für {role}",
+      "defaultForEveryRole": "Standard für jede Rolle",
+      "empty": {
+        "title": "Keine Starter entsprechen diesen Filtern",
+        "bodyRoleTarget": "Kein aktiver Starter für ein {role}-Repository wird auf {target} bereitgestellt. Löschen Sie die Filter, um die ganze Bibliothek zu sehen.",
+        "body": "Kein Starter entspricht diesen Filtern.",
+        "clear": "Filter löschen"
+      },
+      "pager": {
+        "label": "Seiten",
+        "showing": "{from}–{to} von {total}",
+        "previous": "Vorherige Seite",
+        "next": "Nächste Seite"
+      },
+      "retire": {
+        "action": "Ausmustern",
+        "title": "{label} ausmustern?",
+        "body": "Das Matching wählt ihn nicht mehr, und die Starter-Auswahl bietet ihn nicht mehr an. Bereits daraus erstellte Repositorys behalten ihren Code. Ein noch nicht erstelltes Repository, das ihn nennt, kann erst daraus erstellt werden, wenn jemand einen anderen Starter wählt.",
+        "reasonLabel": "Begründung",
+        "reasonHelp": "Wird mit Ihrem Namen ins Audit-Log geschrieben.",
+        "cancel": "Abbrechen",
+        "confirm": "Starter ausmustern",
+        "done": "Ausgemustert. {label} wird neuen Repositorys nicht mehr angeboten.",
+        "failedTitle": "Dieser Starter wurde nicht ausgemustert.",
+        "failed": "Motir konnte ihn nicht ausmustern. Versuchen Sie es erneut.",
+        "defaultTitle": "Dieser Starter kann nicht ausgemustert werden.",
+        "defaultBody": "„{key}“ ist der Standard-Starter für ein {role}-Repository. Einen Standard zu ändern ist eine Entscheidung, keine Operator-Aktion.",
+        "defaultBodyEveryRole": "„{key}“ ist der Standard-Starter für jede Rolle. Einen Standard zu ändern ist eine Entscheidung, keine Operator-Aktion.",
+        "close": "Schließen"
+      },
+      "promoteForm": {
+        "breadcrumb": "Betrieb · Starter · Übernehmen",
+        "title": "Repository übernehmen",
+        "subtitle": "Motir kopiert das Repository am Ref in die eigene Organisation und bietet die Kopie neuen passenden Repositorys als Starter an. Bestehende Repositorys werden nicht geändert.",
+        "field": {
+          "source": "Von Motir erstelltes Repository",
+          "ref": "Ref",
+          "role": "Rolle",
+          "stack": "Stack",
+          "label": "Label",
+          "key": "Schlüssel",
+          "uses": "Abgedeckte Zwecke",
+          "sizes": "Abgedeckte Größen",
+          "targets": "Hosting-Ziele für die Bereitstellung",
+          "reason": "Begründung"
+        },
+        "help": {
+          "ref": "Ein Branch, Tag oder Commit. Der Starter wird daraus kopiert.",
+          "stack": "Wie der Planer diesen Stack nennt, in Kleinbuchstaben.",
+          "label": "Was andere an ihrem Repository sehen.",
+          "key": "Kleinbuchstaben, Ziffern und Bindestriche. Auch der Name der Kopie in motir-co. Kann später nicht geändert werden.",
+          "targets": "Jedes muss in der motir.hosting.json des Repositorys am Ref stehen. Kreuzen Sie keines an für einen Starter, den Motir-Hosting nicht bereitstellt.",
+          "reason": "Wird mit Ihrem Namen ins Audit-Log geschrieben."
+        },
+        "source": {
+          "placeholder": "Repository auswählen",
+          "empty": "Kein Repository passt.",
+          "footer": "Nur Repositorys, die Motir erstellt hat.",
+          "sub": "{project} · {role} · {state}",
+          "leaving": "wird an den Eigentümer übergeben",
+          "notCreated": "noch nicht erstellt"
+        },
+        "rolePlaceholder": "Rolle auswählen",
+        "cancel": "Abbrechen",
+        "review": "Übernahme prüfen",
+        "confirm": {
+          "title": "{name} als Starter übernehmen?",
+          "body": "Motir kopiert <b>{repo}</b> bei <b>{ref}</b> nach <b>motir-co/{key}</b> und fügt <b>{label}</b> der Bibliothek hinzu. Ab dann kann das Matching ihn für ein neues passendes {role}-Repository wählen. Bestehende Repositorys werden nicht geändert.",
+          "roleStack": "Rolle · Stack",
+          "uses": "Zwecke",
+          "sizes": "Größen",
+          "hosting": "Hosting",
+          "reason": "Begründung",
+          "notDeployed": "Nicht von Motir-Hosting bereitgestellt",
+          "back": "Zurück",
+          "promote": "Übernehmen"
+        },
+        "done": "Übernommen. Neue {role}-Repositorys auf {target} können jetzt auf {label} basieren.",
+        "doneNoTarget": "Übernommen. Neue {role}-Repositorys können jetzt auf {label} basieren.",
+        "refusal": {
+          "sourceTitle": "Dieses Repository kann nicht übernommen werden.",
+          "takenOver": "Es wird an den Eigentümer übergeben oder wurde bereits übergeben, daher darf Motir es nicht mehr kopieren.",
+          "notCreated": "Nur ein von Motir erstelltes Repository kann übernommen werden, und dieses ist noch {state}.",
+          "organizationRow": "Es ist das eigene Repository der Organisation, und Motir kopiert nie den Code eines Kunden.",
+          "notMotirHeld": "{repo} liegt nicht mehr in einer GitHub-Organisation, die Motir verwaltet.",
+          "notFound": "Es existiert nicht mehr. Wählen Sie ein anderes.",
+          "refNotFound": "„{ref}“ ist kein Branch, Tag oder Commit von {repo}.",
+          "manifestTitle": "motir.hosting.json lehnt diese Übernahme ab.",
+          "manifestMissing": "Das Repository hat bei <b>{ref}</b> keine motir.hosting.json und kann daher kein Hosting-Ziel beanspruchen. Fügen Sie die Datei an diesem Ref hinzu oder entfernen Sie alle Hosting-Ziele.",
+          "manifestInvalid": "Die Datei bei <b>{ref}</b> ist ungültig: <b>{field}</b> {reason}",
+          "theDocument": "das Dokument",
+          "targetNotDeclared": "Sie führt <b>{target}</b> nicht unter targets auf (sie nennt {declared}). Entfernen Sie {target} oder fügen Sie es der Datei hinzu.",
+          "declaredNone": "keines",
+          "targetNotDeclaredField": "{target} steht bei {ref} nicht in motir.hosting.json.",
+          "notInList": "„{value}“ ist {kind, select, role {keine Rolle} useCases {kein Zweck} sizes {keine Größe} other {kein Hosting-Ziel}}. Wählen Sie aus {list}.",
+          "keyTaken": "Der Schlüssel {key} ist bereits vergeben.",
+          "templateNameTaken": "motir-co/{key} existiert bereits und ist nicht die Kopie dieses Starters. Wählen Sie einen anderen Schlüssel oder entfernen Sie zuerst dieses Repository.",
+          "genericTitle": "Motir konnte dieses Repository nicht übernehmen.",
+          "genericBody": "Es wurde nichts kopiert. Versuchen Sie es erneut."
+        }
       }
     }
   },
