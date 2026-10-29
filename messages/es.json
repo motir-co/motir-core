@@ -9465,10 +9465,73 @@
     "outcomeNeedsAccess": "Terminar de configurar el acceso",
     "connectGithub": "Conectar GitHub",
     "stateCreated": "Creado",
-    "createdDetail": "Alojado por Motir · generado a partir de la plantilla Next.js de Motir.",
+    "createdDetail": "Alojado por Motir · generado a partir de {seed}.",
     "stateFailed": "No se pudo crear",
     "actionError": "No funcionó. No se cambió nada: vuelve a intentarlo.",
-    "promiseDoor": "Cómo funciona moverlo"
+    "promiseDoor": "Cómo funciona moverlo",
+    "stateProposed": "Aún no creado",
+    "createdDetailInitialised": "Alojado por Motir · generado como repositorio inicializado.",
+    "createdDetailNoSeed": "Alojado por Motir.",
+    "seed": {
+      "starterPillLabel": "Parte de {label}",
+      "targetPillLabel": "Alojado en {target}",
+      "default": "Predeterminada",
+      "noTarget": "Sin destino de alojamiento",
+      "target": {
+        "serverless": "Serverless",
+        "fly": "Fly",
+        "aws": "AWS"
+      },
+      "use": {
+        "internal_tool": "Herramienta interna",
+        "mvp": "MVP",
+        "planned_product": "Producto planificado"
+      },
+      "size": {
+        "small": "Pequeño",
+        "medium": "Mediano",
+        "large": "Grande"
+      },
+      "why": {
+        "matched": "<b>Por qué esta plantilla:</b> se despliega en {target} y está pensada para {use, select, internal_tool {una herramienta interna} mvp {un MVP} planned_product {un producto planificado} other {este uso}} de este tamaño.",
+        "matchedTarget": "<b>Por qué esta plantilla:</b> se despliega en {target}.",
+        "softUse": "<b>Por qué esta plantilla:</b> es la plantilla más cercana que se despliega en {target}. Ninguna plantilla de {target} está pensada para {use, select, internal_tool {una herramienta interna} mvp {un MVP} planned_product {un producto planificado} other {este uso}}.",
+        "softSize": "<b>Por qué esta plantilla:</b> es la plantilla más cercana que se despliega en {target}. Ninguna plantilla de {target} está pensada para un repositorio de este tamaño.",
+        "notDeployed": "<b>Por qué esta plantilla:</b> es la plantilla de Motir para una app {role}. El alojamiento de Motir no despliega este repositorio, así que no se muestra alojamiento.",
+        "noStackSignal": "<b>Por qué esta plantilla:</b> el plan no indica qué stack usa este repositorio, así que parte de la plantilla habitual para un repositorio web en {target}. Elige otra si conoces el stack.",
+        "noTarget": "<b>Por qué esta plantilla:</b> este repositorio aún no tiene destino de alojamiento, así que parte de la plantilla habitual para un repositorio web.",
+        "noMatch": "<b>Por qué esta plantilla:</b> no hay ninguna plantilla para un repositorio {role} {where, select, target {en {target}} other {con este stack}}, así que empieza como repositorio inicializado: un repositorio vacío con un README.",
+        "byHand": "<b>Por qué esta plantilla:</b> alguien la eligió a mano para este repositorio."
+      },
+      "fact": {
+        "hosting": "Alojamiento",
+        "use": "Uso",
+        "size": "Tamaño",
+        "stack": "Stack",
+        "not_set": "Sin definir",
+        "not_named": "Sin indicar",
+        "none": "Ninguno",
+        "notServed": "· no cubierto",
+        "noRoleStarter": "· ninguna plantilla {role} se despliega aquí"
+      },
+      "picker": {
+        "label": "Plantilla",
+        "groupTarget": "Plantillas {role, select, web {Web} api {API} mobile {Mobile} shared {Shared} infra {Infra} other {Otras}} en {target}",
+        "groupRole": "Plantillas {role, select, web {Web} api {API} mobile {Mobile} shared {Shared} infra {Infra} other {Otras}}",
+        "groupAny": "Cualquier repositorio",
+        "initialisedSub": "Un repositorio vacío con un README",
+        "footerTarget": "Solo plantillas para un repositorio {role} que se despliegan en {target}.",
+        "footerNoTarget": "Solo plantillas para un repositorio {role}. Este repositorio aún no tiene destino de alojamiento."
+      },
+      "refusal": {
+        "targetMismatch": "<b>{label} no se puede usar aquí.</b> Se despliega en {targets}, y este repositorio se ejecuta en {target}. La plantilla no cambia.",
+        "targetMismatchNoTarget": "<b>{label} no se puede usar aquí.</b> Se despliega en {targets}, y este repositorio no tiene destino de alojamiento. La plantilla no cambia.",
+        "retired": "<b>{label} se ha retirado.</b> Motir ya no la ofrece, así que elige otra plantilla. La plantilla no cambia.",
+        "roleMismatch": "<b>{label} no se puede usar aquí.</b> Es una plantilla para un repositorio {entryRole}, y este es {role}. La plantilla no cambia.",
+        "notEditable": "<b>Este repositorio ya se ha creado,</b> así que ya no puede partir de otra plantilla. Recarga para verlo.",
+        "unknown": "<b>Esa plantilla ya no existe.</b> Elige otra plantilla. La plantilla no cambia."
+      }
+    }
   },
   "repositoryTakeover": {
     "title": "Repositorios",
@@ -10146,7 +10209,8 @@
       "navRunModels": "Modelos de ejecuciones alojadas",
       "navFleetSettings": "Ajustes de la flota",
       "navCapacity": "Capacidad de proveedores",
-      "navJobs": "Trabajos"
+      "navJobs": "Trabajos",
+      "navStarters": "Plantillas"
     },
     "nav": {
       "overview": "Resumen",
@@ -12767,6 +12831,152 @@
       "dlqEmpty": {
         "title": "No hay nada pendiente",
         "body": "Ningún trabajo ha agotado sus intentos. Los mensajes fallidos aparecen aquí cuando ocurre."
+      }
+    },
+    "starters": {
+      "breadcrumb": "Operaciones · Plantillas",
+      "title": "Plantillas",
+      "subtitle": "De qué parte un repositorio que crea Motir. La asignación elige entre las plantillas activas por rol, destino de alojamiento, uso y tamaño. Convierte en plantilla un repositorio que creó Motir, o retira una.",
+      "promote": "Convertir un repositorio",
+      "card": {
+        "title": "Biblioteca de plantillas",
+        "count": "Más recientes primero · {count, plural, one {# plantilla} other {# plantillas}}"
+      },
+      "filter": {
+        "label": "Filtrar plantillas",
+        "role": "Rol",
+        "status": "Estado",
+        "target": "Destino de alojamiento",
+        "anyRole": "Cualquier rol",
+        "anyTarget": "Cualquier destino",
+        "all": "Todas"
+      },
+      "status": {
+        "active": "Activa",
+        "retired": "Retirada"
+      },
+      "notDeployed": "No desplegada por el alojamiento de Motir",
+      "col": {
+        "starter": "Plantilla",
+        "roleStack": "Rol · stack",
+        "serves": "Cubre",
+        "hosting": "Alojamiento",
+        "status": "Estado",
+        "provenance": "Procedencia",
+        "actions": "Acciones"
+      },
+      "alsoAnswersTo": "También responde a {keys}",
+      "roleStack": "{role} · {stack}",
+      "anyRoleAnyStack": "cualquier rol · cualquier stack",
+      "everyUse": "Todos los usos",
+      "everySize": "Todos los tamaños",
+      "provenance": {
+        "shipped": "Incluida con Motir",
+        "promoted": "Convertida por <b>{email}</b> el {date} desde {repo} en <mono>{ref}</mono>",
+        "promotedNoRepo": "Convertida por <b>{email}</b> el {date} en <mono>{ref}</mono>",
+        "retired": "Retirada por <b>{email}</b> el {date}: «{reason}»",
+        "removedAccount": "una cuenta eliminada"
+      },
+      "defaultForRole": "Predeterminada para {role}",
+      "defaultForEveryRole": "Predeterminada para todos los roles",
+      "empty": {
+        "title": "Ninguna plantilla coincide con estos filtros",
+        "bodyRoleTarget": "Ninguna plantilla activa para un repositorio {role} se despliega en {target}. Borra los filtros para ver toda la biblioteca.",
+        "body": "Ninguna plantilla coincide con estos filtros.",
+        "clear": "Borrar filtros"
+      },
+      "pager": {
+        "label": "Páginas",
+        "showing": "Mostrando {from}–{to} de {total}",
+        "previous": "Página anterior",
+        "next": "Página siguiente"
+      },
+      "retire": {
+        "action": "Retirar",
+        "title": "¿Retirar {label}?",
+        "body": "La asignación deja de elegirla y el selector de plantillas deja de ofrecerla. Los repositorios ya creados a partir de ella conservan su código. Un repositorio aún no creado que la indique no se podrá crear a partir de ella hasta que alguien elija otra plantilla.",
+        "reasonLabel": "Motivo",
+        "reasonHelp": "Se escribe en el registro de auditoría con tu nombre.",
+        "cancel": "Cancelar",
+        "confirm": "Retirar plantilla",
+        "done": "Retirada. {label} ya no se ofrece a los repositorios nuevos.",
+        "failedTitle": "Esta plantilla no se ha retirado.",
+        "failed": "Motir no pudo retirarla. Inténtalo de nuevo.",
+        "defaultTitle": "Esta plantilla no se puede retirar.",
+        "defaultBody": "«{key}» es la plantilla predeterminada para un repositorio {role}. Cambiar una predeterminada es una decisión, no una acción de operador.",
+        "defaultBodyEveryRole": "«{key}» es la plantilla predeterminada para todos los roles. Cambiar una predeterminada es una decisión, no una acción de operador.",
+        "close": "Cerrar"
+      },
+      "promoteForm": {
+        "breadcrumb": "Operaciones · Plantillas · Convertir",
+        "title": "Convertir un repositorio",
+        "subtitle": "Motir copia el repositorio en la referencia a su propia organización y ofrece la copia como plantilla a los repositorios nuevos que encajen. Los repositorios que ya existen no cambian.",
+        "field": {
+          "source": "Repositorio creado por Motir",
+          "ref": "Referencia",
+          "role": "Rol",
+          "stack": "Stack",
+          "label": "Etiqueta",
+          "key": "Clave",
+          "uses": "Usos que cubre",
+          "sizes": "Tamaños que cubre",
+          "targets": "Destinos de alojamiento donde se despliega",
+          "reason": "Motivo"
+        },
+        "help": {
+          "ref": "Una rama, etiqueta o commit. La plantilla se copia desde ahí.",
+          "stack": "Cómo llama el planificador a este stack, en minúsculas.",
+          "label": "Lo que la gente ve en su repositorio.",
+          "key": "Minúsculas, dígitos y guiones. También es el nombre de la copia en motir-co. No se puede cambiar después.",
+          "targets": "Cada uno debe figurar en el motir.hosting.json del repositorio en la referencia. No marques ninguno para una plantilla que el alojamiento de Motir no despliega.",
+          "reason": "Se escribe en el registro de auditoría con tu nombre."
+        },
+        "source": {
+          "placeholder": "Elige un repositorio",
+          "empty": "Ningún repositorio coincide.",
+          "footer": "Solo repositorios creados por Motir.",
+          "sub": "{project} · {role} · {state}",
+          "leaving": "en traspaso a su propietario",
+          "notCreated": "aún no creado"
+        },
+        "rolePlaceholder": "Elige un rol",
+        "cancel": "Cancelar",
+        "review": "Revisar conversión",
+        "confirm": {
+          "title": "¿Convertir {name} en plantilla?",
+          "body": "Motir copia <b>{repo}</b> en <b>{ref}</b> a <b>motir-co/{key}</b> y añade <b>{label}</b> a la biblioteca. A partir de entonces la asignación puede elegirla para un repositorio {role} nuevo al que se ajuste. Los repositorios que ya existen no cambian.",
+          "roleStack": "Rol · stack",
+          "uses": "Usos",
+          "sizes": "Tamaños",
+          "hosting": "Alojamiento",
+          "reason": "Motivo",
+          "notDeployed": "No desplegada por el alojamiento de Motir",
+          "back": "Atrás",
+          "promote": "Convertir"
+        },
+        "done": "Convertida. Los repositorios {role} nuevos en {target} ya pueden partir de {label}.",
+        "doneNoTarget": "Convertida. Los repositorios {role} nuevos ya pueden partir de {label}.",
+        "refusal": {
+          "sourceTitle": "Este repositorio no se puede convertir.",
+          "takenOver": "Se está traspasando a su propietario, o ya se traspasó, así que Motir ya no puede copiarlo.",
+          "notCreated": "Solo se puede convertir un repositorio creado por Motir, y este sigue {state}.",
+          "organizationRow": "Es el repositorio propio de la organización, y Motir nunca copia el código de un cliente.",
+          "notMotirHeld": "{repo} ya no está en una organización de GitHub que gestione Motir.",
+          "notFound": "Ya no existe. Elige otro.",
+          "refNotFound": "«{ref}» no es una rama, etiqueta ni commit de {repo}.",
+          "manifestTitle": "motir.hosting.json rechaza esta conversión.",
+          "manifestMissing": "El repositorio no tiene motir.hosting.json en <b>{ref}</b>, así que no puede reclamar un destino de alojamiento. Añade el archivo en esa referencia o desmarca todos los destinos de alojamiento.",
+          "manifestInvalid": "El archivo en <b>{ref}</b> no es válido: <b>{field}</b> {reason}",
+          "theDocument": "el documento",
+          "targetNotDeclared": "No incluye <b>{target}</b> en targets (incluye {declared}). Desmarca {target} o añádelo al archivo.",
+          "declaredNone": "ninguno",
+          "targetNotDeclaredField": "{target} no está en motir.hosting.json en {ref}.",
+          "notInList": "«{value}» no es {kind, select, role {un rol} useCases {un uso} sizes {un tamaño} other {un destino de alojamiento}}. Elige entre {list}.",
+          "keyTaken": "La clave {key} ya está en uso.",
+          "templateNameTaken": "motir-co/{key} ya existe y no es la copia de esta plantilla. Elige otra clave o elimina antes ese repositorio.",
+          "genericTitle": "Motir no pudo convertir este repositorio.",
+          "genericBody": "No se ha copiado nada. Inténtalo de nuevo."
+        }
       }
     }
   },

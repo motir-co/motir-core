@@ -429,12 +429,19 @@ describe('promote', () => {
     [
       'an invalid manifest',
       (): string | null => JSON.stringify({ ...MANIFEST, port: 0 }),
-      { refusal: 'invalid', file: 'motir.hosting.json', field: 'port' },
+      // The parser's reason travels on the error (MOTIR-712), so the console
+      // names it without parsing the English message.
+      {
+        refusal: 'invalid',
+        file: 'motir.hosting.json',
+        field: 'port',
+        reason: expect.stringMatching(/\S/) as unknown as string,
+      },
     ],
     [
       'a claimed target the manifest does not declare',
       (): string | null => JSON.stringify(MANIFEST),
-      { refusal: 'target_not_declared', field: 'targets', target: 'aws' },
+      { refusal: 'target_not_declared', field: 'targets', target: 'aws', declared: ['fly'] },
     ],
   ] as const)('refuses %s, copying nothing and writing no entry', async (_, text, expected) => {
     const principal = await signInAs('operator');

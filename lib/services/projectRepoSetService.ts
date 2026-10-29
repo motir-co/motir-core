@@ -38,6 +38,7 @@ import { allowedTransitions, canTransition } from '@/lib/projectRepos/transition
 import { classifyProjectRepoUniqueViolation } from '@/lib/projectRepos/uniqueViolation';
 import { seedRegistryService } from '@/lib/services/seedRegistryService';
 import {
+  PROJECT_REPO_PLAN_EDITABLE_STATES,
   PROJECT_REPO_PROPOSAL_SIGNALS,
   SEED_MATCH_RESULTS,
   isOrganizationSeedSource,
@@ -120,7 +121,7 @@ const TARGET_ACCOUNT_MAX = 100;
  * settled, and re-planning it is a remove-and-re-add). The free-form `label` is
  * editable in EVERY state: it is a human annotation that drives nothing.
  */
-const PLAN_EDITABLE_STATES: readonly ProjectRepoState[] = ['proposed', 'failed'];
+const PLAN_EDITABLE_STATES: readonly ProjectRepoState[] = PROJECT_REPO_PLAN_EDITABLE_STATES;
 
 /**
  * The SETTLED states a row may be RE-PLANNED out of (`replanRow`) — the two that

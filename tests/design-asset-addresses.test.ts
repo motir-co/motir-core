@@ -273,20 +273,8 @@ const KNOWN: { file: string; address: string; why: string }[] = [
   //  `/approvals` before MOTIR-5302 built the page, and that card removed the row.
   //  And a third time for the Planning lessons console: MOTIR-1409 drew
   //  `/admin/planning-lessons` before MOTIR-1411 built it, and that card removed the rows.
-  // ── FORWARD-LOOKING: the starter library console (MOTIR-705, story MOTIR-704) ──
-  //  MOTIR-705 draws `/admin/starters` and its promote form before MOTIR-712 builds
-  //  them. MOTIR-712 deletes both rows in the pull request that adds the pages;
-  //  the expired-entry arm below turns red there if it does not.
-  {
-    file: 'design/starter-library/design-notes.md',
-    address: '/admin/starters',
-    why: 'Forward-looking: the operator starter library MOTIR-705 draws; MOTIR-712 builds the page and deletes this row.',
-  },
-  {
-    file: 'design/starter-library/design-notes.md',
-    address: '/admin/starters/promote',
-    why: 'Forward-looking: the promote form MOTIR-705 draws; MOTIR-712 builds the page and deletes this row.',
-  },
+  //  And a fourth time for the starter library: MOTIR-705 drew `/admin/starters`
+  //  and its promote form before MOTIR-712 built them, and that card removed the rows.
   // ── An address named as HISTORY, by the asset that retires it ─────────────
   // `design/code-context/design-notes.md` (MOTIR-1764) documents a collapse:
   // Code health, the code index and Git were three things in two rail sections

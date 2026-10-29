@@ -148,6 +148,11 @@ export class SeedPromotionManifestRefusedError extends Error {
     readonly field: string | null,
     readonly target: string | null,
     detail: string,
+    /** What is wrong with `field` (`invalid`), in the parser's words, so the
+     *  console can name it without parsing `message` (MOTIR-712). */
+    readonly reason: string | null = null,
+    /** The targets the manifest DOES declare (`target_not_declared`). */
+    readonly declared: readonly string[] = [],
   ) {
     super(`The starter's ${file} refuses this promotion: ${detail}`);
     this.name = 'SeedPromotionManifestRefusedError';

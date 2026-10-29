@@ -49,3 +49,13 @@ export function byMostRecentlyPromoted(a: Promotable, b: Promotable): number {
   const at = (entry: Promotable) => entry.promotedAt ?? entry.createdAt;
   return at(b).localeCompare(at(a)) || a.key.localeCompare(b.key);
 }
+
+/**
+ * Whether an entry is one of the two FIXED defaults (3.6 / 3.8): `initialised`,
+ * which every row falls back to, and the web default the page names. Neither is
+ * retired by an operator — the retire refuses them and the console draws no
+ * Retire on their rows, from this one rule.
+ */
+export function isFixedDefaultSeedKey(key: string): boolean {
+  return key === SEED_SOURCE_INITIALISED || key === SEED_SOURCE_PLATFORM_STARTER;
+}

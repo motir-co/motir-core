@@ -6,6 +6,7 @@
 // (MOTIR-1783) bind to these.
 
 import type { HostingSize, HostingTarget, HostingUseCase } from '@/lib/hosting/vocabulary';
+import type { SeedRegistryEntryDto } from '@/lib/dto/seedRegistry';
 
 /** Wire form of the Prisma `ProjectRepoRole` enum (ADR §1.1). */
 export type ProjectRepoRoleDto = 'web' | 'api' | 'mobile' | 'shared' | 'infra' | 'other';
@@ -532,6 +533,37 @@ export type HostedRunRepoAccessDto =
  *  no entry draws no line — Motir-hosted rows, and a row whose read failed. */
 export type HostedRunRepoAccessMapDto = Record<string, HostedRunRepoAccessDto>;
 
+/** Why a person's re-point of a row's seed was refused (MOTIR-709). */
+/** Why a person's re-point of a row's seed was refused (MOTIR-709), as the PATCH
+ *  route's `refusal` carries it. */
+export type ProjectRepoSeedRefusalDto =
+  /** No registry entry has the key, current or legacy. */
+  | 'unknown'
+  /** The entry is retired: never offered, never established from. */
+  | 'retired'
+  /** The entry seeds another role. */
+  | 'role_mismatch'
+  /** The entry does not deploy to the row's hosting target (or deploys somewhere
+   *  when the row's role runs nowhere the hosting port reaches). */
+  | 'target_mismatch'
+  /** The row is past `proposed` / `failed`: its repository exists or is being made. */
+  | 'not_editable'
+  /** The row is the organisation's own repository, which Motir never seeds (D1). */
+  | 'organization_row';
+
+/** One Motir-created row's seed, as the room's pills, inset and picker draw it. */
+export interface ProjectRepoRoomSeedDto {
+  /** The entry the row's `seedSource` names (by its current or a legacy key),
+   *  retired ones included, or null when no entry has that key. */
+  entry: SeedRegistryEntryDto | null;
+  /**
+   * The starters the row may be re-pointed to — the row's role's ACTIVE entries
+   * that fit its hosting target, then `initialised` — or null when the row is past
+   * the states a re-point accepts ({@link PROJECT_REPO_PLAN_EDITABLE_STATES}).
+   */
+  options: SeedRegistryEntryDto[] | null;
+}
+
 export interface ProjectRepoRoomViewDto {
   projectId: string;
   rows: ProjectRepoDto[];
@@ -558,6 +590,12 @@ export interface ProjectRepoRoomViewDto {
   ciPaused: boolean;
   /** The OTHER projects in this workspace whose code Motir also hosts. */
   otherHostedProjects: OtherHostedProjectDto[];
+  /**
+   * Each Motir-created row's SEED as the room draws it (MOTIR-712; design
+   * MOTIR-705 §1), keyed by row id. An organisation's own row has no entry here:
+   * Motir never seeds a repository it did not create.
+   */
+  seeds: Record<string, ProjectRepoRoomSeedDto>;
   /** Compatibility field for the retired workspace-inheritance section. */
   connected: ProjectRepoConnectedDto[];
   /** Whether the retired workspace-inheritance section is present. Always false. */

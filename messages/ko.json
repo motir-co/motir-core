@@ -9459,10 +9459,73 @@
     "outcomeNeedsAccess": "액세스 설정 마치기",
     "connectGithub": "GitHub 연결",
     "stateCreated": "생성됨",
-    "createdDetail": "Motir에서 호스팅 · Motir Next.js 스타터에서 생성됨.",
+    "createdDetail": "Motir에서 호스팅 · {seed}에서 생성됨.",
     "stateFailed": "생성할 수 없음",
     "actionError": "작동하지 않았습니다. 변경된 것은 없습니다 — 다시 시도하세요.",
-    "promiseDoor": "이전 방법"
+    "promiseDoor": "이전 방법",
+    "stateProposed": "아직 생성되지 않음",
+    "createdDetailInitialised": "Motir에서 호스팅 · 초기화된 저장소로 생성됨.",
+    "createdDetailNoSeed": "Motir에서 호스팅.",
+    "seed": {
+      "starterPillLabel": "{label}에서 시작",
+      "targetPillLabel": "{target}에서 호스팅",
+      "default": "기본값",
+      "noTarget": "호스팅 대상 없음",
+      "target": {
+        "serverless": "Serverless",
+        "fly": "Fly",
+        "aws": "AWS"
+      },
+      "use": {
+        "internal_tool": "내부 도구",
+        "mvp": "MVP",
+        "planned_product": "계획된 제품"
+      },
+      "size": {
+        "small": "소형",
+        "medium": "중형",
+        "large": "대형"
+      },
+      "why": {
+        "matched": "<b>이 스타터를 고른 이유:</b> {target}에 배포되며 이 규모의 {use, select, internal_tool {내부 도구} mvp {MVP} planned_product {계획된 제품} other {이 용도}}용으로 만들어졌습니다.",
+        "matchedTarget": "<b>이 스타터를 고른 이유:</b> {target}에 배포됩니다.",
+        "softUse": "<b>이 스타터를 고른 이유:</b> {target}에 배포되는 스타터 중 가장 가깝습니다. {use, select, internal_tool {내부 도구} mvp {MVP} planned_product {계획된 제품} other {이 용도}}용 {target} 스타터는 없습니다.",
+        "softSize": "<b>이 스타터를 고른 이유:</b> {target}에 배포되는 스타터 중 가장 가깝습니다. 이 규모의 저장소용 {target} 스타터는 없습니다.",
+        "notDeployed": "<b>이 스타터를 고른 이유:</b> {role} 앱용 Motir 스타터입니다. Motir 호스팅은 이 저장소를 배포하지 않으므로 호스팅이 표시되지 않습니다.",
+        "noStackSignal": "<b>이 스타터를 고른 이유:</b> 계획에 이 저장소의 스택이 나와 있지 않아 {target}의 웹 저장소용 기본 스타터에서 시작합니다. 스택을 알고 있다면 다른 스타터를 선택하십시오.",
+        "noTarget": "<b>이 스타터를 고른 이유:</b> 이 저장소에는 아직 호스팅 대상이 없어 웹 저장소용 기본 스타터에서 시작합니다.",
+        "noMatch": "<b>이 스타터를 고른 이유:</b> {where, select, target {{target}의} other {이 스택의}} {role} 저장소용 스타터가 없어 초기화된 저장소, 즉 README만 있는 빈 저장소로 시작합니다.",
+        "byHand": "<b>이 스타터를 고른 이유:</b> 누군가 이 저장소에 직접 선택했습니다."
+      },
+      "fact": {
+        "hosting": "호스팅",
+        "use": "용도",
+        "size": "규모",
+        "stack": "스택",
+        "not_set": "설정되지 않음",
+        "not_named": "지정되지 않음",
+        "none": "없음",
+        "notServed": "· 지원하지 않음",
+        "noRoleStarter": "· 여기에 배포되는 {role} 스타터 없음"
+      },
+      "picker": {
+        "label": "스타터",
+        "groupTarget": "{target}의 {role, select, web {Web} api {API} mobile {Mobile} shared {Shared} infra {Infra} other {기타}} 스타터",
+        "groupRole": "{role, select, web {Web} api {API} mobile {Mobile} shared {Shared} infra {Infra} other {기타}} 스타터",
+        "groupAny": "모든 저장소",
+        "initialisedSub": "README만 있는 빈 저장소",
+        "footerTarget": "{target}에 배포되는 {role} 저장소용 스타터만 표시됩니다.",
+        "footerNoTarget": "{role} 저장소용 스타터만 표시됩니다. 이 저장소에는 아직 호스팅 대상이 없습니다."
+      },
+      "refusal": {
+        "targetMismatch": "<b>{label}은(는) 여기에서 사용할 수 없습니다.</b> {targets}에 배포되는 스타터인데 이 저장소는 {target}에서 실행됩니다. 스타터는 변경되지 않았습니다.",
+        "targetMismatchNoTarget": "<b>{label}은(는) 여기에서 사용할 수 없습니다.</b> {targets}에 배포되는 스타터인데 이 저장소에는 호스팅 대상이 없습니다. 스타터는 변경되지 않았습니다.",
+        "retired": "<b>{label}은(는) 사용 중지되었습니다.</b> Motir가 더 이상 제공하지 않으므로 다른 스타터를 선택하십시오. 스타터는 변경되지 않았습니다.",
+        "roleMismatch": "<b>{label}은(는) 여기에서 사용할 수 없습니다.</b> {entryRole} 저장소용 스타터인데 이 저장소는 {role}입니다. 스타터는 변경되지 않았습니다.",
+        "notEditable": "<b>이 저장소는 이미 생성되었으므로</b> 더 이상 다른 스타터에서 시작할 수 없습니다. 새로고침하여 확인하십시오.",
+        "unknown": "<b>해당 스타터는 더 이상 존재하지 않습니다.</b> 다른 스타터를 선택하십시오. 스타터는 변경되지 않았습니다."
+      }
+    }
   },
   "repositoryTakeover": {
     "title": "저장소",
@@ -10140,7 +10203,8 @@
       "navRunModels": "호스팅 실행 모델",
       "navFleetSettings": "플릿 설정",
       "navCapacity": "공급자 용량",
-      "navJobs": "작업"
+      "navJobs": "작업",
+      "navStarters": "스타터"
     },
     "nav": {
       "overview": "개요",
@@ -12761,6 +12825,152 @@
       "dlqEmpty": {
         "title": "대기 중인 항목이 없습니다",
         "body": "시도 횟수를 모두 소진한 작업이 없습니다. 소진되면 여기에 데드 레터가 표시됩니다."
+      }
+    },
+    "starters": {
+      "breadcrumb": "운영 · 스타터",
+      "title": "스타터",
+      "subtitle": "Motir가 생성하는 저장소의 출발점입니다. 매칭은 역할, 호스팅 대상, 용도, 규모에 따라 활성 스타터 중에서 선택합니다. Motir가 생성한 저장소를 스타터로 승격하거나 스타터를 사용 중지할 수 있습니다.",
+      "promote": "저장소 승격",
+      "card": {
+        "title": "스타터 라이브러리",
+        "count": "최신순 · {count, plural, other {스타터 #개}}"
+      },
+      "filter": {
+        "label": "스타터 필터",
+        "role": "역할",
+        "status": "상태",
+        "target": "호스팅 대상",
+        "anyRole": "모든 역할",
+        "anyTarget": "모든 대상",
+        "all": "전체"
+      },
+      "status": {
+        "active": "활성",
+        "retired": "사용 중지"
+      },
+      "notDeployed": "Motir 호스팅으로 배포되지 않음",
+      "col": {
+        "starter": "스타터",
+        "roleStack": "역할 · 스택",
+        "serves": "지원",
+        "hosting": "호스팅",
+        "status": "상태",
+        "provenance": "출처",
+        "actions": "작업"
+      },
+      "alsoAnswersTo": "{keys}(으)로도 찾을 수 있음",
+      "roleStack": "{role} · {stack}",
+      "anyRoleAnyStack": "모든 역할 · 모든 스택",
+      "everyUse": "모든 용도",
+      "everySize": "모든 규모",
+      "provenance": {
+        "shipped": "Motir 기본 제공",
+        "promoted": "<b>{email}</b>님이 {date}에 {repo}의 <mono>{ref}</mono>에서 승격",
+        "promotedNoRepo": "<b>{email}</b>님이 {date}에 <mono>{ref}</mono>에서 승격",
+        "retired": "<b>{email}</b>님이 {date}에 사용 중지: “{reason}”",
+        "removedAccount": "삭제된 계정"
+      },
+      "defaultForRole": "{role} 기본값",
+      "defaultForEveryRole": "모든 역할의 기본값",
+      "empty": {
+        "title": "이 필터와 일치하는 스타터가 없습니다",
+        "bodyRoleTarget": "{target}에 배포되는 {role} 저장소용 활성 스타터가 없습니다. 필터를 지우면 전체 라이브러리를 볼 수 있습니다.",
+        "body": "이 필터와 일치하는 스타터가 없습니다.",
+        "clear": "필터 지우기"
+      },
+      "pager": {
+        "label": "페이지",
+        "showing": "{total}개 중 {from}–{to}",
+        "previous": "이전 페이지",
+        "next": "다음 페이지"
+      },
+      "retire": {
+        "action": "사용 중지",
+        "title": "{label}을(를) 사용 중지하시겠습니까?",
+        "body": "매칭이 더 이상 이 스타터를 선택하지 않으며 스타터 선택기에도 표시되지 않습니다. 이미 이 스타터로 생성된 저장소의 코드는 그대로 유지됩니다. 이 스타터를 지정한 아직 생성되지 않은 저장소는 누군가 다른 스타터를 선택할 때까지 생성할 수 없습니다.",
+        "reasonLabel": "사유",
+        "reasonHelp": "사용자 이름과 함께 감사 로그에 기록됩니다.",
+        "cancel": "취소",
+        "confirm": "스타터 사용 중지",
+        "done": "사용 중지되었습니다. {label}은(는) 더 이상 새 저장소에 제공되지 않습니다.",
+        "failedTitle": "이 스타터는 사용 중지되지 않았습니다.",
+        "failed": "Motir가 사용 중지하지 못했습니다. 다시 시도하십시오.",
+        "defaultTitle": "이 스타터는 사용 중지할 수 없습니다.",
+        "defaultBody": "“{key}”은(는) {role} 저장소의 기본 스타터입니다. 기본값 변경은 의사 결정 사항이며 운영자 작업이 아닙니다.",
+        "defaultBodyEveryRole": "“{key}”은(는) 모든 역할의 기본 스타터입니다. 기본값 변경은 의사 결정 사항이며 운영자 작업이 아닙니다.",
+        "close": "닫기"
+      },
+      "promoteForm": {
+        "breadcrumb": "운영 · 스타터 · 승격",
+        "title": "저장소 승격",
+        "subtitle": "Motir는 지정한 ref의 저장소를 자체 조직으로 복사하고, 조건에 맞는 새 저장소에 그 복사본을 스타터로 제공합니다. 기존 저장소는 변경되지 않습니다.",
+        "field": {
+          "source": "Motir가 생성한 저장소",
+          "ref": "Ref",
+          "role": "역할",
+          "stack": "스택",
+          "label": "레이블",
+          "key": "키",
+          "uses": "지원하는 용도",
+          "sizes": "지원하는 규모",
+          "targets": "배포할 호스팅 대상",
+          "reason": "사유"
+        },
+        "help": {
+          "ref": "브랜치, 태그 또는 커밋입니다. 스타터는 여기에서 복사됩니다.",
+          "stack": "플래너가 이 스택을 부르는 이름(소문자)입니다.",
+          "label": "사용자가 저장소에서 보게 되는 이름입니다.",
+          "key": "소문자, 숫자, 하이픈. motir-co 안의 복사본 이름이기도 합니다. 나중에 변경할 수 없습니다.",
+          "targets": "각 대상은 ref 시점의 저장소 motir.hosting.json에 나열되어 있어야 합니다. Motir 호스팅이 배포하지 않는 스타터라면 아무것도 선택하지 마십시오.",
+          "reason": "사용자 이름과 함께 감사 로그에 기록됩니다."
+        },
+        "source": {
+          "placeholder": "저장소 선택",
+          "empty": "일치하는 저장소가 없습니다.",
+          "footer": "Motir가 생성한 저장소만 표시됩니다.",
+          "sub": "{project} · {role} · {state}",
+          "leaving": "소유자에게 이전 중",
+          "notCreated": "아직 생성되지 않음"
+        },
+        "rolePlaceholder": "역할 선택",
+        "cancel": "취소",
+        "review": "승격 검토",
+        "confirm": {
+          "title": "{name}을(를) 스타터로 승격하시겠습니까?",
+          "body": "Motir는 <b>{repo}</b>의 <b>{ref}</b>을(를) <b>motir-co/{key}</b>(으)로 복사하고 <b>{label}</b>을(를) 라이브러리에 추가합니다. 이후 매칭은 조건에 맞는 새 {role} 저장소에 이 스타터를 선택할 수 있습니다. 기존 저장소는 변경되지 않습니다.",
+          "roleStack": "역할 · 스택",
+          "uses": "용도",
+          "sizes": "규모",
+          "hosting": "호스팅",
+          "reason": "사유",
+          "notDeployed": "Motir 호스팅으로 배포되지 않음",
+          "back": "뒤로",
+          "promote": "승격"
+        },
+        "done": "승격되었습니다. 이제 {target}의 새 {role} 저장소가 {label}에서 시작할 수 있습니다.",
+        "doneNoTarget": "승격되었습니다. 이제 새 {role} 저장소가 {label}에서 시작할 수 있습니다.",
+        "refusal": {
+          "sourceTitle": "이 저장소는 승격할 수 없습니다.",
+          "takenOver": "소유자에게 이전 중이거나 이미 이전되어 Motir가 더 이상 복사할 수 없습니다.",
+          "notCreated": "Motir가 생성한 저장소만 승격할 수 있는데, 이 저장소는 아직 {state} 상태입니다.",
+          "organizationRow": "조직 자체의 저장소이며, Motir는 고객의 코드를 절대 복사하지 않습니다.",
+          "notMotirHeld": "{repo}은(는) 더 이상 Motir가 관리하는 GitHub 조직에 없습니다.",
+          "notFound": "더 이상 존재하지 않습니다. 다른 저장소를 선택하십시오.",
+          "refNotFound": "“{ref}”은(는) {repo}의 브랜치, 태그 또는 커밋이 아닙니다.",
+          "manifestTitle": "motir.hosting.json이 이 승격을 거부합니다.",
+          "manifestMissing": "이 저장소에는 <b>{ref}</b> 시점의 motir.hosting.json이 없어 호스팅 대상을 지정할 수 없습니다. 해당 ref에 파일을 추가하거나 모든 호스팅 대상 선택을 해제하십시오.",
+          "manifestInvalid": "<b>{ref}</b> 시점의 파일이 올바르지 않습니다: <b>{field}</b> {reason}",
+          "theDocument": "문서",
+          "targetNotDeclared": "targets에 <b>{target}</b>이(가) 없습니다({declared} 포함). {target} 선택을 해제하거나 파일에 추가하십시오.",
+          "declaredNone": "없음",
+          "targetNotDeclaredField": "{target}이(가) {ref} 시점의 motir.hosting.json에 없습니다.",
+          "notInList": "“{value}”은(는) 올바른 {kind, select, role {역할} useCases {용도} sizes {규모} other {호스팅 대상}}이 아닙니다. {list} 중에서 선택하십시오.",
+          "keyTaken": "키 {key}은(는) 이미 사용 중입니다.",
+          "templateNameTaken": "motir-co/{key}이(가) 이미 있으며 이 스타터의 복사본이 아닙니다. 다른 키를 선택하거나 먼저 해당 저장소를 삭제하십시오.",
+          "genericTitle": "Motir가 이 저장소를 승격하지 못했습니다.",
+          "genericBody": "아무것도 복사되지 않았습니다. 다시 시도하십시오."
+        }
       }
     }
   },

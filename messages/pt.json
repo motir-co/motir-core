@@ -9465,10 +9465,73 @@
     "outcomeNeedsAccess": "Conclua a configuração do acesso",
     "connectGithub": "Conectar o GitHub",
     "stateCreated": "Criado",
-    "createdDetail": "Hospedado pelo Motir · criado a partir do starter Next.js do Motir.",
+    "createdDetail": "Hospedado pelo Motir · criado a partir de {seed}.",
     "stateFailed": "Não foi possível criar",
     "actionError": "Isso não funcionou. Nada foi alterado — tente novamente.",
-    "promiseDoor": "Como funciona a mudança"
+    "promiseDoor": "Como funciona a mudança",
+    "stateProposed": "Ainda não criado",
+    "createdDetailInitialised": "Hospedado pelo Motir · criado como repositório inicializado.",
+    "createdDetailNoSeed": "Hospedado pelo Motir.",
+    "seed": {
+      "starterPillLabel": "Parte de {label}",
+      "targetPillLabel": "Hospedado em {target}",
+      "default": "Padrão",
+      "noTarget": "Sem destino de hospedagem",
+      "target": {
+        "serverless": "Serverless",
+        "fly": "Fly",
+        "aws": "AWS"
+      },
+      "use": {
+        "internal_tool": "Ferramenta interna",
+        "mvp": "MVP",
+        "planned_product": "Produto planejado"
+      },
+      "size": {
+        "small": "Pequeno",
+        "medium": "Médio",
+        "large": "Grande"
+      },
+      "why": {
+        "matched": "<b>Por que este starter:</b> ele é implantado em {target} e foi feito para {use, select, internal_tool {uma ferramenta interna} mvp {um MVP} planned_product {um produto planejado} other {este uso}} deste porte.",
+        "matchedTarget": "<b>Por que este starter:</b> ele é implantado em {target}.",
+        "softUse": "<b>Por que este starter:</b> é o starter mais próximo que é implantado em {target}. Nenhum starter de {target} foi feito para {use, select, internal_tool {uma ferramenta interna} mvp {um MVP} planned_product {um produto planejado} other {este uso}}.",
+        "softSize": "<b>Por que este starter:</b> é o starter mais próximo que é implantado em {target}. Nenhum starter de {target} foi feito para um repositório deste porte.",
+        "notDeployed": "<b>Por que este starter:</b> é o starter do Motir para um app {role}. A hospedagem do Motir não implanta este repositório, então nenhuma hospedagem é mostrada.",
+        "noStackSignal": "<b>Por que este starter:</b> o plano não diz qual stack este repositório usa, então ele parte do starter habitual para um repositório web em {target}. Escolha outro se você souber a stack.",
+        "noTarget": "<b>Por que este starter:</b> este repositório ainda não tem destino de hospedagem, então ele parte do starter habitual para um repositório web.",
+        "noMatch": "<b>Por que este starter:</b> não há starter para um repositório {role} {where, select, target {em {target}} other {com esta stack}}, então ele começa como repositório inicializado: um repositório vazio com um README.",
+        "byHand": "<b>Por que este starter:</b> alguém o escolheu manualmente para este repositório."
+      },
+      "fact": {
+        "hosting": "Hospedagem",
+        "use": "Uso",
+        "size": "Porte",
+        "stack": "Stack",
+        "not_set": "Não definido",
+        "not_named": "Não informado",
+        "none": "Nenhum",
+        "notServed": "· não atendido",
+        "noRoleStarter": "· nenhum starter {role} é implantado aqui"
+      },
+      "picker": {
+        "label": "Starter",
+        "groupTarget": "Starters {role, select, web {Web} api {API} mobile {Mobile} shared {Shared} infra {Infra} other {Outros}} em {target}",
+        "groupRole": "Starters {role, select, web {Web} api {API} mobile {Mobile} shared {Shared} infra {Infra} other {Outros}}",
+        "groupAny": "Qualquer repositório",
+        "initialisedSub": "Um repositório vazio com um README",
+        "footerTarget": "Apenas starters para um repositório {role} que são implantados em {target}.",
+        "footerNoTarget": "Apenas starters para um repositório {role}. Este repositório ainda não tem destino de hospedagem."
+      },
+      "refusal": {
+        "targetMismatch": "<b>{label} não pode ser usado aqui.</b> Ele é implantado em {targets}, e este repositório roda em {target}. O starter não mudou.",
+        "targetMismatchNoTarget": "<b>{label} não pode ser usado aqui.</b> Ele é implantado em {targets}, e este repositório não tem destino de hospedagem. O starter não mudou.",
+        "retired": "<b>{label} foi descontinuado.</b> O Motir não o oferece mais, então escolha outro starter. O starter não mudou.",
+        "roleMismatch": "<b>{label} não pode ser usado aqui.</b> É um starter para um repositório {entryRole}, e este é {role}. O starter não mudou.",
+        "notEditable": "<b>Este repositório já foi criado,</b> então não pode mais partir de outro starter. Recarregue para vê-lo.",
+        "unknown": "<b>Esse starter não existe mais.</b> Escolha outro starter. O starter não mudou."
+      }
+    }
   },
   "repositoryTakeover": {
     "title": "Repositórios",
@@ -10146,7 +10209,8 @@
       "navRunModels": "Modelos de execução hospedada",
       "navFleetSettings": "Configurações da frota",
       "navCapacity": "Capacidade dos provedores",
-      "navJobs": "Jobs"
+      "navJobs": "Jobs",
+      "navStarters": "Starters"
     },
     "nav": {
       "overview": "Visão geral",
@@ -12767,6 +12831,152 @@
       "dlqEmpty": {
         "title": "Nada aguardando",
         "body": "Nenhum job esgotou suas tentativas. As dead-letters aparecem aqui quando isso acontece."
+      }
+    },
+    "starters": {
+      "breadcrumb": "Operações · Starters",
+      "title": "Starters",
+      "subtitle": "De onde parte um repositório que o Motir cria. A correspondência escolhe entre os starters ativos por papel, destino de hospedagem, uso e porte. Promova a starter um repositório que o Motir criou, ou descontinue um.",
+      "promote": "Promover um repositório",
+      "card": {
+        "title": "Biblioteca de starters",
+        "count": "Mais recentes primeiro · {count, plural, one {# starter} other {# starters}}"
+      },
+      "filter": {
+        "label": "Filtrar starters",
+        "role": "Papel",
+        "status": "Status",
+        "target": "Destino de hospedagem",
+        "anyRole": "Qualquer papel",
+        "anyTarget": "Qualquer destino",
+        "all": "Todos"
+      },
+      "status": {
+        "active": "Ativo",
+        "retired": "Descontinuado"
+      },
+      "notDeployed": "Não implantado pela hospedagem do Motir",
+      "col": {
+        "starter": "Starter",
+        "roleStack": "Papel · stack",
+        "serves": "Atende",
+        "hosting": "Hospedagem",
+        "status": "Status",
+        "provenance": "Procedência",
+        "actions": "Ações"
+      },
+      "alsoAnswersTo": "Também responde a {keys}",
+      "roleStack": "{role} · {stack}",
+      "anyRoleAnyStack": "qualquer papel · qualquer stack",
+      "everyUse": "Todos os usos",
+      "everySize": "Todos os portes",
+      "provenance": {
+        "shipped": "Incluído no Motir",
+        "promoted": "Promovido por <b>{email}</b> em {date} a partir de {repo} em <mono>{ref}</mono>",
+        "promotedNoRepo": "Promovido por <b>{email}</b> em {date} em <mono>{ref}</mono>",
+        "retired": "Descontinuado por <b>{email}</b> em {date}: “{reason}”",
+        "removedAccount": "uma conta removida"
+      },
+      "defaultForRole": "Padrão para {role}",
+      "defaultForEveryRole": "Padrão para todos os papéis",
+      "empty": {
+        "title": "Nenhum starter corresponde a estes filtros",
+        "bodyRoleTarget": "Nenhum starter ativo para um repositório {role} é implantado em {target}. Limpe os filtros para ver a biblioteca inteira.",
+        "body": "Nenhum starter corresponde a estes filtros.",
+        "clear": "Limpar filtros"
+      },
+      "pager": {
+        "label": "Páginas",
+        "showing": "Mostrando {from}–{to} de {total}",
+        "previous": "Página anterior",
+        "next": "Próxima página"
+      },
+      "retire": {
+        "action": "Descontinuar",
+        "title": "Descontinuar {label}?",
+        "body": "A correspondência deixa de escolhê-lo e o seletor de starters deixa de oferecê-lo. Os repositórios já criados a partir dele mantêm o código. Um repositório ainda não criado que o indique não poderá ser criado a partir dele até alguém escolher outro starter.",
+        "reasonLabel": "Motivo",
+        "reasonHelp": "Registrado no log de auditoria com o seu nome.",
+        "cancel": "Cancelar",
+        "confirm": "Descontinuar starter",
+        "done": "Descontinuado. {label} não é mais oferecido a novos repositórios.",
+        "failedTitle": "Este starter não foi descontinuado.",
+        "failed": "O Motir não conseguiu descontinuá-lo. Tente novamente.",
+        "defaultTitle": "Este starter não pode ser descontinuado.",
+        "defaultBody": "“{key}” é o starter padrão para um repositório {role}. Mudar um padrão é uma decisão, não uma ação de operador.",
+        "defaultBodyEveryRole": "“{key}” é o starter padrão para todos os papéis. Mudar um padrão é uma decisão, não uma ação de operador.",
+        "close": "Fechar"
+      },
+      "promoteForm": {
+        "breadcrumb": "Operações · Starters · Promover",
+        "title": "Promover um repositório",
+        "subtitle": "O Motir copia o repositório na ref para a própria organização e oferece a cópia como starter a novos repositórios compatíveis. Os repositórios que já existem não mudam.",
+        "field": {
+          "source": "Repositório criado pelo Motir",
+          "ref": "Ref",
+          "role": "Papel",
+          "stack": "Stack",
+          "label": "Etiqueta",
+          "key": "Chave",
+          "uses": "Usos atendidos",
+          "sizes": "Portes atendidos",
+          "targets": "Destinos de hospedagem para implantação",
+          "reason": "Motivo"
+        },
+        "help": {
+          "ref": "Uma branch, tag ou commit. O starter é copiado a partir dela.",
+          "stack": "Como o planejador chama esta stack, em letras minúsculas.",
+          "label": "O que as pessoas veem no repositório delas.",
+          "key": "Letras minúsculas, dígitos e hifens. Também é o nome da cópia em motir-co. Não pode ser alterada depois.",
+          "targets": "Cada um deve constar no motir.hosting.json do repositório na ref. Não marque nenhum para um starter que a hospedagem do Motir não implanta.",
+          "reason": "Registrado no log de auditoria com o seu nome."
+        },
+        "source": {
+          "placeholder": "Escolha um repositório",
+          "empty": "Nenhum repositório corresponde.",
+          "footer": "Apenas repositórios criados pelo Motir.",
+          "sub": "{project} · {role} · {state}",
+          "leaving": "sendo transferido ao proprietário",
+          "notCreated": "ainda não criado"
+        },
+        "rolePlaceholder": "Escolha um papel",
+        "cancel": "Cancelar",
+        "review": "Revisar promoção",
+        "confirm": {
+          "title": "Promover {name} a starter?",
+          "body": "O Motir copia <b>{repo}</b> em <b>{ref}</b> para <b>motir-co/{key}</b> e adiciona <b>{label}</b> à biblioteca. A partir daí, a correspondência pode escolhê-lo para um novo repositório {role} compatível. Os repositórios que já existem não mudam.",
+          "roleStack": "Papel · stack",
+          "uses": "Usos",
+          "sizes": "Portes",
+          "hosting": "Hospedagem",
+          "reason": "Motivo",
+          "notDeployed": "Não implantado pela hospedagem do Motir",
+          "back": "Voltar",
+          "promote": "Promover"
+        },
+        "done": "Promovido. Novos repositórios {role} em {target} agora podem partir de {label}.",
+        "doneNoTarget": "Promovido. Novos repositórios {role} agora podem partir de {label}.",
+        "refusal": {
+          "sourceTitle": "Este repositório não pode ser promovido.",
+          "takenOver": "Ele está sendo transferido ao proprietário, ou já foi, então o Motir não pode mais copiá-lo.",
+          "notCreated": "Só um repositório criado pelo Motir pode ser promovido, e este ainda está {state}.",
+          "organizationRow": "É o repositório da própria organização, e o Motir nunca copia o código de um cliente.",
+          "notMotirHeld": "{repo} não está mais em uma organização do GitHub que o Motir gerencia.",
+          "notFound": "Ele não existe mais. Escolha outro.",
+          "refNotFound": "“{ref}” não é uma branch, tag ou commit de {repo}.",
+          "manifestTitle": "O motir.hosting.json recusa esta promoção.",
+          "manifestMissing": "O repositório não tem motir.hosting.json em <b>{ref}</b>, então não pode reivindicar um destino de hospedagem. Adicione o arquivo nessa ref ou desmarque todos os destinos de hospedagem.",
+          "manifestInvalid": "O arquivo em <b>{ref}</b> é inválido: <b>{field}</b> {reason}",
+          "theDocument": "o documento",
+          "targetNotDeclared": "Ele não lista <b>{target}</b> em targets (lista {declared}). Desmarque {target} ou adicione-o ao arquivo.",
+          "declaredNone": "nenhum",
+          "targetNotDeclaredField": "{target} não está no motir.hosting.json em {ref}.",
+          "notInList": "“{value}” não é {kind, select, role {um papel} useCases {um uso} sizes {um porte} other {um destino de hospedagem}}. Escolha entre {list}.",
+          "keyTaken": "A chave {key} já está em uso.",
+          "templateNameTaken": "motir-co/{key} já existe e não é a cópia deste starter. Escolha outra chave ou remova esse repositório antes.",
+          "genericTitle": "O Motir não conseguiu promover este repositório.",
+          "genericBody": "Nada foi copiado. Tente novamente."
+        }
       }
     }
   },

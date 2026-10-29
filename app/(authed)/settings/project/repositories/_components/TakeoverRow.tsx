@@ -16,7 +16,16 @@ import { Button } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';
 import { GithubMark } from '@/components/icons/GithubMark';
 import { repoWebUrl } from '@/lib/repos/cloneUrl';
-import type { ProjectRepoDto } from '@/lib/dto/projectRepos';
+import type { ProjectRepoDto, ProjectRepoRoomSeedDto } from '@/lib/dto/projectRepos';
+import type { SeedRegistryEntryDto } from '@/lib/dto/seedRegistry';
+import { isPlanEditableState, SEED_SOURCE_INITIALISED } from '@/lib/projectRepos/vocabulary';
+import {
+  currentSeedEntry,
+  SeedPills,
+  StarterPicker,
+  WhyThisStarter,
+  type SeedRefusalState,
+} from './RowSeed';
 
 // ONE row of the TAKE-IT-OVER room (Story MOTIR-1775 · MOTIR-1939 —
 // design/repository-set §14, panels 1 and 4–8).
@@ -71,6 +80,15 @@ export interface TakeoverRowProps {
   onMove: (row: ProjectRepoDto) => void;
   onCheckAgain: (row: ProjectRepoDto) => void;
   onRetry: (row: ProjectRepoDto) => void;
+  /**
+   * The row's SEED (MOTIR-712; design MOTIR-705 §1) — its starter and hosting
+   * pills, and while it is not created yet, why that starter and the picker that
+   * re-points it. Absent for a row the room has no seed for.
+   */
+  seed?: ProjectRepoRoomSeedDto;
+  /** A re-point the server refused, shown under the picker until the next pick. */
+  seedRefusal?: SeedRefusalState | null;
+  onRepoint?: (row: ProjectRepoDto, entry: SeedRegistryEntryDto) => void;
 }
 
 export function TakeoverRow({
@@ -82,6 +100,9 @@ export function TakeoverRow({
   onMove,
   onCheckAgain,
   onRetry,
+  seed,
+  seedRefusal = null,
+  onRepoint,
 }: TakeoverRowProps) {
   const t = useTranslations('repositoryTakeover');
   const ts = useTranslations('repositorySet');
@@ -92,6 +113,10 @@ export function TakeoverRow({
   const repoRef = row.realizedRepo?.repoRef ?? row.name;
   const shortName = row.realizedRepo?.name ?? row.name;
   const stale = isStale(row, nowIso, mode);
+  const seedEntry = seed ? currentSeedEntry(row, seed) : null;
+  // A row not created yet — `proposed`, or `failed` and retried from the plan —
+  // is the one whose starter can still change (§1.2).
+  const notCreated = mode === 'other' && isPlanEditableState(row.state);
 
   const on = (iso: string | null): string =>
     iso ? format.dateTime(new Date(iso), { day: 'numeric', month: 'short' }) : '';
@@ -138,13 +163,40 @@ export function TakeoverRow({
               {t('stateFailed')}
             </StateWord>
           ) : null}
+          {notCreated ? (
+            <StateWord icon={<Clock className={ICON} />} tone="waiting">
+              {ts('stateProposed')}
+            </StateWord>
+          ) : null}
+
+          {seed ? <SeedPills row={row} entry={seedEntry} /> : null}
         </div>
 
         <RepoReference row={row} />
 
         {/* ── The body copy, per state. Every waiting state names the CONSEQUENCE
             and what to go do, not just the chore. ─────────────────────────── */}
-        {mode === 'hosted' ? <Helper>{ts('createdDetail')}</Helper> : null}
+        {mode === 'hosted' ? (
+          <Helper>
+            {seedEntry === null
+              ? ts('createdDetailNoSeed')
+              : seedEntry.key === SEED_SOURCE_INITIALISED
+                ? ts('createdDetailInitialised')
+                : ts('createdDetail', { seed: seedEntry.label })}
+          </Helper>
+        ) : null}
+
+        {notCreated && seed && seedEntry ? <WhyThisStarter row={row} entry={seedEntry} /> : null}
+        {notCreated && seed?.options && onRepoint ? (
+          <StarterPicker
+            row={row}
+            entry={seedEntry}
+            options={seed.options}
+            busy={busy}
+            refusal={seedRefusal}
+            onPick={onRepoint}
+          />
+        ) : null}
 
         {mode === 'yours' ? (
           <Helper>
@@ -328,7 +380,7 @@ function StateWord({
   children,
 }: {
   icon: ReactNode;
-  tone: 'success' | 'info' | 'warning' | 'danger';
+  tone: 'success' | 'info' | 'warning' | 'danger' | 'waiting';
   status?: boolean;
   children: ReactNode;
 }) {
@@ -338,6 +390,7 @@ function StateWord({
     info: 'text-(--el-info)',
     warning: 'text-(--el-warning)',
     danger: 'text-(--el-danger)',
+    waiting: 'text-(--el-icon-muted)',
   }[tone];
   return (
     <span

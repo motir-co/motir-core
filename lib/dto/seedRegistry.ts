@@ -96,3 +96,65 @@ export interface ResolvedSeedDto {
   key: string;
   source: SeedTemplateSourceDto | typeof SEED_REGISTRY_INITIALISED_SOURCE;
 }
+
+// ── The operator console's starter library (MOTIR-712; design MOTIR-705 §2–§3) ──
+
+/** The library's status filter: one status, or both (`all`). */
+export type SeedRegistryConsoleStatus = SeedRegistryEntryStatusDto | 'all';
+
+/** The library's hosting filter: entries that deploy to a target, or entries
+ *  that deploy nowhere (`none` — "Not deployed by Motir hosting"). */
+export type SeedRegistryConsoleTarget = HostingTarget | 'none';
+
+export interface SeedRegistryConsoleFilter {
+  role?: ProjectRepoRoleDto;
+  status: SeedRegistryConsoleStatus;
+  target?: SeedRegistryConsoleTarget;
+}
+
+/** Who retired an entry, when and why — read from the platform audit log, which
+ *  is the only place a retirement's reason is kept. */
+export interface SeedRegistryRetirementDto {
+  /** Null when the operator's account no longer exists. */
+  byEmail: string | null;
+  at: string;
+  reason: string | null;
+}
+
+/** One row of the library: the entry plus the provenance the table spells out. */
+export interface SeedRegistryConsoleRowDto {
+  entry: SeedRegistryEntryDto;
+  /** A role's default (decision MOTIR-706 v2 §3.8): never retired from the console. */
+  isDefault: boolean;
+  /** The promoting operator's email; null for a shipped entry or a removed account. */
+  promotedByEmail: string | null;
+  /** `owner/repo` of the repository it was promoted from, when that row still names one. */
+  promotedFromRepo: string | null;
+  /** Set on a retired entry whose retirement the audit log records. */
+  retirement: SeedRegistryRetirementDto | null;
+}
+
+/** One numbered page of the library, newest first, with the filter's total. */
+export interface SeedRegistryConsolePageDto {
+  rows: SeedRegistryConsoleRowDto[];
+  total: number;
+  /** 1-based. */
+  page: number;
+  pageSize: number;
+}
+
+/** A repository the promote form's picker offers (design MOTIR-705 §3.1): every
+ *  repository Motir created, the ones that cannot be promoted yet included and
+ *  marked, so an operator who came looking for one learns why it is held. */
+export interface SeedPromotionSourceDto {
+  /** The `project_repository` row id the promote route takes. */
+  id: string;
+  name: string;
+  /** `owner/repo` on GitHub, or null before the repository exists. */
+  repoRef: string | null;
+  role: ProjectRepoRoleDto;
+  state: string;
+  projectName: string;
+  /** Why it cannot be picked, or null when it can. */
+  unavailable: 'not_created' | 'leaving' | null;
+}

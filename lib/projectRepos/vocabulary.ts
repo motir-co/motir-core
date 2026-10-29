@@ -69,6 +69,22 @@ export const ESTABLISHED_PROJECT_REPO_STATES = [
   'connected',
 ] as const satisfies readonly ProjectRepoState[];
 
+/**
+ * The states in which a row's PLAN may still change — its role, name and seed
+ * (`projectRepoSetService.patchRow`): `proposed`, and `failed`, which is retried
+ * from the plan. The room offers the Starter picker on exactly these rows
+ * (MOTIR-712), so the two cannot disagree about which rows can be re-pointed.
+ */
+export const PROJECT_REPO_PLAN_EDITABLE_STATES = [
+  'proposed',
+  'failed',
+] as const satisfies readonly ProjectRepoState[];
+
+/** Whether a row's plan — and so its seed — may still change. */
+export function isPlanEditableState(state: ProjectRepoState): boolean {
+  return (PROJECT_REPO_PLAN_EDITABLE_STATES as readonly ProjectRepoState[]).includes(state);
+}
+
 /** Whether a row is ESTABLISHED — i.e. it names a repository that exists. */
 export function isEstablishedState(state: ProjectRepoState): boolean {
   return (ESTABLISHED_PROJECT_REPO_STATES as readonly ProjectRepoState[]).includes(state);

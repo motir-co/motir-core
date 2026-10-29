@@ -9,6 +9,8 @@ import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
 import { githubAppInstallUrl } from '@/lib/github/appLinks';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { provisioningOrgLogin } from '@/lib/ciMetering/config';
+import { roomSeedsFor } from '@/lib/projectRepos/roomSeeds';
+import { seedRegistryService } from '@/lib/services/seedRegistryService';
 import type { OtherHostedProjectDto, ProjectRepoRoomViewDto } from '@/lib/dto/projectRepos';
 
 // The TAKE-IT-OVER ROOM's read model (Story MOTIR-1775 · MOTIR-1939) —
@@ -55,10 +57,11 @@ export const projectRepoRoomService = {
       githubIdentityService.getIdentityForUser(ctx.userId),
     ]);
 
-    const [ciPaused, otherHostedProjects, installHref] = await Promise.all([
+    const [ciPaused, otherHostedProjects, installHref, seedEntries] = await Promise.all([
       readCiPaused(ctx),
       listOtherHostedProjects(projectId, ctx),
       readInstallHref(options.projectKey, ctx),
+      seedRegistryService.listAllEntries(),
     ]);
 
     return {
@@ -70,6 +73,7 @@ export const projectRepoRoomService = {
       installHref,
       ciPaused,
       otherHostedProjects,
+      seeds: roomSeedsFor(set.rows, seedEntries),
       // Compatibility fields for the room UI; organisation connections are not
       // project membership and therefore never populate this section.
       connected: [],

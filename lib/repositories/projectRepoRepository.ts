@@ -10,7 +10,10 @@ import {
 } from '@/generated/prisma/client';
 import { dbRead } from '@/lib/db';
 import type { ProjectRepoWithRealized } from '@/lib/mappers/projectRepoMappers';
-import { ESTABLISHED_PROJECT_REPO_STATES } from '@/lib/projectRepos/vocabulary';
+import {
+  ESTABLISHED_PROJECT_REPO_STATES,
+  SEED_SOURCE_ORGANIZATION,
+} from '@/lib/projectRepos/vocabulary';
 
 // Single Prisma operations on the `project_repository` table — a project's
 // REPOSITORY SET (Story MOTIR-1775 · MOTIR-1780).
@@ -230,6 +233,42 @@ export const projectRepoRepository = {
         seedSource: true,
         takeoverState: true,
         githubRepo: { select: { owner: true, name: true, organizationId: true } },
+      },
+    });
+  },
+
+  /**
+   * The repositories the starter library names as promotion sources, in any
+   * workspace (MOTIR-712): each row's realised `owner/repo`. Inside a platform
+   * context only, on the same `platform_staff` arms as
+   * {@link findForPromotionInTx}.
+   */
+  async findRepoRefsForPromotionInTx(ids: string[], tx: Prisma.TransactionClient) {
+    return tx.projectRepo.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, githubRepo: { select: { owner: true, name: true } } },
+    });
+  },
+
+  /**
+   * Every repository Motir CREATED or is about to, in any workspace, newest
+   * first — the promote form's picker (MOTIR-712). An organisation's own
+   * repository (`seedSource = 'organization'`) is never listed: Motir never
+   * copies a customer's code. Inside a platform context only.
+   */
+  async listPromotionSourcesInTx(take: number, tx: Prisma.TransactionClient) {
+    return tx.projectRepo.findMany({
+      where: { seedSource: { not: SEED_SOURCE_ORGANIZATION } },
+      orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
+      take,
+      select: {
+        id: true,
+        name: true,
+        role: true,
+        state: true,
+        takeoverState: true,
+        project: { select: { name: true } },
+        githubRepo: { select: { owner: true, name: true } },
       },
     });
   },

@@ -33,6 +33,7 @@ const LABELS = {
   navAiPlanning: shell.navAiPlanning,
   navPlanningLessons: shell.navPlanningLessons,
   navIdeas: shell.navIdeas,
+  navStarters: shell.navStarters,
   navRunModels: shell.navRunModels,
   navAuditLog: en.platformAdmin.nav.auditLog,
   staffMarkTitle: 'Platform staff',

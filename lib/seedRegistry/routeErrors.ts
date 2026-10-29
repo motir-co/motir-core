@@ -105,13 +105,18 @@ export function seedRegistryErrorResponse(err: unknown): NextResponse {
         file: err.file,
         field: err.field,
         target: err.target,
+        reason: err.reason,
+        declared: err.declared,
         error: err.message,
       },
       422,
     );
   }
   if (err instanceof SeedRegistryInvalidFieldError) {
-    return seedRegistryJson({ code: err.code, field: err.field, error: err.message }, 422);
+    return seedRegistryJson(
+      { code: err.code, field: err.field, value: err.value, error: err.message },
+      422,
+    );
   }
   if (err instanceof SeedPromotionRefNotFoundError) {
     return seedRegistryJson({ code: err.code, error: err.message }, 422);

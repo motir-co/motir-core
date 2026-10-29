@@ -10,6 +10,7 @@ import {
   Building2,
   Coins,
   Gauge,
+  Layers,
   Lightbulb,
   LogOut,
   ScrollText,
@@ -68,6 +69,8 @@ export interface AdminShellLabels {
   navPlanningLessons: string;
   /** Operations → Ideas (MOTIR-7680), visible to every staff role. */
   navIdeas: string;
+  /** Operations → Starters (MOTIR-712), operator and superadmin only. */
+  navStarters: string;
   /** Operations → Hosted-run models (MOTIR-7528), visible to every staff role. */
   navRunModels: string;
   /** Operations → Audit log (MOTIR-752), superadmin only. */
@@ -229,6 +232,20 @@ export function AdminShell({ operator, labels, children }: AdminShellProps) {
           href: '/admin/ideas',
           active: pathname.startsWith('/admin/ideas'),
         },
+        // The starter library (MOTIR-712, design `starter-library` §2.1, MOTIR-705),
+        // directly after Ideas: another catalogue Motir's own staff keep. Operator
+        // and superadmin only (R97) — for support the row is absent and the route
+        // 404s. `startsWith` so the promote form keeps it lit.
+        ...(operator.role === 'operator' || operator.role === 'superadmin'
+          ? [
+              {
+                icon: <Layers />,
+                label: labels.navStarters,
+                href: '/admin/starters',
+                active: pathname.startsWith('/admin/starters'),
+              },
+            ]
+          : []),
         // The reserved `Governance · 10.3` row goes LIVE as the audit log
         // (design `platform-admin` AMENDMENT 2026-10-03 § 3, MOTIR-752). Every
         // other 10.3 write sits on the org or user page it targets; the log is

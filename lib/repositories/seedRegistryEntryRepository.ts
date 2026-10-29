@@ -29,6 +29,26 @@ export interface SeedRegistryEntryWhere {
   useCase?: HostingUseCase;
 }
 
+/** The console library's filter (MOTIR-712): `target: 'none'` is an EMPTY
+ *  `hostingTargets`, every other target is array CONTAINS. */
+export interface SeedRegistryConsoleWhere {
+  role?: ProjectRepoRole;
+  status?: SeedRegistryEntryStatus;
+  target?: HostingTarget | 'none';
+}
+
+function consoleWhere(where: SeedRegistryConsoleWhere): Prisma.SeedRegistryEntryWhereInput {
+  return {
+    ...(where.role !== undefined ? { role: where.role } : {}),
+    ...(where.status !== undefined ? { status: where.status } : {}),
+    ...(where.target === 'none'
+      ? { hostingTargets: { isEmpty: true } }
+      : where.target !== undefined
+        ? { hostingTargets: { has: where.target } }
+        : {}),
+  };
+}
+
 /** The columns a writer sets; the vocabulary is checked by the service first. */
 export interface SeedRegistryEntryData {
   key: string;
@@ -118,6 +138,32 @@ export const seedRegistryEntryRepository = {
     });
   },
 
+  /**
+   * One numbered page of the operator console's library (MOTIR-712), newest
+   * first. `target: 'none'` keeps the entries with no hosting target. Read inside
+   * the console's audited platform read, so it takes that read's `tx`.
+   */
+  async listForConsoleInTx(
+    where: SeedRegistryConsoleWhere,
+    page: { skip: number; take: number },
+    tx: Prisma.TransactionClient,
+  ): Promise<SeedRegistryEntry[]> {
+    return tx.seedRegistryEntry.findMany({
+      where: consoleWhere(where),
+      orderBy: [{ createdAt: 'desc' }, { key: 'asc' }],
+      skip: page.skip,
+      take: page.take,
+    });
+  },
+
+  /** How many entries the console's filter keeps — the pager's total. */
+  async countForConsoleInTx(
+    where: SeedRegistryConsoleWhere,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    return tx.seedRegistryEntry.count({ where: consoleWhere(where) });
+  },
+
   /** The entry promoted from this source row at this commit, if any — read
    *  before a promotion copies anything, so a re-promotion skips the copy. */
   async findByPromotion(
@@ -127,6 +173,12 @@ export const seedRegistryEntryRepository = {
     return db.seedRegistryEntry.findUnique({
       where: { promotedFrom_promotedRef: { promotedFrom, promotedRef } },
     });
+  },
+
+  /** Every entry, retired ones included — the room's one registry read
+   *  (MOTIR-712): a created row still names the starter it came from. */
+  async listAll(): Promise<SeedRegistryEntry[]> {
+    return db.seedRegistryEntry.findMany({ orderBy: { key: 'asc' } });
   },
 
   /** Every ACTIVE entry — what the default map is computed over. */

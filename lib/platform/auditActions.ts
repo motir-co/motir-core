@@ -429,6 +429,19 @@ export const PLATFORM_AUDIT_ACTIONS = {
    * 'platform'`, `targetId` the entry key, `targetLabel` its label.
    */
   'seed_registry.retire': { kind: 'write', reason: 'required' },
+  /**
+   * An operator read the starter library at /admin/starters (MOTIR-712): one
+   * page of entries with each promotion's source repository, promoter and
+   * retirement. `targetKind: 'platform'`, no `targetId` (estate-wide),
+   * `metadata` `{ role, status, target, page }`.
+   */
+  'seed_registry.library_read': { kind: 'read', reason: 'never' },
+  /**
+   * An operator opened the promote form at /admin/starters/promote (MOTIR-712),
+   * which lists the repositories Motir created across every workspace.
+   * `targetKind: 'platform'`, no `targetId` (estate-wide).
+   */
+  'seed_registry.promote_sources_read': { kind: 'read', reason: 'never' },
 } as const satisfies Record<
   string,
   { kind: PlatformAuditActionKind; reason: PlatformAuditReasonPolicy }

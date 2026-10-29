@@ -1053,8 +1053,9 @@ function roomView(
     // connected section says so explicitly.
     connected: [],
     connectedInDomain: false,
+    seeds: {},
     ...overrides,
-  };
+  } as ProjectRepoRoomViewDto;
 }
 
 function room(view: ProjectRepoRoomViewDto, canAdd = false) {

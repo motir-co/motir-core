@@ -12,13 +12,10 @@ import { HOSTING_MANIFEST_FILE_NAME, parseHostingManifest } from '@/lib/hosting/
 import { toSeedRegistryEntryDto } from '@/lib/mappers/seedRegistryMappers';
 import { requirePlatformStaff, type PlatformPrincipal } from '@/lib/platform/auth';
 import { withPlatformRead, withPlatformWrite } from '@/lib/platform/context';
-import {
-  isOrganizationSeedSource,
-  SEED_SOURCE_INITIALISED,
-  SEED_SOURCE_PLATFORM_STARTER,
-} from '@/lib/projectRepos/vocabulary';
+import { isOrganizationSeedSource } from '@/lib/projectRepos/vocabulary';
 import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
 import { seedRegistryEntryRepository } from '@/lib/repositories/seedRegistryEntryRepository';
+import { isFixedDefaultSeedKey } from '@/lib/seedRegistry/defaults';
 import {
   SeedEntryIsDefaultError,
   SeedPromotionManifestRefusedError,
@@ -72,8 +69,9 @@ export interface SeedPromotionInput {
   hostingTargets: string[];
 }
 
-/** Take-over states in which the repository is leaving, or has left, Motir. */
-const LEAVING_TAKEOVER_STATES: readonly string[] = [
+/** Take-over states in which the repository is leaving, or has left, Motir —
+ *  refused here, and marked held in the console's picker (MOTIR-712). */
+export const LEAVING_TAKEOVER_STATES: readonly string[] = [
   'requested',
   'transfer_pending',
   'awaiting_reinstall',
@@ -217,7 +215,7 @@ export const seedRegistryPromotionService = {
     const entry = toSeedRegistryEntryDto(current);
     // 706 §3.6 / §3.8: `initialised` is never retired, and the web default is
     // fixed by the decision — changing it amends the page, not the registry.
-    if (entry.key === SEED_SOURCE_INITIALISED || entry.key === SEED_SOURCE_PLATFORM_STARTER) {
+    if (isFixedDefaultSeedKey(entry.key)) {
       throw new SeedEntryIsDefaultError(entry.key, entry.role);
     }
     if (entry.status === 'retired') return entry;
@@ -315,6 +313,7 @@ async function checkManifest(text: string | null, claimed: string[]): Promise<vo
         err.field,
         null,
         `${err.field ?? 'the document'} ${err.reason}.`,
+        err.reason,
       );
     }
     throw err;
@@ -327,6 +326,8 @@ async function checkManifest(text: string | null, claimed: string[]): Promise<vo
       'targets',
       undeclared,
       `it does not list "${undeclared}" in targets (it lists ${declared.join(', ')}).`,
+      null,
+      declared,
     );
   }
 }

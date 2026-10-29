@@ -5,6 +5,8 @@
 // layer translates the stable `code` to an HTTP status — the suggested mapping is
 // on each class.
 
+import type { ProjectRepoSeedRefusalDto } from '@/lib/dto/projectRepos';
+
 /** A set ROW does not resolve in this workspace (wrong id, or another tenant's
  *  row — RLS + the workspace-scoped read make those indistinguishable, which is
  *  the point). → 404, never 403: no cross-tenant existence leak. */
@@ -145,21 +147,9 @@ export class ProjectRepoInvalidFieldError extends Error {
   }
 }
 
-/** Why a person's re-point of a row's seed was refused (MOTIR-709). */
-export type ProjectRepoSeedRefusal =
-  /** No registry entry has the key, current or legacy. */
-  | 'unknown'
-  /** The entry is retired: never offered, never established from. */
-  | 'retired'
-  /** The entry seeds another role. */
-  | 'role_mismatch'
-  /** The entry does not deploy to the row's hosting target (or deploys somewhere
-   *  when the row's role runs nowhere the hosting port reaches). */
-  | 'target_mismatch'
-  /** The row is past `proposed` / `failed`: its repository exists or is being made. */
-  | 'not_editable'
-  /** The row is the organisation's own repository, which Motir never seeds (D1). */
-  | 'organization_row';
+/** Why a person's re-point of a row's seed was refused (MOTIR-709) — the wire
+ *  type, so the room can tell the rules apart (MOTIR-712). */
+export type ProjectRepoSeedRefusal = ProjectRepoSeedRefusalDto;
 
 /**
  * A person tried to re-point a row's `seedSource` to an entry it may not seed

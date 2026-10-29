@@ -102,6 +102,13 @@ export const seedRegistryService = {
     return row ? toSeedRegistryEntryDto(row) : null;
   },
 
+  /** Every entry, retired ones included — the whole catalogue, which is small
+   *  (one entry per starter Motir offers). The Repositories room reads it once
+   *  and composes each row's seed from it (`roomSeedsFor`, MOTIR-712). */
+  async listAllEntries(): Promise<SeedRegistryEntryDto[]> {
+    return (await seedRegistryEntryRepository.listAll()).map(toSeedRegistryEntryDto);
+  },
+
   /** One entry by its current or a legacy key. */
   async getByKey(key: string): Promise<SeedRegistryEntryDto> {
     const row = await seedRegistryEntryRepository.findByKeyOrLegacyKey(key);
