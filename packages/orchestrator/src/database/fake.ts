@@ -182,6 +182,14 @@ export function createFakeDatabasePort(
       return { branch: branch.branch, env: databaseEnvPairs(branch) };
     },
 
+    async branchUsage({ database: handle, branchRef, name }) {
+      const branch = held(handle)?.branches.get(name);
+      if (!branch || branch.branch.branchRef !== branchRef) {
+        return usageOver(handle.applicationRef, now(), null);
+      }
+      return usageOver(handle.applicationRef, branch.createdAt, branch.createdAt);
+    },
+
     async deleteBranch({ database: handle, branchRef, name }) {
       const branch = held(handle)?.branches.get(name);
       if (!branch || branch.branch.branchRef !== branchRef) {

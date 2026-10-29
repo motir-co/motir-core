@@ -639,6 +639,9 @@ export interface JobEventDataMap {
   /** The preview reaper (Story MOTIR-5766 · MOTIR-5776) — finishes interrupted
    *  teardowns and closes previews whose close was missed. Cross-tenant. */
   'system.preview-reaper': SystemScheduledData;
+  /** The preview usage accrual (Story MOTIR-5766 · MOTIR-5777) — one slice of
+   *  every live preview's usage into its organisation's CI pool. Cross-tenant. */
+  'system.preview-usage-accrual': SystemScheduledData;
   /** One effect of a committed preview transition (MOTIR-5776), enqueued by the
    *  webhook after the transition commits. */
   'preview/effect.requested': PreviewEffectRequestedData;

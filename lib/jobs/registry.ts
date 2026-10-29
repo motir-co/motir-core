@@ -69,6 +69,7 @@ import { abandonedPlanSweep } from './definitions/abandonedPlanSweep';
 import { codeGraphDriftSweep } from './definitions/codeGraphDriftSweep';
 import { previewEnablementSweep } from './definitions/previewEnablementSweep';
 import { previewEffect, previewReaper, previewStart } from './definitions/previewLifecycle';
+import { previewUsageAccrual } from './definitions/previewUsageAccrual';
 import { codeGraphIndexCatchUp } from './definitions/codeGraphIndexCatchUp';
 import { jobRunReap } from './definitions/jobRunReap';
 import { jobQueueRetention } from './definitions/jobQueueRetention';
@@ -186,6 +187,8 @@ export const jobDefinitions = [
   previewEffect,
   previewStart,
   previewReaper,
+  // Preview usage metered into the CI pool (Story MOTIR-5766 · MOTIR-5777).
+  previewUsageAccrual,
   codeGraphIndexCatchUp,
   jobRunReap,
   jobQueueRetention,

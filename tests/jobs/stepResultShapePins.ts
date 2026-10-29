@@ -518,6 +518,10 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ announced: number; closed: number; failed: number; startsAbandoned: number; teardownsFinished: number }',
   },
+  'preview-usage-accrual': {
+    file: 'lib/jobs/definitions/previewUsageAccrual.ts',
+    shape: '{ failed: number; previews: number; slices: number }',
+  },
   'preview-settle': {
     file: 'lib/jobs/definitions/previewLifecycle.ts',
     shape: '{ status: "failed" | "ready" | "skipped" }',

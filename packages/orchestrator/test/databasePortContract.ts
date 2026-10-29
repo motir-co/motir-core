@@ -207,6 +207,22 @@ export function runDatabasePortContract(name: string, factory: () => DatabaseHar
       expect(recreated.branch.branchRef).not.toBe(branch.branchRef);
     });
 
+    it('reads a branch usage without deleting it, and a gone branch reads zero', async () => {
+      const { port, advanceSeconds } = factory();
+      const db = await port.createDatabase({ applicationRef: APP_A });
+      const { branch } = await port.createBranch(db.handle, { name: 'pr-5' });
+      advanceSeconds(120);
+      const read = await port.branchUsage(branch);
+      expect(read.applicationRef).toBe(APP_A);
+      expect(read.provider).toBe(port.provider);
+      expect(read.computeSeconds).toBeGreaterThan(0);
+      expect(read.storageBytes).toBeGreaterThan(0);
+      // Still there: the delete reports at least what the read did.
+      const deleted = await port.deleteBranch(branch);
+      expect(deleted.computeSeconds).toBeGreaterThanOrEqual(read.computeSeconds);
+      expect((await port.branchUsage(branch)).computeSeconds).toBe(0);
+    });
+
     it('a branch goes with its database: deleting it afterwards is zero', async () => {
       const { port } = factory();
       const db = await port.createDatabase({ applicationRef: APP_A });

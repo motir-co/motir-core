@@ -12,6 +12,7 @@ import {
   serverlessHostingConfig,
   type HostingDeployPort,
   type HostingDeployTarget,
+  type ReleaseUsage,
   type ServerlessSourceCredentials,
 } from '@motir/orchestrator';
 import { createConfiguredAwsHostingPort } from './awsHosting';
@@ -53,6 +54,35 @@ export function unregisterHostingAdapter(target: HostingDeployTarget): void {
   hostingAdapters.delete(target);
 }
 
+/** What the composition root does with the usage a destroyed app returns —
+ *  the preview meter's final slice (MOTIR-5777). It must never throw: the app
+ *  is already gone when it runs. */
+export type HostingDestroyAppObserver = (input: {
+  target: HostingDeployTarget;
+  appRef: string;
+  usage: readonly ReleaseUsage[];
+}) => Promise<unknown>;
+
+let destroyAppObserver: HostingDestroyAppObserver | null = null;
+
+/** Bind (or, with null, unbind) the observer of every port's `destroyApp`.
+ *  `./index` binds the preview meter; this module loads no database. */
+export function observeHostingDestroyApp(observer: HostingDestroyAppObserver | null): void {
+  destroyAppObserver = observer;
+}
+
+/** Route `port`'s `destroyApp` result through the observer bound at CALL time.
+ *  In place, so a cached fake keeps its identity (and a test's spies). */
+function observed(target: HostingDeployTarget, port: HostingDeployPort): HostingDeployPort {
+  const destroyApp = port.destroyApp.bind(port);
+  port.destroyApp = async (input) => {
+    const usage = await destroyApp(input);
+    if (destroyAppObserver) await destroyAppObserver({ target, appRef: input.appRef, usage });
+    return usage;
+  };
+  return port;
+}
+
 /** The deploy port for a target, or the typed not-configured error. */
 export function getHostingDeployPort(
   target: HostingDeployTarget,
@@ -63,11 +93,22 @@ export function getHostingDeployPort(
     const key = `${target}:${appPrefix ?? ''}`;
     let fake = hostingFakes.get(key);
     if (!fake) {
-      fake = createFakeHostingDeployPort({ target, ...(appPrefix ? { appPrefix } : {}) });
+      fake = observed(
+        target,
+        createFakeHostingDeployPort({ target, ...(appPrefix ? { appPrefix } : {}) }),
+      );
       hostingFakes.set(key, fake);
     }
     return fake;
   }
+  return observed(target, buildHostingAdapter(target, options));
+}
+
+function buildHostingAdapter(
+  target: HostingDeployTarget,
+  options: HostingPortOptions,
+): HostingDeployPort {
+  const { appPrefix } = options;
   const registered = hostingAdapters.get(target);
   if (registered) return registered(options);
   if (target === 'fly') {

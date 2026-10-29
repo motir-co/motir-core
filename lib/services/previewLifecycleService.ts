@@ -15,7 +15,9 @@ import type { RepositoryCoordinates } from '@/lib/github/repositoryActionsConfig
 import { seedPromotionGithub } from '@/lib/github/seedPromotion';
 import { parseHostingManifest, type HostingManifest } from '@/lib/hosting/manifest';
 import { sendEvent } from '@/lib/jobs/sendEvent';
-import { getHostingDeployPort, hostingOriginSecretKey } from '@/lib/orchestrator/hosting';
+// From the composition root, not `./hosting`: loading it binds the preview
+// meter to the ports' destroys (MOTIR-5777), which this service never calls.
+import { getHostingDeployPort, hostingOriginSecretKey } from '@/lib/orchestrator';
 import { previewDomain } from '@/lib/preview/config';
 import { NEON_PREVIEW_TARGETS } from '@/lib/preview/enablement';
 import { choosePreviewHostName } from '@/lib/preview/hostName';

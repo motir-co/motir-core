@@ -675,6 +675,7 @@ describe('getOrgPeriodConsumption — the ONE read MOTIR-1901 consumes', () => {
       linearEquivalentMinutes: STARTER_BILLABLE_MINUTES * 2,
       billableMinutes: STARTER_BILLABLE_MINUTES * 2,
       runCount: 2,
+      bySource: { ci: STARTER_BILLABLE_MINUTES * 2, preview: 0 },
     });
   });
 

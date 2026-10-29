@@ -3042,6 +3042,11 @@ export default defineConfig({
         'lib/github/previewDeployments.ts',
         'lib/services/previewLifecycleService.ts',
         'lib/jobs/definitions/previewLifecycle.ts',
+        // Preview usage metered into the CI pool (MOTIR-5777).
+        'lib/ciMetering/previewRates.ts',
+        'lib/repositories/previewUsageRepository.ts',
+        'lib/services/ciPreviewUsageMeterService.ts',
+        'lib/jobs/definitions/previewUsageAccrual.ts',
         'lib/mappers/testInstructionsMappers.ts',
         'lib/services/testInstructionsService.ts',
         'lib/services/repoDeploymentService.ts',
@@ -8064,6 +8069,30 @@ export default defineConfig({
           statements: 90,
         },
         'lib/jobs/definitions/previewLifecycle.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/ciMetering/previewRates.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/repositories/previewUsageRepository.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/ciPreviewUsageMeterService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/jobs/definitions/previewUsageAccrual.ts': {
           lines: 90,
           functions: 90,
           branches: 90,

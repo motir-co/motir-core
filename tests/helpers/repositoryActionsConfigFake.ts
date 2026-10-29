@@ -38,9 +38,12 @@ function json(status: number, body: unknown): Response {
 
 const PATH = /\/repos\/([^/]+)\/([^/]+)\/actions\/(secrets|variables)(?:\/([^/]+))?$/;
 
+/** The package's types declare no `KeyPair`; this is `crypto_box_keypair()`'s binary answer. */
+type KeyPair = { publicKey: Uint8Array; privateKey: Uint8Array; keyType: string };
+
 export function createRepositoryActionsConfigFake(): RepositoryActionsConfigFake {
   const calls: RepositoryActionsCall[] = [];
-  const keys = new Map<string, sodium.KeyPair>();
+  const keys = new Map<string, KeyPair>();
   const secrets = new Map<string, Map<string, string>>();
   const variables = new Map<string, Map<string, string>>();
   const failures: Array<{ method: string; urlSuffix: string; status: number }> = [];
@@ -51,7 +54,7 @@ export function createRepositoryActionsConfigFake(): RepositoryActionsConfigFake
     return entry;
   };
 
-  async function keyPair(repo: string): Promise<sodium.KeyPair> {
+  async function keyPair(repo: string): Promise<KeyPair> {
     await sodium.ready;
     let pair = keys.get(repo);
     if (!pair) keys.set(repo, (pair = sodium.crypto_box_keypair()));

@@ -43,7 +43,8 @@ import type { NeonDatabaseConfig } from './config';
 // for that branch. A branch's usage is read from the branch itself before it is
 // deleted — `compute_time_seconds` (CPU seconds, which on Neon's fractional
 // computes is compute-unit seconds) and its `logical_size` — because
-// consumption history v2 does not break a project down by branch. A 404 on the
+// consumption history v2 does not break a project down by branch. `branchUsage`
+// is the same read with no delete, for a meter that charges as a preview lives. A 404 on the
 // delete is a branch already gone, so teardown is idempotent.
 
 /** Every project this adapter makes is named with this prefix. */
@@ -326,6 +327,19 @@ export function createNeonDatabasePort(
     return branch && branch.name === handle.name ? branch : null;
   }
 
+  /** A branch's life-to-date usage, from the branch's own counters. */
+  function branchUsageOf(handle: DatabaseBranchHandle, branch: NeonBranch): DatabaseUsage {
+    const createdAt = Date.parse(branch.created_at ?? '');
+    return {
+      provider: 'neon',
+      applicationRef: handle.database.applicationRef,
+      since: Number.isNaN(createdAt) ? now() : new Date(createdAt),
+      until: now(),
+      computeSeconds: Math.round(branch.compute_time_seconds ?? 0),
+      storageBytes: branch.logical_size ?? 0,
+    };
+  }
+
   function nothing(applicationRef: string): DatabaseUsage {
     const at = now();
     return {
@@ -419,21 +433,18 @@ export function createNeonDatabasePort(
     async deleteBranch(handle) {
       const branch = await branchOf(handle);
       if (!branch) return nothing(handle.database.applicationRef);
-      const createdAt = Date.parse(branch.created_at ?? '');
-      const usage: DatabaseUsage = {
-        provider: 'neon',
-        applicationRef: handle.database.applicationRef,
-        since: Number.isNaN(createdAt) ? now() : new Date(createdAt),
-        until: now(),
-        computeSeconds: Math.round(branch.compute_time_seconds ?? 0),
-        storageBytes: branch.logical_size ?? 0,
-      };
+      const usage = branchUsageOf(handle, branch);
       await neon(
         'DELETE',
         `/projects/${encodeURIComponent(handle.database.databaseRef)}/branches/${encodeURIComponent(handle.branchRef)}`,
         { missing: null },
       );
       return usage;
+    },
+
+    async branchUsage(handle) {
+      const branch = await branchOf(handle);
+      return branch ? branchUsageOf(handle, branch) : nothing(handle.database.applicationRef);
     },
 
     async list(): Promise<DatabaseSummary[]> {

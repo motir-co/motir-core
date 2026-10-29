@@ -149,6 +149,7 @@ function stateOf(state: CiEntitlementStateDTO['state']): CiEntitlementStateDTO {
     poolMinutes: 1000,
     floorApplied: true,
     consumedMinutes: state === 'within_allowance' ? 10 : 2000,
+    consumedBySource: { ci: state === 'within_allowance' ? 10 : 2000, preview: 0 },
     remainingMinutes: 0,
     overageMinutes: state === 'within_allowance' ? 0 : 1000,
     chargedCredits: 0,

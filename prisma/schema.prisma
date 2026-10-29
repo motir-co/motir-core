@@ -1476,6 +1476,8 @@ model Organization {
   // a join through every workspace. Cascade: an org's consumption history is
   // meaningless without the org.
   ciWorkflowRunUsages         CiWorkflowRunUsage[]
+  // Preview usage slices charged to the CI pool (MOTIR-5777). Cascade.
+  previewUsages               PreviewUsage[]
   ciPeriodUsages              CiPeriodUsage[]
   ciLiveAccruals              CiLiveAccrual[]
   // The attribution reconciler's kills (MOTIR-6925) — SetNull: an audit row
@@ -1797,6 +1799,8 @@ model Workspace {
   // workspace_id + RLS contract) even though the POOL is resolved per org, so a
   // tenant can never read another's consumption. Cascade with the workspace.
   ciWorkflowRunUsages         CiWorkflowRunUsage[]
+  // Preview usage slices charged to the CI pool (MOTIR-5777). Cascade.
+  previewUsages               PreviewUsage[]
   ciPeriodUsages              CiPeriodUsage[]
   ciLiveAccruals              CiLiveAccrual[]
   // Runner-fleet provisioning intents (Story MOTIR-1916 · MOTIR-1920) — the same
@@ -9002,14 +9006,64 @@ model PreviewDeployment {
   updatedAt          DateTime               @updatedAt @map("updated_at")
   closedAt           DateTime?              @map("closed_at")
 
-  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  repo      GithubRepo @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  workspace Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  repo      GithubRepo     @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  usages    PreviewUsage[]
 
   @@unique([repoId, pullRequestNumber])
   /// The reaper's scan: rows not yet closed, oldest first.
   @@index([state, updatedAt])
   @@index([workspaceId])
   @@map("preview_deployment")
+}
+
+/// What a preview's usage is measured in (MOTIR-5777, MOTIR-5769 §9): a Fly
+/// Machine's running seconds, a Lambda's GB-seconds and requests, and a Neon
+/// branch's compute-unit hours. AWS previews run in the tenant's own account and
+/// are not converted, so they have no kind.
+enum PreviewUsageKind {
+  machine_seconds
+  lambda_gb_seconds
+  lambda_requests
+  neon_compute_hours
+}
+
+/// ONE accrual slice of a preview's usage (Story MOTIR-5766 · MOTIR-5777),
+/// counted in the organisation's CI-minutes pool at MOTIR-5769 §9's factors and
+/// charged as `ci_overage` past it (`docs/decisions/ci-minutes-allowance.md`
+/// Amendment 2026-10-29). Written by the hourly accrual job and by the
+/// composition-root wrap of the ports' destroy calls, never by the lifecycle.
+model PreviewUsage {
+  id                     String           @id @default(cuid())
+  previewDeploymentId    String           @map("preview_deployment_id")
+  organizationId         String           @map("organization_id")
+  workspaceId            String           @map("workspace_id")
+  kind                   PreviewUsageKind
+  /// The provider unit the slice was read from: the app for a release, the
+  /// branch for a database. A branch reports life-to-date figures, so its
+  /// slices are differences against what was already recorded FOR THAT branch.
+  sourceRef              String           @map("source_ref")
+  /// In the kind's own unit.
+  quantity               Decimal          @db.Decimal(20, 6)
+  linuxEquivalentMinutes Decimal          @map("linux_equivalent_minutes") @db.Decimal(14, 4)
+  /// What the slice cost Motir at the decision page's list price.
+  motirCostUsd           Decimal          @map("motir_cost_usd") @db.Decimal(20, 12)
+  /// Midnight UTC on the 1st of the month the slice ends in (§4.5).
+  periodStart            DateTime         @map("period_start")
+  sliceStart             DateTime         @map("slice_start")
+  sliceEnd               DateTime         @map("slice_end")
+  createdAt              DateTime         @default(now()) @map("created_at")
+
+  previewDeployment PreviewDeployment @relation(fields: [previewDeploymentId], references: [id], onDelete: Cascade)
+  organization      Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace         Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  /// The idempotency key: two accrual runs over the same interval write one.
+  @@unique([previewDeploymentId, kind, sliceEnd])
+  /// The pool read (`getOrgPeriodConsumption`).
+  @@index([organizationId, periodStart])
+  @@index([workspaceId])
+  @@map("preview_usage")
 }
 
 /// THE CI feedback comment for one `(change request, head commit, work item)`

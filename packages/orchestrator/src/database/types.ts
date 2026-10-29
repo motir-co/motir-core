@@ -111,4 +111,9 @@ export interface DatabasePort {
    *  branch — or a database already gone with it — is deleted with zero usage,
    *  so teardown is idempotent. */
   deleteBranch(branch: DatabaseBranchHandle): Promise<DatabaseUsage>;
+  /** The branch's usage over its life so far, read without deleting it — what a
+   *  meter that charges a long-lived preview month by month reads (MOTIR-5777).
+   *  The same figures `deleteBranch` would return now; an already-gone branch is
+   *  zero. */
+  branchUsage(branch: DatabaseBranchHandle): Promise<DatabaseUsage>;
 }
