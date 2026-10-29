@@ -633,6 +633,11 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
       "Symbols matching a name in the hosted code graph — the hosted planner's own answer, paged.",
     descriptionFingerprint: '0b634bf94bd4',
   },
+  code_grep: {
+    summary:
+      "Lines matching a text or pattern in the indexed file contents — string literals, comments and non-code files the symbol search cannot see — the hosted planner's own answer, paged.",
+    descriptionFingerprint: '94eb063eb23b',
+  },
   skeleton: {
     // Re-pinned for MOTIR-5410: the description now names the folder placement
     // (`folderId` on a filed row, the project's `folders`) the read carries.

@@ -10,7 +10,11 @@ import { TOOL_ANNOTATIONS } from '@/lib/mcp/toolAnnotations';
 import { EXEMPT_TOOLS } from '@/lib/mcp/payloads/exemptions';
 import { isBillableTool } from '@/lib/mcp/rateLimitGate';
 import { PERMISSION_NOT_GRANTED_CODE } from '@/lib/mcp/permissionGate';
-import { CODE_EXPLORE_TOOL_NAME, CODE_SEARCH_TOOL_NAME } from '@/lib/mcp/tools/codeGraphRead';
+import {
+  CODE_EXPLORE_TOOL_NAME,
+  CODE_GREP_TOOL_NAME,
+  CODE_SEARCH_TOOL_NAME,
+} from '@/lib/mcp/tools/codeGraphRead';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { GRANTABLE_PERMISSIONS } from '@/lib/tokens/grant';
 import type { PermissionKey } from '@/lib/permissions/catalog';
@@ -144,12 +148,12 @@ afterAll(async () => {
   await adminDb.$disconnect();
 });
 
-describe('code_explore / code_search — registered and permissioned', () => {
-  it('tools/list names both, read-only and closed-world; every declaration home carries them', async () => {
+describe('code_explore / code_search / code_grep — registered and permissioned', () => {
+  it('tools/list names all three, read-only and closed-world; every declaration home carries them', async () => {
     const client = await connectClient(fx.ctx);
     const { tools } = await client.listTools();
     await client.close();
-    for (const name of [CODE_EXPLORE_TOOL_NAME, CODE_SEARCH_TOOL_NAME]) {
+    for (const name of [CODE_EXPLORE_TOOL_NAME, CODE_SEARCH_TOOL_NAME, CODE_GREP_TOOL_NAME]) {
       const tool = tools.find((t) => t.name === name);
       expect(tool, `${name} is not registered`).toBeTruthy();
       expect(tool!.annotations?.readOnlyHint).toBe(true);
@@ -166,14 +170,30 @@ describe('code_explore / code_search — registered and permissioned', () => {
     expect(Object.keys(search.inputSchema.properties ?? {}).sort()).toEqual(
       ['cursor', 'limit', 'projectKey', 'query', 'repo'].sort(),
     );
+    const grep = tools.find((t) => t.name === CODE_GREP_TOOL_NAME)!;
+    expect(Object.keys(grep.inputSchema.properties ?? {}).sort()).toEqual(
+      [
+        'caseInsensitive',
+        'cursor',
+        'limit',
+        'path',
+        'pattern',
+        'projectKey',
+        'regex',
+        'repo',
+      ].sort(),
+    );
+    expect(grep.inputSchema.required).toEqual(['projectKey', 'pattern']);
   });
 
-  it('a token whose grant lacks ai:plan is refused at the door for both, before any ai call', async () => {
-    for (const name of [CODE_EXPLORE_TOOL_NAME, CODE_SEARCH_TOOL_NAME]) {
+  it('a token whose grant lacks ai:plan is refused at the door for all three, before any ai call', async () => {
+    for (const name of [CODE_EXPLORE_TOOL_NAME, CODE_SEARCH_TOOL_NAME, CODE_GREP_TOOL_NAME]) {
       const denied = await callTool(
         name,
         fx.ctx,
-        { projectKey: fx.projectIdentifier, query: 'readFile' },
+        name === CODE_GREP_TOOL_NAME
+          ? { projectKey: fx.projectIdentifier, pattern: 'readFile' }
+          : { projectKey: fx.projectIdentifier, query: 'readFile' },
         GRANTABLE_PERMISSIONS.filter((k) => k !== 'ai:plan'),
       );
       expect(denied.isError).toBe(true);
@@ -388,5 +408,126 @@ describe('code_explore / code_search — the read', () => {
     });
     expect(res.isError).toBe(true);
     expect(JSON.stringify(res.content)).toContain('MOTIR_AI_BAD_REQUEST');
+  });
+});
+
+describe('code_grep — the file-contents search (MOTIR-10066)', () => {
+  // The executor's own text, as motir-ai renders it: the commit searched and the
+  // files under the path filter that were NOT searched travel inside `ok.text`.
+  const GREP =
+    '2 matching lines in 2 files · searched 41 files at commit 3f2a9c1:\n' +
+    'lib/billing/plans.ts:12: const COPY = "Standard, Pro, Max or Enterprise";\n' +
+    'lib/billing/plans.json:4:   "tiers": "Standard, Pro, Max or Enterprise"\n' +
+    'Not searched — 2 files under lib/billing/: lib/billing/logo.png (binary), ' +
+    'lib/billing/seed.sql (over the 1 MiB cap). Read them with read_file before calling a list complete.';
+
+  it('forwards pattern, regex, caseInsensitive, path, repo and limit, and passes the text through byte-equal', async () => {
+    aiReply = () => okText({ state: 'ok', text: GREP });
+    const res = await callTool(CODE_GREP_TOOL_NAME, fx.ctx, {
+      projectKey: fx.projectIdentifier,
+      pattern: 'Standard, Pro, Max or Enterprise',
+      regex: false,
+      caseInsensitive: true,
+      path: 'lib/billing/',
+      repo: 'motir-core',
+      limit: 20,
+    });
+    expect(dtoOf(res)).toEqual({ state: 'ok', text: GREP });
+    expect(summaryOf(res)).toBe(GREP);
+    // AC4: the answer names the indexed commit and the skipped files under its path.
+    expect(summaryOf(res)).toContain('at commit 3f2a9c1');
+    expect(summaryOf(res)).toContain('lib/billing/logo.png (binary)');
+    expect(summaryOf(res)).toContain('lib/billing/seed.sql (over the 1 MiB cap)');
+
+    expect(aiCalls).toHaveLength(1);
+    expect(aiCalls[0]!.body).toEqual({
+      coreWorkspaceId: fx.workspaceId,
+      coreProjectId: fx.projectId,
+      tool: 'code_grep',
+      repoRefs: SET,
+      args: {
+        pattern: 'Standard, Pro, Max or Enterprise',
+        regex: false,
+        caseInsensitive: true,
+        path: 'lib/billing/',
+        repos: [`${OWNER}/motir-core`],
+        limit: 20,
+      },
+    });
+    expect(aiCalls[0]!.body.args).not.toHaveProperty('query');
+  });
+
+  it('a pattern is sent untrimmed, and a regex with only the required arguments', async () => {
+    aiReply = () => okText({ state: 'ok', text: 'x' });
+    await callTool(CODE_GREP_TOOL_NAME, fx.ctx, {
+      projectKey: fx.projectIdentifier,
+      pattern: ' Max ',
+    });
+    await callTool(CODE_GREP_TOOL_NAME, fx.ctx, {
+      projectKey: fx.projectIdentifier,
+      pattern: '(a+)+$',
+      regex: true,
+    });
+    expect(aiCalls.map((c) => c.body.args)).toEqual([
+      { pattern: ' Max ' },
+      { pattern: '(a+)+$', regex: true },
+    ]);
+  });
+
+  it('content_not_indexed is NOT an empty match: enriched with commits behind, and says so', async () => {
+    await adminDb.githubRepo.updateMany({
+      where: { workspaceId: fx.workspaceId, name: 'motir-ai' },
+      data: {
+        indexedHeadSha: 'aaa111',
+        defaultBranchHeadSha: 'bbb222',
+        commitsBehind: 3,
+        commitsBehindBaseSha: 'aaa111',
+        commitsBehindHeadSha: 'bbb222',
+      },
+    });
+    aiReply = () => okText({ state: 'content_not_indexed', repoRef: `${OWNER}/motir-ai` });
+    const res = await callTool(CODE_GREP_TOOL_NAME, fx.ctx, {
+      projectKey: fx.projectIdentifier,
+      pattern: 'Enterprise',
+      repo: 'motir-ai',
+    });
+    const dto = dtoOf(res);
+    expect(dto).toMatchObject({
+      state: 'content_not_indexed',
+      repoRef: `${OWNER}/motir-ai`,
+      commitsBehind: 3,
+    });
+    expect(typeof dto['indexState']).toBe('string');
+    const summary = summaryOf(res);
+    expect(summary).toContain(`${OWNER}/motir-ai's file contents are not indexed yet`);
+    expect(summary).toContain('3 commits behind');
+    expect(summary).toContain('NOT an empty match');
+    expect(summary).toContain('read_file');
+  });
+
+  it('content_not_indexed for a repo core has no row for carries null facts', async () => {
+    aiReply = () => okText({ state: 'content_not_indexed', repoRef: 'x/unknown' });
+    const res = await callTool(CODE_GREP_TOOL_NAME, fx.ctx, {
+      projectKey: fx.projectIdentifier,
+      pattern: 'Enterprise',
+    });
+    expect(dtoOf(res)).toEqual({
+      state: 'content_not_indexed',
+      repoRef: 'x/unknown',
+      indexState: null,
+      commitsBehind: null,
+    });
+    expect(summaryOf(res)).toBe(
+      "x/unknown's file contents are not indexed yet: its graph was built before contents were stored, so this is NOT an empty match. Its next index run stores them; until then read its files with `read_file`.",
+    );
+  });
+
+  it('an empty pattern is refused by the schema, before any ai call', async () => {
+    const res = await callTool(CODE_GREP_TOOL_NAME, fx.ctx, {
+      projectKey: fx.projectIdentifier,
+      pattern: '',
+    });
+    expect(res.isError).toBe(true);
+    expect(aiCalls).toEqual([]);
   });
 });

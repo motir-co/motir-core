@@ -3,7 +3,8 @@ import baseConfig from './vitest.config';
 
 // STORY MOTIR-7858's `motir-core` COVERAGE FLOOR (MOTIR-7865) — the three MCP
 // code-read tools an agent planning over the MCP reads code through: `read_file`
-// (MOTIR-7861) and `code_explore` / `code_search` (MOTIR-7862).
+// (MOTIR-7861) and `code_explore` / `code_search` (MOTIR-7862), and `code_grep`
+// (MOTIR-10066).
 //
 // Same shape and reasoning as `vitest.coverage.in-flight-code.config.ts`:
 // PER-FILE, measured on this branch before being pinned, scoped to the specs that

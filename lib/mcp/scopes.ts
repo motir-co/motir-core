@@ -203,6 +203,7 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   read_file: 'read',
   code_explore: 'read',
   code_search: 'read',
+  code_grep: 'read',
   skeleton: 'read',
   list_folders: 'read',
   get_section_sets: 'read',

@@ -94,6 +94,12 @@ export const zh: McpSummaryTranslations = {
     source:
       "Symbols matching a name in the hosted code graph — the hosted planner's own answer, paged.",
   },
+  code_grep: {
+    summary:
+      '在已索引的文件内容中与文本或模式匹配的行——包括符号搜索看不到的字符串字面量、注释和非代码文件——托管规划器自身的回答，分页返回。',
+    source:
+      "Lines matching a text or pattern in the indexed file contents — string literals, comments and non-code files the symbol search cannot see — the hosted planner's own answer, paged.",
+  },
   complete_session: {
     summary: '在会话分支的拉取请求合并之后收尾：记录在该分支上的每个工作项都转为已完成。',
     source:
