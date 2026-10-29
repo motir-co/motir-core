@@ -16,7 +16,9 @@ import { githubIdentityRepository } from '@/lib/repositories/githubIdentityRepos
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { githubInstallationService } from './githubInstallationService';
-import { enqueueCodeGraphRefresh } from '@/lib/github/indexEnqueue';
+import { enqueueCodeGraphIndex, enqueueCodeGraphRefresh } from '@/lib/github/indexEnqueue';
+import { isOnlyItsSeed } from '@/lib/projectRepos/seedHead';
+import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import { listPullRequestFiles, type PullRequestFiles } from '@/lib/github/pullRequestFiles';
 import { captureDecisionDocument } from './decisionDocumentCaptureService';
@@ -175,6 +177,8 @@ export type GithubWebhookResult =
       event: 'push';
       outcome:
         | 'refresh_enqueued' // a default-branch push → the incremental refresh job is queued
+        | 'first_index_enqueued' // a created repo's first push past its seed → its first index (MOTIR-4589)
+        | 'seed_only' // a push that leaves a created repo on its seed head → nothing indexed (MOTIR-4589)
         | 'ignored_ref' // a non-branch push (tag / delete) or a non-default branch — no refresh
         | 'unknown_installation'
         | 'unknown_repo';
@@ -573,6 +577,11 @@ export const githubWebhookService = {
         repoOwner: repo.owner,
         repoName: repo.name,
         defaultBranch: repo.defaultBranch,
+        // Whether the repository has a code graph at all, and the seed facts of the
+        // rows that realize it (MOTIR-4589) — read through `project_repository`'s
+        // system read arm.
+        hasGraph: repo.indexedAt !== null,
+        seedRows: await projectRepoRepository.listByGithubRepoId(repo.id, tx),
       };
     });
 
@@ -607,16 +616,42 @@ export const githubWebhookService = {
     // repo's shipped mainline, per tenant, per repo (the N-repo cardinality).
     if (push.branch !== resolved.defaultBranch) return { event: 'push', outcome: 'ignored_ref' };
 
-    // POST-tx, best-effort: the ack never hinges on the queue. The job fetches
-    // the default branch's CURRENT head at run time, so debounced/coalesced
-    // pushes index the newest state once.
-    await enqueueCodeGraphRefresh({
+    const indexData = {
       installationId,
       workspaceId: resolved.workspaceId,
       repoOwner: resolved.repoOwner,
       repoName: resolved.repoName,
       defaultBranch: resolved.defaultBranch,
-    });
+    };
+    // ⚠️ A REPOSITORY MOTIR CREATED IS INDEXED BY ITS FIRST PUSH PAST THE SEED
+    // (MOTIR-4589). A push that leaves it on its seed head — Motir's own CI stub on
+    // an initialised repository — indexes nothing: the graph would be the
+    // template's. The first push past the seed is the repository's FIRST index, so
+    // it is enqueued as one (prompt, no debounce), not as a refresh of a graph that
+    // does not exist. Every other repository refreshes exactly as before.
+    //
+    // A push with no head sha cannot be compared with the seed, so it refreshes;
+    // the index's own run-time gate (`codeGraphIndexService.resolveIndexTarget`)
+    // still holds a repository that turns out to be only its seed.
+    const firstIndexPending =
+      !resolved.hasGraph &&
+      resolved.seedRows.some((row) => row.state === 'created' && row.seedHeadSha !== null);
+    let outcome: 'refresh_enqueued' | 'first_index_enqueued' | 'seed_only' = 'refresh_enqueued';
+    if (push.headSha && firstIndexPending && isOnlyItsSeed(resolved.seedRows, push.headSha)) {
+      outcome = 'seed_only';
+      console.warn(
+        '[github-webhook] code graph not indexed yet: no commit beyond the template. repo:',
+        `${resolved.repoOwner}/${resolved.repoName}`,
+      );
+    } else if (push.headSha && firstIndexPending) {
+      outcome = 'first_index_enqueued';
+      await enqueueCodeGraphIndex(indexData);
+    } else {
+      // POST-tx, best-effort: the ack never hinges on the queue. The job fetches
+      // the default branch's CURRENT head at run time, so debounced/coalesced
+      // pushes index the newest state once.
+      await enqueueCodeGraphRefresh(indexData);
+    }
     // ⚠️ THE BASE MOVED, SO ASK WHETHER ITS PULL REQUESTS STILL MERGE (MOTIR-5914, for bug
     // MOTIR-5907; design/github § 30 rule 1). A conflict usually arrives exactly like this —
     // another merge moves the base and GitHub sends the conflicted pull request nothing —
@@ -630,7 +665,7 @@ export const githubWebhookService = {
       baseHeadSha: push.headSha ?? null,
       idempotencyKey: `${resolved.repoRowId}:${push.headSha ?? 'unknown'}`,
     });
-    return { event: 'push', outcome: 'refresh_enqueued' };
+    return { event: 'push', outcome };
   },
 
   async handlePullRequest(

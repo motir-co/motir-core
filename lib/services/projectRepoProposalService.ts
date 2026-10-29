@@ -1,6 +1,7 @@
 import { getPreplanState } from '@/lib/ai/motirAiClient';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
+import { seedRegistryService } from '@/lib/services/seedRegistryService';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { ProjectRepoNameTakenError } from '@/lib/projectRepos/errors';
 import { projectHasItsOwnCode } from '@/lib/projectRepos/ownCode';
@@ -182,6 +183,13 @@ export const projectRepoProposalService = {
     // as above, arriving a few milliseconds later).
     const created: ProjectRepoDto[] = [];
     for (const row of rows) {
+      // Each row's seed comes from the seed MATCHING (MOTIR-709; decision
+      // MOTIR-706 v2 §3.5), recorded with HOW it was chosen so a fallback is never
+      // shown as a match. A row is being written, so it has no hosting target,
+      // use case or size yet, and no §0.1 signal names a stack: a `web` row takes
+      // the role default (`no_target`), any other role its registered foundation
+      // or `initialised`.
+      const seed = await seedRegistryService.matchSeedEntry({ role: row.role });
       try {
         created.push(
           await projectRepoSetService.addRow(
@@ -189,7 +197,8 @@ export const projectRepoProposalService = {
             {
               role: row.role,
               name: row.name,
-              seedSource: row.seedSource,
+              seedSource: seed.key,
+              seedMatch: seed.result,
               // WHY this row is here, PERSISTED (MOTIR-1892) — not merely
               // returned. The proposer runs once, so a signal that lived only in
               // this result would be gone by the time the establish step renders

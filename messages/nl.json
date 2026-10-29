@@ -9473,10 +9473,73 @@
     "outcomeNeedsAccess": "Het instellen van toegang afronden",
     "connectGithub": "GitHub koppelen",
     "stateCreated": "Aangemaakt",
-    "createdDetail": "Gehost door Motir · opgezet vanuit de Motir Next.js-starter.",
+    "createdDetail": "Gehost door Motir · opgezet vanuit {seed}.",
     "stateFailed": "Kon niet worden aangemaakt",
     "actionError": "Dat werkte niet. Er is niets gewijzigd — probeer het opnieuw.",
-    "promiseDoor": "Zo werkt verplaatsen"
+    "promiseDoor": "Zo werkt verplaatsen",
+    "stateProposed": "Nog niet aangemaakt",
+    "createdDetailInitialised": "Gehost door Motir · opgezet als geïnitialiseerde repository.",
+    "createdDetailNoSeed": "Gehost door Motir.",
+    "seed": {
+      "starterPillLabel": "Begint vanuit {label}",
+      "targetPillLabel": "Gehost op {target}",
+      "default": "Standaard",
+      "noTarget": "Geen hostingdoel",
+      "target": {
+        "serverless": "Serverless",
+        "fly": "Fly",
+        "aws": "AWS"
+      },
+      "use": {
+        "internal_tool": "Interne tool",
+        "mvp": "MVP",
+        "planned_product": "Gepland product"
+      },
+      "size": {
+        "small": "Klein",
+        "medium": "Middel",
+        "large": "Groot"
+      },
+      "why": {
+        "matched": "<b>Waarom deze starter:</b> hij wordt uitgerold op {target} en is gemaakt voor {use, select, internal_tool {een interne tool} mvp {een MVP} planned_product {een gepland product} other {dit gebruik}} van deze omvang.",
+        "matchedTarget": "<b>Waarom deze starter:</b> hij wordt uitgerold op {target}.",
+        "softUse": "<b>Waarom deze starter:</b> het is de dichtstbijzijnde starter die op {target} wordt uitgerold. Geen {target}-starter is gemaakt voor {use, select, internal_tool {een interne tool} mvp {een MVP} planned_product {een gepland product} other {dit gebruik}}.",
+        "softSize": "<b>Waarom deze starter:</b> het is de dichtstbijzijnde starter die op {target} wordt uitgerold. Geen {target}-starter is gemaakt voor een repository van deze omvang.",
+        "notDeployed": "<b>Waarom deze starter:</b> het is de starter van Motir voor een {role}-app. Motir-hosting rolt deze repository niet uit, dus er wordt geen hosting getoond.",
+        "noStackSignal": "<b>Waarom deze starter:</b> het plan zegt niet welke stack deze repository gebruikt, dus hij begint vanuit de gebruikelijke starter voor een webrepository op {target}. Kies een andere als je de stack kent.",
+        "noTarget": "<b>Waarom deze starter:</b> deze repository heeft nog geen hostingdoel, dus hij begint vanuit de gebruikelijke starter voor een webrepository.",
+        "noMatch": "<b>Waarom deze starter:</b> er is geen starter voor een {role}-repository {where, select, target {op {target}} other {met deze stack}}, dus hij begint als geïnitialiseerde repository: een lege repository met een README.",
+        "byHand": "<b>Waarom deze starter:</b> iemand heeft hem met de hand gekozen voor deze repository."
+      },
+      "fact": {
+        "hosting": "Hosting",
+        "use": "Gebruik",
+        "size": "Omvang",
+        "stack": "Stack",
+        "not_set": "Niet ingesteld",
+        "not_named": "Niet genoemd",
+        "none": "Geen",
+        "notServed": "· niet gedekt",
+        "noRoleStarter": "· geen {role}-starter wordt hier uitgerold"
+      },
+      "picker": {
+        "label": "Starter",
+        "groupTarget": "{role, select, web {Web} api {API} mobile {Mobile} shared {Shared} infra {Infra} other {Overige}}-starters op {target}",
+        "groupRole": "{role, select, web {Web} api {API} mobile {Mobile} shared {Shared} infra {Infra} other {Overige}}-starters",
+        "groupAny": "Elke repository",
+        "initialisedSub": "Een lege repository met een README",
+        "footerTarget": "Alleen starters voor een {role}-repository die op {target} worden uitgerold.",
+        "footerNoTarget": "Alleen starters voor een {role}-repository. Deze repository heeft nog geen hostingdoel."
+      },
+      "refusal": {
+        "targetMismatch": "<b>{label} kan hier niet worden gebruikt.</b> Hij wordt uitgerold op {targets}, en deze repository draait op {target}. De starter is niet gewijzigd.",
+        "targetMismatchNoTarget": "<b>{label} kan hier niet worden gebruikt.</b> Hij wordt uitgerold op {targets}, en deze repository heeft geen hostingdoel. De starter is niet gewijzigd.",
+        "retired": "<b>{label} is buiten gebruik gesteld.</b> Motir biedt hem niet meer aan, dus kies een andere starter. De starter is niet gewijzigd.",
+        "roleMismatch": "<b>{label} kan hier niet worden gebruikt.</b> Het is een starter voor een {entryRole}-repository, en deze is {role}. De starter is niet gewijzigd.",
+        "notEditable": "<b>Deze repository is al aangemaakt,</b> dus hij kan niet meer vanuit een andere starter beginnen. Laad de pagina opnieuw om hem te zien.",
+        "unknown": "<b>Die starter bestaat niet meer.</b> Kies een andere starter. De starter is niet gewijzigd."
+      }
+    }
   },
   "repositoryTakeover": {
     "title": "Repository's",
@@ -10156,7 +10219,8 @@
       "navRunModels": "Modellen voor gehoste runs",
       "navFleetSettings": "Vlootinstellingen",
       "navCapacity": "Providercapaciteit",
-      "navJobs": "Taken"
+      "navJobs": "Taken",
+      "navStarters": "Starters"
     },
     "nav": {
       "overview": "Overzicht",
@@ -10381,6 +10445,10 @@
           },
           "jobs": {
             "dlq_replay": "Dead letter opnieuw afgespeeld"
+          },
+          "seed_registry": {
+            "promote": "Repository gepromoveerd tot starter",
+            "retire": "Starter uit gebruik genomen"
           }
         }
       }
@@ -12773,6 +12841,152 @@
       "dlqEmpty": {
         "title": "Niets wachtend",
         "body": "Geen enkele taak heeft zijn pogingen opgebruikt. Dead letters verschijnen hier zodra dat gebeurt."
+      }
+    },
+    "starters": {
+      "breadcrumb": "Beheer · Starters",
+      "title": "Starters",
+      "subtitle": "Waar een repository die Motir aanmaakt mee begint. De matching kiest uit de actieve starters op rol, hostingdoel, gebruik en omvang. Maak van een repository die Motir heeft aangemaakt een starter, of stel er een buiten gebruik.",
+      "promote": "Repository promoveren",
+      "card": {
+        "title": "Starterbibliotheek",
+        "count": "Nieuwste eerst · {count, plural, one {# starter} other {# starters}}"
+      },
+      "filter": {
+        "label": "Starters filteren",
+        "role": "Rol",
+        "status": "Status",
+        "target": "Hostingdoel",
+        "anyRole": "Elke rol",
+        "anyTarget": "Elk doel",
+        "all": "Alle"
+      },
+      "status": {
+        "active": "Actief",
+        "retired": "Buiten gebruik"
+      },
+      "notDeployed": "Niet uitgerold door Motir-hosting",
+      "col": {
+        "starter": "Starter",
+        "roleStack": "Rol · stack",
+        "serves": "Dekt",
+        "hosting": "Hosting",
+        "status": "Status",
+        "provenance": "Herkomst",
+        "actions": "Acties"
+      },
+      "alsoAnswersTo": "Reageert ook op {keys}",
+      "roleStack": "{role} · {stack}",
+      "anyRoleAnyStack": "elke rol · elke stack",
+      "everyUse": "Elk gebruik",
+      "everySize": "Elke omvang",
+      "provenance": {
+        "shipped": "Meegeleverd met Motir",
+        "promoted": "Gepromoveerd door <b>{email}</b> op {date} vanuit {repo} bij <mono>{ref}</mono>",
+        "promotedNoRepo": "Gepromoveerd door <b>{email}</b> op {date} bij <mono>{ref}</mono>",
+        "retired": "Buiten gebruik gesteld door <b>{email}</b> op {date}: ‘{reason}’",
+        "removedAccount": "een verwijderd account"
+      },
+      "defaultForRole": "Standaard voor {role}",
+      "defaultForEveryRole": "Standaard voor elke rol",
+      "empty": {
+        "title": "Geen starters komen overeen met deze filters",
+        "bodyRoleTarget": "Geen actieve starter voor een {role}-repository wordt uitgerold op {target}. Wis de filters om de hele bibliotheek te zien.",
+        "body": "Geen starter komt overeen met deze filters.",
+        "clear": "Filters wissen"
+      },
+      "pager": {
+        "label": "Pagina's",
+        "showing": "{from}–{to} van {total}",
+        "previous": "Vorige pagina",
+        "next": "Volgende pagina"
+      },
+      "retire": {
+        "action": "Buiten gebruik stellen",
+        "title": "{label} buiten gebruik stellen?",
+        "body": "De matching kiest hem niet meer en de starterkeuze biedt hem niet meer aan. Repository's die er al mee zijn aangemaakt, houden hun code. Een nog niet aangemaakte repository die hem noemt, kan er pas mee worden aangemaakt als iemand een andere starter kiest.",
+        "reasonLabel": "Reden",
+        "reasonHelp": "Wordt met je naam in het auditlogboek geschreven.",
+        "cancel": "Annuleren",
+        "confirm": "Starter buiten gebruik stellen",
+        "done": "Buiten gebruik gesteld. {label} wordt niet meer aangeboden aan nieuwe repository's.",
+        "failedTitle": "Deze starter is niet buiten gebruik gesteld.",
+        "failed": "Motir kon hem niet buiten gebruik stellen. Probeer het opnieuw.",
+        "defaultTitle": "Deze starter kan niet buiten gebruik worden gesteld.",
+        "defaultBody": "‘{key}’ is de standaardstarter voor een {role}-repository. Een standaard wijzigen is een besluit, geen operatoractie.",
+        "defaultBodyEveryRole": "‘{key}’ is de standaardstarter voor elke rol. Een standaard wijzigen is een besluit, geen operatoractie.",
+        "close": "Sluiten"
+      },
+      "promoteForm": {
+        "breadcrumb": "Beheer · Starters · Promoveren",
+        "title": "Repository promoveren",
+        "subtitle": "Motir kopieert de repository bij de ref naar de eigen organisatie en biedt de kopie als starter aan nieuwe repository's die erbij passen. Bestaande repository's veranderen niet.",
+        "field": {
+          "source": "Repository die Motir heeft aangemaakt",
+          "ref": "Ref",
+          "role": "Rol",
+          "stack": "Stack",
+          "label": "Label",
+          "key": "Sleutel",
+          "uses": "Gedekt gebruik",
+          "sizes": "Gedekte omvang",
+          "targets": "Hostingdoelen voor uitrol",
+          "reason": "Reden"
+        },
+        "help": {
+          "ref": "Een branch, tag of commit. De starter wordt hieruit gekopieerd.",
+          "stack": "Hoe de planner deze stack noemt, in kleine letters.",
+          "label": "Wat mensen op hun repository zien.",
+          "key": "Kleine letters, cijfers en koppeltekens. Ook de naam van de kopie in motir-co. Kan later niet worden gewijzigd.",
+          "targets": "Elk doel moet bij de ref in de motir.hosting.json van de repository staan. Vink er geen aan voor een starter die Motir-hosting niet uitrolt.",
+          "reason": "Wordt met je naam in het auditlogboek geschreven."
+        },
+        "source": {
+          "placeholder": "Kies een repository",
+          "empty": "Geen repository komt overeen.",
+          "footer": "Alleen repository's die Motir heeft aangemaakt.",
+          "sub": "{project} · {role} · {state}",
+          "leaving": "wordt overgedragen aan de eigenaar",
+          "notCreated": "nog niet aangemaakt"
+        },
+        "rolePlaceholder": "Kies een rol",
+        "cancel": "Annuleren",
+        "review": "Promotie controleren",
+        "confirm": {
+          "title": "{name} promoveren tot starter?",
+          "body": "Motir kopieert <b>{repo}</b> bij <b>{ref}</b> naar <b>motir-co/{key}</b> en voegt <b>{label}</b> toe aan de bibliotheek. Vanaf dan kan de matching hem kiezen voor een nieuwe {role}-repository waar hij bij past. Bestaande repository's veranderen niet.",
+          "roleStack": "Rol · stack",
+          "uses": "Gebruik",
+          "sizes": "Omvang",
+          "hosting": "Hosting",
+          "reason": "Reden",
+          "notDeployed": "Niet uitgerold door Motir-hosting",
+          "back": "Terug",
+          "promote": "Promoveren"
+        },
+        "done": "Gepromoveerd. Nieuwe {role}-repository's op {target} kunnen nu beginnen vanuit {label}.",
+        "doneNoTarget": "Gepromoveerd. Nieuwe {role}-repository's kunnen nu beginnen vanuit {label}.",
+        "refusal": {
+          "sourceTitle": "Deze repository kan niet worden gepromoveerd.",
+          "takenOver": "Hij wordt overgedragen aan de eigenaar, of is dat al, dus Motir mag hem niet meer kopiëren.",
+          "notCreated": "Alleen een repository die Motir heeft aangemaakt kan worden gepromoveerd, en deze is nog {state}.",
+          "organizationRow": "Het is de eigen repository van de organisatie, en Motir kopieert nooit de code van een klant.",
+          "notMotirHeld": "{repo} staat niet meer in een GitHub-organisatie die Motir beheert.",
+          "notFound": "Hij bestaat niet meer. Kies een andere.",
+          "refNotFound": "‘{ref}’ is geen branch, tag of commit van {repo}.",
+          "manifestTitle": "motir.hosting.json weigert deze promotie.",
+          "manifestMissing": "De repository heeft geen motir.hosting.json bij <b>{ref}</b>, dus hij kan geen hostingdoel claimen. Voeg het bestand toe bij die ref, of vink alle hostingdoelen uit.",
+          "manifestInvalid": "Het bestand bij <b>{ref}</b> is ongeldig: <b>{field}</b> {reason}",
+          "theDocument": "het document",
+          "targetNotDeclared": "Het noemt <b>{target}</b> niet onder targets (het noemt {declared}). Vink {target} uit, of voeg het toe aan het bestand.",
+          "declaredNone": "geen",
+          "targetNotDeclaredField": "{target} staat niet in motir.hosting.json bij {ref}.",
+          "notInList": "‘{value}’ is {kind, select, role {geen rol} useCases {geen gebruik} sizes {geen omvang} other {geen hostingdoel}}. Kies uit {list}.",
+          "keyTaken": "De sleutel {key} is al in gebruik.",
+          "templateNameTaken": "motir-co/{key} bestaat al en is niet de kopie van deze starter. Kies een andere sleutel, of verwijder eerst die repository.",
+          "genericTitle": "Motir kon deze repository niet promoveren.",
+          "genericBody": "Er is niets gekopieerd. Probeer het opnieuw."
+        }
       }
     }
   },

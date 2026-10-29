@@ -408,6 +408,40 @@ export const PLATFORM_AUDIT_ACTIONS = {
    * writes _Dead letter replayed from /admin/jobs_.
    */
   'jobs.dlq_replay': { kind: 'write', reason: 'inherited' },
+  /**
+   * An operator read the Motir-created repository row a STARTER PROMOTION names
+   * (Story MOTIR-704 · MOTIR-710) — the one cross-tenant read promotion makes,
+   * before anything is copied. `targetKind: 'platform'`, `targetId` the source
+   * row's id (named up front, before the row is read), `metadata` `{ ref }`.
+   */
+  'seed_registry.promote_source_read': { kind: 'read', reason: 'never' },
+  /**
+   * A Motir-created repository at a ref was PROMOTED to a seed registry entry,
+   * or an existing promotion re-promoted (MOTIR-710; decision MOTIR-706 v2
+   * §3.6). `targetKind: 'platform'`, `targetId` the entry key, `targetLabel` its
+   * label, `metadata` `{ sourceRowId, ref, commit, template, useCases, sizes,
+   * hostingTargets, repromoted }`.
+   */
+  'seed_registry.promote': { kind: 'write', reason: 'required' },
+  /**
+   * A seed registry entry was RETIRED (MOTIR-710; 706 v2 §3.6): never matched
+   * or offered again, kept with its lists and provenance. `targetKind:
+   * 'platform'`, `targetId` the entry key, `targetLabel` its label.
+   */
+  'seed_registry.retire': { kind: 'write', reason: 'required' },
+  /**
+   * An operator read the starter library at /admin/starters (MOTIR-712): one
+   * page of entries with each promotion's source repository, promoter and
+   * retirement. `targetKind: 'platform'`, no `targetId` (estate-wide),
+   * `metadata` `{ role, status, target, page }`.
+   */
+  'seed_registry.library_read': { kind: 'read', reason: 'never' },
+  /**
+   * An operator opened the promote form at /admin/starters/promote (MOTIR-712),
+   * which lists the repositories Motir created across every workspace.
+   * `targetKind: 'platform'`, no `targetId` (estate-wide).
+   */
+  'seed_registry.promote_sources_read': { kind: 'read', reason: 'never' },
 } as const satisfies Record<
   string,
   { kind: PlatformAuditActionKind; reason: PlatformAuditReasonPolicy }

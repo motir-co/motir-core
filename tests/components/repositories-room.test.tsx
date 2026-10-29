@@ -1053,8 +1053,9 @@ function roomView(
     // connected section says so explicitly.
     connected: [],
     connectedInDomain: false,
+    seeds: {},
     ...overrides,
-  };
+  } as ProjectRepoRoomViewDto;
 }
 
 function room(view: ProjectRepoRoomViewDto, canAdd = false) {
@@ -1141,6 +1142,7 @@ function hostedRow(overrides: Partial<ProjectRepoDto> = {}): ProjectRepoDto {
     state: 'created',
     failureReason: null,
     proposalSignal: 'default-web',
+    seedMatch: null,
     realizedRepo: {
       id: 'gh-1',
       provider: 'github',

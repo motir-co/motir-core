@@ -10,7 +10,10 @@ import {
 } from '@/generated/prisma/client';
 import { dbRead } from '@/lib/db';
 import type { ProjectRepoWithRealized } from '@/lib/mappers/projectRepoMappers';
-import { ESTABLISHED_PROJECT_REPO_STATES } from '@/lib/projectRepos/vocabulary';
+import {
+  ESTABLISHED_PROJECT_REPO_STATES,
+  SEED_SOURCE_ORGANIZATION,
+} from '@/lib/projectRepos/vocabulary';
 
 // Single Prisma operations on the `project_repository` table — a project's
 // REPOSITORY SET (Story MOTIR-1775 · MOTIR-1780).
@@ -64,6 +67,8 @@ interface JoinedRow {
   failureReason: string | null;
   proposalSignal: string | null;
   githubRepoId: string | null;
+  seedHeadSha: string | null;
+  seedMatch: string | null;
   position: string;
   createdAt: Date;
   updatedAt: Date;
@@ -151,6 +156,8 @@ function toNested(r: JoinedRow): ProjectRepoWithRealized {
     hostingTarget: r.hostingTarget,
     hostingUseCase: r.hostingUseCase,
     hostingSize: r.hostingSize,
+    seedHeadSha: r.seedHeadSha,
+    seedMatch: r.seedMatch,
     // Zero or one record — the mapper then picks the `admin` one out of it, which
     // is exactly what the JOIN already selected. Keeping the shape a LIST (rather
     // than a nullable field) means this read and the Prisma-`include` reads below
@@ -207,6 +214,65 @@ function toNested(r: JoinedRow): ProjectRepoWithRealized {
 }
 
 export const projectRepoRepository = {
+  /**
+   * The row a STARTER PROMOTION names, in any workspace, with the repository it
+   * realised (Story MOTIR-704 · MOTIR-710). Inside a platform context only: the
+   * operator names a row by id with no tenant to bind, and the read passes on the
+   * `platform_staff` arms of `project_repository` and `github_repo`
+   * (`20261028220000_seed_registry_promotion`). Nothing else calls it.
+   */
+  async findForPromotionInTx(id: string, tx: Prisma.TransactionClient) {
+    return tx.projectRepo.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        workspaceId: true,
+        projectId: true,
+        name: true,
+        state: true,
+        seedSource: true,
+        takeoverState: true,
+        githubRepo: { select: { owner: true, name: true, organizationId: true } },
+      },
+    });
+  },
+
+  /**
+   * The repositories the starter library names as promotion sources, in any
+   * workspace (MOTIR-712): each row's realised `owner/repo`. Inside a platform
+   * context only, on the same `platform_staff` arms as
+   * {@link findForPromotionInTx}.
+   */
+  async findRepoRefsForPromotionInTx(ids: string[], tx: Prisma.TransactionClient) {
+    return tx.projectRepo.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, githubRepo: { select: { owner: true, name: true } } },
+    });
+  },
+
+  /**
+   * Every repository Motir CREATED or is about to, in any workspace, newest
+   * first — the promote form's picker (MOTIR-712). An organisation's own
+   * repository (`seedSource = 'organization'`) is never listed: Motir never
+   * copies a customer's code. Inside a platform context only.
+   */
+  async listPromotionSourcesInTx(take: number, tx: Prisma.TransactionClient) {
+    return tx.projectRepo.findMany({
+      where: { seedSource: { not: SEED_SOURCE_ORGANIZATION } },
+      orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
+      take,
+      select: {
+        id: true,
+        name: true,
+        role: true,
+        state: true,
+        takeoverState: true,
+        project: { select: { name: true } },
+        githubRepo: { select: { owner: true, name: true } },
+      },
+    });
+  },
+
   /**
    * A project's whole repository set, ORDERED (primary first), with each row's
    * realized `GithubRepo` joined — in ONE query.
@@ -266,6 +332,8 @@ export const projectRepoRepository = {
         pr."hosting_target"    AS "hostingTarget",
         pr."hosting_use_case"  AS "hostingUseCase",
         pr."hosting_size"      AS "hostingSize",
+        pr."seed_head_sha"     AS "seedHeadSha",
+        pr."seed_match"        AS "seedMatch",
         oc."github_login"      AS "ownerLogin",
         oc."permission"        AS "ownerPermission",
         oc."invited_at"        AS "ownerInvitedAt",

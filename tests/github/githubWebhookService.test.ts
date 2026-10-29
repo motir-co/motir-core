@@ -1104,6 +1104,127 @@ describe('githubWebhookService — push → code-graph refresh enqueue (MOTIR-89
   });
 });
 
+describe('githubWebhookService — a CREATED repo is indexed by its first push past the seed (MOTIR-4589)', () => {
+  const SEED = 'b'.repeat(40);
+
+  function pushAt(headSha: string) {
+    return {
+      ref: 'refs/heads/main',
+      after: headSha,
+      repository: { id: Number(REPO_PROVIDER_ID) },
+      installation: { id: INSTALLATION_ID },
+    };
+  }
+
+  /** Realize the scenario's repository as a project row Motir CREATED, seeded at `SEED`. */
+  async function createdRow(
+    scenario: Awaited<ReturnType<typeof makeScenario>>,
+    opts: { state?: 'created' | 'connected'; seedHeadSha?: string | null } = {},
+  ) {
+    const repo = await adminDb.githubRepo.findFirstOrThrow({ where: { repoId: REPO_PROVIDER_ID } });
+    await adminDb.projectRepo.create({
+      data: {
+        workspaceId: scenario.workspace.id,
+        projectId: scenario.project.id,
+        role: 'web',
+        name: 'acme',
+        seedSource: 'initialised',
+        state: opts.state ?? 'created',
+        githubRepoId: repo.id,
+        seedHeadSha: opts.seedHeadSha === undefined ? SEED : opts.seedHeadSha,
+        position: 'a0',
+      },
+    });
+    return repo;
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function sentNames(sendSpy: { mock: { calls: unknown[][] } }) {
+    return dispatchedEvents(sendSpy)
+      .map((e) => e.name)
+      .filter((name) => name.startsWith('system.code-graph'));
+  }
+
+  it('a push that leaves it ON its seed head (Motir’s own CI stub) indexes nothing', async () => {
+    const scenario = await makeScenario('seed-only-push@example.com');
+    await createdRow(scenario);
+    const info = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const sendSpy = spyOnJobDispatch();
+    sendSpy.mockClear();
+
+    const res = await githubWebhookService.handleEvent('push', pushAt(SEED));
+
+    expect(res).toEqual({ event: 'push', outcome: 'seed_only' });
+    expect(sentNames(sendSpy)).toEqual([]);
+    // Legible as "not indexed yet", which a failed index never reads as.
+    expect(info).toHaveBeenCalledWith(
+      expect.stringContaining('not indexed yet: no commit beyond the template'),
+      'moooon/acme',
+    );
+  });
+
+  it('its first push PAST the seed enqueues its FIRST index — a full one, not a refresh', async () => {
+    const scenario = await makeScenario('first-real-push@example.com');
+    await createdRow(scenario);
+    const sendSpy = spyOnJobDispatch();
+    sendSpy.mockClear();
+
+    const res = await githubWebhookService.handleEvent('push', pushAt('c'.repeat(40)));
+
+    expect(res).toEqual({ event: 'push', outcome: 'first_index_enqueued' });
+    expect(sentNames(sendSpy)).toEqual(['system.code-graph-index']);
+    expect(
+      dispatchedEvents(sendSpy).find((e) => e.name === 'system.code-graph-index')!.data,
+    ).toEqual({
+      installationId: INSTALLATION_ID,
+      workspaceId: scenario.workspace.id,
+      repoOwner: 'moooon',
+      repoName: 'acme',
+      defaultBranch: 'main',
+    });
+  });
+
+  it('once it HAS a graph, a later push refreshes it like any repository', async () => {
+    const scenario = await makeScenario('later-push@example.com');
+    const repo = await createdRow(scenario);
+    await adminDb.githubRepo.update({ where: { id: repo.id }, data: { indexedAt: new Date() } });
+    const sendSpy = spyOnJobDispatch();
+    sendSpy.mockClear();
+
+    const res = await githubWebhookService.handleEvent('push', pushAt('d'.repeat(40)));
+
+    expect(res).toEqual({ event: 'push', outcome: 'refresh_enqueued' });
+    expect(sentNames(sendSpy)).toEqual(['system.code-graph-refresh']);
+  });
+
+  it('a created row with NO recorded seed head (created before MOTIR-4589) refreshes as before', async () => {
+    const scenario = await makeScenario('legacy-created-push@example.com');
+    await createdRow(scenario, { seedHeadSha: null });
+    const sendSpy = spyOnJobDispatch();
+    sendSpy.mockClear();
+
+    const res = await githubWebhookService.handleEvent('push', pushAt(SEED));
+
+    expect(res).toEqual({ event: 'push', outcome: 'refresh_enqueued' });
+    expect(sentNames(sendSpy)).toEqual(['system.code-graph-refresh']);
+  });
+
+  it('a push with NO head sha cannot be compared with the seed, so it refreshes', async () => {
+    const scenario = await makeScenario('no-sha-created-push@example.com');
+    await createdRow(scenario);
+    const sendSpy = spyOnJobDispatch();
+    sendSpy.mockClear();
+    const { after: _after, ...noAfter } = pushAt(SEED);
+
+    const res = await githubWebhookService.handleEvent('push', noAfter);
+
+    expect(res).toEqual({ event: 'push', outcome: 'refresh_enqueued' });
+  });
+});
+
 describe('githubWebhookService — dispatch', () => {
   it('ignores an unhandled event type (a fast no-op ack)', async () => {
     const res = await githubWebhookService.handleEvent('ping', { zen: 'Keep it simple' });

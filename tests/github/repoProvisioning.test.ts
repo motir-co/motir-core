@@ -5,6 +5,7 @@ import {
   RepoNotReadyError,
   RepoProvisioningApiError,
   RepoProvisioningNotConfiguredError,
+  SeedTemplateUnavailableError,
   _resetProvisioningInstallationCache,
   _setReadinessPollForTests,
   isRepoProvisioningConfigured,
@@ -127,16 +128,23 @@ const generateCollision = {
   status: '422',
 };
 
+// Seeds as the registry resolves them (MOTIR-708): the client never reads a key.
+const STARTER_SEED = {
+  key: SEED_SOURCE_PLATFORM_STARTER,
+  source: { owner: 'motir-co', repo: 'nextjs-prisma-serverless-starter' },
+};
+const INITIALISED_SEED = { key: SEED_SOURCE_INITIALISED, source: 'initialised' as const };
+
 const webRow = {
   name: 'acme-web',
   role: 'web' as const,
-  seedSource: SEED_SOURCE_PLATFORM_STARTER,
+  seed: STARTER_SEED,
   projectName: 'Acme',
 };
 const apiRow = {
   name: 'acme-api',
   role: 'api' as const,
-  seedSource: SEED_SOURCE_INITIALISED,
+  seed: INITIALISED_SEED,
   projectName: 'Acme',
 };
 
@@ -195,6 +203,10 @@ describe('a `web` row is seeded from the platform starter', () => {
           ? json(201, { id: 4242, name: webRow.name, owner: { login: MOTIR_ORG } })
           : null,
       readyRepo(webRow.name),
+      (c) =>
+        c.method === 'GET' && c.url.endsWith(`/repos/${MOTIR_ORG}/${webRow.name}/branches/main`)
+          ? json(200, { commit: { sha: 'template-head' } })
+          : null,
     ]);
 
     const repo = await repoProvisioningClient.provisionRepository(webRow);
@@ -206,13 +218,16 @@ describe('a `web` row is seeded from the platform starter', () => {
       name: webRow.name,
       defaultBranch: 'main',
       adopted: false,
+      // The head the template left, recorded so its first index waits (MOTIR-4589).
+      seedHeadSha: 'template-head',
     });
 
     const generate = calls.find((c) => c.url.includes('/generate'))!;
     // The TEMPLATE SOURCE is in the path, the new repo in the body (§4.4) — which
     // is what lets one starter seed every row.
+    // Read from the ENTRY's source, never spliced from the key (MOTIR-706 3.1).
     expect(generate.url).toBe(
-      `https://api.github.com/repos/moooon-B-V/${SEED_SOURCE_PLATFORM_STARTER}/generate`,
+      'https://api.github.com/repos/motir-co/nextjs-prisma-serverless-starter/generate',
     );
     expect(generate.body).toMatchObject({
       owner: MOTIR_ORG, // the ACCOUNT — always Motir's org, never the user's
@@ -306,7 +321,7 @@ describe('a non-web row is HONESTLY initialised, not seeded from the web starter
     expect(logged).toHaveBeenCalled();
   });
 
-  it('initialises (rather than throwing) for a seed key this build does not know', async () => {
+  it('never reads the KEY: an initialised seed under any key takes the auto_init path', async () => {
     installFetch([
       (c) =>
         c.method === 'POST' && c.url.endsWith(`/orgs/${MOTIR_ORG}/repos`)
@@ -316,17 +331,90 @@ describe('a non-web row is HONESTLY initialised, not seeded from the web starter
       (c) => (c.method === 'PUT' ? json(201, {}) : null),
     ]);
 
-    // MOTIR-709's registry will add keys; a build that predates one must degrade
-    // to an honest empty repo, not fail the row.
     await expect(
       repoProvisioningClient.provisionRepository({
         name: 'acme-ml',
         role: 'other',
-        seedSource: 'some-future-starter',
+        seed: { key: 'some-future-key', source: 'initialised' },
         projectName: 'Acme',
       }),
     ).resolves.toMatchObject({ name: 'acme-ml' });
     expect(calls.some((c) => c.url.includes('/generate'))).toBe(false);
+  });
+});
+
+describe('a template seed is generated from THAT entry’s own repository (MOTIR-708)', () => {
+  const flySeed = {
+    key: 'nextjs-prisma-fly-starter',
+    source: { owner: 'motir-co', repo: 'nextjs-prisma-fly-starter' },
+  };
+
+  it('posts /generate to the entry’s owner/repo with the same body', async () => {
+    installFetch([
+      (c) =>
+        c.method === 'POST' && c.url.includes('/generate')
+          ? json(201, { id: 77, name: 'acme', owner: { login: MOTIR_ORG } })
+          : null,
+      readyRepo('acme', 77),
+    ]);
+    await repoProvisioningClient.provisionRepository({ ...webRow, name: 'acme', seed: flySeed });
+    const generate = calls.find((c) => c.url.includes('/generate'))!;
+    expect(generate.url).toBe(
+      'https://api.github.com/repos/motir-co/nextjs-prisma-fly-starter/generate',
+    );
+    expect(generate.body).toMatchObject({ owner: MOTIR_ORG, name: 'acme', private: true });
+    // A template ships its own CI: no stub is committed.
+    expect(calls.some((c) => c.method === 'PUT')).toBe(false);
+  });
+
+  it.each([
+    ['gone (404)', 404, { message: 'Not Found' }],
+    [
+      'not a template (422)',
+      422,
+      { message: 'motir-co/nextjs-prisma-fly-starter is not a template repository' },
+    ],
+  ])('fails naming the entry when the template is %s', async (_label, status, body) => {
+    installFetch([
+      (c) => (c.method === 'POST' && c.url.includes('/generate') ? json(status, body) : null),
+    ]);
+    const err = await repoProvisioningClient
+      .provisionRepository({ ...webRow, name: 'acme', seed: flySeed })
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(SeedTemplateUnavailableError);
+    expect(err).toMatchObject({
+      code: 'SEED_TEMPLATE_UNAVAILABLE',
+      seedKey: 'nextjs-prisma-fly-starter',
+      template: 'motir-co/nextjs-prisma-fly-starter',
+      status,
+    });
+    expect((err as SeedTemplateUnavailableError).reason).toContain('nextjs-prisma-fly-starter');
+    // Nothing is created from a guessed default instead.
+    expect(calls.some((c) => c.url.endsWith(`/orgs/${MOTIR_ORG}/repos`))).toBe(false);
+  });
+
+  it('keeps any OTHER 422 on the template endpoint the generic API error', async () => {
+    installFetch([
+      (c) =>
+        c.method === 'POST' && c.url.includes('/generate')
+          ? json(422, { message: 'Repository name is reserved' })
+          : null,
+    ]);
+    await expect(
+      repoProvisioningClient.provisionRepository({ ...webRow, name: 'acme', seed: flySeed }),
+    ).rejects.toBeInstanceOf(RepoProvisioningApiError);
+  });
+
+  it('keeps a 404 on the INITIALISED path the generic API error — there is no template', async () => {
+    installFetch([
+      (c) =>
+        c.method === 'POST' && c.url.endsWith(`/orgs/${MOTIR_ORG}/repos`)
+          ? json(404, { message: 'Not Found' })
+          : null,
+    ]);
+    await expect(repoProvisioningClient.provisionRepository(apiRow)).rejects.toBeInstanceOf(
+      RepoProvisioningApiError,
+    );
   });
 });
 
@@ -657,6 +745,8 @@ describe('no raw GitHub payload escapes', () => {
       name: webRow.name,
       defaultBranch: '',
       adopted: true,
+      // An adopted repo's seed is not Motir's to vouch for (MOTIR-4589).
+      seedHeadSha: null,
     });
   });
 

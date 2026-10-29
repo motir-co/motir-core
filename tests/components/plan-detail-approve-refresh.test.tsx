@@ -220,6 +220,7 @@ function repositorySet(): { projectKey: string; view: ProjectRepoEstablishViewDt
             seedSource: 'nextjs-prisma-vercel-starter',
             failureReason: null,
             proposalSignal: null,
+            seedMatch: null,
             realizedRepo: null,
             established: false,
             takeover: null,

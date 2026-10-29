@@ -2,7 +2,12 @@ import { createAppJwt, mintInstallationToken } from '@/lib/github/appAuth';
 import { provisioningOrgLogin } from '@/lib/ciMetering/config';
 import { OrgTargetAuthError, resolveOrgAuth, type GithubOrgTarget } from '@/lib/github/orgTarget';
 import type { ProjectRepoRoleDto } from '@/lib/dto/projectRepos';
-import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
+import { SEED_REGISTRY_INITIALISED_SOURCE, type ResolvedSeedDto } from '@/lib/dto/seedRegistry';
+import {
+  DESIGN_MANIFEST_PATH,
+  designSeedFor,
+  type StoredDesignChoice,
+} from '@/lib/projectRepos/designChoiceSeed';
 
 // The repo-CREATION boundary (Story MOTIR-1775 · MOTIR-1781) — the one module
 // that talks to GitHub about making a repository exist. Everything above it
@@ -54,15 +59,10 @@ const GITHUB_API = 'https://api.github.com';
 const GITIGNORE_TEMPLATE = 'Node';
 
 /** The licence GitHub applies to an initialised repo — MIT, because that is what
- *  `nextjs-prisma-vercel-starter` (the `web` seed, §2 of the ADR) already ships.
+ *  the platform starter (the `web` seed, §2 of the ADR) already ships.
  *  A set whose web repo is MIT and whose api repo is something else would be a
  *  licensing decision made by accident of seed path. */
 const LICENSE_TEMPLATE = 'mit';
-
-/** The org that owns `nextjs-prisma-vercel-starter`. The starter is public and
- *  `is_template: true` (verified live in the spike §4.4), so the same template
- *  seeds every `web` row with no per-template exclusivity. */
-const STARTER_TEMPLATE_OWNER = 'moooon-B-V';
 
 /** Readiness polling (spike §4.2). A generated repo's `201` precedes its tree, so
  *  a row is only reported established once GitHub reports a non-empty
@@ -160,6 +160,46 @@ export class RepoHostOrgUnavailableError extends RepoProvisioningError {
   }
 }
 
+/**
+ * GitHub refused to generate from the row's seed TEMPLATE — the registry entry
+ * names a repository GitHub no longer serves (404) or that is not marked
+ * `is_template` (422). Names the ENTRY and its template, so the row's reason says
+ * what to fix; the row stays resumable, and a retry after the entry is fixed
+ * succeeds. Never a fallback to an initialised repository. (MOTIR-708)
+ */
+export class SeedTemplateUnavailableError extends RepoProvisioningError {
+  readonly code = 'SEED_TEMPLATE_UNAVAILABLE' as const;
+  constructor(
+    readonly seedKey: string,
+    readonly template: string,
+    readonly status: number,
+  ) {
+    super(
+      `GitHub would not create this repository from "${seedKey}" (template ${template}, HTTP ` +
+        `${status}), so nothing was created. The starter needs fixing in Motir's registry — retry this row once it is.`,
+    );
+  }
+}
+
+/**
+ * The repository exists and is seeded, but the project's design choice could not
+ * be committed to it (MOTIR-1529). The repository is KEPT — it is a real artifact
+ * — and the row is resumable: the retry adopts it and applies the choice, and a
+ * choice that already landed is not committed twice.
+ */
+export class DesignChoiceNotAppliedError extends RepoProvisioningError {
+  readonly code = 'DESIGN_CHOICE_NOT_APPLIED' as const;
+  constructor(
+    readonly repoName: string,
+    readonly status: number | null,
+  ) {
+    super(
+      `Motir created "${repoName}" but could not apply the project's design choice to it` +
+        `${status === null ? '' : ` (HTTP ${status})`}. The repository is kept — retry this row to apply it.`,
+    );
+  }
+}
+
 // ── Inputs / outputs ────────────────────────────────────────────────────────
 
 export interface ProvisionRepoInput {
@@ -167,13 +207,21 @@ export interface ProvisionRepoInput {
   name: string;
   /** The row's role (ADR §1.1) — selects the seed path and names the repo. */
   role: ProjectRepoRoleDto;
-  /** The row's seed source (ADR §2). `nextjs-prisma-vercel-starter` templates the
-   *  repo; anything else initialises it. An UNKNOWN key initialises rather than
-   *  throwing: MOTIR-709's registry will add keys, and a row whose key this build
-   *  does not know is better served by an honest empty repo than by a failure. */
-  seedSource: string;
+  /** The row's seed, already RESOLVED through the seed registry (MOTIR-708): a
+   *  template `source` is generated from that entry's own `owner/repo`; the
+   *  `initialised` source takes the `auto_init` path. The caller resolves it, so
+   *  an unknown or retired key has already failed the row before this runs. */
+  seed: ResolvedSeedDto;
   /** The owning project's display name — the README/description names it. */
   projectName: string;
+  /**
+   * The project's stored design choice (MOTIR-1529), to apply to a repository
+   * generated from a design-system starter. Absent: the caller did not ask, and
+   * nothing is applied. `{ choice: null }`: no choice was stored, so the registry
+   * defaults are written. Only a TEMPLATE whose tree carries
+   * `motir.design.json` is touched; every other repository gets no extra call.
+   */
+  design?: { choice: StoredDesignChoice | null };
 }
 
 export interface ProvisionedRepo {
@@ -195,6 +243,15 @@ export interface ProvisionedRepo {
    * already claims it before attaching — see the service.
    */
   adopted: boolean;
+  /**
+   * The default-branch head once seeding finished (MOTIR-4589) — the template's
+   * commit, or the initialised commit plus the CI stub. The project row records
+   * it, and the repository's first index waits until the branch moves past it.
+   * NULL on an ADOPTED repository (this call did not seed it, so it cannot say
+   * what the seed was) and when the head could not be read: either way the
+   * repository indexes as it always has.
+   */
+  seedHeadSha: string | null;
 }
 
 // ── Configuration + the installation id ─────────────────────────────────────
@@ -310,6 +367,18 @@ function errorDetail(body: Record<string, unknown> | null): string {
 function isNameCollision(status: number, body: Record<string, unknown> | null): boolean {
   if (status !== 422) return false;
   return collisionCandidates(body).some((text) => text.toLowerCase().includes('already exists'));
+}
+
+/**
+ * Whether a `/generate` refusal is about the TEMPLATE rather than the new
+ * repository: `404` (the template repository is gone, renamed past its redirect,
+ * or unreadable to Motir's App) or a `422` saying it is not a template. Any other
+ * `422` (a name the org's policy rejects, say) stays the generic API error.
+ */
+function isTemplateRefusal(status: number, body: Record<string, unknown> | null): boolean {
+  if (status === 404) return true;
+  if (status !== 422) return false;
+  return collisionCandidates(body).some((text) => /not a template/i.test(text));
 }
 
 /** Every string a GitHub error body could carry the collision phrase in, across
@@ -499,8 +568,9 @@ export async function provisioningAuth(): Promise<{
 export const repoProvisioningClient = {
   /**
    * Create ONE repository in Motir's org and return it once GitHub reports it
-   * ready. Seeds per role (ADR §2): the platform starter templates a `web` row;
-   * every other role gets an initialised repo (README naming the project + role,
+   * ready. Seeds from the row's RESOLVED seed registry entry (MOTIR-706 3.1): a
+   * template entry is generated from its own `owner/repo`; the `initialised`
+   * entry gets an initialised repo (README naming the project + role,
    * a licence, a `.gitignore`, a CI stub).
    *
    * IDEMPOTENT for a re-run. A `422 already exists` is not treated as a failure
@@ -530,10 +600,12 @@ export const repoProvisioningClient = {
       : await provisioningAuth();
     const auth = { authorization: `Bearer ${token}` };
 
-    const templated = input.seedSource === SEED_SOURCE_PLATFORM_STARTER;
+    const template =
+      input.seed.source === SEED_REGISTRY_INITIALISED_SOURCE ? null : input.seed.source;
+    const templated = template !== null;
     const res = templated
       ? await request(
-          `${GITHUB_API}/repos/${STARTER_TEMPLATE_OWNER}/${SEED_SOURCE_PLATFORM_STARTER}/generate`,
+          `${GITHUB_API}/repos/${encodeURIComponent(template.owner)}/${encodeURIComponent(template.repo)}/generate`,
           {
             method: 'POST',
             headers: auth,
@@ -567,7 +639,22 @@ export const repoProvisioningClient = {
         // one we can claim.
         const existing = await readRepository(org, input.name, token);
         if (!existing) throw new RepoNameTakenOnHostError(input.name);
-        return { installationId, ...existing, adopted: true };
+        // The retry of a row whose design commit failed lands HERE: the
+        // repository exists, so the choice is applied to it now. Idempotent — a
+        // choice that already landed is read back and not committed again.
+        if (templated && input.design) {
+          const ready = await awaitReady(org, input.name, token);
+          await applyDesignChoice(org, ready.name, token, ready.defaultBranch, input.design.choice);
+          return { installationId, ...ready, adopted: true, seedHeadSha: null };
+        }
+        return { installationId, ...existing, adopted: true, seedHeadSha: null };
+      }
+      if (template && isTemplateRefusal(res.status, body)) {
+        throw new SeedTemplateUnavailableError(
+          input.seed.key,
+          `${template.owner}/${template.repo}`,
+          res.status,
+        );
       }
       throw new RepoProvisioningApiError(res.status, errorDetail(body));
     }
@@ -583,7 +670,19 @@ export const repoProvisioningClient = {
     // would turn a cosmetic gap into a lost artifact.
     if (!templated) await seedCiStub(org, ready.name, token, ready.defaultBranch);
 
-    return { installationId, ...ready, adopted: false };
+    // The project's design choice, BEFORE the row is reported established and
+    // before the seed head is read, so the head the row records includes it.
+    // Unlike the stub this is NOT best-effort: a repository that ignores the
+    // choice the user made is the defect this commit exists to prevent, so a
+    // failure fails the row (resumably). An initialised repository cannot carry
+    // the manifest, so it is not even asked.
+    if (templated && input.design) {
+      await applyDesignChoice(org, ready.name, token, ready.defaultBranch, input.design.choice);
+    }
+
+    // Read AFTER every seeding write, so the stub's commit counts as seed too.
+    const seedHeadSha = await readBranchHead(org, ready.name, token, ready.defaultBranch);
+    return { installationId, ...ready, adopted: false, seedHeadSha };
   },
 };
 
@@ -663,6 +762,33 @@ async function awaitReady(org: string, name: string, token: string): Promise<Rea
   throw new RepoNotReadyError(name);
 }
 
+/** The head commit of one branch, or null when it cannot be read. Best-effort by
+ *  contract: a missing seed head only means the repository is indexed at once,
+ *  as every repository was before MOTIR-4589 — never a failed row. */
+async function readBranchHead(
+  org: string,
+  name: string,
+  token: string,
+  branch: string,
+): Promise<string | null> {
+  try {
+    const res = await request(
+      `${GITHUB_API}/repos/${encodeURIComponent(org)}/${encodeURIComponent(name)}` +
+        `/branches/${encodeURIComponent(branch)}`,
+      { method: 'GET', headers: { authorization: `Bearer ${token}` } },
+    );
+    if (!res.ok) return null;
+    const sha = asRecord(asRecord(await readJson(res))?.['commit'])?.['sha'];
+    return typeof sha === 'string' && sha.length > 0 ? sha : null;
+  } catch (err) {
+    console.error(
+      `[repoProvisioning] seed head not read for ${org}/${name}:`,
+      err instanceof Error ? err.message : 'unknown',
+    );
+    return null;
+  }
+}
+
 /** Commit the CI stub into a freshly initialised repository. A NEW file, so no
  *  blob sha is needed. Best-effort by contract — see the call site. */
 async function seedCiStub(org: string, name: string, token: string, branch: string): Promise<void> {
@@ -692,3 +818,137 @@ async function seedCiStub(org: string, name: string, token: string, branch: stri
     );
   }
 }
+
+// ── The project's design choice (MOTIR-1529) ───────────────────────────────
+
+/**
+ * Apply the project's design choice to a repository generated from a template,
+ * as ONE commit on its default branch writing `motir.design.json` (the ids the
+ * root layout reads) and `DESIGN.md` (naming them for later agent runs).
+ *
+ * - The manifest is also the MARKER: a template without it does not use
+ *   `@motir/design-system`, and its repository is left exactly as generated.
+ * - IDEMPOTENT: both files are read first, and when they already hold the
+ *   resolved content nothing is written. That is what makes a retry after a
+ *   failure safe — whether the earlier commit landed or not, the branch ends with
+ *   exactly one design commit.
+ * - The ref update is a fast-forward (`force: false`): a branch that moved under
+ *   us is a failure to retry, never history to overwrite.
+ *
+ * Every refusal is {@link DesignChoiceNotAppliedError}; no GitHub body escapes.
+ */
+async function applyDesignChoice(
+  org: string,
+  name: string,
+  token: string,
+  branch: string,
+  choice: StoredDesignChoice | null,
+): Promise<'not_design_system' | 'already_applied' | 'committed'> {
+  const repo = `${GITHUB_API}/repos/${encodeURIComponent(org)}/${encodeURIComponent(name)}`;
+  const auth = { authorization: `Bearer ${token}` };
+  const call = async (
+    url: string,
+    init: { method: string; body?: unknown },
+    accept: number[] = [],
+  ): Promise<{ status: number; body: Record<string, unknown> | null }> => {
+    let res: Response;
+    try {
+      res = await request(url, {
+        method: init.method,
+        headers: auth,
+        ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
+      });
+    } catch {
+      throw new DesignChoiceNotAppliedError(name, null);
+    }
+    if (!res.ok && !accept.includes(res.status)) {
+      throw new DesignChoiceNotAppliedError(name, res.status);
+    }
+    return { status: res.status, body: await readJson(res) };
+  };
+  /** A file's text on the branch, or null when it is not there. */
+  const readFile = async (path: string): Promise<string | null> => {
+    const { status, body } = await call(
+      `${repo}/contents/${path}?ref=${encodeURIComponent(branch)}`,
+      { method: 'GET' },
+      [404],
+    );
+    if (status === 404) return null;
+    const content = body?.['content'];
+    return typeof content === 'string' ? Buffer.from(content, 'base64').toString('utf8') : null;
+  };
+
+  const manifest = await readFile(DESIGN_MANIFEST_PATH);
+  if (manifest === null) return 'not_design_system';
+
+  const seed = await designSeedFor(choice);
+  if (seed.fallbacks.length > 0) {
+    console.warn(
+      `[repoProvisioning] design choice for ${org}/${name} fell back to the registry default ` +
+        `on: ${seed.fallbacks.join(', ')}. Applied:`,
+      seed.applied,
+    );
+  }
+
+  const current: (string | null)[] = [manifest];
+  for (const file of seed.files.slice(1)) current.push(await readFile(file.path));
+  if (seed.files.every((file, i) => current[i] === file.content)) return 'already_applied';
+
+  const ref = await call(`${repo}/git/ref/heads/${encodeURIComponent(branch)}`, { method: 'GET' });
+  const head = asRecord(ref.body?.['object'])?.['sha'];
+  if (typeof head !== 'string') throw new DesignChoiceNotAppliedError(name, ref.status);
+  const parent = await call(`${repo}/git/commits/${head}`, { method: 'GET' });
+  const baseTree = asRecord(parent.body?.['tree'])?.['sha'];
+  if (typeof baseTree !== 'string') throw new DesignChoiceNotAppliedError(name, parent.status);
+
+  const tree = await call(`${repo}/git/trees`, {
+    method: 'POST',
+    body: {
+      base_tree: baseTree,
+      tree: seed.files.map((file) => ({
+        path: file.path,
+        mode: '100644',
+        type: 'blob',
+        content: file.content,
+      })),
+    },
+  });
+  const treeSha = tree.body?.['sha'];
+  if (typeof treeSha !== 'string') throw new DesignChoiceNotAppliedError(name, tree.status);
+
+  const commit = await call(`${repo}/git/commits`, {
+    method: 'POST',
+    body: {
+      message:
+        "chore(design): apply the project's design choice " +
+        `(${seed.applied.styleId} · ${seed.applied.paletteId} · ${seed.applied.typeId})`,
+      tree: treeSha,
+      parents: [head],
+    },
+  });
+  const commitSha = commit.body?.['sha'];
+  if (typeof commitSha !== 'string') throw new DesignChoiceNotAppliedError(name, commit.status);
+
+  await call(`${repo}/git/refs/heads/${encodeURIComponent(branch)}`, {
+    method: 'PATCH',
+    body: { sha: commitSha, force: false },
+  });
+  return 'committed';
+}
+
+// ── Shared with the starter promotion (MOTIR-710) ──────────────────────────
+
+/**
+ * The transport, readback and readiness helpers `lib/github/seedPromotion.ts`
+ * builds a promoted starter's template copy from, so that copy talks to GitHub
+ * exactly as establish does: the same headers, the same typed transport error,
+ * the same collision rule and the same readiness poll.
+ */
+export const provisioningTransport = {
+  request,
+  readJson,
+  asRecord,
+  errorDetail,
+  isNameCollision,
+  awaitReady,
+};

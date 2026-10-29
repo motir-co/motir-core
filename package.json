@@ -108,6 +108,7 @@
     "build:relay": "node scripts/build-relay.mjs",
     "build:fleet-admin": "node scripts/build-fleet-admin.mjs",
     "build:deploy-check": "node scripts/build-deploy-check.mjs",
+    "build:breach": "node scripts/build-breach.mjs",
     "changeset": "changeset",
     "changeset:version": "changeset version",
     "i18n:extract": "tsx --tsconfig tsconfig.node.json scripts/i18n/catalogue.ts extract",

@@ -273,6 +273,8 @@ const KNOWN: { file: string; address: string; why: string }[] = [
   //  `/approvals` before MOTIR-5302 built the page, and that card removed the row.
   //  And a third time for the Planning lessons console: MOTIR-1409 drew
   //  `/admin/planning-lessons` before MOTIR-1411 built it, and that card removed the rows.
+  //  And a fourth time for the starter library: MOTIR-705 drew `/admin/starters`
+  //  and its promote form before MOTIR-712 built them, and that card removed the rows.
   // ── An address named as HISTORY, by the asset that retires it ─────────────
   // `design/code-context/design-notes.md` (MOTIR-1764) documents a collapse:
   // Code health, the code index and Git were three things in two rail sections

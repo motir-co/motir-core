@@ -9464,10 +9464,73 @@
     "outcomeNeedsAccess": "完成访问设置",
     "connectGithub": "连接GitHub",
     "stateCreated": "已创建",
-    "createdDetail": "由Motir托管 · 基于Motir的Next.js启动模板初始化。",
+    "createdDetail": "由Motir托管 · 基于{seed}创建。",
     "stateFailed": "创建失败",
     "actionError": "操作未成功，没有任何内容被更改——请重试。",
-    "promiseDoor": "迁移是怎么回事"
+    "promiseDoor": "迁移是怎么回事",
+    "stateProposed": "尚未创建",
+    "createdDetailInitialised": "由Motir托管 · 以初始化代码仓库创建。",
+    "createdDetailNoSeed": "由Motir托管。",
+    "seed": {
+      "starterPillLabel": "基于{label}",
+      "targetPillLabel": "托管在{target}",
+      "default": "默认",
+      "noTarget": "无托管目标",
+      "target": {
+        "serverless": "Serverless",
+        "fly": "Fly",
+        "aws": "AWS"
+      },
+      "use": {
+        "internal_tool": "内部工具",
+        "mvp": "MVP",
+        "planned_product": "规划中的产品"
+      },
+      "size": {
+        "small": "小型",
+        "medium": "中型",
+        "large": "大型"
+      },
+      "why": {
+        "matched": "<b>选择此启动模板的原因：</b>它部署到{target}，并且是为此规模的{use, select, internal_tool {内部工具} mvp {MVP} planned_product {规划中的产品} other {此用途}}打造的。",
+        "matchedTarget": "<b>选择此启动模板的原因：</b>它部署到{target}。",
+        "softUse": "<b>选择此启动模板的原因：</b>它是部署到{target}的最接近的启动模板。没有为{use, select, internal_tool {内部工具} mvp {MVP} planned_product {规划中的产品} other {此用途}}打造的{target}启动模板。",
+        "softSize": "<b>选择此启动模板的原因：</b>它是部署到{target}的最接近的启动模板。没有为此规模代码仓库打造的{target}启动模板。",
+        "notDeployed": "<b>选择此启动模板的原因：</b>它是Motir为{role}应用提供的启动模板。Motir托管不部署此代码仓库，因此不显示托管信息。",
+        "noStackSignal": "<b>选择此启动模板的原因：</b>计划没有说明此代码仓库使用哪种技术栈，因此它基于{target}上Web代码仓库的常用启动模板。如果知道技术栈，请另选一个。",
+        "noTarget": "<b>选择此启动模板的原因：</b>此代码仓库还没有托管目标，因此它基于Web代码仓库的常用启动模板。",
+        "noMatch": "<b>选择此启动模板的原因：</b>没有为{where, select, target {{target}上的} other {此技术栈的}}{role}代码仓库打造的启动模板，因此它以初始化代码仓库开始：一个只有README的空代码仓库。",
+        "byHand": "<b>选择此启动模板的原因：</b>有人为此代码仓库手动选择了它。"
+      },
+      "fact": {
+        "hosting": "托管",
+        "use": "用途",
+        "size": "规模",
+        "stack": "技术栈",
+        "not_set": "未设置",
+        "not_named": "未指定",
+        "none": "无",
+        "notServed": "· 不适用",
+        "noRoleStarter": "· 没有部署到此处的{role}启动模板"
+      },
+      "picker": {
+        "label": "启动模板",
+        "groupTarget": "{target}上的{role, select, web {Web} api {API} mobile {Mobile} shared {Shared} infra {Infra} other {其他}}启动模板",
+        "groupRole": "{role, select, web {Web} api {API} mobile {Mobile} shared {Shared} infra {Infra} other {其他}}启动模板",
+        "groupAny": "任意代码仓库",
+        "initialisedSub": "一个只有README的空代码仓库",
+        "footerTarget": "仅显示部署到{target}的{role}代码仓库启动模板。",
+        "footerNoTarget": "仅显示{role}代码仓库的启动模板。此代码仓库还没有托管目标。"
+      },
+      "refusal": {
+        "targetMismatch": "<b>{label}不能在此使用。</b>它部署到{targets}，而此代码仓库运行在{target}上。启动模板未更改。",
+        "targetMismatchNoTarget": "<b>{label}不能在此使用。</b>它部署到{targets}，而此代码仓库没有托管目标。启动模板未更改。",
+        "retired": "<b>{label}已停用。</b>Motir不再提供它，请另选一个启动模板。启动模板未更改。",
+        "roleMismatch": "<b>{label}不能在此使用。</b>它是{entryRole}代码仓库的启动模板，而此代码仓库是{role}。启动模板未更改。",
+        "notEditable": "<b>此代码仓库已经创建，</b>因此不能再改用其他启动模板。请重新加载查看。",
+        "unknown": "<b>该启动模板已不存在。</b>请另选一个启动模板。启动模板未更改。"
+      }
+    }
   },
   "repositoryTakeover": {
     "title": "代码仓库",
@@ -10147,7 +10210,8 @@
       "navRunModels": "托管运行模型",
       "navFleetSettings": "集群设置",
       "navCapacity": "服务商容量",
-      "navJobs": "任务"
+      "navJobs": "任务",
+      "navStarters": "启动模板"
     },
     "nav": {
       "overview": "总览",
@@ -10372,6 +10436,10 @@
           },
           "jobs": {
             "dlq_replay": "重放了一条死信"
+          },
+          "seed_registry": {
+            "promote": "将一个仓库提升为起始模板",
+            "retire": "下架了一个起始模板"
           }
         }
       }
@@ -12764,6 +12832,152 @@
       "dlqEmpty": {
         "title": "没有等待中的死信",
         "body": "没有任务用尽重试次数。出现时，死信会显示在这里。"
+      }
+    },
+    "starters": {
+      "breadcrumb": "运营 · 启动模板",
+      "title": "启动模板",
+      "subtitle": "Motir创建的代码仓库从这里开始。匹配会按角色、托管目标、用途和规模在启用的启动模板中选择。可以把Motir创建的代码仓库提升为启动模板，或停用某个启动模板。",
+      "promote": "提升代码仓库",
+      "card": {
+        "title": "启动模板库",
+        "count": "最新优先 · {count, plural, other {#个启动模板}}"
+      },
+      "filter": {
+        "label": "筛选启动模板",
+        "role": "角色",
+        "status": "状态",
+        "target": "托管目标",
+        "anyRole": "任意角色",
+        "anyTarget": "任意目标",
+        "all": "全部"
+      },
+      "status": {
+        "active": "启用",
+        "retired": "已停用"
+      },
+      "notDeployed": "不由Motir托管部署",
+      "col": {
+        "starter": "启动模板",
+        "roleStack": "角色 · 技术栈",
+        "serves": "适用",
+        "hosting": "托管",
+        "status": "状态",
+        "provenance": "来源",
+        "actions": "操作"
+      },
+      "alsoAnswersTo": "也可通过{keys}引用",
+      "roleStack": "{role} · {stack}",
+      "anyRoleAnyStack": "任意角色 · 任意技术栈",
+      "everyUse": "所有用途",
+      "everySize": "所有规模",
+      "provenance": {
+        "shipped": "随Motir提供",
+        "promoted": "由<b>{email}</b>于{date}从{repo}的<mono>{ref}</mono>提升",
+        "promotedNoRepo": "由<b>{email}</b>于{date}从<mono>{ref}</mono>提升",
+        "retired": "由<b>{email}</b>于{date}停用：“{reason}”",
+        "removedAccount": "已删除的账号"
+      },
+      "defaultForRole": "{role}的默认模板",
+      "defaultForEveryRole": "所有角色的默认模板",
+      "empty": {
+        "title": "没有符合这些筛选条件的启动模板",
+        "bodyRoleTarget": "没有部署到{target}的启用中的{role}代码仓库启动模板。清除筛选条件可查看整个启动模板库。",
+        "body": "没有符合这些筛选条件的启动模板。",
+        "clear": "清除筛选条件"
+      },
+      "pager": {
+        "label": "分页",
+        "showing": "第{from}–{to}个，共{total}个",
+        "previous": "上一页",
+        "next": "下一页"
+      },
+      "retire": {
+        "action": "停用",
+        "title": "停用{label}？",
+        "body": "匹配将不再选择它，启动模板选择器也不再提供它。已基于它创建的代码仓库保留各自的代码。尚未创建且指定了它的代码仓库，在有人另选启动模板之前无法基于它创建。",
+        "reasonLabel": "原因",
+        "reasonHelp": "会连同操作人的名字写入审计日志。",
+        "cancel": "取消",
+        "confirm": "停用启动模板",
+        "done": "已停用。{label}不再提供给新的代码仓库。",
+        "failedTitle": "此启动模板未停用。",
+        "failed": "Motir未能停用它。请重试。",
+        "defaultTitle": "此启动模板不能停用。",
+        "defaultBody": "“{key}”是{role}代码仓库的默认启动模板。更改默认模板是一项决策，不是运营人员的操作。",
+        "defaultBodyEveryRole": "“{key}”是所有角色的默认启动模板。更改默认模板是一项决策，不是运营人员的操作。",
+        "close": "关闭"
+      },
+      "promoteForm": {
+        "breadcrumb": "运营 · 启动模板 · 提升",
+        "title": "提升代码仓库",
+        "subtitle": "Motir会把该代码仓库在指定ref处的内容复制到自己的组织中，并把这份副本作为启动模板提供给符合条件的新代码仓库。已有的代码仓库不受影响。",
+        "field": {
+          "source": "Motir创建的代码仓库",
+          "ref": "Ref",
+          "role": "角色",
+          "stack": "技术栈",
+          "label": "标签",
+          "key": "键",
+          "uses": "适用用途",
+          "sizes": "适用规模",
+          "targets": "部署到的托管目标",
+          "reason": "原因"
+        },
+        "help": {
+          "ref": "分支、标签或提交。启动模板从这里复制。",
+          "stack": "规划器对此技术栈的称呼，使用小写。",
+          "label": "用户在其代码仓库上看到的名称。",
+          "key": "小写字母、数字和连字符。也是motir-co中副本的名称。之后无法更改。",
+          "targets": "每个目标都必须列在该代码仓库在ref处的motir.hosting.json中。如果Motir托管不部署此启动模板，请一个都不要勾选。",
+          "reason": "会连同操作人的名字写入审计日志。"
+        },
+        "source": {
+          "placeholder": "选择代码仓库",
+          "empty": "没有匹配的代码仓库。",
+          "footer": "仅显示Motir创建的代码仓库。",
+          "sub": "{project} · {role} · {state}",
+          "leaving": "正在移交给所有者",
+          "notCreated": "尚未创建"
+        },
+        "rolePlaceholder": "选择角色",
+        "cancel": "取消",
+        "review": "检查提升内容",
+        "confirm": {
+          "title": "将{name}提升为启动模板？",
+          "body": "Motir会把<b>{repo}</b>在<b>{ref}</b>处的内容复制到<b>motir-co/{key}</b>，并把<b>{label}</b>加入启动模板库。此后，匹配可以为符合条件的新{role}代码仓库选择它。已有的代码仓库不受影响。",
+          "roleStack": "角色 · 技术栈",
+          "uses": "用途",
+          "sizes": "规模",
+          "hosting": "托管",
+          "reason": "原因",
+          "notDeployed": "不由Motir托管部署",
+          "back": "返回",
+          "promote": "提升"
+        },
+        "done": "已提升。{target}上的新{role}代码仓库现在可以基于{label}创建。",
+        "doneNoTarget": "已提升。新的{role}代码仓库现在可以基于{label}创建。",
+        "refusal": {
+          "sourceTitle": "此代码仓库不能提升。",
+          "takenOver": "它正在移交给所有者或已经移交，Motir不能再复制它。",
+          "notCreated": "只有Motir创建的代码仓库才能提升，而此代码仓库仍处于{state}状态。",
+          "organizationRow": "这是组织自己的代码仓库，Motir从不复制客户的代码。",
+          "notMotirHeld": "{repo}已不在Motir持有的GitHub组织中。",
+          "notFound": "它已不存在。请另选一个。",
+          "refNotFound": "“{ref}”不是{repo}的分支、标签或提交。",
+          "manifestTitle": "motir.hosting.json拒绝了此次提升。",
+          "manifestMissing": "此代码仓库在<b>{ref}</b>处没有motir.hosting.json，因此不能声明托管目标。请在该ref处添加此文件，或取消勾选所有托管目标。",
+          "manifestInvalid": "<b>{ref}</b>处的文件无效：<b>{field}</b> {reason}",
+          "theDocument": "文档",
+          "targetNotDeclared": "它的targets中没有<b>{target}</b>（列出的是{declared}）。请取消勾选{target}，或把它加入文件。",
+          "declaredNone": "无",
+          "targetNotDeclaredField": "{ref}处的motir.hosting.json中没有{target}。",
+          "notInList": "“{value}”不是有效的{kind, select, role {角色} useCases {用途} sizes {规模} other {托管目标}}。请从{list}中选择。",
+          "keyTaken": "键{key}已被占用。",
+          "templateNameTaken": "motir-co/{key}已存在，且不是此启动模板的副本。请另选一个键，或先删除该代码仓库。",
+          "genericTitle": "Motir未能提升此代码仓库。",
+          "genericBody": "没有复制任何内容。请重试。"
+        }
       }
     }
   },

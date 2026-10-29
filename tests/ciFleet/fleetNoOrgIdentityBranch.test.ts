@@ -96,7 +96,6 @@ function motirOrgLiteralHits(source: string): string[] {
 const PRE_STORY_LITERAL_DEBT = [
   'lib/apiDocs/mcp.ts',
   'lib/export/personalDataSections.ts',
-  'lib/github/repoProvisioning.ts',
   'lib/health/credentialRegistry.ts',
   'lib/publicAddresses/reservedNames.ts',
   'lib/test-github-accounts-mock.ts',

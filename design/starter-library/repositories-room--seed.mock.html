@@ -1,0 +1,1796 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · Repositories — what each repository starts from (MOTIR-705)</title>
+    <!--
+      DESIGN ASSET (HTML mockup) — MOTIR-705, a DELTA on
+      design/repository-set/repositories-room.mock.html, drawing only the
+      changed panels: the starter (seed) and hosting-target pills on a
+      Motir-created row, the "Why this starter" match reason and the Starter
+      re-point picker on a row that is not created yet, the server's refusals
+      of a re-point, and the read-only created row. Spec:
+      design/starter-library/design-notes.md §1.
+
+      Built from app/(authed)/settings/project/repositories/_components/
+      (TakeoverRow.tsx, RepositoriesRoom.tsx, OrganizationRepositories.tsx),
+      the shipped Pill / Combobox / Button primitives, and the base mock's
+      token block and row classes. Matching rules and refusals are MOTIR-709's
+      (lib/projectRepos/seedMatching.ts, projectRepoSetService.checkRepoint).
+    -->
+    <style>
+      /* ═══ TOKENS — generated from @motir/design-system/theme.css ═══ */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-primary-fill: #5645d4;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-canvas: #ecebe7;
+        --color-ink: #1a1a1a;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-orange: #dd5b00;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+        --font-sans:
+          var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: var(--font-serif-source, Georgia), serif;
+        --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+        --font-size-xs: 0.75rem;
+        --font-size-sm: 0.875rem;
+        --font-size-base: 1rem;
+        --font-size-lg: 1.25rem;
+        --font-size-xl: 1.5rem;
+        --font-size-2xl: 2rem;
+        --font-size-3xl: 3rem;
+        --font-size-display: 5rem;
+        --radius-xs: 4px;
+        --radius-sm: 6px;
+        --radius-md: 8px;
+        --radius-lg: 12px;
+        --radius-xl: 16px;
+        --radius-pill: 9999px;
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+        --shadow-flat: none;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --shadow-hero-mockup: 0 24px 48px -8px rgba(15, 15, 15, 0.2);
+        --spacing-xxs: 4px;
+        --spacing-xs: 8px;
+        --spacing-sm: 12px;
+        --spacing-md: 16px;
+        --spacing-lg: 20px;
+        --spacing-xl: 24px;
+        --spacing-2xl: 32px;
+        --spacing-3xl: 40px;
+        --spacing-section: 64px;
+        --spacing-section-lg: 96px;
+        --spacing-hero: 120px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-btn-y-sm: 8px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-btn-lg: 48px;
+        --height-input: 44px;
+        --height-control: 36px;
+        --transition-duration: 150ms;
+        --transition-fast: 100ms;
+        --transition-slow: 250ms;
+        --hover-scale: 1;
+        --active-scale: 0.98;
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+        --focus-ring-color: var(--color-primary);
+        --el-page-bg: var(--color-background);
+        --el-page-text: var(--color-foreground);
+        --el-page-text-muted: var(--color-muted-foreground);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-canvas: var(--color-canvas);
+        --el-surface-text: var(--color-foreground);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        /* ADDED by MOTIR-4674, verbatim from packages/design-system/theme.css:
+           the ink for danger text ON a page surface. --el-danger-text is legal
+           ONLY on an element carrying bg-(--el-danger), and raw --el-danger is
+           under AA on the dark page in three palettes. */
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-status-todo: var(--color-stone);
+        --el-status-in-progress: var(--color-info);
+        --el-status-in-review: var(--color-primary);
+        --el-status-done: var(--color-success);
+        --el-status-blocked: var(--color-warning);
+        --el-status-cancelled: var(--color-steel);
+        --el-priority-highest: var(--color-destructive);
+        --el-priority-high: var(--color-warning);
+        --el-priority-medium: var(--color-slate);
+        --el-priority-low: var(--color-info);
+        --el-priority-lowest: var(--color-stone);
+        --el-danger-surface: var(--color-tint-rose);
+        --el-danger-surface-text: var(--color-charcoal);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-warning-text: var(--color-charcoal);
+        --el-success-surface: var(--color-tint-mint);
+        --el-notice-info-bg: var(--color-tint-sky);
+        --el-notice-info-border: var(--color-info);
+        --el-callout-bg: var(--color-tint-lavender);
+        --el-callout-text: var(--color-charcoal);
+        --el-role-admin: var(--color-tint-lavender);
+        --el-role-member: var(--color-tint-sky);
+        --el-role-viewer: var(--color-tint-mint);
+        --el-org-role-owner: var(--color-tint-lavender);
+        --el-org-role-admin: var(--color-tint-sky);
+        --el-org-role-member: var(--color-tint-mint);
+        --el-privacy-private: var(--color-tint-lavender);
+        --el-privacy-public: var(--color-tint-sky);
+        --el-label-1: var(--color-tint-peach);
+        --el-label-2: var(--color-tint-rose);
+        --el-label-3: var(--color-tint-mint);
+        --el-label-4: var(--color-tint-lavender);
+        --el-label-5: var(--color-tint-sky);
+        --el-label-6: var(--color-tint-yellow);
+        --el-avatar-peach: var(--color-tint-peach);
+        --el-avatar-rose: var(--color-tint-rose);
+        --el-avatar-mint: var(--color-tint-mint);
+        --el-avatar-lavender: var(--color-tint-lavender);
+        --el-avatar-sky: var(--color-tint-sky);
+        --el-avatar-yellow: var(--color-tint-yellow);
+        --el-avatar-fallback: var(--color-info);
+        --el-notif-mentioned: var(--color-primary-fill);
+        --el-notif-commented: var(--color-info);
+        --el-notif-assigned: var(--color-accent-green);
+        --el-notif-transitioned: var(--color-accent-teal);
+        --el-model-opus: var(--color-primary-fill);
+        --el-model-sonnet: var(--color-info);
+        --el-model-haiku: var(--color-success);
+        --el-model-deepseek: var(--color-accent-teal);
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-icon-active: var(--color-primary);
+        --el-icon-btn: var(--color-foreground);
+        --el-icon-heading: var(--color-charcoal);
+        --el-icon-field: var(--color-muted-foreground);
+        --el-text-eyebrow: var(--color-muted-foreground);
+        --el-text-subtitle: var(--color-slate);
+        --el-text-helper: var(--color-muted-foreground);
+        --el-text-identifier: var(--color-slate);
+        --el-tooltip-bg: var(--color-foreground);
+        --el-tooltip-text: var(--color-background);
+        --el-switch-on: var(--color-primary-fill);
+        --el-switch-knob: var(--color-surface);
+        --el-option-active-bg: var(--color-muted);
+        --el-overlay-scrim: #00000066;
+        --el-chip-bg: var(--color-surface);
+        --el-chip-border: var(--color-border);
+        --el-card: var(--color-background);
+        --el-input-border: var(--color-hairline-strong);
+        --el-button-border: var(--color-hairline-strong);
+        --el-count-bg: var(--color-muted);
+        --el-count-text: var(--color-slate);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --el-type-code: var(--color-info);
+        --el-type-design: var(--color-accent);
+        --el-type-test: var(--color-success);
+        --el-type-content: var(--color-accent-teal);
+        --el-type-research: var(--color-primary);
+        --el-type-review: var(--color-accent-orange);
+        --el-type-deploy: var(--color-destructive);
+        --el-type-decision: var(--color-charcoal);
+        --el-type-manual: var(--color-stone);
+        --el-type-chore: var(--color-slate);
+        --el-chart-guideline: var(--color-stone);
+        --el-chart-actual: var(--color-primary);
+        --el-chart-scope: var(--color-warning);
+        --el-chart-committed: var(--color-info);
+        --el-chart-completed: var(--color-success);
+        --el-chart-average: var(--color-charcoal);
+        --el-chart-plot: var(--color-surface-soft);
+        --el-chart-grid: var(--color-border);
+        --el-chart-axis: var(--color-steel);
+        --el-chart-cat-1: var(--color-primary);
+        --el-chart-cat-2: var(--color-info);
+        --el-chart-cat-3: var(--color-success);
+        --el-chart-cat-4: var(--color-warning);
+        --el-chart-cat-5: var(--color-accent-teal);
+        --el-chart-cat-6: var(--color-accent);
+        --el-chart-cat-7: var(--color-charcoal);
+        --el-chart-cat-none: var(--color-stone);
+        --el-chart-created: var(--color-info);
+        --el-chart-resolved: var(--color-success);
+        --el-chart-deficit: var(--color-destructive);
+        --el-chart-surplus: var(--color-success);
+        --el-chart-age: var(--color-warning);
+        --el-chart-resolution: var(--color-info);
+        --el-chart-cycle-scope: var(--color-stone);
+        --el-chart-cycle-started: var(--color-warning);
+        --el-chart-cycle-completed: var(--color-info);
+        --el-chart-cycle-target: var(--color-info);
+        --el-public-banner-bg: var(--color-tint-sky);
+        --el-public-banner-text: var(--color-charcoal);
+        --el-vote-bg: var(--color-tint-lavender);
+        --el-vote-active-bg: var(--color-primary);
+        --el-vote-active-text: var(--color-primary-foreground);
+        --el-roadmap-submitted: var(--color-tint-peach);
+        --el-roadmap-planned: var(--color-tint-lavender);
+        --el-roadmap-progress: var(--color-tint-sky);
+        --el-roadmap-done: var(--color-tint-mint);
+        --el-diff-added: var(--color-tint-mint);
+        --el-diff-removed: var(--color-tint-rose);
+        --el-diff-moved: var(--color-tint-sky);
+        --el-chat-bubble-user: var(--color-primary-fill);
+        --el-chat-bubble-ai: var(--color-surface-soft);
+        --el-canvas-edge-pending: var(--color-slate);
+        --el-canvas-edge-committed: var(--color-charcoal);
+        --el-station-tier-discovery: var(--color-tint-sky);
+        --el-station-tier-vision: var(--color-tint-lavender);
+        --el-station-tier-feasibility: var(--color-tint-mint);
+        --el-station-tier-validation: var(--color-tint-peach);
+        --el-hero-wash-a: var(--color-tint-lavender);
+        --el-hero-wash-b: var(--color-tint-sky);
+        --el-build-bg: var(--color-tint-lavender);
+        --el-build-text: var(--color-charcoal);
+        --el-build-glyph: var(--color-primary);
+        --el-selection-bg: var(--color-tint-sky);
+        --el-droptarget-bg: var(--color-tint-lavender);
+        --el-board-column-accent: var(--color-primary);
+        --el-overdue: var(--color-destructive);
+        --el-due-soon: var(--color-warning);
+        --el-sprint-accent: var(--color-tint-lavender);
+        --el-epic-accent: var(--color-accent);
+        --el-archived-pill-bg: var(--color-muted);
+        --el-archived-pill-text: var(--color-slate);
+        --el-auth-wash: var(--color-tint-sky);
+        --el-tabnav-track: var(--color-surface);
+        --el-tabnav-active: var(--color-primary);
+        --el-card-icon-bg: var(--color-muted);
+        --el-card-icon-fg: var(--color-primary);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+      }
+      :root {
+        --spacing-card-padding-16: 16px;
+        --spacing-card-padding-12: 12px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #f2f1ee;
+        color: var(--el-page-text);
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          Roboto,
+          'Helvetica Neue',
+          Arial,
+          sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .board {
+        max-width: 1240px;
+        margin: 0 auto;
+        padding: 40px 24px 72px;
+      }
+      .board > header {
+        margin-bottom: 32px;
+      }
+      .board h1 {
+        font-family: ui-serif, Georgia, 'Times New Roman', serif;
+        font-size: 30px;
+        line-height: 1.2;
+        margin: 0 0 8px;
+        color: var(--el-text);
+      }
+      .board > header p {
+        margin: 0 0 10px;
+        font-size: 14px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+        max-width: 88ch;
+      }
+      .board > header p b {
+        color: var(--el-text);
+      }
+      .panel-label {
+        margin: 44px 0 12px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+        border-top: 1px solid var(--el-border);
+        padding-top: 14px;
+      }
+      .panel-label b {
+        color: var(--el-text);
+        font-weight: 700;
+      }
+      .panel-note {
+        margin: 0 0 14px;
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+        max-width: 88ch;
+      }
+      .panel-note b {
+        color: var(--el-text);
+      }
+      .panel {
+        margin-bottom: 8px;
+      }
+      .gallery {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 20px;
+      }
+      figure {
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        min-width: 0;
+      }
+      figcaption {
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      code.k {
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 12px;
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+        border-radius: var(--radius-control);
+        padding: 2px 6px;
+      }
+      svg.i {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      svg.i.sm {
+        width: 14px;
+        height: 14px;
+      }
+      svg.gh {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        fill: currentColor;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        font-family: inherit;
+        font-size: 14px;
+        font-weight: 500;
+        line-height: 1;
+        border: 0;
+        cursor: pointer;
+        border-radius: var(--radius-btn);
+        height: var(--height-btn-md);
+        padding-inline: var(--spacing-btn-x);
+        background: transparent;
+        color: var(--el-text);
+        white-space: nowrap;
+      }
+      .btn-secondary {
+        border: 1px solid var(--el-button-border);
+        background: var(--el-card);
+        color: var(--el-text);
+      }
+      .btn-sm {
+        height: var(--height-btn-sm);
+        padding-inline: var(--spacing-btn-x-sm);
+        font-size: 13px;
+      }
+      .btn[disabled] {
+        opacity: 0.5;
+        cursor: default;
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+      .pill-neutral {
+        background: var(--el-chip-bg);
+        color: var(--el-text-secondary);
+        border-color: var(--el-chip-border);
+      }
+      .pill-seed {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+      .pill-target {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+      }
+      .pill-default {
+        background: var(--el-tint-yellow);
+        color: var(--el-text-strong);
+      }
+      .pill svg {
+        color: currentColor;
+      }
+      .helper {
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+        margin: 0;
+      }
+      .combo {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-input);
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-input-border);
+        background: var(--el-page-bg);
+        padding-inline: var(--spacing-input-x);
+        font-size: 14px;
+        color: var(--el-text);
+        min-width: 0;
+      }
+      .combo .val {
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .combo svg {
+        color: var(--el-icon-muted);
+      }
+      .listbox {
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 4px;
+        display: flex;
+        flex-direction: column;
+      }
+      .listbox .opt {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 14px;
+        color: var(--el-text);
+        min-width: 0;
+      }
+      .listbox .opt.active {
+        background: var(--el-option-active-bg);
+      }
+      .listbox .opt .main {
+        display: flex;
+        flex: 1 1 auto;
+        min-width: 0;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .listbox .opt .nm {
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .listbox .opt .sub {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .listbox .opt .tick {
+        color: var(--el-accent-on-surface);
+      }
+      .listbox .grp {
+        padding: 8px var(--spacing-control-x) 4px;
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .listbox .lfoot {
+        margin: 4px 0 0;
+        border-top: 1px solid var(--el-border-soft);
+        padding: 8px var(--spacing-control-x) 4px;
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      .alert {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-danger);
+        background: var(--el-danger-surface);
+        padding: 12px 14px;
+        font-size: 14px;
+        line-height: 1.5;
+        color: var(--el-danger-surface-text);
+      }
+      .alert > svg {
+        margin-top: 2px;
+        color: var(--el-danger-on-surface);
+      }
+      .alert b {
+        color: var(--el-text-strong);
+      }
+      .settings {
+        display: grid;
+        grid-template-columns: 15rem 1fr;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        overflow: hidden;
+      }
+      .set-rail {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        border-right: 1px solid var(--el-sidebar-border);
+        background: var(--el-sidebar-bg);
+        padding: 20px 12px;
+      }
+      .set-rail .grp {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .set-rail .grp > .h {
+        padding: 6px var(--spacing-control-x) 2px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .rail-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        border-radius: var(--radius-control);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        font-size: 14px;
+        color: var(--el-text-secondary);
+      }
+      .rail-row svg {
+        color: var(--el-icon-muted);
+      }
+      .rail-row.active {
+        background: var(--el-sidebar-item-bg-active);
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .rail-row.active svg {
+        color: var(--el-icon-active);
+      }
+      .set-pane {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        padding: 28px;
+        min-width: 0;
+      }
+      .pane-head {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .pane-head h3 {
+        margin: 0;
+        font-family: ui-serif, Georgia, serif;
+        font-size: 22px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .pane-head p {
+        margin: 0;
+        max-width: 68ch;
+        font-size: 14px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+      .eyebrow {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .section {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .seclabel {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .section > .hint {
+        margin: 0;
+        max-width: 68ch;
+        font-size: 13px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+      .rows {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .row {
+        display: flex;
+        gap: 12px;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-card);
+        padding: var(--spacing-card-padding);
+        min-width: 0;
+      }
+      .row.created {
+        background: var(--el-success-surface);
+        border-color: var(--el-border-soft);
+      }
+      .row-main {
+        display: flex;
+        min-width: 0;
+        flex: 1;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .row-head {
+        display: flex;
+        min-width: 0;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+      }
+      .row-state {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .row-state.ok svg {
+        color: var(--el-success);
+      }
+      .row-state.wait svg {
+        color: var(--el-icon-muted);
+      }
+      .repo-link {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 8px;
+      }
+      .repo-link .name {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .repo-link a.name {
+        color: var(--el-link);
+        text-decoration: none;
+      }
+      .repo-link .ghm {
+        color: var(--el-icon-muted);
+      }
+      .row .helper {
+        font-size: 14px;
+      }
+      .row-actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+      }
+      .why {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
+        padding: 12px 14px;
+      }
+      .why-line {
+        margin: 0;
+        font-size: 14px;
+        line-height: 1.5;
+        color: var(--el-text);
+      }
+      .why-facts {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 16px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+      .fact {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .fact b {
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .fact.hit svg {
+        color: var(--el-success);
+      }
+      .fact.miss svg {
+        color: var(--el-icon-muted);
+      }
+      .fact.none svg {
+        color: var(--el-icon-muted);
+      }
+      .repoint {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        max-width: 420px;
+      }
+      .repoint > .label {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .connected {
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-card);
+        padding: var(--spacing-card-padding);
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .connected ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .connected li {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        border-radius: var(--radius-control);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+      }
+      .connected li svg {
+        color: var(--el-icon-muted);
+      }
+      .connected .repo {
+        flex: 1 1 auto;
+        min-width: 0;
+        font-size: 14px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .connected .repo .owner {
+        color: var(--el-text-secondary);
+      }
+      .connected .repo .nm {
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .connected .branch {
+        flex: none;
+        border-radius: var(--radius-control);
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+      }
+      .quiet-danger {
+        flex: none;
+        border: 0;
+        background: transparent;
+        padding: 0;
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-danger-on-surface);
+        cursor: pointer;
+      }
+      @media (max-width: 980px) {
+        .settings {
+          grid-template-columns: 1fr;
+        }
+        .gallery {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <symbol id="i-arrow-up-right" viewBox="0 0 24 24">
+          <path d="M7 7h10v10" />
+          <path d="M7 17 17 7" />
+        </symbol>
+        <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5" /></symbol>
+        <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" /></symbol>
+        <symbol id="i-circle-check-big" viewBox="0 0 24 24">
+          <path d="M21.801 10A10 10 0 1 1 17 3.335" />
+          <path d="m9 11 3 3L22 4" />
+        </symbol>
+        <symbol id="i-clock" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 6v6l4 2" />
+        </symbol>
+        <symbol id="i-cloud" viewBox="0 0 24 24">
+          <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
+        </symbol>
+        <symbol id="i-folder-git-2" viewBox="0 0 24 24">
+          <path d="M18 19a5 5 0 0 1-5-5v8" />
+          <path
+            d="M9 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v5"
+          />
+          <circle cx="13" cy="12" r="2" />
+          <circle cx="20" cy="19" r="2" />
+        </symbol>
+        <symbol id="i-github" viewBox="0 0 24 24">
+          <path
+            fill-rule="evenodd"
+            clip-rule="evenodd"
+            d="M12 .5C5.37.5 0 5.87 0 12.5c0 5.3 3.44 9.8 8.21 11.39.6.11.82-.26.82-.58 0-.29-.01-1.05-.02-2.06-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.73.08-.73 1.21.09 1.84 1.24 1.84 1.24 1.07 1.84 2.81 1.31 3.5 1 .11-.78.42-1.31.76-1.61-2.67-.3-5.47-1.34-5.47-5.95 0-1.31.47-2.39 1.24-3.23-.13-.3-.54-1.53.11-3.19 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 3-.4c1.02 0 2.05.14 3 .4 2.29-1.55 3.3-1.23 3.3-1.23.65 1.66.24 2.89.12 3.19.77.84 1.23 1.92 1.23 3.23 0 4.62-2.81 5.64-5.49 5.94.43.37.82 1.1.82 2.22 0 1.6-.02 2.89-.02 3.29 0 .32.22.7.83.58A12.01 12.01 0 0 0 24 12.5C24 5.87 18.63.5 12 .5z"
+          />
+        </symbol>
+        <symbol id="i-layers" viewBox="0 0 24 24">
+          <path
+            d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"
+          />
+          <path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65" />
+          <path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65" />
+        </symbol>
+        <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14" /></symbol>
+        <symbol id="i-sliders-horizontal" viewBox="0 0 24 24">
+          <path d="M10 5H3" />
+          <path d="M12 19H3" />
+          <path d="M14 3v4" />
+          <path d="M16 17v4" />
+          <path d="M21 12h-9" />
+          <path d="M21 19h-5" />
+          <path d="M21 5h-7" />
+          <path d="M8 10v4" />
+          <path d="M8 12H3" />
+        </symbol>
+        <symbol id="i-triangle-alert" viewBox="0 0 24 24">
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </symbol>
+        <symbol id="i-users" viewBox="0 0 24 24">
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+          <path d="M16 3.128a4 4 0 0 1 0 7.744" />
+          <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+          <circle cx="9" cy="7" r="4" />
+        </symbol>
+      </defs>
+    </svg>
+    <main class="board">
+      <header>
+        <h1>Repositories — what each repository starts from</h1>
+        <p>
+          MOTIR-705 · story MOTIR-704. A DELTA on
+          <code class="k">design/repository-set/repositories-room.mock.html</code>, drawing only
+          what changes: a repository Motir creates now starts from a <b>starter</b> chosen out of
+          Motir’s starter library, and the row says which one, where the repository is hosted, and —
+          while it is not created yet — <b>why</b> that starter was chosen and how to pick another.
+        </p>
+        <p>
+          The seed lives in the room, not on the plan approval step. Since MOTIR-5014 the approval
+          step lists no repositories and asks nothing about them (<code class="k"
+            >design/repository-set/design-notes.md</code
+          >
+          §0, §4); the room already lists every repository Motir creates,
+          <b>including the ones not created yet</b>, in its <b>Hosted by Motir</b> section. The
+          approval step is not redrawn.
+        </p>
+      </header>
+
+      <!-- ═══════════════════════════════════════════════════════════════════ -->
+      <div class="panel-label">
+        Panel 1 · <b>Project settings → Repositories</b> — two repositories not created yet, each
+        with its starter, its hosting and why it was chosen; the organisation’s repository is
+        unchanged
+      </div>
+      <p class="panel-note">
+        A Motir-created row gains two pills after its state: the <b>starter</b> (lavender) and the
+        <b>hosting target</b> (sky). A row that is <b>not created yet</b> also shows
+        <b>Why this starter</b> and the <b>Starter</b> picker. The row from the organisation shows
+        neither pill — Motir never seeds a repository it did not create.
+      </p>
+      <div class="panel">
+        <div class="settings">
+          <div class="set-rail">
+            <div class="grp">
+              <div class="h">General</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-sliders-horizontal" /></svg>Details
+              </div>
+              <div class="rail-row active">
+                <svg class="i"><use href="#i-folder-git-2" /></svg>Repositories
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Access</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-users" /></svg>Members &amp; access
+              </div>
+            </div>
+          </div>
+          <div class="set-pane">
+            <div class="pane-head">
+              <div class="eyebrow">Project settings</div>
+              <h3>Repositories</h3>
+              <p>
+                Only the repositories Acme booking works on — whether Motir hosts them or moooon
+                does.
+              </p>
+            </div>
+            <div class="section">
+              <div class="seclabel">Hosted by Motir</div>
+              <p class="hint">
+                Motir created these and pays for their CI. Move any of them to your own GitHub
+                whenever you want.
+              </p>
+              <div class="rows">
+                <div class="row">
+                  <div class="row-main">
+                    <div class="row-head">
+                      <span class="pill pill-neutral mono">web</span>
+                      <span class="row-state wait"
+                        ><svg class="i"><use href="#i-clock" /></svg>Not created yet</span
+                      >
+                      <span class="pill pill-seed" aria-label="Starts from Next.js · serverless"
+                        ><svg class="i sm"><use href="#i-layers" /></svg>Next.js · serverless</span
+                      >
+                      <span class="pill pill-target" aria-label="Hosted on Serverless"
+                        ><svg class="i sm"><use href="#i-cloud" /></svg>Serverless</span
+                      >
+                    </div>
+                    <div class="repo-link">
+                      <svg class="gh ghm"><use href="#i-github" /></svg>
+                      <span class="name">acme-booking-web</span>
+                    </div>
+                    <div class="why">
+                      <p class="why-line">
+                        <b>Why this starter:</b> it deploys to Serverless and is made for an
+                        internal tool of this size.
+                      </p>
+                      <ul class="why-facts">
+                        <li class="fact hit">
+                          <svg class="i sm"><use href="#i-check" /></svg>Hosting
+                          <b>Serverless</b>
+                        </li>
+                        <li class="fact hit">
+                          <svg class="i sm"><use href="#i-check" /></svg>Use <b>Internal tool</b>
+                        </li>
+                        <li class="fact hit">
+                          <svg class="i sm"><use href="#i-check" /></svg>Size <b>Small</b>
+                        </li>
+                        <li class="fact hit">
+                          <svg class="i sm"><use href="#i-check" /></svg>Stack <b>Next.js</b>
+                        </li>
+                      </ul>
+                    </div>
+                    <div class="repoint">
+                      <span class="label">Starter</span>
+                      <div class="combo" role="combobox" aria-expanded="false">
+                        <span class="val">Next.js · serverless</span>
+                        <svg class="i"><use href="#i-chevron-down" /></svg>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="row">
+                  <div class="row-main">
+                    <div class="row-head">
+                      <span class="pill pill-neutral mono">mobile</span>
+                      <span class="row-state wait"
+                        ><svg class="i"><use href="#i-clock" /></svg>Not created yet</span
+                      >
+                      <span class="pill pill-seed" aria-label="Starts from Expo mobile foundation"
+                        ><svg class="i sm"><use href="#i-layers" /></svg>Expo mobile
+                        foundation</span
+                      >
+                    </div>
+                    <div class="repo-link">
+                      <svg class="gh ghm"><use href="#i-github" /></svg>
+                      <span class="name">acme-booking-mobile</span>
+                    </div>
+                    <div class="why">
+                      <p class="why-line">
+                        <b>Why this starter:</b> it is Motir’s starter for a mobile app. Motir
+                        hosting doesn’t deploy this repository, so no hosting is shown.
+                      </p>
+                      <ul class="why-facts">
+                        <li class="fact none">
+                          <svg class="i sm"><use href="#i-minus" /></svg>Hosting <b>None</b>
+                        </li>
+                        <li class="fact hit">
+                          <svg class="i sm"><use href="#i-check" /></svg>Use <b>Internal tool</b>
+                        </li>
+                        <li class="fact hit">
+                          <svg class="i sm"><use href="#i-check" /></svg>Size <b>Small</b>
+                        </li>
+                        <li class="fact hit">
+                          <svg class="i sm"><use href="#i-check" /></svg>Stack <b>Expo</b>
+                        </li>
+                      </ul>
+                    </div>
+                    <div class="repoint">
+                      <span class="label">Starter</span>
+                      <div class="combo" role="combobox" aria-expanded="false">
+                        <span class="val">Expo mobile foundation</span>
+                        <svg class="i"><use href="#i-chevron-down" /></svg>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="section">
+              <div class="seclabel">From your organisation</div>
+              <p class="hint">Repositories from moooon that are linked to this project.</p>
+              <div class="connected">
+                <ul>
+                  <li>
+                    <svg class="i"><use href="#i-folder-git-2" /></svg>
+                    <span class="repo"
+                      ><span class="owner">acme-inc/</span
+                      ><span class="nm">acme-booking-design-tokens</span></span
+                    >
+                    <span class="branch">main</span>
+                    <button class="quiet-danger" type="button">Remove from this project</button>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════════════ -->
+      <div class="panel-label">
+        Panel 2 · <b>Matched</b> — a web repository on each of the three hosting targets, and a soft
+        criterion the starter does not serve
+      </div>
+      <p class="panel-note">
+        Hosting and role are hard: a starter that does not deploy where the repository runs is never
+        chosen. Use and size are soft. When the best starter for the target does not serve the
+        repository’s use or size, the fact says so (<b>not served</b>) instead of hiding it. Only
+        the rows are drawn; each sits in the <b>Hosted by Motir</b> section of Panel 1.
+      </p>
+      <div class="panel gallery">
+        <figure>
+          <figcaption>Serverless · matched on every criterion</figcaption>
+          <div class="row">
+            <div class="row-main">
+              <div class="row-head">
+                <span class="pill pill-neutral mono">web</span>
+                <span class="row-state wait"
+                  ><svg class="i"><use href="#i-clock" /></svg>Not created yet</span
+                >
+                <span class="pill pill-seed"
+                  ><svg class="i sm"><use href="#i-layers" /></svg>Next.js · serverless</span
+                >
+                <span class="pill pill-target"
+                  ><svg class="i sm"><use href="#i-cloud" /></svg>Serverless</span
+                >
+              </div>
+              <div class="repo-link">
+                <svg class="gh ghm"><use href="#i-github" /></svg>
+                <span class="name">field-notes-web</span>
+              </div>
+              <div class="why">
+                <p class="why-line">
+                  <b>Why this starter:</b> it deploys to Serverless and is made for an MVP of this
+                  size.
+                </p>
+                <ul class="why-facts">
+                  <li class="fact hit">
+                    <svg class="i sm"><use href="#i-check" /></svg>Hosting <b>Serverless</b>
+                  </li>
+                  <li class="fact hit">
+                    <svg class="i sm"><use href="#i-check" /></svg>Use <b>MVP</b>
+                  </li>
+                  <li class="fact hit">
+                    <svg class="i sm"><use href="#i-check" /></svg>Size <b>Small</b>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </figure>
+        <figure>
+          <figcaption>Fly · matched on every criterion</figcaption>
+          <div class="row">
+            <div class="row-main">
+              <div class="row-head">
+                <span class="pill pill-neutral mono">web</span>
+                <span class="row-state wait"
+                  ><svg class="i"><use href="#i-clock" /></svg>Not created yet</span
+                >
+                <span class="pill pill-seed"
+                  ><svg class="i sm"><use href="#i-layers" /></svg>Next.js · Fly</span
+                >
+                <span class="pill pill-target"
+                  ><svg class="i sm"><use href="#i-cloud" /></svg>Fly</span
+                >
+              </div>
+              <div class="repo-link">
+                <svg class="gh ghm"><use href="#i-github" /></svg>
+                <span class="name">clinic-portal-web</span>
+              </div>
+              <div class="why">
+                <p class="why-line">
+                  <b>Why this starter:</b> it deploys to Fly and is made for a planned product of
+                  this size.
+                </p>
+                <ul class="why-facts">
+                  <li class="fact hit">
+                    <svg class="i sm"><use href="#i-check" /></svg>Hosting <b>Fly</b>
+                  </li>
+                  <li class="fact hit">
+                    <svg class="i sm"><use href="#i-check" /></svg>Use <b>Planned product</b>
+                  </li>
+                  <li class="fact hit">
+                    <svg class="i sm"><use href="#i-check" /></svg>Size <b>Medium</b>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </figure>
+        <figure>
+          <figcaption>AWS · matched on every criterion</figcaption>
+          <div class="row">
+            <div class="row-main">
+              <div class="row-head">
+                <span class="pill pill-neutral mono">web</span>
+                <span class="row-state wait"
+                  ><svg class="i"><use href="#i-clock" /></svg>Not created yet</span
+                >
+                <span class="pill pill-seed"
+                  ><svg class="i sm"><use href="#i-layers" /></svg>Next.js · AWS</span
+                >
+                <span class="pill pill-target"
+                  ><svg class="i sm"><use href="#i-cloud" /></svg>AWS</span
+                >
+              </div>
+              <div class="repo-link">
+                <svg class="gh ghm"><use href="#i-github" /></svg>
+                <span class="name">ledger-web</span>
+              </div>
+              <div class="why">
+                <p class="why-line">
+                  <b>Why this starter:</b> it deploys to AWS and is made for a planned product of
+                  this size.
+                </p>
+                <ul class="why-facts">
+                  <li class="fact hit">
+                    <svg class="i sm"><use href="#i-check" /></svg>Hosting <b>AWS</b>
+                  </li>
+                  <li class="fact hit">
+                    <svg class="i sm"><use href="#i-check" /></svg>Use <b>Planned product</b>
+                  </li>
+                  <li class="fact hit">
+                    <svg class="i sm"><use href="#i-check" /></svg>Size <b>Large</b>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </figure>
+        <figure>
+          <figcaption>Fly · the use is not served, the target still decides</figcaption>
+          <div class="row">
+            <div class="row-main">
+              <div class="row-head">
+                <span class="pill pill-neutral mono">web</span>
+                <span class="row-state wait"
+                  ><svg class="i"><use href="#i-clock" /></svg>Not created yet</span
+                >
+                <span class="pill pill-seed"
+                  ><svg class="i sm"><use href="#i-layers" /></svg>Next.js · Fly</span
+                >
+                <span class="pill pill-target"
+                  ><svg class="i sm"><use href="#i-cloud" /></svg>Fly</span
+                >
+              </div>
+              <div class="repo-link">
+                <svg class="gh ghm"><use href="#i-github" /></svg>
+                <span class="name">rota-web</span>
+              </div>
+              <div class="why">
+                <p class="why-line">
+                  <b>Why this starter:</b> it is the closest starter that deploys to Fly. No Fly
+                  starter is made for an internal tool.
+                </p>
+                <ul class="why-facts">
+                  <li class="fact hit">
+                    <svg class="i sm"><use href="#i-check" /></svg>Hosting <b>Fly</b>
+                  </li>
+                  <li class="fact miss">
+                    <svg class="i sm"><use href="#i-minus" /></svg>Use <b>Internal tool</b> · not
+                    served
+                  </li>
+                  <li class="fact hit">
+                    <svg class="i sm"><use href="#i-check" /></svg>Size <b>Small</b>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </figure>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════════════ -->
+      <div class="panel-label">
+        Panel 3 · <b>The defaults, shown as defaults</b> — no stack named, no hosting target yet, no
+        starter matched, and a mobile repository with no hosting
+      </div>
+      <p class="panel-note">
+        Each of the four non-matches says what was missing and what the repository falls back to. A
+        default is never dressed up as a match: the facts show <b>Not named</b> or
+        <b>Not set</b> where the plan gave nothing, and the starter pill carries a
+        <b>Default</b> pill beside it.
+      </p>
+      <div class="panel gallery">
+        <figure>
+          <figcaption><code class="k">no_stack_signal</code> · the plan named no stack</figcaption>
+          <div class="row">
+            <div class="row-main">
+              <div class="row-head">
+                <span class="pill pill-neutral mono">web</span>
+                <span class="row-state wait"
+                  ><svg class="i"><use href="#i-clock" /></svg>Not created yet</span
+                >
+                <span class="pill pill-seed"
+                  ><svg class="i sm"><use href="#i-layers" /></svg>Next.js · serverless</span
+                >
+                <span class="pill pill-default">Default</span>
+                <span class="pill pill-target"
+                  ><svg class="i sm"><use href="#i-cloud" /></svg>Serverless</span
+                >
+              </div>
+              <div class="repo-link">
+                <svg class="gh ghm"><use href="#i-github" /></svg>
+                <span class="name">survey-web</span>
+              </div>
+              <div class="why">
+                <p class="why-line">
+                  <b>Why this starter:</b> the plan didn’t say which stack this repository uses, so
+                  it starts from the usual starter for a web repository on Serverless. Pick another
+                  if you know the stack.
+                </p>
+                <ul class="why-facts">
+                  <li class="fact hit">
+                    <svg class="i sm"><use href="#i-check" /></svg>Hosting <b>Serverless</b>
+                  </li>
+                  <li class="fact hit">
+                    <svg class="i sm"><use href="#i-check" /></svg>Use <b>MVP</b>
+                  </li>
+                  <li class="fact hit">
+                    <svg class="i sm"><use href="#i-check" /></svg>Size <b>Small</b>
+                  </li>
+                  <li class="fact none">
+                    <svg class="i sm"><use href="#i-minus" /></svg>Stack <b>Not named</b>
+                  </li>
+                </ul>
+              </div>
+              <div class="repoint">
+                <span class="label">Starter</span>
+                <div class="combo" role="combobox" aria-expanded="false">
+                  <span class="val">Next.js · serverless</span>
+                  <svg class="i"><use href="#i-chevron-down" /></svg>
+                </div>
+              </div>
+            </div>
+          </div>
+        </figure>
+        <figure>
+          <figcaption><code class="k">no_target</code> · no hosting target yet</figcaption>
+          <div class="row">
+            <div class="row-main">
+              <div class="row-head">
+                <span class="pill pill-neutral mono">web</span>
+                <span class="row-state wait"
+                  ><svg class="i"><use href="#i-clock" /></svg>Not created yet</span
+                >
+                <span class="pill pill-seed"
+                  ><svg class="i sm"><use href="#i-layers" /></svg>Next.js · serverless</span
+                >
+                <span class="pill pill-default">Default</span>
+                <span class="pill pill-neutral">No hosting target</span>
+              </div>
+              <div class="repo-link">
+                <svg class="gh ghm"><use href="#i-github" /></svg>
+                <span class="name">intake-web</span>
+              </div>
+              <div class="why">
+                <p class="why-line">
+                  <b>Why this starter:</b> this repository has no hosting target yet, so it starts
+                  from the usual starter for a web repository.
+                </p>
+                <ul class="why-facts">
+                  <li class="fact none">
+                    <svg class="i sm"><use href="#i-minus" /></svg>Hosting <b>Not set</b>
+                  </li>
+                  <li class="fact none">
+                    <svg class="i sm"><use href="#i-minus" /></svg>Use <b>Not set</b>
+                  </li>
+                  <li class="fact none">
+                    <svg class="i sm"><use href="#i-minus" /></svg>Size <b>Not set</b>
+                  </li>
+                </ul>
+              </div>
+              <div class="repoint">
+                <span class="label">Starter</span>
+                <div class="combo" role="combobox" aria-expanded="false">
+                  <span class="val">Next.js · serverless</span>
+                  <svg class="i"><use href="#i-chevron-down" /></svg>
+                </div>
+              </div>
+            </div>
+          </div>
+        </figure>
+        <figure>
+          <figcaption><code class="k">no_match</code> · falls back to Initialised</figcaption>
+          <div class="row">
+            <div class="row-main">
+              <div class="row-head">
+                <span class="pill pill-neutral mono">api</span>
+                <span class="row-state wait"
+                  ><svg class="i"><use href="#i-clock" /></svg>Not created yet</span
+                >
+                <span class="pill pill-seed"
+                  ><svg class="i sm"><use href="#i-layers" /></svg>Initialised repository</span
+                >
+                <span class="pill pill-default">Default</span>
+                <span class="pill pill-target"
+                  ><svg class="i sm"><use href="#i-cloud" /></svg>Fly</span
+                >
+              </div>
+              <div class="repo-link">
+                <svg class="gh ghm"><use href="#i-github" /></svg>
+                <span class="name">clinic-portal-api</span>
+              </div>
+              <div class="why">
+                <p class="why-line">
+                  <b>Why this starter:</b> no starter is made for an api repository on Fly, so it
+                  starts as an initialised repository: an empty repository with a README.
+                </p>
+                <ul class="why-facts">
+                  <li class="fact miss">
+                    <svg class="i sm"><use href="#i-minus" /></svg>Hosting <b>Fly</b> · no api
+                    starter deploys there
+                  </li>
+                  <li class="fact hit">
+                    <svg class="i sm"><use href="#i-check" /></svg>Use <b>Planned product</b>
+                  </li>
+                </ul>
+              </div>
+              <div class="repoint">
+                <span class="label">Starter</span>
+                <div class="combo" role="combobox" aria-expanded="false">
+                  <span class="val">Initialised repository</span>
+                  <svg class="i"><use href="#i-chevron-down" /></svg>
+                </div>
+              </div>
+            </div>
+          </div>
+        </figure>
+        <figure>
+          <figcaption>mobile · no hosting target, nothing matched yet</figcaption>
+          <div class="row">
+            <div class="row-main">
+              <div class="row-head">
+                <span class="pill pill-neutral mono">mobile</span>
+                <span class="row-state wait"
+                  ><svg class="i"><use href="#i-clock" /></svg>Not created yet</span
+                >
+                <span class="pill pill-seed"
+                  ><svg class="i sm"><use href="#i-layers" /></svg>Initialised repository</span
+                >
+                <span class="pill pill-default">Default</span>
+              </div>
+              <div class="repo-link">
+                <svg class="gh ghm"><use href="#i-github" /></svg>
+                <span class="name">rota-mobile</span>
+              </div>
+              <div class="why">
+                <p class="why-line">
+                  <b>Why this starter:</b> no starter is made for a mobile repository with this
+                  stack, so it starts as an initialised repository: an empty repository with a
+                  README.
+                </p>
+                <ul class="why-facts">
+                  <li class="fact none">
+                    <svg class="i sm"><use href="#i-minus" /></svg>Hosting <b>None</b>
+                  </li>
+                  <li class="fact miss">
+                    <svg class="i sm"><use href="#i-minus" /></svg>Stack <b>Flutter</b> · no starter
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </figure>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════════════ -->
+      <div class="panel-label">
+        Panel 4 · <b>The Starter picker, open</b> — only the starters this repository can start from
+      </div>
+      <p class="panel-note">
+        The picker lists only <b>active</b> starters of the row’s role that deploy to the row’s
+        hosting target, then <b>Initialised repository</b>, which fits every repository. A retired
+        starter, another role’s starter or another target’s starter is never offered. On the left, a
+        web repository on Serverless; on the right, a web repository with no hosting target yet,
+        which every web starter fits. The footer says what the list is filtered by.
+      </p>
+      <div class="panel gallery">
+        <figure>
+          <figcaption>web · Serverless</figcaption>
+          <div class="repoint">
+            <span class="label">Starter</span>
+            <div class="combo" role="combobox" aria-expanded="true">
+              <span class="val">Next.js · serverless</span>
+              <svg class="i"><use href="#i-chevron-down" /></svg>
+            </div>
+            <div class="listbox" role="listbox" aria-label="Starters">
+              <div class="grp">Web starters on Serverless</div>
+              <div class="opt active" role="option" aria-selected="true">
+                <span class="main"
+                  ><span class="nm">Next.js · serverless</span
+                  ><span class="sub">Internal tool, MVP · Small</span></span
+                >
+                <svg class="i tick"><use href="#i-check" /></svg>
+              </div>
+              <div class="opt" role="option" aria-selected="false">
+                <span class="main"
+                  ><span class="nm">Next.js · booking</span
+                  ><span class="sub">MVP · Small, Medium</span></span
+                >
+              </div>
+              <div class="grp">Any repository</div>
+              <div class="opt" role="option" aria-selected="false">
+                <span class="main"
+                  ><span class="nm">Initialised repository</span
+                  ><span class="sub">An empty repository with a README</span></span
+                >
+              </div>
+              <p class="lfoot">Only starters for a web repository that deploy to Serverless.</p>
+            </div>
+          </div>
+        </figure>
+        <figure>
+          <figcaption>web · no hosting target yet</figcaption>
+          <div class="repoint">
+            <span class="label">Starter</span>
+            <div class="combo" role="combobox" aria-expanded="true">
+              <span class="val">Next.js · serverless</span>
+              <svg class="i"><use href="#i-chevron-down" /></svg>
+            </div>
+            <div class="listbox" role="listbox" aria-label="Starters">
+              <div class="grp">Web starters</div>
+              <div class="opt active" role="option" aria-selected="true">
+                <span class="main"
+                  ><span class="nm">Next.js · serverless</span
+                  ><span class="sub">Serverless · Internal tool, MVP · Small</span></span
+                >
+                <svg class="i tick"><use href="#i-check" /></svg>
+              </div>
+              <div class="opt" role="option" aria-selected="false">
+                <span class="main"
+                  ><span class="nm">Next.js · Fly</span
+                  ><span class="sub">Fly · MVP, Planned product · Small, Medium, Large</span></span
+                >
+              </div>
+              <div class="opt" role="option" aria-selected="false">
+                <span class="main"
+                  ><span class="nm">Next.js · AWS</span
+                  ><span class="sub">AWS · Planned product · Small, Medium, Large</span></span
+                >
+              </div>
+              <div class="grp">Any repository</div>
+              <div class="opt" role="option" aria-selected="false">
+                <span class="main"
+                  ><span class="nm">Initialised repository</span
+                  ><span class="sub">An empty repository with a README</span></span
+                >
+              </div>
+              <p class="lfoot">
+                Only starters for a web repository. This repository has no hosting target yet.
+              </p>
+            </div>
+          </div>
+        </figure>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════════════ -->
+      <div class="panel-label">
+        Panel 5 · <b>Refused changes</b> — the starter is saved by the server, which can still say
+        no
+      </div>
+      <p class="panel-note">
+        The picker offers only starters that fit, so a refusal means the library changed after the
+        list loaded, or the row did. The alert sits under the picker, the picker keeps the
+        <b>saved</b> starter, and the list reloads. Each refusal names its rule: a different hosting
+        target, a retired starter, another role’s starter, and a repository that already exists. The
+        copy is the route’s typed refusal (<code class="k">refusal</code>) put in the person’s
+        words.
+      </p>
+      <div class="panel gallery">
+        <figure>
+          <figcaption><code class="k">target_mismatch</code> · another hosting target</figcaption>
+          <div class="repoint">
+            <span class="label">Starter</span>
+            <div class="combo" role="combobox" aria-expanded="false">
+              <span class="val">Next.js · serverless</span>
+              <svg class="i"><use href="#i-chevron-down" /></svg>
+            </div>
+            <div class="alert" role="alert">
+              <svg class="i"><use href="#i-triangle-alert" /></svg>
+              <span
+                ><b>Next.js · Fly can’t be used here.</b> It deploys to Fly, and this repository
+                runs on Serverless. The starter is unchanged.</span
+              >
+            </div>
+          </div>
+        </figure>
+        <figure>
+          <figcaption><code class="k">retired</code> · retired after the list loaded</figcaption>
+          <div class="repoint">
+            <span class="label">Starter</span>
+            <div class="combo" role="combobox" aria-expanded="false">
+              <span class="val">Next.js · serverless</span>
+              <svg class="i"><use href="#i-chevron-down" /></svg>
+            </div>
+            <div class="alert" role="alert">
+              <svg class="i"><use href="#i-triangle-alert" /></svg>
+              <span
+                ><b>Next.js · booking has been retired.</b> Motir no longer offers it, so pick
+                another starter. The starter is unchanged.</span
+              >
+            </div>
+          </div>
+        </figure>
+        <figure>
+          <figcaption><code class="k">role_mismatch</code> · another role’s starter</figcaption>
+          <div class="repoint">
+            <span class="label">Starter</span>
+            <div class="combo" role="combobox" aria-expanded="false">
+              <span class="val">Next.js · serverless</span>
+              <svg class="i"><use href="#i-chevron-down" /></svg>
+            </div>
+            <div class="alert" role="alert">
+              <svg class="i"><use href="#i-triangle-alert" /></svg>
+              <span
+                ><b>Expo mobile foundation can’t be used here.</b> It is a starter for a mobile
+                repository, and this one is web. The starter is unchanged.</span
+              >
+            </div>
+          </div>
+        </figure>
+        <figure>
+          <figcaption><code class="k">not_editable</code> · already created</figcaption>
+          <div class="repoint">
+            <span class="label">Starter</span>
+            <div class="combo" role="combobox" aria-expanded="false">
+              <span class="val">Next.js · serverless</span>
+              <svg class="i"><use href="#i-chevron-down" /></svg>
+            </div>
+            <div class="alert" role="alert">
+              <svg class="i"><use href="#i-triangle-alert" /></svg>
+              <span
+                ><b>This repository has already been created,</b> so it can no longer start from
+                another starter. Reload to see it.</span
+              >
+            </div>
+          </div>
+        </figure>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════════════ -->
+      <div class="panel-label">
+        Panel 6 · <b>Created</b> — the starter and hosting stay on the row, read-only
+      </div>
+      <p class="panel-note">
+        Once a repository is created its starter is history: the row keeps both pills, drops
+        <b>Why this starter</b> and the picker, and its detail line names the starter it actually
+        started from instead of the fixed “seeded from the Motir Next.js starter”. The
+        <b>Move to my GitHub</b> action and the rest of the row are unchanged.
+      </p>
+      <div class="panel">
+        <div class="rows">
+          <div class="row created">
+            <div class="row-main">
+              <div class="row-head">
+                <span class="pill pill-neutral mono">web</span>
+                <span class="row-state ok"
+                  ><svg class="i"><use href="#i-circle-check-big" /></svg>Created</span
+                >
+                <span class="pill pill-seed"
+                  ><svg class="i sm"><use href="#i-layers" /></svg>Next.js · Fly</span
+                >
+                <span class="pill pill-target"
+                  ><svg class="i sm"><use href="#i-cloud" /></svg>Fly</span
+                >
+              </div>
+              <div class="repo-link">
+                <svg class="gh ghm"><use href="#i-github" /></svg>
+                <a class="name" href="#">motir-projects/clinic-portal-web</a>
+              </div>
+              <p class="helper">Hosted by Motir · started from Next.js · Fly.</p>
+              <div class="row-actions">
+                <button class="btn btn-secondary btn-sm" type="button">
+                  <svg class="i sm"><use href="#i-arrow-up-right" /></svg>Move to my GitHub
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="row created">
+            <div class="row-main">
+              <div class="row-head">
+                <span class="pill pill-neutral mono">api</span>
+                <span class="row-state ok"
+                  ><svg class="i"><use href="#i-circle-check-big" /></svg>Created</span
+                >
+                <span class="pill pill-seed"
+                  ><svg class="i sm"><use href="#i-layers" /></svg>Initialised repository</span
+                >
+                <span class="pill pill-target"
+                  ><svg class="i sm"><use href="#i-cloud" /></svg>Fly</span
+                >
+              </div>
+              <div class="repo-link">
+                <svg class="gh ghm"><use href="#i-github" /></svg>
+                <a class="name" href="#">motir-projects/clinic-portal-api</a>
+              </div>
+              <p class="helper">Hosted by Motir · started as an initialised repository.</p>
+              <div class="row-actions">
+                <button class="btn btn-secondary btn-sm" type="button">
+                  <svg class="i sm"><use href="#i-arrow-up-right" /></svg>Move to my GitHub
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </body>
+</html>

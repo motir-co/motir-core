@@ -363,6 +363,10 @@ describe('(5b) every `Textarea` caller in the tree is pinned by name', () => {
     'app/(admin)/admin/ideas/[slug]/_components/RetireIdeaDialog.tsx',
     // The platform lessons console's why / how-to-apply editors (MOTIR-1411).
     'app/(admin)/admin/planning-lessons/_components/LessonCurate.tsx',
+    // The starter library's retire reason and promote reason (MOTIR-712): fixed
+    // editors, per design starter-library.
+    'app/(admin)/admin/starters/_components/RetireStarter.tsx',
+    'app/(admin)/admin/starters/promote/_components/PromoteForm.tsx',
     // The ops reason field (MOTIR-752): a fixed three-row editor.
     'app/(admin)/admin/tenants/[orgId]/_components/ops/ReasonConfirmDialog.tsx',
     'app/(authed)/_components/ReportWidgetModal.tsx',
