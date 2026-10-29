@@ -319,6 +319,12 @@ function allowedMergeMethod(repo: Record<string, unknown> | null): string | unde
 // GitHub's wording for a refusal made by a REQUIRED CHECK. Read from the 405's own
 // message because `mergeable_state` answers `blocked` for a missing review and a
 // failing required check alike.
+//
+// ⚠️ IT IS ASKED ONLY AFTER `behind` (Bug MOTIR-10054). A base branch whose required
+// checks are STRICT refuses a pull request that is behind it, and GitHub's 405 then
+// talks about the required status checks (*"2 of 2 required status checks are
+// expected."*) although every check on the head is green. The state word is the
+// reliable answer there, so it is read first.
 const CHECKS_NOT_GREEN_MESSAGE =
   /status check|checks? (?:is|are) (?:expected|failing|pending|in progress)/i;
 const MERGE_QUEUE_MESSAGE = /merge queue/i;
@@ -356,6 +362,14 @@ function permissionNamedBy(res: Response): Omit<MergeRefusal, 'code'> {
   const first = res.headers.get('x-accepted-github-permissions')?.split(/[;,]/)[0]?.trim();
   return first && first.includes('=') ? { permission: first.replace('=', ': ') } : {};
 }
+
+/**
+ * GitHub's `mergeable_state` for a head that is behind a base branch requiring pull
+ * requests to be up to date (Bug MOTIR-10054). GitHub answers it ONLY when the base
+ * requires it — a base that does not reads `clean` — so the word alone says both that
+ * the branch is behind and that being behind blocks the merge.
+ */
+const OUT_OF_DATE_STATE = 'behind';
 
 /** Does the base branch's active ruleset require a merge queue? */
 function rulesRequireMergeQueue(rules: unknown): boolean {
@@ -435,6 +449,10 @@ async function githubEnqueue(
     });
   }
   if (HEAD_MOVED_MESSAGE.test(message)) return mergeRefused('subject_changed');
+  // Behind a strict base, the queue's message names the checks too (MOTIR-10054).
+  if (pull?.['mergeable_state'] === OUT_OF_DATE_STATE) {
+    return mergeRefused('out_of_date', message ? { reason: message } : {});
+  }
   if (ENQUEUE_CHECKS_MESSAGE.test(message)) {
     return mergeRefused('checks_not_green', { reason: message });
   }
@@ -724,10 +742,15 @@ export const githubProvider: GitProvider = {
       return mergeRefused('subject_changed');
     }
     if (pr?.['mergeable_state'] === 'dirty') return mergeRefused('conflict');
+    // Behind a strict base: GitHub's message names the required checks, but they are
+    // green — the branch has to be brought up to date (MOTIR-10054).
+    if (pr?.['mergeable_state'] === OUT_OF_DATE_STATE) {
+      return mergeRefused('out_of_date', message ? { reason: message } : {});
+    }
     if (CHECKS_NOT_GREEN_MESSAGE.test(message) || pr?.['mergeable_state'] === 'unstable') {
       return mergeRefused('checks_not_green', message ? { reason: message } : {});
     }
-    // `blocked`, `behind`, a draft, or a state GitHub adds later: the host said no
+    // `blocked`, a draft, or a state GitHub adds later: the host said no
     // and named a rule. It is a refusal with the host's own reason — never a throw,
     // because the host DID answer.
     return mergeRefused('branch_protected', message ? { reason: message } : {});

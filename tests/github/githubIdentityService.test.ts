@@ -517,6 +517,29 @@ describe('githubIdentityService — expiring user tokens (Bug MOTIR-10021)', () 
     expect(row.updatedAt).toEqual(seeded.updatedAt);
   });
 
+  it('the identity DTO carries the refused state as needsReauth, and no credential field (Bug MOTIR-10047)', async () => {
+    const user = await makeUser();
+    await seedIdentity(user.id, { accessToken: 'ghu_live', refreshToken: 'ghr_live' });
+    expect(await githubIdentityService.getIdentityForUser(user.id)).toMatchObject({
+      needsReauth: false,
+    });
+
+    await adminDb.githubIdentity.update({
+      where: { userId: user.id },
+      data: { refreshRefusedAt: new Date() },
+    });
+    const dto = await githubIdentityService.getIdentityForUser(user.id);
+
+    expect(dto?.needsReauth).toBe(true);
+    // The pane needs a yes/no, never the timestamp, and never anything about the
+    // tokens behind it. The key set is pinned, so a new field is a decision.
+    expect(Object.keys(dto ?? {}).sort()).toEqual(
+      ['avatarUrl', 'createdAt', 'githubLogin', 'githubUserId', 'id', 'needsReauth'].sort(),
+    );
+    expect(JSON.stringify(dto)).not.toContain('ghu_live');
+    expect(JSON.stringify(dto)).not.toContain('ghr_live');
+  });
+
   it('reconnecting clears the refused mark, so the new sign-in works', async () => {
     const user = await makeUser();
     await seedIdentity(user.id, { accessToken: 'ghu_dead', refreshToken: 'ghr_dead' });

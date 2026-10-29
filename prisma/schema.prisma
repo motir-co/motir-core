@@ -3967,10 +3967,14 @@ enum WorkItemObsolescence {
 /// be repaired until somebody owns its branch again. It was added with a hand-written
 /// `ADD VALUE … BEFORE 'queue_failed'` — a generated `ADD VALUE` appends at the END,
 /// which would have made it the LOWEST priority.
+///
+/// `out_of_date` (Bug MOTIR-10054) — a member behind a base branch that requires it to
+/// be up to date — is placed the same way, `ADD VALUE … AFTER 'conflicted'`.
 enum WorkItemFixReason {
   run_died
   queue_failed
   conflicted
+  out_of_date
   ci_failed
   changes_requested
 

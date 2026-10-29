@@ -4149,14 +4149,20 @@
         "github": "GitHub"
       },
       "state": {
-        "connected": "Conectada"
+        "connected": "Conectada",
+        "needsReauth": "Requer nova autenticação"
       },
       "connectedOn": "Conectada em {date}",
       "connect": "Conectar o GitHub",
       "disconnect": "Desconectar",
+      "reconnect": "Reconectar",
       "empty": {
         "title": "Nenhuma conta Git conectada",
         "description": "Conectar uma permite que o Motir convide você para os repositórios em que seus projetos trabalham e assine o trabalho que você faz. Ela lê apenas seu perfil público — não concede acesso a nenhum código."
+      },
+      "reauth": {
+        "title": "Reconecte sua conta do GitHub.",
+        "body": "O GitHub não aceita mais este login, então o Motir não consegue mais confirmar quem você é lá. Nada mais mudou na sua conta."
       },
       "noInstallation": {
         "title": "Sua conta está conectada. A da sua organização não está.",
@@ -7621,6 +7627,8 @@
         },
         "conflictOn": "<prs></prs> tem conflito com {base} e não pode ser mesclado.",
         "conflictOnNoBase": "<prs></prs> tem conflito com o branch base e não pode ser mesclado.",
+        "outOfDateOn": "<prs></prs> está atrás de {base}, que exige estar atualizado, e não pode ser mesclado.",
+        "outOfDateOnNoBase": "<prs></prs> está atrás do branch base, que exige estar atualizado, e não pode ser mesclado.",
         "howConflict": "Um agente faz rebase ou resolve no próprio branch do pull request, envia as alterações, e as verificações são executadas novamente.",
         "rearm": "Não há nada para aprovar aqui. Um push move o head, o que reabre a pergunta, e o próximo verde abre a etapa de aprovação do merge uma única vez — sobre os novos commits.",
         "sentBackByAgent": "O agente de revisão devolveu estes commits. Um agente os corrige {count, plural, one {no mesmo pull request} other {nos mesmos pull requests}}, com as constatações dele no prompt.",
@@ -9925,6 +9933,8 @@
         "queueFailedBare": "Falhou na fila de merge",
         "conflicted": "Conflito com <d>{base}</d>",
         "conflictedNoBase": "Conflito com o branch base",
+        "outOfDate": "Desatualizado em relação a <d>{base}</d>",
+        "outOfDateNoBase": "Desatualizado em relação ao branch base",
         "ciFailed": "CI falhou · <d>{check}</d>",
         "ciFailedBare": "CI falhou",
         "changesRequested": "Alterações solicitadas por <b>{name}</b> — “{note}”",
@@ -14188,6 +14198,10 @@
         "atPress": "O {host} informa que {pr} tem conflito com {base}. O clique foi recusado antes que qualquer coisa fosse gravada, então {key} não se moveu.",
         "atPressNoBase": "O {host} informa que {pr} tem conflito com o branch base. O clique foi recusado antes que qualquer coisa fosse gravada, então {key} não se moveu."
       },
+      "mergeOutOfDate": {
+        "title": "Este pull request está desatualizado em relação ao branch base.",
+        "next": "Nada foi mesclado. O branch base exige que os pull requests estejam atualizados antes de serem mesclados, e este está atrás dele. Traga o branch base para ele — atualize o branch, ou deixe o motir fix entregá-lo a um agente — e o Motir perguntará novamente quando as verificações estiverem verdes."
+      },
       "mergeBranchProtected": {
         "title": "As regras de proteção do branch ainda não permitem este merge.",
         "next": "Atenda à regra no GitHub, como uma revisão obrigatória, e aprove novamente."
@@ -15359,6 +15373,7 @@
       "run_died": "A corrigir · a execução morreu",
       "queue_failed": "A corrigir · falhou na fila de merge",
       "conflicted": "A corrigir · conflito com o branch base",
+      "out_of_date": "A corrigir · desatualizado em relação ao branch base",
       "ci_failed": "A corrigir · CI falhou",
       "changes_requested": "A corrigir · alterações solicitadas",
       "sent_back_by_agent": "A corrigir · devolvido pelo agente revisor",
@@ -15370,6 +15385,8 @@
       "queueFailedBare": "Isto precisa de uma correção: falhou na fila de merge.",
       "conflicted": "Isto precisa de uma correção: tem conflito com <code>{base}</code>.",
       "conflictedNoBase": "Isto precisa de uma correção: tem conflito com o branch base.",
+      "outOfDate": "Isto precisa de uma correção: está desatualizado em relação a <code>{base}</code>.",
+      "outOfDateNoBase": "Isto precisa de uma correção: está desatualizado em relação ao branch base.",
       "ciFailed": "Isto precisa de uma correção: o CI falhou (verificação <code>{check}</code>).",
       "ciFailedBare": "Isto precisa de uma correção: o CI falhou.",
       "changesRequested": "Isto precisa de uma correção: <b>{name}</b> solicitou alterações — “{note}”",

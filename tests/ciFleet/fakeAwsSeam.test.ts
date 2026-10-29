@@ -354,12 +354,13 @@ describe('the agent-runner switch reads the fixture with the seam on', () => {
   });
 });
 
-describe('the CI runner switch (MOTIR-9565) is the lane fixture’s, and Fly without it', () => {
+describe('the CI runner switch (MOTIR-9565 · MOTIR-10064): the lane fixture answers first, then the env var', () => {
   it('reads Fly with the seam off, and with the fixture absent, empty or on fly', async () => {
+    vi.stubEnv('MOTIR_FLEET_CI_RUNNER_PROVIDER', '');
     const { fleetKindOnPool } = await import('@/lib/ciFleet/shardTargets');
-    const { ciRunnerOnPoolInLane } = await import('@/lib/ciFleet/fleetKindSwitches');
-    // No seam installed: nothing can say yes.
-    expect(ciRunnerOnPoolInLane()).toBe(false);
+    const { ciRunnerOnPool } = await import('@/lib/ciFleet/fleetKindSwitches');
+    // No seam installed and no env var: nothing says yes.
+    expect(ciRunnerOnPool()).toBe(false);
     expect(await fleetKindOnPool('ci_runner')).toBe(false);
 
     await seamOn();
@@ -383,6 +384,21 @@ describe('the CI runner switch (MOTIR-9565) is the lane fixture’s, and Fly wit
     expect(await fleetKindOnPool('ci_runner')).toBe(true);
     expect(await fleetKindOnPool('hosted_agent')).toBe(false);
     writeFileSync(switchPath, JSON.stringify({ ciRunner: 'fly' }));
+    expect(await fleetKindOnPool('ci_runner')).toBe(false);
+  });
+
+  it('lets the fixture win over the env var, and falls through to it when the fixture says nothing', async () => {
+    vi.stubEnv('MOTIR_FLEET_CI_RUNNER_PROVIDER', 'aws');
+    await seamOn();
+    const { fleetKindOnPool } = await import('@/lib/ciFleet/shardTargets');
+    // The fixture file does not exist: it says nothing, so the env var decides.
+    expect(await fleetKindOnPool('ci_runner')).toBe(true);
+    writeFileSync(switchPath, JSON.stringify({ ciRunner: 'fly' }));
+    expect(await fleetKindOnPool('ci_runner')).toBe(false);
+    vi.stubEnv('MOTIR_FLEET_CI_RUNNER_PROVIDER', 'fly');
+    writeFileSync(switchPath, JSON.stringify({ ciRunner: 'aws' }));
+    expect(await fleetKindOnPool('ci_runner')).toBe(true);
+    writeFileSync(switchPath, '{}');
     expect(await fleetKindOnPool('ci_runner')).toBe(false);
   });
 });

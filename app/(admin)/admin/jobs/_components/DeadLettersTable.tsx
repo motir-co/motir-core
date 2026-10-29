@@ -24,6 +24,11 @@ export function useDlqColumns(): string[] {
  * which turn secondary and show _Replayed {time}_ in place of the button. The
  * order is the read service's; this table only draws it.
  *
+ * The Failure column is the one that gives up width (MOTIR-10055): its cell is
+ * `w-full max-w-0`, so it takes what the other columns leave and truncates,
+ * the full message staying in the cell's `title`. A fixed rem cap there made
+ * each row ask ~1,150px and scroll the Replay column out of a laptop frame.
+ *
  * `canReplay` is presentation: support gets no button, and the action and the
  * service refuse below operator whatever this draws.
  */
@@ -57,12 +62,12 @@ export function DeadLettersTable({
         return (
           <Tr key={row.id} className={cn(replayed && '[&_td]:text-(--el-text-secondary)')}>
             <Td title={row.functionId}>
-              <span className="block max-w-[16rem] truncate font-mono text-xs">
+              <span className="block max-w-[12rem] truncate font-mono text-xs">
                 {row.functionId}
               </span>
               <span
                 title={row.eventName}
-                className="block max-w-[16rem] truncate text-xs text-(--el-text-secondary)"
+                className="block max-w-[12rem] truncate text-xs text-(--el-text-secondary)"
               >
                 {row.eventName}
               </span>
@@ -70,8 +75,8 @@ export function DeadLettersTable({
             <Td>
               <WorkspaceCell workspaceId={row.workspaceId} />
             </Td>
-            <Td title={row.failure.message}>
-              <span className="block max-w-[18rem] truncate">{row.failure.message}</span>
+            <Td title={row.failure.message} className="w-full max-w-0">
+              <span className="block truncate">{row.failure.message}</span>
             </Td>
             <Td className="text-right tabular-nums">{row.attempts}</Td>
             <Td className="whitespace-nowrap text-(--el-text-secondary)">

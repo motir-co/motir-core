@@ -4149,14 +4149,20 @@
         "github": "GitHub"
       },
       "state": {
-        "connected": "Połączono"
+        "connected": "Połączono",
+        "needsReauth": "Wymaga ponownego uwierzytelnienia"
       },
       "connectedOn": "Połączono {date}",
       "connect": "Połącz z GitHub",
       "disconnect": "Rozłącz",
+      "reconnect": "Połącz ponownie",
       "empty": {
         "title": "Brak połączonego konta Git",
         "description": "Połączenie konta pozwala Motir zapraszać Cię do repozytoriów, nad którymi pracują Twoje projekty, i podpisywać wykonaną pracę. Odczytuje tylko Twój publiczny profil — nie daje dostępu do żadnego kodu."
+      },
+      "reauth": {
+        "title": "Połącz ponownie swoje konto GitHub.",
+        "body": "GitHub nie akceptuje już tego logowania, więc Motir nie może już potwierdzić, kim jesteś na GitHubie. Nic innego na Twoim koncie się nie zmieniło."
       },
       "noInstallation": {
         "title": "Twoje konto jest połączone. Konto organizacji — nie.",
@@ -7621,6 +7627,8 @@
         },
         "conflictOn": "<prs></prs> jest w konflikcie z {base} i nie może zostać scalony.",
         "conflictOnNoBase": "<prs></prs> jest w konflikcie ze swoją gałęzią bazową i nie może zostać scalony.",
+        "outOfDateOn": "<prs></prs> pozostaje w tyle za {base}, która wymaga aktualności, i nie może zostać scalony.",
+        "outOfDateOnNoBase": "<prs></prs> pozostaje w tyle za gałęzią bazową, która wymaga aktualności, i nie może zostać scalony.",
         "howConflict": "Agent wykonuje rebase lub rozwiązuje konflikt na własnej gałęzi pull requesta, wypycha zmiany, a testy uruchamiają się ponownie.",
         "rearm": "Nie ma tu nic do zatwierdzenia. Wypchnięcie przesuwa HEAD, co ponownie uzbraja pytanie, a następny zielony wynik raz podniesie bramkę scalania — dla nowych commitów.",
         "sentBackByAgent": "Agent przeglądu odesłał te commity. Agent naprawia je w ramach {count, plural, one {tego samego pull requesta} few {tych samych pull requestów} many {tych samych pull requestów} other {tych samych pull requestów}}, z jego ustaleniami w prompcie.",
@@ -9925,6 +9933,8 @@
         "queueFailedBare": "Niepowodzenie w kolejce scalania",
         "conflicted": "Konflikt z <d>{base}</d>",
         "conflictedNoBase": "Konflikt z gałęzią bazową",
+        "outOfDate": "Nieaktualny względem <d>{base}</d>",
+        "outOfDateNoBase": "Nieaktualny względem gałęzi bazowej",
         "ciFailed": "CI nie przeszło · <d>{check}</d>",
         "ciFailedBare": "CI nie przeszło",
         "changesRequested": "Zmiany zażądane przez <b>{name}</b> — „{note}”",
@@ -14188,6 +14198,10 @@
         "atPress": "{host} zgłasza, że {pr} jest w konflikcie z {base}. Kliknięcie zostało odrzucone, zanim cokolwiek zapisano, więc {key} się nie przesunął.",
         "atPressNoBase": "{host} zgłasza, że {pr} jest w konflikcie ze swoją gałęzią bazową. Kliknięcie zostało odrzucone, zanim cokolwiek zapisano, więc {key} się nie przesunął."
       },
+      "mergeOutOfDate": {
+        "title": "Ten pull request jest nieaktualny względem swojej gałęzi bazowej.",
+        "next": "Nic nie zostało scalone. Gałąź bazowa wymaga, aby pull requesty były aktualne przed scaleniem, a ten pozostaje w tyle. Wprowadź do niego gałąź bazową — zaktualizuj gałąź albo pozwól, by motir fix przekazał go agentowi — a Motir zapyta ponownie, gdy testy będą zielone."
+      },
       "mergeBranchProtected": {
         "title": "Reguły ochrony gałęzi nie pozwalają jeszcze na to scalenie.",
         "next": "Spełnij regułę w GitHubie, na przykład wymagany przegląd, a potem zatwierdź ponownie."
@@ -15359,6 +15373,7 @@
       "run_died": "Do naprawy · uruchomienie przerwane",
       "queue_failed": "Do naprawy · niepowodzenie w kolejce scalania",
       "conflicted": "Do naprawy · konflikt z gałęzią bazową",
+      "out_of_date": "Do naprawy · nieaktualny względem gałęzi bazowej",
       "ci_failed": "Do naprawy · CI nie powiodło się",
       "changes_requested": "Do naprawy · poproszono o zmiany",
       "sent_back_by_agent": "Do naprawy · odesłane przez agenta przeglądającego",
@@ -15370,6 +15385,8 @@
       "queueFailedBare": "To wymaga naprawy: niepowodzenie w kolejce scalania.",
       "conflicted": "To wymaga naprawy: konflikt z <code>{base}</code>.",
       "conflictedNoBase": "To wymaga naprawy: konflikt z gałęzią bazową.",
+      "outOfDate": "To wymaga naprawy: nieaktualny względem <code>{base}</code>.",
+      "outOfDateNoBase": "To wymaga naprawy: nieaktualny względem gałęzi bazowej.",
       "ciFailed": "To wymaga naprawy: CI nie powiodło się (test <code>{check}</code>).",
       "ciFailedBare": "To wymaga naprawy: CI nie powiodło się.",
       "changesRequested": "To wymaga naprawy: <b>{name}</b> prosi o zmiany — „{note}”",

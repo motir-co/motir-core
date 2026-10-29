@@ -12339,5 +12339,18 @@
   "previewGate.notFound.pill": "Not available",
   "previewGate.notFound.title": "There is no preview here",
   "previewGate.notFound.body": "This address doesn't belong to a running preview. It may have been shut down, or the link may be mistyped.",
-  "previewGate.notFound.home": "Go to Motir"
+  "previewGate.notFound.home": "Go to Motir",
+  "settings.gitAccounts.state.needsReauth": "Needs re-auth",
+  "settings.gitAccounts.reauth.title": "Reconnect your GitHub account.",
+  "settings.gitAccounts.reauth.body": "GitHub no longer accepts this sign-in, so Motir can no longer confirm who you are there. Nothing else about your account changed.",
+  "settings.gitAccounts.reconnect": "Reconnect",
+  "approvalGate.refusal.mergeOutOfDate.title": "This pull request is out of date with its base branch.",
+  "approvalGate.refusal.mergeOutOfDate.next": "Nothing was merged. The base branch requires pull requests to be up to date before they merge, and this one is behind it. Bring the base branch into it — update the branch, or let motir fix hand it to an agent — and Motir asks again once its checks are green.",
+  "github.development.fix.outOfDateOn": "<prs></prs> is behind {base}, which requires it to be up to date, and cannot be merged.",
+  "github.development.fix.outOfDateOnNoBase": "<prs></prs> is behind its base branch, which requires it to be up to date, and cannot be merged.",
+  "workbench.toFix.reason.outOfDate": "Out of date with <d>{base}</d>",
+  "workbench.toFix.reason.outOfDateNoBase": "Out of date with its base branch",
+  "toFix.tagName.out_of_date": "To fix · out of date with its base branch",
+  "toFix.banner.outOfDate": "This needs a fix: it is out of date with <code>{base}</code>.",
+  "toFix.banner.outOfDateNoBase": "This needs a fix: it is out of date with its base branch."
 }

@@ -35,6 +35,7 @@ export function toGithubIdentityDTO(row: GithubIdentity): GithubIdentityDTO {
     githubLogin: row.githubLogin,
     avatarUrl: row.avatarUrl,
     createdAt: row.createdAt.toISOString(),
+    needsReauth: row.refreshRefusedAt !== null,
   };
 }
 

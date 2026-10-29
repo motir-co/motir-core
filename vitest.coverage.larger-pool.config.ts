@@ -33,6 +33,10 @@ export default defineConfig({
       'tests/ciFleet/fleetShardProvisioning.test.ts',
       'tests/ciFleet/fleetShardProvisioningAws.test.ts',
       'tests/ciFleet/rungOwnAccounts.test.ts',
+      // The spare path the provisioning service also carries — its growth and
+      // `fleet-admin add-spare` callers (MOTIR-10065) — so the per-file floor
+      // below measures that service's code rather than only the org-owned walk.
+      'tests/ciFleet/addSpareShard.test.ts',
       // The story's integration gate (MOTIR-9656).
       'tests/billing/largerPoolHostAnchorStoryGate.test.ts',
       'tests/ciFleet/rungOwnAccountsIntegration.test.ts',

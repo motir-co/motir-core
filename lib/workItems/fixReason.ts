@@ -9,21 +9,23 @@ import { routedToDisplayName } from '@/lib/approvalGates/routing';
 // the priority and the detail can be pinned without a database.
 
 /**
- * The five reasons in PRIORITY order — the first that holds is the one to repair first
+ * The reasons in PRIORITY order — the first that holds is the one to repair first
  * and the one stored. It is also the enum's declaration order (`WorkItemFixReason`),
  * and a test asserts the two are the same list.
  *
  * Why this order: a dead run comes first because nothing else on the card can be
  * repaired until somebody owns its branch again — a red check or a conflict on that
  * branch is fixed BY the continue (`design/workbench/design-notes.md` § 31). A queue failure and a conflict both mean the members cannot land AS
- * THEY ARE, and a green re-run fixes neither; a red build usually shares a cause with
- * them and is re-judged by the same push; a reviewer's refusal is last because a push
+ * THEY ARE, and a green re-run fixes neither; a member out of date with a base that
+ * requires it (MOTIR-10054) is the same shape, answered by a push that merges the base;
+ * a red build usually shares a cause with them and is re-judged by the same push; a reviewer's refusal is last because a push
  * that answers any of the first three also withdraws what they were refusing.
  */
 export const FIX_REASON_PRIORITY: readonly WorkItemFixReasonDto[] = [
   'run_died',
   'queue_failed',
   'conflicted',
+  'out_of_date',
   'ci_failed',
   'changes_requested',
 ];
@@ -245,7 +247,8 @@ export function deadRunReasonOf(verdict: DeadRunVerdict): FixReasonValue | null 
  * null when none of them is failing.
  *
  * Each member is classed by the SAME three facts the predicate admitted it on —
- * `queueExit` (a standing queue failure at its head), `conflicted`, and its own `ci` —
+ * `queueExit` (a standing queue failure at its head), `conflicted`, `outOfDate`, and its
+ * own `ci` —
  * so a member is never listed for a reason the predicate did not see. `affected` counts
  * the members carrying the stored reason; `total` is every open member.
  */
@@ -277,6 +280,19 @@ export function pullRequestReasonOf(
         repair: 'fix',
         base: conflicted[0]!.baseRef,
         affected: conflicted.length,
+        total,
+      },
+    };
+  }
+  const behind = members.filter((m) => m.outOfDate);
+  if (behind.length > 0) {
+    return {
+      fixReason: 'out_of_date',
+      fixDetail: {
+        ...EMPTY_DETAIL,
+        repair: 'fix',
+        base: behind[0]!.baseRef,
+        affected: behind.length,
         total,
       },
     };

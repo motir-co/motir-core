@@ -115,12 +115,32 @@ function isConflictedOnly(pr: RepairPullRequestRefDto): boolean {
   return pr.conflict !== null && pr.ci !== 'failing' && pr.queueExit === null;
 }
 
-/** The conflict line (MOTIR-5916) — `{base}` when every conflicted member names the same
- *  one, *its base branch* otherwise. */
-function ConflictLine({ conflicted }: { conflicted: RepairPullRequestRefDto[] }) {
+/** A member failing ONLY because it is out of date with a base that requires it to be up
+ *  to date (Bug MOTIR-10054): green checks, no queue exit, no conflict — so it is named on
+ *  the out-of-date line, never *Checks are failing*. */
+function isOutOfDateOnly(pr: RepairPullRequestRefDto): boolean {
+  return (
+    pr.outOfDate !== null && pr.conflict === null && pr.ci !== 'failing' && pr.queueExit === null
+  );
+}
+
+/** A line naming members by their BASE — the conflict line (MOTIR-5916) and the
+ *  out-of-date line (MOTIR-10054): `{base}` when every member names the same one, *its base
+ *  branch* otherwise. */
+function BaseLine({
+  members,
+  baseOf,
+  message,
+  testId,
+}: {
+  members: RepairPullRequestRefDto[];
+  baseOf: (pr: RepairPullRequestRefDto) => string | null;
+  message: 'conflictOn' | 'outOfDateOn';
+  testId: string;
+}) {
   const t = useTranslations('github.development.fix');
   const locale = useLocale();
-  const names = conflicted.map((pr) => `${pr.repo} · #${pr.number}`);
+  const names = members.map((pr) => `${pr.repo} · #${pr.number}`);
   const parts = new Intl.ListFormat(locale, { type: 'conjunction' }).formatToParts(names);
   const list = parts.map((part, i) =>
     part.type === 'element' ? (
@@ -131,31 +151,50 @@ function ConflictLine({ conflicted }: { conflicted: RepairPullRequestRefDto[] })
       <Fragment key={i}>{part.value}</Fragment>
     ),
   );
-  const bases = new Set(conflicted.map((pr) => pr.conflict!.baseRef ?? null));
+  const bases = new Set(members.map(baseOf));
   const base = bases.size === 1 ? [...bases][0]! : null;
   return (
     <p className="flex items-start gap-2 text-[13px] leading-normal text-(--el-text)">
       <CircleX className="mt-0.5 h-4 w-4 shrink-0 text-(--el-danger-on-surface)" aria-hidden />
-      <span data-testid="repair-conflict-line">
+      <span data-testid={testId}>
         {base !== null
-          ? t.rich('conflictOn', { prs: () => list, base })
-          : t.rich('conflictOnNoBase', { prs: () => list })}
+          ? t.rich(message, { prs: () => list, base })
+          : t.rich(`${message}NoBase`, { prs: () => list })}
       </span>
     </p>
   );
 }
 
-/** The own-checks line, the left-the-queue line and the conflict line — each when the set
- *  holds that kind, own-failing first (§ 26; § 30 for the conflict line). */
+/** The own-checks line, the left-the-queue line, the conflict line and the out-of-date
+ *  line — each when the set holds that kind, own-failing first (§ 26; § 30 for the
+ *  conflict line; MOTIR-10054 for the out-of-date line). */
 function FailingLines({ failing }: { failing: RepairPullRequestRefDto[] }) {
-  const own = failing.filter((pr) => !isEjectedOnly(pr) && !isConflictedOnly(pr));
+  const own = failing.filter(
+    (pr) => !isEjectedOnly(pr) && !isConflictedOnly(pr) && !isOutOfDateOnly(pr),
+  );
   const ejected = failing.filter(isEjectedOnly);
   const conflicted = failing.filter((pr) => pr.conflict !== null);
+  const behind = failing.filter(isOutOfDateOnly);
   return (
     <>
       {own.length > 0 ? <PrLine failing={own} message="failingOn" /> : null}
       {ejected.length > 0 ? <PrLine failing={ejected} message="leftQueueOn" /> : null}
-      {conflicted.length > 0 ? <ConflictLine conflicted={conflicted} /> : null}
+      {conflicted.length > 0 ? (
+        <BaseLine
+          members={conflicted}
+          baseOf={(pr) => pr.conflict!.baseRef ?? null}
+          message="conflictOn"
+          testId="repair-conflict-line"
+        />
+      ) : null}
+      {behind.length > 0 ? (
+        <BaseLine
+          members={behind}
+          baseOf={(pr) => pr.outOfDate!.baseRef ?? null}
+          message="outOfDateOn"
+          testId="repair-out-of-date-line"
+        />
+      ) : null}
     </>
   );
 }
@@ -204,7 +243,9 @@ export type SentBackBy = { by: 'agent' } | { by: 'person'; name: string | null }
  *  sent-back story the part is handed EVERY open member, green ones included, so only these
  *  follow the sent-back line (design § *Failing lines*). */
 function isFailing(pr: RepairPullRequestRefDto): boolean {
-  return pr.ci === 'failing' || pr.queueExit !== null || pr.conflict !== null;
+  return (
+    pr.ci === 'failing' || pr.queueExit !== null || pr.conflict !== null || pr.outOfDate !== null
+  );
 }
 
 /** The WHICH-TO-USE sentence (§ 26): under the command, in the offer state only,
