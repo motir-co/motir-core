@@ -18,6 +18,7 @@ import {
   actionsPermissionsClient,
   type SetActionsEnabledInput,
 } from '@/lib/github/actionsPermissions';
+import { githubInstallationRepository } from '@/lib/repositories/githubInstallationRepository';
 import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
 import type { CiEntitlementStateDTO } from '@/lib/dto/ciAllowance';
 import { adminDb } from '../helpers/adminDb';
@@ -101,7 +102,9 @@ async function seedRepo(
     where: { installationId },
     create: {
       installationId,
-      workspaceId: tenant.workspaceId,
+      // NULL, as Motir's shared provisioning installation is in production: no
+      // tenant owns it, so a tenant context cannot read it (MOTIR-10062).
+      workspaceId: null,
       accountLogin: owner,
       accountType: 'Organization',
       provider: 'github',
@@ -168,13 +171,28 @@ async function readRow(rowId: string) {
 
 let setActionsEnabled: MockInstance<(input: SetActionsEnabledInput) => Promise<void>>;
 
+/**
+ * What GitHub does with the installation id a call is made under: it mints a token
+ * only for an id IT issued — a seeded `GithubInstallation.installationId`. Any
+ * other id, Motir's own `GithubInstallation.id` cuid above all (MOTIR-10062), is
+ * the 404 production answers, so the stub refuses it rather than succeeding.
+ */
+async function githubIssued(input: SetActionsEnabledInput): Promise<void> {
+  const known = await adminDb.githubInstallation.findUnique({
+    where: { installationId: input.installationId },
+  });
+  if (!known) {
+    throw new Error(`token endpoint returned 404 for installation ${input.installationId}`);
+  }
+}
+
 beforeEach(async () => {
   await truncateAuthTables();
   vi.stubEnv('MOTIR_CLOUD', 'true');
   vi.stubEnv('GITHUB_FALLBACK_ORG', MOTIR_ORG);
   setActionsEnabled = vi
     .spyOn(actionsPermissionsClient, 'setActionsEnabled')
-    .mockResolvedValue(undefined);
+    .mockImplementation(githubIssued);
 });
 
 afterEach(() => {
@@ -215,6 +233,44 @@ describe('ciActionsGateService — the exhausted stop', () => {
     const targets = setActionsEnabled.mock.calls.map(([arg]) => arg);
     expect(targets.map((t) => t.repo).sort()).toEqual(['alpha-api', 'alpha-web']);
     expect(targets.every((t) => t.enabled === false)).toBe(true);
+  });
+
+  it('calls GitHub under its NUMERIC installation id, never Motir\u2019s cuid (MOTIR-10062)', async () => {
+    const tenant = await seedTenant();
+    const row = await seedRepo(tenant, 'iota-web');
+    const installation = await adminDb.githubInstallation.findUniqueOrThrow({
+      where: { installationId: `inst-${tenant.workspaceId}` },
+    });
+
+    const result = await ciActionsGateService.syncForOrganization(tenant.organizationId, {
+      at: NOW,
+      state: stateOf('ci_credits_exhausted'),
+    });
+
+    expect(result).toMatchObject({ outcome: 'synced', applied: 1, failed: 0 });
+    expect(setActionsEnabled).toHaveBeenCalledTimes(1);
+    expect(setActionsEnabled.mock.calls[0]![0].installationId).toBe(installation.installationId);
+    expect(setActionsEnabled.mock.calls[0]![0].installationId).not.toBe(installation.id);
+    expect((await readRow(row.rowId)).appliedAt).not.toBeNull();
+  });
+
+  it('leaves a row pending, calling nothing, when its installation is no longer on record', async () => {
+    const tenant = await seedTenant();
+    const row = await seedRepo(tenant, 'kappa-web');
+    vi.spyOn(githubInstallationRepository, 'findHostInstallationIdsByIds').mockResolvedValue(
+      new Map(),
+    );
+
+    const result = await ciActionsGateService.syncForOrganization(tenant.organizationId, {
+      at: NOW,
+      state: stateOf('ci_credits_exhausted'),
+    });
+
+    expect(result).toMatchObject({ outcome: 'synced', applied: 0, failed: 1 });
+    expect(setActionsEnabled).not.toHaveBeenCalled();
+    const after = await readRow(row.rowId);
+    expect(after.disabled).toBe(true);
+    expect(after.appliedAt).toBeNull();
   });
 
   it('stamps applied only after the host call lands, so a settled row leaves the pending set', async () => {
@@ -408,6 +464,7 @@ describe('ciActionsGateService — convergence', () => {
     // Half the fan-out fails — the case the whole persist-intent design exists for.
     setActionsEnabled.mockImplementation(async (input: SetActionsEnabledInput) => {
       if (input.repo === 'theta-flaky') throw new Error('GitHub 500');
+      await githubIssued(input);
     });
 
     const first = await ciActionsGateService.syncForOrganization(tenant.organizationId, {
@@ -426,7 +483,7 @@ describe('ciActionsGateService — convergence', () => {
 
     // GitHub recovers; the sweep finishes the job with no new intent decision.
     setActionsEnabled.mockReset();
-    setActionsEnabled.mockResolvedValue(undefined);
+    setActionsEnabled.mockImplementation(githubIssued);
     const swept = await ciActionsGateService.sweep();
 
     expect(swept).toEqual({ applied: 1, failed: 0 });

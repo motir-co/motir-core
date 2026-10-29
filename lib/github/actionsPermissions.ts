@@ -47,9 +47,11 @@ export class ActionsPermissionsError extends Error {
 }
 
 export interface SetActionsEnabledInput {
-  /** GitHub's numeric installation id the repository lives in — the mirror row's
-   *  `installationId`, which for a Motir-created repo is the PROVISIONING
-   *  installation. */
+  /** GitHub's numeric installation id the repository lives in — for a
+   *  Motir-created repo, the PROVISIONING installation. It is the installation's
+   *  own `GithubInstallation.installationId`, NOT the mirror row's
+   *  `installationId`: that column is the foreign key to `GithubInstallation.id`,
+   *  a cuid GitHub never issued (MOTIR-10062). */
   installationId: string;
   owner: string;
   repo: string;
