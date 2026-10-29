@@ -409,6 +409,10 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // `ai:plan` holder these answers.
   code_explore: 'ai:plan',
   code_search: 'ai:plan',
+  // MOTIR-10066 — the file-contents search, the same argument: the hosted
+  // planner's own `code_grep` shows every `ai:plan` holder these lines, which
+  // `read_file` already shows them file by file.
+  code_grep: 'ai:plan',
 
   // ── ai:view_plan — the plan AUTHOR write that has a door ─────────────────
   // `plansService.addProposals` (and `markPlanned`, which `final: true` also

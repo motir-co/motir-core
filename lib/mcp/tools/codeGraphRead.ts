@@ -18,9 +18,15 @@ import { projectKeyField } from './sprintRef';
 //
 // Every other answer is a NAMED state with one sentence saying what to do next.
 // Only the door's refusals (no `ai:plan`; project not found) are errors.
+//
+// `code_grep` (MOTIR-10066) is the third: a search of the indexed FILE CONTENTS —
+// string literals, comments, function bodies and files that are not code — which
+// the symbol index behind the other two cannot answer. Same door, same states,
+// plus `content_not_indexed` for a graph built before contents were stored.
 
 export const CODE_EXPLORE_TOOL_NAME = 'code_explore';
 export const CODE_SEARCH_TOOL_NAME = 'code_search';
+export const CODE_GREP_TOOL_NAME = 'code_grep';
 
 const queryField = z
   .string()
@@ -59,6 +65,42 @@ const searchSchema = {
     .describe('OPTIONAL. The page size — how many symbols to return per page.'),
 };
 
+const grepSchema = {
+  projectKey: projectKeyField,
+  pattern: z
+    .string()
+    .min(1)
+    .max(1000)
+    .describe(
+      'The text to find in the files, matched literally and case-sensitively unless `regex` or ' +
+        '`caseInsensitive` says otherwise. It is NOT trimmed.',
+    ),
+  regex: z
+    .boolean()
+    .optional()
+    .describe(
+      'OPTIONAL. Treat `pattern` as a regular expression (RE2 syntax: no backreferences or ' +
+        'lookaround). Matched one line at a time.',
+    ),
+  caseInsensitive: z.boolean().optional().describe('OPTIONAL. Match regardless of letter case.'),
+  path: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      'OPTIONAL. Limit the search to files under this path prefix, e.g. "lib/billing/" or ' +
+        '"app/pricing/page.tsx".',
+    ),
+  repo: repoField,
+  cursor: cursorField,
+  limit: z
+    .number()
+    .int()
+    .min(1)
+    .optional()
+    .describe('OPTIONAL. The page size — how many matching lines to return per page.'),
+};
+
 /** The one-line summary for a non-`ok` state: the state, then what to do next. */
 export function summarizeCodeGraphRead(dto: CodeGraphReadDTO): string {
   switch (dto.state) {
@@ -76,6 +118,13 @@ export function summarizeCodeGraphRead(dto: CodeGraphReadDTO): string {
         dto.graphTooLarge ? 'graph over the size cap' : null,
       ].filter((f): f is string => Boolean(f));
       return `${dto.repoRef} is not indexed yet${facts.length ? ` (${facts.join(', ')})` : ''} — read its files with \`read_file\` instead.`;
+    }
+    case 'content_not_indexed': {
+      const facts = [
+        dto.indexState,
+        dto.commitsBehind !== null ? `${dto.commitsBehind} commits behind` : null,
+      ].filter((f): f is string => Boolean(f));
+      return `${dto.repoRef}'s file contents are not indexed yet${facts.length ? ` (${facts.join(', ')})` : ''}: its graph was built before contents were stored, so this is NOT an empty match. Its next index run stores them; until then read its files with \`read_file\`.`;
     }
     case 'no_graph':
       return 'No code graph exists for this project yet. Read files with `read_file` instead, and do not conclude the code is absent.';
@@ -98,7 +147,11 @@ async function run(
       tool,
       args.projectKey.trim().toUpperCase(),
       {
-        query: args.query,
+        ...(args.query !== undefined ? { query: args.query } : {}),
+        ...(args.pattern !== undefined ? { pattern: args.pattern } : {}),
+        ...(args.regex !== undefined ? { regex: args.regex } : {}),
+        ...(args.caseInsensitive !== undefined ? { caseInsensitive: args.caseInsensitive } : {}),
+        ...(args.path !== undefined ? { path: args.path } : {}),
         ...(args.repo !== undefined ? { repo: args.repo } : {}),
         ...(args.cursor !== undefined ? { cursor: args.cursor } : {}),
         ...(args.limit !== undefined ? { limit: args.limit } : {}),
@@ -119,12 +172,20 @@ export const runCodeSearch = (
   args: { projectKey: string } & CodeGraphReadArgs,
   ctx: ServiceContext,
 ): Promise<CallToolResult> => run('code_search', args, ctx);
+export const runCodeGrep = (
+  args: { projectKey: string } & CodeGraphReadArgs,
+  ctx: ServiceContext,
+): Promise<CallToolResult> => run('code_grep', args, ctx);
 
 const STATES =
   'Every answer carries a `state`: `ok` (the text), `no_repositories`, `repo_not_in_set` (with ' +
   '`available`), `not_indexed` (with the repo’s index state and commits behind), `no_graph`, ' +
   '`stale_cursor`, `invalid_cursor`, or `graph_unavailable` (with a `reason`) — none of them an ' +
   'error, and none means the project has no code.';
+/** `code_grep`'s one extra state, said on its own description only. */
+const GREP_STATE =
+  ' `code_grep` adds `content_not_indexed` (with the repo’s index state and commits behind): the ' +
+  'repo’s graph was built before file contents were stored — NOT an empty match.';
 
 export function registerCodeGraphRead(server: McpServer, resolveContext: McpContextResolver): void {
   server.registerTool(
@@ -167,6 +228,33 @@ export function registerCodeGraphRead(server: McpServer, resolveContext: McpCont
     async (args, extra) => {
       try {
         return await runCodeSearch(args, resolveContext(extra));
+      } catch (err) {
+        return toToolError(err);
+      }
+    },
+  );
+  server.registerTool(
+    CODE_GREP_TOOL_NAME,
+    {
+      title: 'Search the file contents',
+      description:
+        "Search the CONTENTS of a project's indexed files for a piece of text — the lines inside " +
+        'string literals, comments, function bodies and files that are not code (copy, config, ' +
+        'JSON, YAML), which `code_search` and `code_explore` cannot see: they match symbol names ' +
+        'and paths only. Use it to find every place that still says something (a removal, a ' +
+        'rename, a copy change). Each match is `path:line: text`. The answer names the commit it ' +
+        'searched and the files under `path` it did NOT search (binary, or over the size cap) — ' +
+        'read those with `read_file` before calling a list complete. It is the hosted planner’s ' +
+        'own `code_grep` (motir-ai). Results PAGE like `code_search`. ' +
+        STATES +
+        GREP_STATE +
+        ' Read-only; gated on the planning permission. The project key resolves inside the ' +
+        'token’s own workspace.',
+      inputSchema: grepSchema,
+    },
+    async (args, extra) => {
+      try {
+        return await runCodeGrep(args, resolveContext(extra));
       } catch (err) {
         return toToolError(err);
       }

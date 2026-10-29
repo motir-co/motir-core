@@ -106,6 +106,12 @@ export const pl: McpSummaryTranslations = {
     source:
       "Symbols matching a name in the hosted code graph — the hosted planner's own answer, paged.",
   },
+  code_grep: {
+    summary:
+      'Wiersze pasujące do tekstu lub wzorca w zindeksowanej treści plików — literały tekstowe, komentarze i pliki niebędące kodem, których wyszukiwanie symboli nie widzi — własna odpowiedź hostowanego planisty, stronicowana.',
+    source:
+      "Lines matching a text or pattern in the indexed file contents — string literals, comments and non-code files the symbol search cannot see — the hosted planner's own answer, paged.",
+  },
   complete_session: {
     summary:
       'Zamknij gałąź sesji po scaleniu jej PR: każdy zapisany na niej element przechodzi do Gotowe.',

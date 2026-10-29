@@ -155,7 +155,8 @@ export const E2E_MOCK_SEAMS: readonly MockSeam[] = [
   },
   {
     // Story MOTIR-7858 · MOTIR-7866 — motir-ai's POST /v1/code-graph/read, which
-    // the MCP `code_explore` / `code_search` tools call from inside the server.
+    // the MCP `code_explore` / `code_search` / `code_grep` tools call from inside
+    // the server.
     flag: 'E2E_TEST_CODE_GRAPH_READ',
     message: 'motir-ai code-graph read seam mocked.',
     install: async (agent) => {

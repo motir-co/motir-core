@@ -114,13 +114,14 @@ describe('permissionDenial — pure decision over the whole registry', () => {
     // the actors who may plan (`member-facing-permissions.md` AMENDMENT 3).
     // MOTIR-7861 adds `read_file` on the same argument: the hosted planner's own
     // `read_file` already shows every `ai:plan` holder that file text. MOTIR-7862
-    // adds `code_explore` / `code_search` the same way.
+    // adds `code_explore` / `code_search` the same way, and MOTIR-10066 `code_grep`.
     const noPlanning = GRANTABLE_PERMISSIONS.filter((k) => k !== 'ai:plan');
     const blocked = MCP_TOOL_NAMES.filter((n) => permissionDenial(n, noPlanning) !== null);
     expect([...blocked].sort()).toEqual(
       [
         'append_plan_turn',
         'code_explore',
+        'code_grep',
         'code_search',
         'expand_item',
         'get_code_health',

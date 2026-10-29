@@ -6,11 +6,11 @@ import { describe, expect, it } from 'vitest';
 // THE CODE-READ TOOLS' TEXT HOMES (Story MOTIR-7858 · Subtask MOTIR-7865) — the
 // half of the code-read table guard whose subject is a document: `docs/mcp.md`,
 // `docs/decisions/member-facing-permissions.md` and `design/mcp-server/build.py`
-// each name all three tools. Split out of `code-read-tool-tables.test.ts` so it
+// each name all four tools (`code_grep` since MOTIR-10066). Split out of `code-read-tool-tables.test.ts` so it
 // imports nothing from `lib/` (the registry pulls in the auth wiring) and can
 // run in the docs-guard lane, which a docs-only pull request still executes.
 
-const CODE_READ_TOOLS = ['read_file', 'code_explore', 'code_search'] as const;
+const CODE_READ_TOOLS = ['read_file', 'code_explore', 'code_search', 'code_grep'] as const;
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const read = (rel: string) => readFileSync(join(ROOT, rel), 'utf8');
