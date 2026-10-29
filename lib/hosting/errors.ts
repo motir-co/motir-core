@@ -189,3 +189,58 @@ export class ProductionDatabaseUnreadableError extends Error {
     this.name = 'ProductionDatabaseUnreadableError';
   }
 }
+
+/** A release of the application is still `building` or `releasing`; the caller
+ *  retries or coalesces (MOTIR-10030). Nothing was written. → 409 */
+export class ReleaseInProgressError extends Error {
+  readonly code = 'RELEASE_IN_PROGRESS' as const;
+  constructor(
+    readonly applicationId: string,
+    readonly releaseId: string,
+    readonly state: string,
+  ) {
+    super(`Application ${applicationId} is already releasing (${releaseId} is ${state}).`);
+    this.name = 'ReleaseInProgressError';
+  }
+}
+
+/** The manifest's migration step did not succeed: its exit status, or a time-out.
+ *  Caught by the release service into the release's `failure_reason` (MOTIR-10030). */
+export class ReleaseMigrationFailedError extends Error {
+  readonly code = 'RELEASE_MIGRATION_FAILED' as const;
+  constructor(
+    readonly releaseId: string,
+    readonly exitCode: number | null,
+    readonly timedOut: boolean,
+  ) {
+    super(
+      `The migration of release ${releaseId} ${
+        timedOut ? 'timed out' : `exited with status ${exitCode ?? 'unknown'}`
+      }.`,
+    );
+    this.name = 'ReleaseMigrationFailedError';
+  }
+}
+
+/** The step of a production release that failed (MOTIR-10030). */
+export type ReleaseStep = 'manifest' | 'database' | 'environment' | 'app' | 'migrate' | 'deploy';
+
+/**
+ * A production release step failed. It carries the step, the provider's HTTP
+ * status and the error's code ONLY — never a message, which can hold an
+ * environment value or a connection string (MOTIR-10030). → 502
+ */
+export class ReleaseDeployFailedError extends Error {
+  readonly code = 'RELEASE_DEPLOY_FAILED' as const;
+  constructor(
+    readonly releaseId: string,
+    readonly step: ReleaseStep,
+    readonly status: number | null,
+    readonly causeCode: string,
+  ) {
+    super(
+      `Release ${releaseId} failed at ${step} (${causeCode}${status === null ? '' : `, HTTP ${status}`}).`,
+    );
+    this.name = 'ReleaseDeployFailedError';
+  }
+}

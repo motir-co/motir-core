@@ -1,8 +1,5 @@
 import type { DeployCredential, HostingApp } from '@motir/orchestrator';
-import { provisioningOrgLogin } from '@/lib/ciMetering/config';
-import { resolveOrgAuth } from '@/lib/github/orgTarget';
 import { repoActionsConfig } from '@/lib/github/repoActionsConfig';
-import { provisioningAuth } from '@/lib/github/repoProvisioning';
 import { seedPromotionGithub, type GithubRepoAccess } from '@/lib/github/seedPromotion';
 import { deployEligibilityRefusal } from '@/lib/hosting/deployEligibility';
 import {
@@ -27,8 +24,8 @@ import {
 import { getHostingDeployPort } from '@/lib/orchestrator/hosting';
 import { hostedApplicationRepository } from '@/lib/repositories/hostedApplicationRepository';
 import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
-import { fleetGithubOrgAssignmentService } from '@/lib/services/fleetGithubOrgAssignmentService';
 import { hostedApplicationService } from '@/lib/services/hostedApplicationService';
+import { hostedRepositoryAccessService } from '@/lib/services/hostedRepositoryAccessService';
 import { withSystemContext } from '@/lib/workspaces/context';
 
 // SWITCH PRODUCTION ON for a Motir repository (Story MOTIR-9797 · MOTIR-10027):
@@ -115,21 +112,11 @@ async function step<T>(
   }
 }
 
-/** The credential that reaches the repository: Motir's own org's, or the org
- *  Motir assigned the workspace's organisation (MOTIR-8966). */
-async function repositoryAccess(
+/** The credential that reaches the repository (MOTIR-8966). */
+function repositoryAccess(
   facts: DeployFacts & { githubRepo: NonNullable<DeployFacts['githubRepo']> },
 ): Promise<GithubRepoAccess> {
-  const { owner, name } = facts.githubRepo;
-  const ownOrg = provisioningOrgLogin();
-  if (ownOrg !== null && owner.toLowerCase() === ownOrg.toLowerCase()) {
-    return { owner, repo: name, token: (await provisioningAuth()).token };
-  }
-  const hosted = await fleetGithubOrgAssignmentService.hostedTargetForWorkspace(facts.workspaceId);
-  if (hosted && hosted.org.toLowerCase() === owner.toLowerCase()) {
-    return { owner, repo: name, token: (await resolveOrgAuth(hosted)).token };
-  }
-  throw new Error(`${owner}/${name} is not in a GitHub organisation Motir holds`);
+  return hostedRepositoryAccessService.accessFor(facts);
 }
 
 /** The manifest's verdict on production: null when it declares a web app for

@@ -1,4 +1,4 @@
-import { OrchestratorApiError } from '@motir/orchestrator';
+import { DATABASE_DIRECT_ENV, OrchestratorApiError } from '@motir/orchestrator';
 import {
   ApplicationNotFoundError,
   ProductionDatabaseProvisioningError,
@@ -114,7 +114,38 @@ async function getProductionDatabaseEnv(applicationId: string): Promise<Producti
   return { DATABASE_URL: value };
 }
 
+/** The pair a release's MIGRATION needs beside it: the direct (unpooled)
+ *  string, re-read through the database port and never stored. */
+export interface ProductionMigrationEnv {
+  readonly DIRECT_URL: string;
+}
+
+async function getProductionMigrationEnv(applicationId: string): Promise<ProductionMigrationEnv> {
+  const app = await withSystemContext((tx) =>
+    hostedApplicationRepository.findDatabaseById(applicationId, tx),
+  );
+  if (!app) throw new ApplicationNotFoundError(applicationId);
+  if (app.databaseProjectId === null) {
+    throw new ProductionDatabaseUnreadableError(applicationId, 'absent');
+  }
+  const port = getDatabasePort();
+  let pairs;
+  try {
+    pairs = await port.connectionEnv({
+      provider: port.provider,
+      applicationRef: app.projectRepositoryId,
+      databaseRef: app.databaseProjectId,
+    });
+  } catch (error) {
+    throw provisioningError(applicationId, error);
+  }
+  const direct = pairs.find((pair) => pair.name === DATABASE_DIRECT_ENV);
+  if (!direct) throw new ProductionDatabaseUnreadableError(applicationId, 'absent');
+  return { DIRECT_URL: direct.value };
+}
+
 export const productionDatabaseService = {
   ensureProductionDatabase,
   getProductionDatabaseEnv,
+  getProductionMigrationEnv,
 };

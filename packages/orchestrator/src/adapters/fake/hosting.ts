@@ -3,6 +3,7 @@ import {
   CustomerRepositoryRefusedError,
   IdlePolicyUnsupportedError,
   NoPreviousReleaseError,
+  ReleaseCommandUnsupportedError,
   ReleaseNotFoundError,
 } from '../../hosting/errors';
 import { hostingAppNames, sameEnvironment } from '../../hosting/names';
@@ -13,6 +14,7 @@ import type {
   HostingDeployTarget,
   HostingEnvironment,
   OriginCredentialKind,
+  ReleaseCommandResult,
   ReleaseDescription,
   ReleaseHandle,
   ReleaseRuntime,
@@ -66,6 +68,22 @@ export interface FakeHostedApp {
   transitions: RunTransition[];
 }
 
+/** The port operations, as the fake's call log names them. */
+export type FakeHostingOperation = Exclude<keyof HostingDeployPort, 'target'>;
+
+/** One call the fake received, in order (MOTIR-10030): which operation, on which
+ *  app when it names one, and — for a release command — the command it ran. */
+export interface FakeHostingCall {
+  readonly operation: FakeHostingOperation;
+  readonly appRef: string | null;
+  readonly command?: string;
+  /** The names of the environment it was given — never the values. */
+  readonly envNames?: readonly string[];
+}
+
+/** The operations a test can make fail once at the provider. */
+export type FakeFailableOperation = 'destroy' | 'destroyApp' | 'deploy' | 'runReleaseCommand';
+
 export interface FakeHostingControls {
   /** The fake's clock. */
   now(): Date;
@@ -81,8 +99,14 @@ export interface FakeHostingControls {
   readonly mintedFor: readonly string[];
   /** The next call of that operation fails at the "provider" with an
    *  `OrchestratorApiError` and changes nothing — a destroy that destroyed
-   *  nothing, for the usage-always rule's error path. */
-  failNext(operation: 'destroy' | 'destroyApp'): void;
+   *  nothing, for the usage-always rule's error path; a deploy or a release
+   *  command that never ran. `message` replaces the error's detail, so a test
+   *  can make it carry something that must not leak. */
+  failNext(operation: FakeFailableOperation, message?: string): void;
+  /** Every port call, in order. */
+  readonly calls: readonly FakeHostingCall[];
+  /** How the next release commands end (default: exit 0). */
+  setReleaseCommandResult(result: ReleaseCommandResult): void;
   /** Whether the organisation's AWS tenant account is ready. Ready unless a test
    *  sets it false; while not ready an `aws` deploy waits in
    *  `waiting_for_account`. */
@@ -126,16 +150,20 @@ export function createFakeHostingDeployPort(
   let sequence = 0;
   const apps = new Map<string, FakeHostedApp>();
   const mintedFor: string[] = [];
-  const failing = new Set<'destroy' | 'destroyApp'>();
+  const failing = new Map<FakeFailableOperation, string | undefined>();
+  const calls: FakeHostingCall[] = [];
+  let commandResult: ReleaseCommandResult = { exitCode: 0, timedOut: false };
   const refused = new Set(options.refuseRepositories ?? []);
   // Every release's shape, kept past its destroy so a repeated destroy still
   // reports usage in the unit of the release it names.
   const shapes = new Map<string, FakeHostedRelease>();
   let accountReady = true;
 
-  function injectedFailure(operation: 'destroy' | 'destroyApp'): void {
-    if (!failing.delete(operation)) return;
-    throw new OrchestratorApiError('fake', 503, `injected ${operation} failure`);
+  function injectedFailure(operation: FakeFailableOperation): void {
+    if (!failing.has(operation)) return;
+    const message = failing.get(operation);
+    failing.delete(operation);
+    throw new OrchestratorApiError('fake', 503, message ?? `injected ${operation} failure`);
   }
 
   const now = () => new Date(clock);
@@ -224,9 +252,10 @@ export function createFakeHostingDeployPort(
     return made;
   }
 
-  return {
+  const port: HostingDeployPort & FakeHostingControls = {
     target,
     mintedFor,
+    calls,
     now,
     advanceSeconds(seconds) {
       clock += seconds * 1000;
@@ -241,8 +270,11 @@ export function createFakeHostingDeployPort(
       setRunning(appOf(appRef), true);
     },
     app: (appRef) => apps.get(appRef),
-    failNext(operation) {
-      failing.add(operation);
+    failNext(operation, message) {
+      failing.set(operation, message);
+    },
+    setReleaseCommandResult(result) {
+      commandResult = result;
     },
     setAccountReady(ready) {
       accountReady = ready;
@@ -277,6 +309,7 @@ export function createFakeHostingDeployPort(
     },
 
     async deploy(input) {
+      injectedFailure('deploy');
       // As the serverless adapter: its manifest refusals come before anything
       // else, so a refused release finds no app and creates nothing.
       if (target === 'serverless') assertServerlessRuntime(input.runtime);
@@ -383,5 +416,47 @@ export function createFakeHostingDeployPort(
         },
       ];
     },
+
+    async runReleaseCommand({ appRef }) {
+      // As the real adapters: only Fly runs a one-off command of a release image.
+      if (target !== 'fly') throw new ReleaseCommandUnsupportedError(target);
+      appOf(appRef);
+      injectedFailure('runReleaseCommand');
+      return commandResult;
+    },
   };
+
+  // The call log wraps every operation, so a test can assert their ORDER — the
+  // migration before the deploy — without each operation logging itself.
+  const operations: FakeHostingOperation[] = [
+    'ensureApp',
+    'mintDeployCredential',
+    'deploy',
+    'describe',
+    'rollback',
+    'usageSince',
+    'destroy',
+    'destroyApp',
+    'listReleases',
+    'runReleaseCommand',
+  ];
+  const record = port as unknown as Record<FakeHostingOperation, (input: unknown) => unknown>;
+  for (const operation of operations) {
+    const inner = record[operation].bind(port);
+    record[operation] = (input: unknown, ...rest: unknown[]) => {
+      const fields = (input ?? {}) as {
+        appRef?: unknown;
+        command?: unknown;
+        env?: ReadonlyArray<{ name: string }>;
+      };
+      calls.push({
+        operation,
+        appRef: typeof fields.appRef === 'string' ? fields.appRef : null,
+        ...(typeof fields.command === 'string' ? { command: fields.command } : {}),
+        ...(Array.isArray(fields.env) ? { envNames: fields.env.map((v) => v.name) } : {}),
+      });
+      return (inner as (...args: unknown[]) => unknown)(input, ...rest);
+    };
+  }
+  return port;
 }

@@ -975,6 +975,7 @@ export const projectRepoRepository = {
         seedSource: true,
         state: true,
         hostingTarget: true,
+        hostingSize: true,
         githubRepo: { select: { owner: true, name: true, defaultBranch: true } },
       },
     });

@@ -83,6 +83,10 @@ export default defineConfig({
       'tests/hosting/productionEnablement.test.ts',
       // MOTIR-10028 — the production database's three errors.
       'tests/hosting/productionDatabaseService.test.ts',
+      // MOTIR-10030 — the release service's four errors and the extracted
+      // repository access it reads the manifest through.
+      'tests/hosting/productionReleaseService.test.ts',
+      'tests/hosting/hostedRepositoryAccessService.test.ts',
     ],
     coverage: {
       provider: 'v8',

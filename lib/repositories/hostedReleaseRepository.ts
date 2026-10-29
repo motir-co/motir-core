@@ -52,6 +52,18 @@ export const hostedReleaseRepository = {
     return count;
   },
 
+  /** The application's release still in `building` or `releasing`, if any —
+   *  the one a new release must wait for (MOTIR-10030). */
+  async findInFlightByApplication(
+    applicationId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<HostedRelease | null> {
+    return tx.hostedRelease.findFirst({
+      where: { applicationId, state: { in: ['building', 'releasing'] } },
+      orderBy: { createdAt: 'desc' },
+    });
+  },
+
   /** The application's releases, newest first. */
   async listByApplication(
     applicationId: string,

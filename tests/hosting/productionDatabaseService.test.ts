@@ -7,6 +7,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import type { HostingTarget } from '@/generated/prisma/client';
 import {
   createFakeDatabasePort,
+  DATABASE_DIRECT_ENV,
   OrchestratorApiError,
   type DatabasePort,
 } from '@motir/orchestrator';
@@ -337,5 +338,62 @@ describe('getProductionDatabaseEnv', () => {
     await expect(service.getProductionDatabaseEnv('nope')).rejects.toBeInstanceOf(
       ApplicationNotFoundError,
     );
+  });
+});
+
+describe('getProductionMigrationEnv (MOTIR-10030)', () => {
+  it('hands back the direct string, which is not the pooled one, read from the provider', async () => {
+    const fx = await workspace();
+    const { applicationId } = await application(fx);
+    await service.ensureProductionDatabase(applicationId);
+
+    const migration = await service.getProductionMigrationEnv(applicationId);
+    const runtime = await service.getProductionDatabaseEnv(applicationId);
+
+    expect(migration.DIRECT_URL).toMatch(CONNECTION_STRING);
+    expect(migration.DIRECT_URL).not.toBe(runtime.DATABASE_URL);
+    expect(logged.join('\n')).not.toMatch(CONNECTION_STRING);
+  });
+
+  it('refuses an application with no database, and an unknown one', async () => {
+    const fx = await workspace();
+    const { applicationId } = await application(fx);
+
+    await expect(service.getProductionMigrationEnv(applicationId)).rejects.toMatchObject({
+      constructor: ProductionDatabaseUnreadableError,
+      reason: 'absent',
+    });
+    await expect(service.getProductionMigrationEnv('nope')).rejects.toBeInstanceOf(
+      ApplicationNotFoundError,
+    );
+  });
+
+  it("passes a provider failure's status and code, and refuses an answer with no direct string", async () => {
+    const fx = await workspace();
+    const { applicationId } = await application(fx);
+    await service.ensureProductionDatabase(applicationId);
+    registerDatabaseAdapter('neon', () => ({
+      ...countingPort(),
+      async connectionEnv() {
+        throw new OrchestratorApiError('neon', 503, 'postgresql://leaked@x/y');
+      },
+    }));
+
+    await expect(service.getProductionMigrationEnv(applicationId)).rejects.toMatchObject({
+      constructor: ProductionDatabaseProvisioningError,
+      status: 503,
+    });
+
+    registerDatabaseAdapter('neon', () => ({
+      ...countingPort(),
+      async connectionEnv(handle) {
+        const pairs = await fake.connectionEnv(handle);
+        return pairs.filter((p) => p.name !== DATABASE_DIRECT_ENV);
+      },
+    }));
+    await expect(service.getProductionMigrationEnv(applicationId)).rejects.toMatchObject({
+      constructor: ProductionDatabaseUnreadableError,
+      reason: 'absent',
+    });
   });
 });

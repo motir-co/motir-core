@@ -1,5 +1,9 @@
 import { OrchestratorApiError } from '../../errors';
-import { NoPreviousReleaseError, ReleaseNotFoundError } from '../../hosting/errors';
+import {
+  NoPreviousReleaseError,
+  ReleaseCommandUnsupportedError,
+  ReleaseNotFoundError,
+} from '../../hosting/errors';
 import type {
   DeployCredential,
   HostingDeployPort,
@@ -326,6 +330,12 @@ export function createServerlessHostingDeployPort(
             live === null ? 'deploying' : serverlessReleaseState(fn.state, fn.lastUpdateStatus),
         },
       ];
+    },
+
+    // A function has no one-off run of its image yet; a release that needs a
+    // migration fails by name rather than going live unmigrated (MOTIR-10030).
+    async runReleaseCommand() {
+      throw new ReleaseCommandUnsupportedError('serverless');
     },
   };
 }
