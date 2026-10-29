@@ -17,6 +17,7 @@ import {
   isSizingAdvisory,
   isUnderAuthoredAdvisory,
   isMislabelledLinkAdvisory,
+  isPostMergeChildAdvisory,
   isSubsumptionAdvisory,
 } from '@/lib/dto/workItems';
 import {
@@ -25,6 +26,7 @@ import {
 } from '@/lib/workItems/bodyAboveFieldMove';
 import type {
   WorkItemProseMislabelledLinkAdvisoryDto,
+  WorkItemValidityAdvisoryDto,
   WorkItemValidityDto,
 } from '@/lib/dto/workItems';
 import type { ValidityCondition } from '@/lib/dto/sprints';
@@ -87,24 +89,39 @@ interface ValidateWorkItemArgs {
  * not change `valid`, so a VALID item with advisories is still VALID.
  */
 function advisoryLines(result: WorkItemValidityDto): string[] {
-  if (result.advisories.length === 0) return [];
-  const unaffected = `NOT a blocker — ${result.key} is ${
-    result.valid ? 'still VALID' : 'unaffected'
-  } either way`;
+  return advisoryBlockLines(
+    result.advisories,
+    `NOT a blocker — ${result.key} is ${result.valid ? 'still VALID' : 'unaffected'} either way`,
+  );
+}
 
-  const references = result.advisories.filter(isReferenceAdvisory);
-  const shapes = result.advisories.filter(isOrderingAdvisory);
-  const straddles = result.advisories.filter(isRepoStraddleAdvisory);
-  const subsumed = result.advisories.filter(isSubsumptionAdvisory);
-  const oversized = result.advisories.filter(isSizingAdvisory);
-  const selfBlocking = result.advisories.filter(isSelfBlockingDesignAdvisory);
-  const bodyAbove = result.advisories.filter(isBodyAboveFieldMoveAdvisory);
-  const blockerCounts = result.advisories.filter(isBlockerCountAdvisory);
-  const underAuthored = result.advisories.filter(isUnderAuthoredAdvisory);
-  const mislabelled = result.advisories.filter(isMislabelledLinkAdvisory);
-  const uncovered = result.advisories.filter(isCoverageAdvisory);
-  const unnamedTitles = result.advisories.filter(isTitleCoverageAdvisory);
-  const pathReferences = result.advisories.filter(isPathReferenceAdvisory);
+/**
+ * The advisory blocks for any advisory list, one block per family with its
+ * remedy. Exported for `validate_plan`, which reports the SHAPE families over a
+ * plan's proposals (MOTIR-10087) in the same words this verdict uses for one
+ * card. `unaffected` is the caller's "not a blocker" clause — the two verdicts
+ * phrase it differently.
+ */
+export function advisoryBlockLines(
+  advisories: readonly WorkItemValidityAdvisoryDto[],
+  unaffected: string,
+): string[] {
+  if (advisories.length === 0) return [];
+
+  const references = advisories.filter(isReferenceAdvisory);
+  const shapes = advisories.filter(isOrderingAdvisory);
+  const straddles = advisories.filter(isRepoStraddleAdvisory);
+  const subsumed = advisories.filter(isSubsumptionAdvisory);
+  const oversized = advisories.filter(isSizingAdvisory);
+  const selfBlocking = advisories.filter(isSelfBlockingDesignAdvisory);
+  const bodyAbove = advisories.filter(isBodyAboveFieldMoveAdvisory);
+  const blockerCounts = advisories.filter(isBlockerCountAdvisory);
+  const underAuthored = advisories.filter(isUnderAuthoredAdvisory);
+  const mislabelled = advisories.filter(isMislabelledLinkAdvisory);
+  const postMerge = advisories.filter(isPostMergeChildAdvisory);
+  const uncovered = advisories.filter(isCoverageAdvisory);
+  const unnamedTitles = advisories.filter(isTitleCoverageAdvisory);
+  const pathReferences = advisories.filter(isPathReferenceAdvisory);
 
   const lines: string[] = [];
   for (const a of underAuthored) {
@@ -124,6 +141,14 @@ function advisoryLines(result: WorkItemValidityDto): string[] {
     );
   }
   lines.push(...mislabelledLinkLines(mislabelled, unaffected));
+  // The POST-MERGE-CHILD member of the shape family (MOTIR-8863), rendered here
+  // since `validate_plan` reports it over a plan's proposals (MOTIR-10087).
+  for (const a of postMerge) {
+    lines.push(
+      '',
+      `Advisory (${unaffected}): ${a.item} reads the deployment ("${a.phrase}") while it sits INSIDE ${a.container}, whose merge it waits on. Move it out to be a sibling of ${a.container} that ${a.container} blocks.`,
+    );
+  }
   if (references.length > 0) {
     lines.push(
       '',

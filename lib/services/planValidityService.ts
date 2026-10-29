@@ -35,7 +35,7 @@ import type {
   WorkItemCoverageAdvisoryDto,
   WorkItemTitleCoverageAdvisoryDto,
   WorkItemProseAdvisoryDto,
-  WorkItemProseMislabelledLinkAdvisoryDto,
+  WorkItemProseShapeAdvisoryDto,
   WorkItemSoftBlockDto,
   WorkItemValidityDto,
 } from '@/lib/dto/workItems';
@@ -984,35 +984,63 @@ export const planValidityService = {
   },
 
   /**
-   * The MISLABELLED-LINK advisories (MOTIR-9007) over every body this plan
-   * PROPOSES — an `add`'s body and a `modify`'s patched one — for `validate_plan`
-   * and the internal `validate-plan-forest` route (MOTIR-9873).
+   * The SHAPE advisories over every card this plan PROPOSES — each `add`, and
+   * each real card a `modify` patches — for `validate_plan` and the internal
+   * `validate-plan-forest` route (MOTIR-9873, widened by MOTIR-10087).
+   *
+   * Every `kind: 'shape'` family {@link validateProjectedWorkItem} yields for the
+   * same card, keyed by the card's `item` (`planItem:<id>` for an `add`): a
+   * self-blocking design, a repo straddle, an ordering violation, over-gate
+   * sizing, a post-merge child, a mislabelled link and the rest. A shape entry is
+   * a defect in what the card itself says or is, so it has exactly one subject
+   * and needs no subtree to be read. The reference and subsumption families are
+   * not shape: they name a second card or a merge, and stay
+   * `validate_work_item`'s.
+   *
+   * ⚠️ WHY THIS EXISTS (MOTIR-10087). Both planners close on `validate_plan`
+   * alone, and until this widening it carried only the mislabelled link, so a
+   * proposal the detector flagged `likely-self-blocking-design` was sealed and
+   * reached the runner, whose guard #4 reads a two-index shape entry as LIFT and
+   * stops. The detector had spoken; nothing the planner held could hear it.
+   *
+   * A MISLABELLED LINK keeps its narrower scope: it is reported only on a card
+   * whose description or explanation the plan sets, because a link in a body the
+   * plan did not write is not the plan's (MOTIR-9938). Untouched committed cards
+   * are never scanned: they are not the plan's finding (`validate_work_item`
+   * reports them).
    *
    * Deliberately NOT part of {@link validateProjectedPlan}'s verdict: the
    * forest's no-advisory rule exists because a body-vs-EDGES gap has no single
-   * subject there. A mislabelled link has no such problem — it is a property of
-   * one body, decided by what its id opens — so it is reported per proposed card,
-   * BESIDE the verdict and never inside it: both callers answer
-   * `{ ...verdict, advisories }`. Untouched committed cards are not scanned: they
-   * are not the plan's finding (`validate_work_item` reports them). `opts.caller`
-   * is passed to the projection exactly as {@link validateProjectedPlan} takes it.
+   * subject there. Both callers answer `{ ...verdict, advisories }`, beside the
+   * verdict and never inside it. `opts.caller` is passed to the projection
+   * exactly as {@link validateProjectedPlan} takes it.
    */
-  async projectedLinkAdvisories(
+  async projectedShapeAdvisories(
     planId: string,
     ctx: ServiceContext,
     opts: { caller?: 'actor' | 'system' } = {},
-  ): Promise<WorkItemProseMislabelledLinkAdvisoryDto[]> {
+  ): Promise<WorkItemProseShapeAdvisoryDto[]> {
     const proj = await buildProjection(planId, ctx, opts);
+    const inPlanProject = (id: string) => proj.nodes.get(id)?.projectId === proj.projectId;
     // A plan proposes a body when it sets a description OR an explanation
     // (MOTIR-9938): a `modify` that rewrites only the explanation is still the
     // plan's text, and a link in it is the plan's finding.
     const proposedBodies = new Set(
       [...proj.projectedDescription.keys(), ...proj.projectedExplanation.keys()].filter(
-        (id) => proj.nodes.get(id)?.projectId === proj.projectId,
+        inPlanProject,
       ),
     );
-    const advisories = await projectedProseAdvisories(proj, proposedBodies, ctx);
-    return advisories.filter(isMislabelledLinkAdvisory);
+    const proposed = new Set(
+      [...proj.proposalByRef.keys(), ...proj.patchByWorkItemId.keys(), ...proposedBodies].filter(
+        inPlanProject,
+      ),
+    );
+    const bodyItems = new Set([...proposedBodies].map((id) => proj.nodes.get(id)!.identifier));
+    const advisories = await projectedProseAdvisories(proj, proposed, ctx);
+    return advisories.filter(
+      (a): a is WorkItemProseShapeAdvisoryDto =>
+        a.kind === 'shape' && (!isMislabelledLinkAdvisory(a) || bodyItems.has(a.item)),
+    );
   },
 
   /**

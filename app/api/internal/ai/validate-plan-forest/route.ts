@@ -24,13 +24,15 @@ import type { ValidityCondition } from '@/lib/dto/sprints';
 // plan closed on a `valid: true` that only meant finishable is exactly the dead
 // plan MOTIR-3560 reported.
 //
-// ⚠️ AND IT ANSWERS THE MISLABELLED-LINK ADVISORIES BESIDE THE VERDICT (MOTIR-9873):
-// `{ ...verdict, advisories }`, the same shape the PAT `validate_plan` tool answers.
-// `advisories` lists every `likely-mislabelled-link` in a body the plan PROPOSES
-// (`planValidityService.projectedLinkAdvisories`, MOTIR-9007) and never changes
-// `valid`. motir-ai's forest close (`generate_tree` / `revise_plan`) reads it to
-// re-open the phase on a link that opens the wrong card, or none (MOTIR-9820);
-// without it that close read the field as absent and sealed the broken link.
+// ⚠️ AND IT ANSWERS THE SHAPE ADVISORIES BESIDE THE VERDICT (MOTIR-9873, widened
+// by MOTIR-10087): `{ ...verdict, advisories }`, the same shape the PAT
+// `validate_plan` tool answers. `advisories` lists every `kind: 'shape'` entry on
+// a card the plan PROPOSES or modifies (`planValidityService.projectedShapeAdvisories`)
+// and never changes `valid`. motir-ai's forest close (`generate_tree` /
+// `revise_plan`) reads it to re-open the phase on a link that opens the wrong
+// card (MOTIR-9820) and on a criterion-indexed shape entry — the
+// self-blocking design a runner reads as LIFT and stops on (MOTIR-10087);
+// without it that close read the field as absent and sealed the card.
 //
 // Read-only, server-to-server only (§4a service bearer + §4b job-scoped token,
 // via authenticateJobRequest) — never reachable from the browser and NEVER
@@ -97,7 +99,7 @@ export async function POST(req: Request): Promise<Response> {
       condition as ValidityCondition | undefined,
       opts,
     );
-    const advisories = await planValidityService.projectedLinkAdvisories(planId, auth.ctx, opts);
+    const advisories = await planValidityService.projectedShapeAdvisories(planId, auth.ctx, opts);
     return NextResponse.json({ ...result, advisories });
   } catch (err) {
     if (err instanceof PlanNotFoundError) {
