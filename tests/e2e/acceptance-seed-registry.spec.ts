@@ -429,6 +429,10 @@ test('a repository starts from the starter that fits it, and an operator grows t
     );
     await dialog.getByTestId('retire-confirm').click();
     expect((await retired).status(), 'the retirement committed').toBe(200);
+    // The default view lists Active entries only, so a retired one leaves it;
+    // the Retired view is where the library says what happened to it.
+    await expect(dialog).toBeHidden();
+    expect((await page.goto('/admin/starters?status=retired'))?.status()).toBe(200);
     await expect(row).toContainText(starters.status.retired);
     await beat();
 
