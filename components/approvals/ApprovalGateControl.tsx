@@ -815,6 +815,9 @@ export function useRefusalCopy(
     case 'MERGE_CONFLICT':
       headline = t('mergeConflict.title');
       break;
+    case 'MERGE_OUT_OF_DATE':
+      headline = t('mergeOutOfDate.title');
+      break;
     case 'MERGE_BRANCH_PROTECTED':
       // `refusal.reason` is the host's sentence: not part of this copy — the
       // Development frame quotes it beneath the line (MOTIR-6735; see the union).
@@ -998,6 +1001,8 @@ function refusalKeyOf(tag: Exclude<GateRefusal['tag'], 'UNEXPECTED'>): string {
       return 'mergeChecksNotGreen';
     case 'MERGE_CONFLICT':
       return 'mergeConflict';
+    case 'MERGE_OUT_OF_DATE':
+      return 'mergeOutOfDate';
     case 'MERGE_BRANCH_PROTECTED':
       return 'mergeBranchProtected';
     case 'MERGE_ALREADY_MERGED':

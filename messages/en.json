@@ -7624,6 +7624,8 @@
         },
         "conflictOn": "<prs></prs> conflicts with {base} and cannot be merged.",
         "conflictOnNoBase": "<prs></prs> conflicts with its base branch and cannot be merged.",
+        "outOfDateOn": "<prs></prs> is behind {base}, which requires it to be up to date, and cannot be merged.",
+        "outOfDateOnNoBase": "<prs></prs> is behind its base branch, which requires it to be up to date, and cannot be merged.",
         "howConflict": "An agent rebases or resolves on the pull request's own branch, pushes, and the checks run again.",
         "rearm": "There is nothing to approve here. A push moves the head, which re-arms the question, and the next green raises the merge gate once — over the new commits.",
         "sentBackByAgent": "The review agent sent these commits back. An agent fixes them on {count, plural, one {the same pull request} other {the same pull requests}}, with its findings in the prompt.",
@@ -9865,6 +9867,8 @@
         "queueFailedBare": "Failed in the merge queue",
         "conflicted": "Conflicts with <d>{base}</d>",
         "conflictedNoBase": "Conflicts with its base branch",
+        "outOfDate": "Out of date with <d>{base}</d>",
+        "outOfDateNoBase": "Out of date with its base branch",
         "ciFailed": "CI failed · <d>{check}</d>",
         "ciFailedBare": "CI failed",
         "changesRequested": "Changes requested by <b>{name}</b> — “{note}”",
@@ -13977,6 +13981,10 @@
         "atPress": "{host} reports {pr} conflicts with {base}. The press was refused before anything was written, so {key} did not move.",
         "atPressNoBase": "{host} reports {pr} conflicts with its base branch. The press was refused before anything was written, so {key} did not move."
       },
+      "mergeOutOfDate": {
+        "title": "This pull request is out of date with its base branch.",
+        "next": "Nothing was merged. The base branch requires pull requests to be up to date before they merge, and this one is behind it. Bring the base branch into it — update the branch, or let motir fix hand it to an agent — and Motir asks again once its checks are green."
+      },
       "mergeBranchProtected": {
         "title": "The branch's protection rules do not allow this merge yet.",
         "next": "Satisfy the rule on GitHub, such as a required review, then approve again."
@@ -15148,6 +15156,7 @@
       "run_died": "To fix · run died",
       "queue_failed": "To fix · failed in the merge queue",
       "conflicted": "To fix · conflicts with its base branch",
+      "out_of_date": "To fix · out of date with its base branch",
       "ci_failed": "To fix · CI failed",
       "changes_requested": "To fix · changes requested",
       "sent_back_by_agent": "To fix · sent back by the review agent",
@@ -15159,6 +15168,8 @@
       "queueFailedBare": "This needs a fix: it failed in the merge queue.",
       "conflicted": "This needs a fix: it conflicts with <code>{base}</code>.",
       "conflictedNoBase": "This needs a fix: it conflicts with its base branch.",
+      "outOfDate": "This needs a fix: it is out of date with <code>{base}</code>.",
+      "outOfDateNoBase": "This needs a fix: it is out of date with its base branch.",
       "ciFailed": "This needs a fix: CI failed (check <code>{check}</code>).",
       "ciFailedBare": "This needs a fix: CI failed.",
       "changesRequested": "This needs a fix: <b>{name}</b> requested changes — “{note}”",

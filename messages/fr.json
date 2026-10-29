@@ -7627,6 +7627,8 @@
         },
         "conflictOn": "<prs></prs> est en conflit avec {base} et ne peut pas être fusionnée.",
         "conflictOnNoBase": "<prs></prs> est en conflit avec sa branche de base et ne peut pas être fusionnée.",
+        "outOfDateOn": "<prs></prs> est en retard sur {base}, qui exige d'être à jour, et ne peut pas être fusionnée.",
+        "outOfDateOnNoBase": "<prs></prs> est en retard sur sa branche de base, qui exige d'être à jour, et ne peut pas être fusionnée.",
         "howConflict": "Un agent effectue un rebase ou résout le conflit sur la branche de la pull request, pousse, et les vérifications sont relancées.",
         "rearm": "Il n'y a rien à approuver ici. Un push déplace la tête, ce qui réarme la question, et le prochain passage au vert déclenche une seule fois le contrôle de fusion — sur les nouveaux commits.",
         "sentBackByAgent": "L'agent de revue a renvoyé ces commits. Un agent les corrige sur {count, plural, one {la même pull request} other {les mêmes pull requests}}, avec ses constats dans le prompt.",
@@ -9868,6 +9870,8 @@
         "queueFailedBare": "Échec dans la file de fusion",
         "conflicted": "En conflit avec <d>{base}</d>",
         "conflictedNoBase": "En conflit avec sa branche de base",
+        "outOfDate": "Pas à jour avec <d>{base}</d>",
+        "outOfDateNoBase": "Pas à jour avec sa branche de base",
         "ciFailed": "Échec de la CI · <d>{check}</d>",
         "ciFailedBare": "Échec de la CI",
         "changesRequested": "Modifications demandées par <b>{name}</b> — « {note} »",
@@ -13980,6 +13984,10 @@
         "atPress": "{host} signale que {pr} est en conflit avec {base}. Le clic a été refusé avant toute écriture, donc {key} n'a pas bougé.",
         "atPressNoBase": "{host} signale que {pr} est en conflit avec sa branche de base. Le clic a été refusé avant toute écriture, donc {key} n'a pas bougé."
       },
+      "mergeOutOfDate": {
+        "title": "Cette pull request n'est pas à jour avec sa branche de base.",
+        "next": "Rien n'a été fusionné. La branche de base exige que les pull requests soient à jour avant leur fusion, et celle-ci est en retard. Intégrez-y la branche de base — mettez la branche à jour, ou laissez motir fix la confier à un agent — et Motir redemandera une fois ses vérifications au vert."
+      },
       "mergeBranchProtected": {
         "title": "Les règles de protection de la branche n'autorisent pas encore cette fusion.",
         "next": "Satisfaites la règle sur GitHub, par exemple une revue obligatoire, puis approuvez de nouveau."
@@ -15151,6 +15159,7 @@
       "run_died": "À corriger · exécution interrompue",
       "queue_failed": "À corriger · échec dans la file de fusion",
       "conflicted": "À corriger · en conflit avec sa branche de base",
+      "out_of_date": "À corriger · pas à jour avec sa branche de base",
       "ci_failed": "À corriger · échec de la CI",
       "changes_requested": "À corriger · modifications demandées",
       "sent_back_by_agent": "À corriger · renvoyé par l'agent de relecture",
@@ -15162,6 +15171,8 @@
       "queueFailedBare": "Ceci nécessite une correction : échec dans la file de fusion.",
       "conflicted": "Ceci nécessite une correction : en conflit avec <code>{base}</code>.",
       "conflictedNoBase": "Ceci nécessite une correction : en conflit avec sa branche de base.",
+      "outOfDate": "Ceci nécessite une correction : pas à jour avec <code>{base}</code>.",
+      "outOfDateNoBase": "Ceci nécessite une correction : pas à jour avec sa branche de base.",
       "ciFailed": "Ceci nécessite une correction : échec de la CI (vérification <code>{check}</code>).",
       "ciFailedBare": "Ceci nécessite une correction : échec de la CI.",
       "changesRequested": "Ceci nécessite une correction : <b>{name}</b> a demandé des modifications — « {note} »",
