@@ -394,6 +394,31 @@ export interface NormalizedWorkflowRunEvent {
   completedAt: Date;
 }
 
+/** A COMPLETED run of a repository's `production-image` workflow, normalized —
+ *  the signal a merge has been built (Story MOTIR-9797 · MOTIR-10031). DISTINCT
+ *  from {@link NormalizedWorkflowRunEvent}, the CI-minutes meter's, which keeps
+ *  its own tolerance: this one carries the facts a release decides on (the
+ *  triggering event, the branch, the commit built and how the run concluded),
+ *  and is trusted for the commit and the outcome only. */
+export interface NormalizedProductionImageRun {
+  providerRepoId: string;
+  repoOwner: string;
+  repoName: string;
+  /** The workflow's name (`production-image` for the run that releases). */
+  workflowName: string;
+  /** The event that triggered the run — `push`, `pull_request`, … */
+  event: string;
+  headBranch: string;
+  /** The commit the run built — the full sha. */
+  headSha: string;
+  /** `success`, `failure`, `timed_out`, `cancelled`, `skipped`, … */
+  conclusion: string;
+  /** The host's own workflow-run id (as a string — never do math on it). */
+  runId: string;
+  /** The run attempt; a re-run of the workflow increments it. */
+  runAttempt: number;
+}
+
 /** A QUEUED CI job, normalized across providers — consumed by the runner-fleet
  *  provisioning path (Story MOTIR-1916 · MOTIR-1920). DISTINCT from
  *  `NormalizedWorkflowRunEvent`, which is the *billing* signal read at run

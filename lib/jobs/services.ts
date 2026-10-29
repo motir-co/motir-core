@@ -6,6 +6,7 @@ import { pullRequestAutoMergeService } from '@/lib/services/pullRequestAutoMerge
 import { designAutoRerunService } from '@/lib/services/designAutoRerunService';
 import { gateResumeService } from '@/lib/services/gateResumeService';
 import { pullRequestMergeabilityService } from '@/lib/services/pullRequestMergeabilityService';
+import { productionMergeReleaseService } from '@/lib/services/productionMergeReleaseService';
 import { monitorIngestionService } from '@/lib/services/monitorIngestionService';
 import { dlqStandingDepthService } from '@/lib/services/dlqStandingDepthService';
 import { monitorSyncService } from '@/lib/services/monitorSyncService';
@@ -216,6 +217,9 @@ export const jobServices = {
   // The base-branch mergeability re-read (MOTIR-5914): a push to a default branch
   // withdraws the approve-and-merge question over any pull request it put in conflict.
   pullRequestMergeability: pullRequestMergeabilityService,
+  // A merge starts a production release (Story MOTIR-9797 · MOTIR-10031): one
+  // release of the commit the production-image run built, or its failed build.
+  productionMergeRelease: productionMergeReleaseService,
   // The monitor-issue reconciler (Story MOTIR-4929 · MOTIR-5581): the tick's
   // discovery, one binding's poll, and the terminal write onto that binding.
   monitorIngestion: monitorIngestionService,

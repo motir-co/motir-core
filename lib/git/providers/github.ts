@@ -45,6 +45,7 @@ import type {
   NormalizedStatusEvent,
   NormalizedWorkflowJob,
   NormalizedWorkflowJobEvent,
+  NormalizedProductionImageRun,
   NormalizedWorkflowRunEvent,
   RepoFileReadResult,
   CommitComparison,
@@ -1624,6 +1625,60 @@ export const githubProvider: GitProvider = {
       repoName,
       workflowName: typeof run['name'] === 'string' ? run['name'] : null,
       completedAt,
+    };
+  },
+
+  // --- Production releases (Story MOTIR-9797 · MOTIR-10031) -----------------
+
+  parseProductionImageRunEvent(rawPayload: unknown): NormalizedProductionImageRun | null {
+    const payload = asRecord(rawPayload);
+    if (!payload || payload['action'] !== 'completed') return null;
+    const run = asRecord(payload['workflow_run']);
+    const repo = asRecord(payload['repository']);
+    if (!run || !repo) return null;
+
+    const text = (value: unknown): string | null =>
+      typeof value === 'string' && value.length > 0 ? value : null;
+    const providerRepoId = idToString(repo['id']);
+    const runId = idToString(run['id']);
+    // The owner from the delivery's own `repository.owner.login`, as the meter
+    // and the fleet read it — never the stored mirror.
+    const repoOwner = text(asRecord(repo['owner'])?.['login']);
+    const repoName = text(repo['name']);
+    const workflowName = text(run['name']);
+    const event = text(run['event']);
+    const headBranch = text(run['head_branch']);
+    const headSha = text(run['head_sha']);
+    const conclusion = text(run['conclusion']);
+    if (
+      !providerRepoId ||
+      !runId ||
+      !repoOwner ||
+      !repoName ||
+      !workflowName ||
+      !event ||
+      !headBranch ||
+      !headSha ||
+      !conclusion
+    ) {
+      return null;
+    }
+    const rawAttempt = run['run_attempt'];
+    const runAttempt =
+      typeof rawAttempt === 'number' && Number.isInteger(rawAttempt) && rawAttempt > 0
+        ? rawAttempt
+        : 1;
+    return {
+      providerRepoId,
+      repoOwner,
+      repoName,
+      workflowName,
+      event,
+      headBranch,
+      headSha,
+      conclusion,
+      runId,
+      runAttempt,
     };
   },
 

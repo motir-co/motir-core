@@ -12,8 +12,8 @@ import {
   type ProductionEnablementStep,
 } from '@/lib/hosting/errors';
 import { parseHostingManifest } from '@/lib/hosting/manifest';
+import { productionImageRepository } from '@/lib/hosting/productionArtifact';
 import {
-  PRODUCTION_REGISTRY_HOST,
   HOSTING_TARGET_VARIABLE,
   PRODUCTION_BRANCH,
   PRODUCTION_ENVIRONMENT,
@@ -247,7 +247,7 @@ export const productionEnablementService = {
         await repoActionsConfig.setRepositoryVariable(
           access,
           PRODUCTION_IMAGE_VARIABLE,
-          `${PRODUCTION_REGISTRY_HOST}/${app.pushNamespace}`,
+          productionImageRepository(app.pushNamespace),
         );
         // LAST: the gate every build workflow reads.
         await repoActionsConfig.setRepositoryVariable(access, HOSTING_TARGET_VARIABLE, 'fly');

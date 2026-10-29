@@ -27,6 +27,11 @@ export const HOSTING_TARGET_VARIABLE = 'MOTIR_HOSTING_TARGET';
  *  org-scope writer (`lib/github/actionsVariables.ts`), never by enablement. */
 export const HOSTING_BUILD_ORG_VARIABLE = 'MOTIR_HOSTING_BUILD';
 
+/** The starter workflow that builds and pushes the production image on a push
+ *  to {@link PRODUCTION_BRANCH} (MOTIR-10029, `.github/workflows/production-image.yml`'s
+ *  `name:`). Its completed run is what starts a merge release (MOTIR-10031). */
+export const PRODUCTION_IMAGE_WORKFLOW = 'production-image';
+
 /** Fly's registry host: the production image is `<registry>/<app>`. */
 export const PRODUCTION_REGISTRY_HOST = 'registry.fly.io';
 

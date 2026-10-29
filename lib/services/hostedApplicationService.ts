@@ -51,6 +51,14 @@ import {
 /** The default page of a release history. */
 const DEFAULT_RELEASE_PAGE = 20;
 
+/** A repository's production switch — see `getProductionSwitch`. */
+export interface ProductionSwitch {
+  applicationId: string;
+  /** The production app releases deploy to, `mh-<rid>` on Fly. */
+  appName: string;
+  enabledAt: string;
+}
+
 /** Optional values a move records beside the new state. */
 export type ReleaseTransitionDetails = Pick<
   HostedReleaseStamp,
@@ -212,6 +220,27 @@ export const hostedApplicationService = {
         tx,
       );
       return row ? toHostedApplicationDto(row) : null;
+    });
+  },
+
+  /**
+   * Whether production is switched on for the repository (MOTIR-10031): its
+   * application, the production app it releases to and when it was first
+   * enabled — or null when it has no application or production was never
+   * switched on. A system read: the merge webhook carries no workspace.
+   */
+  async getProductionSwitch(projectRepositoryId: string): Promise<ProductionSwitch | null> {
+    return withSystemContext(async (tx) => {
+      const row = await hostedApplicationRepository.findByProjectRepository(
+        projectRepositoryId,
+        tx,
+      );
+      if (!row?.productionEnabledAt || !row.productionAppName) return null;
+      return {
+        applicationId: row.id,
+        appName: row.productionAppName,
+        enabledAt: row.productionEnabledAt.toISOString(),
+      };
     });
   },
 
