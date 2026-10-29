@@ -1155,6 +1155,15 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     address: '/login',
     why: "Not an address: Claude Code's own `/login` slash command, typed in the agent's terminal to sign in (docs/decisions/agent-terminal.md Q9: the sign-in completes through the vendor's own flow). The panel's not-signed-in line quotes it verbatim. PERMANENT.",
   },
+  // ── Forward-looking: the Production room (Story MOTIR-9797 · MOTIR-10024) ──
+  //    The design draws a settings room that does not exist yet; MOTIR-10037
+  //    builds the route and its registry entry, and DELETES this row in the
+  //    commit that adds `app/(authed)/settings/project/production/page.tsx`.
+  {
+    file: 'design/hosting/design-notes.md',
+    address: '/settings/project/production',
+    why: 'Forward-looking: the Production room MOTIR-10037 builds from this design. Named in the registry table as the room’s href. DELETE-ME when the route lands.',
+  },
 ];
 
 type Entry = { file: string; address: string; why: string };
