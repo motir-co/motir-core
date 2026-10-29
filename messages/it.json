@@ -7621,6 +7621,8 @@
         },
         "conflictOn": "<prs></prs> è in conflitto con {base} e non può essere unita.",
         "conflictOnNoBase": "<prs></prs> è in conflitto con il suo branch di base e non può essere unita.",
+        "outOfDateOn": "<prs></prs> è indietro rispetto a {base}, che richiede di essere aggiornata, e non può essere unita.",
+        "outOfDateOnNoBase": "<prs></prs> è indietro rispetto al suo branch di base, che richiede di essere aggiornata, e non può essere unita.",
         "howConflict": "Un agente esegue il rebase o risolve i conflitti sul branch della pull request, esegue il push e i controlli vengono rieseguiti.",
         "rearm": "Qui non c’è nulla da approvare. Un push sposta l’head, il che riattiva la domanda, e il prossimo esito verde apre il controllo di merge una sola volta, sui nuovi commit.",
         "sentBackByAgent": "L’agente di revisione ha rimandato indietro questi commit. Un agente li corregge {count, plural, one {sulla stessa pull request} other {sulle stesse pull request}}, con i suoi rilievi nel prompt.",
@@ -9862,6 +9864,8 @@
         "queueFailedBare": "Non riuscita nella coda di merge",
         "conflicted": "In conflitto con <d>{base}</d>",
         "conflictedNoBase": "In conflitto con il suo branch di base",
+        "outOfDate": "Non aggiornata rispetto a <d>{base}</d>",
+        "outOfDateNoBase": "Non aggiornata rispetto al suo branch di base",
         "ciFailed": "CI non superata · <d>{check}</d>",
         "ciFailedBare": "CI non superata",
         "changesRequested": "Modifiche richieste da <b>{name}</b>: «{note}»",
@@ -13974,6 +13978,10 @@
         "atPress": "{host} segnala che {pr} è in conflitto con {base}. Il clic è stato rifiutato prima che venisse scritto qualcosa, quindi {key} non si è spostato.",
         "atPressNoBase": "{host} segnala che {pr} è in conflitto con il suo branch di base. Il clic è stato rifiutato prima che venisse scritto qualcosa, quindi {key} non si è spostato."
       },
+      "mergeOutOfDate": {
+        "title": "Questa pull request non è aggiornata rispetto al suo branch di base.",
+        "next": "Non è stato unito nulla. Il branch di base richiede che le pull request siano aggiornate prima di essere unite, e questa è indietro. Porta al suo interno il branch di base — aggiorna il branch, oppure lascia che motir fix lo affidi a un agente — e Motir chiederà di nuovo quando i suoi controlli saranno verdi."
+      },
       "mergeBranchProtected": {
         "title": "Le regole di protezione del branch non consentono ancora questo merge.",
         "next": "Soddisfa la regola su GitHub, per esempio una revisione obbligatoria, poi approva di nuovo."
@@ -15145,6 +15153,7 @@
       "run_died": "Da correggere · esecuzione interrotta",
       "queue_failed": "Da correggere · non riuscito nella coda di merge",
       "conflicted": "Da correggere · in conflitto con il suo branch di base",
+      "out_of_date": "Da correggere · non aggiornata rispetto al suo branch di base",
       "ci_failed": "Da correggere · CI non riuscita",
       "changes_requested": "Da correggere · modifiche richieste",
       "sent_back_by_agent": "Da correggere · rimandato indietro dall’agente di revisione",
@@ -15156,6 +15165,8 @@
       "queueFailedBare": "Serve una correzione: non è passato nella coda di merge.",
       "conflicted": "Serve una correzione: è in conflitto con <code>{base}</code>.",
       "conflictedNoBase": "Serve una correzione: è in conflitto con il suo branch di base.",
+      "outOfDate": "Serve una correzione: non è aggiornata rispetto a <code>{base}</code>.",
+      "outOfDateNoBase": "Serve una correzione: non è aggiornata rispetto al suo branch di base.",
       "ciFailed": "Serve una correzione: la CI non è riuscita (controllo <code>{check}</code>).",
       "ciFailedBare": "Serve una correzione: la CI non è riuscita.",
       "changesRequested": "Serve una correzione: <b>{name}</b> ha richiesto modifiche — «{note}»",

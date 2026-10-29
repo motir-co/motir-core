@@ -7612,6 +7612,8 @@
         },
         "conflictOn": "<prs></prs> 与 {base} 冲突，无法合并。",
         "conflictOnNoBase": "<prs></prs> 与其目标分支冲突，无法合并。",
+        "outOfDateOn": "<prs></prs> 落后于要求保持同步的 {base}，无法合并。",
+        "outOfDateOnNoBase": "<prs></prs> 落后于要求保持同步的目标分支，无法合并。",
         "howConflict": "智能体会在拉取请求自己的分支上变基或解决冲突、推送，检查随即重新运行。",
         "rearm": "这里没有可批准的东西。推送会移动 HEAD 并重新武装这个问题；下一次检查全绿时，会就新的提交提出一次合并审批。",
         "sentBackByAgent": "审查智能体退回了这些提交。智能体会在{count, plural, =1 {同一个拉取请求} other {同一组拉取请求}}上修复它们，并把审查发现写进提示词。",
@@ -9853,6 +9855,8 @@
         "queueFailedBare": "在合并队列中失败",
         "conflicted": "与 <d>{base}</d> 冲突",
         "conflictedNoBase": "与其目标分支冲突",
+        "outOfDate": "落后于 <d>{base}</d>",
+        "outOfDateNoBase": "落后于其目标分支",
         "ciFailed": "CI 未通过 · <d>{check}</d>",
         "ciFailedBare": "CI 未通过",
         "changesRequested": "<b>{name}</b> 要求修改 ——“{note}”",
@@ -13965,6 +13969,10 @@
         "atPress": "{host} 报告 {pr} 与 {base} 冲突。该操作在写入任何内容之前即被拒绝，因此 {key} 没有变化。",
         "atPressNoBase": "{host} 报告 {pr} 与其目标分支冲突。该操作在写入任何内容之前即被拒绝，因此 {key} 没有变化。"
       },
+      "mergeOutOfDate": {
+        "title": "该拉取请求落后于其目标分支。",
+        "next": "没有合并任何内容。目标分支要求拉取请求在合并前与其保持同步，而该拉取请求已落后。请将目标分支合入它（更新分支，或让 motir fix 交给智能体处理），检查通过后，Motir 会再次请求审批。"
+      },
       "mergeBranchProtected": {
         "title": "分支保护规则暂不允许此次合并。",
         "next": "请先在 GitHub 上满足该规则（例如必需的审查），然后再次批准。"
@@ -15136,6 +15144,7 @@
       "run_died": "待修复 · 运行已中断",
       "queue_failed": "待修复 · 在合并队列中失败",
       "conflicted": "待修复 · 与其目标分支冲突",
+      "out_of_date": "待修复 · 落后于其目标分支",
       "ci_failed": "待修复 · CI 未通过",
       "changes_requested": "待修复 · 已要求修改",
       "sent_back_by_agent": "待修复 · 已被审查智能体退回",
@@ -15147,6 +15156,8 @@
       "queueFailedBare": "需要修复：它在合并队列中失败。",
       "conflicted": "需要修复：它与 <code>{base}</code> 冲突。",
       "conflictedNoBase": "需要修复：它与其目标分支冲突。",
+      "outOfDate": "需要修复：它落后于 <code>{base}</code>。",
+      "outOfDateNoBase": "需要修复：它落后于其目标分支。",
       "ciFailed": "需要修复：CI 未通过（检查 <code>{check}</code>）。",
       "ciFailedBare": "需要修复：CI 未通过。",
       "changesRequested": "需要修复：<b>{name}</b> 要求修改——“{note}”",
