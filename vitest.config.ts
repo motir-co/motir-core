@@ -3047,6 +3047,18 @@ export default defineConfig({
         'lib/repositories/previewUsageRepository.ts',
         'lib/services/ciPreviewUsageMeterService.ts',
         'lib/jobs/definitions/previewUsageAccrual.ts',
+        // The hourly enablement sweep (MOTIR-5775), run as a job by the story
+        // gate (MOTIR-5780), and the preview gate itself (MOTIR-5779). The two
+        // preview pages sit under route groups whose `(` is glob syntax to the
+        // coverage matcher (see above), so they are measured through the frame
+        // they render and opened by `tests/components/preview-gate-pages.test.tsx`.
+        'lib/jobs/definitions/previewEnablementSweep.ts',
+        'lib/preview/gate.ts',
+        'lib/preview/gateProxy.ts',
+        'lib/preview/failureReason.ts',
+        'lib/services/previewGateService.ts',
+        'lib/repositories/previewGateAdmissionRepository.ts',
+        'components/preview/PreviewGateFrame.tsx',
         'lib/mappers/testInstructionsMappers.ts',
         'lib/services/testInstructionsService.ts',
         'lib/services/repoDeploymentService.ts',
@@ -8093,6 +8105,48 @@ export default defineConfig({
           statements: 90,
         },
         'lib/jobs/definitions/previewUsageAccrual.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/jobs/definitions/previewEnablementSweep.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/preview/gate.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/preview/gateProxy.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/preview/failureReason.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/previewGateService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/repositories/previewGateAdmissionRepository.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/preview/PreviewGateFrame.tsx': {
           lines: 90,
           functions: 90,
           branches: 90,
