@@ -1,7 +1,8 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { adminDb } from '../../helpers/adminDb';
-import { SEED_SOURCE_ORGANIZATION } from '@/lib/projectRepos/vocabulary';
+import { resetSeedRegistry } from '../../helpers/seedRegistryShipped';
+import { SEED_SOURCE_FLY_STARTER, SEED_SOURCE_ORGANIZATION } from '@/lib/projectRepos/vocabulary';
 import type { WorkspaceContext } from '@/lib/workspaces';
 
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures/workItemFixtures';
@@ -283,31 +284,12 @@ describe('PATCH / DELETE /api/projects/[key]/repositories/[rowId]', () => {
 });
 
 describe('PATCH seedSource — a person re-points a row’s seed (MOTIR-709)', () => {
-  // The registry is migration-seeded platform data no truncate reaches: every
-  // entry a test registers is removed again.
-  const FLY = 'nextjs-prisma-fly-starter';
+  // The Fly starter is a shipped entry (MOTIR-9813). The registry is
+  // migration-seeded platform data no truncate reaches, so a test that retires it
+  // re-activates it, and anything a test registers is removed again.
+  const FLY = SEED_SOURCE_FLY_STARTER;
 
-  afterEach(async () => {
-    await adminDb.seedRegistryEntry.deleteMany({
-      where: { key: { notIn: ['nextjs-prisma-serverless-starter', 'initialised'] } },
-    });
-  });
-
-  async function registerFly() {
-    await adminDb.seedRegistryEntry.create({
-      data: {
-        key: FLY,
-        role: 'web',
-        stack: 'nextjs',
-        label: 'Next.js · Fly',
-        templateOwner: 'motir-co',
-        templateRepo: FLY,
-        useCases: ['mvp'],
-        sizes: ['small'],
-        hostingTargets: ['fly'],
-      },
-    });
-  }
+  afterEach(resetSeedRegistry);
 
   async function webRow(fx: WorkItemFixture) {
     return projectRepoSetService.addRow(fx.projectId, { role: 'web', name: 'acme' }, fx.ctx);
@@ -327,7 +309,6 @@ describe('PATCH seedSource — a person re-points a row’s seed (MOTIR-709)', (
     signInAs(fx);
     const row = await webRow(fx);
     await adminDb.projectRepo.update({ where: { id: row.id }, data: { seedMatch: 'no_target' } });
-    await registerFly();
 
     const res = await repoint(row.id, FLY);
     expect(res.status).toBe(200);
@@ -355,7 +336,6 @@ describe('PATCH seedSource — a person re-points a row’s seed (MOTIR-709)', (
       'retired',
       FLY,
       async () => {
-        await registerFly();
         await adminDb.seedRegistryEntry.update({
           where: { key: FLY },
           data: { status: 'retired' },
@@ -399,7 +379,6 @@ describe('PATCH seedSource — a person re-points a row’s seed (MOTIR-709)', (
     signInAs(fx);
     const row = await webRow(fx);
     await adminDb.projectRepo.update({ where: { id: row.id }, data: { hostingTarget: 'aws' } });
-    await registerFly();
     const before = await stored(row.id);
 
     const res = await repoint(row.id, FLY);

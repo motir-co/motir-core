@@ -21,16 +21,20 @@ import {
 } from '@/lib/seedRegistry/errors';
 import { seedRegistryService } from '@/lib/services/seedRegistryService';
 import { adminDb } from '../helpers/adminDb';
+import { ORIGINAL_SEED_KEYS, withOnlyOriginalSeeds } from '../helpers/seedRegistryShipped';
 
 // The SEED REGISTRY (Story MOTIR-704 · MOTIR-708; decision MOTIR-706 v2) over
 // real Postgres. The registry is migration-seeded platform data that no
-// truncate reaches, so every test starts from exactly the two shipped seeds and
-// removes what it registered.
+// truncate reaches. This file proves the registry's own reads and writes, and
+// registers the starters itself, so it sets MOTIR-9813's four shipped starter
+// entries aside: every test starts from exactly the two original seeds and
+// removes what it registered. What the migrations ship is
+// `tests/projectRepos/seedRegistryEntries.test.ts`.
 
-const SHIPPED = [SEED_SOURCE_PLATFORM_STARTER, SEED_SOURCE_INITIALISED];
+withOnlyOriginalSeeds();
 
 afterEach(async () => {
-  await adminDb.seedRegistryEntry.deleteMany({ where: { key: { notIn: SHIPPED } } });
+  await adminDb.seedRegistryEntry.deleteMany({ where: { key: { notIn: ORIGINAL_SEED_KEYS } } });
   await adminDb.seedRegistryEntry.updateMany({ data: { status: 'active' } });
 });
 
@@ -60,8 +64,8 @@ function entry(over: Partial<SeedRegistryEntryInput> = {}): SeedRegistryEntryInp
 
 const count = () => adminDb.seedRegistryEntry.count();
 
-describe('after the migration', () => {
-  it('holds exactly the two shipped seeds', async () => {
+describe('the two original seeds', () => {
+  it('holds exactly the two original seeds', async () => {
     const { items, nextCursor } = await seedRegistryService.list();
     expect(items.map((e) => e.key)).toEqual([
       SEED_SOURCE_INITIALISED,

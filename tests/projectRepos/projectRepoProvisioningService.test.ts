@@ -13,13 +13,11 @@ import {
 } from '@/lib/github/repoProvisioning';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { MOTIR_RUNNER_LABEL, MOTIR_RUNNER_VARIABLE } from '@/lib/ciFleet/config';
-import {
-  SEED_SOURCE_INITIALISED,
-  SEED_SOURCE_PLATFORM_STARTER,
-} from '@/lib/projectRepos/vocabulary';
+import { SEED_SOURCE_INITIALISED } from '@/lib/projectRepos/vocabulary';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { adminDb } from '../helpers/adminDb';
+import { ORIGINAL_SEED_KEYS, withOnlyOriginalSeeds } from '../helpers/seedRegistryShipped';
 import { truncateAuthTables } from '../helpers/db';
 import { createRunnerGroupFake, type RunnerGroupFake } from '../helpers/runnerGroupFake';
 import {
@@ -234,11 +232,17 @@ beforeEach(async () => {
   spyOnJobDispatch();
 });
 
+// These scenarios prove provisioning from the two original seeds, a non-web row
+// initialised; seeding a non-web row from its shipped foundation is
+// MOTIR-713's integration suite. So MOTIR-9813's four starter entries are set
+// aside for this file.
+withOnlyOriginalSeeds();
+
 afterEach(async () => {
   // The registry is migration-seeded platform data, not truncated: drop only
   // what a test registered.
   await adminDb.seedRegistryEntry.deleteMany({
-    where: { key: { notIn: [SEED_SOURCE_PLATFORM_STARTER, SEED_SOURCE_INITIALISED] } },
+    where: { key: { notIn: ORIGINAL_SEED_KEYS } },
   });
   await adminDb.seedRegistryEntry.updateMany({ data: { status: 'active' } });
   vi.unstubAllGlobals();

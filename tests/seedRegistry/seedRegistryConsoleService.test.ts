@@ -15,6 +15,7 @@ import {
 import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
 import { createTestUser } from '../fixtures/userFixtures';
 import { adminDb } from '../helpers/adminDb';
+import { ORIGINAL_SEED_KEYS, withOnlyOriginalSeeds } from '../helpers/seedRegistryShipped';
 import { truncateAuthTables } from '../helpers/db';
 import { organizationIdOf } from '../helpers/organizationOf';
 
@@ -139,6 +140,10 @@ async function motirRow(
   });
 }
 
+// The library's reads are proved from the two original seeds, so MOTIR-9813's
+// four shipped starter entries are set aside for this file.
+withOnlyOriginalSeeds();
+
 const auditRows = (action: string) => adminDb.platformAuditLog.findMany({ where: { action } });
 
 beforeEach(async () => {
@@ -150,7 +155,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await adminDb.seedRegistryEntry.deleteMany({
-    where: { key: { notIn: [SEED_SOURCE_PLATFORM_STARTER, SEED_SOURCE_INITIALISED] } },
+    where: { key: { notIn: ORIGINAL_SEED_KEYS } },
   });
   vi.restoreAllMocks();
 });
@@ -161,7 +166,7 @@ afterAll(async () => {
 });
 
 describe('the library', () => {
-  it('refuses support, and answers an operator the shipped starters as defaults, audited', async () => {
+  it('refuses support, and answers an operator the original seeds as defaults, audited', async () => {
     const support = await signInAs('support');
     await expect(
       (await fresh()).console.listLibrary(support, { status: 'active' }, 1),

@@ -34,7 +34,7 @@ export function seedEntry(
   };
 }
 
-/** The two entries Motir ships (decision MOTIR-706 v2). */
+/** The two original entries Motir ships (decision MOTIR-706 v2); MOTIR-9813 adds four. */
 export const SHIPPED_ENTRIES: SeedRegistryEntryDto[] = [
   seedEntry(SEED_SOURCE_PLATFORM_STARTER, {
     label: 'Next.js · serverless',

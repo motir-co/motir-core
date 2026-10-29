@@ -164,6 +164,17 @@ export const SEED_SOURCE_PLATFORM_STARTER = 'nextjs-prisma-serverless-starter';
 export const SEED_SOURCE_LEGACY_PLATFORM_STARTER = 'nextjs-prisma-vercel-starter';
 
 /**
+ * The four starter entries MOTIR-9813 registers (706 3.4): the Fly and AWS web
+ * starters, each deploying to exactly its one target, and the two non-web
+ * foundations, which carry no target and so are their role's default (3.8). Keys,
+ * like {@link SEED_SOURCE_PLATFORM_STARTER}: the entry names its template.
+ */
+export const SEED_SOURCE_FLY_STARTER = 'nextjs-prisma-fly-starter';
+export const SEED_SOURCE_AWS_STARTER = 'nextjs-prisma-aws-starter';
+export const SEED_SOURCE_EXPO_MOBILE_FOUNDATION = 'expo-mobile-foundation';
+export const SEED_SOURCE_SPRING_API_FOUNDATION = 'spring-api-foundation';
+
+/**
  * The honest fallback for a role the single starter does not fit (ADR §2): an
  * INITIALISED repo — a README naming the project and the row's role, a licence, a
  * `.gitignore`, a CI stub. A non-web repo starts near-empty and the flow says so

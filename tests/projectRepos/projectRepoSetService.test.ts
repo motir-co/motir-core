@@ -18,6 +18,7 @@ import {
   PROJECT_REPO_PROPOSAL_SIGNALS,
   SEED_SOURCE_INITIALISED,
   SEED_SOURCE_PLATFORM_STARTER,
+  SEED_SOURCE_SPRING_API_FOUNDATION,
 } from '@/lib/projectRepos/vocabulary';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { createTestProject } from '../fixtures/projectFixtures';
@@ -186,8 +187,9 @@ describe('a project repository SET', () => {
     ]);
     // Order is meaningful: the FIRST row is the project's primary repo (§1.3).
     expect(rows[0]!.position < rows[1]!.position).toBe(true);
-    // ADR §2: a non-web role cannot be seeded from the web starter.
-    expect(rows[1]!.seedSource).toBe(SEED_SOURCE_INITIALISED);
+    // ADR §2: a non-web role is not seeded from the web starter — it takes its
+    // role's registered foundation (706 3.8, MOTIR-9813).
+    expect(rows[1]!.seedSource).toBe(SEED_SOURCE_SPRING_API_FOUNDATION);
   });
 
   it('lets a ROLE REPEAT, distinguished by label — a service-oriented backend', async () => {

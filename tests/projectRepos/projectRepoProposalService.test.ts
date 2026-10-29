@@ -14,8 +14,9 @@ import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { ProjectRepoNameTakenError } from '@/lib/projectRepos/errors';
 import {
   PROJECT_REPO_PROPOSAL_SIGNALS,
-  SEED_SOURCE_INITIALISED,
+  SEED_SOURCE_EXPO_MOBILE_FOUNDATION,
   SEED_SOURCE_PLATFORM_STARTER,
+  SEED_SOURCE_SPRING_API_FOUNDATION,
 } from '@/lib/projectRepos/vocabulary';
 import type { ProjectRepoDto } from '@/lib/dto/projectRepos';
 import type { RawPreplanStateResponse } from '@/lib/ai/types';
@@ -202,8 +203,8 @@ describe('projectRepoProposalService.proposeRepositorySet — deriving + persist
     expect(rows[0]).toMatchObject({
       role: 'mobile',
       name: fx.project.slug,
-      // §2: no starter fits a mobile app — the row starts near-empty and says so.
-      seedSource: SEED_SOURCE_INITIALISED,
+      // 706 3.8: a mobile row takes the registered Expo foundation (MOTIR-9813).
+      seedSource: SEED_SOURCE_EXPO_MOBILE_FOUNDATION,
     });
     expect(getPreplanState).toHaveBeenCalledWith({
       coreWorkspaceId: fx.workspaceId,
@@ -247,10 +248,10 @@ describe('projectRepoProposalService.proposeRepositorySet — deriving + persist
     const rows = await readSet(fx);
     expect(rows.map((r) => [r.role, r.name, r.seedSource, r.seedMatch])).toEqual([
       // MOTIR-709: each seed comes from the matching, with HOW it was chosen — a
-      // web row with no target yet takes the role default, an api row with no
-      // registered foundation falls back to `initialised`.
+      // web row with no target yet takes the role default, and an api row takes
+      // the registered Spring foundation (MOTIR-9813) with no signal naming a stack.
       ['web', `${fx.project.slug}-web`, SEED_SOURCE_PLATFORM_STARTER, 'no_target'],
-      ['api', `${fx.project.slug}-api`, SEED_SOURCE_INITIALISED, 'no_match'],
+      ['api', `${fx.project.slug}-api`, SEED_SOURCE_SPRING_API_FOUNDATION, 'no_stack_signal'],
     ]);
     expect(rows.every((r) => r.state === 'proposed')).toBe(true);
   });
