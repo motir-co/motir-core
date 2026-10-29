@@ -71,8 +71,9 @@ import zh from '@/messages/zh.json';
 //    switch fixture first (`MOTIR_FAKE_FLEET_SWITCH_PATH`, installed by
 //    `installFakeAwsSeam`), then `MOTIR_FLEET_AGENT_RUNNER_PROVIDER`. SET to
 //    `aws` through the fixture.
-//  - CI runner (`ci_runner`): `ciRunnerOnPoolInLane`, the same fixture file —
-//    the only way it reads yes. SET to `aws` through the fixture.
+//  - CI runner (`ci_runner`): `ciRunnerOnPool`, which reads the same fixture
+//    file first, then `MOTIR_FLEET_CI_RUNNER_PROVIDER`. SET to `aws` through
+//    the fixture.
 //  - agent hoster (`agent_instance`): the stored `platform_fleet_kind_switch`
 //    row /admin/fleet-settings writes. Written OFF for the walk (and put back as
 //    it was afterwards), so it reads Fly.
