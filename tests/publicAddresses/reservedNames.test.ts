@@ -1,10 +1,17 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import {
+  MAX_APPLICATION_SLUG_LENGTH,
   MAX_SUBDOMAIN_LENGTH,
+  MIN_APPLICATION_SLUG_LENGTH,
   MIN_SUBDOMAIN_LENGTH,
+  RESERVED_SEPARATOR,
   RESERVED_SUBDOMAIN_LABELS,
   isReservedLabel,
+  refuseApplicationSlug,
   refuseLabel,
 } from '@/lib/publicAddresses/reservedNames';
 
@@ -146,6 +153,90 @@ describe('the STRUCTURAL rules — predicates, not list entries', () => {
     expect(isReservedLabel('motir-cloud')).toBe(true);
     expect(refuseLabel('motir-cloud')).toBe('structurally_reserved');
   });
+
+  it('reserves the `--` separator ANYWHERE in a workspace label', () => {
+    // `shop--acme` as a workspace label would read as application `shop` of
+    // workspace `acme`. Reserving the separator is what keeps the parse of an
+    // application host unambiguous (AMENDMENT 4 §4).
+    for (const label of ['ab--cd', 'acme--', 'shop--acme', 'a-b--c-d']) {
+      expect(isReservedLabel(label), `${label} must be structurally reserved`).toBe(true);
+    }
+    expect(refuseLabel('ab--cd')).toBe('structurally_reserved');
+    expect(refuseLabel('shop--acme')).toBe('structurally_reserved');
+    // A single hyphen stays an ordinary label.
+    expect(refuseLabel('a-b-c')).toBeNull();
+  });
+});
+
+describe('the application slug — AMENDMENT 4', () => {
+  it('accepts an ordinary slug, and a listed reserved NAME', () => {
+    // The listed names guard Motir's own hostnames at the workspace label. An
+    // application host always carries `--<workspace>`, so `admin--acme` can
+    // never be mistaken for Motir's `admin` (AMENDMENT 4 §4 rule 4).
+    for (const slug of ['web', 'shop', 'admin', 'api', 'x'.repeat(MAX_APPLICATION_SLUG_LENGTH)]) {
+      expect(refuseApplicationSlug(slug), `${slug} should be a valid slug`).toBeNull();
+    }
+  });
+
+  it('refuses a slug outside 3–30 characters', () => {
+    expect(refuseApplicationSlug('ab')).toBe('too_short');
+    expect(refuseApplicationSlug('x'.repeat(MAX_APPLICATION_SLUG_LENGTH + 1))).toBe('too_long');
+  });
+
+  it('refuses the separator inside a slug, so the host parses one way only', () => {
+    expect(refuseApplicationSlug('ab--cd')).toBe('structurally_reserved');
+  });
+
+  it('refuses bad grammar first', () => {
+    for (const slug of ['Shop', '-shop', 'shop-', 'sh_op', '_shop', '']) {
+      expect(refuseApplicationSlug(slug), `${slug} must be refused`).toBe('bad_grammar');
+    }
+  });
+
+  it('fits a whole application host label inside one DNS label', () => {
+    const longest = `${'a'.repeat(MAX_APPLICATION_SLUG_LENGTH)}${RESERVED_SEPARATOR}${'w'.repeat(
+      MAX_SUBDOMAIN_LENGTH,
+    )}`;
+    expect(longest.length).toBeLessThanOrEqual(63);
+  });
+});
+
+describe('the constants agree with the ADR', () => {
+  // Read from the ADR rather than restated, so an amendment that changes a
+  // number without changing the code (or the reverse) fails here.
+  const adr = readFileSync(
+    join(process.cwd(), 'docs/decisions/public-tenant-addresses.md'),
+    'utf8',
+  );
+  const amendment = adr.slice(adr.indexOf('### ⚠️ AMENDMENT 4'));
+  const row = (label: string): string => {
+    const match = amendment.match(
+      new RegExp(`^\\|\\s*${label}\\s*\\|\\s*\`([^\`]+)\`\\s*\\|`, 'm'),
+    );
+    expect(match, `AMENDMENT 4 §4 must carry a "${label}" row`).not.toBeNull();
+    return match![1]!;
+  };
+
+  it('§8 rules 1 and 2 are exactly RESERVED_SUBDOMAIN_LABELS', () => {
+    const section = adr.slice(adr.indexOf('### The reserved-name set'));
+    const listed = (from: string, to: string): string[] => {
+      const text = section.slice(section.indexOf(from), section.indexOf(to));
+      return [...text.matchAll(/`([a-z0-9-]+)`/g)].map((m) => m[1]!);
+    };
+    const named = [
+      ...listed('1. **Is one of', '2. **Is an impersonation'),
+      ...listed('2. **Is an impersonation', '3. **Is structurally'),
+    ];
+    expect(named).toHaveLength(42 + 16);
+    expect(new Set(named)).toEqual(RESERVED_SUBDOMAIN_LABELS);
+  });
+
+  it('AMENDMENT 4 §4 table', () => {
+    expect(row('reserved separator in a workspace label')).toBe(RESERVED_SEPARATOR);
+    expect(Number(row('longest workspace label'))).toBe(MAX_SUBDOMAIN_LENGTH);
+    expect(Number(row('shortest application slug'))).toBe(MIN_APPLICATION_SLUG_LENGTH);
+    expect(Number(row('longest application slug'))).toBe(MAX_APPLICATION_SLUG_LENGTH);
+  });
 });
 
 describe('the label grammar', () => {
@@ -163,9 +254,11 @@ describe('the label grammar', () => {
     expect(MIN_SUBDOMAIN_LENGTH).toBe(3);
   });
 
-  it('refuses a label past the DNS label limit', () => {
+  it('refuses a label past the AMENDMENT 4 cap of 30', () => {
+    // 30, not the DNS limit of 63: the label now shares one 63-octet DNS label
+    // with an application slug and the `--` separator (ADR §8 AMENDMENT 4).
     expect(refuseLabel('x'.repeat(MAX_SUBDOMAIN_LENGTH + 1))).toBe('too_long');
-    expect(MAX_SUBDOMAIN_LENGTH).toBe(63);
+    expect(MAX_SUBDOMAIN_LENGTH).toBe(30);
   });
 
   it('refuses uppercase as GRAMMAR, not as a name to fold', () => {

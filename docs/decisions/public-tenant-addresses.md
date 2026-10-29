@@ -3,7 +3,9 @@
 - **Status:** Accepted (2026-09-03)
 - **Story / Subtask:** MOTIR-3878 (Customer-owned addresses for a public project) ·
   Subtask MOTIR-4206
-- **Supersedes / superseded by:** none. **§6 (Q5) is AMENDED 2026-10-28 — see
+- **Supersedes / superseded by:** none. **§8 is AMENDED 2026-10-29 by its AMENDMENT 4**
+  (the address of each hosted application, MOTIR-9790), which also supersedes §3's
+  second paragraph and §4's one-project rule for an application host. **§6 (Q5) is AMENDED 2026-10-28 — see
   its AMENDMENT 1:** the `motir-marketing` Fly app it names no longer exists. It **closes** `public-surface-hosts.md`
   §4's reversal condition (AMENDMENT 6 of that record, written by this card) and
   is the record `public-surface-hosts.md` §9 named as owning per-tenant and
@@ -618,6 +620,8 @@ cannot drift. A claim is refused when the requested label:
 4. **Fails the shape rule**: shorter than **3** characters, longer than **63**
    (the DNS label limit), not matching `^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`, or
    containing `--` at positions 3–4 (the punycode-lookalike form).
+   **Amended 2026-10-29 (AMENDMENT 4 below):** the longest label is now **30**, and
+   `--` is refused ANYWHERE in a label as a structural reservation.
 
 The single-character and two-character exclusion is the minimum-length rule
 stated as a rule rather than a list: short labels are the scarcest and the most
@@ -1006,6 +1010,167 @@ once that reuse needed the domain to itself, the page had no reason to be there.
 
 The cost of finding it this way is one shipped story superseded the day it
 merged. The alternative was finding it after a customer had claimed a name.
+
+### ⚠️ AMENDMENT 4 (2026-10-29, Decision MOTIR-9790 · Story MOTIR-9797 · MOTIR-10025) — the address of each hosted application: `<app>--<workspace>.motir.site`, the default application, and one application per customer domain
+
+**Source.** The approved decision page _"Decision — the address of each hosted
+application: `<app>--<workspace>.motir.site`, the default application, and one
+application per customer domain"_ (decision card MOTIR-9790, page
+`cmvrcqw7200pwhpr7gnc8me53`, version 1, approved 2026-10-28). It is mirrored here
+because a workspace will hold several applications — one per Motir repository's
+production deployment (MOTIR-9797: _"The unit is the repository"_) — and every rule
+above assumed it ran one.
+
+**What it supersedes.** §3's second paragraph (_"The workspace root `acme.<base>/`
+lists that workspace's public projects"_) and the `workspace` host outcome MOTIR-4217
+built for it; §4 / §1 Q3 (_"A customer domain names ONE public project"_) for an
+application host — a customer domain names ONE APPLICATION. **Not dropped:** §3's
+answer to Q2 (a subdomain names a WORKSPACE), Amendment 3's six rules, §5's ownership
+proof, §6's certificate path and its single wildcard.
+
+#### 1. The host of an application is `<app>--<workspace>.motir.site`
+
+- `<workspace>` is the workspace's claimed label, unchanged: every rule of Amendment 3
+  and MOTIR-4528 still holds.
+- `<app>` is the **application slug**, one per application record. It is derived from
+  the repository name when the record is created (the derivation the preview host uses
+  for `<repo-slug>`); if the slug is already used in the workspace, `-2`, `-3`… is
+  appended. A workspace admin may rename it.
+- The host is stored on the application record and **resolved by lookup, never
+  parsed**, as the preview host is. The `--` separator is for readers; it is reserved
+  only so that no workspace label can ever equal an application host.
+- A workspace with no claimed label has no `motir.site` address for any of its
+  applications.
+- **An application rename stops the old host at once**, with no redirect and no hold:
+  only the workspace holding `<workspace>` can mint a `*--<workspace>` host, so a freed
+  application host can only be reused by its own workspace.
+- **A workspace rename moves every application host with it**: all `*--<old>` hosts
+  stop at once together with `<old>.motir.site` (Amendment 3 rule 2) and are held by
+  the same reservation on `<old>`. The rename confirm names how many application hosts
+  it moves.
+
+#### 2. What the bare `<workspace>.motir.site` answers
+
+| applications in the workspace               | `<workspace>.motir.site` answers                                                                                                              |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| **zero**, or none with a production release | the plain _no application deployed yet_ page — the state a customer domain shows; not a project page and not the shared 404                   |
+| **one**                                     | that application, served directly (`200`, no redirect); it is the default automatically                                                       |
+| **several**                                 | the workspace's **default application**, served directly; the first application to get an address becomes the default; an admin may change it |
+
+- The default is a workspace setting naming one application record.
+- **Removing the default never promotes another application silently**, even when one
+  is left: the bare host answers _no application deployed yet_ until an admin picks one
+  (the recycled-name hazard Amendment 3's quarantine is sized against).
+- The default also answers on its own `<app>--<workspace>` host; Motir adds no redirect
+  or canonical between the two.
+- The bare host no longer lists the workspace's public projects; those live at
+  `motir.co/p/<identifier>` (Amendment 3, decision 1).
+- A members-only application is behind the member gate on both of its `motir.site`
+  hosts; the gate is MOTIR-9817's.
+
+#### 3. A customer domain names exactly one application
+
+- **Chosen when the domain is added**: the add step asks which application it serves,
+  and the domain row stores that application record's id. The domain still belongs to
+  the workspace; §5 and §6 are unchanged.
+- **Re-pointing** moves it to another application of the same workspace — one row
+  update, effective on the next request, no certificate reissued, no DNS change. A
+  domain never names two applications, and never names "the default" indirectly.
+- **When its application is removed**, the domain stays in the workspace, unbound: its
+  host answers _no application deployed yet_ and the pane offers Re-point and Remove;
+  the certificate stays issued.
+- **When its repository is taken over** (MOTIR-711), it stops being a Motir repo and
+  Motir does not host customer repos: its `<app>--<workspace>` host and its customer
+  domains keep serving for MOTIR-9802's 30-day grace window from the transfer, and both
+  stop at the stop. Then the application record is removed, its host answers the shared
+  404, its slug is free in the workspace, and its domains are unbound as on removal.
+  **Domains do not travel with the repository.**
+
+#### 4. The reserved separator and the label grammar — the rules `reservedNames.ts` mirrors
+
+This is the part §8's reserved-name set changes, and the part
+`tests/publicAddresses/reservedNames.test.ts` reads back from this table:
+
+| Rule                                    | Value | Mirrored in `lib/publicAddresses/reservedNames.ts`                                    |
+| --------------------------------------- | ----- | ------------------------------------------------------------------------------------- |
+| reserved separator in a workspace label | `--`  | `RESERVED_SEPARATOR`; `isReservedLabel` true, `refuseLabel` → `structurally_reserved` |
+| longest workspace label                 | `30`  | `MAX_SUBDOMAIN_LENGTH`                                                                |
+| shortest application slug               | `3`   | `MIN_APPLICATION_SLUG_LENGTH`                                                         |
+| longest application slug                | `30`  | `MAX_APPLICATION_SLUG_LENGTH`                                                         |
+
+1. **A workspace label may not contain `--` anywhere**; `refuseLabel` refuses it as
+   `structurally_reserved`. This replaces rule 4's _"`--` at positions 3–4"_ clause with
+   a stricter rule, and closes the gap where `refuseLabel` never enforced that clause
+   (`refuseLabel('ab--cd')` answered `null`).
+2. **`MAX_SUBDOMAIN_LENGTH` drops from 63 to 30** for a workspace label, so
+   `<app>--<workspace>` (at most 30 + 2 + 30 = 62 characters) always fits one DNS label
+   (RFC 1035, 63).
+3. **The application-slug rule** (`refuseApplicationSlug`): `LABEL_GRAMMAR`, 3 to 30
+   characters, no `--`. The minimum of 3 matters: a 2-character slug would put `--` at
+   positions 3–4 of the full label — the punycode-lookalike form — and with the grammar
+   it also rules out a leading `xn--`.
+4. **The listed reserved names do not apply to application slugs.** The full label
+   always ends in the tenant's own workspace label, which is where the reserved set
+   protects Motir's names.
+5. **No new reserved label.** `preview` is already reserved, so no workspace can collide
+   with `preview.motir.site`. Rules 1 and 2 of §8's set are unchanged.
+
+#### Why this option, and why the other two lose
+
+| option                                      | why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `<app>--<workspace>.motir.site`, **chosen** | One label, so the single `*.motir.site` wildcard §6 holds covers every application and claiming or renaming issues no certificate. With `motir.site` on the PSL (MOTIR-5767) every application is its own registrable domain, so its own site and cookie jar. Netlify (`staging--mysitename.netlify.app`) and Vercel (`<project>-<scope>.vercel.app`) use the same single-label shape, and it matches the preview host `pr-<n>--<repo-slug>.preview.motir.site`. Its costs: an application slug per repository, a default setting per workspace, and `--` reserved in workspace labels. |
+| `<app>.<workspace>.motir.site`, rejected    | `*.motir.site` does not cover a second level, so every claimed workspace needs its own wildcard certificate, issued and renewed on every claim and rename (Let's Encrypt: 50 per registered domain per 7 days). Under a `motir.site` PSL entry, `acme.motir.site` would be the registrable domain, so its applications would share one site and could set each other's cookies. No reference host nests apps under a team label.                                                                                                                                                        |
+| `<workspace>.motir.site/<app>/…`, rejected  | Every app would run under a base path every framework must honour, and two apps would share one origin — cookies, storage and service workers colliding. No reference host does this.                                                                                                                                                                                                                                                                                                                                                                                                   |
+
+#### The change list it gives the serving cards — recorded, not performed
+
+The decision named, card by card, the sentence each consumer must change on its next
+pass. This record carries the list; **it does not edit those cards and nothing here
+waits on them.**
+
+- **MOTIR-4528's children.** MOTIR-9507 (publicSubdomainService): a rename or release of
+  the workspace label stops every `*--<label>` application host in the same transaction;
+  claim and rename refuse `--` and labels over 30 through `refuseLabel` (this amendment
+  makes `refuseLabel` do so). MOTIR-9510 / 9513 / 9514 (routes, design, control): the
+  rename / release preview and confirm name how many application hosts move; the field
+  error for `--` and the 30-character limit is its own copy. MOTIR-9511 (host contract):
+  a workspace host answers the default `application`, `no_application`, or a 404, and a
+  `<app>--<workspace>` host answers its application by lookup, under the 30-second cache
+  bound. MOTIR-9516 (Vitest gate): _"the new hostname still resolves to the workspace"_
+  becomes _"… to the workspace's default application, or `no_application`"_, plus a case
+  that a rename stops every `*--<old>` host. MOTIR-9517 (marketing gate): kind
+  `application` / `no_application`. MOTIR-9512 (router): the project-list `workspace`
+  arm goes, replaced by MOTIR-9527's forward. **New work owed, no card yet:** resolving
+  `<app>--<workspace>` and the bare host to an application record; the per-workspace
+  default-application setting and its control; the application-slug rename.
+- **MOTIR-4533's children.** MOTIR-9521: the host contract returns the application the
+  domain names. MOTIR-9522 (pane design): an application picker in Add domain, Re-point
+  on the row, and a _names no application_ state. MOTIR-9523 (store): the row carries a
+  nullable `applicationId` (null = unbound). MOTIR-9524 (lifecycle): `POST` takes
+  `{ hostname, applicationId }`, a re-point action, and removing an application unbinds
+  its domains in the same transaction. MOTIR-9525 (host contract):
+  `resolveApplicationTarget(applicationId)` read from the domain row, the `application`
+  outcome naming `{ id, slug }`, and `primaryHostsForProjects` / `addressesForProject`
+  answering `motir.co/p/<identifier>` only. MOTIR-9527 (router): the outcome gains the
+  application, and the same forward arm serves `motir.site` application hosts.
+  MOTIR-9529 (pane): the DTO carries the named application. MOTIR-9532 (docs): _"the
+  application you chose for it"_, re-pointing and removal. MOTIR-9530 / 9531 / 9533
+  (gates and E2E): re-point, unbound-after-removal, and a two-application workspace.
+  MOTIR-9819: _"to the application it names"_.
+- **MOTIR-9797** (this story): the application record carries `slug` and its
+  `motir.site` host, the workspace carries `defaultApplicationId`, and this amendment
+  lands §4 above.
+
+#### What this amendment does NOT decide
+
+The workspace label's own rules beyond the cap and the `--` refusal (Amendment 3,
+MOTIR-4528); a primary or redirect between a customer's domains, the cache bound for a
+removed host, and the member gate on a customer host (MOTIR-9521); when Motir stops
+serving an application at takeover (MOTIR-9802, MOTIR-9800); who may open an
+application (MOTIR-9817); the preview host (MOTIR-9791); where an application runs
+(MOTIR-9797, MOTIR-9791); and the application-slug derivation itself, which reuses the
+preview's.
 
 ---
 

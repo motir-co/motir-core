@@ -1,7 +1,10 @@
 // The reserved-label set and the label grammar for a workspace subdomain —
 // Story MOTIR-3878 · Subtask MOTIR-4209.
 //
-// `docs/decisions/public-tenant-addresses.md` §8 is the record. The set is
+// `docs/decisions/public-tenant-addresses.md` §8 is the record, as amended by its
+// AMENDMENT 4 (the address of each hosted application, MOTIR-9790 · MOTIR-10025),
+// which reserves the `--` separator, caps a workspace label at 30 and adds the
+// application-slug rule at the bottom of this file. The set is
 // enumerated THERE and mirrored here, and `tests/publicAddresses/reservedNames.test.ts`
 // re-derives it from the ADR's own tables so the two cannot drift: a name added
 // to the record and not to this file fails the suite, and so does the reverse.
@@ -111,8 +114,23 @@ export const RESERVED_SUBDOMAIN_LABELS: ReadonlySet<string> = new Set([
  */
 export const MIN_SUBDOMAIN_LENGTH = 3;
 
-/** The DNS label limit (RFC 1035 §2.3.4). Not ours to choose. */
-export const MAX_SUBDOMAIN_LENGTH = 63;
+/**
+ * The longest workspace label (ADR §8 AMENDMENT 4).
+ *
+ * The DNS label limit (RFC 1035 §2.3.4) is 63, but an application's host is
+ * `<app>--<workspace>.<base>` — ONE label holding both names — so each half is
+ * capped at 30 and the whole (30 + 2 + 30 = 62) always fits.
+ */
+export const MAX_SUBDOMAIN_LENGTH = 30;
+
+/**
+ * The separator between an application slug and its workspace label in an
+ * application host (ADR §8 AMENDMENT 4). It is reserved ANYWHERE in a workspace
+ * label so no workspace label can ever equal an application host — which also
+ * covers the old rule-4 clause (`--` at positions 3–4, the punycode-lookalike
+ * form) that `refuseLabel` never enforced.
+ */
+export const RESERVED_SEPARATOR = '--';
 
 /**
  * The label grammar: lowercase letters, digits and hyphens, not starting or
@@ -129,7 +147,7 @@ export type LabelRefusal =
   | 'reserved';
 
 /**
- * Is this label RESERVED — the ADR §8 set plus the two STRUCTURAL rules?
+ * Is this label RESERVED — the ADR §8 set plus the STRUCTURAL rules?
  *
  * The structural rules are predicates rather than list entries, which is the
  * whole reason they are rules:
@@ -140,7 +158,9 @@ export type LabelRefusal =
  *   * a leading `xn--` is punycode, which is the form a homograph attack
  *     arrives in. Refusing the prefix refuses the whole class without anybody
  *     enumerating confusable scripts;
- *   * a `motir-` prefix keeps the namespace's first-party-looking corner ours.
+ *   * a `motir-` prefix keeps the namespace's first-party-looking corner ours;
+ *   * a `--` anywhere is the application-host separator (AMENDMENT 4), so no
+ *     workspace label can ever equal an `<app>--<workspace>` host.
  *
  * Case is NOT normalised here. DNS labels are lowercase by the grammar above, so
  * an uppercase input is a grammar failure rather than a name to fold — the
@@ -148,10 +168,21 @@ export type LabelRefusal =
  * would make `isReservedLabel('ADMIN')` answer `false`.
  */
 export function isReservedLabel(label: string): boolean {
-  if (label.startsWith('_')) return true;
-  if (label.startsWith('xn--')) return true;
-  if (label.startsWith('motir-')) return true;
-  return RESERVED_SUBDOMAIN_LABELS.has(label);
+  return isStructurallyReserved(label) || RESERVED_SUBDOMAIN_LABELS.has(label);
+}
+
+/**
+ * The structural rules as ONE predicate, so `isReservedLabel` and `refuseLabel`
+ * cannot disagree about them: the `_`, `xn--` and `motir-` prefixes, and the
+ * reserved `--` separator anywhere in the label (AMENDMENT 4).
+ */
+function isStructurallyReserved(label: string): boolean {
+  return (
+    label.startsWith('_') ||
+    label.startsWith('xn--') ||
+    label.startsWith('motir-') ||
+    label.includes(RESERVED_SEPARATOR)
+  );
 }
 
 /**
@@ -167,9 +198,36 @@ export function refuseLabel(label: string): LabelRefusal | null {
   if (!LABEL_GRAMMAR.test(label)) return 'bad_grammar';
   if (label.length < MIN_SUBDOMAIN_LENGTH) return 'too_short';
   if (label.length > MAX_SUBDOMAIN_LENGTH) return 'too_long';
-  if (label.startsWith('_') || label.startsWith('xn--') || label.startsWith('motir-')) {
-    return 'structurally_reserved';
-  }
+  if (isStructurallyReserved(label)) return 'structurally_reserved';
   if (RESERVED_SUBDOMAIN_LABELS.has(label)) return 'reserved';
+  return null;
+}
+
+// ── The application slug (ADR §8 AMENDMENT 4, rule 3) ───────────────────────
+
+/** The shortest application slug. Below 3, `<app>--` would put `--` at positions 3–4 — the punycode-lookalike form. */
+export const MIN_APPLICATION_SLUG_LENGTH = 3;
+
+/** The longest application slug: its half of the 62-character application host. */
+export const MAX_APPLICATION_SLUG_LENGTH = 30;
+
+/** Why an application slug was refused. */
+export type ApplicationSlugRefusal = Exclude<LabelRefusal, 'reserved'>;
+
+/**
+ * May `slug` name an application inside its workspace's host
+ * `<slug>--<workspace>.<base>`? `null` when it may.
+ *
+ * The label grammar, 3 to 30 characters, and no `--`. **The listed reserved
+ * names do NOT apply** (AMENDMENT 4, rule 4): the full label always ends in the
+ * tenant's own workspace label, and the workspace label is where the reserved set
+ * protects Motir's names — so `admin--acme` is the tenant's, never Motir's. The
+ * 3-character minimum with the grammar also rules out a leading `xn--`.
+ */
+export function refuseApplicationSlug(slug: string): ApplicationSlugRefusal | null {
+  if (!LABEL_GRAMMAR.test(slug)) return 'bad_grammar';
+  if (slug.length < MIN_APPLICATION_SLUG_LENGTH) return 'too_short';
+  if (slug.length > MAX_APPLICATION_SLUG_LENGTH) return 'too_long';
+  if (slug.includes(RESERVED_SEPARATOR)) return 'structurally_reserved';
   return null;
 }

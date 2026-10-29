@@ -1,4 +1,9 @@
-import { MIN_SUBDOMAIN_LENGTH, refuseLabel } from '@/lib/publicAddresses/reservedNames';
+import {
+  MAX_SUBDOMAIN_LENGTH,
+  MIN_SUBDOMAIN_LENGTH,
+  RESERVED_SEPARATOR,
+  refuseLabel,
+} from '@/lib/publicAddresses/reservedNames';
 
 // THE REFUSAL MAP for the workspace address control (Story MOTIR-4528 ·
 // MOTIR-9514; `design/workspace-address/design-notes.md` § Field refusal).
@@ -15,19 +20,17 @@ import { MIN_SUBDOMAIN_LENGTH, refuseLabel } from '@/lib/publicAddresses/reserve
 // in the viewer's locale, long form.
 
 /**
- * The longest label the FIELD accepts, and why it is not the server's 63.
+ * The longest label the FIELD accepts — the server's own cap.
  *
  * The address decision (MOTIR-9790) gives every application of a workspace the
- * host `<label>--<app>.<base>`, and caps a workspace label at 30 so that host
- * still fits a 63-octet DNS label. The server still accepts up to
- * `MAX_SUBDOMAIN_LENGTH` (63) until the application record lands with MOTIR-9797;
- * the field holds a customer to the decided rule now, so nobody claims a name the
- * next release would refuse.
+ * host `<app>--<label>.<base>` and caps a workspace label at 30 so that host fits
+ * one 63-octet DNS label; ADR §8 AMENDMENT 4 put that cap in
+ * `MAX_SUBDOMAIN_LENGTH` (MOTIR-10025), so the field and the server now agree.
  */
-export const FIELD_MAX_LABEL_LENGTH = 30;
+export const FIELD_MAX_LABEL_LENGTH = MAX_SUBDOMAIN_LENGTH;
 
 /** The decided `--` separator (MOTIR-9790) — application addresses own it. */
-const DOUBLE_HYPHEN = '--';
+const DOUBLE_HYPHEN = RESERVED_SEPARATOR;
 
 export type RefusalSurface = 'field' | 'toast';
 
@@ -67,8 +70,9 @@ function labelRefusal(discriminator: string, label: string): RefusalMessage | nu
  * refusals the design shows as the user types. `null` when the label may be
  * submitted (or is empty: an empty field says nothing, Claim is just disabled).
  *
- * The grammar is the SERVER's own `refuseLabel`, asked rather than restated, plus
- * the two rules the address decision adds (`--`, 30 characters).
+ * The grammar is the SERVER's own `refuseLabel`, asked rather than restated. The
+ * field names `--` with its own sentence (the server reports it as a structural
+ * reservation) because the next action differs: drop the second hyphen, not the name.
  */
 export function refuseLabelInput(label: string): RefusalMessage | null {
   if (label === '') return null;
