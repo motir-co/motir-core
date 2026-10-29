@@ -31,6 +31,9 @@ import type { FakeHostingControls, HostingDeployPort } from '@motir/orchestrator
 import { getHostingDeployPort, resetHostingFakes } from '@/lib/orchestrator/hosting';
 import { resetDatabaseFakes } from '@/lib/orchestrator/database';
 import { previewEnablementService } from '@/lib/services/previewEnablementService';
+import { previewLifecycleService } from '@/lib/services/previewLifecycleService';
+import { getDatabasePort } from '@/lib/orchestrator/database';
+import type { FakeDatabaseControls } from '@motir/orchestrator';
 
 // TAKE IT OVER over real Postgres (Story MOTIR-1775 · MOTIR-711) — the handoff that
 // moves a Motir-owned repository into the user's own GitHub.
@@ -178,9 +181,13 @@ function installGitHub(): void {
  * ordering assertion must be about these two calls and nothing else, or an
  * unrelated card's new side effect breaks it.
  */
+const PREVIEW_TEARDOWN_MARK = 'motir:preview-teardown';
+
 function hostCallSequence(): string[] {
   return calls.flatMap((c) => {
     if (c.url.endsWith('/transfer') && c.method === 'POST') return ['transfer'];
+    // MOTIR-5776's step, recorded by the spy the preview-teardown suite installs.
+    if (c.url === PREVIEW_TEARDOWN_MARK) return ['preview_teardown'];
     if (c.url.endsWith('/actions/permissions') && c.method === 'PUT') return ['actions'];
     // MOTIR-5775's step: the preview push secret withdrawn while Motir still can.
     if (c.url.endsWith('/actions/secrets/MOTIR_FLY_PREVIEW_PUSH_TOKEN') && c.method === 'DELETE') {
@@ -396,6 +403,95 @@ describe('previews off before the transfer (MOTIR-5775)', () => {
     await expect(refusal).rejects.toThrow(step);
     expect(hostCallSequence()).not.toContain('transfer');
     expect((await readRow(rowId, fx)).takeover).toMatchObject({ state: 'failed' });
+  });
+});
+
+describe('previews torn down before the transfer (MOTIR-5776)', () => {
+  const fly = () => getHostingDeployPort('fly') as HostingDeployPort & FakeHostingControls;
+  const neon = () => getDatabasePort('neon') as unknown as FakeDatabaseControls;
+
+  /** A previewed row with one live preview whose app exists. */
+  async function previewedRowWithPreview(fx: WorkItemFixture) {
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fake');
+    resetHostingFakes();
+    resetDatabaseFakes();
+    const { rowId } = await motirOwnedRow(fx, 'acme-web');
+    await projectRepoSetService.setHosting(
+      rowId,
+      { target: 'fly', useCase: 'mvp', size: 'small' },
+      fx.ctx,
+    );
+    expect((await previewEnablementService.enable(rowId)).outcome).toBe('enabled');
+    const { githubRepoId } = await adminDb.projectRepo.findUniqueOrThrow({
+      where: { id: rowId },
+      select: { githubRepoId: true },
+    });
+    const app = await fly().ensureApp({
+      repositoryId: rowId,
+      environment: { kind: 'preview', pullRequest: 3 },
+    });
+    await adminDb.previewDeployment.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        repoId: githubRepoId!,
+        pullRequestNumber: 3,
+        headSha: 'f'.repeat(40),
+        host: 'pr-3--acme-web.preview.motir.site',
+        state: 'ready',
+        flyAppName: app.appRef,
+      },
+    });
+    const teardown = previewLifecycleService.teardownRepository.bind(previewLifecycleService);
+    const spy = vi
+      .spyOn(previewLifecycleService, 'teardownRepository')
+      .mockImplementation(async (...args) => {
+        calls.push({ url: PREVIEW_TEARDOWN_MARK, method: 'CALL', body: null });
+        return teardown(...args);
+      });
+    calls.length = 0;
+    return { rowId, appRef: app.appRef, spy };
+  }
+
+  it('closes every preview and destroys the image app and the Neon project AFTER disable, BEFORE the transfer', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectIdentity(fx);
+    const { rowId, appRef, spy } = await previewedRowWithPreview(fx);
+
+    await projectRepoTakeoverService.requestTakeover(rowId, NEW_OWNER, fx.ctx);
+
+    expect(hostCallSequence()).toEqual([
+      'actions',
+      'preview_secret',
+      'preview_teardown',
+      'transfer',
+    ]);
+    // Handed the namespace disable has since cleared from the row.
+    expect(spy).toHaveBeenCalledWith(rowId, { pushNamespace: `mh-${rowId}-pv` });
+    expect(await adminDb.previewDeployment.findFirstOrThrow()).toMatchObject({
+      state: 'closed',
+      flyAppName: null,
+    });
+    expect(fly().app(appRef)).toBeUndefined();
+    expect(fly().pushNamespaces()).toEqual([]);
+    expect(neon().databases()).toEqual([]);
+  });
+
+  it('a teardown that does not finish does not stop the handover', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectIdentity(fx);
+    const { rowId } = await previewedRowWithPreview(fx);
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    fly().failNext('destroyApp');
+
+    await projectRepoTakeoverService.requestTakeover(rowId, NEW_OWNER, fx.ctx);
+    expect(hostCallSequence()).toEqual([
+      'actions',
+      'preview_secret',
+      'preview_teardown',
+      'transfer',
+    ]);
+    // Committed closed before its teardown, so the reaper finishes it.
+    expect((await adminDb.previewDeployment.findFirstOrThrow()).state).toBe('closed');
   });
 });
 

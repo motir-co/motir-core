@@ -29,6 +29,10 @@
 // defineJob); the payload type therefore makes `workspaceId` optional.
 
 import type { DesignAutoRerunRequestedData } from '@/lib/services/designAutoRerunService';
+import type {
+  PreviewEffectRequestedData,
+  PreviewStartRequestedData,
+} from '@/lib/services/previewLifecycleService';
 import type { GateResumeRequestedData } from '@/lib/services/gateResumeRequest';
 import type { TransactionalEmail } from '@/lib/services/emailService';
 import type { HostedAgentSession } from '@/lib/services/hostedAgentContainerService';
@@ -632,6 +636,14 @@ export interface JobEventDataMap {
    *  head and the default branch's, off every render path. */
   'system.code-graph-drift-sweep': SystemScheduledData;
   'system.preview-enablement-sweep': SystemScheduledData;
+  /** The preview reaper (Story MOTIR-5766 · MOTIR-5776) — finishes interrupted
+   *  teardowns and closes previews whose close was missed. Cross-tenant. */
+  'system.preview-reaper': SystemScheduledData;
+  /** One effect of a committed preview transition (MOTIR-5776), enqueued by the
+   *  webhook after the transition commits. */
+  'preview/effect.requested': PreviewEffectRequestedData;
+  /** A preview image landed: start the head's release (MOTIR-5776). */
+  'preview/start.requested': PreviewStartRequestedData;
   /** The index CATCH-UP sweep (MOTIR-5290) — re-asks the internal index allowance
    *  for repositories paused by a hard stop, and refreshes only where the head
    *  moved. Cross-tenant by design. */
@@ -966,6 +978,7 @@ export type JobEventData<N extends JobEventName> = JobEventDataMap[N];
  * `email.send` + the `work-item/*` events.
  */
 export type { DesignAutoRerunRequestedData };
+export type { PreviewEffectRequestedData, PreviewStartRequestedData };
 export type { GateResumeRequestedData };
 
 export type WorkspaceScopedEventName = Exclude<JobEventName, `system.${string}`>;

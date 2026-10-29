@@ -89,6 +89,74 @@ export const previewDeploymentRepository = {
     return rows[0] ?? null;
   },
 
+  /** One row by id — what a lifecycle job re-reads before each effect. */
+  async findById(id: string, tx: Prisma.TransactionClient): Promise<PreviewDeployment | null> {
+    return tx.previewDeployment.findUnique({ where: { id } });
+  },
+
+  /** The pull request's row, if it has one. */
+  async findForPullRequest(
+    repoId: string,
+    pullRequestNumber: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<PreviewDeployment | null> {
+    return tx.previewDeployment.findUnique({
+      where: { repoId_pullRequestNumber: { repoId, pullRequestNumber } },
+    });
+  },
+
+  /**
+   * Write `patch` to a row WITHOUT moving its state, and only while it is in one
+   * of `states` — how an effect records what it made (the GitHub deployment, the
+   * app, the branch) after the transition that ordered it committed. Returns the
+   * row, or null when it has moved on and nothing was written.
+   */
+  async recordWhileIn(
+    id: string,
+    states: readonly PreviewDeploymentState[],
+    patch: PreviewDeploymentPatch,
+    tx: Prisma.TransactionClient,
+  ): Promise<PreviewDeployment | null> {
+    const rows = await tx.previewDeployment.updateManyAndReturn({
+      where: { id, state: { in: [...states] } },
+      data: patch,
+    });
+    return rows[0] ?? null;
+  },
+
+  /**
+   * Closed rows that still name a resource — an app or a branch whose teardown
+   * did not finish (MOTIR-5776's reaper). Teardown clears the names as it
+   * destroys, so a row here is exactly a teardown a crash interrupted.
+   */
+  async listUnfinishedTeardowns(
+    tx: Prisma.TransactionClient,
+    opts: { repoId?: string; limit?: number } = {},
+  ): Promise<PreviewDeployment[]> {
+    return tx.previewDeployment.findMany({
+      where: {
+        ...(opts.repoId ? { repoId: opts.repoId } : {}),
+        state: 'closed',
+        OR: [{ flyAppName: { not: null } }, { neonBranchId: { not: null } }],
+      },
+      orderBy: { updatedAt: 'asc' },
+      take: opts.limit ?? STALE_SCAN_LIMIT,
+    });
+  },
+
+  /** Bump a row's `updated_at` while it is still in `state` — the reaper's mark
+   *  that it checked the row, so the oldest-first scan moves on past it. */
+  async touch(
+    id: string,
+    state: PreviewDeploymentState,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await tx.previewDeployment.updateMany({
+      where: { id, state },
+      data: { updatedAt: new Date() },
+    });
+  },
+
   /** The row that holds a host — what serving resolves a request with. */
   async findByHost(host: string, tx?: Prisma.TransactionClient): Promise<PreviewDeployment | null> {
     const client = tx ?? dbRead;

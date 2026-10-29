@@ -3037,6 +3037,11 @@ export default defineConfig({
         'lib/preview/enablement.ts',
         'lib/github/repositoryActionsConfig.ts',
         'lib/services/previewEnablementService.ts',
+        // The preview lifecycle (MOTIR-5776).
+        'lib/preview/lifecycleEvents.ts',
+        'lib/github/previewDeployments.ts',
+        'lib/services/previewLifecycleService.ts',
+        'lib/jobs/definitions/previewLifecycle.ts',
         'lib/mappers/testInstructionsMappers.ts',
         'lib/services/testInstructionsService.ts',
         'lib/services/repoDeploymentService.ts',
@@ -8035,6 +8040,30 @@ export default defineConfig({
           statements: 90,
         },
         'lib/services/previewEnablementService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/preview/lifecycleEvents.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/github/previewDeployments.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/previewLifecycleService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/jobs/definitions/previewLifecycle.ts': {
           lines: 90,
           functions: 90,
           branches: 90,

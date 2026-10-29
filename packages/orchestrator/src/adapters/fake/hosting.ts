@@ -397,6 +397,10 @@ export function createFakeHostingDeployPort(
       injectedFailure('destroyApp');
       const app = apps.get(appRef);
       apps.delete(appRef);
+      // On Fly a push namespace IS an app (`mh-<rid>-pv`), destroyed the same way
+      // at takeover (MOTIR-5776).
+      namespaces.delete(appRef);
+      liveTokens.delete(appRef);
       if (!app?.live) return [];
       return [usage(app, app.live.releaseId, app.transitions[0]?.at ?? now())];
     },

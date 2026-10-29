@@ -276,6 +276,15 @@ describe('the fake push namespace and its credentials (MOTIR-5775)', () => {
     ).rejects.toMatchObject({ code: 'HOSTING_CUSTOMER_REPOSITORY_REFUSED' });
   });
 
+  it('destroying the namespace app removes the namespace and its credentials (MOTIR-5776)', async () => {
+    const fake = createFakeHostingDeployPort();
+    const made = await fake.ensurePushNamespace({ repositoryId: RID, kind: 'preview' });
+    await fake.mintDeployCredential({ pushNamespace: made.pushNamespace });
+    expect(await fake.destroyApp({ appRef: made.pushNamespace })).toEqual([]);
+    expect(fake.pushNamespaces()).toEqual([]);
+    expect(fake.liveCredentials(made.pushNamespace)).toBe(0);
+  });
+
   it('fails each operation once on request, changing nothing', async () => {
     const fake = createFakeHostingDeployPort();
     fake.failNext('ensurePushNamespace');

@@ -219,6 +219,28 @@ function toNested(r: JoinedRow): ProjectRepoWithRealized {
   };
 }
 
+/** What the preview lifecycle reads of a row (MOTIR-5776). */
+const PREVIEW_LIFECYCLE_SUBJECT_SELECT = {
+  id: true,
+  workspaceId: true,
+  seedSource: true,
+  state: true,
+  hostingTarget: true,
+  takeoverState: true,
+  previewPushNamespace: true,
+  previewEnabledAt: true,
+  githubRepoId: true,
+  githubRepo: {
+    select: {
+      id: true,
+      repoId: true,
+      owner: true,
+      name: true,
+      installation: { select: { installationId: true } },
+    },
+  },
+} satisfies Prisma.ProjectRepoSelect;
+
 export const projectRepoRepository = {
   /**
    * The row a STARTER PROMOTION names, in any workspace, with the repository it
@@ -1070,6 +1092,31 @@ export const projectRepoRepository = {
       orderBy: { createdAt: 'asc' },
       take: input.limit,
     });
+  },
+
+  /**
+   * The row a preview lifecycle event is about, found from the GitHub mirror row
+   * the delivery resolved to (Story MOTIR-5766 · MOTIR-5776). Every field the
+   * lifecycle decides "is this repository's preview switched on?" with, and the
+   * coordinates its outbound calls need. System context, like
+   * {@link findPreviewSubjectInTx}: a webhook has no tenant session. The first
+   * row by creation when (unusually) two projects list the same repository.
+   */
+  async findPreviewLifecycleSubjectByGithubRepoInTx(
+    githubRepoId: string,
+    tx: Prisma.TransactionClient,
+  ) {
+    return tx.projectRepo.findFirst({
+      where: { githubRepoId },
+      orderBy: { createdAt: 'asc' },
+      select: PREVIEW_LIFECYCLE_SUBJECT_SELECT,
+    });
+  },
+
+  /** {@link findPreviewLifecycleSubjectByGithubRepoInTx}, by the row's own id —
+   *  what the takeover saga holds. */
+  async findPreviewLifecycleSubjectInTx(id: string, tx: Prisma.TransactionClient) {
+    return tx.projectRepo.findUnique({ where: { id }, select: PREVIEW_LIFECYCLE_SUBJECT_SELECT });
   },
 
   /**

@@ -45,6 +45,7 @@ import { hostAccountReconcileService } from '@/lib/services/hostAccountReconcile
 import { hostAccountStateService } from '@/lib/services/hostAccountStateService';
 import { hostingTenantAccountService } from '@/lib/services/hostingTenantAccountService';
 import { previewEnablementService } from '@/lib/services/previewEnablementService';
+import { previewLifecycleService } from '@/lib/services/previewLifecycleService';
 import { ciLiveChargeService } from '@/lib/services/ciLiveChargeService';
 import { ciActionsGateService } from '@/lib/services/ciActionsGateService';
 import { ciRunnerBootService } from '@/lib/services/ciRunnerBootService';
@@ -144,6 +145,7 @@ export const jobServices = {
   hostingTenantAccountReconcile: hostingTenantAccountService,
   // The preview enablement sweep (Story MOTIR-5766 · MOTIR-5775).
   previewEnablement: previewEnablementService,
+  previewLifecycle: previewLifecycleService,
   ciActionsGate: ciActionsGateService,
   ciRunnerBoot: ciRunnerBootService,
   // The GitHub-side reconcile of the fleet's queue (MOTIR-8976).

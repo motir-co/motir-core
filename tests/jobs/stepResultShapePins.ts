@@ -505,6 +505,28 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ rows: Array<{ errorCode?: string | undefined; outcome: "already_enabled" | "enabled" | "failed" | "ineligible" | "not_found" | "renewed"; repositoryId: string }> }',
   },
+  '`preview-${data.effect}`': {
+    file: 'lib/jobs/definitions/previewLifecycle.ts',
+    shape: '{ status: string }',
+  },
+  '`preview-health-${poll}`': {
+    file: 'lib/jobs/definitions/previewLifecycle.ts',
+    shape: '"healthy" | "pending" | "unhealthy"',
+  },
+  'preview-reaper': {
+    file: 'lib/jobs/definitions/previewLifecycle.ts',
+    shape:
+      '{ announced: number; closed: number; failed: number; startsAbandoned: number; teardownsFinished: number }',
+  },
+  'preview-settle': {
+    file: 'lib/jobs/definitions/previewLifecycle.ts',
+    shape: '{ status: "failed" | "ready" | "skipped" }',
+  },
+  'preview-start': {
+    file: 'lib/jobs/definitions/previewLifecycle.ts',
+    shape:
+      '{ handle: { appRef: string; environment: { kind: "preview"; pullRequest: number } | { kind: "production" }; providerRef: string; releaseId: string; target: "aws" | "fly" | "serverless" }; status: "deployed" } | { reason: string; status: "failed" } | { status: "skipped" }',
+  },
   'recompute-code-graph-drift': {
     file: 'lib/jobs/definitions/codeGraphDriftSweep.ts',
     shape: '{ counted: number; indeterminate: number; scanned: number; skipped: number }',

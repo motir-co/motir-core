@@ -68,6 +68,7 @@ import { supervisionSweep } from './definitions/supervisionSweep';
 import { abandonedPlanSweep } from './definitions/abandonedPlanSweep';
 import { codeGraphDriftSweep } from './definitions/codeGraphDriftSweep';
 import { previewEnablementSweep } from './definitions/previewEnablementSweep';
+import { previewEffect, previewReaper, previewStart } from './definitions/previewLifecycle';
 import { codeGraphIndexCatchUp } from './definitions/codeGraphIndexCatchUp';
 import { jobRunReap } from './definitions/jobRunReap';
 import { jobQueueRetention } from './definitions/jobQueueRetention';
@@ -181,6 +182,10 @@ export const jobDefinitions = [
   codeGraphDriftSweep,
   // The preview enablement sweep (Story MOTIR-5766 · MOTIR-5775).
   previewEnablementSweep,
+  // The preview lifecycle (Story MOTIR-5766 · MOTIR-5776).
+  previewEffect,
+  previewStart,
+  previewReaper,
   codeGraphIndexCatchUp,
   jobRunReap,
   jobQueueRetention,
