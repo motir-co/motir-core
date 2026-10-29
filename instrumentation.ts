@@ -175,6 +175,13 @@ export async function register() {
   const { startMetricsServer } = await import('@/lib/monitoring/metricsServer');
   startMetricsServer();
 
+  // This process's event-loop delay as CloudWatch embedded-metric lines on
+  // stdout when `MONITORING_CLOUDWATCH_NAMESPACE` is set (MOTIR-9881); unset
+  // starts nothing and writes nothing. The worker and relay start their own from
+  // `main()`.
+  const { startEventLoopDelayPublisher } = await import('@/lib/monitoring/cloudwatchMetrics');
+  startEventLoopDelayPublisher();
+
   // Every E2E seam, from the ONE table the job worker installs from too
   // (`lib/test-mock-seams.ts`, MOTIR-5837). Dynamic, like every import below the
   // runtime gate, so the Edge bundle never analyses the mocks.
