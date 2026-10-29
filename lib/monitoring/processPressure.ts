@@ -59,7 +59,7 @@ const PROC_STAT = '/proc/stat';
 // ABI on x86-64 and arm64 Linux (what Fly runs) — an ASSUMPTION, since nothing in
 // Node exposes `sysconf(_SC_CLK_TCK)`; a host with another value would report
 // steal scaled by the ratio.
-const MS_PER_TICK = 1000 / 100;
+export const MS_PER_TICK = 1000 / 100;
 const BYTES_PER_MIB = 1024 * 1024;
 
 /** Reads one file's text, or null when it cannot be read. */
@@ -106,7 +106,7 @@ function cpuStatField(text: string, key: string): number | null {
 }
 
 /** The `steal` column — the 8th number — of `/proc/stat`'s aggregate `cpu` line. */
-function procStatSteal(text: string): number | null {
+export function procStatSteal(text: string): number | null {
   const line = text.split('\n').find((l) => l.startsWith('cpu '));
   if (!line) return null;
   const fields = line.trim().split(/\s+/).slice(1);
