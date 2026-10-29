@@ -64,7 +64,7 @@ export interface ProductionSwitch {
 /** Optional values a move records beside the new state. */
 export type ReleaseTransitionDetails = Pick<
   HostedReleaseStamp,
-  'failureReason' | 'artifactRef' | 'providerReleaseId'
+  'failureReason' | 'artifactRef' | 'providerReleaseId' | 'providerRef'
 >;
 
 export interface CreateReleaseInput {

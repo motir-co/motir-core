@@ -21,6 +21,7 @@ import { hostedApplicationRepository } from '@/lib/repositories/hostedApplicatio
 import { hostedReleaseRepository } from '@/lib/repositories/hostedReleaseRepository';
 import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
 import { hostedApplicationService } from '@/lib/services/hostedApplicationService';
+import { hostedReleaseUsageService } from '@/lib/services/hostedReleaseUsageService';
 import { hostedRepositoryAccessService } from '@/lib/services/hostedRepositoryAccessService';
 import { productionDatabaseService } from '@/lib/services/productionDatabaseService';
 import { withSystemContext } from '@/lib/workspaces/context';
@@ -203,6 +204,16 @@ async function deployProductionRelease(
       }
     }
 
+    // Close the serving release's usage window while it still serves: once the
+    // deploy replaces it the port need not answer for its handle (MOTIR-10034).
+    // Never fails the release — a settle that cannot read records nothing.
+    const serving = (
+      await hostedApplicationService.getApplicationForRepositorySystem(input.projectRepositoryId)
+    )?.currentRelease;
+    if (serving?.state === 'live') {
+      await hostedReleaseUsageService.settleReleaseUsage(serving.id);
+    }
+
     const handle = await inStep(id, 'deploy', () =>
       port.deploy({
         appRef,
@@ -220,7 +231,7 @@ async function deployProductionRelease(
         id,
         'releasing',
         'live',
-        { providerReleaseId: handle.releaseId },
+        { providerReleaseId: handle.releaseId, providerRef: handle.providerRef },
         tx,
       );
       await hostedApplicationService.swapCurrentRelease(app.id, id, tx);

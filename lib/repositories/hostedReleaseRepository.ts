@@ -2,6 +2,7 @@ import type {
   HostedRelease,
   HostedReleaseCause,
   HostedReleaseState,
+  HostingTarget,
   Prisma,
 } from '@/generated/prisma/client';
 import { dbRead } from '@/lib/db';
@@ -20,7 +21,10 @@ export interface HostedReleaseInsert {
 
 /** The columns a state move may stamp alongside the state. */
 export type HostedReleaseStamp = Partial<
-  Pick<HostedRelease, 'liveAt' | 'endedAt' | 'failureReason' | 'artifactRef' | 'providerReleaseId'>
+  Pick<
+    HostedRelease,
+    'liveAt' | 'endedAt' | 'failureReason' | 'artifactRef' | 'providerReleaseId' | 'providerRef'
+  >
 >;
 
 /** The facts posting a release's GitHub deployment status reads (MOTIR-10033). */
@@ -31,6 +35,17 @@ export interface ReleaseStatusTarget {
   statusPostedState: string | null;
   projectRepositoryId: string;
   productionAddress: string | null;
+}
+
+/** The facts settling a release's usage reads (MOTIR-10034). */
+export interface ReleaseUsageTarget {
+  state: HostedReleaseState;
+  liveAt: Date | null;
+  usageSettledUntil: Date | null;
+  providerReleaseId: string | null;
+  providerRef: string | null;
+  target: HostingTarget;
+  projectRepositoryId: string;
 }
 
 export const hostedReleaseRepository = {
@@ -155,5 +170,54 @@ export const hostedReleaseRepository = {
   async findWorkspaceId(id: string, tx: Prisma.TransactionClient): Promise<string | null> {
     const row = await tx.hostedRelease.findUnique({ where: { id }, select: { workspaceId: true } });
     return row?.workspaceId ?? null;
+  },
+
+  /** What settling a release's usage reads (MOTIR-10034): the release's own
+   *  window and handle columns, and its application's target and repository. */
+  async findUsageTarget(
+    id: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<ReleaseUsageTarget | null> {
+    const row = await tx.hostedRelease.findUnique({
+      where: { id },
+      select: {
+        state: true,
+        liveAt: true,
+        usageSettledUntil: true,
+        providerReleaseId: true,
+        providerRef: true,
+        application: { select: { target: true, projectRepositoryId: true } },
+      },
+    });
+    if (!row) return null;
+    const { application, ...release } = row;
+    return {
+      ...release,
+      target: application.target,
+      projectRepositoryId: application.projectRepositoryId,
+    };
+  },
+
+  /**
+   * Add one settled window to the release's usage, ONE conditional statement:
+   * it matches only while `usage_settled_until` is still what the settler read
+   * (`expectedSettledUntil`, null the first time), so two settles of one window
+   * add it once. Returns whether the row changed.
+   */
+  async addSettledUsage(
+    id: string,
+    window: { expectedSettledUntil: Date | null; seconds: number; settledUntil: Date },
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    // Raw, because a never-settled release's `usage_seconds` is NULL and an
+    // ORM increment of NULL stays NULL.
+    const changed = await tx.$executeRaw`
+      UPDATE "hosted_release"
+         SET "usage_seconds" = COALESCE("usage_seconds", 0) + ${window.seconds}::int,
+             "usage_settled_until" = ${window.settledUntil}::timestamptz,
+             "updated_at" = now()
+       WHERE "id" = ${id}
+         AND "usage_settled_until" IS NOT DISTINCT FROM ${window.expectedSettledUntil}::timestamptz`;
+    return changed === 1;
   },
 };
