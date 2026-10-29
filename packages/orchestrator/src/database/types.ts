@@ -60,6 +60,29 @@ export interface DatabaseSummary {
   readonly handle: DatabaseHandle;
 }
 
+/** One BRANCH of an application's database (MOTIR-5772) — what a pull-request
+ *  preview runs on: MOTIR-5769 §6 gives each preview branch `pr-<n>` of its
+ *  repository's data-free preview database. `branchRef` is opaque above the
+ *  adapter, and, like the database handle, no field holds a connection string. */
+export interface DatabaseBranchHandle {
+  readonly database: DatabaseHandle;
+  readonly branchRef: string;
+  /** The name it was created under — unique within its database. */
+  readonly name: string;
+}
+
+export interface CreateBranchInput {
+  /** A DNS-label-shaped name, unique within the database (`pr-12`). */
+  readonly name: string;
+}
+
+/** A created (or found) branch and its connection pairs — the branch's own
+ *  credentials, never its database's. */
+export interface DatabaseBranchCreated {
+  readonly branch: DatabaseBranchHandle;
+  readonly env: readonly ReleaseEnvVar[];
+}
+
 export interface DatabasePort {
   readonly provider: DatabaseProvider;
   /** Create the application's database. Idempotent on `applicationRef`: an
@@ -78,4 +101,14 @@ export interface DatabasePort {
   deleteDatabase(handle: DatabaseHandle): Promise<DatabaseUsage>;
   /** The databases this port holds. */
   list(): Promise<DatabaseSummary[]>;
+  /** Create a branch of the database from its root, with its own connection
+   *  pairs. Idempotent on `name`: an existing branch is returned, never a
+   *  second one, so a redelivered webhook makes one preview database. Throws
+   *  `DatabaseNotFoundError` when the handle names no database, and
+   *  `DatabaseBranchNameInvalidError` before any provider call. */
+  createBranch(database: DatabaseHandle, input: CreateBranchInput): Promise<DatabaseBranchCreated>;
+  /** Delete the branch, returning its usage over its life. An already-gone
+   *  branch — or a database already gone with it — is deleted with zero usage,
+   *  so teardown is idempotent. */
+  deleteBranch(branch: DatabaseBranchHandle): Promise<DatabaseUsage>;
 }

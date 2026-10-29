@@ -1665,6 +1665,8 @@ model Workspace {
   testInstructionsRepos       TestInstructionsRepo[]
   // Preview deployments reported by connected repositories (MOTIR-5329). Cascade.
   repoDeployments             RepoDeployment[]
+  // Motir's own previews of pull requests (MOTIR-5772). Cascade.
+  previewDeployments          PreviewDeployment[]
   /// Approval gates scoped to this workspace (the routing read's tenancy half).
   approvalGates               ApprovalGate[]
   /// Automatic hosted re-runs after a design Revise (MOTIR-700).
@@ -8372,6 +8374,8 @@ model GithubRepo {
   testInstructionsRepos       TestInstructionsRepo[]
   /// Preview deployments this repository's host reported (MOTIR-5329). Cascade.
   repoDeployments             RepoDeployment[]
+  /// Motir's own previews of this repository's pull requests (MOTIR-5772). Cascade.
+  previewDeployments          PreviewDeployment[]
 
   @@unique([installationId, repoId])
   @@index([installationId])
@@ -8951,6 +8955,61 @@ model RepoDeployment {
   @@index([repoId, ref])
   @@index([workspaceId])
   @@map("repo_deployment")
+}
+
+/// The lifecycle of a Motir-hosted preview — MOTIR-5769's closed enum, verbatim
+/// (§9 "States"). Moves only through `previewDeploymentRepository.transition`.
+enum PreviewDeploymentState {
+  building
+  starting
+  ready
+  failed
+  closed
+}
+
+/// ONE preview of one pull request on a Motir-hosted repository (Story MOTIR-5766
+/// · MOTIR-5772): Motir's own OPERATING record — what it started, where it lives
+/// and what state it is in. Distinct from `RepoDeployment`, which is what a host
+/// REPORTS through `deployment_status` and stays the display store; the lifecycle
+/// posts GitHub statuses that land there, and nothing here writes to it.
+///
+/// One row per `(repo, pull request)` for the pull request's whole life: a new
+/// head moves the same row back to `building`, and a closed one keeps its row so
+/// the host it held is never handed to another repository's preview.
+model PreviewDeployment {
+  id                 String                 @id @default(cuid())
+  /// The repository's tenancy, copied onto the row so the policy is a pure gate
+  /// (the `repo_deployment` precedent).
+  workspaceId        String                 @map("workspace_id")
+  repoId             String                 @map("repo_id")
+  pullRequestNumber  Int                    @map("pull_request_number")
+  headSha            String                 @map("head_sha")
+  /// The full `pr-<n>--<slug>.<preview domain>` (`lib/preview/hostName.ts`).
+  /// Looked up host → row, never parsed back into a repository.
+  host               String                 @unique
+  state              PreviewDeploymentState @default(building)
+  /// Why it is `failed`, written for a person; null otherwise.
+  failureReason      String?                @map("failure_reason")
+  /// The provider's names for the release and its database, as the deploy and
+  /// database ports return them. The column names are the card's; on a
+  /// non-Fly target `fly_app_name` holds the port's app reference.
+  flyAppName         String?                @map("fly_app_name")
+  flyMachineId       String?                @map("fly_machine_id")
+  neonProjectId      String?                @map("neon_project_id")
+  neonBranchId       String?                @map("neon_branch_id")
+  githubDeploymentId String?                @map("github_deployment_id")
+  createdAt          DateTime               @default(now()) @map("created_at")
+  updatedAt          DateTime               @updatedAt @map("updated_at")
+  closedAt           DateTime?              @map("closed_at")
+
+  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  repo      GithubRepo @relation(fields: [repoId], references: [id], onDelete: Cascade)
+
+  @@unique([repoId, pullRequestNumber])
+  /// The reaper's scan: rows not yet closed, oldest first.
+  @@index([state, updatedAt])
+  @@index([workspaceId])
+  @@map("preview_deployment")
 }
 
 /// THE CI feedback comment for one `(change request, head commit, work item)`

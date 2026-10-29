@@ -81,6 +81,24 @@ describe('createFakeDatabasePort', () => {
     expect(JSON.stringify(fake.databases())).not.toContain('postgresql://');
   });
 
+  it('lists its branches across databases, without their connection strings (MOTIR-5772)', async () => {
+    const fake = createFakeDatabasePort({ start: START });
+    const a = await fake.createDatabase({ applicationRef: 'a-pv' });
+    const b = await fake.createDatabase({ applicationRef: 'b-pv' });
+    const one = await fake.createBranch(a.handle, { name: 'pr-1' });
+    fake.advanceSeconds(10);
+    const two = await fake.createBranch(b.handle, { name: 'pr-1' });
+    expect(fake.branches()).toEqual([
+      { branch: one.branch, createdAt: START },
+      { branch: two.branch, createdAt: new Date(START.getTime() + 10_000) },
+    ]);
+    expect(JSON.stringify(fake.branches())).not.toContain('postgresql://');
+    // A stale ref under a live name is not that branch.
+    const stale = await fake.deleteBranch({ ...one.branch, branchRef: 'fake-br-0' });
+    expect(stale.computeSeconds).toBe(0);
+    expect(fake.branches()).toHaveLength(2);
+  });
+
   it('treats a stale handle as not found, and its delete as already gone', async () => {
     const fake = createFakeDatabasePort();
     const first = await fake.createDatabase({ applicationRef: 'app' });

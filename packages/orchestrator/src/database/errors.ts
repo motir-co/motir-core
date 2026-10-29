@@ -22,3 +22,23 @@ export class DatabaseApplicationRefInvalidError extends Error {
     this.name = 'DatabaseApplicationRefInvalidError';
   }
 }
+
+/** A branch name is not a DNS label (lowercase letters, digits and inner
+ *  hyphens, at most 63 characters). Refused before any provider call
+ *  (MOTIR-5772). */
+export class DatabaseBranchNameInvalidError extends Error {
+  readonly code = 'DATABASE_BRANCH_NAME_INVALID' as const;
+  constructor(readonly branchName: string) {
+    super(`"${branchName}" is not a database branch name.`);
+    this.name = 'DatabaseBranchNameInvalidError';
+  }
+}
+
+const BRANCH_NAME = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+
+/** The name, or the typed refusal. Shared by every adapter so they refuse the
+ *  same names. */
+export function assertDatabaseBranchName(name: string): string {
+  if (!BRANCH_NAME.test(name)) throw new DatabaseBranchNameInvalidError(name);
+  return name;
+}
