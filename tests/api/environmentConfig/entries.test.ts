@@ -247,11 +247,12 @@ describe('environment entry routes', () => {
       const text = await bodyText(res);
       expect(text).not.toContain(SECRET);
       expect(text).not.toContain(replacedCipher);
-      expect(text).not.toContain('v1.');
+      // At a word start, so a generated id that ends in `v1` before a full stop is not a match.
+      expect(text).not.toMatch(/\bv1\./);
     }
     for (const line of logged) {
       expect(line).not.toContain(SECRET);
-      expect(line).not.toContain('v1.');
+      expect(line).not.toMatch(/\bv1\./);
     }
   });
 
