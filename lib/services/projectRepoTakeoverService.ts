@@ -149,18 +149,20 @@ export const projectRepoTakeoverService = {
       // reaches it, so this is the last moment they are usable.
       return {
         projectId: row.projectId,
-        installationId: row.githubRepo!.installationId,
+        installationRowId: row.githubRepo!.installationId,
         owner: row.githubRepo!.owner,
         repo: row.githubRepo!.name,
       };
     });
 
     // ── 2 · The host calls, IN ORDER, outside any transaction ────────────────
+    let installationId: string;
     try {
+      installationId = await hostInstallationIdOf(claimed.installationRowId);
       // §G — re-enable FIRST, unconditionally. Idempotent by construction (a PUT
       // of a desired state), so a retry after a lost response is free.
       await actionsPermissionsClient.setActionsEnabled({
-        installationId: claimed.installationId,
+        installationId,
         owner: claimed.owner,
         repo: claimed.repo,
         enabled: true,
@@ -175,7 +177,7 @@ export const projectRepoTakeoverService = {
     let accepted = false;
     try {
       const result = await repoTransferClient.transferRepo({
-        installationId: claimed.installationId,
+        installationId,
         owner: claimed.owner,
         repo: claimed.repo,
         newOwner: target,
@@ -448,6 +450,27 @@ function assertTransferable(rowId: string, row: ProjectRepoWithRealized): void {
   if (row.state !== 'created' || !row.githubRepo) {
     throw new ProjectRepoNotTransferableError(rowId, 'not_realized');
   }
+}
+
+/**
+ * GitHub's NUMERIC installation id for a mirror row's `installationId` (MOTIR-10062).
+ *
+ * The mirror's column is the foreign key to `GithubInstallation.id` — Motir's own
+ * cuid, which GitHub has never issued, so a token minted for it is a 404 and the
+ * takeover would fail at its very first host call. Read under `withSystemContext`
+ * because the provisioning installation every Motir-created repository lives in
+ * is shared and has no `workspace_id`: the tenant context the claim runs in cannot
+ * see it. The mapping is immutable, so reading it after the claim's lock is safe.
+ */
+async function hostInstallationIdOf(installationRowId: string): Promise<string> {
+  const ids = await withSystemContext((tx) =>
+    githubInstallationRepository.findHostInstallationIdsByIds([installationRowId], tx),
+  );
+  const installationId = ids.get(installationRowId);
+  if (!installationId) {
+    throw new Error('the GitHub installation this repository lives in is no longer on record');
+  }
+  return installationId;
 }
 
 /** Find the row, check the caller may edit its project, lock it, and re-read it
