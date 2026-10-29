@@ -4149,14 +4149,20 @@
         "github": "GitHub"
       },
       "state": {
-        "connected": "Gekoppeld"
+        "connected": "Gekoppeld",
+        "needsReauth": "Opnieuw aanmelden nodig"
       },
       "connectedOn": "Gekoppeld op {date}",
       "connect": "GitHub koppelen",
       "disconnect": "Ontkoppelen",
+      "reconnect": "Opnieuw verbinden",
       "empty": {
         "title": "Geen git-account gekoppeld",
         "description": "Als je er een koppelt, kan Motir je uitnodigen voor de repository's waarin je projecten werken en het werk dat je doet ondertekenen. Het leest alleen je openbare profiel — het geeft geen toegang tot code."
+      },
+      "reauth": {
+        "title": "Verbind je GitHub-account opnieuw.",
+        "body": "GitHub accepteert deze aanmelding niet meer, dus Motir kan niet meer bevestigen wie je daar bent. Verder is er niets aan je account veranderd."
       },
       "noInstallation": {
         "title": "Je account is gekoppeld. Dat van je organisatie niet.",

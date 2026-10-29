@@ -10,6 +10,12 @@ import {
 } from '@/lib/settings/accountSettingsNav';
 import { GITHUB_RETURN_SURFACES } from '@/lib/github/returnSurface';
 import { DisconnectAccountButton } from '@/app/(authed)/settings/account/git/_components/DisconnectAccountButton';
+import {
+  GitAccountCard,
+  type GitAccountCardCopy,
+} from '@/app/(authed)/settings/account/git/_components/GitAccountCard';
+import en from '@/messages/en.json';
+import type { GithubIdentityDTO } from '@/lib/dto/github';
 
 // Settings → Account → GIT ACCOUNTS (Story MOTIR-4669 · MOTIR-4682).
 //
@@ -162,5 +168,90 @@ describe('the INK — danger on a page surface', () => {
   it('renders the label from the catalogue, not a literal', () => {
     renderWithIntl(<DisconnectAccountButton />);
     expect(screen.getByRole('button', { name: 'Disconnect' })).toBeTruthy();
+  });
+});
+
+describe('NEEDS RE-AUTH — the design`s fourth state (Bug MOTIR-10047)', () => {
+  // Panel 10 · B of `design/settings/account-settings.mock.html`: a danger
+  // notice, the row kept with a peach `Needs re-auth` pill, and a primary
+  // `Reconnect`. Rendered when GitHub refused to renew the member's sign-in
+  // (`needsReauth`, from `refresh_refused_at` — MOTIR-10021).
+  const c = en.settings.gitAccounts;
+  const copy: GitAccountCardCopy = {
+    host: c.host.github,
+    connected: c.state.connected,
+    connectedOn: 'Connected on 12 August 2026',
+    needsReauth: c.state.needsReauth,
+    reauthTitle: c.reauth.title,
+    reauthBody: c.reauth.body,
+    reconnect: c.reconnect,
+    noInstallationTitle: c.noInstallation.title,
+    noInstallationBody: c.noInstallation.body,
+  };
+  const identity = (needsReauth: boolean): GithubIdentityDTO => ({
+    id: 'gi_1',
+    githubUserId: '4242',
+    githubLogin: 'zhuyue',
+    avatarUrl: null,
+    createdAt: '2026-08-12T09:00:00.000Z',
+    needsReauth,
+  });
+  const RECONNECT = '/api/github/oauth/start?from=accountGit';
+
+  it('renders the notice, the warning pill and Reconnect — and no Connected, no Disconnect', () => {
+    const { container } = renderWithIntl(
+      <GitAccountCard
+        identity={identity(true)}
+        hasInstallation={false}
+        reconnectHref={RECONNECT}
+        copy={copy}
+      />,
+    );
+
+    expect(screen.getByRole('alert').textContent).toContain('Reconnect your GitHub account.');
+    expect(screen.getByText('Needs re-auth')).toBeTruthy();
+    const reconnect = screen.getByRole('link', { name: 'Reconnect' });
+    expect(reconnect.getAttribute('href')).toBe(RECONNECT);
+
+    expect(screen.queryByText('Connected')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Disconnect' })).toBeNull();
+    // A dead sign-in is what the member has to act on; state C's quiet note is not.
+    expect(container.textContent).not.toContain(c.noInstallation.title);
+  });
+
+  it('`Reconnect` is the same OAuth round trip `Connect GitHub` starts, back to this pane', () => {
+    expect(PAGE).toContain('reconnectHref={OAUTH_START_PATH}');
+    expect(PAGE).toContain("const OAUTH_START_PATH = '/api/github/oauth/start?from=accountGit'");
+  });
+
+  it('the notice glyph takes --el-danger-on-surface, never --el-danger-text', () => {
+    const { container } = renderWithIntl(
+      <GitAccountCard
+        identity={identity(true)}
+        hasInstallation
+        reconnectHref={RECONNECT}
+        copy={copy}
+      />,
+    );
+    const notice = container.querySelector('[role="alert"]');
+    expect(notice?.className).toContain('bg-(--el-danger-surface)');
+    expect(notice?.querySelector('svg')?.getAttribute('class')).toContain('--el-danger-on-surface');
+    expect(notice?.innerHTML).not.toContain('--el-danger-text');
+  });
+
+  it('…and a live sign-in still renders Connected with Disconnect — the counterfactual', () => {
+    renderWithIntl(
+      <GitAccountCard
+        identity={identity(false)}
+        hasInstallation
+        reconnectHref={RECONNECT}
+        copy={copy}
+      />,
+    );
+    expect(screen.getByText('Connected')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Disconnect' })).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByText('Needs re-auth')).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Reconnect' })).toBeNull();
   });
 });

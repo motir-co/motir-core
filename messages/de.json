@@ -4149,14 +4149,20 @@
         "github": "GitHub"
       },
       "state": {
-        "connected": "Verbunden"
+        "connected": "Verbunden",
+        "needsReauth": "Erneute Anmeldung nötig"
       },
       "connectedOn": "Verbunden am {date}",
       "connect": "GitHub verbinden",
       "disconnect": "Trennen",
+      "reconnect": "Erneut verbinden",
       "empty": {
         "title": "Kein Git-Konto verbunden",
         "description": "Wenn Sie eines verbinden, kann Motir Sie zu den Repositorys einladen, an denen Ihre Projekte arbeiten, und Ihre Arbeit signieren. Es liest nur Ihr öffentliches Profil – es gewährt keinen Zugriff auf Code."
+      },
+      "reauth": {
+        "title": "Verbinden Sie Ihr GitHub-Konto erneut.",
+        "body": "GitHub akzeptiert diese Anmeldung nicht mehr, daher kann Motir nicht mehr bestätigen, wer Sie dort sind. Sonst hat sich an Ihrem Konto nichts geändert."
       },
       "noInstallation": {
         "title": "Ihr Konto ist verbunden. Das Ihrer Organisation nicht.",

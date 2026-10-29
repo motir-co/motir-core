@@ -4149,14 +4149,20 @@
         "github": "GitHub"
       },
       "state": {
-        "connected": "已连接"
+        "connected": "已连接",
+        "needsReauth": "需要重新授权"
       },
       "connectedOn": "连接于 {date}",
       "connect": "连接 GitHub",
       "disconnect": "断开连接",
+      "reconnect": "重新连接",
       "empty": {
         "title": "尚未连接 Git 账户",
         "description": "连接后，Motir 可以把你邀请到项目所使用的仓库，并为你的工作署名。它只读取你的公开资料——不会获得任何代码的访问权限。"
+      },
+      "reauth": {
+        "title": "请重新连接你的 GitHub 账户。",
+        "body": "GitHub 已不再接受此次登录，因此 Motir 无法再确认你在 GitHub 上的身份。你账户的其他内容均未改变。"
       },
       "noInstallation": {
         "title": "你的账户已连接，你的组织尚未连接。",
