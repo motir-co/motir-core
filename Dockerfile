@@ -230,6 +230,13 @@ RUN pnpm build:fleet-admin
 # fleet-admin way (`scripts/build-deploy-check.mjs`).
 RUN pnpm build:deploy-check
 
+# ── the rehearsal breach bundle (MOTIR-9884) ────────────────────────────────
+# `node breach/breach.mjs <memory|cpu|loop>` proves each CloudWatch alarm by a
+# real breach. It runs ONLY as an ECS one-off task on a rehearsal service, and
+# does nothing without MOTIR_BREACH_ENABLED=true; bundled the fleet-admin way
+# (`scripts/build-breach.mjs`).
+RUN pnpm build:breach
+
 
 # ── assert the standalone output stayed small — the prune's successor ────────
 # ⚠️ THIS STEP USED TO PRUNE. It does not any more, because there is nothing
@@ -408,6 +415,13 @@ COPY --from=builder --chown=nextjs:nodejs /app/.fleet-admin/fleet-admin.mjs.map 
 # resolve upward into `/app/node_modules`.
 COPY --from=builder --chown=nextjs:nodejs /app/.deploy-check/deploy-check.mjs ./hosting/deploy-check.mjs
 COPY --from=builder --chown=nextjs:nodejs /app/.deploy-check/deploy-check.mjs.map ./hosting/deploy-check.mjs.map
+
+# ── /app/breach — the rehearsal breach (MOTIR-9884) ─────────────────────────
+# Run only as an ECS one-off task of this image on a rehearsal service, never by
+# a process group; inert without MOTIR_BREACH_ENABLED=true. The map is copied so
+# an error names a source line.
+COPY --from=builder --chown=nextjs:nodejs /app/.breach/breach.mjs ./breach/breach.mjs
+COPY --from=builder --chown=nextjs:nodejs /app/.breach/breach.mjs.map ./breach/breach.mjs.map
 
 # ── the RUNNING process must be able to name its own build (MOTIR-3760) ─────
 # ⚠️ THE BUILDER STAGE'S `MOTIR_RELEASE` DOES NOT REACH HERE, AND FOR MONTHS
