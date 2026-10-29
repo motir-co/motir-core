@@ -82,6 +82,7 @@ import { designAutoRerun } from './definitions/designAutoRerun';
 import { gateResume } from './definitions/gateResume';
 import { pullRequestBaseMoved } from './definitions/pullRequestBaseMoved';
 import { productionMergeRelease } from './definitions/productionMergeRelease';
+import { productionConfigRedeploy } from './definitions/productionConfigRedeploy';
 import { pullRequestHeadMoved } from './definitions/pullRequestHeadMoved';
 import {
   monitorConnectionPoll,
@@ -203,6 +204,8 @@ export const jobDefinitions = [
   pullRequestHeadMoved,
   // A merge starts a production release (Story MOTIR-9797 · MOTIR-10031).
   productionMergeRelease,
+  // A production config change redeploys the live release (MOTIR-10032).
+  productionConfigRedeploy,
   // The monitor-issue reconciler (Story MOTIR-4929 · MOTIR-5581): the tick and
   // its per-connection fan-out.
   monitorIssueReconcileTick,

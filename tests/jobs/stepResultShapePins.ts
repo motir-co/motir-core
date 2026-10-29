@@ -189,6 +189,19 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/services/codeGraphIndexDispatchService.ts',
     shape: '{ refusedForSize: null } | { refusedForSize: { capBytes: number; sizeBytes: number } }',
   },
+  // A merge starts a production release (MOTIR-10031): one try per wait while
+  // another release of the application is in flight.
+  '`merge-release-${attempt}`': {
+    file: 'lib/jobs/definitions/productionMergeRelease.ts',
+    shape:
+      '{ outcome: "build_failed_recorded"; releaseId: string } | { outcome: "deferred_in_progress" } | { outcome: "gave_up_in_progress"; releaseId: string } | { outcome: "ignored" } | { outcome: "released"; releaseId: string; state: string }',
+  },
+  // A production config change redeploys the live release (MOTIR-10032).
+  '`config-redeploy-${attempt}`': {
+    file: 'lib/jobs/definitions/productionConfigRedeploy.ts',
+    shape:
+      '{ outcome: "deferred_in_progress" } | { outcome: "failed_release"; releaseId: string } | { outcome: "gave_up_in_progress" } | { outcome: "redeployed"; releaseId: string } | { outcome: "skipped_customer_repository" } | { outcome: "skipped_no_live_release" }',
+  },
   '`settle-${pass}`': {
     file: 'lib/jobs/definitions/pullRequestBaseMoved.ts',
     shape:

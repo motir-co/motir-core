@@ -223,6 +223,20 @@ export const hostedApplicationService = {
     });
   },
 
+  /** The repository's application in whichever workspace holds it, or null —
+   *  a SYSTEM read for the jobs that act on a repository by id (MOTIR-10032). */
+  async getApplicationForRepositorySystem(
+    projectRepositoryId: string,
+  ): Promise<HostedApplicationDto | null> {
+    return withSystemContext(async (tx) => {
+      const row = await hostedApplicationRepository.findByProjectRepository(
+        projectRepositoryId,
+        tx,
+      );
+      return row ? toHostedApplicationDto(row) : null;
+    });
+  },
+
   /**
    * Whether production is switched on for the repository (MOTIR-10031): its
    * application, the production app it releases to and when it was first

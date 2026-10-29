@@ -7,6 +7,7 @@ import { designAutoRerunService } from '@/lib/services/designAutoRerunService';
 import { gateResumeService } from '@/lib/services/gateResumeService';
 import { pullRequestMergeabilityService } from '@/lib/services/pullRequestMergeabilityService';
 import { productionMergeReleaseService } from '@/lib/services/productionMergeReleaseService';
+import { productionConfigRedeployService } from '@/lib/services/productionConfigRedeployService';
 import { monitorIngestionService } from '@/lib/services/monitorIngestionService';
 import { dlqStandingDepthService } from '@/lib/services/dlqStandingDepthService';
 import { monitorSyncService } from '@/lib/services/monitorSyncService';
@@ -220,6 +221,8 @@ export const jobServices = {
   // A merge starts a production release (Story MOTIR-9797 · MOTIR-10031): one
   // release of the commit the production-image run built, or its failed build.
   productionMergeRelease: productionMergeReleaseService,
+  // A production config change redeploys the live release (MOTIR-10032).
+  productionConfigRedeploy: productionConfigRedeployService,
   // The monitor-issue reconciler (Story MOTIR-4929 · MOTIR-5581): the tick's
   // discovery, one binding's poll, and the terminal write onto that binding.
   monitorIngestion: monitorIngestionService,
