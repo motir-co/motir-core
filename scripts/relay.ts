@@ -32,6 +32,7 @@ import { createTerminalRelay } from '@/lib/agentTerminal/relay/terminalRelay';
 import { relayMachineId } from '@/lib/agentTerminal/relay/machineId';
 import { relaySentryInitOptions, scrubbedError } from '@/lib/agentTerminal/relay/monitoring';
 import { startEventLoopDelayPublisher } from '@/lib/monitoring/cloudwatchMetrics';
+import { startWatchdogMetricsPublisher } from '@/lib/monitoring/watchdogMetrics';
 import { agentTerminalRelayService } from '@/lib/services/agentTerminalRelayService';
 import { agentInstanceActivityService } from '@/lib/services/agentInstanceActivityService';
 
@@ -52,6 +53,9 @@ async function main(): Promise<void> {
   // Event-loop delay as CloudWatch metrics when MONITORING_CLOUDWATCH_NAMESPACE
   // is set (MOTIR-9881); nothing at all otherwise.
   startEventLoopDelayPublisher();
+  // Each ended loop block's length, and CPU steal when MONITORING_CLOUDWATCH_STEAL
+  // is on (MOTIR-9882).
+  startWatchdogMetricsPublisher();
   // Refuse to start without the master key: every connection would need it, and
   // a relay that accepts sockets it can never authenticate reads as an outage of
   // the agents rather than of its own configuration. (A short key throws here.)

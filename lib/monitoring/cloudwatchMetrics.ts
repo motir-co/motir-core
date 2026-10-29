@@ -48,6 +48,7 @@ const RESOLUTION_MS = 10;
 const NS_PER_MS = 1_000_000;
 const UNKNOWN_SERVICE = 'unknown';
 const PUBLISHER_KEY = Symbol.for('motir.cloudwatchMetrics.publisher');
+const SERVICE_WARNED_KEY = Symbol.for('motir.cloudwatchMetrics.serviceWarned');
 
 type Env = Readonly<Record<string, string | undefined>>;
 
@@ -57,18 +58,21 @@ export interface EventLoopDelayPublisher {
   readonly timer: NodeJS.Timeout;
 }
 
-type Holder = { [PUBLISHER_KEY]?: EventLoopDelayPublisher };
+type Holder = { [PUBLISHER_KEY]?: EventLoopDelayPublisher; [SERVICE_WARNED_KEY]?: true };
 
 /**
  * The publication settings, or null when `MONITORING_CLOUDWATCH_NAMESPACE` is
  * unset or blank. A blank `MONITORING_CLOUDWATCH_SERVICE` reads as `unknown`,
- * with one warning per call, so a caller that reads once at start warns once.
+ * with ONE warning per process however many publishers read the settings.
  */
 export function readCloudWatchSettings(env: Env = process.env): CloudWatchSettings | null {
   const namespace = env['MONITORING_CLOUDWATCH_NAMESPACE']?.trim();
   if (!namespace) return null;
   const service = env['MONITORING_CLOUDWATCH_SERVICE']?.trim();
   if (service) return { namespace, service };
+  const holder = globalThis as Holder;
+  if (holder[SERVICE_WARNED_KEY]) return { namespace, service: UNKNOWN_SERVICE };
+  holder[SERVICE_WARNED_KEY] = true;
   console.warn(
     `[cloudwatchMetrics] MONITORING_CLOUDWATCH_SERVICE is not set; publishing as Service="${UNKNOWN_SERVICE}".`,
   );
@@ -153,6 +157,7 @@ export function stopEventLoopDelayPublisherForTests(): void {
   const holder = globalThis as Holder;
   const publisher = holder[PUBLISHER_KEY];
   delete holder[PUBLISHER_KEY];
+  delete holder[SERVICE_WARNED_KEY];
   if (!publisher) return;
   clearInterval(publisher.timer);
   publisher.histogram.disable();

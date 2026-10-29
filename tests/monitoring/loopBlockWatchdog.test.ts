@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   BLOCK_THRESHOLD_MS,
+  MAX_COMPLETED_BLOCK_LENGTHS,
   NOT_IN_JS,
   NO_APP_FRAME,
   __forTests,
@@ -13,6 +14,7 @@ import {
   rollLoopBlockWindow,
   startLoopBlockWatchdog,
   stopLoopBlockWatchdog,
+  takeCompletedBlockLengths,
   type RawCapture,
 } from '@/lib/monitoring/loopBlockWatchdog';
 
@@ -474,5 +476,43 @@ describe('the thread', () => {
     await exited; // resolves only once the thread has exited
     expect(isLoopBlockWatchdogRunning()).toBe(false);
     expect(__forTests.threadId()).toBeNull();
+  });
+});
+
+describe('completed block lengths (MOTIR-9882)', () => {
+  it('returns every ended block once, captured or not', async () => {
+    blockLoopForTest(SPIN_MS);
+    await sleep(300);
+    // A window takes one capture, so this second block is not captured.
+    blockLoopForTest(SPIN_MS);
+    await sleep(300);
+    expect(__forTests.captureCount()).toBe(1);
+    const lengths = takeCompletedBlockLengths();
+    expect(lengths).toHaveLength(2);
+    for (const ms of lengths) expect(ms).toBeGreaterThanOrEqual(SPIN_MS - 100);
+    expect(takeCompletedBlockLengths()).toEqual([]);
+  });
+
+  it('leaves the windowed reading as it was', async () => {
+    blockLoopForTest(SPIN_MS);
+    await sleep(300);
+    takeCompletedBlockLengths();
+    expect(readLoopBlock()!.blockMs).toBeGreaterThanOrEqual(SPIN_MS - 100);
+  });
+
+  it('holds at most the cap, dropping the oldest', () => {
+    for (let ms = 1; ms <= MAX_COMPLETED_BLOCK_LENGTHS + 50; ms += 1) {
+      __forTests.recordBlockLength(ms);
+    }
+    const lengths = takeCompletedBlockLengths();
+    expect(lengths).toHaveLength(MAX_COMPLETED_BLOCK_LENGTHS);
+    expect(lengths[0]).toBe(51);
+    expect(lengths.at(-1)).toBe(MAX_COMPLETED_BLOCK_LENGTHS + 50);
+  });
+
+  it('is empty when the watchdog is not running', async () => {
+    await stopLoopBlockWatchdog();
+    __forTests.recordBlockLength(5000);
+    expect(takeCompletedBlockLengths()).toEqual([]);
   });
 });

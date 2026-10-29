@@ -166,6 +166,13 @@ describe('with the namespace set', () => {
     expect(publisher!.timer.hasRef()).toBe(false);
   });
 
+  it('reads process.env when no env is passed', () => {
+    vi.stubEnv('MONITORING_CLOUDWATCH_NAMESPACE', '');
+    expect(startEventLoopDelayPublisher()).toBeNull();
+    expect(readCloudWatchSettings()).toBeNull();
+    vi.unstubAllEnvs();
+  });
+
   it('a stop with nothing running is a no-op', () => {
     expect(() => stopEventLoopDelayPublisherForTests()).not.toThrow();
   });
