@@ -81,6 +81,8 @@ export default defineConfig({
       'tests/hosting/hostedApplicationService.test.ts',
       // MOTIR-10027 — production enablement's error, beside them in errors.ts.
       'tests/hosting/productionEnablement.test.ts',
+      // MOTIR-10028 — the production database's three errors.
+      'tests/hosting/productionDatabaseService.test.ts',
     ],
     coverage: {
       provider: 'v8',

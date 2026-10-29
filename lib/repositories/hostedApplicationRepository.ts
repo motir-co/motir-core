@@ -9,6 +9,18 @@ import type { HostedApplicationWithReleases } from '@/lib/mappers/hostedApplicat
 // context the release paths run under and the bound workspace's own session.
 
 const WITH_RELEASES = { currentRelease: true, previousRelease: true } as const;
+/** The default reads never select the database URL's ciphertext: only
+ *  `findDatabaseById` does, for the production database service (MOTIR-10028). */
+const WITHOUT_SECRET = { databaseUrlCiphertext: true } as const;
+
+/** What the production database service reads of an application. */
+export interface HostedApplicationDatabaseRow {
+  id: string;
+  projectRepositoryId: string;
+  target: HostingTarget;
+  databaseProjectId: string | null;
+  databaseUrlCiphertext: string | null;
+}
 
 export interface HostedApplicationInsert {
   workspaceId: string;
@@ -25,7 +37,11 @@ export const hostedApplicationRepository = {
     tx?: Prisma.TransactionClient,
   ): Promise<HostedApplicationWithReleases | null> {
     const client = tx ?? dbRead;
-    return client.hostedApplication.findUnique({ where: { id }, include: WITH_RELEASES });
+    return client.hostedApplication.findUnique({
+      where: { id },
+      include: WITH_RELEASES,
+      omit: WITHOUT_SECRET,
+    });
   },
 
   async findByProjectRepository(
@@ -36,6 +52,7 @@ export const hostedApplicationRepository = {
     return client.hostedApplication.findUnique({
       where: { projectRepositoryId },
       include: WITH_RELEASES,
+      omit: WITHOUT_SECRET,
     });
   },
 
@@ -47,6 +64,7 @@ export const hostedApplicationRepository = {
     return client.hostedApplication.findUnique({
       where: { productionAddress },
       include: WITH_RELEASES,
+      omit: WITHOUT_SECRET,
     });
   },
 
@@ -122,6 +140,41 @@ export const hostedApplicationRepository = {
         productionTokenMintedAt: input.mintedAt,
       },
     });
+  },
+
+  /** The application's database columns, ciphertext included — the one read
+   *  that selects it (MOTIR-10028). */
+  async findDatabaseById(
+    id: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<HostedApplicationDatabaseRow | null> {
+    return tx.hostedApplication.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        projectRepositoryId: true,
+        target: true,
+        databaseProjectId: true,
+        databaseUrlCiphertext: true,
+      },
+    });
+  },
+
+  /**
+   * Record the application's production database, ONCE: the UPDATE matches only
+   * while no ciphertext is stored, so a second writer changes nothing. Returns
+   * whether this call wrote it.
+   */
+  async setDatabase(
+    id: string,
+    input: { databaseProjectId: string; databaseUrlCiphertext: string },
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const { count } = await tx.hostedApplication.updateMany({
+      where: { id, databaseUrlCiphertext: null },
+      data: input,
+    });
+    return count === 1;
   },
 
   /**

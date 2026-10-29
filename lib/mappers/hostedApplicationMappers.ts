@@ -3,7 +3,8 @@ import type { HostedApplicationDto, HostedReleaseDto } from '@/lib/dto/hostedApp
 
 // Row → DTO for hosted applications and their releases (Story MOTIR-9797 ·
 // MOTIR-10026). The one rule that matters: `databaseUrlCiphertext` is never
-// copied, so no caller of a service can reach the database URL through a DTO.
+// copied — the rows these map are read without it (MOTIR-10028) — so no caller
+// of a service can reach the database URL through a DTO.
 
 export function toHostedReleaseDto(row: HostedRelease): HostedReleaseDto {
   return {
@@ -24,7 +25,7 @@ export function toHostedReleaseDto(row: HostedRelease): HostedReleaseDto {
 }
 
 /** An application row with its two release pointers loaded. */
-export type HostedApplicationWithReleases = HostedApplication & {
+export type HostedApplicationWithReleases = Omit<HostedApplication, 'databaseUrlCiphertext'> & {
   currentRelease: HostedRelease | null;
   previousRelease: HostedRelease | null;
 };
@@ -40,7 +41,7 @@ export function toHostedApplicationDto(row: HostedApplicationWithReleases): Host
     productionAddress: row.productionAddress,
     currentRelease: row.currentRelease ? toHostedReleaseDto(row.currentRelease) : null,
     previousRelease: row.previousRelease ? toHostedReleaseDto(row.previousRelease) : null,
-    hasDatabase: row.databaseUrlCiphertext !== null,
+    hasDatabase: row.databaseProjectId !== null,
     createdAt: row.createdAt.toISOString(),
   };
 }

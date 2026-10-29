@@ -143,3 +143,49 @@ export class ProductionEnablementFailedError extends Error {
     this.name = 'ProductionEnablementFailedError';
   }
 }
+
+/** The application's target runs on a database kind this story does not
+ *  provision (the AWS target's managed database is its adapter story's). Refused
+ *  before any provider call (MOTIR-10028). → 422 */
+export class ProductionDatabaseKindUnsupportedError extends Error {
+  readonly code = 'PRODUCTION_DATABASE_KIND_UNSUPPORTED' as const;
+  constructor(readonly target: string) {
+    super(`The ${target} target has no serverless Postgres production database.`);
+    this.name = 'ProductionDatabaseKindUnsupportedError';
+  }
+}
+
+/**
+ * The database port could not create the production database. It carries the
+ * provider's HTTP status and the error's code ONLY — never a message or a body,
+ * either of which can hold a connection string — and nothing was written, so a
+ * retry is safe (MOTIR-10028). → 502
+ */
+export class ProductionDatabaseProvisioningError extends Error {
+  readonly code = 'PRODUCTION_DATABASE_PROVISIONING_FAILED' as const;
+  constructor(
+    readonly applicationId: string,
+    readonly status: number | null,
+    readonly causeCode: string,
+  ) {
+    super(
+      `The production database of ${applicationId} could not be created (${causeCode}${
+        status === null ? '' : `, HTTP ${status}`
+      }).`,
+    );
+    this.name = 'ProductionDatabaseProvisioningError';
+  }
+}
+
+/** The application's database URL is not stored, or fails to decrypt (wrong key
+ *  or a tampered ciphertext). No value is returned (MOTIR-10028). → 500 */
+export class ProductionDatabaseUnreadableError extends Error {
+  readonly code = 'PRODUCTION_DATABASE_UNREADABLE' as const;
+  constructor(
+    readonly applicationId: string,
+    readonly reason: 'absent' | 'undecryptable',
+  ) {
+    super(`The production database URL of ${applicationId} is ${reason}.`);
+    this.name = 'ProductionDatabaseUnreadableError';
+  }
+}
