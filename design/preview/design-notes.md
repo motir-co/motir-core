@@ -216,3 +216,7 @@ values; `{reason}` is the record's `failure_reason` (see _Handed to serving_).
   otherwise; storing a reason code beside the text is serving's call.
 - **The refresh** needs no script: a `Refresh` header or `<meta http-equiv="refresh">` of 10 seconds
   on Building and Starting.
+- **The gate's 501 / 413 / 411 answers** carry the Panel 6b page only for a browser navigation
+  (`Accept: text/html`). Any other request gets the same status with the matching copy-table
+  sentence (`unsupported.websocket`, `unsupported.tooLarge`, `unsupported.noLength`) as
+  `text/plain`, so a script reads a reason rather than a page.
