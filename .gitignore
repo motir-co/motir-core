@@ -31,6 +31,9 @@
 # misc
 .DS_Store
 *.pem
+# Amazon's PUBLIC RDS CA bundle, baked into the image so the pg driver can
+# verify the AWS database's certificate (MOTIR-10056). Not a key.
+!/certs/rds-global-bundle.pem
 
 # debug
 npm-debug.log*
