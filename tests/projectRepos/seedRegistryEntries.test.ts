@@ -104,6 +104,20 @@ describe('the four starter entries', () => {
 });
 
 describe('the registry as the migrations ship it', () => {
+  it('a second run of the entries migration changes no row', async () => {
+    const sql = readFileSync(
+      join(
+        __dirname,
+        '../../prisma/migrations/20261029100000_seed_registry_starter_entries/migration.sql',
+      ),
+      'utf8',
+    );
+    const snapshot = () => adminDb.seedRegistryEntry.findMany({ orderBy: { key: 'asc' } });
+    const before = await snapshot();
+    await adminDb.$executeRawUnsafe(sql);
+    expect(await snapshot()).toEqual(before);
+  });
+
   it('holds exactly the six shipped entries', async () => {
     const keys = (await seedRegistryService.listAllEntries()).map((e) => e.key);
     expect(keys.sort()).toEqual([...SHIPPED_SEED_KEYS].sort());

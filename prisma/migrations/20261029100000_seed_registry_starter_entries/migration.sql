@@ -11,7 +11,9 @@
 -- An UPSERT by key, so it is idempotent and adopts an entry an operator may have
 -- registered by hand under the same key: the catalogue fields take 706 §3.4's
 -- values, while `id`, `status` and the promotion fields are left as found — a
--- retired entry stays retired. The two shipped rows are not named, so not touched.
+-- retired entry stays retired. A row already holding these values is not
+-- written at all, so a re-run changes no row. The two shipped rows are not
+-- named, so not touched.
 -- ===========================================================================
 
 INSERT INTO "seed_registry_entry" (
@@ -83,4 +85,15 @@ ON CONFLICT ("key") DO UPDATE SET
   "use_cases"       = EXCLUDED."use_cases",
   "sizes"           = EXCLUDED."sizes",
   "hosting_targets" = EXCLUDED."hosting_targets",
-  "updated_at"      = CURRENT_TIMESTAMP;
+  "updated_at"      = CURRENT_TIMESTAMP
+WHERE (
+  "seed_registry_entry"."role", "seed_registry_entry"."stack", "seed_registry_entry"."label",
+  "seed_registry_entry"."template_owner", "seed_registry_entry"."template_repo",
+  "seed_registry_entry"."use_cases", "seed_registry_entry"."sizes",
+  "seed_registry_entry"."hosting_targets"
+) IS DISTINCT FROM (
+  EXCLUDED."role", EXCLUDED."stack", EXCLUDED."label",
+  EXCLUDED."template_owner", EXCLUDED."template_repo",
+  EXCLUDED."use_cases", EXCLUDED."sizes",
+  EXCLUDED."hosting_targets"
+);
