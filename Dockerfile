@@ -343,6 +343,15 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 
+# Amazon's RDS CA bundle, for the AWS services' database connection. node-postgres
+# treats `sslmode=require` as verify-full and Node does not ship the RDS roots,
+# so without this every query on Fargate fails `self-signed certificate in
+# certificate chain` (MOTIR-10056). motir-infra points NODE_EXTRA_CA_CERTS here.
+# Vendored rather than fetched at build so the image never depends on a network
+# call; refresh it from https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
+# when AWS adds a CA.
+COPY --chown=nextjs:nodejs certs/rds-global-bundle.pem ./certs/rds-global-bundle.pem
+
 # ── /app/migrate — the release lane, in ONE self-contained directory ────────
 # It gets its own directory rather than merging into the standalone server's
 # node_modules for two independent reasons:
