@@ -49,6 +49,36 @@ export function isConflictedAtCurrentHead(pr: StoredMergeability & PullRequestHe
 }
 
 /**
+ * The host's word for "behind a base branch that requires pull requests to be up to
+ * date" (Bug MOTIR-10054). GitHub answers `behind` ONLY when the base requires it — a
+ * base that does not reads `clean` — so the word itself says the merge is blocked.
+ */
+export const OUT_OF_DATE_MERGEABLE_STATE = 'behind';
+
+/**
+ * Whether the stored reading says this pull request is OUT OF DATE with its base AT
+ * `headSha` — the same head rule as {@link isConflictedAt}.
+ *
+ * ⚠️ OUT OF DATE IS NOT A CONFLICT, and the conflict readers do not see it. The commits
+ * combine with the base; they only have to be brought up to date with it — a merge of
+ * the base (or GitHub's *Update branch*), after which CI runs again. So it is its own
+ * reason wherever it is named (`out_of_date` on To fix), while the readers that decide
+ * whether the set can land hold it exactly as they hold a conflict: it is refused when
+ * pressed, so it is asked about nobody, and `motir fix` — which merges the base first —
+ * is the repair.
+ */
+export function isOutOfDateAt(pr: StoredMergeability, headSha: string | null): boolean {
+  if (pr.mergeableState !== OUT_OF_DATE_MERGEABLE_STATE) return false;
+  if (pr.mergeableStateHeadSha === null) return false;
+  return headSha === null || headSha === pr.mergeableStateHeadSha;
+}
+
+/** {@link isOutOfDateAt} at the pull request's head ({@link pullRequestHead}). */
+export function isOutOfDateAtCurrentHead(pr: StoredMergeability & PullRequestHeadSlice): boolean {
+  return isOutOfDateAt(pr, pullRequestHead(pr));
+}
+
+/**
  * The host's own word for "not computed yet" — what a `synchronize` stores at the new
  * head (MOTIR-7063). GitHub answers `mergeable_state: unknown` in exactly that window,
  * and a computed reading always overwrites it.

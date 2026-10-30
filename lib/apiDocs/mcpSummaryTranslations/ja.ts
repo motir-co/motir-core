@@ -105,6 +105,12 @@ export const ja: McpSummaryTranslations = {
     source:
       "Symbols matching a name in the hosted code graph — the hosted planner's own answer, paged.",
   },
+  code_grep: {
+    summary:
+      'インデックス済みのファイル内容のうち、テキストまたはパターンに一致する行。シンボル検索では見えない文字列リテラル、コメント、コード以外のファイルも含みます。ホスト型計画者自身の回答をページ分けして返します。',
+    source:
+      "Lines matching a text or pattern in the indexed file contents — string literals, comments and non-code files the symbol search cannot see — the hosted planner's own answer, paged.",
+  },
   complete_session: {
     summary:
       'プルリクエストのマージ後にセッションブランチを締めます。そのブランチに記録されたすべての項目が完了に移ります。',
@@ -247,9 +253,9 @@ export const ja: McpSummaryTranslations = {
   },
   get_work_item: {
     summary:
-      '1つの項目の全体像。説明、ステータス、親またはフォルダー、子、依存エッジ、準備完了の判定、紐づくエラー、そして最新の差し戻し内容を返します。',
+      '1つの項目の全体像。説明、ステータス、親またはフォルダー、子、依存エッジ、準備完了の判定、紐づくエラー、最新の差し戻し内容、そして未マージのコードがどこにあるかを返します。',
     source:
-      'One item in full — description, status, parent or folder, children, dependency edges, a readiness verdict, the errors linked to it, and the latest refusal sent back on it.',
+      'One item in full — description, status, parent or folder, children, dependency edges, a readiness verdict, the errors linked to it, the latest refusal sent back on it, and where its unmerged code is.',
   },
   get_work_item_activity: {
     summary:
@@ -369,6 +375,12 @@ export const ja: McpSummaryTranslations = {
       'プロジェクトの集合に含まれるリポジトリから、ref を指定して1ファイルのテキスト、またはディレクトリの直下のエントリを読みます。ホスト型計画者の読み取りと同様に上限と行範囲があり、見つからない場合もすべて名前付きの結果で示されます。',
     source:
       "One file's text, or a directory's immediate entries, from a repository in the project's set, at a ref — capped and line-ranged like the hosted planner's read, every absence a named outcome.",
+  },
+  list_changed_files: {
+    summary:
+      'プロジェクトの集合に含まれるリポジトリで、あるブランチが既定ブランチまたは指定したベースに対して変更したパスを一覧します。ホスト型計画者の一覧と同様に上限があり、見つからない場合もすべて名前付きの結果で示されます。',
+    source:
+      "The paths a branch changed in a repository in the project's set, against its default branch or a named base — bounded like the hosted planner's listing, every absence a named outcome.",
   },
   record_plan_revision_reason: {
     summary:

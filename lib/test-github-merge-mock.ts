@@ -59,6 +59,7 @@ const GITHUB_ORIGIN = 'https://api.github.com';
 export type GithubMergeRefusal =
   | 'checks_not_green'
   | 'conflict'
+  | 'out_of_date'
   | 'branch_protected'
   | 'already_merged'
   | 'app_permission_missing'
@@ -283,7 +284,7 @@ function keyOfNodeId(body: string): string | null {
 /** The host's wording and the pull request's `mergeable_state` for each 405 refusal — the two
  *  facts `mergeChangeRequest` classifies a refused merge by. */
 const REFUSED_MERGE: Record<
-  'checks_not_green' | 'conflict' | 'branch_protected',
+  'checks_not_green' | 'conflict' | 'out_of_date' | 'branch_protected',
   { message: string; mergeableState: string }
 > = {
   checks_not_green: {
@@ -291,6 +292,12 @@ const REFUSED_MERGE: Record<
     mergeableState: 'blocked',
   },
   conflict: { message: 'Pull Request is not mergeable', mergeableState: 'dirty' },
+  // A base whose required checks are STRICT, with the head behind it: GitHub's message
+  // names the required checks although they are green (MOTIR-10054, motir-infra#11).
+  out_of_date: {
+    message: '2 of 2 required status checks are expected.',
+    mergeableState: 'behind',
+  },
   branch_protected: {
     message: 'At least 1 approving review is required by reviewers with write access.',
     mergeableState: 'blocked',

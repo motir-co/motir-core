@@ -4,12 +4,12 @@ import { planValidityService } from '@/lib/services/planValidityService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { PlanValidityDto } from '@/lib/dto/plans';
 import {
+  advisoryBlockLines,
   crossLevelEdgeLines,
   invalidEdgeLines,
-  mislabelledLinkLines,
   sectionFindingLines,
 } from '@/lib/mcp/tools/validateWorkItem';
-import type { WorkItemProseMislabelledLinkAdvisoryDto } from '@/lib/dto/workItems';
+import type { WorkItemProseShapeAdvisoryDto } from '@/lib/dto/workItems';
 import type { ValidityCondition } from '@/lib/dto/sprints';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
@@ -68,10 +68,11 @@ interface ValidatePlanArgs {
  */
 function summarize(
   result: PlanValidityDto,
-  advisories: readonly WorkItemProseMislabelledLinkAdvisoryDto[],
+  advisories: readonly WorkItemProseShapeAdvisoryDto[],
 ): string {
-  // The link advisories (MOTIR-9007) ride beside the verdict and never change it.
-  const linkLines = mislabelledLinkLines(
+  // The shape advisories over the plan's proposals (MOTIR-9007, widened to every
+  // shape family by MOTIR-10087) ride beside the verdict and never change it.
+  const linkLines = advisoryBlockLines(
     advisories,
     `NOT a blocker — the plan is ${result.valid ? 'still VALID' : 'unaffected'} either way`,
   );
@@ -133,7 +134,7 @@ export async function runValidatePlan(
     // take and no second access check to add here.
     const [result, advisories] = await Promise.all([
       planValidityService.validateProjectedPlan(args.planId, ctx, args.condition),
-      planValidityService.projectedLinkAdvisories(args.planId, ctx),
+      planValidityService.projectedShapeAdvisories(args.planId, ctx),
     ]);
     return toolOk(
       summarize(result, advisories),
@@ -177,12 +178,20 @@ export function registerValidatePlan(server: McpServer, resolveContext: McpConte
         'item or blocker, or an ancestor of either, the plan adds, re-parents, re-wires ' +
         '(`blockedByAdd` / `blockedByRemove`) or removes. An old bad edge the plan touches ' +
         'nothing of is not this plan’s finding — `validate_work_item` without a `planId` still ' +
-        'reports it. Beside the verdict, never part of it, `advisories` lists every ' +
-        '`likely-mislabelled-link` in a body the plan PROPOSES (an `add`, or a `modify` that ' +
-        'rewrites the description or the explanation): a `[label](motir:<id>)` link whose label ' +
-        'names a different key than the card the id opens, or whose id opens no card ' +
-        '(`targetKey: null`), with the `field` it sits in (`descriptionMd` or `explanationMd`) — ' +
-        'fix the id before sealing, or every reader follows the link to the wrong card. Returns ' +
+        'reports it. Beside the verdict, never part of it, `advisories` lists every SHAPE ' +
+        'advisory (`kind: "shape"`) on a card the plan PROPOSES (an `add`, keyed ' +
+        '`planItem:<id>`, or a card a `modify` patches) — the same entries `validate_work_item` ' +
+        'with this `planId` yields for that card: `likely-self-blocking-design` ' +
+        '(`designCriterionIndex` + `surfaceCriterionIndex`: LIFT the design criterion into its ' +
+        'own `type: design` card the rest is `blocked_by`), `likely-repo-straddle` and ' +
+        '`likely-ordering-violation` (`criterionIndex`: cut or re-word there), ' +
+        '`likely-over-gate-sizing`, `likely-post-merge-child-under-container`, ' +
+        '`under-authored`, `likely-blocker-count-mismatch`, `body-edit-above-field-move`, and ' +
+        '`likely-mislabelled-link` in a body the plan writes (a `[label](motir:<id>)` link ' +
+        'whose label names a different key than the card the id opens, or whose id opens no ' +
+        'card — `targetKey: null` — with the `field` it sits in). A runner STOPS on a ' +
+        'two-index entry, so dispose of each before sealing: re-word the criterion, lift it, or ' +
+        'record on the card why it is a false positive. Returns ' +
         '`{ planId, valid, rejections: [...], blockers: [...], invalidEdges: [...], ' +
         'crossLevelEdges: [...], sectionFindings: [...], advisories: [...] }`; an item named ' +
         '`planItem:<id>` is a PROPOSAL in this plan, not a work item. ' +

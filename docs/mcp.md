@@ -329,7 +329,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **106 tools**.
+`initialize` handshake and registers **108 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -1101,6 +1101,31 @@ GitHub_); `refusalVerdict` is set only on a design refusal pressed in Motir;
   "decidedByLabel": "Ada <ada@example.com>", "decidedAt": "2026-09-26T01:02:03.000Z",
   "decisionSource": "ui", "refusalVerdict": "revise", "subjectVersion": "cm…"
 }
+```
+
+The aggregate carries **`inFlightCode`** and **`mergedRepos`** (MOTIR-10069) —
+WHERE the item's UNMERGED code is, per repository: its own open pull request
+(`source: "own"`), else the NEAREST ANCESTOR's (`source: "inherited"`, `fromKey`
+the ancestor's key). A child built by `motir run <parent>` commits onto its
+parent's pull request and has no delivery of its own, so its `deliveries` is
+`[]` while its code sits on the parent's branch; `inFlightCode` names that
+branch. `mergedRepos` lists the repositories where the item's own delivery has
+already merged and nothing is in flight. Both are `[]` when nothing was delivered
+on the item or a parent. It is the read the hosted planner's `get_item` makes
+(`inFlightCodeService.readForItem`, shared), so the two planners are handed the
+same answer; `deliveries` is unchanged and stays the item's OWN pull requests.
+The text block prints one `In-flight code:` line per entry, then `Merged to
+default branch: …`, or `No in-flight code (…)`. Pass an entry's `repo` and
+`branch` to [`list_changed_files`](#list_changed_files) as `repo` and `head`, then
+to [`read_file`](#read_file) as `repo` and `ref`.
+
+```jsonc
+"inFlightCode": [{
+  "repo": "acme/web", "branch": "parent/ACME-7-story", "headSha": "0328041…",
+  "prNumber": 42, "prUrl": "https://github.com/acme/web/pull/42", "draft": true,
+  "baseRef": "main", "source": "inherited", "fromKey": "ACME-7"
+}],
+"mergedRepos": []
 ```
 
 The item carries its **`difficulty`** (Story MOTIR-6016) — `trivial` / `low` /
@@ -5061,12 +5086,25 @@ PROJECTION: a PROPOSED cross-level edge is a `cross_level` rejection instead, so
 what it reports is a COMMITTED cross-level edge (the link door writes one —
 MOTIR-6509). `valid` is `true` only when all four lists are empty.
 
-**`advisories` rides beside the verdict and never changes it (MOTIR-9007).** It
-lists every `likely-mislabelled-link` shape advisory in a body the plan
-PROPOSES — an `add`'s description or explanation, or a `modify` that rewrites
-either — as `{ kind: "shape", item, severity, label, targetId, targetKey, field }`
-(`field` is `descriptionMd` or `explanationMd`, MOTIR-9938): a
-`[label](motir:<id>)` link whose label names a work-item key the id does not
+**`advisories` rides beside the verdict and never changes it (MOTIR-9007,
+widened by MOTIR-10087).** It lists every SHAPE advisory (`kind: "shape"`) on a
+card the plan PROPOSES — an `add` (keyed `planItem:<id>`) or a card a `modify`
+patches — the same entries `validate_work_item { planId }` yields for that card:
+`likely-self-blocking-design` (`designCriterionIndex` + `surfaceCriterionIndex`),
+`likely-repo-straddle` and `likely-ordering-violation` (`criterionIndex`),
+`likely-over-gate-sizing`, `likely-post-merge-child-under-container`,
+`under-authored`, `likely-blocker-count-mismatch` and
+`body-edit-above-field-move`. The reference and subsumption families are not
+shape and stay `validate_work_item`'s. A runner reads a two-index entry as LIFT
+and stops, so a planner disposes of each before sealing: re-word the criterion,
+lift the design half into its own card, or record on the card why it is a false
+positive.
+
+`likely-mislabelled-link` keeps its narrower scope: it is listed only for a body
+the plan writes — an `add`'s description or explanation, or a `modify` that
+rewrites either — as `{ kind: "shape", item, severity, label, targetId,
+targetKey, field }` (`field` is `descriptionMd` or `explanationMd`, MOTIR-9938):
+a `[label](motir:<id>)` link whose label names a work-item key the id does not
 open, or whose id opens no card at all (`targetKey: null`). Fix the id before
 sealing. The internal `validate-plan-forest` route answers the same
 `advisories` beside its verdict (MOTIR-9873), so motir-ai's forest close can
@@ -5610,6 +5648,55 @@ reads as `repo_not_in_project`.
 `projectKey` selects **within** the token's workspace; another tenant's key reads
 as a plain not-found.
 
+#### `list_changed_files`
+
+The **paths a branch changed** in one of the project's repositories, against the
+repository's default branch or a named base — names and a status, no content —
+the listing the hosted planner's own `list_changed_files` makes (motir-ai
+`src/llm/codeReadTools.ts`, served by `app/api/internal/ai/repo-changes`), for an
+agent planning over the MCP (MOTIR-10069). Reach for it on a NEIGHBOUR'S
+IN-FLIGHT CODE: [`get_work_item`](#get_work_item)'s `inFlightCode` names the
+`repo` and `branch` of an unmerged pull request; list what that branch changed
+here, then open the paths that matter with [`read_file`](#read_file) at that
+branch.
+
+**Input**
+
+| Field        | Type   | Required | Notes                                                                                                                                |
+| ------------ | ------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `projectKey` | string | yes      | Project key, e.g. `"ACME"`.                                                                                                          |
+| `repo`       | string | yes      | A repository in the project's set: the bare name (`motir-core`) or `owner/name`, case-insensitively.                                 |
+| `head`       | string | yes      | The branch (or commit) whose changes to list — an `inFlightCode` entry's `branch`.                                                   |
+| `base`       | string | no       | The ref to compare against. Omitted ⇒ the repository's default branch, as stored on its row (the entry's `baseRef` when it differs). |
+
+**The bound.** At most **300 paths** are listed — the host's own cap and motir-ai's
+`CHANGED_FILES_RENDER_CAP`. A cut list says so in `truncated` and ends its text
+with a SENTENCE: the branch changed AT LEAST these files. The cap, the marker and
+the outcome sentences are copied from the planner's tool.
+
+**Output** — `structuredContent.outcome` names what happened, and every outcome is
+a **non-error** result with its own summary sentence:
+
+| `outcome`             | Meaning                                                                                                       | Extra fields                                                          |
+| --------------------- | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `ok`                  | The changed paths, each `{ path, status, previousPath? }` (`added` / `modified` / `removed` / `renamed`).     | `repoRef`, `base`, `head`, `baseSha`, `headSha`, `files`, `truncated` |
+| `no_such_ref`         | `head` or `base` does not resolve, or they share no history — perhaps a merged pull request's deleted branch. | `repoRef`, `base`, `head`                                             |
+| `not_connected`       | No usable connection on this deployment.                                                                      | `repoRef`, `base`, `head`                                             |
+| `revoked`             | The host refused the stored credential. What the branch changed is unknown.                                   | `repoRef`, `base`, `head`                                             |
+| `too_large`           | The host declined to compute a comparison that large. The branch exists.                                      | `repoRef`, `base`, `head`                                             |
+| `host_error`          | The host did not answer — a failure to ASK, not an answer.                                                    | `repoRef`, `base`, `head`, `detail`                                   |
+| `repo_not_connected`  | The repository is in the set but not connected to the organisation.                                           | `repoRef`, `base`, `head`                                             |
+| `repo_not_in_project` | `repo` matches no repository in the project's set. Answered **before** any host call.                         | `repo`, `repoSet`                                                     |
+
+None of them means the branch changed nothing, and none carries a provider
+credential, a patch or a host URL.
+
+**Permission: `ai:plan`, at the door and in the service** — as `read_file`, on the
+same argument (`docs/decisions/member-facing-permissions.md` AMENDMENT 3).
+**Read-only**, but **open-world**: the listing calls the third-party git host.
+`projectKey` selects **within** the token's workspace; another tenant's key reads
+as a plain not-found.
+
 #### `code_explore` and `code_search`
 
 The **hosted code graph**, for an agent planning over the MCP: the hosted
@@ -5653,6 +5740,50 @@ than read as a soft state.
 **Permission: `ai:plan`, at the door and in the service** — as `get_code_health`
 and `read_file`, on the same argument (`docs/decisions/member-facing-permissions.md`
 AMENDMENT 3). **Read-only**, closed-world: the graph is Motir's own.
+
+#### `code_grep`
+
+**A search of the indexed FILE CONTENTS** (MOTIR-10066): the lines inside string
+literals, comments, function bodies and files that are not code (copy, config,
+JSON, YAML), which `code_search` and `code_explore` cannot see — they match symbol
+names and paths only. It is how an agent finds every place that still says
+something before it plans a removal, a rename or a copy change. Like the two graph
+reads it is the hosted planner's own `code_grep`, run in motir-ai behind
+`POST /v1/code-graph/read`, and an `ok` answer's text is that executor's bytes
+verbatim.
+
+Each index run stores the content of every text file in the snapshot, up to
+1 MiB; a binary file (a NUL byte in its first 8 KB) or a larger one is recorded
+as **not searched** instead. A literal is matched byte-for-byte; a `regex` or
+`caseInsensitive` search runs on RE2, which has no backtracking, so a pathological
+pattern such as `(a+)+$` answers in normal time. Lines are decoded as UTF-8,
+falling back to Latin-1, with a trailing carriage return dropped.
+
+**Input**
+
+| Field             | Type    | Required | Notes                                                                                                  |
+| ----------------- | ------- | -------- | ------------------------------------------------------------------------------------------------------ |
+| `projectKey`      | string  | yes      | Project key, e.g. `"ACME"`.                                                                            |
+| `pattern`         | string  | yes      | The text to find, at most 1,000 characters. Not trimmed.                                               |
+| `regex`           | boolean | no       | Treat `pattern` as an RE2 regular expression (no backreferences or lookaround), matched per line.      |
+| `caseInsensitive` | boolean | no       | Match regardless of letter case.                                                                       |
+| `path`            | string  | no       | A path prefix the search is limited to, e.g. `"lib/billing/"`.                                         |
+| `repo`            | string  | no       | ONE repository in the project's set — bare name or `owner/name`, case-insensitively. Omit to read all. |
+| `cursor`          | string  | no       | The `cursor` a page line printed, passed back exactly, with the same other arguments.                  |
+| `limit`           | integer | no       | The page size — matching lines per page.                                                               |
+
+**Output.** The `ok` text lists each match as `path:line: text`, headed by the
+number of matching lines and files and **the commit it searched**, and ends with
+the files under `path` that were **not searched** (binary, or over the cap) —
+read those with `read_file` before calling a list complete. The states are
+`code_explore`'s, plus one:
+
+| `state`               | Meaning                                                                                                                                  | Extra fields                             |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| `content_not_indexed` | The repository is indexed, but its graph was built before file contents were stored. NOT an empty match: its next index run stores them. | `repoRef`, `indexState`, `commitsBehind` |
+
+**Permission: `ai:plan`, at the door and in the service**, as the two graph reads.
+**Read-only**, closed-world.
 
 #### `get_coding_convention`
 

@@ -163,6 +163,7 @@ describe('the class map answers for the HOST too', () => {
   it.each([
     ['checks_not_green', 'cant_land'],
     ['conflict', 'cant_land'],
+    ['out_of_date', 'cant_land'],
     ['branch_protected', 'setting'],
     ['app_permission_missing', 'setting'],
     ['already_merged', 'landed'],
@@ -182,6 +183,7 @@ describe('the class map answers for the HOST too', () => {
     const every: MergeRefusalCode[] = [
       'checks_not_green',
       'conflict',
+      'out_of_date',
       'branch_protected',
       'already_merged',
       'app_permission_missing',
@@ -194,6 +196,7 @@ describe('the class map answers for the HOST too', () => {
 describe('a refused press RECORDS the refusal and settles the card by its class', () => {
   it.each([
     ['conflict', 'implemented', 0],
+    ['out_of_date', 'implemented', 0],
     ['checks_not_green', 'implemented', 0],
     ['branch_protected', 'in_review', 1],
     ['app_permission_missing', 'in_review', 1],
@@ -222,6 +225,43 @@ describe('a refused press RECORDS the refusal and settles the card by its class'
       ).toBe('approved');
     },
   );
+
+  it('an OUT-OF-DATE refusal stores the `behind` reading, so the card reads To fix rather than Approved (MOTIR-10054)', async () => {
+    const { s, item, gate } = await approvedCard('refuse-behind@example.com');
+    stubHost({
+      outcome: 'refused',
+      refusal: { code: 'out_of_date', reason: '2 of 2 required status checks are expected.' },
+    });
+
+    const result = await press(s, gate!.id);
+
+    expect(result.members[0]).toMatchObject({ outcome: 'refused' });
+    expect((await refusalsOf(41))[0]).toMatchObject({
+      code: 'out_of_date',
+      reason: '2 of 2 required status checks are expected.',
+    });
+    expect(await prRow(41)).toMatchObject({
+      mergeableState: 'behind',
+      mergeableStateHeadSha: 'sha-41',
+    });
+    const after = await adminDb.workItem.findUniqueOrThrow({ where: { id: item.id } });
+    expect(after.status).toBe('implemented');
+    expect(after.fixReason).toBe('out_of_date');
+    expect(await awaitingGates(item.id)).toHaveLength(0);
+  });
+
+  it('a refusal of any OTHER code leaves the stored mergeability as it was', async () => {
+    const { s, gate } = await approvedCard('refuse-not-behind@example.com');
+    const before = await prRow(41);
+    stubHost({ outcome: 'refused', refusal: { code: 'checks_not_green' } });
+
+    await press(s, gate!.id);
+
+    expect(await prRow(41)).toMatchObject({
+      mergeableState: before.mergeableState,
+      mergeableStateHeadSha: before.mergeableStateHeadSha,
+    });
+  });
 
   it('`app_permission_missing` keeps the permission the host named, for the surface to say', async () => {
     const { s, gate } = await approvedCard('refuse-permission@example.com');

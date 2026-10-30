@@ -205,10 +205,16 @@ export function classOfQueueExit(exit: {
  * ⚠️ `subject_changed` IS NOT AN OUTCOME and answers `null`. It means the head moved
  * under the press, so nothing was attempted and no approval was spent — the
  * stale-stamp path (MOTIR-5232), not a failed landing.
+ *
+ * ⚠️ `out_of_date` IS CAN'T-LAND (Bug MOTIR-10054). The base branch requires a pull
+ * request to be up to date with it, so these commits cannot land as they stand: only a
+ * push that brings the base in (an update from the base, or `motir fix`, which merges
+ * the base first) can. A second yes to the same head is refused the same way.
  */
 const MERGE_REFUSAL_CLASSES: Record<MergeRefusalCode, LandingClass | null> = {
   checks_not_green: 'cant_land',
   conflict: 'cant_land',
+  out_of_date: 'cant_land',
   branch_protected: 'setting',
   app_permission_missing: 'setting',
   already_merged: 'landed',

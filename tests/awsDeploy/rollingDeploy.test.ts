@@ -43,6 +43,26 @@ describe('findCoreServices', () => {
     ]);
   });
 
+  it('refuses a core service on a breach revision, naming it and the container (MOTIR-10093)', async () => {
+    const { aws } = fleet();
+    aws.addBreachRevision('worker');
+    await expect(findCoreServices(aws, CLUSTER, CORE_REPO)).rejects.toThrow(
+      'the service worker runs motir-prod-core-worker:9, whose worker container sets ' +
+        'MOTIR_BREACH_ENABLED: a breach run holds it.',
+    );
+    expect(aws.registered).toEqual([]);
+  });
+
+  it('leaves a breach revision of a service that runs another image to that service', async () => {
+    const { aws } = fleet();
+    aws.addBreachRevision('ai');
+    expect((await findCoreServices(aws, CLUSTER, CORE_REPO)).map((s) => s.name)).toEqual([
+      'web',
+      'worker',
+      'relay',
+    ]);
+  });
+
   it('returns none for an empty cluster without describing anything', async () => {
     const aws = new FakeDeployAws();
     expect(await findCoreServices(aws, CLUSTER, CORE_REPO)).toEqual([]);

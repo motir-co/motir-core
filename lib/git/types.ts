@@ -726,6 +726,7 @@ export interface ChangeRequestMergeability {
 export type MergeRefusalCode =
   | 'checks_not_green'
   | 'conflict'
+  | 'out_of_date'
   | 'branch_protected'
   | 'already_merged'
   | 'app_permission_missing'

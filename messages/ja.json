@@ -4151,14 +4151,20 @@
         "github": "GitHub"
       },
       "state": {
-        "connected": "接続済み"
+        "connected": "接続済み",
+        "needsReauth": "再認証が必要"
       },
       "connectedOn": "{date} に接続",
       "connect": "GitHub を接続",
       "disconnect": "接続を解除",
+      "reconnect": "再接続",
       "empty": {
         "title": "接続された Git アカウントはありません",
         "description": "接続すると、Motir がプロジェクトのリポジトリにあなたを招待し、あなたの作業に署名できるようになります。読み取るのは公開プロフィールだけで、コードへのアクセス権は付与されません。"
+      },
+      "reauth": {
+        "title": "GitHub アカウントを再接続してください。",
+        "body": "GitHub がこのサインインを受け付けなくなったため、Motir は GitHub 上のあなたを確認できなくなりました。アカウントのその他の設定は変わっていません。"
       },
       "noInstallation": {
         "title": "あなたのアカウントは接続済みですが、組織のアカウントは未接続です。",
@@ -7713,6 +7719,8 @@
         },
         "conflictOn": "<prs></prs> は {base} とコンフリクトしているため、マージできません。",
         "conflictOnNoBase": "<prs></prs> はベースブランチとコンフリクトしているため、マージできません。",
+        "outOfDateOn": "<prs></prs> は最新であることが求められる {base} より遅れているため、マージできません。",
+        "outOfDateOnNoBase": "<prs></prs> は最新であることが求められるベースブランチより遅れているため、マージできません。",
         "howConflict": "エージェントがプルリクエスト自身のブランチでリベースまたは解決してプッシュし、チェックが再実行されます。",
         "rearm": "ここで承認するものはありません。プッシュによって head が移動すると問いが再び有効になり、次にチェックが通った時点で、新しいコミットに対してマージゲートが一度だけ作成されます。",
         "sentBackByAgent": "レビューエージェントがこれらのコミットを差し戻しました。エージェントがその指摘をプロンプトに含めて、{count, plural, other {同じプルリクエスト}}上で修正します。",
@@ -10017,6 +10025,8 @@
         "queueFailedBare": "マージキューで失敗",
         "conflicted": "<d>{base}</d> とコンフリクト",
         "conflictedNoBase": "ベースブランチとコンフリクト",
+        "outOfDate": "<d>{base}</d> に対して最新ではない",
+        "outOfDateNoBase": "ベースブランチに対して最新ではない",
         "ciFailed": "CI 失敗 · <d>{check}</d>",
         "ciFailedBare": "CI 失敗",
         "changesRequested": "<b>{name}</b> が変更を依頼 — 「{note}」",
@@ -14280,6 +14290,10 @@
         "atPress": "{host} によると、{pr} は {base} とコンフリクトしています。何も書き込まれる前に操作が拒否されたため、{key} は動いていません。",
         "atPressNoBase": "{host} によると、{pr} はベースブランチとコンフリクトしています。何も書き込まれる前に操作が拒否されたため、{key} は動いていません。"
       },
+      "mergeOutOfDate": {
+        "title": "このプルリクエストはベースブランチに対して最新ではありません。",
+        "next": "何もマージされていません。ベースブランチはマージ前にプルリクエストが最新であることを求めていますが、このプルリクエストは遅れています。ベースブランチを取り込んでください（ブランチを更新するか、motir fix でエージェントに任せられます）。チェックが通ると Motir が再度確認します。"
+      },
       "mergeBranchProtected": {
         "title": "ブランチの保護ルールにより、まだこのマージはできません。",
         "next": "必須レビューなど、GitHub 上のルールを満たしてから、もう一度承認してください。"
@@ -15451,6 +15465,7 @@
       "run_died": "要修正 · 実行が停止",
       "queue_failed": "要修正 · マージキューで失敗",
       "conflicted": "要修正 · ベースブランチとコンフリクト",
+      "out_of_date": "要修正 · ベースブランチに対して最新ではない",
       "ci_failed": "要修正 · CI が失敗",
       "changes_requested": "要修正 · 変更リクエスト",
       "sent_back_by_agent": "要修正 · レビューエージェントが差し戻し",
@@ -15462,6 +15477,8 @@
       "queueFailedBare": "修正が必要です：マージキューで失敗しました。",
       "conflicted": "修正が必要です：<code>{base}</code> とコンフリクトしています。",
       "conflictedNoBase": "修正が必要です：ベースブランチとコンフリクトしています。",
+      "outOfDate": "修正が必要です：<code>{base}</code> に対して最新ではありません。",
+      "outOfDateNoBase": "修正が必要です：ベースブランチに対して最新ではありません。",
       "ciFailed": "修正が必要です：CI が失敗しました（チェック <code>{check}</code>）。",
       "ciFailedBare": "修正が必要です：CI が失敗しました。",
       "changesRequested": "修正が必要です：<b>{name}</b> が変更をリクエストしました —「{note}」",

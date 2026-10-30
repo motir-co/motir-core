@@ -102,8 +102,8 @@ export const DOCS_GUARD_SPECS = [
   'tests/mcp/mcp-doc-guards.test.ts',
   // ── tests/mcp/ — the code-read tools' text homes (MOTIR-7865) ─────────────
   // Reads `docs/mcp.md` and `docs/decisions/member-facing-permissions.md` and
-  // fails when either stops naming `read_file`, `code_explore` or
-  // `code_search`. Imports nothing from `lib/`.
+  // fails when either stops naming `read_file`, `code_explore`, `code_search`
+  // or `code_grep`. Imports nothing from `lib/`.
   'tests/mcp/code-read-tool-docs.test.ts',
   // ── tests/permissions/ — the inventory, from THREE sides ──────────────────
   // All three open `docs/decisions/permission-inventory.md`, which maps every

@@ -195,6 +195,17 @@ describe('a 405 is classified by RE-READING the pull request', () => {
     stubHost({ merge: [blocked()], pull: [pull(), pull({ mergeable_state: 'blocked' })] });
     await expect(merge()).resolves.toEqual(refused('branch_protected'));
   });
+
+  it('BEHIND a strict base is out of date, though the message names the required checks (MOTIR-10054)', async () => {
+    const strict = '2 of 2 required status checks are expected.';
+    stubHost({ merge: [blocked(strict)], pull: [pull(), pull({ mergeable_state: 'behind' })] });
+    await expect(merge()).resolves.toEqual(refused('out_of_date', { reason: strict }));
+    stubHost({ merge: [blocked()], pull: [pull(), pull({ mergeable_state: 'behind' })] });
+    await expect(merge()).resolves.toEqual(refused('out_of_date'));
+    // The same message over a head that is NOT behind is still a checks refusal.
+    stubHost({ merge: [blocked(strict)], pull: [pull(), pull({ mergeable_state: 'blocked' })] });
+    await expect(merge()).resolves.toEqual(refused('checks_not_green', { reason: strict }));
+  });
 });
 
 describe('the ENQUEUE call', () => {
@@ -243,6 +254,18 @@ describe('the ENQUEUE call', () => {
       graphql: [graphqlError({ message: 'Pull request is not mergeable' })],
     });
     await expect(merge()).resolves.toEqual(refused('conflict'));
+  });
+
+  it('a pull request BEHIND a strict base the queue refuses is out of date, not red checks (MOTIR-10054)', async () => {
+    queued({
+      pull: [pull({ mergeable_state: 'behind' })],
+      graphql: [graphqlError({ message: 'Required status checks are expected' })],
+    });
+    await expect(merge()).resolves.toEqual(
+      refused('out_of_date', { reason: 'Required status checks are expected' }),
+    );
+    queued({ pull: [pull({ mergeable_state: 'behind' })], graphql: [graphqlError({})] });
+    await expect(merge()).resolves.toEqual(refused('out_of_date'));
   });
 
   it('"already queued" whose entry cannot be read back is an error, never a guessed entry', async () => {

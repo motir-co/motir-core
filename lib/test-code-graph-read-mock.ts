@@ -1,7 +1,7 @@
 // Node-only motir-ai CODE-GRAPH READ boundary mock for E2E (Story MOTIR-7858 ·
 // MOTIR-7866).
 //
-// The MCP `code_explore` / `code_search` tools call motir-ai's
+// The MCP `code_explore` / `code_search` / `code_grep` tools call motir-ai's
 // `POST /v1/code-graph/read` through `motirAiClient.readCodeGraph`, inside the
 // Next server, so nothing a Playwright runner does can see or answer that call.
 // This is that seam, the SAME shape `test-code-health-mock` uses: an undici

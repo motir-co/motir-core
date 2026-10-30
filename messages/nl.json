@@ -4151,14 +4151,20 @@
         "github": "GitHub"
       },
       "state": {
-        "connected": "Gekoppeld"
+        "connected": "Gekoppeld",
+        "needsReauth": "Opnieuw aanmelden nodig"
       },
       "connectedOn": "Gekoppeld op {date}",
       "connect": "GitHub koppelen",
       "disconnect": "Ontkoppelen",
+      "reconnect": "Opnieuw verbinden",
       "empty": {
         "title": "Geen git-account gekoppeld",
         "description": "Als je er een koppelt, kan Motir je uitnodigen voor de repository's waarin je projecten werken en het werk dat je doet ondertekenen. Het leest alleen je openbare profiel — het geeft geen toegang tot code."
+      },
+      "reauth": {
+        "title": "Verbind je GitHub-account opnieuw.",
+        "body": "GitHub accepteert deze aanmelding niet meer, dus Motir kan niet meer bevestigen wie je daar bent. Verder is er niets aan je account veranderd."
       },
       "noInstallation": {
         "title": "Je account is gekoppeld. Dat van je organisatie niet.",
@@ -7716,6 +7722,8 @@
         },
         "conflictOn": "<prs></prs> conflicteert met {base} en kan niet worden gemerged.",
         "conflictOnNoBase": "<prs></prs> conflicteert met de basisbranch en kan niet worden gemerged.",
+        "outOfDateOn": "<prs></prs> loopt achter op {base}, dat een bijgewerkte branch eist, en kan niet worden gemerged.",
+        "outOfDateOnNoBase": "<prs></prs> loopt achter op de basisbranch, die een bijgewerkte branch eist, en kan niet worden gemerged.",
         "howConflict": "Een agent rebaset of lost op in de eigen branch van de pull request, pusht, en de checks draaien opnieuw.",
         "rearm": "Er valt hier niets goed te keuren. Een push verplaatst de head, waardoor de vraag opnieuw wordt gesteld, en de volgende groene status opent de merge-poort één keer — over de nieuwe commits.",
         "sentBackByAgent": "De review-agent heeft deze commits teruggestuurd. Een agent repareert ze op {count, plural, one {dezelfde pull request} other {dezelfde pull requests}}, met de bevindingen in de prompt.",
@@ -10020,6 +10028,8 @@
         "queueFailedBare": "Mislukt in de merge-wachtrij",
         "conflicted": "Conflicteert met <d>{base}</d>",
         "conflictedNoBase": "Conflicteert met de basisbranch",
+        "outOfDate": "Loopt achter op <d>{base}</d>",
+        "outOfDateNoBase": "Loopt achter op de basisbranch",
         "ciFailed": "CI mislukt · <d>{check}</d>",
         "ciFailedBare": "CI mislukt",
         "changesRequested": "Wijzigingen gevraagd door <b>{name}</b> — ‘{note}’",
@@ -14283,6 +14293,10 @@
         "atPress": "{host} meldt dat {pr} conflicteert met {base}. De druk op de knop is geweigerd voordat er iets is geschreven, dus {key} is niet verplaatst.",
         "atPressNoBase": "{host} meldt dat {pr} conflicteert met de basisbranch. De druk op de knop is geweigerd voordat er iets is geschreven, dus {key} is niet verplaatst."
       },
+      "mergeOutOfDate": {
+        "title": "Deze pull request loopt achter op de basisbranch.",
+        "next": "Er is niets gemerged. De basisbranch eist dat pull requests bijgewerkt zijn voordat ze mergen, en deze loopt erachter. Haal de basisbranch erin — werk de branch bij, of laat motir fix het aan een agent geven — en Motir vraagt het opnieuw zodra de checks groen zijn."
+      },
       "mergeBranchProtected": {
         "title": "De beveiligingsregels van de branch staan deze merge nog niet toe.",
         "next": "Voldoe op GitHub aan de regel, zoals een verplichte review, en keur dan opnieuw goed."
@@ -15454,6 +15468,7 @@
       "run_died": "Te repareren · run gestorven",
       "queue_failed": "Te repareren · mislukt in de merge-wachtrij",
       "conflicted": "Te repareren · conflicteert met de basisbranch",
+      "out_of_date": "Te repareren · loopt achter op de basisbranch",
       "ci_failed": "Te repareren · CI mislukt",
       "changes_requested": "Te repareren · wijzigingen gevraagd",
       "sent_back_by_agent": "Te repareren · teruggestuurd door de reviewagent",
@@ -15465,6 +15480,8 @@
       "queueFailedBare": "Dit moet worden gerepareerd: het is mislukt in de merge-wachtrij.",
       "conflicted": "Dit moet worden gerepareerd: het conflicteert met <code>{base}</code>.",
       "conflictedNoBase": "Dit moet worden gerepareerd: het conflicteert met de basisbranch.",
+      "outOfDate": "Dit moet worden gerepareerd: het loopt achter op <code>{base}</code>.",
+      "outOfDateNoBase": "Dit moet worden gerepareerd: het loopt achter op de basisbranch.",
       "ciFailed": "Dit moet worden gerepareerd: CI is mislukt (check <code>{check}</code>).",
       "ciFailedBare": "Dit moet worden gerepareerd: CI is mislukt.",
       "changesRequested": "Dit moet worden gerepareerd: <b>{name}</b> heeft wijzigingen gevraagd — ‘{note}’",

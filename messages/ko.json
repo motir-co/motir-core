@@ -4151,14 +4151,20 @@
         "github": "GitHub"
       },
       "state": {
-        "connected": "연결됨"
+        "connected": "연결됨",
+        "needsReauth": "재인증 필요"
       },
       "connectedOn": "{date}에 연결됨",
       "connect": "GitHub 연결",
       "disconnect": "연결 해제",
+      "reconnect": "다시 연결",
       "empty": {
         "title": "연결된 Git 계정 없음",
         "description": "연결하면 Motir가 프로젝트에서 작업하는 저장소에 회원님을 초대하고 회원님의 작업에 서명할 수 있습니다. 공개 프로필만 읽으며 코드에 대한 액세스 권한은 부여하지 않습니다."
+      },
+      "reauth": {
+        "title": "GitHub 계정을 다시 연결하세요.",
+        "body": "GitHub가 더 이상 이 로그인을 받아들이지 않아, Motir가 GitHub에서 회원님이 누구인지 확인할 수 없습니다. 계정의 다른 부분은 바뀌지 않았습니다."
       },
       "noInstallation": {
         "title": "회원님의 계정은 연결되었지만 조직의 계정은 연결되지 않았습니다.",
@@ -7710,6 +7716,8 @@
         },
         "conflictOn": "<prs></prs>이(가) {base}와(과) 충돌하여 병합할 수 없습니다.",
         "conflictOnNoBase": "<prs></prs>이(가) 기본 브랜치와 충돌하여 병합할 수 없습니다.",
+        "outOfDateOn": "<prs></prs>이(가) 최신 상태를 요구하는 {base}보다 뒤처져 있어 병합할 수 없습니다.",
+        "outOfDateOnNoBase": "<prs></prs>이(가) 최신 상태를 요구하는 기준 브랜치보다 뒤처져 있어 병합할 수 없습니다.",
         "howConflict": "에이전트가 풀 리퀘스트의 브랜치에서 리베이스하거나 충돌을 해결하고 푸시하면 검사가 다시 실행됩니다.",
         "rearm": "여기서 승인할 것은 없습니다. 푸시하면 헤드가 이동하여 질문이 다시 준비되고, 다음 통과 시 새 커밋에 대해 병합 게이트가 한 번 생성됩니다.",
         "sentBackByAgent": "검토 에이전트가 이 커밋을 반려했습니다. 에이전트가 검토 결과를 프롬프트에 담아 {count, plural, other {동일한 풀 리퀘스트}}에서 수정합니다.",
@@ -10014,6 +10022,8 @@
         "queueFailedBare": "병합 대기열에서 실패",
         "conflicted": "<d>{base}</d>와(과) 충돌",
         "conflictedNoBase": "기본 브랜치와 충돌",
+        "outOfDate": "<d>{base}</d>보다 뒤처짐",
+        "outOfDateNoBase": "기본 브랜치보다 뒤처짐",
         "ciFailed": "CI 실패 · <d>{check}</d>",
         "ciFailedBare": "CI 실패",
         "changesRequested": "<b>{name}</b> 님이 변경 요청 — “{note}”",
@@ -14277,6 +14287,10 @@
         "atPress": "{host}에서 {pr}이(가) {base}와(과) 충돌한다고 보고했습니다. 기록되기 전에 요청이 거부되었으므로 {key}은(는) 이동하지 않았습니다.",
         "atPressNoBase": "{host}에서 {pr}이(가) 기준 브랜치와 충돌한다고 보고했습니다. 기록되기 전에 요청이 거부되었으므로 {key}은(는) 이동하지 않았습니다."
       },
+      "mergeOutOfDate": {
+        "title": "이 풀 리퀘스트가 기준 브랜치보다 뒤처져 있습니다.",
+        "next": "병합된 것이 없습니다. 기준 브랜치는 병합 전에 풀 리퀘스트가 최신 상태일 것을 요구하는데, 이 풀 리퀘스트는 뒤처져 있습니다. 기준 브랜치를 반영하세요 — 브랜치를 업데이트하거나 motir fix가 에이전트에게 맡기게 하세요. 검사가 통과하면 Motir가 다시 묻습니다."
+      },
       "mergeBranchProtected": {
         "title": "브랜치 보호 규칙이 아직 이 병합을 허용하지 않습니다.",
         "next": "필수 리뷰 등 GitHub의 규칙을 충족한 후 다시 승인하세요."
@@ -15448,6 +15462,7 @@
       "run_died": "수정 필요 · 실행 중단됨",
       "queue_failed": "수정 필요 · 병합 대기열에서 실패",
       "conflicted": "수정 필요 · 기준 브랜치와 충돌",
+      "out_of_date": "수정 필요 · 기준 브랜치보다 뒤처짐",
       "ci_failed": "수정 필요 · CI 실패",
       "changes_requested": "수정 필요 · 변경 요청됨",
       "sent_back_by_agent": "수정 필요 · 리뷰 에이전트가 반려함",
@@ -15459,6 +15474,8 @@
       "queueFailedBare": "수정이 필요합니다: 병합 대기열에서 실패했습니다.",
       "conflicted": "수정이 필요합니다: <code>{base}</code>와(과) 충돌합니다.",
       "conflictedNoBase": "수정이 필요합니다: 기준 브랜치와 충돌합니다.",
+      "outOfDate": "수정이 필요합니다: <code>{base}</code>보다 뒤처져 있습니다.",
+      "outOfDateNoBase": "수정이 필요합니다: 기준 브랜치보다 뒤처져 있습니다.",
       "ciFailed": "수정이 필요합니다: CI가 실패했습니다(검사 <code>{check}</code>).",
       "ciFailedBare": "수정이 필요합니다: CI가 실패했습니다.",
       "changesRequested": "수정이 필요합니다: <b>{name}</b> 님이 변경을 요청했습니다 — “{note}”",

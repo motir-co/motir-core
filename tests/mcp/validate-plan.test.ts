@@ -628,6 +628,205 @@ describe('validate_plan — the MISLABELLED-LINK advisory beside the verdict (MO
   });
 });
 
+describe('validate_plan — every SHAPE advisory on the plan’s proposals (MOTIR-10087)', () => {
+  // Both planners close on `validate_plan` alone. Until MOTIR-10087 it carried
+  // only the mislabelled link, so a proposal the detector flagged
+  // `likely-self-blocking-design` was sealed and reached the runner, whose guard
+  // #4 reads a two-index shape entry as LIFT and stops.
+
+  /** The reconstructed MOTIR-3154 criteria set: criterion 1 draws, 3 builds. */
+  const selfBlockingBody = [
+    '## Acceptance criteria',
+    '',
+    '1. a `design/ai-planning/` three-file amendment — the accepted and declined node treatments',
+    '2. decline no longer deletes the proposal rows',
+    '3. the plan-detail canvas draws a DECIDED plan, one node per approved add',
+  ].join('\n');
+
+  const leaf = (title: string, descriptionMd: string) => ({
+    title,
+    kind: 'subtask' as const,
+    type: 'code' as const,
+    executor: 'coding_agent' as const,
+    storyPoints: 2,
+    estimateMinutes: 30,
+    descriptionMd,
+  });
+
+  it('lists a proposed leaf’s self-blocking design with its ref and BOTH indices, and stays VALID', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await mk(fx, 'Story', 'story');
+    const planId = await freshPlan(fx);
+    const plan = await addProposals(fx, planId, [
+      {
+        op: 'add',
+        proposedFields: leaf('Draws and builds', selfBlockingBody),
+        parentRef: story.id,
+      },
+    ]);
+    await plansService.markPlanned(planId, fx.ctx);
+    const addRef = `planItem:${itemIdByTitle(plan, 'Draws and builds')}`;
+
+    const client = await connectClient(fx.ctx);
+    const res = await call(client, 'validate_plan', { planId });
+    expect(struct(res).valid).toBe(true);
+    expect(struct(res).advisories).toEqual([
+      {
+        kind: 'shape',
+        item: addRef,
+        severity: 'likely-self-blocking-design',
+        designCriterionIndex: 1,
+        surfaceCriterionIndex: 3,
+      },
+    ]);
+    expect(text(res)).toContain('is VALID');
+    expect(text(res)).toContain('NOT a blocker — the plan is still VALID either way');
+    expect(text(res)).toContain(
+      `${addRef}: criterion 1 produces a design asset, criterion 3 builds a rendered surface (likely-self-blocking-design)`,
+    );
+    await client.close();
+  });
+
+  it('lists the same entry `validate_work_item { planId }` yields for that proposal', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await mk(fx, 'Story', 'story');
+    const planId = await freshPlan(fx);
+    await addProposals(fx, planId, [
+      {
+        op: 'add',
+        proposedFields: leaf('Draws and builds', selfBlockingBody),
+        parentRef: story.id,
+      },
+    ]);
+    await plansService.markPlanned(planId, fx.ctx);
+
+    const client = await connectClient(fx.ctx);
+    const whole = struct(await call(client, 'validate_plan', { planId })).advisories;
+    const subtree = struct(
+      await call(client, 'validate_work_item', { key: story.identifier, planId }),
+    ).advisories as { kind?: string }[];
+    expect(whole).toEqual(subtree.filter((a) => a.kind === 'shape'));
+    await client.close();
+  });
+
+  it('lists none once the plan LIFTS the design into a sibling the leaf is blocked_by', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await mk(fx, 'Story', 'story');
+    const planId = await freshPlan(fx);
+    const withDesign = await addProposals(fx, planId, [
+      {
+        op: 'add',
+        proposedFields: { ...leaf('The drawing', 'Draws the canvas.'), type: 'design' },
+        parentRef: story.id,
+      },
+    ]);
+    const designRef = `planItem:${itemIdByTitle(withDesign, 'The drawing')}`;
+    await addProposals(fx, planId, [
+      {
+        op: 'add',
+        proposedFields: leaf('Draws and builds', selfBlockingBody),
+        parentRef: story.id,
+        blockedByRefs: [designRef],
+      },
+    ]);
+    await plansService.markPlanned(planId, fx.ctx);
+
+    const client = await connectClient(fx.ctx);
+    const res = await call(client, 'validate_plan', { planId });
+    expect(struct(res).advisories).toEqual([]);
+    expect(text(res)).not.toContain('Advisory');
+    await client.close();
+  });
+
+  it('lists a committed card the plan MODIFIES, by its key — and never one the plan leaves untouched', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await mk(fx, 'Story', 'story');
+    const commit = (title: string) =>
+      workItemsService.createWorkItem(
+        { projectId: fx.projectId, parentId: story.id, ...leaf(title, selfBlockingBody) },
+        fx.ctx,
+      );
+    const touched = await commit('Touched');
+    await commit('Untouched');
+    const planId = await freshPlan(fx);
+    await addProposals(fx, planId, [
+      { op: 'modify', workItemId: touched.id, patch: { title: 'Touched, renamed' } },
+    ]);
+    await plansService.markPlanned(planId, fx.ctx);
+
+    const client = await connectClient(fx.ctx);
+    const res = await call(client, 'validate_plan', { planId });
+    expect(struct(res).advisories).toEqual([
+      {
+        kind: 'shape',
+        item: touched.identifier,
+        severity: 'likely-self-blocking-design',
+        designCriterionIndex: 1,
+        surfaceCriterionIndex: 3,
+      },
+    ]);
+    await client.close();
+  });
+
+  it('lists a proposed card laid inside the container whose merge it waits on, and says where it goes', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await mk(fx, 'Story', 'story');
+    const planId = await freshPlan(fx);
+    const plan = await addProposals(fx, planId, [
+      {
+        op: 'add',
+        proposedFields: {
+          ...leaf('Walk it', 'Walk the canvas once deployed, on staging.'),
+          type: 'verification',
+          executor: 'human',
+        },
+        parentRef: story.id,
+      },
+    ]);
+    await plansService.markPlanned(planId, fx.ctx);
+    const addRef = `planItem:${itemIdByTitle(plan, 'Walk it')}`;
+
+    const client = await connectClient(fx.ctx);
+    const res = await call(client, 'validate_plan', { planId });
+    expect(struct(res).advisories).toEqual([
+      {
+        kind: 'shape',
+        item: addRef,
+        severity: 'likely-post-merge-child-under-container',
+        phrase: 'once deployed',
+        container: story.identifier,
+      },
+    ]);
+    expect(text(res)).toContain(
+      `${addRef} reads the deployment ("once deployed") while it sits INSIDE ${story.identifier}, whose merge it waits on.`,
+    );
+    await client.close();
+  });
+
+  it('keeps a MISLABELLED LINK to the bodies the plan writes: a title-only modify does not report its stored link', async () => {
+    const fx = await makeWorkItemFixture();
+    const opened = await mk(fx, 'Opened', 'task');
+    const old = await workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        ...leaf('Old card', `Built on [PROD-99](motir:${opened.id}).`),
+        kind: 'task',
+      },
+      fx.ctx,
+    );
+    const planId = await freshPlan(fx);
+    await addProposals(fx, planId, [
+      { op: 'modify', workItemId: old.id, patch: { title: 'Old card, renamed' } },
+    ]);
+    await plansService.markPlanned(planId, fx.ctx);
+
+    const client = await connectClient(fx.ctx);
+    const res = await call(client, 'validate_plan', { planId });
+    expect(struct(res).advisories).toEqual([]);
+    await client.close();
+  });
+});
+
 describe('validate_plan — SECTION findings, advisory (MOTIR-9032)', () => {
   it('names a prose-only proposal in a VALID plan, states the count, and never flips `valid`', async () => {
     const fx = await makeWorkItemFixture();

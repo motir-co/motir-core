@@ -4151,14 +4151,20 @@
         "github": "GitHub"
       },
       "state": {
-        "connected": "Conectada"
+        "connected": "Conectada",
+        "needsReauth": "Requiere volver a autenticarse"
       },
       "connectedOn": "Conectada el {date}",
       "connect": "Conectar GitHub",
       "disconnect": "Desconectar",
+      "reconnect": "Volver a conectar",
       "empty": {
         "title": "No hay ninguna cuenta de Git conectada",
         "description": "Conectar una permite a Motir invitarte a los repositorios en los que trabajan tus proyectos y firmar el trabajo que haces. Solo lee tu perfil público: no concede acceso a ningún código."
+      },
+      "reauth": {
+        "title": "Vuelve a conectar tu cuenta de GitHub.",
+        "body": "GitHub ya no acepta este inicio de sesión, así que Motir ya no puede confirmar quién eres allí. Nada más ha cambiado en tu cuenta."
       },
       "noInstallation": {
         "title": "Tu cuenta está conectada. La de tu organización, no.",
@@ -7716,6 +7722,8 @@
         },
         "conflictOn": "<prs></prs> tiene conflictos con {base} y no se puede fusionar.",
         "conflictOnNoBase": "<prs></prs> tiene conflictos con su rama base y no se puede fusionar.",
+        "outOfDateOn": "<prs></prs> va por detrás de {base}, que exige estar al día, y no se puede fusionar.",
+        "outOfDateOnNoBase": "<prs></prs> va por detrás de su rama base, que exige estar al día, y no se puede fusionar.",
         "howConflict": "Un Agente hace rebase o resuelve los conflictos en la propia rama del pull request, sube los cambios y las comprobaciones se vuelven a ejecutar.",
         "rearm": "No hay nada que aprobar aquí. Un push mueve el head, lo que reactiva la pregunta, y el siguiente verde abre la puerta de fusión una vez, sobre los nuevos commits.",
         "sentBackByAgent": "El Agente de revisión devolvió estos commits. Un Agente los corrige en {count, plural, one {el mismo pull request} other {los mismos pull requests}}, con sus hallazgos en el prompt.",
@@ -10020,6 +10028,8 @@
         "queueFailedBare": "Falló en la cola de fusión",
         "conflicted": "Tiene conflictos con <d>{base}</d>",
         "conflictedNoBase": "Tiene conflictos con su rama base",
+        "outOfDate": "Desactualizado respecto a <d>{base}</d>",
+        "outOfDateNoBase": "Desactualizado respecto a su rama base",
         "ciFailed": "CI falló · <d>{check}</d>",
         "ciFailedBare": "CI falló",
         "changesRequested": "Cambios solicitados por <b>{name}</b>: “{note}”",
@@ -14283,6 +14293,10 @@
         "atPress": "{host} informa de que {pr} tiene conflictos con {base}. El clic se rechazó antes de escribir nada, así que {key} no se movió.",
         "atPressNoBase": "{host} informa de que {pr} tiene conflictos con su rama base. El clic se rechazó antes de escribir nada, así que {key} no se movió."
       },
+      "mergeOutOfDate": {
+        "title": "Este pull request está desactualizado respecto a su rama base.",
+        "next": "No se fusionó nada. La rama base exige que los pull requests estén al día antes de fusionarse, y este va por detrás. Incorpora la rama base (actualiza la rama, o deja que motir fix se lo pase a un Agente) y Motir volverá a preguntar cuando sus comprobaciones estén en verde."
+      },
       "mergeBranchProtected": {
         "title": "Las reglas de protección de la rama aún no permiten esta fusión.",
         "next": "Cumple la regla en GitHub, por ejemplo una revisión obligatoria, y vuelve a aprobar."
@@ -15454,6 +15468,7 @@
       "run_died": "Por corregir · la Ejecución murió",
       "queue_failed": "Por corregir · falló en la cola de fusión",
       "conflicted": "Por corregir · tiene conflictos con su rama base",
+      "out_of_date": "Por corregir · desactualizado respecto a su rama base",
       "ci_failed": "Por corregir · falló la CI",
       "changes_requested": "Por corregir · cambios solicitados",
       "sent_back_by_agent": "Por corregir · devuelto por el Agente de revisión",
@@ -15465,6 +15480,8 @@
       "queueFailedBare": "Necesita una corrección: falló en la cola de fusión.",
       "conflicted": "Necesita una corrección: tiene conflictos con <code>{base}</code>.",
       "conflictedNoBase": "Necesita una corrección: tiene conflictos con su rama base.",
+      "outOfDate": "Necesita una corrección: está desactualizado respecto a <code>{base}</code>.",
+      "outOfDateNoBase": "Necesita una corrección: está desactualizado respecto a su rama base.",
       "ciFailed": "Necesita una corrección: falló la CI (comprobación <code>{check}</code>).",
       "ciFailedBare": "Necesita una corrección: falló la CI.",
       "changesRequested": "Necesita una corrección: <b>{name}</b> solicitó cambios: “{note}”",

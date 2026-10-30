@@ -406,8 +406,16 @@ describe('POST /api/internal/ai/validate-plan-forest', () => {
       invalidEdges: [],
       crossLevelEdges: [],
       sectionFindings: expect.any(Array),
-      // The link advisories ride beside the verdict (MOTIR-9873); none here.
-      advisories: [],
+      // The shape advisories ride beside the verdict (MOTIR-9873, MOTIR-10087):
+      // a bare `{ title, kind }` add is UNDER-AUTHORED, and says so.
+      advisories: [
+        {
+          kind: 'shape',
+          item: `planItem:${gatedId}`,
+          severity: 'under-authored',
+          criteria: 'no-heading',
+        },
+      ],
     });
   });
 
