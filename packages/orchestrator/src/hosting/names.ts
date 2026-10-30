@@ -4,13 +4,24 @@
 // same names, so they live beside the port rather than in one adapter.
 
 import { HostingAppNameInvalidError } from './errors';
-import type { HostingApp, HostingEnvironment } from './types';
+import type { HostingApp, HostingEnvironment, PushNamespaceKind } from './types';
 
 const DNS_LABEL = /^[a-z0-9][a-z0-9-]{0,62}$/;
 
 function checked(name: string): string {
   if (!DNS_LABEL.test(name) || name.endsWith('-')) throw new HostingAppNameInvalidError(name);
   return name;
+}
+
+/** The push namespace of a repository's previews (shared by every pull request)
+ *  or of its production: `<prefix><rid>-pv` / `<prefix><rid>`. */
+export function pushNamespaceName(
+  prefix: string,
+  repositoryId: string,
+  kind: PushNamespaceKind,
+): string {
+  const base = `${prefix}${repositoryId}`;
+  return checked(kind === 'production' ? base : `${base}-pv`);
 }
 
 /** The app and push namespace for one (repository, environment). */
@@ -29,7 +40,7 @@ export function hostingAppNames(
   }
   return {
     appRef: checked(`${base}-pr${environment.pullRequest}`),
-    pushNamespace: checked(`${base}-pv`),
+    pushNamespace: pushNamespaceName(prefix, repositoryId, 'preview'),
   };
 }
 

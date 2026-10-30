@@ -96,11 +96,17 @@ export function isTwoFactorExemptPath(path: string): boolean {
  * passkey counts even with that flag false, which is precisely the account a
  * naive check would lock out of the product.
  */
-export async function assertTwoFactorCompliance(userId: string): Promise<void> {
+export async function assertTwoFactorCompliance(
+  userId: string,
+  /** Where enrolment returns to, for a page outside `proxy.ts`'s matcher (which
+   *  is what stamps the current path): the preview gate's `/preview-access`
+   *  door builds its own (MOTIR-5779). Defaults to the request's current path. */
+  returnTo?: string,
+): Promise<void> {
   const requirement = await twoFactorPolicyService.resolveRequirement(userId);
   if (!requirement.required || requirement.compliant) return;
 
-  const current = (await headers()).get(CURRENT_PATH_HEADER);
+  const current = returnTo ?? (await headers()).get(CURRENT_PATH_HEADER);
   // The exemption is read from the CURRENT path, so a held visitor can still
   // open their own Security pane and enrol.
   if (current && isTwoFactorExemptPath(current)) return;

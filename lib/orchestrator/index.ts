@@ -52,6 +52,9 @@ import {
 } from '@/lib/orchestrator/shardFakeJournal';
 import { selectedOrchestratorProvider } from './provider';
 import { ciFleetCostMeterService } from '@/lib/services/ciFleetCostMeterService';
+import { ciPreviewUsageMeterService } from '@/lib/services/ciPreviewUsageMeterService';
+import { observeHostingDestroyApp } from './hosting';
+import { observeDatabaseBranchDelete } from './database';
 import { withPlatformMeterReport } from '@/lib/services/platformMeterReportEnqueue';
 
 // ⚠️ THIS FILE IS THE PACKAGE'S COMPOSITION ROOT (MOTIR-4299), and it is the ONE
@@ -1133,6 +1136,16 @@ const usageSink = createUsageSink(withPlatformMeterReport(ciFleetCostMeterServic
 export const recordContainerUsage = usageSink.recordContainerUsage;
 /** Emit a CHECKPOINT on a container still running. NEVER THROWS. */
 export const recordContainerAccrual = usageSink.recordContainerAccrual;
+
+// ── The preview meter, bound to the ports' destroys (MOTIR-5777) ────────────
+//
+// The lifecycle destroys a preview's app and branch through the ports and never
+// calls billing code; binding the meter HERE is how a destroy's usage reaches
+// the CI pool. `./hosting` and `./database` load no database, so they only hold
+// the observer; this module, which does, binds it. The preview lifecycle imports
+// its ports from `@/lib/orchestrator` for exactly that reason.
+observeHostingDestroyApp((input) => ciPreviewUsageMeterService.recordDestroyedApp(input));
+observeDatabaseBranchDelete((input) => ciPreviewUsageMeterService.recordDeletedBranch(input));
 
 // ── The PURE half: re-exported verbatim from the package ─────────────────────
 //

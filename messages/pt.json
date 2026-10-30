@@ -7879,6 +7879,14 @@
         "failing": "Verificações falhando",
         "running": "Verificações em execução"
       },
+      "preview": {
+        "building": "Pré-visualização em construção",
+        "ready": "Pré-visualização pronta",
+        "failed": "Falha na pré-visualização",
+        "failedReason": "Falha na pré-visualização · <tone>{reason}</tone>",
+        "closed": "Pré-visualização encerrada",
+        "unknown": "Pré-visualização {state}"
+      },
       "linkPr": "Vincular pull request",
       "linkPrField": "Pull request a vincular",
       "searchPlaceholder": "Pesquisar pull requests…",
@@ -16075,5 +16083,85 @@
     "pendingMark": "Traduzindo",
     "showOriginal": "Mostrar original",
     "showTranslation": "Mostrar tradução"
+  },
+  "previewGate": {
+    "frame": {
+      "tag": "Prévia",
+      "brand": "Motir",
+      "footer": "Você está em <chip>{host}</chip>, uma prévia que o Motir executa para um pull request. O Motir nunca pede sua senha neste endereço. O login acontece somente em app.motir.co."
+    },
+    "signIn": {
+      "banner": "Faça login para abrir a prévia em <chip>{host}</chip>. As prévias ficam abertas apenas para membros do projeto."
+    },
+    "refused": {
+      "metaTitle": "Sem acesso a esta prévia",
+      "pill": "Prévia",
+      "title": "Você não tem acesso a esta prévia",
+      "body": "As prévias ficam abertas apenas para membros do projeto a que pertencem. Se alguém compartilhou este link com você, peça para essa pessoa adicionar você ao projeto e abra o link de novo.",
+      "signedInAs": "Conectado como <strong>{email}</strong>",
+      "home": "Ir para o Motir",
+      "switch": "Entrar com outra conta",
+      "switchHint": "Você voltará a esta prévia depois de fazer login."
+    },
+    "building": {
+      "pill": "Compilando",
+      "title": "Esta prévia está sendo compilada",
+      "body": "A CI do repositório está compilando a imagem da prévia para o commit mais recente deste pull request. Isso costuma levar alguns minutos.",
+      "refresh": "Esta página verifica de novo a cada 10 segundos e abre a prévia quando ela estiver pronta."
+    },
+    "starting": {
+      "pill": "Iniciando",
+      "title": "Esta prévia está iniciando",
+      "body": "A imagem foi compilada. O Motir está iniciando a imagem e aguardando a verificação de integridade passar."
+    },
+    "steps": {
+      "label": "Progresso",
+      "build": "Compilar a imagem",
+      "start": "Iniciar a prévia",
+      "ready": "Pronta"
+    },
+    "facts": {
+      "workItem": "Item de trabalho",
+      "pullRequest": "Pull request",
+      "pullRequestValue": "{repo} · #{n}"
+    },
+    "action": {
+      "openWorkItem": "Abrir {key} no Motir",
+      "openPullRequest": "Abrir o pull request #{n} no GitHub"
+    },
+    "failed": {
+      "pill": "Falhou",
+      "title": "Esta prévia não foi iniciada",
+      "body": "Nada está em execução para o commit mais recente deste pull request. Um novo push a compila de novo.",
+      "reasonTitle": "O que deu errado",
+      "checks": "O item de trabalho mostra as verificações deste pull request e os logs delas.",
+      "reason": {
+        "imageBuild": "A imagem da prévia não foi compilada: o fluxo de trabalho “Preview image” terminou com “{conclusion}”. O log de execução no GitHub explica o motivo.",
+        "healthTimeout": "A prévia não passou na verificação de integridade em {minutes} minutos.",
+        "healthFailed": "A prévia foi iniciada, mas falhou na verificação de integridade.",
+        "fallback": "Não foi possível iniciar a prévia."
+      }
+    },
+    "unsupported": {
+      "pill": "Indisponível em prévias",
+      "title": "As prévias não podem fazer isso",
+      "websocket": "Conexões em tempo real (websockets) não passam pelo gateway das prévias. O restante da prévia funciona normalmente.",
+      "tooLarge": "Não é possível enviar a uma prévia solicitações com mais de 10 MB.",
+      "noLength": "Esta solicitação não informou o próprio tamanho, então o gateway das prévias não pode aceitá-la."
+    },
+    "closed": {
+      "pill": "Encerrada",
+      "title": "Esta prévia foi desligada",
+      "merged": "O pull request #{n} foi mesclado, então o Motir desligou a prévia e excluiu o banco de dados dela.",
+      "closed": "O pull request #{n} foi fechado sem mesclar, então o Motir desligou a prévia e excluiu o banco de dados dela.",
+      "takenOver": "Este repositório saiu do Motir, então o Motir desligou as prévias dele e excluiu os bancos de dados delas.",
+      "unknown": "O Motir desligou esta prévia e excluiu o banco de dados dela."
+    },
+    "notFound": {
+      "pill": "Indisponível",
+      "title": "Não há nenhuma prévia aqui",
+      "body": "Este endereço não pertence a nenhuma prévia em execução. Ela pode ter sido desligada, ou o link pode estar digitado errado.",
+      "home": "Ir para o Motir"
+    }
   }
 }

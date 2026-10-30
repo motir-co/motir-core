@@ -7879,6 +7879,14 @@
         "failing": "Checks fehlgeschlagen",
         "running": "Checks laufen"
       },
+      "preview": {
+        "building": "Vorschau wird erstellt",
+        "ready": "Vorschau bereit",
+        "failed": "Vorschau fehlgeschlagen",
+        "failedReason": "Vorschau fehlgeschlagen · <tone>{reason}</tone>",
+        "closed": "Vorschau geschlossen",
+        "unknown": "Vorschau {state}"
+      },
       "linkPr": "Pull Request verknüpfen",
       "linkPrField": "Zu verknüpfender Pull Request",
       "searchPlaceholder": "Pull Requests durchsuchen…",
@@ -16075,5 +16083,85 @@
     "pendingMark": "Wird übersetzt",
     "showOriginal": "Original anzeigen",
     "showTranslation": "Übersetzung anzeigen"
+  },
+  "previewGate": {
+    "frame": {
+      "tag": "Vorschau",
+      "brand": "Motir",
+      "footer": "Sie befinden sich auf <chip>{host}</chip>, einer Vorschau, die Motir für einen Pull Request betreibt. Motir fragt auf dieser Adresse nie nach Ihrem Passwort. Die Anmeldung erfolgt nur auf app.motir.co."
+    },
+    "signIn": {
+      "banner": "Melden Sie sich an, um die Vorschau auf <chip>{host}</chip> zu öffnen. Vorschauen sind nur für Mitglieder des Projekts zugänglich."
+    },
+    "refused": {
+      "metaTitle": "Kein Zugriff auf diese Vorschau",
+      "pill": "Vorschau",
+      "title": "Sie haben keinen Zugriff auf diese Vorschau",
+      "body": "Vorschauen sind nur für Mitglieder des Projekts zugänglich, zu dem sie gehören. Wenn Ihnen jemand diesen Link geschickt hat, bitten Sie die Person, Sie zum Projekt hinzuzufügen, und öffnen Sie den Link dann erneut.",
+      "signedInAs": "Angemeldet als <strong>{email}</strong>",
+      "home": "Zu Motir",
+      "switch": "Mit einem anderen Konto anmelden",
+      "switchHint": "Nach der Anmeldung kommen Sie zu dieser Vorschau zurück."
+    },
+    "building": {
+      "pill": "Wird gebaut",
+      "title": "Diese Vorschau wird gebaut",
+      "body": "Die CI des Repositorys baut das Vorschau-Image für den neuesten Commit dieses Pull Requests. Das dauert meist ein paar Minuten.",
+      "refresh": "Diese Seite prüft alle 10 Sekunden erneut und öffnet die Vorschau, sobald sie bereit ist."
+    },
+    "starting": {
+      "pill": "Wird gestartet",
+      "title": "Diese Vorschau wird gestartet",
+      "body": "Das Image ist gebaut. Motir startet es und wartet, bis die Integritätsprüfung erfolgreich ist."
+    },
+    "steps": {
+      "label": "Fortschritt",
+      "build": "Image bauen",
+      "start": "Vorschau starten",
+      "ready": "Bereit"
+    },
+    "facts": {
+      "workItem": "Arbeitselement",
+      "pullRequest": "Pull Request",
+      "pullRequestValue": "{repo} · #{n}"
+    },
+    "action": {
+      "openWorkItem": "{key} in Motir öffnen",
+      "openPullRequest": "Pull Request #{n} auf GitHub öffnen"
+    },
+    "failed": {
+      "pill": "Fehlgeschlagen",
+      "title": "Diese Vorschau wurde nicht gestartet",
+      "body": "Für den neuesten Commit dieses Pull Requests läuft nichts. Ein neuer Push baut sie erneut.",
+      "reasonTitle": "Was schiefgelaufen ist",
+      "checks": "Das Arbeitselement zeigt die Prüfungen dieses Pull Requests und ihre Protokolle.",
+      "reason": {
+        "imageBuild": "Das Vorschau-Image wurde nicht gebaut: Der Workflow „Preview image“ endete mit „{conclusion}“. Das Ausführungsprotokoll auf GitHub nennt den Grund.",
+        "healthTimeout": "Die Vorschau hat ihre Integritätsprüfung nicht innerhalb von {minutes} Minuten bestanden.",
+        "healthFailed": "Die Vorschau wurde gestartet, hat aber ihre Integritätsprüfung nicht bestanden.",
+        "fallback": "Die Vorschau konnte nicht gestartet werden."
+      }
+    },
+    "unsupported": {
+      "pill": "In Vorschauen nicht verfügbar",
+      "title": "Das ist in Vorschauen nicht möglich",
+      "websocket": "Live-Verbindungen (WebSockets) passieren das Vorschau-Gateway nicht. Der Rest der Vorschau funktioniert wie gewohnt.",
+      "tooLarge": "Anfragen über 10 MB können nicht an eine Vorschau gesendet werden.",
+      "noLength": "Diese Anfrage hat ihre Größe nicht angegeben, daher kann das Vorschau-Gateway sie nicht annehmen."
+    },
+    "closed": {
+      "pill": "Geschlossen",
+      "title": "Diese Vorschau wurde beendet",
+      "merged": "Pull Request #{n} wurde gemergt, daher hat Motir seine Vorschau beendet und ihre Datenbank gelöscht.",
+      "closed": "Pull Request #{n} wurde ohne Merge geschlossen, daher hat Motir seine Vorschau beendet und ihre Datenbank gelöscht.",
+      "takenOver": "Dieses Repository hat Motir verlassen, daher hat Motir seine Vorschauen beendet und ihre Datenbanken gelöscht.",
+      "unknown": "Motir hat diese Vorschau beendet und ihre Datenbank gelöscht."
+    },
+    "notFound": {
+      "pill": "Nicht verfügbar",
+      "title": "Hier gibt es keine Vorschau",
+      "body": "Diese Adresse gehört zu keiner laufenden Vorschau. Sie wurde möglicherweise beendet, oder der Link ist falsch geschrieben.",
+      "home": "Zu Motir"
+    }
   }
 }

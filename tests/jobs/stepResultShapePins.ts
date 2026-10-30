@@ -519,6 +519,37 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ accounts: number; apps: number; failures: number; killed: Array<{ action: "destroyed" | "stopped"; app: string; machineId: string; reason: "foreign_org" | "no_record" | "org_stopped" | "record_ended"; workload: "agent_instance" | "ci_runner" | "code_graph_index" | "hosted_agent" | null }>; listed: number; matched: number; orphanedVolumesDestroyed: number; outcome: "reconciled"; spared: number; unavailableApps: Array<string>; undated: number } | { detail: string; outcome: "inventory_unavailable" } | { outcome: "disabled" }',
   },
+  'preview-enablement-sweep': {
+    file: 'lib/jobs/definitions/previewEnablementSweep.ts',
+    shape:
+      '{ rows: Array<{ errorCode?: string | undefined; outcome: "already_enabled" | "enabled" | "failed" | "ineligible" | "not_found" | "renewed"; repositoryId: string }> }',
+  },
+  '`preview-${data.effect}`': {
+    file: 'lib/jobs/definitions/previewLifecycle.ts',
+    shape: '{ status: string }',
+  },
+  '`preview-health-${poll}`': {
+    file: 'lib/jobs/definitions/previewLifecycle.ts',
+    shape: '"healthy" | "pending" | "unhealthy"',
+  },
+  'preview-reaper': {
+    file: 'lib/jobs/definitions/previewLifecycle.ts',
+    shape:
+      '{ announced: number; closed: number; failed: number; startsAbandoned: number; teardownsFinished: number }',
+  },
+  'preview-usage-accrual': {
+    file: 'lib/jobs/definitions/previewUsageAccrual.ts',
+    shape: '{ failed: number; previews: number; slices: number }',
+  },
+  'preview-settle': {
+    file: 'lib/jobs/definitions/previewLifecycle.ts',
+    shape: '{ status: "failed" | "ready" | "skipped" }',
+  },
+  'preview-start': {
+    file: 'lib/jobs/definitions/previewLifecycle.ts',
+    shape:
+      '{ handle: { appRef: string; environment: { kind: "preview"; pullRequest: number } | { kind: "production" }; providerRef: string; releaseId: string; target: "aws" | "fly" | "serverless" }; status: "deployed" } | { reason: string; status: "failed" } | { status: "skipped" }',
+  },
   'recompute-code-graph-drift': {
     file: 'lib/jobs/definitions/codeGraphDriftSweep.ts',
     shape: '{ counted: number; indeterminate: number; scanned: number; skipped: number }',

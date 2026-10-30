@@ -86,6 +86,28 @@ export interface GithubAccountRepositoriesDTO {
  * merged/closed collapse, per-PR CI derivation, and link-out URL are all
  * resolved server-side so the client stays purely presentational.
  */
+/**
+ * A pull request's preview, as its row draws it (MOTIR-10099).
+ *
+ * ⚠️ `state` IS A `string`, NOT A UNION. Its membership is the
+ * `PreviewDeploymentState` database enum, and a hand-copied union here would compile
+ * exhaustively and still be wrong the day a migration widens the enum or a deploy
+ * runs ahead of one. The row draws an unrecognised value as its own raw word
+ * (`Preview {state}`) — a fallback the compiler could not reach if the type forbade
+ * the value it exists for.
+ */
+export interface LinkedPullRequestPreviewDto {
+  /** The record's state, verbatim: `building`, `starting`, `ready`, `failed`, `closed`. */
+  state: string;
+  /** `pr-<n>--<slug>.<preview domain>` — the link's visible text. */
+  host: string;
+  /** Why it failed, written for a person; null when not recorded. */
+  failureReason: string | null;
+  /** The preview's address (`lib/preview/url.ts`'s `previewUrl(host)`), composed
+   *  server-side so the client never string-builds it. */
+  url: string;
+}
+
 export interface LinkedPullRequestDto {
   /**
    * Motir's own id for the pull-request row (MOTIR-5005) — what the REMOVE
@@ -161,6 +183,18 @@ export interface LinkedPullRequestDto {
    * `false` for an unknown reading — "not computed" is never a conflict (§ 30 Panel 6).
    */
   conflicted: boolean;
+  /**
+   * THIS PULL REQUEST'S PREVIEW (Story MOTIR-5766 · MOTIR-10099; design
+   * `design/github/design-notes.md` § 31) — Motir's own record of it
+   * (`preview_deployment`), or null when the pull request has none. Null renders NO
+   * preview line: a connected repository, a repository whose previews are off and a
+   * pull request that never built all have no record, and absence of a preview is
+   * not a state, exactly as `ci: null` renders no CI pill.
+   *
+   * REQUIRED and nullable rather than optional, so *this pull request has no
+   * preview* and *the producer forgot to answer* cannot be the same value.
+   */
+  preview: LinkedPullRequestPreviewDto | null;
   /* ⚠️ `linkedManually` WAS HERE and is removed by MOTIR-4894, along with the
    * "linked manually" suffix it fed. It said the link was DECLARED rather than
    * inferred by the MOTIR-892 auto-resolver, and MOTIR-3674 deleted that

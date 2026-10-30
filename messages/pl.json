@@ -7879,6 +7879,14 @@
         "failing": "Testy nie przechodzą",
         "running": "Testy w toku"
       },
+      "preview": {
+        "building": "Podgląd w budowie",
+        "ready": "Podgląd gotowy",
+        "failed": "Podgląd nie powiódł się",
+        "failedReason": "Podgląd nie powiódł się · <tone>{reason}</tone>",
+        "closed": "Podgląd zamknięty",
+        "unknown": "Podgląd {state}"
+      },
       "linkPr": "Powiąż pull request",
       "linkPrField": "Pull request do powiązania",
       "searchPlaceholder": "Szukaj pull requestów…",
@@ -16075,5 +16083,85 @@
     "pendingMark": "Tłumaczenie",
     "showOriginal": "Pokaż oryginał",
     "showTranslation": "Pokaż tłumaczenie"
+  },
+  "previewGate": {
+    "frame": {
+      "tag": "Podgląd",
+      "brand": "Motir",
+      "footer": "Jesteś na <chip>{host}</chip> – to podgląd, który Motir uruchamia dla pull requesta. Motir nigdy nie prosi o hasło pod tym adresem. Logowanie odbywa się wyłącznie na app.motir.co."
+    },
+    "signIn": {
+      "banner": "Zaloguj się, aby otworzyć podgląd pod adresem <chip>{host}</chip>. Podglądy są dostępne tylko dla członków projektu."
+    },
+    "refused": {
+      "metaTitle": "Brak dostępu do tego podglądu",
+      "pill": "Podgląd",
+      "title": "Nie masz dostępu do tego podglądu",
+      "body": "Podglądy są dostępne tylko dla członków projektu, do którego należą. Jeśli ktoś udostępnił Ci ten link, poproś tę osobę o dodanie Cię do projektu, a potem otwórz link ponownie.",
+      "signedInAs": "Zalogowano jako <strong>{email}</strong>",
+      "home": "Przejdź do Motir",
+      "switch": "Zaloguj się na inne konto",
+      "switchHint": "Po zalogowaniu wrócisz do tego podglądu."
+    },
+    "building": {
+      "pill": "Budowanie",
+      "title": "Ten podgląd jest budowany",
+      "body": "CI repozytorium buduje obraz podglądu dla najnowszego commita tego pull requesta. Zwykle trwa to kilka minut.",
+      "refresh": "Ta strona sprawdza ponownie co 10 sekund i otwiera podgląd, gdy będzie gotowy."
+    },
+    "starting": {
+      "pill": "Uruchamianie",
+      "title": "Ten podgląd jest uruchamiany",
+      "body": "Obraz jest zbudowany. Motir go uruchamia i czeka, aż przejdzie kontrolę kondycji."
+    },
+    "steps": {
+      "label": "Postęp",
+      "build": "Budowanie obrazu",
+      "start": "Uruchamianie podglądu",
+      "ready": "Gotowe"
+    },
+    "facts": {
+      "workItem": "Element roboczy",
+      "pullRequest": "Pull request",
+      "pullRequestValue": "{repo} · #{n}"
+    },
+    "action": {
+      "openWorkItem": "Otwórz {key} w Motir",
+      "openPullRequest": "Otwórz pull request #{n} w GitHub"
+    },
+    "failed": {
+      "pill": "Niepowodzenie",
+      "title": "Ten podgląd się nie uruchomił",
+      "body": "Dla najnowszego commita tego pull requesta nic nie działa. Nowy push zbuduje go ponownie.",
+      "reasonTitle": "Co poszło nie tak",
+      "checks": "Element roboczy pokazuje kontrole tego pull requesta i ich logi.",
+      "reason": {
+        "imageBuild": "Obraz podglądu nie został zbudowany: workflow „Preview image” zakończył się wynikiem „{conclusion}”. Jego log uruchomienia w GitHub wyjaśnia dlaczego.",
+        "healthTimeout": "Podgląd nie przeszedł kontroli kondycji w ciągu {minutes} min.",
+        "healthFailed": "Podgląd się uruchomił, ale nie przeszedł kontroli kondycji.",
+        "fallback": "Nie udało się uruchomić podglądu."
+      }
+    },
+    "unsupported": {
+      "pill": "Niedostępne w podglądach",
+      "title": "Podglądy tego nie obsługują",
+      "websocket": "Połączenia na żywo (websockety) nie przechodzą przez bramę podglądów. Reszta podglądu działa normalnie.",
+      "tooLarge": "Do podglądu nie można wysyłać żądań większych niż 10 MB.",
+      "noLength": "To żądanie nie podało swojego rozmiaru, więc brama podglądów nie może go przyjąć."
+    },
+    "closed": {
+      "pill": "Zamknięty",
+      "title": "Ten podgląd został wyłączony",
+      "merged": "Pull request #{n} został scalony, więc Motir wyłączył jego podgląd i usunął jego bazę danych.",
+      "closed": "Pull request #{n} został zamknięty bez scalania, więc Motir wyłączył jego podgląd i usunął jego bazę danych.",
+      "takenOver": "To repozytorium opuściło Motir, więc Motir wyłączył jego podglądy i usunął ich bazy danych.",
+      "unknown": "Motir wyłączył ten podgląd i usunął jego bazę danych."
+    },
+    "notFound": {
+      "pill": "Niedostępny",
+      "title": "Tu nie ma żadnego podglądu",
+      "body": "Ten adres nie należy do żadnego działającego podglądu. Mógł zostać wyłączony albo link zawiera literówkę.",
+      "home": "Przejdź do Motir"
+    }
   }
 }

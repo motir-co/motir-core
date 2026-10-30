@@ -24,6 +24,7 @@ function state(over: Partial<CiEntitlementStateDTO> = {}): CiEntitlementStateDTO
     poolMinutes: 1800,
     floorApplied: false,
     consumedMinutes: 1240,
+    consumedBySource: { ci: 1240, preview: 0 },
     remainingMinutes: 560,
     overageMinutes: 0,
     chargedCredits: 0,

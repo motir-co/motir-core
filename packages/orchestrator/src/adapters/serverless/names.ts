@@ -44,6 +44,15 @@ export interface ServerlessAppNames {
   readonly pushNamespace: string;
 }
 
+/** The ECR repository one push namespace kind of a repository pushes to. */
+export function serverlessPushNamespace(
+  prefix: string,
+  repositoryId: string,
+  kind: ServerlessNamespaceKind,
+): string {
+  return `${prefixSegment(prefix)}/${repositoryId}/${kind}`;
+}
+
 export function serverlessAppNames(
   prefix: string,
   repositoryId: string,
@@ -52,7 +61,7 @@ export function serverlessAppNames(
   const { appRef } = hostingAppNames(prefix, repositoryId, environment);
   return {
     appRef,
-    pushNamespace: `${prefixSegment(prefix)}/${repositoryId}/${kindOf(environment)}`,
+    pushNamespace: serverlessPushNamespace(prefix, repositoryId, kindOf(environment)),
   };
 }
 

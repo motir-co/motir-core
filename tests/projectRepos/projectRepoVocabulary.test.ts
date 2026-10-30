@@ -48,6 +48,9 @@ function row(over: Partial<ProjectRepoWithRealized> = {}): ProjectRepoWithRealiz
     hostingTarget: null,
     hostingUseCase: null,
     hostingSize: null,
+    previewPushNamespace: null,
+    previewEnabledAt: null,
+    previewCredentialExpiresAt: null,
     position: 'a0',
     // The CI-Actions intent (MOTIR-1907) — irrelevant to name resolution, but
     // part of the row's shape, so the fixture carries its default.

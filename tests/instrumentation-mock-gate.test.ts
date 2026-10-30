@@ -54,6 +54,7 @@ const blob = vi.hoisted(() => ({ installBlobStoreMock: vi.fn() }));
 const billing = vi.hoisted(() => ({ installBillingBoundaryMock: vi.fn() }));
 const githubRepos = vi.hoisted(() => ({ installGithubReposMock: vi.fn() }));
 const githubMerge = vi.hoisted(() => ({ installGithubMergeMock: vi.fn() }));
+const githubPreview = vi.hoisted(() => ({ installGithubPreviewMock: vi.fn() }));
 const productionRelease = vi.hoisted(() => ({ installProductionReleaseMock: vi.fn() }));
 const githubAccounts = vi.hoisted(() => ({ installGithubAccountsMock: vi.fn() }));
 const githubFleetOrgCi = vi.hoisted(() => ({ installGithubFleetOrgCiMock: vi.fn() }));
@@ -76,6 +77,7 @@ vi.mock('@/lib/test-blob-mock', () => blob);
 vi.mock('@/lib/test-billing-mock', () => billing);
 vi.mock('@/lib/test-github-repos-mock', () => githubRepos);
 vi.mock('@/lib/test-github-merge-mock', () => githubMerge);
+vi.mock('@/lib/test-github-preview-mock', () => githubPreview);
 vi.mock('@/lib/test-production-release-mock', () => productionRelease);
 vi.mock('@/lib/test-github-accounts-mock', () => githubAccounts);
 vi.mock('@/lib/test-github-fleet-org-ci-mock', () => githubFleetOrgCi);
@@ -105,6 +107,8 @@ const INSTALLERS: Record<string, ReturnType<typeof vi.fn>[]> = {
   // MOTIR-5572 — the GitHub MERGE seam, registered here in the same change that adds
   // it to the shipped table.
   E2E_TEST_GITHUB_MERGE: [githubMerge.installGithubMergeMock],
+  // MOTIR-5781 — a preview's GitHub deployment, statuses and hosting manifest (Story MOTIR-5766).
+  E2E_TEST_GITHUB_PREVIEW: [githubPreview.installGithubPreviewMock],
   // MOTIR-10040 — a production release's GitHub calls, made by the job worker
   // (Story MOTIR-9797).
   E2E_TEST_PRODUCTION_RELEASE: [productionRelease.installProductionReleaseMock],

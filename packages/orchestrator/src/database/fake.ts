@@ -1,6 +1,16 @@
 import { databaseEnvPairs } from './env';
-import { DatabaseApplicationRefInvalidError, DatabaseNotFoundError } from './errors';
-import type { DatabaseHandle, DatabasePort, DatabaseProvider, DatabaseUsage } from './types';
+import {
+  DatabaseApplicationRefInvalidError,
+  DatabaseNotFoundError,
+  assertDatabaseBranchName,
+} from './errors';
+import type {
+  DatabaseBranchHandle,
+  DatabaseHandle,
+  DatabasePort,
+  DatabaseProvider,
+  DatabaseUsage,
+} from './types';
 
 // The FAKE database port (MOTIR-9971) — the second implementation shipped beside
 // the Neon adapter, for the reason every port here has one: the production and
@@ -10,13 +20,20 @@ import type { DatabaseHandle, DatabasePort, DatabaseProvider, DatabaseUsage } fr
 // In memory and deterministic. It holds one database per application, keyed by
 // the application ref, with connection strings that look like connection
 // strings so a suite can search for them where they must not be. Compute time
-// accrues while a database exists; storage is a fixed figure per database. Its
-// controls arrange what a test needs: a clock, and a read of what exists.
+// accrues while a database (or a branch) exists; storage is a fixed figure per
+// database and per branch. A database's branches go with it. Its controls
+// arrange what a test needs: a clock, and a read of what exists.
 
 /** What the fake holds for one database — never its connection strings. */
 export interface FakeDatabase {
   readonly handle: DatabaseHandle;
   readonly region: string | null;
+  readonly createdAt: Date;
+}
+
+/** What the fake holds for one branch — never its connection strings. */
+export interface FakeDatabaseBranch {
+  readonly branch: DatabaseBranchHandle;
   readonly createdAt: Date;
 }
 
@@ -27,6 +44,8 @@ export interface FakeDatabaseControls {
   advanceSeconds(seconds: number): void;
   /** Every database the fake holds now. */
   databases(): FakeDatabase[];
+  /** Every branch the fake holds now, across its databases. */
+  branches(): FakeDatabaseBranch[];
 }
 
 export interface FakeDatabaseOptions {
@@ -37,9 +56,16 @@ export interface FakeDatabaseOptions {
 /** The storage each fake database reports: 32 MiB. */
 export const FAKE_DATABASE_STORAGE_BYTES = 32 * 1024 * 1024;
 
+interface StoredBranch extends FakeDatabaseBranch {
+  readonly pooledUrl: string;
+  readonly directUrl: string;
+}
+
 interface StoredDatabase extends FakeDatabase {
   readonly pooledUrl: string;
   readonly directUrl: string;
+  /** Keyed by branch name. */
+  readonly branches: Map<string, StoredBranch>;
 }
 
 export function createFakeDatabasePort(
@@ -79,6 +105,19 @@ export function createFakeDatabasePort(
       createdAt: now(),
       pooledUrl: `postgresql://app:${password}@${databaseRef}-pooler.fake.invalid/app?sslmode=require`,
       directUrl: `postgresql://app:${password}@${databaseRef}.fake.invalid/app?sslmode=require`,
+      branches: new Map(),
+    };
+  }
+
+  function branchOf(database: StoredDatabase, name: string): StoredBranch {
+    sequence += 1;
+    const branchRef = `fake-br-${sequence}`;
+    const password = `fake-password-${sequence}`;
+    return {
+      branch: { database: database.handle, branchRef, name },
+      createdAt: now(),
+      pooledUrl: `postgresql://app:${password}@${branchRef}-pooler.fake.invalid/app?sslmode=require`,
+      directUrl: `postgresql://app:${password}@${branchRef}.fake.invalid/app?sslmode=require`,
     };
   }
 
@@ -93,6 +132,10 @@ export function createFakeDatabasePort(
     },
     databases: () =>
       [...stored.values()].map(({ handle, region, createdAt }) => ({ handle, region, createdAt })),
+    branches: () =>
+      [...stored.values()].flatMap((database) =>
+        [...database.branches.values()].map(({ branch, createdAt }) => ({ branch, createdAt })),
+      ),
 
     async createDatabase({ applicationRef, region }) {
       if (!applicationRef.trim()) throw new DatabaseApplicationRefInvalidError(applicationRef);
@@ -125,6 +168,35 @@ export function createFakeDatabasePort(
 
     async list() {
       return [...stored.values()].map(({ handle }) => ({ handle }));
+    },
+
+    async createBranch(handle, { name }) {
+      assertDatabaseBranchName(name);
+      const database = held(handle);
+      if (!database) throw new DatabaseNotFoundError(handle.applicationRef);
+      let branch = database.branches.get(name);
+      if (!branch) {
+        branch = branchOf(database, name);
+        database.branches.set(name, branch);
+      }
+      return { branch: branch.branch, env: databaseEnvPairs(branch) };
+    },
+
+    async branchUsage({ database: handle, branchRef, name }) {
+      const branch = held(handle)?.branches.get(name);
+      if (!branch || branch.branch.branchRef !== branchRef) {
+        return usageOver(handle.applicationRef, now(), null);
+      }
+      return usageOver(handle.applicationRef, branch.createdAt, branch.createdAt);
+    },
+
+    async deleteBranch({ database: handle, branchRef, name }) {
+      const branch = held(handle)?.branches.get(name);
+      if (!branch || branch.branch.branchRef !== branchRef) {
+        return usageOver(handle.applicationRef, now(), null);
+      }
+      held(handle)!.branches.delete(name);
+      return usageOver(handle.applicationRef, branch.createdAt, branch.createdAt);
     },
   };
 }

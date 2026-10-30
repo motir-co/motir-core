@@ -6,6 +6,7 @@ import { WELL_KNOWN_CORS_HEADERS, WELL_KNOWN_PREFIX } from '@/lib/oauth/cors';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import { VISITOR_COOKIE, isVisitorCookieValue, visitorCookieOptions } from '@/lib/visitor/cookie';
 import { parseVisitorPath, visitorPathForMemberPath } from '@/lib/visitor/routes';
+import { previewHostOf } from '@/lib/preview/gate';
 
 // Optimistic cookie-presence check on every incoming request to a
 // protected route: if no session cookie is present, bounce to /sign-in.
@@ -297,6 +298,19 @@ function wellKnownCors(request: NextRequest): NextResponse | null {
 }
 
 export async function proxy(request: NextRequest) {
+  // A PREVIEW HOST (MOTIR-5779) is not app.motir.co, and none of what follows
+  // applies to it: it carries no Motir session, and its paths are the
+  // preview's application's, not Motir's. So it is answered first, by the
+  // member gate (`lib/preview/gateProxy.ts`, loaded only here so a request to
+  // app.motir.co never imports the database client through it). The host is
+  // checked against the CONFIGURED preview domain at call time, so a
+  // deployment without previews never enters the branch.
+  const previewHost = previewHostOf(request.headers.get('host'));
+  if (previewHost) {
+    const { previewHostResponse } = await import('@/lib/preview/gateProxy');
+    return previewHostResponse(request, previewHost);
+  }
+
   // OAuth discovery (MOTIR-6982) — before anything that could bounce it.
   const wellKnown = wellKnownCors(request);
   if (wellKnown) return wellKnown;
@@ -463,5 +477,15 @@ export const config = {
     // a `next.config` redirect onto this address, answered before the proxy.
     '/triage/:path*',
     '/workbench/:path*',
+    // EVERY path on a PREVIEW HOST (MOTIR-5779) — `pr-<n>--<slug>.<domain>`,
+    // `lib/preview/hostName.ts`. Conditioned on the host, so it adds no path on
+    // app.motir.co: no Motir host's first label is `pr-<n>--…`. The pattern is a
+    // literal because Next reads this object statically; `proxy()` still checks
+    // the host against the configured domain before acting on it, and
+    // `tests/preview/gateProxy.test.ts` pins this pattern to the host rule.
+    {
+      source: '/:path*',
+      has: [{ type: 'host', value: 'pr-[1-9][0-9]*--[a-z0-9-]+\\..+' }],
+    },
   ],
 };

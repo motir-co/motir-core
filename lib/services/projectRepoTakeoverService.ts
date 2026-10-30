@@ -13,6 +13,8 @@ import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { githubIdentityService } from '@/lib/services/githubIdentityService';
 import { projectRunnerGroupService } from '@/lib/services/projectRunnerGroupService';
+import { previewEnablementService } from '@/lib/services/previewEnablementService';
+import { previewLifecycleService } from '@/lib/services/previewLifecycleService';
 import { actionsPermissionsClient } from '@/lib/github/actionsPermissions';
 import { repoTransferClient, RepoTransferError } from '@/lib/github/repoTransfer';
 import { toProjectRepoDto, type ProjectRepoWithRealized } from '@/lib/mappers/projectRepoMappers';
@@ -85,7 +87,13 @@ import {
 //     ceiling binds), the unset belongs in this saga, in the same diff.**
 //     `lib/github/actionsVariables.ts` deliberately ships no repo-scoped writer so
 //     that cannot happen by accident, and `projectRepoTakeoverService.test.ts`
-//     asserts this path makes no Actions-variable call at all.
+//     asserts this path makes no ORG-variable call at all.
+//
+//     The one repository-scoped Actions configuration Motir does write is the
+//     preview push credential and its variables (MOTIR-5775,
+//     `lib/github/repositoryActionsConfig.ts`), and its unset is exactly where
+//     the paragraph above says it belongs: `previewEnablementService.disable`,
+//     a step of this saga ordered before the transfer.
 
 /** How far a takeover got. Returned for the surface + the tests; never thrown. */
 export interface TakeoverOutcome {
@@ -152,6 +160,9 @@ export const projectRepoTakeoverService = {
         installationRowId: row.githubRepo!.installationId,
         owner: row.githubRepo!.owner,
         repo: row.githubRepo!.name,
+        // Read before enablement's `disable` clears it: the preview teardown
+        // below destroys the namespace's app by this name (MOTIR-5776).
+        previewPushNamespace: row.previewPushNamespace,
       };
     });
 
@@ -172,6 +183,40 @@ export const projectRepoTakeoverService = {
       throw new RepoTransferRefusedError(
         `could not re-enable Actions before the transfer: ${detailOf(err)}`,
       );
+    }
+
+    // MOTIR-5775 — previews OFF, also BEFORE the transfer and for the same reason
+    // as §G: a repository SECRET and VARIABLES travel with the repository, and
+    // once it has moved Motir's App can no longer delete them. The push token
+    // would leave with it, able to push into Motir's registry. So the token is
+    // revoked and the secret and variables deleted here, and a failure fails the
+    // saga before anything moves. The preview RESOURCES (apps, Neon project) are
+    // the preview lifecycle's, not this step's.
+    try {
+      await previewEnablementService.disable(rowId);
+    } catch (err) {
+      await this.markFailed(rowId, detailOf(err), ctx);
+      throw new RepoTransferRefusedError(
+        `could not withdraw the preview push credential before the transfer: ${detailOf(err)}`,
+      );
+    }
+
+    // MOTIR-5776 — the preview RESOURCES, after the credential is gone and still
+    // before the transfer, while Motir can post `inactive` on the repository's
+    // deployments: every open preview closed and torn down, then the repository's
+    // preview image app and Neon preview project destroyed (decision MOTIR-5769
+    // §9: "previews destroyed, never handed over"). NOT a reason to stop the
+    // handover: no credential is left to leak, every row is committed `closed`
+    // before its teardown, and the reaper finishes a teardown that did not.
+    try {
+      await previewLifecycleService.teardownRepository(rowId, {
+        pushNamespace: claimed.previewPushNamespace,
+      });
+    } catch (err) {
+      console.warn('[projectRepoTakeover] preview teardown did not finish; the reaper will', {
+        rowId,
+        error: detailOf(err),
+      });
     }
 
     let accepted = false;

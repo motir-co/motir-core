@@ -18,14 +18,16 @@ import { serverlessHostingConfig, type ServerlessHostingConfig } from './config'
 export interface FunctionUrlRequestInit {
   readonly method?: string;
   readonly headers?: Readonly<Record<string, string>>;
-  readonly body?: string;
+  /** Signed as it is: the payload hash covers these exact bytes. The preview
+   *  gate (MOTIR-5779) forwards a buffered request body as bytes. */
+  readonly body?: string | Uint8Array;
 }
 
 /** What to hand `fetch`: the method, the signed headers and the body. */
 export interface SignedFunctionUrlRequest {
   readonly method: string;
   readonly headers: Record<string, string>;
-  readonly body?: string;
+  readonly body?: string | Uint8Array;
 }
 
 export interface SignFunctionUrlOptions extends ServerlessClientDeps {

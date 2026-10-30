@@ -132,6 +132,19 @@ export const E2E_MOCK_SEAMS: readonly MockSeam[] = [
     },
   },
   {
+    // Story MOTIR-5766 · MOTIR-5781 — a preview's GitHub deployment, its statuses
+    // and its hosting manifest, all reached from the JOB WORKER's lifecycle effects.
+    // ⚠️ BEFORE `E2E_TEST_GITHUB_MERGE`, and the order is load-bearing: that seam
+    // answers `contents/{path}` RAW for its own repositories, and this one claims the
+    // manifest read (GitHub's JSON object) only for the repositories its control names.
+    flag: 'E2E_TEST_GITHUB_PREVIEW',
+    message: 'GitHub preview deployments + hosting manifest mocked.',
+    install: async (agent) => {
+      const { installGithubPreviewMock } = await import('@/lib/test-github-preview-mock');
+      installGithubPreviewMock(agent);
+    },
+  },
+  {
     // ⚠️ BEFORE `E2E_TEST_GITHUB_REPOS`, and the order is load-bearing: both seams
     // answer `GET /repos/{owner}/{name}`, undici tries intercepts in registration
     // order, and this one claims only the repositories its control file names.

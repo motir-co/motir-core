@@ -20,6 +20,7 @@ import {
   flyJson,
   type FlyCall,
   type SimMachine,
+  type SimToken,
 } from './contract/hostingFlySim';
 
 // The FLY adapter of the HOSTING DEPLOY PORT on the wire (MOTIR-5773) — what each
@@ -44,6 +45,7 @@ let calls: FlyCall[];
 let apps: Map<string, SimMachine[]>;
 let clock: number;
 let overrides: Array<(call: FlyCall) => Response | null>;
+let tokens: Map<string, SimToken[]>;
 
 function input(over: Partial<DeployReleaseInput> = {}): DeployReleaseInput {
   return {
@@ -86,7 +88,7 @@ beforeEach(() => {
   ids = 0;
   clock = Date.parse('2026-10-28T00:00:00.000Z');
   const sim = createHostingFlySim(() => clock);
-  ({ calls, apps, overrides } = sim);
+  ({ calls, apps, overrides, tokens } = sim);
   vi.stubGlobal('fetch', sim.fetch);
 });
 
@@ -180,6 +182,93 @@ describe('ensureApp', () => {
     await expect(
       port().ensureApp({ repositoryId: RID, environment: { kind: 'preview', pullRequest: 8 } }),
     ).resolves.toMatchObject({ appRef: 'mh-cmrepo1-pr8' });
+  });
+});
+
+describe('ensurePushNamespace and revokeDeployCredentials (MOTIR-5775)', () => {
+  it('creates the push namespace as an app with no Machines and no addresses, on its own network', async () => {
+    const made = await port().ensurePushNamespace({ repositoryId: RID, kind: 'preview' });
+    expect(made).toEqual({
+      pushNamespace: 'mh-cmrepo1-pv',
+      imageRepository: 'registry.fly.io/mh-cmrepo1-pv',
+    });
+    expect(calls.filter((c) => c.method !== 'GET').map((c) => [c.method, c.path, c.body])).toEqual([
+      [
+        'POST',
+        '/apps',
+        { app_name: 'mh-cmrepo1-pv', org_slug: 'motir-hosting', network: 'mh-cmrepo1-pv' },
+      ],
+    ]);
+    await expect(
+      port().ensurePushNamespace({ repositoryId: RID, kind: 'production' }),
+    ).resolves.toEqual({ pushNamespace: PROD, imageRepository: `registry.fly.io/${PROD}` });
+  });
+
+  it('lists the app’s tokens through GraphQL and revokes each live one, with the hosting token', async () => {
+    apps.set('mh-cmrepo1-pv', []);
+    tokens.set('mh-cmrepo1-pv', [
+      { id: 'tok-old', revokedAt: '2026-10-01T00:00:00.000Z' },
+      { id: 'tok-a', revokedAt: null },
+      { id: 'tok-b', revokedAt: null },
+    ]);
+    await expect(
+      port().revokeDeployCredentials({ pushNamespace: 'mh-cmrepo1-pv' }),
+    ).resolves.toEqual({ revoked: 2 });
+    const graphql = calls.filter((c) => c.path === '/graphql');
+    expect(graphql.map((c) => c.body?.['variables'])).toEqual([
+      { appName: 'mh-cmrepo1-pv' },
+      { input: { id: 'tok-a' } },
+      { input: { id: 'tok-b' } },
+    ]);
+    expect(graphql.every((c) => c.auth === 'Bearer hosting-token')).toBe(true);
+    expect(tokens.get('mh-cmrepo1-pv')!.every((t) => t.revokedAt !== null)).toBe(true);
+  });
+
+  it('revokes nothing for a namespace that does not exist, or one with no token list', async () => {
+    await expect(port().revokeDeployCredentials({ pushNamespace: 'mh-gone-pv' })).resolves.toEqual({
+      revoked: 0,
+    });
+    overrides.push((c) =>
+      c.path === '/graphql' ? flyJson(200, { data: { app: { limitedAccessTokens: null } } }) : null,
+    );
+    await expect(port().revokeDeployCredentials({ pushNamespace: 'mh-x-pv' })).resolves.toEqual({
+      revoked: 0,
+    });
+    overrides.unshift((c) => (c.path === '/graphql' ? flyJson(200, { data: null }) : null));
+    await expect(port().revokeDeployCredentials({ pushNamespace: 'mh-x-pv' })).resolves.toEqual({
+      revoked: 0,
+    });
+  });
+
+  it('throws on a GraphQL error other than a missing app, on a refused revoke, and on a non-2xx', async () => {
+    overrides.push((c) =>
+      c.path === '/graphql'
+        ? flyJson(200, { data: null, errors: [{ message: 'unauthorized' }, {}] })
+        : null,
+    );
+    await expect(
+      port().revokeDeployCredentials({ pushNamespace: 'mh-cmrepo1-pv' }),
+    ).rejects.toThrow(/unauthorized; unknown error/);
+    overrides.length = 0;
+    overrides.push((c) => {
+      if (c.path !== '/graphql') return null;
+      return String(c.body?.['query']).includes('deleteLimitedAccessToken')
+        ? flyJson(200, { data: null, errors: [{ message: 'forbidden' }] })
+        : flyJson(200, {
+            data: {
+              app: { limitedAccessTokens: { nodes: [{ id: 'tok-1', revokedAt: null }, 'junk'] } },
+            },
+          });
+    });
+    await expect(
+      port().revokeDeployCredentials({ pushNamespace: 'mh-cmrepo1-pv' }),
+    ).rejects.toThrow(/forbidden/);
+    overrides.unshift((c) =>
+      c.path === '/graphql' ? flyJson(502, { error: 'bad gateway' }) : null,
+    );
+    await expect(
+      port().revokeDeployCredentials({ pushNamespace: 'mh-cmrepo1-pv' }),
+    ).rejects.toBeInstanceOf(OrchestratorApiError);
   });
 });
 

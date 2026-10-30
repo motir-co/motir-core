@@ -50,6 +50,7 @@ const CI: CiEntitlementStateDTO = {
   poolMinutes: 1800,
   floorApplied: false,
   consumedMinutes: 0,
+  consumedBySource: { ci: 0, preview: 0 },
   remainingMinutes: 1800,
   overageMinutes: 0,
   chargedCredits: 0,

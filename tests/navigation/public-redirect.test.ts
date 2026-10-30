@@ -167,7 +167,9 @@ describe('the moved public surfaces 308 to motir.co', () => {
 describe('the matcher covers the root and the moved surfaces, including /p', () => {
   it('lists /, /explore, /docs, /legal and /p — and only the last four move', async () => {
     const { config, PUBLIC_REDIRECT_SEGMENTS } = await import('@/proxy');
-    const segments = config.matcher.map((entry) => entry.replace(/^\//, '').split('/')[0]);
+    const segments = config.matcher
+      .filter((entry): entry is string => typeof entry === 'string')
+      .map((entry) => entry.replace(/^\//, '').split('/')[0]);
     expect(segments).toContain('');
     expect(segments).toContain('explore');
     expect(segments).toContain('docs');

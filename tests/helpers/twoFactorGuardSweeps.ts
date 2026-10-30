@@ -161,6 +161,15 @@ export function topLevelSegments(appDir: string, group: string): string[] {
 }
 
 /** `'/items/:path*'` → `'items'`. */
+/**
+ * The PATH entries of `config.matcher` — every entry but the one host-conditioned
+ * object (MOTIR-5779), which matches every path on a PREVIEW host and no path on
+ * app.motir.co, so it is no part of the path list these sweeps measure.
+ * `tests/preview/gateProxy.test.ts` pins that object.
+ */
+export const pathMatchers = (matcher: readonly (string | object)[]): string[] =>
+  matcher.filter((entry): entry is string => typeof entry === 'string');
+
 export const segmentOf = (matcherEntry: string): string =>
   matcherEntry.replace(/^\//, '').split('/')[0] ?? '';
 

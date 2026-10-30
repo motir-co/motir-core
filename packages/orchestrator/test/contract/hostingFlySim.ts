@@ -27,6 +27,13 @@ export interface SimMachine {
 }
 
 export const FLY_API = 'https://api.machines.dev/v1';
+export const FLY_GRAPHQL = 'https://api.fly.io/graphql';
+
+/** A deploy token the sim minted for an app, as Fly's GraphQL lists it. */
+export interface SimToken {
+  id: string;
+  revokedAt: string | null;
+}
 
 export function flyJson(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -52,6 +59,8 @@ function machineBody(m: SimMachine) {
 export interface HostingFlySim {
   readonly calls: FlyCall[];
   readonly apps: Map<string, SimMachine[]>;
+  /** Each app's deploy tokens, minted through `/deploy_token` (MOTIR-5775). */
+  readonly tokens: Map<string, SimToken[]>;
   /** Answer a call before the simulator does; return null to pass. */
   readonly overrides: Array<(call: FlyCall) => Response | null>;
   /** The exit statuses the next one-off Machines stop with, in order (0 when
@@ -65,6 +74,7 @@ export interface HostingFlySim {
 export function createHostingFlySim(clock: () => number): HostingFlySim {
   const calls: FlyCall[] = [];
   const apps = new Map<string, SimMachine[]>();
+  const tokens = new Map<string, SimToken[]>();
   const overrides: Array<(call: FlyCall) => Response | null> = [];
   const exitCodes: number[] = [];
   let seq = 0;
@@ -96,7 +106,11 @@ export function createHostingFlySim(clock: () => number): HostingFlySim {
     if (!machines) return flyJson(404, { error: 'app not found' });
     if (parts[2] === 'ip_assignments')
       return flyJson(200, call.method === 'GET' ? { ips: [] } : {});
-    if (parts[2] === 'deploy_token') return flyJson(200, { token: `fly-deploy-${app}` });
+    if (parts[2] === 'deploy_token') {
+      seq += 1;
+      tokens.set(app, [...(tokens.get(app) ?? []), { id: `tok-${seq}`, revokedAt: null }]);
+      return flyJson(200, { token: `fly-deploy-${app}` });
+    }
     if (parts[2] !== 'machines') return flyJson(500, { error: `unhandled ${call.path}` });
     const id = parts[3];
     if (!id) {
@@ -145,22 +159,50 @@ export function createHostingFlySim(clock: () => number): HostingFlySim {
     return flyJson(200, machineBody(m));
   }
 
+  /** The two GraphQL calls the adapter makes: an app's tokens, and a revoke. */
+  function graphql(call: FlyCall): Response {
+    for (const o of overrides) {
+      const res = o(call);
+      if (res) return res;
+    }
+    const query = String(call.body?.['query']);
+    const variables = (call.body?.['variables'] ?? {}) as Record<string, unknown>;
+    if (query.includes('limitedAccessTokens')) {
+      const app = String(variables['appName']);
+      if (!apps.has(app)) {
+        return flyJson(200, { data: { app: null }, errors: [{ message: 'Could not find App' }] });
+      }
+      return flyJson(200, {
+        data: { app: { limitedAccessTokens: { nodes: tokens.get(app) ?? [] } } },
+      });
+    }
+    if (query.includes('deleteLimitedAccessToken')) {
+      const id = String((variables['input'] as Record<string, unknown>)['id']);
+      const token = [...tokens.values()].flat().find((t) => t.id === id);
+      if (!token) return flyJson(200, { data: null, errors: [{ message: 'token not found' }] });
+      token.revokedAt = new Date(clock()).toISOString();
+      return flyJson(200, { data: { deleteLimitedAccessToken: { token: id } } });
+    }
+    return flyJson(400, { error: 'unhandled query' });
+  }
+
   return {
     calls,
     apps,
+    tokens,
     overrides,
     exitCodes,
     async fetch(url, init) {
       const headers = (init.headers ?? {}) as Record<string, string>;
       const call: FlyCall = {
-        path: url.slice(FLY_API.length),
+        path: url === FLY_GRAPHQL ? '/graphql' : url.slice(FLY_API.length),
         method: init.method ?? 'GET',
         body:
           typeof init.body === 'string' ? (JSON.parse(init.body) as Record<string, unknown>) : null,
         auth: headers['authorization'] ?? null,
       };
       calls.push(call);
-      return simulate(call);
+      return url === FLY_GRAPHQL ? graphql(call) : simulate(call);
     },
   };
 }
