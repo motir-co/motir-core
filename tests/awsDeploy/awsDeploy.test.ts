@@ -287,6 +287,34 @@ describe('a failed roll', () => {
     expect(aws.methods()).not.toContain('putParameter');
   });
 
+  it('leaves a service another deployer moved mid-roll where it is, names it, and records nothing (MOTIR-10117)', async () => {
+    const { aws, previous } = coreFleet();
+    const cdkRevision = previous.web.replace(/:7$/, ':17');
+    aws.rollouts.set('web', () => ({ primary: cdkRevision, state: 'IN_PROGRESS' }));
+    const { code, err, result } = await deploy(aws);
+    expect(code).toBe(1);
+    const rollbacks = aws.calls
+      .filter(([m]) => m === 'updateService')
+      .slice(3)
+      .map(([, , n, td]) => [n, td]);
+    expect(rollbacks).toEqual([
+      ['worker', previous.worker],
+      ['relay', previous.relay],
+    ]);
+    expect(err).toContain(
+      `rollback: web left on ${cdkRevision}, which another deployer put there after this ` +
+        'deploy rolled it to arn:aws:ecs:us-east-1:111122223333:task-definition/motir-prod-core-web:8',
+    );
+    expect(err.at(-1)).toBe(
+      'error: the roll was superseded: another deployer moved web to a revision of its own ' +
+        'while this deploy waited, and it was left there; every other service is back on its ' +
+        'previous revision. Re-run the deploy, which copies the revision each service runs now',
+    );
+    expect((result?.services as { rolloutState: string }[])[0]?.rolloutState).toBe('SUPERSEDED');
+    expect(result).toMatchObject({ recorded: false });
+    expect(aws.methods()).not.toContain('putParameter');
+  });
+
   it('refuses before migrating or changing any service when no service runs the core image', async () => {
     const aws = new FakeDeployAws();
     aws.addService('ai', OTHER_REPO);

@@ -4,6 +4,10 @@
  * wait for every PRIMARY deployment to complete, and on a failure or a timeout
  * put every rolled service back on the revision it ran before.
  *
+ * A service another deployer moves while the roll waits (a motir-infra deploy's
+ * CloudFormation update, MOTIR-10117) is SUPERSEDED: the deploy fails, and the
+ * rollback leaves that service on the revision the other deployer put there.
+ *
  * The services keep 100% minimum healthy and 200% maximum with the circuit
  * breaker on (motir-infra's `FargateService`), so the old tasks serve until the
  * new ones pass the load balancer's health check, and keep serving on a rollback.
@@ -20,7 +24,7 @@ export interface CoreService {
   containers: string[];
 }
 
-export type RolloutState = 'COMPLETED' | 'FAILED' | 'IN_PROGRESS' | 'TIMED_OUT';
+export type RolloutState = 'COMPLETED' | 'FAILED' | 'IN_PROGRESS' | 'SUPERSEDED' | 'TIMED_OUT';
 
 export interface RolledService {
   name: string;
@@ -88,6 +92,7 @@ async function registerWithImage(aws: DeployAws, service: CoreService, image: st
 async function rolloutStates(
   aws: DeployAws,
   cluster: string,
+  services: CoreService[],
   rolled: RolledService[],
 ): Promise<RolledService[]> {
   const described = await aws.describeServices(
@@ -97,10 +102,15 @@ async function rolloutStates(
   return rolled.map((r) => {
     const service = described.find((s) => s.serviceName === r.name);
     const primary = service?.deployments?.find((d) => d.status === 'PRIMARY');
+    const previous = services.find((s) => s.name === r.name)?.previousTaskDefinition;
     // A circuit-breaker rollback makes a deployment of the OLD revision primary,
     // which then completes: that is this deploy failing, not succeeding.
-    if (!primary || primary.taskDefinition !== r.taskDefinition) {
+    if (!primary || primary.taskDefinition === previous) {
       return { ...r, rolloutState: 'FAILED' };
+    }
+    // Any other revision was put there by someone else after this deploy's update.
+    if (primary.taskDefinition !== r.taskDefinition) {
+      return { ...r, rolloutState: 'SUPERSEDED' };
     }
     const state = primary.rolloutState;
     return {
@@ -114,14 +124,17 @@ async function rolloutStates(
 async function waitForRollout(
   aws: DeployAws,
   cluster: string,
+  services: CoreService[],
   rolled: RolledService[],
   deadline: number,
   log: DeployLog,
 ): Promise<RolledService[]> {
   for (;;) {
-    const states = await rolloutStates(aws, cluster, rolled);
+    const states = await rolloutStates(aws, cluster, services, rolled);
     log(`roll: ${states.map((s) => `${s.name} ${s.rolloutState}`).join(', ')}`);
-    if (states.some((s) => s.rolloutState === 'FAILED')) return states;
+    if (states.some((s) => s.rolloutState === 'FAILED' || s.rolloutState === 'SUPERSEDED')) {
+      return states;
+    }
     if (states.every((s) => s.rolloutState === 'COMPLETED')) return states;
     if (aws.now() >= deadline) {
       return states.map((s) =>
@@ -134,7 +147,9 @@ async function waitForRollout(
 
 /**
  * Roll every service onto `image` together and wait. Resolves to each service's
- * outcome; `ok` only when every one is COMPLETED.
+ * outcome; `ok` only when every one is COMPLETED. Each update is recorded in
+ * `updated` (service name → the revision it was pointed at) as it is issued, so
+ * a caller can roll back exactly what this deploy changed even when it throws.
  */
 export async function rollServices(
   aws: DeployAws,
@@ -143,6 +158,7 @@ export async function rollServices(
   image: string,
   timeoutMs: number,
   log: DeployLog,
+  updated: Map<string, string> = new Map(),
 ): Promise<{ ok: boolean; services: RolledService[] }> {
   const rolled: RolledService[] = [];
   for (const service of services) {
@@ -151,20 +167,27 @@ export async function rollServices(
   }
   for (const r of rolled) {
     await aws.updateService(cluster, r.name, r.taskDefinition);
+    updated.set(r.name, r.taskDefinition);
     log(`roll: ${r.name} -> ${r.taskDefinition}`);
   }
-  const states = await waitForRollout(aws, cluster, rolled, aws.now() + timeoutMs, log);
+  const deadline = aws.now() + timeoutMs;
+  const states = await waitForRollout(aws, cluster, services, rolled, deadline, log);
   return { ok: states.every((s) => s.rolloutState === 'COMPLETED'), services: states };
 }
 
 /**
- * Put every service back on the revision it ran before, skipping one already
- * there (the circuit breaker rolled it back itself).
+ * Put every service this deploy moved back on the revision it ran before. Only a
+ * service still on the revision `updated` names is moved: one already back (the
+ * circuit breaker rolled it back itself) is skipped, and one on any other
+ * revision was moved by another deployer after this deploy (SUPERSEDED,
+ * MOTIR-10117) and is left there, since forcing the old revision back would
+ * undo that deployer's change.
  */
 export async function rollBack(
   aws: DeployAws,
   cluster: string,
   services: CoreService[],
+  updated: ReadonlyMap<string, string>,
   log: DeployLog,
 ): Promise<void> {
   const described = await aws.describeServices(
@@ -175,6 +198,14 @@ export async function rollBack(
     const current = described.find((s) => s.serviceName === service.name)?.taskDefinition;
     if (current === service.previousTaskDefinition) {
       log(`rollback: ${service.name} already runs ${service.previousTaskDefinition}`);
+      continue;
+    }
+    const rolledTo = updated.get(service.name);
+    if (!rolledTo || current !== rolledTo) {
+      log(
+        `rollback: ${service.name} left on ${String(current)}, which another deployer put ` +
+          `there after this deploy${rolledTo ? ` rolled it to ${rolledTo}` : ''}`,
+      );
       continue;
     }
     await aws.updateService(cluster, service.name, service.previousTaskDefinition);

@@ -174,10 +174,11 @@ describe('rollBack', () => {
     const { aws, previous } = fleet();
     aws.rollouts.set('relay', (_p, _to, prev) => ({ primary: prev, state: 'COMPLETED' }));
     const services = await findCoreServices(aws, CLUSTER, CORE_REPO);
-    await rollServices(aws, CLUSTER, services, IMAGE, MINUTE, noLog);
+    const updated = new Map<string, string>();
+    await rollServices(aws, CLUSTER, services, IMAGE, MINUTE, noLog, updated);
     const before = aws.calls.length;
     const log: string[] = [];
-    await rollBack(aws, CLUSTER, services, (l) => log.push(l));
+    await rollBack(aws, CLUSTER, services, updated, (l) => log.push(l));
     const rollbacks = aws.calls.slice(before).filter(([m]) => m === 'updateService');
     expect(rollbacks.map(([, , name, td]) => [name, td])).toEqual([
       ['web', previous.web],
@@ -185,5 +186,72 @@ describe('rollBack', () => {
     ]);
     expect(log).toContain(`rollback: relay already runs ${previous.relay}`);
     expect(aws.services.get('web')).toBe(previous.web);
+  });
+
+  it('records each update it issues in the map it is handed', async () => {
+    const { aws } = fleet();
+    const services = await findCoreServices(aws, CLUSTER, CORE_REPO);
+    const updated = new Map<string, string>();
+    const outcome = await rollServices(aws, CLUSTER, services, IMAGE, MINUTE, noLog, updated);
+    expect([...updated]).toEqual(outcome.services.map((s) => [s.name, s.taskDefinition]));
+  });
+});
+
+// MOTIR-10117 — a motir-infra deploy that updates a service while the roll waits
+// makes ITS revision primary. That is neither this deploy's revision nor the one
+// the service ran before, and forcing the previous one back would undo it.
+describe('a roll superseded by another deployer', () => {
+  const CDK_REVISION = 'arn:aws:ecs:us-east-1:111122223333:task-definition/motir-prod-core-web:17';
+
+  function superseded() {
+    const { aws, previous } = fleet();
+    aws.rollouts.set('web', () => ({ primary: CDK_REVISION, state: 'IN_PROGRESS' }));
+    return { aws, previous };
+  }
+
+  it('names the service SUPERSEDED and stops waiting', async () => {
+    const { aws } = superseded();
+    const services = await findCoreServices(aws, CLUSTER, CORE_REPO);
+    const outcome = await rollServices(aws, CLUSTER, services, IMAGE, 20 * MINUTE, noLog);
+    expect(outcome.ok).toBe(false);
+    expect(outcome.services.map((s) => [s.name, s.rolloutState])).toEqual([
+      ['web', 'SUPERSEDED'],
+      ['worker', 'IN_PROGRESS'],
+      ['relay', 'IN_PROGRESS'],
+    ]);
+    expect(aws.now()).toBe(0);
+  });
+
+  it('issues no updateService for the superseded service, and rolls back the rest', async () => {
+    const { aws, previous } = superseded();
+    const services = await findCoreServices(aws, CLUSTER, CORE_REPO);
+    const updated = new Map<string, string>();
+    await rollServices(aws, CLUSTER, services, IMAGE, 20 * MINUTE, noLog, updated);
+    const before = aws.calls.length;
+    const log: string[] = [];
+    await rollBack(aws, CLUSTER, services, updated, (l) => log.push(l));
+    const rollbacks = aws.calls.slice(before).filter(([m]) => m === 'updateService');
+    expect(rollbacks.map(([, , name, td]) => [name, td])).toEqual([
+      ['worker', previous.worker],
+      ['relay', previous.relay],
+    ]);
+    expect(log).toContain(
+      `rollback: web left on ${CDK_REVISION}, which another deployer put there after this ` +
+        `deploy rolled it to ${String(updated.get('web'))}`,
+    );
+  });
+
+  it('leaves a service it never updated on whatever runs there now', async () => {
+    const { aws, previous } = fleet();
+    const services = await findCoreServices(aws, CLUSTER, CORE_REPO);
+    aws.services.set('relay', CDK_REVISION);
+    const log: string[] = [];
+    await rollBack(aws, CLUSTER, services, new Map(), (l) => log.push(l));
+    expect(aws.methods()).not.toContain('updateService');
+    expect(log).toEqual([
+      `rollback: web already runs ${previous.web}`,
+      `rollback: worker already runs ${previous.worker}`,
+      `rollback: relay left on ${CDK_REVISION}, which another deployer put there after this deploy`,
+    ]);
   });
 });
