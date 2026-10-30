@@ -44,14 +44,18 @@ export const MERGE_RELEASE_IN_PROGRESS_WAIT_MS = 2 * 60_000;
 /** The reason a merge release that never got its turn is recorded with. */
 export const IN_PROGRESS_GAVE_UP_REASON = 'another release was in progress';
 
-/** The `hosting/merge-release.requested` event payload. Ids, the commit and the
- *  run's outcome only — never a value. */
+/** The `hosting/merge-release.requested` event payload. Ids, the commit, what
+ *  the merge was and the run's outcome only — never a value. */
 export interface MergeReleaseRequestedData {
   /** The repository's tenant. */
   workspaceId: string;
   projectRepositoryId: string;
   /** The commit the run built. */
   headSha: string;
+  /** The commit's subject and the pull request it merged (MOTIR-10103).
+   *  Optional: an event enqueued before they were carried has neither. */
+  commitSubject?: string | null;
+  pullRequestNumber?: number | null;
   conclusion: string;
   runId: string;
   runAttempt: number;
@@ -76,6 +80,8 @@ export type HandleProductionImageRunOutcome =
 export interface RunMergeReleaseInput {
   projectRepositoryId: string;
   headSha: string;
+  commitSubject?: string | null;
+  pullRequestNumber?: number | null;
   conclusion: string;
   /** Zero-based: the job's try while another release is in flight. */
   attempt: number;
@@ -127,6 +133,8 @@ async function handleProductionImageRun(
       workspaceId: row.workspaceId,
       projectRepositoryId: row.id,
       headSha: run.headSha,
+      commitSubject: run.headCommitSubject,
+      pullRequestNumber: run.pullRequestNumber,
       conclusion: run.conclusion,
       runId: run.runId,
       runAttempt: run.runAttempt,
@@ -140,11 +148,16 @@ async function handleProductionImageRun(
 
 async function runMergeRelease(input: RunMergeReleaseInput): Promise<RunMergeReleaseOutcome> {
   const { projectRepositoryId, headSha, conclusion } = input;
+  const merge = {
+    commitSubject: input.commitSubject ?? null,
+    pullRequestNumber: input.pullRequestNumber ?? null,
+  };
   if (BUILD_FAILED.has(conclusion)) {
     const failed = await productionReleaseService.recordFailedRelease(
       projectRepositoryId,
       headSha,
       `build ${conclusion}`,
+      merge,
     );
     return { outcome: 'build_failed_recorded', releaseId: failed.id };
   }
@@ -160,6 +173,7 @@ async function runMergeRelease(input: RunMergeReleaseInput): Promise<RunMergeRel
       commitSha: headSha,
       artifactRef: productionArtifactRef(production.appName, headSha),
       cause: 'merge',
+      ...merge,
     });
     return { outcome: 'released', releaseId: release.id, state: release.state };
   } catch (error) {
@@ -169,6 +183,7 @@ async function runMergeRelease(input: RunMergeReleaseInput): Promise<RunMergeRel
       projectRepositoryId,
       headSha,
       IN_PROGRESS_GAVE_UP_REASON,
+      merge,
     );
     return { outcome: 'gave_up_in_progress', releaseId: failed.id };
   }

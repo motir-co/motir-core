@@ -901,7 +901,9 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // now scans proposed explanations too — beside the verdict, never in it.
     // Re-pinned for MOTIR-10087, summary UNCHANGED: `advisories` widens to every
     // shape family on the plan's proposals — still beside the verdict, never in it.
-    descriptionFingerprint: '5979fea073d6',
+    // Re-pinned for MOTIR-10106, summary UNCHANGED: `rescopeWarnings` (a `modify`
+    // approve will send back from built work) rides beside the verdict, never in it.
+    descriptionFingerprint: 'ad45344ec714',
   },
   get_plan_status: {
     // Re-pinned for MOTIR-3064, summary UNCHANGED and deliberately so: the tool

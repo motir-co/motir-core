@@ -12,14 +12,21 @@ import type { HostedReleaseRow } from '@/lib/mappers/hostedApplicationMappers';
 // writes take a required `tx`: the table is policy-gated, so no read runs
 // outside a bound context.
 
-/** Who restored a release, for its DTO (MOTIR-10035). */
-const RESTORED_BY = { restoredBy: { select: { id: true, name: true } } } as const;
+/** Who restored a release (MOTIR-10035) and who asked for it (MOTIR-10103),
+ *  for its DTO. */
+const RELEASE_PEOPLE = {
+  restoredBy: { select: { id: true, name: true } },
+  requestedBy: { select: { id: true, name: true } },
+} as const;
 
 export interface HostedReleaseInsert {
   workspaceId: string;
   applicationId: string;
   commitSha: string;
   ref: string | null;
+  commitSubject: string | null;
+  pullRequestNumber: number | null;
+  requestedById: string | null;
   cause: HostedReleaseCause;
 }
 
@@ -62,11 +69,11 @@ export interface ReleaseUsageTarget {
 
 export const hostedReleaseRepository = {
   async create(input: HostedReleaseInsert, tx: Prisma.TransactionClient): Promise<HostedRelease> {
-    return tx.hostedRelease.create({ data: input });
+    return tx.hostedRelease.create({ data: input, include: RELEASE_PEOPLE });
   },
 
   async findById(id: string, tx: Prisma.TransactionClient): Promise<HostedReleaseRow | null> {
-    return tx.hostedRelease.findUnique({ where: { id }, include: RESTORED_BY });
+    return tx.hostedRelease.findUnique({ where: { id }, include: RELEASE_PEOPLE });
   },
 
   /**
@@ -108,7 +115,7 @@ export const hostedReleaseRepository = {
   ): Promise<HostedReleaseRow[]> {
     return tx.hostedRelease.findMany({
       where: { applicationId },
-      include: RESTORED_BY,
+      include: RELEASE_PEOPLE,
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take,
     });
@@ -252,7 +259,7 @@ export const hostedReleaseRepository = {
             }
           : {}),
       },
-      include: RESTORED_BY,
+      include: RELEASE_PEOPLE,
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take,
     });

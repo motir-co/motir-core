@@ -182,6 +182,22 @@ export const planOutcomePayload = definePayload({
  * proposal rows stay MCP's own and the divergence is DECLARED here rather than
  * discovered later.
  */
+/**
+ * One `modify` approve will send back from built work (MOTIR-10106) — the shape
+ * `ProposalRescopeWarningDto` carries, on the write doors and `validate_plan`.
+ */
+export const rescopeWarningSchema = z.object({
+  planItemId: z.string(),
+  proposal: z.string(),
+  workItemId: z.string(),
+  identifier: z.string(),
+  status: z.string(),
+  statusLabel: z.string(),
+  outcomes: z.string(),
+  fields: z.array(z.enum(['title', 'descriptionMd', 'repository'])),
+  message: z.string(),
+});
+
 export const mcpPlanSchema = planSchema.omit({ proposals: true, proposalCount: true }).extend({
   projectId: z.string(),
   itemCount: z.number().int(),
@@ -290,6 +306,13 @@ export const mcpPlanSchema = planSchema.omit({ proposals: true, proposalCount: t
       }),
     )
     .optional(),
+  /**
+   * The `modify`s a proposal WRITE kept that approve will send back from built work
+   * (MOTIR-10106) — present only when the write left at least one. The write is kept;
+   * the entry names the card, the status it leaves, what it may land on and the
+   * fields that trip it.
+   */
+  rescopeWarnings: z.array(rescopeWarningSchema).optional(),
 });
 export type McpPlan = z.infer<typeof mcpPlanSchema>;
 
@@ -332,6 +355,9 @@ export function presentMcpPlan(
         }))
       : plan.items,
     ...(plan.warnings && plan.warnings.length > 0 ? { warnings: plan.warnings } : {}),
+    ...(plan.rescopeWarnings && plan.rescopeWarnings.length > 0
+      ? { rescopeWarnings: plan.rescopeWarnings }
+      : {}),
   };
 }
 

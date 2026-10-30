@@ -152,14 +152,21 @@ export const publicAddressRepository = {
    * join is on `workspace.organizationId`; there is no denormalized org column
    * on this table and adding one to save a join would be the second place the
    * same fact lives.
+   *
+   * Through `app_org_custom_domain_count` (MOTIR-10116), not a Prisma count: the
+   * caller's `tx` is bound to ONE workspace, and `public_address`'s tenancy
+   * policy hides the org's other workspaces from any invoker read, so a plain
+   * count undercounted to that workspace. The function counts the whole org,
+   * and only for the org that owns the bound workspace — 0 for any other.
    */
   async countCustomDomainsByOrganization(
     organizationId: string,
     tx: Prisma.TransactionClient,
   ): Promise<number> {
-    return tx.publicAddress.count({
-      where: { kind: 'custom_domain', workspace: { organizationId } },
-    });
+    const rows = await tx.$queryRaw<Array<{ count: bigint }>>`
+      SELECT app_org_custom_domain_count(${organizationId}) AS count
+    `;
+    return Number(rows[0]?.count ?? 0);
   },
 
   /**

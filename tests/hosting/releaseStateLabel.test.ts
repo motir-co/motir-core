@@ -58,31 +58,67 @@ describe('releaseStateLabel', () => {
   });
 });
 
+/** A release that knows neither its pull request nor who asked for it — one
+ *  made before MOTIR-10103 stored them. */
+const UNNAMED = { pullRequestNumber: null, requestedBy: null } as const;
+
 describe('releaseTriggerLabel', () => {
   it('says each cause, with copy for every key', () => {
     for (const cause of HOSTED_RELEASE_CAUSES) {
-      const label = releaseTriggerLabel({ cause, ref: 'v1.4.0', restoredBy: null });
+      const label = releaseTriggerLabel({ cause, ref: 'v1.4.0', restoredBy: null, ...UNNAMED });
       expect(typeof english(label.labelKey), cause).toBe('string');
     }
-    expect(releaseTriggerLabel({ cause: 'merge', ref: null, restoredBy: null })).toEqual({
+    expect(
+      releaseTriggerLabel({ cause: 'merge', ref: null, restoredBy: null, ...UNNAMED }),
+    ).toEqual({
       kind: 'merge',
       labelKey: 'trigger.mergeDefault',
       values: {},
     });
-    expect(releaseTriggerLabel({ cause: 'config_change', ref: null, restoredBy: null }).kind).toBe(
-      'redeploy',
-    );
-    expect(releaseTriggerLabel({ cause: 'ref', ref: 'v1.4.0', restoredBy: null })).toEqual({
+    expect(
+      releaseTriggerLabel({ cause: 'config_change', ref: null, restoredBy: null, ...UNNAMED }).kind,
+    ).toBe('redeploy');
+    expect(
+      releaseTriggerLabel({ cause: 'ref', ref: 'v1.4.0', restoredBy: null, ...UNNAMED }),
+    ).toEqual({
       kind: 'ref',
       labelKey: 'trigger.refUnnamed',
       values: { ref: 'v1.4.0' },
     });
-    expect(releaseTriggerLabel({ cause: 'ref', ref: null, restoredBy: null }).values).toEqual({
+    expect(
+      releaseTriggerLabel({ cause: 'ref', ref: null, restoredBy: null, ...UNNAMED }).values,
+    ).toEqual({
       ref: '',
     });
-    expect(releaseTriggerLabel({ cause: 'rollback', ref: null, restoredBy: null }).labelKey).toBe(
-      'trigger.rollbackUnnamed',
-    );
+    expect(
+      releaseTriggerLabel({ cause: 'rollback', ref: null, restoredBy: null, ...UNNAMED }).labelKey,
+    ).toBe('trigger.rollbackUnnamed');
+  });
+
+  it('says the pull request a merge came from and who asked for a ref (MOTIR-10103)', () => {
+    const merge = releaseTriggerLabel({
+      cause: 'merge',
+      ref: null,
+      restoredBy: null,
+      pullRequestNumber: 48,
+      requestedBy: null,
+    });
+    expect(merge).toEqual({ kind: 'merge', labelKey: 'trigger.merge', values: { number: '48' } });
+    expect(english(merge.labelKey)).toBe('Merge of #{number}');
+
+    const ref = releaseTriggerLabel({
+      cause: 'ref',
+      ref: 'v1.4.0',
+      restoredBy: null,
+      pullRequestNumber: null,
+      requestedBy: { id: 'u2', name: 'Sam Lee' },
+    });
+    expect(ref).toEqual({
+      kind: 'ref',
+      labelKey: 'trigger.ref',
+      values: { ref: 'v1.4.0', name: 'Sam Lee' },
+    });
+    expect(english(ref.labelKey)).toBe('Deploy of {ref} · {name}');
   });
 
   it('names who restored a release, whatever first made it', () => {
@@ -91,6 +127,8 @@ describe('releaseTriggerLabel', () => {
         cause: 'merge',
         ref: null,
         restoredBy: { id: 'u1', name: 'Dana Ito' },
+        pullRequestNumber: 48,
+        requestedBy: null,
       }),
     ).toEqual({ kind: 'rollback', labelKey: 'trigger.rollback', values: { name: 'Dana Ito' } });
   });
