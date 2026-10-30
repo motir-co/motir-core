@@ -1,4 +1,5 @@
 import { registerGitProvider } from '../registry';
+import { FULL_COMMIT_SHA } from '../commitSha';
 import { gitlabConnectionService } from '@/lib/services/gitlabConnectionService';
 import { gitlabBaseUrl } from '@/lib/gitlab/gitlabOAuth';
 import {
@@ -34,6 +35,7 @@ import type {
   NormalizedStatusEvent,
   RepoDirectoryEntry,
   RepoFileReadResult,
+  RefResolution,
   CommitComparison,
   ChangedFile,
   ChangedFilesResult,
@@ -431,6 +433,50 @@ export const gitlabProvider: GitProvider = {
           ? headCommit
           : null),
     };
+  },
+
+  async resolveRef(
+    installationId: string,
+    owner: string,
+    name: string,
+    ref: string,
+  ): Promise<RefResolution> {
+    const { token } = await gitlabConnectionService.getAccessToken(installationId);
+    const project = encodeURIComponent(`${owner}/${name}`);
+    const url =
+      `${gitlabBaseUrl()}/api/v4/projects/${project}/repository/commits/` + encodeURIComponent(ref);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REPO_FILE_READ_TIMEOUT_MS);
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: 'GET',
+        headers: { authorization: `Bearer ${token}`, 'user-agent': 'motir' },
+        signal: controller.signal,
+      });
+    } catch (err) {
+      return {
+        outcome: 'unreachable',
+        ref,
+        failure: controller.signal.aborted ? 'timeout' : 'unreachable',
+        detail: controller.signal.aborted
+          ? `no response within ${REPO_FILE_READ_TIMEOUT_MS}ms`
+          : err instanceof Error
+            ? err.message
+            : 'unknown',
+      };
+    } finally {
+      clearTimeout(timer);
+    }
+    if (res.status === 404) return { outcome: 'ref_not_found', ref };
+    if (res.status === 401 || res.status === 403) return { outcome: 'unauthorized', ref };
+    if (!res.ok) throw new RepoFileReadError('gitlab', res.status, await describeBody(res));
+    const body = (await res.json().catch(() => null)) as { id?: unknown } | null;
+    const sha = typeof body?.id === 'string' ? body.id.trim().toLowerCase() : '';
+    if (!FULL_COMMIT_SHA.test(sha)) {
+      throw new RepoFileReadError('gitlab', res.status, 'the commit lookup returned no id');
+    }
+    return { outcome: 'resolved', ref, sha };
   },
 
   async readFileAtRef(

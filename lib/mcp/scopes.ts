@@ -243,6 +243,7 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   // governs nothing but the deprecated docs rendering.
   validate_plan: 'read',
   get_plan_authoring_state: 'read',
+  get_plan_code_reads: 'read',
   get_plan_status: 'read',
   get_plan: 'read',
   // The approved-shape verdict (MOTIR-6227). A pure READ, and still filed under

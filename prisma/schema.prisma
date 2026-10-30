@@ -7606,6 +7606,10 @@ model Plan {
   /// Each planner session's STEP WORDS (MOTIR-8062) — kind + target title as
   /// last reported, kept after the session's `end` deletes its `PlanStep`.
   narrationSessions PlanNarrationSession[]
+  /// Every CODE READ a planner session made (MOTIR-10122) — what it asked, at
+  /// which commit, and how much came back; never the contents. Append-only and
+  /// kept as long as the narration.
+  codeReads         PlanCodeRead[]
   /// The targets this plan has PARKED at `planning` while it is open
   /// (MOTIR-5645). Cascade-deleted with the plan, so a deleted plan holds
   /// nothing — the restore is the release path's job, not the FK's.
@@ -7905,6 +7909,60 @@ model PlanNarration {
   @@unique([planId, seq])
   @@index([planId, sessionKey])
   @@map("plan_narration")
+}
+
+/// One CODE READ a planner session made (MOTIR-10122): the tool, what it asked
+/// (a file and range, or a query and its scope), the COMMIT the code was read at
+/// and how much came back — never the code itself. Lets a check of a plan tell a
+/// session that read the file holding a fact and wrote against it from one that
+/// read another file, or nothing. APPEND-ONLY KEPT HISTORY, exactly as
+/// `PlanNarration`: never updated, deleted only by the plan's cascade, and keyed
+/// by the same opaque `sessionKey`. No FK to `plan_step`: a read outlives its
+/// session's step, and `plan.py`'s PART 1 session reads before it holds one.
+model PlanCodeRead {
+  id         String   @id @default(cuid())
+  planId     String   @map("plan_id")
+  /// The reading session's opaque key, the value `plan_step` and narration carry.
+  sessionKey String   @map("session_key")
+  /// Per-plan order, gapless from 1, taken under the plan row lock — call order
+  /// within a session, because one session's reads arrive in order.
+  seq        Int
+  /// The tool, as the planner named it: `read_file` · `code_explore` ·
+  /// `code_search` · `code_grep`, and `plan.py`'s local `Read` · `Grep` · `Glob`
+  /// · `git show` · `git grep` · `git log`.
+  tool       String
+  /// `owner/name`, or the local checkout's name; NULL when the read named none.
+  repo       String?
+  /// A read's path, or a search's path prefix / glob.
+  path       String?
+  startLine  Int?     @map("start_line")
+  endLine    Int?     @map("end_line")
+  /// The ref the call ASKED for (`main`, `origin/main`), when it named one. A
+  /// LABEL only: what the read was made AT is `commits`.
+  askedRef   String?  @map("asked_ref")
+  /// A search's query or pattern.
+  query      String?
+  /// Every commit the read was made at, as `[{ repo?, sha, dirty? }]`: one for a
+  /// file read, one per repository for a graph read across a set. `sha` is a
+  /// resolved hex id, never a branch name; `dirty` marks a local checkout whose
+  /// working tree had changes. EMPTY only when nothing resolved (a refused
+  /// path, a ref that names nothing, a failure to ask).
+  commits    Json
+  /// The result's own outcome code: `found`, `ok`, `not_found`, `too_large`, …
+  outcome    String
+  /// Lines returned by a read, when it returned any.
+  lines      Int?
+  /// Matches a search returned, when it is a search.
+  hits       Int?
+  /// A short refusal or failure detail, capped; never content.
+  detail     String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  plan Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, seq])
+  @@index([planId, sessionKey])
+  @@map("plan_code_read")
 }
 
 /// One planner session's STEP WORDS on a plan (MOTIR-8062): the step kind, its

@@ -6,6 +6,7 @@ import type {
   Plan,
   PlanItem,
   PlanNarration,
+  PlanCodeRead,
   PlanNarrationSession,
   PlanStep,
 } from '@/generated/prisma/client';
@@ -16,6 +17,7 @@ import type {
   PlanItemPatch,
   PlanItemProposedFields,
   PlanNarrationDto,
+  PlanCodeReadDto,
   PlanNarrationSessionDto,
   PlanStepDto,
   PlanWithItemsDto,
@@ -126,6 +128,27 @@ export function toPlanNarrationDto(row: PlanNarration): PlanNarrationDto {
     sessionKey: row.sessionKey,
     seq: row.seq,
     body: row.body,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+/** One stored code read as it crosses the boundary (MOTIR-10122). */
+export function toPlanCodeReadDto(row: PlanCodeRead): PlanCodeReadDto {
+  return {
+    seq: row.seq,
+    sessionKey: row.sessionKey,
+    tool: row.tool,
+    repo: row.repo,
+    path: row.path,
+    startLine: row.startLine,
+    endLine: row.endLine,
+    askedRef: row.askedRef,
+    query: row.query,
+    commits: Array.isArray(row.commits) ? (row.commits as PlanCodeReadDto['commits']) : [],
+    outcome: row.outcome,
+    lines: row.lines,
+    hits: row.hits,
+    detail: row.detail,
     createdAt: row.createdAt.toISOString(),
   };
 }

@@ -31,6 +31,7 @@ import type {
   ProposalLinkWarningDto,
   ProposalRescopeWarningDto,
   PlanNarrationDto,
+  PlanCodeReadDto,
   PlanStepDto,
   PlanStepProviderWaitDto,
   PlanStepKindDto,
@@ -506,11 +507,14 @@ export const aiGenerationService = {
       narration?: string[];
       /** The session's provider-retry wait (MOTIR-9619) — sent INSTEAD of `step`. */
       providerRetry?: PlanProviderRetryInput;
+      /** The session's code reads (MOTIR-10122) — sent INSTEAD of `step`. */
+      codeReads?: unknown[];
     },
     auth: { ctx: ServiceContext; projectId: string },
   ): Promise<
     | { planId: string; step: PlanStepKindDto | 'end'; inFlight: PlanStepDto | null }
     | { planId: string; narration: PlanNarrationDto[] }
+    | { planId: string; codeReads: PlanCodeReadDto[] }
     | { planId: string; providerWait: PlanStepProviderWaitDto | null }
   > {
     const { ctx, projectId } = auth;
@@ -528,10 +532,12 @@ export const aiGenerationService = {
         ...(input.step !== undefined ? { step: input.step } : {}),
         ...(input.narration !== undefined ? { narration: input.narration } : {}),
         ...(input.providerRetry !== undefined ? { providerRetry: input.providerRetry } : {}),
+        ...(input.codeReads !== undefined ? { codeReads: input.codeReads } : {}),
       },
       ctx,
     );
     if (result.kind === 'narration') return { planId: plan.id, narration: result.narration };
+    if (result.kind === 'codeReads') return { planId: plan.id, codeReads: result.codeReads };
     if (result.kind === 'providerRetry') {
       return { planId: plan.id, providerWait: result.providerWait };
     }

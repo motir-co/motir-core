@@ -845,6 +845,43 @@ export interface PlanNarrationDto {
 }
 
 /**
+ * One CODE READ a planner session made (MOTIR-10122): what it asked, the commits
+ * it was read at and how much came back — never the code. `seq` is the plan-wide
+ * call order; within one `sessionKey` it is that session's call order.
+ */
+export interface PlanCodeReadDto {
+  seq: number;
+  sessionKey: string;
+  tool: string;
+  repo: string | null;
+  path: string | null;
+  startLine: number | null;
+  endLine: number | null;
+  /** The ref the call asked for — a label; what it was read AT is `commits`. */
+  askedRef: string | null;
+  query: string | null;
+  /** Every commit the read was made at: a resolved hex id, never a branch name. */
+  commits: { repo?: string; sha: string; dirty?: boolean }[];
+  outcome: string;
+  lines: number | null;
+  hits: number | null;
+  detail: string | null;
+  createdAt: string;
+}
+
+/**
+ * One page of a plan's code reads (MOTIR-10122), ascending `seq`, with the step
+ * words of every session that appears on it — so a reader can tell which card a
+ * session was writing — and the cursor for the next page (`null` on the last).
+ */
+export interface PlanCodeReadPageDto {
+  planId: string;
+  reads: PlanCodeReadDto[];
+  sessions: PlanNarrationSessionDto[];
+  nextAfterSeq: number | null;
+}
+
+/**
  * One planner session's STEP WORDS on a plan (MOTIR-8062): the step it last
  * reported and the target's title as it read then — kept after the session ends,
  * so the chat panel can head that session's group with its real step. Both

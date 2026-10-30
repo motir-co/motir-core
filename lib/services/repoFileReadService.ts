@@ -4,6 +4,7 @@ import { resolveOrganizationId } from '@/lib/github/resolveOrganizationId';
 import { getGitProvider } from '@/lib/git';
 import { UnknownGitProviderError } from '@/lib/git/registry';
 import type { GitProviderId, RepoFileReadResult } from '@/lib/git/types';
+import { normalizeRepoFilePath } from '@/lib/git/fileRead';
 import { projectsService } from '@/lib/services/projectsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { resolveCodeContextState } from '@/lib/services/codeContextService';
@@ -54,7 +55,15 @@ export interface RepoFileReadContext {
 /** The service's result: the provider's own outcomes, plus the two this layer
  *  decides — the repo is not connected here, and the provider is unusable. */
 export type RepoFileServiceResult =
-  | RepoFileReadResult
+  | (RepoFileReadResult & {
+      /**
+       * The FULL commit id the ref resolved to, and the commit the read was made
+       * at (MOTIR-10122) — present on every outcome whose ref resolved, absent
+       * where it did not (no such ref, a refused credential, a host that did not
+       * answer, a path refused before any request).
+       */
+      commitSha?: string;
+    })
   | { outcome: 'repo_not_connected'; repoRef: string }
   | { outcome: 'provider_unavailable'; repoRef: string; detail: string };
 
@@ -107,6 +116,19 @@ export function splitRepoRef(repoRef: string): { owner: string; name: string } |
   return { owner, name };
 }
 
+/**
+ * The mint failed (an App not configured on this deploy, a revoked connection),
+ * or the host answered a status no arm names. Both are "we could not ask", which
+ * is a different fact from any answer.
+ */
+function unavailable(repoRef: string, err: unknown): RepoFileServiceResult {
+  return {
+    outcome: 'provider_unavailable',
+    repoRef,
+    detail: err instanceof Error ? err.message : 'unknown',
+  };
+}
+
 export const repoFileReadService = {
   /**
    * Read one file's text from a connected repository, at `ref` or at the
@@ -116,12 +138,18 @@ export const repoFileReadService = {
    * it is a mirrored column, it is what every other consumer already reads, and
    * asking the host for it would double the latency of the common case to learn
    * something we wrote down at connect time.
+   *
+   * `pinCommit` (MOTIR-10122) is the PLANNER's read — the MCP `read_file` and the
+   * hosted planner's internal route: the ref is resolved to its commit first and
+   * the file read AT it, and the answer carries `commitSha`. One host call more,
+   * so the other consumers (a decision page, a path advisory) keep the plain read.
    */
   async readFile(
     ctx: RepoFileReadContext,
     repoRef: string,
     path: string,
     ref?: string,
+    opts: { pinCommit?: boolean } = {},
   ): Promise<RepoFileServiceResult> {
     const coords = splitRepoRef(repoRef);
     if (!coords) return { outcome: 'repo_not_connected', repoRef };
@@ -157,23 +185,58 @@ export const repoFileReadService = {
 
     // The STORED canonical coordinates, never the caller's ref — casing on
     // GitHub is the host's, and the caller's spelling is model-supplied.
+    const asked = ref?.trim() || connected.defaultBranch;
+    const { installationId } = connected.installation;
+    if (!opts.pinCommit) {
+      try {
+        return await provider.readFileAtRef(
+          installationId,
+          connected.owner,
+          connected.name,
+          path,
+          asked,
+        );
+      } catch (err) {
+        return unavailable(repoRef, err);
+      }
+    }
+
+    // The path guard runs before ANY host call, the resolve included, so a
+    // refused path costs nothing — the provider runs it again for its own sake.
+    const guarded = normalizeRepoFilePath(path);
+    if (!guarded.ok) return { outcome: 'invalid_path', path, reason: guarded.reason };
     try {
-      return await provider.readFileAtRef(
-        connected.installation.installationId,
+      // ⚠️ RESOLVE FIRST, THEN READ AT THE SHA (MOTIR-10122). A planning
+      // session's reads are recorded with the commit they were made at, so a
+      // check can open the code the session saw. Reading at the branch and
+      // resolving it separately could cite a commit the read never saw when the
+      // branch moves between the two calls; reading AT the resolved sha cannot.
+      const resolved = await provider.resolveRef(
+        installationId,
         connected.owner,
         connected.name,
-        path,
-        ref?.trim() || connected.defaultBranch,
+        asked,
       );
+      if (resolved.outcome === 'unreachable') {
+        const { failure, detail } = resolved;
+        return { outcome: 'unreachable', path: guarded.path, ref: asked, failure, detail };
+      }
+      if (resolved.outcome !== 'resolved') {
+        return { outcome: resolved.outcome, path: guarded.path, ref: asked };
+      }
+      const read = await provider.readFileAtRef(
+        installationId,
+        connected.owner,
+        connected.name,
+        guarded.path,
+        resolved.sha,
+      );
+      // The answer names the ref the caller ASKED for; the sha rides beside it.
+      return read.outcome === 'invalid_path'
+        ? read
+        : { ...read, ref: asked, commitSha: resolved.sha };
     } catch (err) {
-      // The mint failed (an App not configured on this deploy, a revoked
-      // connection), or the host answered a status no arm names. Both are
-      // "we could not ask", which is a different fact from any answer.
-      return {
-        outcome: 'provider_unavailable',
-        repoRef,
-        detail: err instanceof Error ? err.message : 'unknown',
-      };
+      return unavailable(repoRef, err);
     }
   },
 
@@ -212,6 +275,7 @@ export const repoFileReadService = {
       repoRef,
       path,
       ref,
+      { pinCommit: true },
     );
     return { ...result, repoRef };
   },

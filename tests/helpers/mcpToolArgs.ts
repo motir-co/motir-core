@@ -161,6 +161,7 @@ export function mcpToolArgs(t: McpToolTargets): Record<McpToolName, Record<strin
     // leak here would be a leak on all three (MOTIR-3095).
     validate_plan: { planId: t.planId },
     get_plan_authoring_state: { planId: t.planId },
+    get_plan_code_reads: { planId: t.planId },
     create_work_item: { projectKey: t.projectKey, kind: 'task', title: 'x' },
     expand_item: { key: t.item1 },
     update_work_item: { key: t.item1, title: 'hijacked' },

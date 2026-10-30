@@ -65,6 +65,17 @@ export function sliceLines(
   return { text: lines.slice(from - 1, to).join('\n'), from, to, total };
 }
 
+/**
+ * The ref a read was made at, as the model reads it: the ref asked for, then the
+ * commit it resolved to (MOTIR-10122) — `main (commit 4aadf3c…)`. The FULL sha is
+ * printed: a planning session's recorded reads cite it, and `plan.py` takes it
+ * from this text, the only part of a result its session stream carries. Mirrors
+ * motir-ai `atRef` verbatim.
+ */
+export function atRef(ref: string, commitSha?: string): string {
+  return commitSha ? `${ref} (commit ${commitSha})` : ref;
+}
+
 const lineField = z.number().int().min(1);
 
 const inputSchema = {
@@ -128,7 +139,8 @@ export function renderReadFile(
   const repoRef = result.repoRef;
   switch (result.outcome) {
     case 'found': {
-      const where = `"${result.path}" in ${repoRef} at ${result.ref}`;
+      const at = atRef(result.ref, result.commitSha);
+      const where = `"${result.path}" in ${repoRef} at ${at}`;
       // A NUL is not text a model can read. The provider serves any blob under
       // its size cap as text, so this is decided here, over what came back —
       // not as a new member of the union motir-ai also consumes.
@@ -140,6 +152,7 @@ export function renderReadFile(
             repoRef,
             path: result.path,
             ref: result.ref,
+            commitSha: result.commitSha ?? null,
             bytes: result.bytes,
           },
         };
@@ -160,6 +173,7 @@ export function renderReadFile(
           repoRef,
           path: result.path,
           ref: result.ref,
+          commitSha: result.commitSha ?? null,
           bytes: result.bytes,
           lines: sliced ? { from: sliced.from, to: sliced.to, total: sliced.total } : null,
           truncated,
@@ -171,12 +185,13 @@ export function renderReadFile(
       // The provider classifies the blob itself since MOTIR-7873, so a binary
       // file arrives here as its own outcome rather than as `found` text.
       return {
-        summary: `"${result.path}" in ${repoRef} at ${result.ref} is a BINARY file (${result.bytes} bytes), so no text is returned. The file EXISTS; use the code graph to ask a structural question instead.`,
+        summary: `"${result.path}" in ${repoRef} at ${atRef(result.ref, result.commitSha)} is a BINARY file (${result.bytes} bytes), so no text is returned. The file EXISTS; use the code graph to ask a structural question instead.`,
         structured: {
           outcome: result.outcome,
           repoRef,
           path: result.path,
           ref: result.ref,
+          commitSha: result.commitSha ?? null,
           bytes: result.bytes,
         },
       };
@@ -192,13 +207,14 @@ export function renderReadFile(
         : '';
       return {
         summary:
-          `"${result.path}" in ${repoRef} at ${result.ref} is a DIRECTORY, so it has no text; its ${result.entries.length} immediate entries follow (a trailing "/" is a subdirectory). Read one with read_file at its full path:\n\n` +
+          `"${result.path}" in ${repoRef} at ${atRef(result.ref, result.commitSha)} is a DIRECTORY, so it has no text; its ${result.entries.length} immediate entries follow (a trailing "/" is a subdirectory). Read one with read_file at its full path:\n\n` +
           `${lines.join('\n')}${cut}`,
         structured: {
           outcome: result.outcome,
           repoRef,
           path: result.path,
           ref: result.ref,
+          commitSha: result.commitSha ?? null,
           entries: result.entries,
           truncated: result.truncated,
         },
@@ -206,8 +222,14 @@ export function renderReadFile(
     }
     case 'not_found':
       return {
-        summary: `There is no file at "${result.path}" in ${repoRef} at ${result.ref}. The REF resolved, so this is a statement about the path: the file is not there. It is NOT a statement about the repository or the project.`,
-        structured: { outcome: result.outcome, repoRef, path: result.path, ref: result.ref },
+        summary: `There is no file at "${result.path}" in ${repoRef} at ${atRef(result.ref, result.commitSha)}. The REF resolved, so this is a statement about the path: the file is not there. It is NOT a statement about the repository or the project.`,
+        structured: {
+          outcome: result.outcome,
+          repoRef,
+          path: result.path,
+          ref: result.ref,
+          commitSha: result.commitSha ?? null,
+        },
       };
     case 'ref_not_found':
       return {
@@ -216,12 +238,13 @@ export function renderReadFile(
       };
     case 'too_large':
       return {
-        summary: `"${result.path}" in ${repoRef} is larger than the host will serve inline (${result.limitBytes} bytes). The file EXISTS and was not read. Use the code graph to ask a structural question about it instead.`,
+        summary: `"${result.path}" in ${repoRef} at ${atRef(result.ref, result.commitSha)} is larger than the host will serve inline (${result.limitBytes} bytes). The file EXISTS and was not read. Use the code graph to ask a structural question about it instead.`,
         structured: {
           outcome: result.outcome,
           repoRef,
           path: result.path,
           ref: result.ref,
+          commitSha: result.commitSha ?? null,
           limitBytes: result.limitBytes,
         },
       };
