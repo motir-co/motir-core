@@ -2803,15 +2803,9 @@
           "showDns": "Show DNS records",
           "checkAgain": "Check again",
           "requestAgain": "Request again",
-          "makePrimary": "Make primary",
           "remove": "Remove",
           "copy": "Copy value",
           "copied": "Copied"
-        },
-        "primary": {
-          "badge": "Primary",
-          "consequence": "Every other address redirects here.",
-          "disabledReason": "A domain can be primary once its certificate is live"
         },
         "addModal": {
           "title": "Add a domain",

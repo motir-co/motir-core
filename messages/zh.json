@@ -2803,15 +2803,9 @@
           "showDns": "查看 DNS 记录",
           "checkAgain": "重新检查",
           "requestAgain": "重新申请",
-          "makePrimary": "设为主地址",
           "remove": "移除",
           "copy": "复制值",
           "copied": "已复制"
-        },
-        "primary": {
-          "badge": "主地址",
-          "consequence": "其他所有地址都会重定向到这里。",
-          "disabledReason": "证书生效后，域名才能设为主地址"
         },
         "addModal": {
           "title": "添加域名",

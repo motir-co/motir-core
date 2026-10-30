@@ -132,11 +132,10 @@ async function squatter() {
  * would make a test about DELETION fail the day a plan's `maxCustomDomains`
  * changes. What is under test is what the delete does to a row of this KIND.
  */
-async function giveCustomDomain(workspaceId: string, projectId: string, hostname: string) {
+async function giveCustomDomain(workspaceId: string, hostname: string) {
   return adminDb.publicAddress.create({
     data: {
       workspaceId,
-      projectId,
       hostname,
       kind: 'custom_domain',
       status: 'unverified',
@@ -338,12 +337,12 @@ describe('the retained row satisfies the erasure obligation', () => {
     // tombstoned: nothing tenant-derived survives, because no address row
     // survives. What is retained is one digest per name.
     const gone = await soleOwnerWithRenamedSubdomain();
-    const project = await createTestProject({
+    await createTestProject({
       workspaceId: gone.workspaceId,
       actorUserId: gone.userId,
       identifier: 'SOLO',
     });
-    await giveCustomDomain(gone.workspaceId, project.id, 'roadmap.acme-customer.example');
+    await giveCustomDomain(gone.workspaceId, 'roadmap.acme-customer.example');
 
     await workspacesService.removeWorkspaceAsOrgAdmin({
       workspaceId: gone.workspaceId,
@@ -430,12 +429,12 @@ describe('a CUSTOMER domain is not reserved', () => {
       name: 'Personal',
       ownerUserId: user.id,
     });
-    const project = await createTestProject({
+    await createTestProject({
       workspaceId: workspace.id,
       actorUserId: user.id,
       identifier: 'SOLO',
     });
-    await giveCustomDomain(workspace.id, project.id, 'roadmap.acme-customer.example');
+    await giveCustomDomain(workspace.id, 'roadmap.acme-customer.example');
 
     await workspacesService.removeWorkspaceAsOrgAdmin({
       workspaceId: workspace.id,
@@ -448,16 +447,12 @@ describe('a CUSTOMER domain is not reserved', () => {
     // arbiter, so an insert that SUCCEEDS is the proof that nothing holds the
     // name — the same evidence a refused claim gives in the negative.
     const next = await squatter();
-    const nextProject = await createTestProject({
+    await createTestProject({
       workspaceId: next.workspaceId,
       actorUserId: next.userId,
       identifier: 'NEXT',
     });
-    const reconnected = await giveCustomDomain(
-      next.workspaceId,
-      nextProject.id,
-      'roadmap.acme-customer.example',
-    );
+    const reconnected = await giveCustomDomain(next.workspaceId, 'roadmap.acme-customer.example');
     expect(reconnected.hostname).toBe('roadmap.acme-customer.example');
   });
 

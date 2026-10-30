@@ -4,7 +4,6 @@ import { EntitlementExceededError } from '@/lib/billing/errors';
 import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import {
   AddressNotFoundError,
-  AddressNotIssuedError,
   InvalidHostnameError,
   NotACustomerDomainError,
 } from '@/lib/publicAddresses/errors';
@@ -147,12 +146,6 @@ export function mapCustomDomainError(err: unknown): NextResponse | null {
     return NextResponse.json(
       { code: err.code, error: err.message, hostname: err.hostname },
       { status: 422 },
-    );
-  }
-  if (err instanceof AddressNotIssuedError) {
-    return NextResponse.json(
-      { code: err.code, error: err.message, status: err.status },
-      { status: 409 },
     );
   }
   if (err instanceof EntitlementExceededError) {

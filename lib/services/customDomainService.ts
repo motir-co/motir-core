@@ -10,7 +10,6 @@ import {
 } from '@/lib/publicAddresses/certificateProvider';
 import {
   AddressNotFoundError,
-  AddressNotIssuedError,
   InvalidHostnameError,
   NotACustomerDomainError,
   PublicAddressesUnavailableError,
@@ -32,8 +31,17 @@ import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 
 // THE CUSTOMER-DOMAIN LIFECYCLE — Story MOTIR-3878 · Subtask MOTIR-4216.
-// add → verify → issue → make primary → remove. The state machine is the ADR's
-// §5 (which records prove ownership) and §7 (exactly one primary).
+// add → verify → issue → remove. The state machine is the ADR's §5 (which
+// records prove ownership).
+//
+// ── A customer domain is a WORKSPACE asset (ADR MOTIR-9521 §1) ─────────────
+//
+// It names at most one application, never a project, and there is no primary:
+// the product's single link is the application's production address, else its
+// earliest-issued domain. The pane still lives in a project's settings, so the
+// routes still carry a project key and the gate is still that project's
+// `project:manage_access` (`project:browse` to list) — the key authorises the
+// actor, it no longer scopes the rows.
 //
 // ── ⚠️ EVERY SIDE EFFECT SITS OUTSIDE ITS TRANSACTION ─────────────────────
 //
@@ -56,6 +64,8 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 const VERIFY_PREFIX = '_motir-verify';
 
 export interface DomainScopedInput {
+  /** The project KEY ("PROD") the pane was opened from — the permission gate. */
+  key: string;
   addressId: string;
   actorUserId: string;
   ctx: { workspaceId: string };
@@ -69,7 +79,7 @@ export interface ProjectScopedInput {
 }
 
 export const customDomainService = {
-  /** Every address on the project, as the pane renders them. */
+  /** Every customer domain of the workspace, as the pane renders them. */
   async list(input: ProjectScopedInput): Promise<PublicAddressDto[]> {
     assertAvailable();
     return withWorkspaceContext(
@@ -82,8 +92,11 @@ export const customDomainService = {
           'project:browse',
           tx,
         );
-        const rows = await publicAddressRepository.listForProjectInTx(project.id, tx);
-        return rows.map((row) => toDto(row, project.primaryAddressId));
+        const rows = await publicAddressRepository.listCustomDomainsForWorkspaceInTx(
+          input.ctx.workspaceId,
+          tx,
+        );
+        return rows.map(toDto);
       },
     );
   },
@@ -119,13 +132,13 @@ export const customDomainService = {
         const row = await publicAddressRepository.createCustomDomain(
           {
             workspaceId: input.ctx.workspaceId,
-            projectId: project.id,
+            applicationId: null,
             hostname,
             verificationToken: mintToken(),
           },
           tx,
         );
-        const dto = toDto(row, project.primaryAddressId);
+        const dto = toDto(row);
         // ⚠️ THE FAKE RESOLVER IS SEEDED HERE, AND ONLY HERE (MOTIR-4225).
         // `providers.ts` says the lane "seeds it through `seedFakeTxt` as the
         // address is created, so the verify step reads back the token the
@@ -156,7 +169,7 @@ export const customDomainService = {
    */
   async verify(input: DomainScopedInput): Promise<PublicAddressDto> {
     assertAvailable();
-    const { address, project } = await this.loadForWrite(input);
+    const { address } = await this.loadForWrite(input);
     const name = `${VERIFY_PREFIX}.${address.hostname}`;
 
     // ── outside any transaction ──
@@ -175,7 +188,7 @@ export const customDomainService = {
           : `No ${VERIFY_PREFIX} TXT record found at ${name}. DNS changes can take a few minutes.`,
         lastCheckedAt: new Date(),
       });
-      return toDto(row, project.primaryAddressId);
+      return toDto(row);
     }
 
     try {
@@ -187,7 +200,7 @@ export const customDomainService = {
         lastCheckedAt: state.checkedAt,
         ...(state.issued ? { issuedAt: new Date() } : {}),
       });
-      return toDto(row, project.primaryAddressId);
+      return toDto(row);
     } catch (err) {
       if (err instanceof CertificateProviderUnavailableError) {
         // The platform is down. NOT the customer's problem and not a state
@@ -203,41 +216,8 @@ export const customDomainService = {
         failureReason: reason,
         lastCheckedAt: new Date(),
       });
-      return toDto(row, project.primaryAddressId);
+      return toDto(row);
     }
-  },
-
-  /** Make an ISSUED address the project's canonical one (ADR §7). */
-  async makePrimary(input: DomainScopedInput): Promise<PublicAddressDto> {
-    assertAvailable();
-    const { address, project } = await this.loadForWrite(input);
-    // Only a live address may be canonical: pointing every other address at one
-    // that does not serve would 301 every reader into a TLS error.
-    if (address.status !== 'issued') throw new AddressNotIssuedError(address.status);
-
-    await withWorkspaceContext(
-      { userId: input.actorUserId, workspaceId: input.ctx.workspaceId },
-      (tx) => publicAddressRepository.setPrimary(project.id, address.id, tx),
-    );
-    return toDto(address, address.id);
-  },
-
-  /** Back to the ADR §7 default rule. */
-  async clearPrimary(input: ProjectScopedInput): Promise<void> {
-    assertAvailable();
-    await withWorkspaceContext(
-      { userId: input.actorUserId, workspaceId: input.ctx.workspaceId },
-      async (tx) => {
-        const project = await resolveProject(input, tx);
-        await projectAccessService.assertPermission(
-          project.id,
-          { userId: input.actorUserId, workspaceId: input.ctx.workspaceId },
-          'project:manage_access',
-          tx,
-        );
-        await publicAddressRepository.setPrimary(project.id, null, tx);
-      },
-    );
   },
 
   /**
@@ -274,22 +254,27 @@ export const customDomainService = {
 
   // ── internals, exposed on the object so tests can spy the ordering ──────
 
-  /** Load the address + its project, asserting the manage permission. */
+  /** Load the customer domain, asserting the manage permission. */
   async loadForWrite(input: DomainScopedInput) {
     return withWorkspaceContext(
       { userId: input.actorUserId, workspaceId: input.ctx.workspaceId },
       async (tx) => {
         const address = await publicAddressRepository.findByIdInTx(input.addressId, tx);
-        if (!address || !address.projectId) throw new AddressNotFoundError();
-        const project = await projectRepository.findById(address.projectId, tx);
-        if (!project) throw new AddressNotFoundError();
+        const project = await resolveProject(input, tx);
         await projectAccessService.assertPermission(
           project.id,
           { userId: input.actorUserId, workspaceId: input.ctx.workspaceId },
           'project:manage_access',
           tx,
         );
-        return { address, project };
+        if (
+          !address ||
+          address.kind !== 'custom_domain' ||
+          address.workspaceId !== input.ctx.workspaceId
+        ) {
+          throw new AddressNotFoundError();
+        }
+        return { address };
       },
     );
   },
@@ -312,7 +297,10 @@ function assertAvailable(): void {
   if (!isCloud()) throw new PublicAddressesUnavailableError();
 }
 
-async function resolveProject(input: ProjectScopedInput, tx: Prisma.TransactionClient) {
+async function resolveProject(
+  input: { key: string; ctx: { workspaceId: string } },
+  tx: Prisma.TransactionClient,
+) {
   const project = await projectRepository.findByIdentifier(input.ctx.workspaceId, input.key, tx);
   if (!project) throw new AddressNotFoundError();
   return project;
@@ -346,19 +334,17 @@ export function normaliseCustomHostname(raw: string): string {
   return host;
 }
 
-function toDto(
-  row: {
-    id: string;
-    kind: string;
-    hostname: string;
-    status: string;
-    verificationToken: string | null;
-    lastCheckedAt: Date | null;
-    issuedAt: Date | null;
-    failureReason: string | null;
-  },
-  primaryAddressId: string | null,
-): PublicAddressDto {
+function toDto(row: {
+  id: string;
+  applicationId: string | null;
+  kind: string;
+  hostname: string;
+  status: string;
+  verificationToken: string | null;
+  lastCheckedAt: Date | null;
+  issuedAt: Date | null;
+  failureReason: string | null;
+}): PublicAddressDto {
   // ⚠️ TWO KINDS OF RECORD, AND THE POINTING ONE COMES FIRST (MOTIR-4278).
   //
   // The record that POINTS the hostname at us — a `CNAME` for a subdomain,
@@ -392,7 +378,7 @@ function toDto(
     kind: row.kind as PublicAddressDto['kind'],
     hostname: row.hostname,
     status: row.status as PublicAddressDto['status'],
-    isPrimary: primaryAddressId === row.id,
+    applicationId: row.applicationId,
     verification,
     dns,
     lastCheckedAt: row.lastCheckedAt?.toISOString() ?? null,

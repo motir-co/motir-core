@@ -87,21 +87,13 @@ describe('the two shapes that RESOLVE', () => {
     expect(r).toEqual({ kind: 'no_application', workspace: { name: 'Acme' } });
   });
 
-  it('an ISSUED customer domain names one project, and reports whether it is primary', async () => {
-    const addr = await seedCustomDomain(host, 'roadmap.acme.test', 'issued');
-    const before = await publicAddressesService.resolveHost('roadmap.acme.test');
-    expect(before).toMatchObject({
-      kind: 'project',
-      project: { identifier: 'ACME' },
-      primary: false,
-    });
-
-    await adminDb.project.update({
-      where: { id: host.projectId },
-      data: { primaryAddressId: addr.id },
-    });
-    const after = await publicAddressesService.resolveHost('roadmap.acme.test');
-    expect(after).toMatchObject({ primary: true });
+  it('an ISSUED customer domain names no project — it answers no_application', async () => {
+    // ADR MOTIR-9521 §1: a customer domain is the workspace's and names at most
+    // one application. The `project` outcome is retired; until the contract
+    // carries `application` (MOTIR-9525) the domain has nothing to serve.
+    await seedCustomDomain(host, 'roadmap.acme.test', 'issued');
+    const r = await publicAddressesService.resolveHost('roadmap.acme.test');
+    expect(r).toEqual({ kind: 'no_application', workspace: { name: 'Acme' } });
   });
 
   it('a port on the Host header does not change the answer', async () => {
@@ -207,7 +199,7 @@ describe('everything else refuses IDENTICALLY', () => {
     );
   });
 
-  it('a customer domain whose project is not public', async () => {
+  it('a customer domain of a workspace with no public project', async () => {
     const priv = await seedTenant('priv2', 'PRIV2', 'members');
     await seedCustomDomain(priv, 'secret.acme.test', 'issued');
     await expect(publicAddressesService.resolveHost('secret.acme.test')).rejects.toBeInstanceOf(
@@ -285,22 +277,19 @@ describe('addressesForProject — the ADR §7 default rule', () => {
     expect(a.alternates).toEqual([]);
   });
 
-  it('a custom domain PROMOTED → it wins over the subdomain', async () => {
+  it('an ISSUED custom domain is never a project address — it serves an application', async () => {
+    // ADR MOTIR-9521 §1 retires the primary custom domain: a project's canonical
+    // is always its motir.co URL, and a customer domain is neither primary nor
+    // an alternate of any project.
     await seedSubdomain(host, `acme.${BASE}`);
-    const addr = await seedCustomDomain(host, 'roadmap.acme.test', 'issued');
-    await adminDb.project.update({
-      where: { id: host.projectId },
-      data: { primaryAddressId: addr.id },
-    });
+    await seedCustomDomain(host, 'roadmap.acme.test', 'issued');
     const a = await publicAddressesService.addressesForProject(
       host.projectId,
       host.workspaceId,
       'ACME',
     );
-    expect(a.primary).toBe('https://roadmap.acme.test');
-    // The motir.co URL is the one alternate; the workspace host is never listed.
-    expect(a.alternates).toHaveLength(1);
-    expect(a.alternates[0]).toContain('/p/ACME');
+    expect(a.primary).toContain('/p/ACME');
+    expect(a.alternates).toEqual([]);
   });
 
   it('an ADDED-but-not-issued custom domain is neither primary nor an alternate', async () => {
@@ -328,45 +317,14 @@ describe('addressesForProject — the ADR §7 default rule', () => {
     );
     expect([a.primary, ...a.alternates].some((u) => u.includes(`old.${BASE}`))).toBe(false);
   });
-
-  it('another project’s custom domain never leaks into this project’s addresses', async () => {
-    const other = await adminDb.project.create({
-      data: {
-        workspaceId: host.workspaceId,
-        name: 'Other',
-        slug: 'other',
-        identifier: 'OTHER',
-        ...projectAccessData('public'),
-      },
-    });
-    await adminDb.publicAddress.create({
-      data: {
-        workspaceId: host.workspaceId,
-        projectId: other.id,
-        hostname: 'other.acme.test',
-        kind: 'custom_domain',
-        status: 'issued',
-      },
-    });
-    const a = await publicAddressesService.addressesForProject(
-      host.projectId,
-      host.workspaceId,
-      'ACME',
-    );
-    expect([a.primary, ...a.alternates].some((u) => u.includes('other.acme.test'))).toBe(false);
-  });
 });
 
 describe('primaryHostsForProjects — the batched crawl read', () => {
-  it('agrees with addressesForProject, project by project', async () => {
-    // Two paths computing one rule is how they come apart. Asserted against
-    // each other rather than against a restated expectation.
+  it('agrees with addressesForProject: no project has a host of its own', async () => {
+    // Two paths computing one rule is how they come apart. An issued customer
+    // domain and a claimed subdomain both present, and neither is a project's.
     await seedSubdomain(host, `acme.${BASE}`);
-    const addr = await seedCustomDomain(host, 'roadmap.acme.test', 'issued');
-    await adminDb.project.update({
-      where: { id: host.projectId },
-      data: { primaryAddressId: addr.id },
-    });
+    await seedCustomDomain(host, 'roadmap.acme.test', 'issued');
     const map = await publicAddressesService.primaryHostsForProjects([
       { id: host.projectId, workspaceId: host.workspaceId, identifier: 'ACME' },
     ]);
@@ -375,10 +333,11 @@ describe('primaryHostsForProjects — the batched crawl read', () => {
       host.workspaceId,
       'ACME',
     );
-    expect(map.get(host.projectId)).toBe(new URL(single.primary).host);
+    expect(map.has(host.projectId)).toBe(false);
+    expect(single.primary).toContain('/p/ACME');
   });
 
-  it('is empty for a project with no promoted domain, a claimed workspace subdomain included', async () => {
+  it('is empty with a claimed workspace subdomain', async () => {
     await seedSubdomain(host, `acme.${BASE}`);
     const map = await publicAddressesService.primaryHostsForProjects([
       { id: host.projectId, workspaceId: host.workspaceId, identifier: 'ACME' },
@@ -412,7 +371,6 @@ function seedCustomDomain(
   return adminDb.publicAddress.create({
     data: {
       workspaceId: t.workspaceId,
-      projectId: t.projectId,
       hostname,
       kind: 'custom_domain',
       status,

@@ -252,16 +252,7 @@ export class NotACustomerDomainError extends Error {
   }
 }
 
-/** An operation legal only on an `issued` address was asked of another status. */
-export class AddressNotIssuedError extends Error {
-  readonly code = 'ADDRESS_NOT_ISSUED' as const;
-  constructor(readonly status: string) {
-    super(`This address is ${status}; only a live address can be made primary.`);
-    this.name = 'AddressNotIssuedError';
-  }
-}
-
-/** The address id does not name a row in this project. */
+/** The address id does not name a customer domain in this workspace. */
 export class AddressNotFoundError extends Error {
   readonly code = 'ADDRESS_NOT_FOUND' as const;
   constructor() {

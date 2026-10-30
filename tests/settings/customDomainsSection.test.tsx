@@ -48,7 +48,7 @@ function domain(over: Partial<PublicAddressDto> = {}): PublicAddressDto {
     kind: 'custom_domain',
     hostname: 'roadmap.acme.com',
     status: 'issued',
-    isPrimary: false,
+    applicationId: null,
     verification: { name: '_motir-verify.roadmap.acme.com', value: 'motir-verify=abc123' },
     dns: [{ type: 'CNAME', name: 'roadmap', value: 'motir-marketing.fly.dev' }],
     lastCheckedAt: '2026-09-03T09:00:00.000Z',
@@ -117,24 +117,15 @@ describe('panel 5 — the state set, total over the enum', () => {
   });
 });
 
-describe('panel 6 — primary', () => {
-  it('offers Make primary only on a LIVE row', () => {
-    render([domain({ status: 'issued' })]);
-    const button = screen.getByRole('button', { name: 'Make primary' });
-    expect(button).toHaveProperty('disabled', false);
-  });
-
-  it('and on a row that cannot be primary, SAYS WHY instead of hiding the control', () => {
-    // A reader who cannot find the option assumes it is missing, not that it is
-    // unavailable — panel 6's own argument.
-    render([domain({ status: 'unverified' })]);
-    expect(screen.getByRole('button', { name: 'Make primary' })).toHaveProperty('disabled', true);
-  });
-
-  it('shows the consequence on the row that IS primary, and offers it no promotion', () => {
-    render([domain({ status: 'issued', isPrimary: true })]);
-    expect(screen.getByText('Every other address redirects here.')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Make primary' })).toBeNull();
+describe('no primary (ADR MOTIR-9521 §1)', () => {
+  it('offers no Make primary on any row — a domain serves an application, not a project', () => {
+    // The primary customer domain is retired: the product's single link is the
+    // application's production address, else its earliest-issued domain.
+    for (const status of DOMAIN_STATUSES) {
+      const { unmount } = render([domain({ status })]);
+      expect(screen.queryByRole('button', { name: 'Make primary' }), status).toBeNull();
+      unmount();
+    }
   });
 });
 

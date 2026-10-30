@@ -458,8 +458,8 @@ export const PROJECT_SETTINGS_NAV: SettingsNavEntry[] = [
     //
     // VERIFIED, and this key is the one thing the design asset deliberately did
     // NOT decide (its planning flag 1: "MOTIR-4221's to READ OFF its own service
-    // gate"). The room's writes are `customDomainService.{add,verify,remove,
-    // makePrimary,clearPrimary}`, every one of which asserts
+    // gate"). The room's writes are `customDomainService.{add,verify,remove}`,
+    // every one of which asserts
     // `assertPermission(…, 'project:manage_access')`; its list asserts
     // `project:browse`. So the key the room's WRITES assert is this one, read off
     // the destination rather than inferred from the row's name.

@@ -150,10 +150,10 @@ describe('seam (a) — a claim written by one service is read by the public cont
   });
 });
 
-/* ── seam (b): add → verify → issue → primary → the subject and the index ── */
+/* ── seam (b): add → verify → issue → the host contract, never a project ──── */
 
-describe('seam (b) — a domain walked to primary reaches the DTO and the crawl index', () => {
-  it('carries the whole lifecycle into `addresses.primary` and `primaryHost`', async () => {
+describe('seam (b) — a domain walked to issued is the workspace host, never a project', () => {
+  it('carries the lifecycle to `issued` and keeps every project on its motir.co URL', async () => {
     await onAPaidTier();
     const added = await customDomainService.add({
       key: 'ACME',
@@ -167,6 +167,7 @@ describe('seam (b) — a domain walked to primary reaches the DTO and the crawl 
     resolveTxt.mockResolvedValue([added.verification!.value]);
     requestCertificate.mockResolvedValue(certificateState({ configured: true, issued: false }));
     const verified = await customDomainService.verify({
+      key: 'ACME',
       addressId: added.id,
       actorUserId: acme.ownerId,
       ctx: ctx(),
@@ -190,34 +191,27 @@ describe('seam (b) — a domain walked to primary reaches the DTO and the crawl 
     const live = listed.find((a) => a.hostname === 'roadmap.acme.test');
     expect(live?.status, 'the job did not carry the platform state home').toBe('issued');
 
-    await customDomainService.makePrimary({
-      addressId: added.id,
-      actorUserId: acme.ownerId,
-      ctx: ctx(),
-    });
-
-    // 1 · the SUBJECT the renderer reads.
+    // 1 · the SUBJECT the renderer reads: a customer domain serves an
+    // application, never a project (ADR MOTIR-9521 §1), so the project's
+    // canonical stays its motir.co URL.
     const addresses = await publicAddressesService.addressesForProject(
       acme.projectId,
       acme.workspaceId,
       'ACME',
     );
-    expect(addresses.primary).toBe('https://roadmap.acme.test');
+    expect(addresses.primary).toContain('/p/ACME');
+    expect(addresses.alternates).toEqual([]);
 
-    // 2 · the CRAWL INDEX's per-row host, computed by a DIFFERENT query. Two
-    // paths deriving one rule is how they come apart, so they are asserted
-    // against each other rather than against a restated expectation.
+    // 2 · the CRAWL INDEX's per-row host agrees, by a different path.
     const hosts = await publicAddressesService.primaryHostsForProjects([
       { id: acme.projectId, workspaceId: acme.workspaceId, identifier: 'ACME' },
     ]);
-    expect(hosts.get(acme.projectId)).toBe(new URL(addresses.primary).host);
+    expect(hosts.has(acme.projectId)).toBe(false);
 
-    // 3 · and the HOST CONTRACT now serves that project at that host's root.
+    // 3 · and the HOST CONTRACT answers for the issued domain, with nothing to
+    // serve until the `application` outcome lands (MOTIR-9525).
     const resolved = await publicAddressesService.resolveHost('roadmap.acme.test');
-    expect(resolved.kind).toBe('project');
-    if (resolved.kind !== 'project') throw new Error('unreachable');
-    expect(resolved.project.identifier).toBe('ACME');
-    expect(resolved.primary).toBe(true);
+    expect(resolved.kind).toBe('no_application');
   });
 });
 
@@ -290,23 +284,15 @@ describe('seam (e) — every record a customer must create reaches the payload t
     }
   });
 
-  it('a NON-customer address in the list is told to create nothing — the wildcard serves it', async () => {
-    // The mirror arm, and the reason the pointing records are gated on the
-    // address KIND rather than added unconditionally: a name under our own base
-    // is already pointed and already covered by the wildcard (ADR §6), so a
-    // record here would be an instruction to edit DNS the customer does not
-    // control.
-    //
-    // ⚠️ The row is written DIRECTLY, because the guard's whole point is that
-    // nothing structural stops this shape reaching the mapper: `project_id` is
-    // nullable and unconstrained by `kind`, and `listForProjectInTx` filters on
-    // the project alone. The service never mints such a row — which is exactly
-    // why the guard would otherwise be an untested claim about a state the store
-    // can hold.
+  it('a NON-customer address never reaches the list — the wildcard serves it', async () => {
+    // The mirror arm: a name under our own base is already pointed and already
+    // covered by the wildcard (ADR §6), so listing it would be an instruction to
+    // edit DNS the customer does not control. Since MOTIR-9523 the list selects
+    // the workspace's rows by KIND, so the subdomain sharing the table is never
+    // read — and the mapper's own kind gate stays as the second line.
     await adminDb.publicAddress.create({
       data: {
         workspaceId: acme.workspaceId,
-        projectId: acme.projectId,
         hostname: `acme.${BASE}`,
         kind: 'workspace_subdomain',
         status: 'active',
@@ -318,9 +304,7 @@ describe('seam (e) — every record a customer must create reaches the payload t
       actorUserId: acme.ownerId,
       ctx: ctx(),
     });
-    const subdomain = listed.find((a) => a.hostname === `acme.${BASE}`);
-    expect(subdomain?.kind).toBe('workspace_subdomain');
-    expect(subdomain?.dns).toEqual([]);
+    expect(listed.find((a) => a.hostname === `acme.${BASE}`)).toBeUndefined();
   });
 });
 

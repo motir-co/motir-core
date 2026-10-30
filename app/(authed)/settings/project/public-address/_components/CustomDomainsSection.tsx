@@ -11,7 +11,6 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Pill } from '@/components/ui/Pill';
-import { Tooltip } from '@/components/ui/Tooltip';
 import { useToast } from '@/components/ui/Toast';
 import type { DnsInstructionDto, PublicAddressDto } from '@/lib/dto/publicAddresses';
 
@@ -37,7 +36,7 @@ import type { DnsInstructionDto, PublicAddressDto } from '@/lib/dto/publicAddres
  */
 
 type DomainStatus = PublicAddressDto['status'];
-type RowAction = 'showDns' | 'checkAgain' | 'requestAgain' | 'makePrimary' | 'remove';
+type RowAction = 'showDns' | 'checkAgain' | 'requestAgain' | 'remove';
 
 interface StateRow {
   /** The `Pill` variant. `severity` covers every tone this list needs. */
@@ -61,7 +60,7 @@ const STATES: Record<DomainStatus, StateRow> = {
   unverified: { severity: 'warning', actions: ['showDns', 'checkAgain', 'remove'], inList: true },
   verifying: { severity: 'info', actions: ['checkAgain', 'remove'], inList: true },
   pending_certificate: { severity: 'info', actions: ['checkAgain', 'remove'], inList: true },
-  issued: { severity: 'success', actions: ['makePrimary', 'remove'], inList: true },
+  issued: { severity: 'success', actions: ['remove'], inList: true },
   failed: { severity: 'danger', actions: ['showDns', 'checkAgain', 'remove'], inList: true },
   expired: { severity: 'danger', actions: ['showDns', 'checkAgain', 'remove'], inList: true },
   revoked: { severity: 'danger', actions: ['requestAgain', 'remove'], inList: true },
@@ -208,7 +207,6 @@ export function CustomDomainsSection({
                 setShowDnsFor((current) => (current === address.id ? null : address.id))
               }
               onCheck={() => void call(`/public-addresses/${address.id}/verify`, 'POST')}
-              onMakePrimary={() => void call(`/public-addresses/${address.id}/primary`, 'POST')}
               onRemove={() => setRemoving(address)}
             />
           ))}
@@ -266,7 +264,6 @@ function DomainRow({
   dnsOpen,
   onToggleDns,
   onCheck,
-  onMakePrimary,
   onRemove,
 }: {
   address: PublicAddressDto;
@@ -275,7 +272,6 @@ function DomainRow({
   dnsOpen: boolean;
   onToggleDns: () => void;
   onCheck: () => void;
-  onMakePrimary: () => void;
   onRemove: () => void;
 }) {
   const t = useTranslations('settings.publicAddress.domains');
@@ -286,7 +282,6 @@ function DomainRow({
     showDns: onToggleDns,
     checkAgain: onCheck,
     requestAgain: onCheck,
-    makePrimary: onMakePrimary,
     remove: onRemove,
   };
 
@@ -299,7 +294,6 @@ function DomainRow({
         <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-(--el-text)">
           {address.hostname}
         </span>
-        {address.isPrimary ? <Pill status="planned">{t('primary.badge')}</Pill> : null}
         {state.severity ? <Pill severity={state.severity}>{label}</Pill> : <Pill>{label}</Pill>}
       </div>
 
@@ -313,36 +307,16 @@ function DomainRow({
 
       {canManage ? (
         <div className="flex flex-wrap items-center gap-2">
-          {state.actions.map((action) =>
-            action === 'makePrimary' && address.isPrimary ? null : (
-              <ActionButton
-                key={action}
-                action={action}
-                label={t(`action.${action}`)}
-                disabled={busy}
-                onClick={handler[action]}
-              />
-            ),
-          )}
-          {/* Panel 6: a non-`issued` row does not lose the control silently — it
-              says WHY, because "primary" is not a preference and a reader who
-              cannot find the option assumes it is missing. */}
-          {!state.actions.includes('makePrimary') && !address.isPrimary ? (
-            <Tooltip content={t('primary.disabledReason')}>
-              <span>
-                <Button variant="secondary" size="sm" disabled>
-                  {t('action.makePrimary')}
-                </Button>
-              </span>
-            </Tooltip>
-          ) : null}
+          {state.actions.map((action) => (
+            <ActionButton
+              key={action}
+              action={action}
+              label={t(`action.${action}`)}
+              disabled={busy}
+              onClick={handler[action]}
+            />
+          ))}
         </div>
-      ) : null}
-
-      {address.isPrimary ? (
-        <p className="font-sans text-[12px] text-(--el-text-secondary)">
-          {t('primary.consequence')}
-        </p>
       ) : null}
 
       {dnsOpen ? <DnsTable verification={address.verification} dns={address.dns} /> : null}

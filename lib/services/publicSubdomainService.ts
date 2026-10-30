@@ -263,11 +263,6 @@ export const publicSubdomainService = {
    * `customDomainService.remove`, which withdraws a certificate post-commit. A
    * workspace subdomain is covered by the wildcard `*.<base>` (ADR §6) — claiming
    * one issues nothing, so releasing one withdraws nothing.
-   *
-   * ⚠️ NO `setPrimary(null)` SWEEP either. `project.primary_address_id` is
-   * `ON DELETE SET NULL`, so a project whose primary this was falls back to §7's
-   * default on its own. A hand-run sweep here would be a second copy of a
-   * constraint the database already holds.
    */
   async release(
     workspaceId: string,

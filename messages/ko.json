@@ -2803,15 +2803,9 @@
           "showDns": "DNS 레코드 보기",
           "checkAgain": "다시 확인",
           "requestAgain": "다시 요청",
-          "makePrimary": "기본으로 지정",
           "remove": "제거",
           "copy": "값 복사",
           "copied": "복사됨"
-        },
-        "primary": {
-          "badge": "기본",
-          "consequence": "다른 모든 주소가 여기로 리디렉션됩니다.",
-          "disabledReason": "인증서가 활성화된 도메인만 기본으로 지정할 수 있습니다"
         },
         "addModal": {
           "title": "도메인 추가",

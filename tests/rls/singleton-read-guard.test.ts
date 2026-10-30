@@ -131,27 +131,11 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
   // whole question host resolution asks is WHICH TENANT a hostname belongs to.
   'publicAddressRepository.ts#findByHostname': [
     'public',
-    'public_address_public_read (20260903010000) · publicAddressRepository.test "the public read arm" (5 cases, both directions under SET LOCAL ROLE motir_app) + publicHostResolution.test',
-  ],
-  'publicAddressRepository.ts#listForWorkspace': [
-    'public',
-    'public_address_public_read (20260903010000) · publicHostResolution.test "addressesForProject — the ADR §7 default rule" (6 cases)',
-  ],
-  'publicAddressRepository.ts#listForWorkspaces': [
-    'public',
-    'public_address_public_read (20260903010000) · publicHostResolution.test "primaryHostsForProjects — the batched crawl read" (3 cases)',
-  ],
-  'projectRepository.ts#findPublicByIdInternal': [
-    'public',
-    'project_public_read (20260811230000) · publicHostResolution.test "a customer domain whose project is not public" — the policy supplies the access-mode filter this read deliberately omits',
+    'public_address_public_read (20261030150000) · publicAddressRepository.test "the public read arm" (5 cases, both directions under SET LOCAL ROLE motir_app) + publicHostResolution.test',
   ],
   'projectRepository.ts#findWorkspaceNameForPublic': [
     'public',
     'workspace_public_project_read (20260815200000) · publicHostResolution.test "a subdomain whose workspace holds NO public project"',
-  ],
-  'projectRepository.ts#listPrimaryAddressIds': [
-    'public',
-    'project_public_read (20260811230000) · publicHostResolution.test "primaryHostsForProjects … agrees with addressesForProject"',
   ],
 
   // ── pre-auth: the readiness probe ──────────────────────────────────────────

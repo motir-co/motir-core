@@ -2803,15 +2803,9 @@
           "showDns": "DNS レコードを表示",
           "checkAgain": "再確認",
           "requestAgain": "再リクエスト",
-          "makePrimary": "メインにする",
           "remove": "削除",
           "copy": "値をコピー",
           "copied": "コピーしました"
-        },
-        "primary": {
-          "badge": "メイン",
-          "consequence": "他のすべてのアドレスはここにリダイレクトされます。",
-          "disabledReason": "証明書が有効になるとメインのドメインにできます"
         },
         "addModal": {
           "title": "ドメインを追加",

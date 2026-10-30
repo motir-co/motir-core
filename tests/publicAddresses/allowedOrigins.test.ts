@@ -22,7 +22,6 @@ const { publicAddressRepository } = await import('@/lib/repositories/publicAddre
 const { createTestWorkspace } = await import('../fixtures');
 
 let workspaceId: string;
-let projectId: string;
 
 beforeEach(async () => {
   await truncateAuthTables();
@@ -31,7 +30,7 @@ beforeEach(async () => {
   process.env['MOTIR_PUBLIC_SITE_URL'] = 'https://motir.co';
   const { workspace } = await createTestWorkspace({ name: 'Acme' });
   workspaceId = workspace.id;
-  const project = await adminDb.project.create({
+  await adminDb.project.create({
     data: {
       workspaceId,
       name: 'Acme',
@@ -40,7 +39,6 @@ beforeEach(async () => {
       ...projectAccessData('public'),
     },
   });
-  projectId = project.id;
 });
 
 afterEach(() => {
@@ -226,7 +224,6 @@ function seedCustomDomain(hostname: string, status: 'unverified' | 'issued') {
   return adminDb.publicAddress.create({
     data: {
       workspaceId,
-      projectId,
       hostname,
       kind: 'custom_domain',
       status,

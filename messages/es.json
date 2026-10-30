@@ -2803,15 +2803,9 @@
           "showDns": "Mostrar registros DNS",
           "checkAgain": "Volver a comprobar",
           "requestAgain": "Volver a solicitar",
-          "makePrimary": "Convertir en principal",
           "remove": "Quitar",
           "copy": "Copiar valor",
           "copied": "Copiado"
-        },
-        "primary": {
-          "badge": "Principal",
-          "consequence": "Todas las demás direcciones redirigen aquí.",
-          "disabledReason": "Un dominio puede ser principal cuando su certificado esté activo"
         },
         "addModal": {
           "title": "Añadir un dominio",

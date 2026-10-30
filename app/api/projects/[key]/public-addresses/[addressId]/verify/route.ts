@@ -20,10 +20,10 @@ export async function POST(
   const hold = await refuseIfNonCompliant(ctx.userId);
   if (hold) return hold;
 
-  const { addressId } = await params;
+  const { key, addressId } = await params;
   try {
     return NextResponse.json(
-      await customDomainService.verify({ addressId, actorUserId: ctx.userId, ctx }),
+      await customDomainService.verify({ key, addressId, actorUserId: ctx.userId, ctx }),
     );
   } catch (err) {
     const mapped = mapCustomDomainError(err);

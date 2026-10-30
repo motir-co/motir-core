@@ -738,8 +738,8 @@ const KEY_EVIDENCE: Record<string, { permission: PermissionKey; source: string; 
     gate: 'assertPermission',
   },
   // MOTIR-4221 — the Public address room. Its writes live in the customer-domain
-  // lifecycle, which asserts `project:manage_access` on add / verify / remove /
-  // makePrimary / clearPrimary. The room's OTHER half (the workspace subdomain)
+  // lifecycle, which asserts `project:manage_access` on add / verify / remove.
+  // The room's OTHER half (the workspace subdomain)
   // is gated on the workspace ROLE, an axis the registry cannot express — see the
   // entry's own comment for why the project key is the honest one for the rail.
   'public-address': {

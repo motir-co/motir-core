@@ -3,7 +3,6 @@ import { EntitlementExceededError } from '@/lib/billing/errors';
 import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import {
   AddressNotFoundError,
-  AddressNotIssuedError,
   HostnameTakenError,
   InvalidHostnameError,
   NotACustomerDomainError,
@@ -16,7 +15,7 @@ import {
   CertificateProviderUnavailableError,
 } from '@/lib/publicAddresses/certificateProvider';
 
-// THE FOUR CUSTOMER-DOMAIN ROUTES AND THEIR ERROR MAPPER (Story MOTIR-3878 ·
+// THE CUSTOMER-DOMAIN ROUTES AND THEIR ERROR MAPPER (Story MOTIR-3878 ·
 // MOTIR-4223, over MOTIR-4216's routes).
 //
 // ⚠️ THESE FILES HAD NO TEST AT ALL, AND THE GAP HAD ALREADY COST SOMETHING.
@@ -38,10 +37,8 @@ const list = vi.fn();
 const add = vi.fn();
 const verify = vi.fn();
 const remove = vi.fn();
-const makePrimary = vi.fn();
-const clearPrimary = vi.fn();
 vi.mock('@/lib/services/customDomainService', () => ({
-  customDomainService: { list, add, verify, remove, makePrimary, clearPrimary },
+  customDomainService: { list, add, verify, remove },
 }));
 
 const getWorkspaceContext = vi.fn();
@@ -54,8 +51,6 @@ const { GET, POST } = await import('@/app/api/projects/[key]/public-addresses/ro
 const { DELETE } = await import('@/app/api/projects/[key]/public-addresses/[addressId]/route');
 const { POST: VERIFY } =
   await import('@/app/api/projects/[key]/public-addresses/[addressId]/verify/route');
-const { POST: MAKE_PRIMARY, DELETE: CLEAR_PRIMARY } =
-  await import('@/app/api/projects/[key]/public-addresses/[addressId]/primary/route');
 
 const CTX = { userId: 'u_1', workspaceId: 'ws_1' };
 const req = (body?: unknown) =>
@@ -78,13 +73,11 @@ describe('the gate runs before the service, on every route', () => {
     ['POST add', () => POST(req({ hostname: 'a.example' }), keyParams)],
     ['POST verify', () => VERIFY(new Request('https://app.motir.co/x'), addressParams)],
     ['DELETE remove', () => DELETE(new Request('https://app.motir.co/x'), addressParams)],
-    ['POST primary', () => MAKE_PRIMARY(new Request('https://app.motir.co/x'), addressParams)],
-    ['DELETE primary', () => CLEAR_PRIMARY(new Request('https://app.motir.co/x'), addressParams)],
   ])('%s answers 401 with no session, and calls nothing', async (_label, call) => {
     getWorkspaceContext.mockResolvedValue(null);
     const res = await call();
     expect(res.status).toBe(401);
-    for (const fn of [list, add, verify, remove, makePrimary, clearPrimary]) {
+    for (const fn of [list, add, verify, remove]) {
       expect(fn).not.toHaveBeenCalled();
     }
   });
@@ -107,15 +100,18 @@ describe('the happy paths hand through exactly one service call', () => {
     });
   });
 
-  it('DELETE and clear-primary answer 204 with NO body', async () => {
+  it('DELETE answers 204 with NO body', async () => {
     remove.mockResolvedValue(undefined);
     const removed = await DELETE(new Request('https://app.motir.co/x'), addressParams);
     expect(removed.status).toBe(204);
     expect(await removed.text()).toBe('');
-
-    clearPrimary.mockResolvedValue(undefined);
-    const cleared = await CLEAR_PRIMARY(new Request('https://app.motir.co/x'), addressParams);
-    expect(cleared.status).toBe(204);
+    // The key reaches the service: it is the permission gate (MOTIR-9523).
+    expect(remove).toHaveBeenCalledWith({
+      key: 'PROD',
+      addressId: 'addr_1',
+      actorUserId: 'u_1',
+      ctx: CTX,
+    });
   });
 
   it('refuses a POST with no hostname before reaching the service', async () => {
@@ -151,7 +147,6 @@ describe('THE MAPPER — every typed refusal reaches its own status', () => {
     // saying the control is admin-only leaks nothing.
     [new SubdomainForbiddenError(), 403],
     [new HostnameTakenError('roadmap.acme.com'), 409],
-    [new AddressNotIssuedError('unverified'), 409],
     [new InvalidHostnameError('not a host'), 422],
     [new NotACustomerDomainError('acme.motir.site'), 422],
     // The billing surface's own shape, so one refusal does not render two ways.
@@ -172,10 +167,10 @@ describe('THE MAPPER — every typed refusal reaches its own status', () => {
   it('an UNKNOWN error is RETHROWN, so the platform logs a genuine 500', async () => {
     // A mapper that swallowed everything would turn a database outage into a
     // 422 the customer is invited to fix by editing their hostname.
-    makePrimary.mockRejectedValue(new Error('the database fell over'));
-    await expect(
-      MAKE_PRIMARY(new Request('https://app.motir.co/x'), addressParams),
-    ).rejects.toThrow('the database fell over');
+    remove.mockRejectedValue(new Error('the database fell over'));
+    await expect(DELETE(new Request('https://app.motir.co/x'), addressParams)).rejects.toThrow(
+      'the database fell over',
+    );
   });
 
   it('and the mapper is shared, so the same error answers alike on every route', async () => {
@@ -187,14 +182,13 @@ describe('THE MAPPER — every typed refusal reaches its own status', () => {
       () => POST(req({ hostname: 'a.example' }), keyParams),
       () => VERIFY(new Request('https://app.motir.co/x'), addressParams),
       () => DELETE(new Request('https://app.motir.co/x'), addressParams),
-      () => MAKE_PRIMARY(new Request('https://app.motir.co/x'), addressParams),
     ]) {
-      for (const fn of [add, verify, remove, makePrimary]) {
+      for (const fn of [add, verify, remove]) {
         fn.mockRejectedValue(new SubdomainForbiddenError());
       }
       statuses.push((await call()).status);
     }
-    expect(statuses).toEqual([403, 403, 403, 403]);
+    expect(statuses).toEqual([403, 403, 403]);
   });
 });
 

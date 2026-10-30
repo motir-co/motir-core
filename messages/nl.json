@@ -2803,15 +2803,9 @@
           "showDns": "DNS-records tonen",
           "checkAgain": "Opnieuw controleren",
           "requestAgain": "Opnieuw aanvragen",
-          "makePrimary": "Primair maken",
           "remove": "Verwijderen",
           "copy": "Waarde kopiëren",
           "copied": "Gekopieerd"
-        },
-        "primary": {
-          "badge": "Primair",
-          "consequence": "Elk ander adres verwijst hierheen door.",
-          "disabledReason": "Een domein kan primair worden zodra het certificaat live is"
         },
         "addModal": {
           "title": "Een domein toevoegen",

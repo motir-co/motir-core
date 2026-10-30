@@ -19,7 +19,6 @@ const { publicAddressRepository } = await import('@/lib/repositories/publicAddre
 const { createTestWorkspace } = await import('../fixtures');
 
 let workspaceId: string;
-let projectId: string;
 /** What the stubbed port reports for every hostname this run. */
 let answer: { configured: boolean; issued: boolean } | Error = { configured: true, issued: false };
 
@@ -31,7 +30,7 @@ beforeEach(async () => {
 
   const { workspace } = await createTestWorkspace({ name: 'Acme' });
   workspaceId = workspace.id;
-  const project = await adminDb.project.create({
+  await adminDb.project.create({
     data: {
       workspaceId,
       name: 'Acme',
@@ -40,7 +39,6 @@ beforeEach(async () => {
       ...projectAccessData('public'),
     },
   });
-  projectId = project.id;
 
   vi.spyOn(providers, 'certificateProvider').mockResolvedValue({
     request: async () => {
@@ -218,7 +216,6 @@ async function seed(
   return adminDb.publicAddress.create({
     data: {
       workspaceId,
-      projectId,
       hostname,
       kind: 'custom_domain',
       status,

@@ -182,11 +182,4 @@ test('a project admin gives their public project an address of its own', async (
     await expect(page.getByText('Live')).toBeVisible({ timeout: 20_000 });
     await beat();
   });
-
-  await chapter('Making it the primary address', async () => {
-    await page.getByRole('button', { name: 'Make primary' }).click();
-    await expect(page.getByText('Every other address redirects here.')).toBeVisible();
-    await expect(page.getByText('Primary')).toBeVisible();
-    await beat();
-  });
 });

@@ -13,7 +13,7 @@ const { customDomainService, normaliseCustomHostname } =
   await import('@/lib/services/customDomainService');
 const providers = await import('@/lib/publicAddresses/providers');
 const {
-  AddressNotIssuedError,
+  AddressNotFoundError,
   InvalidHostnameError,
   NotACustomerDomainError,
   PublicAddressesUnavailableError,
@@ -139,7 +139,7 @@ describe('normaliseCustomHostname — refuses OUR addresses with their own error
 describe('add', () => {
   it('creates an UNVERIFIED row carrying its ownership TXT', async () => {
     const dto = await addDomain();
-    expect(dto).toMatchObject({ hostname: HOST, status: 'unverified', isPrimary: false });
+    expect(dto).toMatchObject({ hostname: HOST, status: 'unverified', applicationId: null });
     expect(dto.verification?.name).toBe(`_motir-verify.${HOST}`);
     expect(dto.verification?.value).toMatch(/^motir-verify-/);
     // ⚠️ BOTH RECORDS, AND THE POINTING ONE FIRST (MOTIR-4278). This assertion
@@ -211,7 +211,12 @@ describe('verify — the side effects happen OUTSIDE any transaction, in order',
     txtRecords = [dto.verification!.value];
     onRequest = async () => ({ issued: false });
 
-    const after = await customDomainService.verify({ addressId: dto.id, actorUserId, ctx });
+    const after = await customDomainService.verify({
+      key: 'ACME',
+      addressId: dto.id,
+      actorUserId,
+      ctx,
+    });
 
     expect(trace).toEqual(['dns', 'cert.request']);
     expect(after.status).toBe('pending_certificate');
@@ -223,7 +228,12 @@ describe('verify — the side effects happen OUTSIDE any transaction, in order',
     txtRecords = [dto.verification!.value];
     onRequest = async () => ({ issued: true });
 
-    const after = await customDomainService.verify({ addressId: dto.id, actorUserId, ctx });
+    const after = await customDomainService.verify({
+      key: 'ACME',
+      addressId: dto.id,
+      actorUserId,
+      ctx,
+    });
     expect(after.status).toBe('issued');
     expect(after.issuedAt).not.toBeNull();
     // The ownership record stops being shown once it is no longer owed.
@@ -242,7 +252,12 @@ describe('verify — the side effects happen OUTSIDE any transaction, in order',
     const dto = await addDomain();
     txtRecords = [];
 
-    const after = await customDomainService.verify({ addressId: dto.id, actorUserId, ctx });
+    const after = await customDomainService.verify({
+      key: 'ACME',
+      addressId: dto.id,
+      actorUserId,
+      ctx,
+    });
     expect(after.status).toBe('unverified');
     expect(after.failureReason).toContain('No _motir-verify TXT record');
     // And no certificate was requested for an unproven hostname — the ADR §5
@@ -253,7 +268,12 @@ describe('verify — the side effects happen OUTSIDE any transaction, in order',
   it('a WRONG value is reported differently from a missing one', async () => {
     const dto = await addDomain();
     txtRecords = ['motir-verify-somebody-elses'];
-    const after = await customDomainService.verify({ addressId: dto.id, actorUserId, ctx });
+    const after = await customDomainService.verify({
+      key: 'ACME',
+      addressId: dto.id,
+      actorUserId,
+      ctx,
+    });
     expect(after.status).toBe('unverified');
     expect(after.failureReason).toContain('not the expected value');
     expect(trace).toEqual(['dns']);
@@ -265,7 +285,12 @@ describe('verify — the side effects happen OUTSIDE any transaction, in order',
     onRequest = async () => {
       throw new CertificateProviderRefusedError(422, 'hostname is not pointed at this app');
     };
-    const after = await customDomainService.verify({ addressId: dto.id, actorUserId, ctx });
+    const after = await customDomainService.verify({
+      key: 'ACME',
+      addressId: dto.id,
+      actorUserId,
+      ctx,
+    });
     expect(after.status).toBe('failed');
     expect(after.failureReason).toBe('hostname is not pointed at this app');
   });
@@ -280,7 +305,7 @@ describe('verify — the side effects happen OUTSIDE any transaction, in order',
       throw new CertificateProviderUnavailableError('503 upstream');
     };
     await expect(
-      customDomainService.verify({ addressId: dto.id, actorUserId, ctx }),
+      customDomainService.verify({ key: 'ACME', addressId: dto.id, actorUserId, ctx }),
     ).rejects.toBeInstanceOf(CertificateProviderUnavailableError);
 
     const row = await adminDb.publicAddress.findUniqueOrThrow({ where: { id: dto.id } });
@@ -288,51 +313,38 @@ describe('verify — the side effects happen OUTSIDE any transaction, in order',
   });
 });
 
-describe('makePrimary', () => {
-  it('succeeds only for an ISSUED address', async () => {
-    const dto = await addDomain();
-    await expect(
-      customDomainService.makePrimary({ addressId: dto.id, actorUserId, ctx }),
-    ).rejects.toBeInstanceOf(AddressNotIssuedError);
-
-    await adminDb.publicAddress.update({ where: { id: dto.id }, data: { status: 'issued' } });
-    const after = await customDomainService.makePrimary({ addressId: dto.id, actorUserId, ctx });
-    expect(after.isPrimary).toBe(true);
-    const project = await adminDb.project.findUniqueOrThrow({ where: { id: projectId } });
-    expect(project.primaryAddressId).toBe(dto.id);
-  });
-
-  it('clearPrimary returns the project to the default rule', async () => {
-    const dto = await addDomain();
-    await adminDb.publicAddress.update({ where: { id: dto.id }, data: { status: 'issued' } });
-    await customDomainService.makePrimary({ addressId: dto.id, actorUserId, ctx });
-    await customDomainService.clearPrimary({ key: 'ACME', actorUserId, ctx });
-    const project = await adminDb.project.findUniqueOrThrow({ where: { id: projectId } });
-    expect(project.primaryAddressId).toBeNull();
-  });
-});
-
 describe('remove', () => {
   it('deletes the row, THEN withdraws the certificate', async () => {
     const dto = await addDomain();
     trace = [];
-    await customDomainService.remove({ addressId: dto.id, actorUserId, ctx });
+    await customDomainService.remove({ key: 'ACME', addressId: dto.id, actorUserId, ctx });
 
     expect(await adminDb.publicAddress.findUnique({ where: { id: dto.id } })).toBeNull();
     expect(trace).toEqual(['cert.remove']);
   });
 
-  it('leaves the project standing when the removed address was its PRIMARY', async () => {
-    // The FK's SET NULL. A cascade here would make "remove this domain" delete
-    // the project it served.
+  it("a domain is the WORKSPACE's — removing it touches no project", async () => {
+    // ADR MOTIR-9521 §1: the row carries no project, so there is nothing for a
+    // delete to cascade into or fall back from.
     const dto = await addDomain();
-    await adminDb.publicAddress.update({ where: { id: dto.id }, data: { status: 'issued' } });
-    await customDomainService.makePrimary({ addressId: dto.id, actorUserId, ctx });
-    await customDomainService.remove({ addressId: dto.id, actorUserId, ctx });
+    await customDomainService.remove({ key: 'ACME', addressId: dto.id, actorUserId, ctx });
+    expect(await adminDb.project.findUnique({ where: { id: projectId } })).not.toBeNull();
+  });
 
-    const project = await adminDb.project.findUnique({ where: { id: projectId } });
-    expect(project).not.toBeNull();
-    expect(project?.primaryAddressId).toBeNull();
+  it('refuses an id that is not a customer domain of this workspace', async () => {
+    // A workspace subdomain shares the table; the lifecycle must not reach it.
+    const sub = await adminDb.publicAddress.create({
+      data: {
+        workspaceId: ctx.workspaceId,
+        hostname: `acme.${BASE}`,
+        kind: 'workspace_subdomain',
+        status: 'active',
+      },
+    });
+    await expect(
+      customDomainService.remove({ key: 'ACME', addressId: sub.id, actorUserId, ctx }),
+    ).rejects.toBeInstanceOf(AddressNotFoundError);
+    expect(await adminDb.publicAddress.findUnique({ where: { id: sub.id } })).not.toBeNull();
   });
 
   it('still succeeds when the platform withdrawal FAILS', async () => {
@@ -355,7 +367,7 @@ describe('remove', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     await expect(
-      customDomainService.remove({ addressId: dto.id, actorUserId, ctx }),
+      customDomainService.remove({ key: 'ACME', addressId: dto.id, actorUserId, ctx }),
     ).resolves.toBeUndefined();
     expect(await adminDb.publicAddress.findUnique({ where: { id: dto.id } })).toBeNull();
     // Logged with the hostname, so the leftover is findable.
@@ -374,12 +386,24 @@ describe('the gates', () => {
     ).rejects.toBeInstanceOf(PublicAddressesUnavailableError);
   });
 
-  it('lists what it created, with isPrimary derived', async () => {
+  it("lists the WORKSPACE's customer domains, unbound until re-pointed", async () => {
     const dto = await addDomain();
-    const rows = await customDomainService.list({ key: 'ACME', actorUserId, ctx });
-    expect(rows.map((r) => r.hostname)).toEqual([HOST]);
-    expect(rows[0]!.isPrimary).toBe(false);
-    expect(rows[0]!.id).toBe(dto.id);
+    // A second project in the same workspace sees the same domains — they are
+    // the workspace's, not the project's (ADR MOTIR-9521 §1).
+    await adminDb.project.create({
+      data: {
+        workspaceId: ctx.workspaceId,
+        name: 'Beta',
+        slug: 'beta',
+        identifier: 'BETA',
+        ...projectAccessData('public'),
+      },
+    });
+    const fromAcme = await customDomainService.list({ key: 'ACME', actorUserId, ctx });
+    const fromBeta = await customDomainService.list({ key: 'BETA', actorUserId, ctx });
+    expect(fromAcme.map((r) => r.hostname)).toEqual([HOST]);
+    expect(fromBeta.map((r) => r.id)).toEqual([dto.id]);
+    expect(fromAcme[0]!.applicationId).toBeNull();
   });
 });
 

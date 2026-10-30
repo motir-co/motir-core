@@ -36,9 +36,10 @@ export const publicAddressRepository = {
    * Uses the `db` singleton with no workspace context, which is what the
    * migration's `public_address_public_read` RLS arm exists to admit: the whole
    * question is which tenant a hostname belongs to, so binding a workspace first
-   * would presume the answer. That arm is narrow — it admits a row only when
-   * what it points at is public — so a private project's domain resolves to
-   * `null` here rather than leaking that it exists.
+   * would presume the answer. That arm is narrow — a workspace subdomain only when
+   * its workspace has a public project, a customer domain only once its
+   * certificate is issued (MOTIR-9523) — so anything else resolves to `null`
+   * here rather than leaking that it exists.
    */
   async findByHostname(hostname: string): Promise<PublicAddress | null> {
     return db.publicAddress.findUnique({ where: { hostname } });
@@ -58,54 +59,28 @@ export const publicAddressRepository = {
   },
 
   /**
-   * Every address across SEVERAL workspaces, in one query — the batched read
-   * behind the crawl index's per-row canonical host (MOTIR-4217).
+   * Every customer domain of one workspace, oldest first (ADR MOTIR-9521 §1: a
+   * domain is a workspace asset naming at most one application).
    *
-   * A page of the index is up to a hundred projects, and asking per project
-   * would be a hundred sequential round trips to answer one sitemap build. One
-   * `IN` is the whole cost.
+   * Takes the caller's `tx`. Its consumer is the customer-domain lifecycle,
+   * which always runs inside a bound workspace context — so this is a tenant
+   * read, and the tenancy policy scopes it as well as the `where` clause.
    */
-  async listForWorkspaces(workspaceIds: readonly string[]): Promise<PublicAddress[]> {
-    if (workspaceIds.length === 0) return [];
-    return db.publicAddress.findMany({
-      where: { workspaceId: { in: [...workspaceIds] } },
-      orderBy: { createdAt: 'asc' },
-    });
-  },
-
-  /**
-   * Every address belonging to one project (its customer domains).
-   *
-   * Takes the caller's `tx`. Its consumer is the customer-domain lifecycle
-   * (MOTIR-4216), which always runs inside a bound workspace context — so this
-   * is a tenant read, not an anonymous one, and binding it is what makes the
-   * tenancy policy do the scoping instead of the `where` clause.
-   */
-  async listForProjectInTx(
-    projectId: string,
+  async listCustomDomainsForWorkspaceInTx(
+    workspaceId: string,
     tx: Prisma.TransactionClient,
   ): Promise<PublicAddress[]> {
     return tx.publicAddress.findMany({
-      where: { projectId },
+      where: { workspaceId, kind: 'custom_domain' },
       orderBy: { createdAt: 'asc' },
     });
   },
 
   /**
    * Every address in one workspace — its live subdomain, its retained aliases,
-   * and every customer domain of every project under it.
-   */
-  async listForWorkspace(workspaceId: string): Promise<PublicAddress[]> {
-    return db.publicAddress.findMany({
-      where: { workspaceId },
-      orderBy: { createdAt: 'asc' },
-    });
-  },
-
-  /**
-   * The same list INSIDE the caller's transaction.
+   * and every customer domain it holds — INSIDE the caller's transaction.
    *
-   * ⚠️ NOT an optional `tx` on {@link listForWorkspace}, and not a convenience.
+   * ⚠️ There is deliberately no singleton twin, and the `tx` is not a convenience.
    * The singleton read is a DIFFERENT CONNECTION: called from inside a
    * transaction it cannot see that transaction's uncommitted writes, and it
    * carries none of the transaction's GUCs, so under the non-bypass app role RLS
@@ -172,7 +147,7 @@ export const publicAddressRepository = {
    *
    * Takes a `tx`: the sweep runs ACROSS tenants, so the job binds a system
    * context for it. Left on the `db` singleton it would be an unbound read that
-   * the public arm silently narrows to public projects only — returning a
+   * the public arm silently narrows to what is publicly readable — returning a
    * plausible, wrong subset rather than failing.
    */
   async listByStatusOlderThan(
@@ -215,7 +190,8 @@ export const publicAddressRepository = {
   },
 
   /**
-   * Connect a customer domain to one project. Starts `unverified` with its
+   * Connect a customer domain to the workspace, optionally naming the
+   * application it serves (ADR MOTIR-9521 §1). Starts `unverified` with its
    * `_motir-verify` token — the ADR §5 order is strict that a certificate is
    * never requested before the TXT resolves, and starting anywhere else would
    * make that order unrepresentable.
@@ -223,7 +199,7 @@ export const publicAddressRepository = {
   async createCustomDomain(
     input: {
       workspaceId: string;
-      projectId: string;
+      applicationId: string | null;
       hostname: string;
       verificationToken: string;
     },
@@ -233,7 +209,7 @@ export const publicAddressRepository = {
       return await tx.publicAddress.create({
         data: {
           workspaceId: input.workspaceId,
-          projectId: input.projectId,
+          applicationId: input.applicationId,
           hostname: input.hostname,
           kind: 'custom_domain',
           status: 'unverified',
@@ -269,34 +245,12 @@ export const publicAddressRepository = {
   },
 
   /**
-   * Make one address the project's canonical one — the ADR §7 *make primary*.
-   * Writes `project.primaryAddressId`, not a column on the address: the FK is
-   * the constraint that makes "exactly one" hold.
-   *
-   * `null` restores the default rule (the subdomain path when one is claimed,
-   * else `motir.co/p/<identifier>`), which is what removing the primary address
-   * must fall back to.
-   */
-  async setPrimary(
-    projectId: string,
-    addressId: string | null,
-    tx: Prisma.TransactionClient,
-  ): Promise<void> {
-    await tx.project.update({
-      where: { id: projectId },
-      data: { primaryAddressId: addressId },
-    });
-  },
-
-  /**
    * Remove an address.
    *
    * A removed custom domain, and a workspace subdomain that is renamed or
    * released (§8 Amendment 3 rule 2: it stops being served in that
    * transaction). Which hostnames are HELD when they go is the service's rule,
-   * not this layer's. The `SET NULL` on `project.primary_address_id` means a
-   * project whose primary this was falls back to the default rather than being
-   * deleted with it.
+   * not this layer's.
    */
   async remove(addressId: string, tx: Prisma.TransactionClient): Promise<void> {
     await tx.publicAddress.delete({ where: { id: addressId } });
@@ -322,12 +276,6 @@ export const publicAddressRepository = {
    * Remove a SET of addresses in one statement — a bulk delete with no rule
    * about WHICH ids belong in the set (ADR §8 Amendment 2, MOTIR-4454). The
    * caller chooses them, through `reservesItsHostname` where a hold is owed.
-   *
-   * The `SET NULL` on `project.primary_address_id` applies exactly as it does
-   * to {@link remove}, so a project whose primary was the released subdomain
-   * falls back to §7's default rather than being deleted with it. That is why
-   * there is no companion `setPrimary(null)` sweep: adding one would be a
-   * second, hand-run copy of a constraint the database already enforces.
    */
   async removeMany(addressIds: readonly string[], tx: Prisma.TransactionClient): Promise<number> {
     if (addressIds.length === 0) return 0;

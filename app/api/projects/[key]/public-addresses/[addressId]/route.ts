@@ -22,9 +22,9 @@ export async function DELETE(
   const hold = await refuseIfNonCompliant(ctx.userId);
   if (hold) return hold;
 
-  const { addressId } = await params;
+  const { key, addressId } = await params;
   try {
-    await customDomainService.remove({ addressId, actorUserId: ctx.userId, ctx });
+    await customDomainService.remove({ key, addressId, actorUserId: ctx.userId, ctx });
     return new NextResponse(null, { status: 204 });
   } catch (err) {
     const mapped = mapCustomDomainError(err);

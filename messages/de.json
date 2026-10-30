@@ -2803,15 +2803,9 @@
           "showDns": "DNS-Einträge anzeigen",
           "checkAgain": "Erneut prüfen",
           "requestAgain": "Erneut anfordern",
-          "makePrimary": "Als primär festlegen",
           "remove": "Entfernen",
           "copy": "Wert kopieren",
           "copied": "Kopiert"
-        },
-        "primary": {
-          "badge": "Primär",
-          "consequence": "Jede andere Adresse leitet hierher weiter.",
-          "disabledReason": "Eine Domain kann primär werden, sobald ihr Zertifikat live ist"
         },
         "addModal": {
           "title": "Domain hinzufügen",

@@ -68,15 +68,11 @@ export interface PublicHostNoApplicationDto {
   readonly workspace: { readonly name: string };
 }
 
-/** A customer domain with an issued certificate — it serves ONE project at its root. */
-export interface PublicHostProjectDto {
-  readonly kind: 'project';
-  readonly project: { readonly identifier: string; readonly name: string };
-  /** Whether this address is the project's CANONICAL one (ADR §7). */
-  readonly primary: boolean;
-}
-
-export type PublicHostResolutionDto = PublicHostNoApplicationDto | PublicHostProjectDto;
+/**
+ * What a `Host` answers. The `project` outcome is retired (ADR MOTIR-9521 §1:
+ * a customer domain serves an application, never a project).
+ */
+export type PublicHostResolutionDto = PublicHostNoApplicationDto;
 
 /**
  * A project's addresses, as the renderer needs them (ADR §7).
@@ -120,7 +116,8 @@ export interface PublicAddressDto {
     | 'failed'
     | 'expired'
     | 'revoked';
-  readonly isPrimary: boolean;
+  /** The application a customer domain serves; null when unbound (ADR MOTIR-9521 §1). */
+  readonly applicationId: string | null;
   /** The ownership `TXT` — null once it no longer needs showing. */
   readonly verification: { readonly name: string; readonly value: string } | null;
   /** The records that point the hostname at us. */

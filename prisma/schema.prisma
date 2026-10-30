@@ -2327,27 +2327,6 @@ model Project {
   testInstructions            TestInstructions[]
   testInstructionsRepos       TestInstructionsRepo[]
 
-  /// The addresses this project answers on, and which one is CANONICAL
-  /// (Story MOTIR-3878 · `docs/decisions/public-tenant-addresses.md`).
-  ///
-  /// `publicAddresses` are the project's OWN addresses — customer domains, each
-  /// serving this project at its root (ADR §4). A WORKSPACE subdomain is not
-  /// here: it belongs to the workspace and every public project under it answers
-  /// beneath it, so its row hangs off `Workspace` with a null `projectId`.
-  ///
-  /// `primaryAddress` is the ADR §7 canonical rule expressed as a CONSTRAINT
-  /// rather than a convention: one nullable FK cannot point at two rows, so
-  /// "exactly one primary" is unrepresentable-otherwise instead of enforced by a
-  /// check somebody has to remember to write. NULL means the default rule
-  /// applies — the workspace subdomain path when one is claimed, else
-  /// `motir.co/p/<identifier>`.
-  ///
-  /// `SetNull` on the primary, `Cascade` on the list: removing the address a
-  /// project is canonical at must NOT delete the project, it must fall back to
-  /// the default; deleting the project takes its addresses with it.
-  primaryAddressId              String?                      @map("primary_address_id")
-  primaryAddress                PublicAddress?               @relation("ProjectPrimaryAddress", fields: [primaryAddressId], references: [id], onDelete: SetNull)
-  publicAddresses               PublicAddress[]              @relation("ProjectPublicAddresses")
   /// Approval gates scoped to this project (a gate is `workspaceId` + `projectId`,
   /// per the ADR §7 tier — `prMergeMode` lives at the project, not the workspace).
   approvalGates                 ApprovalGate[]
@@ -2383,12 +2362,6 @@ model Project {
   @@unique([workspaceId, slug])
   @@unique([workspaceId, identifier])
   @@index([workspaceId])
-  /// `public_address.id` is SET NULL when the address is removed, so the delete
-  /// scans `project` for referencing rows. Declared here as well as in the
-  /// migration because a database index the datamodel does not carry is exactly
-  /// the drift `CLAUDE.md`'s migration rules describe — the `build` job's
-  /// `prisma migrate diff` assertion caught this one before it shipped.
-  @@index([primaryAddressId])
   /// A folder delete checks `project` for rows naming it (the NoAction FK above).
   @@index([bugDestinationFolderId])
   /// …and for rows naming it as the PLANNER-bug destination (MOTIR-5820).
@@ -12132,6 +12105,8 @@ model HostedApplication {
   previousRelease   HostedRelease?  @relation("HostedApplicationPreviousRelease", fields: [previousReleaseId], references: [id], onDelete: SetNull)
   releases          HostedRelease[] @relation("HostedApplicationReleases")
   defaultOf         Workspace?      @relation("WorkspaceDefaultApplication")
+  /// The customer domains bound to this application (ADR MOTIR-9521 §1).
+  customDomains     PublicAddress[] @relation("HostedApplicationCustomDomains")
 
   @@unique([workspaceId, slug])
   @@index([projectId])
@@ -13633,16 +13608,17 @@ enum PublicAddressStatus {
 ///
 /// ── `workspaceId` is denormalized, deliberately ──
 ///
-/// Every row carries it, including a `custom_domain` whose project already
+/// Every row carries it, including a `custom_domain` whose application already
 /// implies it, so the RLS tenancy gate is a direct
 /// `workspace_id = app.workspace_id` comparison with no join — the pattern
 /// `project_membership`, `work_item` and `project_key_alias` all use.
 model PublicAddress {
   id                String              @id @default(cuid())
   workspaceId       String              @map("workspace_id")
-  /// NULL for a subdomain (it names the workspace); set for a customer domain
-  /// (it names one project).
-  projectId         String?             @map("project_id")
+  /// The application a customer domain serves (ADR MOTIR-9521 §1). NULL for a
+  /// subdomain, and for a customer domain not bound to an application yet or
+  /// whose application was removed — the domain is unbound, never deleted.
+  applicationId     String?             @map("application_id")
   hostname          String              @unique
   kind              PublicAddressKind
   status            PublicAddressStatus
@@ -13658,17 +13634,11 @@ model PublicAddress {
   createdAt         DateTime            @default(now()) @map("created_at")
   updatedAt         DateTime            @updatedAt @map("updated_at")
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  project   Project?  @relation("ProjectPublicAddresses", fields: [projectId], references: [id], onDelete: Cascade)
-
-  /// The back-relation of `Project.primaryAddress`. Modelled on BOTH sides per
-  /// the FK-`@relation` rule in `CLAUDE.md`: a raw-SQL-only FK puts the schema
-  /// graph and the migration-built database in permanent drift, and every later
-  /// `migrate dev` then re-proposes dropping it.
-  primaryOf Project[] @relation("ProjectPrimaryAddress")
+  workspace   Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  application HostedApplication? @relation("HostedApplicationCustomDomains", fields: [applicationId], references: [id], onDelete: SetNull)
 
   @@index([workspaceId])
-  @@index([projectId])
+  @@index([applicationId])
   /// The certificate job's sweep (MOTIR-4219): "every address in state X not
   /// checked since T". Both columns, in that order, because the job filters on
   /// the state and orders on the clock.

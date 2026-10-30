@@ -2803,15 +2803,9 @@
           "showDns": "Pokaż rekordy DNS",
           "checkAgain": "Sprawdź ponownie",
           "requestAgain": "Zażądaj ponownie",
-          "makePrimary": "Ustaw jako główną",
           "remove": "Usuń",
           "copy": "Kopiuj wartość",
           "copied": "Skopiowano"
-        },
-        "primary": {
-          "badge": "Główna",
-          "consequence": "Każdy inny adres przekierowuje tutaj.",
-          "disabledReason": "Domena może zostać główną, gdy jej certyfikat będzie aktywny"
         },
         "addModal": {
           "title": "Dodaj domenę",

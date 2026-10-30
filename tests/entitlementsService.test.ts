@@ -1008,7 +1008,7 @@ describe('entitlementsService — custom-domain cap (Story MOTIR-3878 · the ADR
     await seedCustomDomains(fx, 4);
 
     const seeded = await adminDb.publicAddress.count({
-      where: { projectId: fx.projectId, kind: 'custom_domain' },
+      where: { workspaceId: fx.workspaceId, kind: 'custom_domain' },
     });
     expect(seeded, 'precondition: the race must start at cap − 1').toBe(4);
 
@@ -1024,7 +1024,7 @@ describe('entitlementsService — custom-domain cap (Story MOTIR-3878 · the ADR
         await publicAddressRepository.createCustomDomain(
           {
             workspaceId: fx.workspaceId,
-            projectId: fx.projectId,
+            applicationId: null,
             hostname: `race-${n}.acme.example`,
             verificationToken: `motir-verify-race-${n}`,
           },
@@ -1039,7 +1039,7 @@ describe('entitlementsService — custom-domain cap (Story MOTIR-3878 · the ADR
     // Measured BEFORE any assertion can throw, so the number survives into every
     // failure message: 5 = the lock held, 6 = it did not serialize.
     const finalCount = await adminDb.publicAddress.count({
-      where: { projectId: fx.projectId, kind: 'custom_domain' },
+      where: { workspaceId: fx.workspaceId, kind: 'custom_domain' },
     });
     const census =
       `census: seeded=${seeded} finalCount=${finalCount} ` +
@@ -1056,14 +1056,10 @@ describe('entitlementsService — custom-domain cap (Story MOTIR-3878 · the ADR
 });
 
 /** Seed `count` issued custom domains on the fixture's project. */
-async function seedCustomDomains(
-  fx: { workspaceId: string; projectId: string },
-  count: number,
-): Promise<void> {
+async function seedCustomDomains(fx: { workspaceId: string }, count: number): Promise<void> {
   await adminDb.publicAddress.createMany({
     data: Array.from({ length: count }, (_, i) => ({
       workspaceId: fx.workspaceId,
-      projectId: fx.projectId,
       hostname: `seed-${i}.acme.example`,
       kind: 'custom_domain' as const,
       status: 'issued' as const,
