@@ -7964,7 +7964,7 @@ export const plansService = {
     opts: { sessionKey?: string | null; afterSeq?: number; limit?: number },
     ctx: ServiceContext,
   ): Promise<PlanCodeReadPageDto> {
-    const plan = await plansService.admitPlanReader(planId, ctx);
+    await plansService.admitPlanReader(planId, ctx);
     const limit = Math.min(
       Math.max(1, opts.limit ?? PLAN_CODE_READ_PAGE_MAX),
       PLAN_CODE_READ_PAGE_MAX,
@@ -7974,22 +7974,20 @@ export const plansService = {
       sessionKey: opts.sessionKey ?? null,
       limit,
     };
-    return withWorkspaceContext(
-      { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
-      async (tx) => {
-        const rows = await planCodeReadRepository.listAfterSeq(planId, filter, tx);
-        const keys = new Set(rows.map((r) => r.sessionKey));
-        const sessions = (await planNarrationRepository.listSessionsByPlan(planId, tx)).filter(
-          (s) => keys.has(s.sessionKey),
-        );
-        return {
-          planId,
-          reads: rows.map(toPlanCodeReadDto),
-          sessions: sessions.map(toPlanNarrationSessionDto),
-          nextAfterSeq: rows.length === limit ? rows[rows.length - 1]!.seq : null,
-        };
-      },
-    );
+    // A READ: the service binding, not the write transaction (planTrailCompleteness).
+    return withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
+      const rows = await planCodeReadRepository.listAfterSeq(planId, filter, tx);
+      const keys = new Set(rows.map((r) => r.sessionKey));
+      const sessions = (await planNarrationRepository.listSessionsByPlan(planId, tx)).filter((s) =>
+        keys.has(s.sessionKey),
+      );
+      return {
+        planId,
+        reads: rows.map(toPlanCodeReadDto),
+        sessions: sessions.map(toPlanNarrationSessionDto),
+        nextAfterSeq: rows.length === limit ? rows[rows.length - 1]!.seq : null,
+      };
+    });
   },
 
   /**
