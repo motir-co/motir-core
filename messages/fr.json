@@ -8692,7 +8692,7 @@
       "clearEnough": "Assez clair pour être planifié tel quel.",
       "nothingSettled": "Rien n’a été arrêté, la requête est donc planifiée telle quelle.",
       "requirementSaved": "Enregistré sous <link>{title}</link> dans les Documents d’exigences.",
-      "requirementNotSaved": "<lead>Impossible d’enregistrer l’exigence.</lead> Rien n’a été lancé. Confirmer reste disponible : réessayez."
+      "requirementPageNotSaved": "<lead>Impossible d’enregistrer l’exigence comme page.</lead> La planification l’utilise quand même."
     },
     "logBugOffer": {
       "label": "Proposition de consigner un bug",

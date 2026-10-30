@@ -51,7 +51,6 @@ import {
   PlanChangeMailboxJobMismatchError,
   PlanChangeTurnNotFoundError,
   PlanOfferNotOpenError,
-  PlanOfferRequirementNotSavedError,
   PlanOfferStartRefusedError,
   PlanSessionEndedError,
   PlanTargetLockedError,
@@ -421,7 +420,6 @@ async function startOrNothing(
   } catch (err) {
     if (
       err instanceof PlanOfferStartRefusedError ||
-      err instanceof PlanOfferRequirementNotSavedError ||
       err instanceof PlanTargetLockedError ||
       err instanceof PlanSessionEndedError ||
       err instanceof MotirAiOutOfCreditsError ||

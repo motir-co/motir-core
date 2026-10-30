@@ -154,18 +154,18 @@ describe('toPlanChangeTurnDto — the composed requirement (MOTIR-9432)', () => 
   });
 });
 
-describe('toPlanChangeTurnDto — the saved page and failed save (MOTIR-9436)', () => {
+describe('toPlanChangeTurnDto — the saved page (MOTIR-9436) and the failed background save (MOTIR-10091)', () => {
   const NO_TARGET = { ...UNDECIDED, targetKey: null };
   const PAGE = { pageId: 'pg_1', title: 'Export reports' };
 
-  it('serves the recorded page and the failed-save flag on a no-target plan offer', () => {
+  it('serves the recorded page and the failed-save mark on a no-target plan offer', () => {
     expect(offerOf({ ...NO_TARGET, requirementPage: PAGE })).toEqual({
       ...NO_TARGET,
       requirementPage: PAGE,
     });
-    expect(offerOf({ ...NO_TARGET, requirementSaveFailed: true })).toEqual({
+    expect(offerOf({ ...NO_TARGET, requirementPageFailed: true })).toEqual({
       ...NO_TARGET,
-      requirementSaveFailed: true,
+      requirementPageFailed: true,
     });
   });
 
@@ -181,16 +181,20 @@ describe('toPlanChangeTurnDto — the saved page and failed save (MOTIR-9436)', 
     ]) {
       expect(offerOf({ ...NO_TARGET, requirementPage })).toEqual(NO_TARGET);
     }
-    for (const requirementSaveFailed of [false, 'true', 1, null]) {
-      expect(offerOf({ ...NO_TARGET, requirementSaveFailed })).toEqual(NO_TARGET);
+    for (const requirementPageFailed of [false, 'true', 1, null]) {
+      expect(offerOf({ ...NO_TARGET, requirementPageFailed })).toEqual(NO_TARGET);
     }
   });
 
+  it('drops the retired confirm-time flag, requirementSaveFailed (MOTIR-9436)', () => {
+    expect(offerOf({ ...NO_TARGET, requirementSaveFailed: true })).toEqual(NO_TARGET);
+  });
+
   it('serves both on an offer with a target too (MOTIR-9878)', () => {
-    expect(offerOf({ ...UNDECIDED, requirementPage: PAGE, requirementSaveFailed: true })).toEqual({
+    expect(offerOf({ ...UNDECIDED, requirementPage: PAGE, requirementPageFailed: true })).toEqual({
       ...UNDECIDED,
       requirementPage: PAGE,
-      requirementSaveFailed: true,
+      requirementPageFailed: true,
     });
   });
 });

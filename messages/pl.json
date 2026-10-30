@@ -8692,7 +8692,7 @@
       "clearEnough": "Wystarczająco jasne, by zaplanować bez zmian.",
       "nothingSettled": "Nic nie ustalono, więc prośba zostanie zaplanowana bez zmian.",
       "requirementSaved": "Zapisano jako <link>{title}</link> w Dokumentach wymagań.",
-      "requirementNotSaved": "<lead>Nie udało się zapisać wymagania.</lead> Nic nie zostało uruchomione. Potwierdź nadal jest dostępne – spróbuj ponownie."
+      "requirementPageNotSaved": "<lead>Nie udało się zapisać wymagania jako strony.</lead> Planowanie nadal z niego korzysta."
     },
     "logBugOffer": {
       "label": "Propozycja zgłoszenia błędu",

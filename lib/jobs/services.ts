@@ -5,6 +5,7 @@ import { pullRequestReconcileService } from '@/lib/services/pullRequestReconcile
 import { pullRequestAutoMergeService } from '@/lib/services/pullRequestAutoMergeService';
 import { designAutoRerunService } from '@/lib/services/designAutoRerunService';
 import { gateResumeService } from '@/lib/services/gateResumeService';
+import { requirementPageSaveService } from '@/lib/services/requirementPageSaveService';
 import { pullRequestMergeabilityService } from '@/lib/services/pullRequestMergeabilityService';
 import { monitorIngestionService } from '@/lib/services/monitorIngestionService';
 import { dlqStandingDepthService } from '@/lib/services/dlqStandingDepthService';
@@ -213,6 +214,8 @@ export const jobServices = {
   designAutoRerun: designAutoRerunService,
   // The automatic hosted resume after a held gate is approved (MOTIR-7710).
   gateResume: gateResumeService,
+  // The confirmed plan offer's requirement page, saved after the start (MOTIR-10091).
+  requirementPageSave: requirementPageSaveService,
   // The base-branch mergeability re-read (MOTIR-5914): a push to a default branch
   // withdraws the approve-and-merge question over any pull request it put in conflict.
   pullRequestMergeability: pullRequestMergeabilityService,

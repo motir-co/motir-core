@@ -20,17 +20,17 @@ import type {
   PlanChangeSessionDto,
   PlanTargetHeldByDto,
 } from '@/lib/dto/planChange';
-import type { SubmittedRequirement } from '@/lib/ai/types';
+import type { RequirementConfirmation, SubmittedRequirement } from '@/lib/ai/types';
 
 /**
  * What a CONFIRMED targeted plan offer submits beside its turn (MOTIR-9878): the
- * requirement the person read in the pane, the page Confirm saved it to, and the submit's
- * options — the same supply a no-target offer's start sends (MOTIR-9436). The anchored
- * door otherwise submits the bare accumulated intent, exactly as before.
+ * requirement the person read in the pane, the offer that confirmed it (MOTIR-10091), and
+ * the submit's options — the same supply a no-target offer's start sends (MOTIR-9436). The
+ * anchored door otherwise submits the bare accumulated intent, exactly as before.
  */
 export interface ComposedSubmit {
   requirement: SubmittedRequirement;
-  opts: { requirementPage: { pageId: string; title: string }; omitCarriedAnswers: true };
+  opts: { requirementConfirmed: RequirementConfirmation; omitCarriedAnswers: true };
 }
 
 /** The shipped submit, with a confirmed offer's requirement when there is one. */

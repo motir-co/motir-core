@@ -11,16 +11,20 @@ import { projectsService } from '@/lib/services/projectsService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { seedSystemPrincipal } from '@/scripts/plan-seed/systemPrincipal';
+import { captureJobEvents, JobTestEngine, type CapturedJobEvent } from '../../helpers/jobs';
 
-// CONFIRM SAVES THE REQUIREMENT PAGE (Story MOTIR-9430 · MOTIR-9436), on REAL Postgres.
-// A confirmed no-target offer that carries a composed requirement writes it as a page
-// in Requirements Docs exactly once, records the page on the offer before the run is
-// submitted, and submits the run with `requirement` + `requirementPage` and NO carried
-// answers. A save that fails starts nothing and leaves the offer pending.
+// A CONFIRMED OFFER STARTS AT ONCE AND ITS PAGE IS SAVED AFTER (Story MOTIR-9430 ·
+// MOTIR-9436; MOTIR-10091), on REAL Postgres. A confirmed offer that carries a composed
+// requirement submits its run straight from the stored requirement, with the
+// `requirementConfirmed` marker and NO carried answers, and requests ONE page-save job,
+// keyed by the offer turn, after the claim commits. The job writes the page in
+// Requirements Docs and records it on the offer; a job that fails every attempt leaves
+// the run running and marks the offer `requirementPageFailed`.
 //
-// Mocked: the motir-ai boundary (`submitJob` captured) and the Grill me read. The page
-// writer runs for real against a provisioned Motir account; a failure is injected with
-// a spy that calls through otherwise.
+// Mocked: the motir-ai boundary (`submitJob` captured) and the Grill me read. The job
+// dispatcher is CAPTURED, and each captured event is handed to the job's own handler,
+// the call a worker would make. The page writer runs for real against a provisioned
+// Motir account; a failure is injected with a spy that calls through otherwise.
 
 const submitJobMock = vi.fn();
 const jobs = new Map<string, unknown>();
@@ -37,7 +41,8 @@ const { planOfferStartService } = await import('@/lib/services/planOfferStartSer
 const { requirementPageService } = await import('@/lib/services/requirementPageService');
 const { aiSharpenService } = await import('@/lib/services/aiSharpenService');
 const { workItemsService } = await import('@/lib/services/workItemsService');
-const { PlanOfferRequirementNotSavedError } = await import('@/lib/planChange/errors');
+const { planOfferRequirementPage, REQUIREMENT_PAGE_MAX_ATTEMPTS } =
+  await import('@/lib/jobs/definitions/planOfferRequirementPage');
 
 const T = { timeout: 120_000 };
 const REQUEST = 'Plan the CSV export for reports.';
@@ -68,6 +73,8 @@ const settledSpy = vi.spyOn(aiSharpenService, 'getSettledForConversation');
 
 let fx: WorkItemFixture;
 let jobSeq = 0;
+let events: CapturedJobEvent[];
+let restoreEvents: (() => void) | undefined;
 
 /** The Motir account, in a meta tenant it alone belongs to (no membership in `fx`). */
 async function provisionMotir() {
@@ -96,16 +103,21 @@ beforeEach(async () => {
   jobSeq = 0;
   submitJobMock.mockReset();
   submitJobMock.mockImplementation(async () => ({ jobId: `job-${++jobSeq}` }));
-  writeSpy.mockClear();
+  // A reset spy calls through to the real writer again (a test may have made it fail).
+  writeSpy.mockReset();
   settledSpy.mockReset();
   settledSpy.mockResolvedValue(null);
   vi.stubEnv('MOTIR_AI_URL', 'http://motir-ai.test');
   vi.stubEnv('MOTIR_AI_SERVICE_TOKEN', 'token');
+  restoreEvents?.();
+  ({ events, restore: restoreEvents } = captureJobEvents());
   fx = await makeWorkItemFixture();
   await provisionMotir();
 });
 
 afterEach(async () => {
+  restoreEvents?.();
+  restoreEvents = undefined;
   vi.unstubAllEnvs();
   await truncateJobRuns();
 });
@@ -178,18 +190,60 @@ const planCalls = () => submitJobMock.mock.calls.filter((c) => c[0] !== 'ask_pro
 const planContext = (n = 0) => planCalls()[n]![2] as Record<string, unknown>;
 const requirementPages = () =>
   adminDb.page.findMany({ where: { projectId: fx.projectId, title: { contains: 'CSV' } } });
+const pageAsks = () => events.filter((e) => e.name === 'plan-offer/requirement-page.requested');
+
+/**
+ * Hand every captured page request to the JOB'S OWN handler, as a worker would — the
+ * engine's dedup included: one run per idempotency key, whatever was emitted.
+ */
+async function drainPageJobs(opts: { attempt?: number } = {}) {
+  const pending = pageAsks();
+  const seen = new Set<string>();
+  const outcomes = [];
+  for (const event of pending) {
+    const key = (event.data as { idempotencyKey: string }).idempotencyKey;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    outcomes.push(
+      await new JobTestEngine({
+        function: planOfferRequirementPage,
+        events: [event],
+        ...(opts.attempt !== undefined ? { attempt: opts.attempt } : {}),
+      }).execute(),
+    );
+  }
+  return outcomes;
+}
+
+/** The typed yes against the offer at `offerSeq`, settled. */
+async function typedYes(conversationId: string, offerSeq: number) {
+  const yes = await aiAskService.submitTurn('Yes, go ahead.', me(), { sessionId: conversationId });
+  if (!('jobId' in yes) || !yes.jobId) throw new Error('not an ask');
+  jobs.set(yes.jobId, {
+    jobId: yes.jobId,
+    status: 'succeeded',
+    result: {
+      ask: answerWith({
+        answer: 'Starting the plan.',
+        offerReply: { seq: offerSeq, kind: 'plan', decision: 'agree' },
+      }),
+    },
+    error: null,
+  });
+  return aiAskService.settle(yes.jobId, me(), { sessionId: conversationId });
+}
 
 describe('a confirmed no-target offer with a requirement', () => {
   it(
-    'saves one page, records it on the offer before the run, and sends requirement + page, no carried answers',
+    'starts the run from the stored requirement with the marker and no page, and asks for ONE page after the claim',
     T,
     async () => {
       settledSpy.mockResolvedValue(SETTLED);
       const { conversationId, offerTurnId } = await offered();
-      // What the offer held at the moment the run was submitted.
-      let heldAtSubmit: Record<string, unknown> | null = null;
+      // What had been asked for at the moment the run was submitted.
+      let asksAtSubmit = -1;
       submitJobMock.mockImplementation(async (kind: string) => {
-        if (kind !== 'ask_project') heldAtSubmit = await rawOffer(offerTurnId);
+        if (kind !== 'ask_project') asksAtSubmit = pageAsks().length;
         return { jobId: `job-${++jobSeq}` };
       });
 
@@ -198,6 +252,41 @@ describe('a confirmed no-target offer with a requirement', () => {
         offerTurnId,
       });
 
+      // Nothing was written inside the confirm: the page is the job's.
+      expect(writeSpy).not.toHaveBeenCalled();
+      expect(await requirementPages()).toHaveLength(0);
+      expect(planCalls()).toHaveLength(1);
+      expect(planContext()['requirement']).toEqual(REQUIREMENT);
+      expect(planContext()['requirementConfirmed']).toEqual({ conversationId, offerTurnId });
+      expect(planContext()).not.toHaveProperty('requirementPage');
+      expect(planContext()).not.toHaveProperty('carriedAnswers');
+      // The request was sent once the claim committed, before the run was submitted.
+      expect(asksAtSubmit).toBe(1);
+      expect(pageAsks().map((e) => e.data)).toEqual([
+        {
+          workspaceId: fx.workspaceId,
+          projectId: fx.projectId,
+          userId: fx.ownerId,
+          conversationId,
+          offerTurnId,
+          idempotencyKey: offerTurnId,
+        },
+      ]);
+      expect(await rawOffer(offerTurnId)).toMatchObject({ confirmedSessionId: started.sessionId });
+      expect(await rawOffer(offerTurnId)).not.toHaveProperty('requirementPage');
+    },
+  );
+
+  it(
+    'the job writes one page in Requirements Docs, records it on the offer, and the thread serves it',
+    T,
+    async () => {
+      const { conversationId, offerTurnId } = await offered();
+      await planOfferStartService.confirmPlanOffer(me(), { conversationId, offerTurnId });
+
+      const [outcome] = await drainPageJobs();
+
+      expect(outcome!.error).toBeUndefined();
       expect(writeSpy).toHaveBeenCalledTimes(1);
       expect(writeSpy.mock.calls[0]![0]).toMatchObject({
         workspaceId: fx.workspaceId,
@@ -209,37 +298,69 @@ describe('a confirmed no-target offer with a requirement', () => {
       });
       const pages = await requirementPages();
       expect(pages).toHaveLength(1);
+      const folder = await adminDb.folder.findUniqueOrThrow({ where: { id: pages[0]!.folderId! } });
+      expect(folder.name).toBe('Requirements Docs');
       const recorded = { pageId: pages[0]!.id, title: pages[0]!.title };
-      expect(heldAtSubmit).toMatchObject({ requirementPage: recorded });
-      expect(planCalls()).toHaveLength(1);
-      expect(planContext()['requirement']).toEqual(REQUIREMENT);
-      expect(planContext()['requirementPage']).toEqual(recorded);
-      expect(planContext()).not.toHaveProperty('carriedAnswers');
-      expect(await rawOffer(offerTurnId)).toMatchObject({
-        requirementPage: recorded,
-        confirmedSessionId: started.sessionId,
-      });
-      expect(await rawOffer(offerTurnId)).not.toHaveProperty('requirementSaveFailed');
+      expect(outcome!.result).toEqual({ saved: true, pageId: recorded.pageId });
+      expect(await rawOffer(offerTurnId)).toMatchObject({ requirementPage: recorded });
+      const thread = await planChangeSessionsService.getById(me(), conversationId);
+      const offer = thread.turns.find((t) => t.id === offerTurnId)!.offer!;
+      expect(offer.requirementPage).toEqual(recorded);
+      expect(offer.requirementPageFailed).toBeUndefined();
+      expect(planOfferStateOf(thread.turns, offerTurnId)).toBe('confirmed');
     },
   );
 
-  it('two concurrent confirms write one page and start one run', T, async () => {
-    const { conversationId, offerTurnId } = await offered();
+  it(
+    'two concurrent confirms start one run, ask once, and the job writes one page',
+    T,
+    async () => {
+      const { conversationId, offerTurnId } = await offered();
 
-    const [a, b] = await Promise.all([
-      planOfferStartService.confirmPlanOffer(me(), { conversationId, offerTurnId }),
-      planOfferStartService.confirmPlanOffer(me(), { conversationId, offerTurnId }),
-    ]);
+      const [a, b] = await Promise.all([
+        planOfferStartService.confirmPlanOffer(me(), { conversationId, offerTurnId }),
+        planOfferStartService.confirmPlanOffer(me(), { conversationId, offerTurnId }),
+      ]);
+      await drainPageJobs();
 
-    expect(b.sessionId).toBe(a.sessionId);
-    expect(b.jobId).toBe(a.jobId);
+      expect(b.sessionId).toBe(a.sessionId);
+      expect(b.jobId).toBe(a.jobId);
+      expect(planCalls()).toHaveLength(1);
+      expect(pageAsks()).toHaveLength(1);
+      expect(writeSpy).toHaveBeenCalledTimes(1);
+      expect(await requirementPages()).toHaveLength(1);
+    },
+  );
+
+  it('Confirm and then a typed agreement start one run and save one page', T, async () => {
+    const { conversationId, offerTurnId, offerSeq } = await offered();
+    await planOfferStartService.confirmPlanOffer(me(), { conversationId, offerTurnId });
+
+    const settled = await typedYes(conversationId, offerSeq);
+    await drainPageJobs();
+
+    expect(settled.outcome).toBe('answered');
+    expect(planCalls()).toHaveLength(1);
     expect(writeSpy).toHaveBeenCalledTimes(1);
     expect(await requirementPages()).toHaveLength(1);
-    expect(planCalls()).toHaveLength(1);
+  });
+
+  it('a job run again after its page was recorded writes nothing more', T, async () => {
+    const { conversationId, offerTurnId } = await offered();
+    await planOfferStartService.confirmPlanOffer(me(), { conversationId, offerTurnId });
+    await drainPageJobs();
+    const before = await rawOffer(offerTurnId);
+
+    const [again] = await drainPageJobs();
+
+    expect(again!.error).toBeUndefined();
+    expect(writeSpy).toHaveBeenCalledTimes(1);
+    expect(await requirementPages()).toHaveLength(1);
+    expect(await rawOffer(offerTurnId)).toEqual(before);
   });
 
   it(
-    'on a conversation holding an undecided plan, the restart carries the same requirement and page',
+    'on a conversation holding an undecided plan, the restart carries the same requirement and marker',
     T,
     async () => {
       settledSpy.mockResolvedValue(SETTLED);
@@ -251,147 +372,164 @@ describe('a confirmed no-target offer with a requirement', () => {
         conversationId,
         offerTurnId,
       });
+      await drainPageJobs();
 
       expect(started.sessionId).not.toBe(conversationId);
       expect(planCalls()).toHaveLength(2);
-      const page = (await requirementPages())[0]!;
       expect(planContext(1)['requirement']).toEqual(REQUIREMENT);
-      expect(planContext(1)['requirementPage']).toEqual({ pageId: page.id, title: page.title });
+      expect(planContext(1)['requirementConfirmed']).toEqual({ conversationId, offerTurnId });
       expect(planContext(1)).not.toHaveProperty('carriedAnswers');
+      expect(await requirementPages()).toHaveLength(1);
     },
   );
 
   it(
-    'a restart whose start throws resumes on its successor and re-uses the recorded page',
+    'a start that throws releases the claim, and the retry starts once with one page asked for',
     T,
     async () => {
       const { conversationId, offerTurnId } = await offered();
-      await planChangeSessionsService.submit(me(), { sessionId: conversationId });
       submitJobMock.mockImplementationOnce(async () => {
         throw new Error('motir-ai is down');
       });
       await expect(
         planOfferStartService.confirmPlanOffer(me(), { conversationId, offerTurnId }),
       ).rejects.toThrow('motir-ai is down');
-      expect(writeSpy).toHaveBeenCalledTimes(1);
+      expect(await rawOffer(offerTurnId)).toMatchObject({ confirmedAt: null });
 
       await planOfferStartService.confirmPlanOffer(me(), { conversationId, offerTurnId });
+      await drainPageJobs();
 
+      expect(planCalls()).toHaveLength(2);
+      expect(planContext(1)['requirementConfirmed']).toEqual({ conversationId, offerTurnId });
+      // Each claim asked; the engine's key collapses them into one run and one page.
+      expect(
+        new Set(pageAsks().map((e) => (e.data as { idempotencyKey: string }).idempotencyKey)),
+      ).toEqual(new Set([offerTurnId]));
       expect(writeSpy).toHaveBeenCalledTimes(1);
       expect(await requirementPages()).toHaveLength(1);
-      const page = (await requirementPages())[0]!;
-      expect(planContext(planCalls().length - 1)['requirementPage']).toEqual({
-        pageId: page.id,
-        title: page.title,
-      });
     },
   );
 });
 
-describe('a save that fails', () => {
+describe('a page that cannot be saved', () => {
   it(
-    'starts nothing, leaves the offer pending with requirementSaveFailed, and a retry succeeds',
+    'starts exactly one run anyway, and motir-ai is told the requirement is confirmed',
     T,
     async () => {
       const { conversationId, offerTurnId } = await offered();
-      writeSpy.mockRejectedValueOnce(new Error('folder refused'));
-
-      await expect(
-        planOfferStartService.confirmPlanOffer(me(), { conversationId, offerTurnId }),
-      ).rejects.toBeInstanceOf(PlanOfferRequirementNotSavedError);
-
-      expect(planCalls()).toHaveLength(0);
-      expect(await requirementPages()).toHaveLength(0);
-      expect(await rawOffer(offerTurnId)).toMatchObject({
-        confirmedAt: null,
-        requirementSaveFailed: true,
-      });
-      expect(await rawOffer(offerTurnId)).not.toHaveProperty('startRefusal');
-      const thread = await planChangeSessionsService.getById(me(), conversationId);
-      const offer = thread.turns.find((t) => t.id === offerTurnId)!.offer!;
-      expect(offer.requirementSaveFailed).toBe(true);
-      expect(planOfferStateOf(thread.turns, offerTurnId)).toBe('undecided');
+      writeSpy.mockRejectedValue(new Error('folder refused'));
 
       const started = await planOfferStartService.confirmPlanOffer(me(), {
         conversationId,
         offerTurnId,
       });
+      const [outcome] = await drainPageJobs();
 
-      expect(writeSpy).toHaveBeenCalledTimes(2);
-      expect(await requirementPages()).toHaveLength(1);
+      expect(outcome!.error?.message).toBe('folder refused');
       expect(planCalls()).toHaveLength(1);
-      const stored = await rawOffer(offerTurnId);
-      expect(stored).toMatchObject({ confirmedSessionId: started.sessionId });
-      expect(stored).toHaveProperty('requirementPage');
-      expect(stored).not.toHaveProperty('requirementSaveFailed');
+      expect(planContext()['requirementConfirmed']).toEqual({ conversationId, offerTurnId });
+      expect(await rawOffer(offerTurnId)).toMatchObject({ confirmedSessionId: started.sessionId });
+      // Not the final attempt: the offer is not marked yet, the engine retries.
+      expect(await rawOffer(offerTurnId)).not.toHaveProperty('requirementPageFailed');
     },
   );
 
-  it('an unprovisioned Motir account is the same failure', T, async () => {
+  it(
+    'a job that fails every attempt leaves the run running and marks the offer for the rail',
+    T,
+    async () => {
+      const { conversationId, offerTurnId } = await offered();
+      writeSpy.mockRejectedValue(new Error('folder refused'));
+      const started = await planOfferStartService.confirmPlanOffer(me(), {
+        conversationId,
+        offerTurnId,
+      });
+
+      for (let attempt = 0; attempt < REQUIREMENT_PAGE_MAX_ATTEMPTS; attempt += 1) {
+        const [outcome] = await drainPageJobs({ attempt });
+        expect(outcome!.error?.message).toBe('folder refused');
+      }
+
+      expect(writeSpy).toHaveBeenCalledTimes(REQUIREMENT_PAGE_MAX_ATTEMPTS);
+      expect(await requirementPages()).toHaveLength(0);
+      expect(planCalls()).toHaveLength(1);
+      const stored = await rawOffer(offerTurnId);
+      expect(stored).toMatchObject({
+        confirmedSessionId: started.sessionId,
+        requirementPageFailed: true,
+      });
+      expect(stored).not.toHaveProperty('requirementPage');
+      const thread = await planChangeSessionsService.getById(me(), conversationId);
+      expect(thread.turns.find((t) => t.id === offerTurnId)!.offer!.requirementPageFailed).toBe(
+        true,
+      );
+      expect(planOfferStateOf(thread.turns, offerTurnId)).toBe('confirmed');
+      // The run it started is the conversation's, untouched by the failed save.
+      expect(thread.lastJobId).toBe(started.jobId);
+    },
+  );
+
+  it(
+    'an unprovisioned Motir account is the same failure, and the run still starts',
+    T,
+    async () => {
+      const { conversationId, offerTurnId } = await offered();
+      writeSpy.mockImplementationOnce(async () => {
+        const { SystemPrincipalNotProvisionedError } = await import('@/lib/ai/serviceAuth');
+        throw new SystemPrincipalNotProvisionedError();
+      });
+      await planOfferStartService.confirmPlanOffer(me(), { conversationId, offerTurnId });
+      const [outcome] = await drainPageJobs({ attempt: REQUIREMENT_PAGE_MAX_ATTEMPTS - 1 });
+      expect(outcome!.error).toBeDefined();
+      expect(planCalls()).toHaveLength(1);
+      expect(await rawOffer(offerTurnId)).toMatchObject({ requirementPageFailed: true });
+    },
+  );
+
+  it(
+    'a typed agreement whose page cannot be saved starts the run, and the offer reads confirmed, not superseded',
+    T,
+    async () => {
+      const { conversationId, offerTurnId, offerSeq } = await offered();
+      writeSpy.mockRejectedValue(new Error('folder refused'));
+
+      const settled = await typedYes(conversationId, offerSeq);
+      for (let attempt = 0; attempt < REQUIREMENT_PAGE_MAX_ATTEMPTS; attempt += 1) {
+        await drainPageJobs({ attempt });
+      }
+
+      expect(settled.outcome).toBe('redirected');
+      expect(planCalls()).toHaveLength(1);
+      expect(planContext()['requirement']).toEqual(REQUIREMENT);
+      expect(planContext()['requirementConfirmed']).toEqual({ conversationId, offerTurnId });
+      const thread = await planChangeSessionsService.getById(me(), conversationId);
+      expect(planOfferStateOf(thread.turns, offerTurnId)).toBe('confirmed');
+      expect(await rawOffer(offerTurnId)).toMatchObject({ requirementPageFailed: true });
+    },
+  );
+
+  it('a page recorded before the final failure is kept: the failure marks nothing', T, async () => {
     const { conversationId, offerTurnId } = await offered();
-    writeSpy.mockImplementationOnce(async () => {
-      const { SystemPrincipalNotProvisionedError } = await import('@/lib/ai/serviceAuth');
-      throw new SystemPrincipalNotProvisionedError();
-    });
-    await expect(
-      planOfferStartService.confirmPlanOffer(me(), { conversationId, offerTurnId }),
-    ).rejects.toBeInstanceOf(PlanOfferRequirementNotSavedError);
-    expect(planCalls()).toHaveLength(0);
-  });
-
-  it('a typed yes whose save fails still lands its answer and starts nothing', T, async () => {
-    const { conversationId, offerTurnId, offerSeq } = await offered();
-    writeSpy.mockRejectedValueOnce(new Error('folder refused'));
-    const yes = await aiAskService.submitTurn('Yes, go ahead.', me(), {
-      sessionId: conversationId,
-    });
-    if (!('jobId' in yes) || !yes.jobId) throw new Error('not an ask');
-    jobs.set(yes.jobId, {
-      jobId: yes.jobId,
-      status: 'succeeded',
-      result: {
-        ask: answerWith({
-          answer: 'Starting the plan.',
-          offerReply: { seq: offerSeq, kind: 'plan', decision: 'agree' },
-        }),
-      },
-      error: null,
-    });
-
-    const settled = await aiAskService.settle(yes.jobId, me(), { sessionId: conversationId });
-
-    expect(settled.outcome).toBe('answered');
-    expect(planCalls()).toHaveLength(0);
-    expect(await rawOffer(offerTurnId)).toMatchObject({ requirementSaveFailed: true });
-  });
-});
-
-describe('a start that throws after the page was written', () => {
-  it('keeps the page: the next confirm writes none and the run carries that page', T, async () => {
-    const { conversationId, offerTurnId } = await offered();
-    submitJobMock.mockImplementationOnce(async () => {
-      throw new Error('motir-ai is down');
-    });
-    await expect(
-      planOfferStartService.confirmPlanOffer(me(), { conversationId, offerTurnId }),
-    ).rejects.toThrow('motir-ai is down');
-    expect(await rawOffer(offerTurnId)).toHaveProperty('requirementPage');
-
     await planOfferStartService.confirmPlanOffer(me(), { conversationId, offerTurnId });
+    await drainPageJobs();
+    const { requirementPageSaveService } =
+      await import('@/lib/services/requirementPageSaveService');
+    const data = pageAsks()[0]!.data as Parameters<
+      typeof requirementPageSaveService.recordFailure
+    >[0];
 
-    expect(writeSpy).toHaveBeenCalledTimes(1);
-    const pages = await requirementPages();
-    expect(pages).toHaveLength(1);
-    expect(planContext()['requirementPage']).toEqual({
-      pageId: pages[0]!.id,
-      title: pages[0]!.title,
-    });
+    await requirementPageSaveService.recordFailure(data);
+    await requirementPageSaveService.record(data, { pageId: 'other', title: 'Other' });
+
+    const stored = await rawOffer(offerTurnId);
+    expect(stored).not.toHaveProperty('requirementPageFailed');
+    expect((stored!['requirementPage'] as { pageId: string }).pageId).not.toBe('other');
   });
 });
 
 describe('offers the page does not touch', () => {
   it(
-    'a no-target offer with no requirement starts as before: no writer, carried answers kept',
+    'a no-target offer with no requirement starts as before: no page asked for, carried answers kept',
     T,
     async () => {
       settledSpy.mockResolvedValue(SETTLED);
@@ -399,17 +537,18 @@ describe('offers the page does not touch', () => {
 
       await planOfferStartService.confirmPlanOffer(me(), { conversationId, offerTurnId });
 
+      expect(pageAsks()).toHaveLength(0);
       expect(writeSpy).not.toHaveBeenCalled();
       expect(planContext()).not.toHaveProperty('requirement');
-      expect(planContext()).not.toHaveProperty('requirementPage');
+      expect(planContext()).not.toHaveProperty('requirementConfirmed');
       expect(planContext()['carriedAnswers']).toBeDefined();
       const stored = await rawOffer(offerTurnId);
       expect(stored).not.toHaveProperty('requirementPage');
-      expect(stored).not.toHaveProperty('requirementSaveFailed');
+      expect(stored).not.toHaveProperty('requirementPageFailed');
     },
   );
 
-  it('a targeted offer with no requirement calls no writer and sends no page', T, async () => {
+  it('a targeted offer with no requirement asks for no page and sends no marker', T, async () => {
     const target = await workItemsService.createWorkItem(
       { projectId: fx.projectId, kind: 'task', title: 'CSV export' },
       fx.ctx,
@@ -421,50 +560,101 @@ describe('offers the page does not touch', () => {
 
     await planOfferStartService.confirmPlanOffer(me(), { conversationId, offerTurnId });
 
-    expect(writeSpy).not.toHaveBeenCalled();
+    expect(pageAsks()).toHaveLength(0);
     expect(planContext()).not.toHaveProperty('requirement');
-    expect(planContext()).not.toHaveProperty('requirementPage');
+    expect(planContext()).not.toHaveProperty('requirementConfirmed');
+  });
+
+  it('a job for an offer with no requirement writes nothing', T, async () => {
+    const { conversationId, offerTurnId } = await offered({ requirement: undefined });
+    const outcome = await new JobTestEngine({
+      function: planOfferRequirementPage,
+      events: [
+        {
+          name: 'plan-offer/requirement-page.requested',
+          data: {
+            workspaceId: fx.workspaceId,
+            projectId: fx.projectId,
+            userId: fx.ownerId,
+            conversationId,
+            offerTurnId,
+            idempotencyKey: offerTurnId,
+          },
+        },
+      ],
+    }).execute();
+    expect(outcome.result).toEqual({ saved: false });
+    expect(writeSpy).not.toHaveBeenCalled();
+  });
+
+  it('a job for an offer turn that no longer reads writes nothing', T, async () => {
+    const { conversationId } = await offered();
+    const outcome = await new JobTestEngine({
+      function: planOfferRequirementPage,
+      events: [
+        {
+          name: 'plan-offer/requirement-page.requested',
+          data: {
+            workspaceId: fx.workspaceId,
+            projectId: fx.projectId,
+            userId: fx.ownerId,
+            conversationId,
+            offerTurnId: 'no-such-turn',
+            idempotencyKey: 'no-such-turn',
+          },
+        },
+      ],
+    }).execute();
+    expect(outcome.result).toEqual({ saved: false });
+    expect(writeSpy).not.toHaveBeenCalled();
   });
 });
 
 // MOTIR-9878: the requirement is the planner's decision on a targeted offer too. Its
 // target is a reference, not the WHAT, so a targeted offer carrying a requirement is
-// stored, saved as one page on Confirm and submitted exactly as a no-target one is.
+// stored, submitted with its marker and saved as one page after the start, exactly as a
+// no-target one is.
 describe('a confirmed targeted offer with a requirement', () => {
-  it('stores it, saves one page, and sends requirement + page on the target’s run', T, async () => {
-    const target = await workItemsService.createWorkItem(
-      { projectId: fx.projectId, kind: 'task', title: 'Reports' },
-      fx.ctx,
-    );
-    const { conversationId, offerTurnId } = await offered({ targetKey: target.identifier });
-    expect(await rawOffer(offerTurnId)).toMatchObject({
-      targetKey: target.identifier,
-      requirement: REQUIREMENT,
-    });
+  it(
+    'stores it, sends requirement + marker on the target’s run, and saves one page',
+    T,
+    async () => {
+      const target = await workItemsService.createWorkItem(
+        { projectId: fx.projectId, kind: 'task', title: 'Reports' },
+        fx.ctx,
+      );
+      const { conversationId, offerTurnId } = await offered({ targetKey: target.identifier });
+      expect(await rawOffer(offerTurnId)).toMatchObject({
+        targetKey: target.identifier,
+        requirement: REQUIREMENT,
+      });
 
-    await planOfferStartService.confirmPlanOffer(me(), { conversationId, offerTurnId });
+      await planOfferStartService.confirmPlanOffer(me(), { conversationId, offerTurnId });
+      await drainPageJobs();
 
-    expect(writeSpy).toHaveBeenCalledTimes(1);
-    expect(writeSpy.mock.calls[0]![0]).toMatchObject({ requirement: REQUIREMENT });
-    const pages = await requirementPages();
-    expect(pages).toHaveLength(1);
-    const recorded = { pageId: pages[0]!.id, title: pages[0]!.title };
-    expect(planCalls()).toHaveLength(1);
-    expect(planContext()['requirement']).toEqual(REQUIREMENT);
-    expect(planContext()['requirementPage']).toEqual(recorded);
-    expect(planContext()).not.toHaveProperty('carriedAnswers');
-    expect(await rawOffer(offerTurnId)).toMatchObject({ requirementPage: recorded });
-  });
+      expect(planCalls()).toHaveLength(1);
+      expect(planContext()['requirement']).toEqual(REQUIREMENT);
+      expect(planContext()['requirementConfirmed']).toEqual({ conversationId, offerTurnId });
+      expect(planContext()).not.toHaveProperty('carriedAnswers');
+      expect(writeSpy).toHaveBeenCalledTimes(1);
+      const pages = await requirementPages();
+      expect(pages).toHaveLength(1);
+      expect(await rawOffer(offerTurnId)).toMatchObject({
+        requirementPage: { pageId: pages[0]!.id, title: pages[0]!.title },
+      });
+    },
+  );
 });
 
 describe('other entrances to submit', () => {
-  it('a plain submit still sends carried answers and no page', T, async () => {
+  it('a plain submit still sends carried answers and no marker', T, async () => {
     settledSpy.mockResolvedValue(SETTLED);
     const { conversationId } = await offered();
 
     await planChangeSessionsService.submit(me(), { sessionId: conversationId });
 
     expect(planContext()['carriedAnswers']).toBeDefined();
-    expect(planContext()).not.toHaveProperty('requirementPage');
+    expect(planContext()).not.toHaveProperty('requirementConfirmed');
+    expect(pageAsks()).toHaveLength(0);
   });
 });

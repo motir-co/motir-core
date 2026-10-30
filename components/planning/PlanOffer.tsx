@@ -392,6 +392,19 @@ export function PlanOffer({
                 ),
               })}
             </p>
+          ) : requirementOffer && offer.requirementPageFailed ? (
+            // The page is saved in the background after the start (MOTIR-10091): a save
+            // that failed every attempt costs the link, never the run, so the line takes
+            // the page link's place and asks nothing of the person.
+            <p
+              role="status"
+              className="text-xs text-(--el-text-secondary)"
+              data-testid="plan-offer-requirement-page-not-saved"
+            >
+              {t.rich('requirementPageNotSaved', {
+                lead: (chunks) => <b className="text-(--el-danger-on-surface)">{chunks}</b>,
+              })}
+            </p>
           ) : null}
         </div>
       ) : state === 'declined' ? (
@@ -463,18 +476,6 @@ export function PlanOffer({
               {declining ? t('declining') : t('decline')}
             </Button>
           </div>
-          {requirementOffer && offer.requirementSaveFailed ? (
-            // NOT the cannot-start line: nothing here is refused and Confirm stays.
-            <p
-              role="alert"
-              className="rounded-(--radius-control) border border-(--el-danger) bg-(--el-danger-surface) px-(--spacing-control-x-12) py-(--spacing-control-y-8) text-xs text-(--el-text)"
-              data-testid="plan-offer-requirement-not-saved"
-            >
-              {t.rich('requirementNotSaved', {
-                lead: (chunks) => <b className="text-(--el-danger-on-surface)">{chunks}</b>,
-              })}
-            </p>
-          ) : null}
           <p className="text-xs leading-relaxed text-(--el-text-secondary)">
             {bug
               ? `${tb('confirmHelp')} ${tb('declineHelp')}`

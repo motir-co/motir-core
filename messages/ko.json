@@ -8686,7 +8686,7 @@
       "clearEnough": "그대로 계획할 만큼 충분히 명확합니다.",
       "nothingSettled": "확정된 내용이 없어 요청을 그대로 계획합니다.",
       "requirementSaved": "요구사항 문서에 <link>{title}</link>(으)로 저장했습니다.",
-      "requirementNotSaved": "<lead>요구사항을 저장하지 못했습니다.</lead> 아무것도 시작되지 않았습니다. 확인 버튼은 그대로 사용할 수 있으니 다시 시도해 주세요."
+      "requirementPageNotSaved": "<lead>요구사항을 페이지로 저장하지 못했습니다.</lead> 계획에는 계속 이 요구사항이 사용됩니다."
     },
     "logBugOffer": {
       "label": "버그 기록 제안",
