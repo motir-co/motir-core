@@ -158,6 +158,26 @@ export const previewDeploymentRepository = {
   },
 
   /** The row that holds a host — what serving resolves a request with. */
+  /**
+   * The preview of every `(repository, pull request number)` pair one card draws, in
+   * ONE `findMany` (MOTIR-10099) — the Development rows are a list, and a read per
+   * row on a server-rendered page is the shape this exists to prevent. `tx` is
+   * REQUIRED: the table is policy-gated on the workspace binding, and an unbound
+   * read answers an empty set rather than an error. An empty pair set answers `[]`
+   * without querying.
+   */
+  async listForPullRequests(
+    pairs: readonly { repoId: string; pullRequestNumber: number }[],
+    tx: Prisma.TransactionClient,
+  ): Promise<PreviewDeployment[]> {
+    if (pairs.length === 0) return [];
+    return tx.previewDeployment.findMany({
+      where: {
+        OR: pairs.map(({ repoId, pullRequestNumber }) => ({ repoId, pullRequestNumber })),
+      },
+    });
+  },
+
   async findByHost(host: string, tx?: Prisma.TransactionClient): Promise<PreviewDeployment | null> {
     const client = tx ?? dbRead;
     return client.previewDeployment.findUnique({ where: { host } });

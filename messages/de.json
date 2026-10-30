@@ -7784,6 +7784,14 @@
         "failing": "Checks fehlgeschlagen",
         "running": "Checks laufen"
       },
+      "preview": {
+        "building": "Vorschau wird erstellt",
+        "ready": "Vorschau bereit",
+        "failed": "Vorschau fehlgeschlagen",
+        "failedReason": "Vorschau fehlgeschlagen · <tone>{reason}</tone>",
+        "closed": "Vorschau geschlossen",
+        "unknown": "Vorschau {state}"
+      },
       "linkPr": "Pull Request verknüpfen",
       "linkPrField": "Zu verknüpfender Pull Request",
       "searchPlaceholder": "Pull Requests durchsuchen…",

@@ -7778,6 +7778,14 @@
         "failing": "검사 실패",
         "running": "검사 실행 중"
       },
+      "preview": {
+        "building": "미리보기 빌드 중",
+        "ready": "미리보기 준비됨",
+        "failed": "미리보기 실패",
+        "failedReason": "미리보기 실패 · <tone>{reason}</tone>",
+        "closed": "미리보기 종료됨",
+        "unknown": "미리보기 {state}"
+      },
       "linkPr": "풀 리퀘스트 연결",
       "linkPrField": "연결할 풀 리퀘스트",
       "searchPlaceholder": "풀 리퀘스트 검색…",

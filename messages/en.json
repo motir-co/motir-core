@@ -7781,6 +7781,14 @@
         "failing": "Checks failing",
         "running": "Checks running"
       },
+      "preview": {
+        "building": "Preview building",
+        "ready": "Preview ready",
+        "failed": "Preview failed",
+        "failedReason": "Preview failed · <tone>{reason}</tone>",
+        "closed": "Preview closed",
+        "unknown": "Preview {state}"
+      },
       "linkPr": "Link pull request",
       "linkPrField": "Pull request to link",
       "searchPlaceholder": "Search pull requests…",

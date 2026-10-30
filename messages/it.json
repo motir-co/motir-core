@@ -7784,6 +7784,14 @@
         "failing": "Controlli non superati",
         "running": "Controlli in esecuzione"
       },
+      "preview": {
+        "building": "Anteprima in creazione",
+        "ready": "Anteprima pronta",
+        "failed": "Anteprima non riuscita",
+        "failedReason": "Anteprima non riuscita · <tone>{reason}</tone>",
+        "closed": "Anteprima chiusa",
+        "unknown": "Anteprima {state}"
+      },
       "linkPr": "Collega pull request",
       "linkPrField": "Pull request da collegare",
       "searchPlaceholder": "Cerca pull request…",

@@ -7775,6 +7775,14 @@
         "failing": "检查失败",
         "running": "检查运行中"
       },
+      "preview": {
+        "building": "预览构建中",
+        "ready": "预览已就绪",
+        "failed": "预览失败",
+        "failedReason": "预览失败 · <tone>{reason}</tone>",
+        "closed": "预览已关闭",
+        "unknown": "预览 {state}"
+      },
       "linkPr": "关联拉取请求",
       "linkPrField": "要关联的拉取请求",
       "searchPlaceholder": "搜索拉取请求…",

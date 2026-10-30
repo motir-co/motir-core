@@ -3059,6 +3059,9 @@ export default defineConfig({
         'lib/services/previewGateService.ts',
         'lib/repositories/previewGateAdmissionRepository.ts',
         'components/preview/PreviewGateFrame.tsx',
+        // The preview on a pull request's row (MOTIR-10099).
+        'lib/preview/url.ts',
+        'components/github/PreviewLine.tsx',
         'lib/mappers/testInstructionsMappers.ts',
         'lib/services/testInstructionsService.ts',
         'lib/services/repoDeploymentService.ts',
@@ -8147,6 +8150,18 @@ export default defineConfig({
           statements: 90,
         },
         'components/preview/PreviewGateFrame.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/preview/url.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/github/PreviewLine.tsx': {
           lines: 90,
           functions: 90,
           branches: 90,

@@ -7784,6 +7784,14 @@
         "failing": "Comprobaciones fallidas",
         "running": "Comprobaciones en ejecución"
       },
+      "preview": {
+        "building": "Vista previa en construcción",
+        "ready": "Vista previa lista",
+        "failed": "Vista previa fallida",
+        "failedReason": "Vista previa fallida · <tone>{reason}</tone>",
+        "closed": "Vista previa cerrada",
+        "unknown": "Vista previa {state}"
+      },
       "linkPr": "Vincular pull request",
       "linkPrField": "Pull request que vincular",
       "searchPlaceholder": "Buscar pull requests…",

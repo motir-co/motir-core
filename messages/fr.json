@@ -7784,6 +7784,14 @@
         "failing": "Vérifications en échec",
         "running": "Vérifications en cours"
       },
+      "preview": {
+        "building": "Aperçu en construction",
+        "ready": "Aperçu prêt",
+        "failed": "Échec de l’aperçu",
+        "failedReason": "Échec de l’aperçu · <tone>{reason}</tone>",
+        "closed": "Aperçu fermé",
+        "unknown": "Aperçu {state}"
+      },
       "linkPr": "Lier une pull request",
       "linkPrField": "Pull request à lier",
       "searchPlaceholder": "Rechercher des pull requests…",

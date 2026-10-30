@@ -7784,6 +7784,14 @@
         "failing": "Checks mislukt",
         "running": "Checks bezig"
       },
+      "preview": {
+        "building": "Voorbeeld wordt gebouwd",
+        "ready": "Voorbeeld klaar",
+        "failed": "Voorbeeld mislukt",
+        "failedReason": "Voorbeeld mislukt · <tone>{reason}</tone>",
+        "closed": "Voorbeeld gesloten",
+        "unknown": "Voorbeeld {state}"
+      },
       "linkPr": "Pull request koppelen",
       "linkPrField": "Te koppelen pull request",
       "searchPlaceholder": "Pull requests zoeken…",

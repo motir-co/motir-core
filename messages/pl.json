@@ -7784,6 +7784,14 @@
         "failing": "Testy nie przechodzą",
         "running": "Testy w toku"
       },
+      "preview": {
+        "building": "Podgląd w budowie",
+        "ready": "Podgląd gotowy",
+        "failed": "Podgląd nie powiódł się",
+        "failedReason": "Podgląd nie powiódł się · <tone>{reason}</tone>",
+        "closed": "Podgląd zamknięty",
+        "unknown": "Podgląd {state}"
+      },
       "linkPr": "Powiąż pull request",
       "linkPrField": "Pull request do powiązania",
       "searchPlaceholder": "Szukaj pull requestów…",

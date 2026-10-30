@@ -7784,6 +7784,14 @@
         "failing": "Verificações falhando",
         "running": "Verificações em execução"
       },
+      "preview": {
+        "building": "Pré-visualização em construção",
+        "ready": "Pré-visualização pronta",
+        "failed": "Falha na pré-visualização",
+        "failedReason": "Falha na pré-visualização · <tone>{reason}</tone>",
+        "closed": "Pré-visualização encerrada",
+        "unknown": "Pré-visualização {state}"
+      },
       "linkPr": "Vincular pull request",
       "linkPrField": "Pull request a vincular",
       "searchPlaceholder": "Pesquisar pull requests…",

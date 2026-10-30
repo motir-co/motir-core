@@ -127,6 +127,7 @@ function pr(repo: string, state: LinkedPullRequestDto['state']): LinkedPullReque
     headSha: null,
     url: `https://github.com/moooon-B-V/${repo}/pull/7`,
     githubReview: null,
+    preview: null,
     baseRef: 'main',
     conflicted: false,
   };

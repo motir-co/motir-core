@@ -7781,6 +7781,14 @@
         "failing": "チェック失敗",
         "running": "チェック実行中"
       },
+      "preview": {
+        "building": "プレビューをビルド中",
+        "ready": "プレビュー準備完了",
+        "failed": "プレビューに失敗",
+        "failedReason": "プレビューに失敗 · <tone>{reason}</tone>",
+        "closed": "プレビュー終了",
+        "unknown": "プレビュー {state}"
+      },
       "linkPr": "プルリクエストをリンク",
       "linkPrField": "リンクするプルリクエスト",
       "searchPlaceholder": "プルリクエストを検索…",
