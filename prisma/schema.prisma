@@ -472,6 +472,8 @@ model User {
   environmentConfigChanges         EnvironmentConfigChange[]           @relation("EnvironmentConfigChangeActor")
   /// Production releases this user restored by a rollback (MOTIR-10035). SetNull on delete.
   hostedReleasesRestored           HostedRelease[]                     @relation("HostedReleaseRestoredBy")
+  /// Production releases of a ref this user asked for (MOTIR-10103). SetNull on delete.
+  hostedReleasesRequested          HostedRelease[]                     @relation("HostedReleaseRequestedBy")
 
   @@index([lastActiveProjectId])
   @@map("user")
@@ -12265,6 +12267,14 @@ model HostedRelease {
   commitSha          String             @map("commit_sha")
   /// The tag or branch the release was asked for, when it was asked by ref.
   ref                String?
+  /// The first line of the released commit's message, as the build's run
+  /// reported it; null when it did not (MOTIR-10103).
+  commitSubject      String?            @map("commit_subject")
+  /// The pull request a merge release came from, when its merge commit names
+  /// one (MOTIR-10103).
+  pullRequestNumber  Int?               @map("pull_request_number")
+  /// Who asked for a release of a ref (MOTIR-10103); null for a merge.
+  requestedById      String?            @map("requested_by_id")
   cause              HostedReleaseCause
   state              HostedReleaseState @default(building)
   artifactRef        String?            @map("artifact_ref")
@@ -12298,10 +12308,12 @@ model HostedRelease {
   currentOf   HostedApplication? @relation("HostedApplicationCurrentRelease")
   previousOf  HostedApplication? @relation("HostedApplicationPreviousRelease")
   restoredBy  User?              @relation("HostedReleaseRestoredBy", fields: [restoredById], references: [id], onDelete: SetNull)
+  requestedBy User?              @relation("HostedReleaseRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
 
   @@index([applicationId, createdAt])
   @@index([workspaceId])
   @@index([restoredById])
+  @@index([requestedById])
   @@map("hosted_release")
 }
 

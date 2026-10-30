@@ -859,7 +859,9 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // section finding — advisory channel only, outside the verdict.
     // Re-pinned for MOTIR-9938, summary UNCHANGED: the mislabelled-link advisory
     // now scans the explanation too — still advisory, outside the verdict.
-    descriptionFingerprint: 'f5357970c9f9',
+    // Re-pinned for MOTIR-10112, summary UNCHANGED: `likely-self-blocking-design`
+    // now exempts `type: test` beside `type: design` — advisory channel only.
+    descriptionFingerprint: '2601f9f3a510',
   },
   get_plan_authoring_state: {
     // MOTIR-9821: the live read an author session makes before it wires an edge onto a sibling.
@@ -899,7 +901,9 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // now scans proposed explanations too — beside the verdict, never in it.
     // Re-pinned for MOTIR-10087, summary UNCHANGED: `advisories` widens to every
     // shape family on the plan's proposals — still beside the verdict, never in it.
-    descriptionFingerprint: '5979fea073d6',
+    // Re-pinned for MOTIR-10106, summary UNCHANGED: `rescopeWarnings` (a `modify`
+    // approve will send back from built work) rides beside the verdict, never in it.
+    descriptionFingerprint: 'ad45344ec714',
   },
   get_plan_status: {
     // Re-pinned for MOTIR-3064, summary UNCHANGED and deliberately so: the tool

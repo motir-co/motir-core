@@ -1286,77 +1286,55 @@ const DESIGN_ASSET_MATCHERS: ReadonlyArray<RegExp> = [
   /\bdesign assets?\b/i,
 ];
 
-// ── A TEST DOUBLE is not a drawing ───────────────────────────────────────────
-// A bare `mock` is the commonest export tell above — and the commonest word for
-// a TEST DOUBLE in every test card's criteria: *"asserted on the boundary mock"*,
-// *"no test mocks the helper wholesale"*, *"the lane's `E2E_TEST_BILLING`
-// boundary mock"*. Read as a design asset, such a criterion becomes the DESIGN
-// half of the finding, and the card's ordinary render criterion the SURFACE
-// half, so a test or route card that draws nothing is reported as its own
-// design blocker. Plan `cmvez6dl300gmhmrffl127q95` (2026-10-19) carried four
-// such cards — MOTIR-8637, MOTIR-8640, MOTIR-8643 and the larger-pool E2E —
-// and `check-plan` read each advisory as a guard #3 stop.
+// ── A bare `mock` is a TEST DOUBLE unless it is plainly a DRAWING ────────────
+// A bare `mock` is the commonest word for a TEST DOUBLE in every test card's
+// criteria: *"asserted on the boundary mock"*, *"no test mocks the helper
+// wholesale"*, *"the tests mock only the auth seam"*. Read as a design asset,
+// such a criterion becomes the DESIGN half of the finding, and the card's
+// ordinary render criterion the SURFACE half, so a test or route card that
+// draws nothing is reported as its own design blocker — a hard stop for the
+// runner (guard #3).
 //
-// So a bare `mock` counts only on a line that does not use it as a test double:
-// the verb (*mocks the*, *mocked*, *mocking*, `vi.mock`), a double's noun
-// before it (*boundary mock*, *fetch mock*), the thing it stands in for after
-// it (*mock client*, *mock module*), a module specifier or path after the verb
-// (*mocks @/lib/foo*, *mocks ./foo*, *mocks lib/x* — MOTIR-9077), or an
-// assertion read off it (*asserted on the mock*). `*.mock.html` and *mockup* stay tells on any line, so a design
-// card's export criterion is unaffected.
-//
-// ⚠️ The assertion arm keys on the GRAMMAR of a double, not on its adjective
-// (MOTIR-9263). *"(asserted by the shared mock's argument identity)"* fired as a
-// design asset: the arm took only *asserted ON*, and its noun-before list had no
-// *shared* — and growing that list one adjective at a time is the fix this
-// detector has already had five times. So the arm takes *asserted / checked BY*
-// as well as *ON*, with any one modifier before the mock, and a POSSESSIVE mock
-// followed by what a double records (*the mock's arguments / calls / identity /
-// invocations*) is a double too. *"the mock's P3 panel"* names a drawing's part
-// and stays a tell.
-//
-// ⚠️ A `mock` INSIDE A FILE NAME is judged by what the FILE is, not by the words
-// around it (MOTIR-10088). *"`lib/test-ai-jobs-mock.ts` passes a declared
-// `offer.requirement`…"* fired as a design asset — the third filed false positive
-// of this tell after MOTIR-9077 and MOTIR-9263 — because `\b` splits
-// `jobs-mock.ts` at the hyphen and the dot, and no phrasing arm can know that the
-// word is part of a path. So {@link stripTestDoubleFileTokens} removes every token
-// that is a CODE file (`.ts`, `.tsx`, `.py`, …) or sits under a test or helper
-// directory (`tests/`, `__mocks__/`, `helpers/`, …) before the bare-`mock` test
-// runs. A drawing never has that shape: it is a `design/` path or a `.mock.html`
-// / `.pen` file, which {@link DESIGN_ASSET_MATCHERS} read first and on the whole
-// line. The phrasing arms still read the WHOLE line, because *"mocks lib/x"* is
-// a double by its verb and its path together.
-const BARE_MOCK_RE = /\bmocks?\b/i;
+// ⚠️ SO THE DEFAULT IS INVERTED (MOTIR-10112). The detector used to count every
+// bare `mock` as a drawing and list the phrasings that made it a double: the
+// verb (*mocks the*), a double's noun before it (*boundary mock*), a module
+// path after it (MOTIR-9077), an assertion read off it (MOTIR-9263), a code
+// file around it (MOTIR-10088). Every one of those fixes listed one more
+// phrasing, and the next phrasing fired again: *"mock ONLY the seam"*, *"as the
+// other v1 tests mock."* (MOTIR-10112, the fourth filed false positive). A
+// double has open-ended phrasing; a DRAWING has a small, closed one. So a bare
+// `mock` is a double by default, and counts as a design asset only in a drawing
+// sense — {@link DRAWING_MOCK_RES}. Every design FILE (`design/…`,
+// `.mock.html`, `.pen`) and *mockup* stay caught by
+// {@link DESIGN_ASSET_MATCHERS}, on any line, whatever the prose around them.
+
+/** A word that DRAWS or SHOWS — what a drawing does and a test double does not. */
+const DRAWING_VERB = String.raw`(?:shows?|shown|draws?|drew|drawn|redrawn|renders?|depicts?|illustrates?|specifies|lays\s+out)`;
+
+/** A part of a drawing — what a mock HAS when it is a picture. */
+const DRAWING_PART = String.raw`(?:panels?|states?|screens?|frames?|layouts?|boards?|views?|surfaces?|pages?|dialogs?|modals?|columns?|rows?)`;
 
 /**
- * A file-like token, slash or not: word characters plus the punctuation a module
- * path carries. Wider than {@link PATH_TOKEN_RE}, which needs a `/`.
+ * The drawing senses of a bare `mock`. Each names the mock as a NOUN beside a
+ * visual word; anything else a line says about a mock is a test double.
  */
-const FILE_TOKEN_RE = /[\w@.()[\]/-]+/g;
-
-/** A file whose extension makes it code, data or a test snapshot — never a drawing. */
-const CODE_FILE_RE =
-  /\.(?:[cm]?[jt]sx?|py|rb|go|rs|java|kts?|swift|php|cs|sh|sql|json|ya?ml|toml|snap)$/i;
-
-/** A directory a test double lives under. A drawing lives under `design/`. */
-const TEST_DOUBLE_DIR_RE =
-  /(?:^|\/)(?:__mocks__|__tests__|__fixtures__|tests?|specs?|e2e|fixtures|helpers|test-utils|testing)\//i;
-
-/**
- * The line with every token that names a test double BY ITS FILE removed — a
- * code file, or any path under a test or helper directory — so the bare-`mock`
- * tell reads only the prose around it (MOTIR-10088).
- */
-export function stripTestDoubleFileTokens(text: string): string {
-  return text.replace(FILE_TOKEN_RE, (token) => {
-    const path = token.replace(/[.)\]]+$/, '');
-    return CODE_FILE_RE.test(path) || TEST_DOUBLE_DIR_RE.test(path) ? ' ' : token;
-  });
-}
-
-const TEST_DOUBLE_MOCK_RE =
-  /\b(?:vi|jest)\.mock\b|\bmock(?:ed|ing)\b|\bmocks?\s+(?:the|a|an|its|every|each|out)\b|\b(?:boundary|test|stub|fake|spy|http|fetch|network|transport|server|client|module)\s+mocks?\b|\b(?:asserted|asserts?|recorded|seen|checked|counted)\s+(?:on|by)\s+(?:the\s+)?(?:[\w-]+\s+)?mocks?\b|\bmock['’]s\s+(?:arguments?|calls?|identity|identities|invocations?)\b|\bmocks?\s+(?:@\/|\.{1,2}\/|(?!and\/or\b)[\w@.()[\]-]+\/[\w@.()[\]-]+)|\bmocks?\s+(?:clients?|servers?|fetch|calls?|responses?|requests?|modules?|helpers?|leaf|leaves|routes?|boundar(?:y|ies)|transports?|gateways?|adapters?|implementations?|functions?|handlers?)\b/i;
+const DRAWING_MOCK_RES: ReadonlyArray<RegExp> = [
+  // *"the mock shows / draws / renders …"*, an adverb allowed between.
+  new RegExp(String.raw`\bmocks?\s+(?:\w+ly\s+)?${DRAWING_VERB}\b`, 'i'),
+  // *"the mock's panel / state / screen …"*, one modifier allowed (*P3 panel*).
+  new RegExp(String.raw`\bmock['’]s\s+(?:[\w-]+\s+)?${DRAWING_PART}\b`, 'i'),
+  // *"each panel is drawn in the mock"*.
+  new RegExp(String.raw`\b${DRAWING_VERB}\s+(?:in|on|by)\s+(?:the\s+)?(?:[\w-]+\s+)?mocks?\b`, 'i'),
+  // *"the mocks of every state"*.
+  new RegExp(
+    String.raw`\bmocks?\s+of\s+(?:the\s+|every\s+|each\s+|all\s+)?(?:[\w-]+\s+)?${DRAWING_PART}\b`,
+    'i',
+  ),
+  // A mock with its EXPORT: *"the export of the mock"*, *"the mock and/or the export"*.
+  /\bexports?\s+of\s+(?:the\s+)?mocks?\b|\bmocks?\s+and(?:\/or)?\s+(?:the\s+|its\s+)?exports?\b/i,
+  // A DELTA mock is this corpus's name for a drawing that amends one.
+  /\bdelta\s+mocks?\b/i,
+];
 
 // ── The AMENDMENT, not only the NEW ASSET (MOTIR-4477) ───────────────────────
 // Every matcher above is an ASSET tell — a file, a path, or a word for a
@@ -1513,7 +1491,7 @@ const COMPONENT_PATH_RE = /[A-Za-z0-9_.@()[\]-]+(?:\/[A-Za-z0-9_.@()[\]-]+)*\.[j
  */
 export function namesDesignAsset(text: string): boolean {
   if (DESIGN_ASSET_MATCHERS.some((re) => re.test(text))) return true;
-  return BARE_MOCK_RE.test(stripTestDoubleFileTokens(text)) && !TEST_DOUBLE_MOCK_RE.test(text);
+  return DRAWING_MOCK_RES.some((re) => re.test(text));
 }
 
 /**
@@ -1552,11 +1530,16 @@ export function namesRenderedSurface(text: string): boolean {
  * card's own type is insensitive to which sentence the criterion used, so it is
  * the caller's third scope test beside `hasChildren` and `hasDesignBlocker`.
  *
+ * A `type: test` card is exempt too (MOTIR-10112): it writes tests and never
+ * draws a design, so the finding's remedy — lift the design criterion onto its
+ * own card — has nothing to lift. Its criteria name test doubles constantly,
+ * which is exactly the vocabulary the prose predicate has misread four times.
+ *
  * Exported so the scope is asserted DIRECTLY rather than only through a fixture
  * a later widening of the prose predicate could silently re-open.
  */
 export function isSelfBlockingDesignCheckExempt(type: string | null | undefined): boolean {
-  return type === 'design';
+  return type === 'design' || type === 'test';
 }
 
 /** The SELF-BLOCKING-DESIGN finding: the two criteria that must not share a card. */

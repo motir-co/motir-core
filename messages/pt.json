@@ -4228,10 +4228,12 @@
         "rolledBack": "Revertida"
       },
       "trigger": {
+        "merge": "Merge de #{number}",
         "mergeDefault": "Merge na branch padrão",
         "redeploy": "Novo deploy · configurações de produção alteradas",
         "rollback": "Restaurada por reversão · {name}",
         "rollbackUnnamed": "Restaurada por reversão",
+        "ref": "Deploy de {ref} · {name}",
         "refUnnamed": "Deploy de {ref}"
       },
       "address": {

@@ -4228,10 +4228,12 @@
         "rolledBack": "롤백됨"
       },
       "trigger": {
+        "merge": "#{number} 병합",
         "mergeDefault": "기본 브랜치로 병합",
         "redeploy": "재배포 · 프로덕션 설정 변경",
         "rollback": "롤백으로 복원 · {name}",
         "rollbackUnnamed": "롤백으로 복원",
+        "ref": "{ref} 배포 · {name}",
         "refUnnamed": "{ref} 배포"
       },
       "address": {

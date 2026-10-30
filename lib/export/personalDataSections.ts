@@ -756,11 +756,12 @@ export const PERSONAL_DATA_SECTIONS: readonly PersonalDataSection[] = [
     model: 'hostedRelease',
     tier: 'tenant',
     // `restored_by_id` records WHO rolled production back to this release
-    // (Story MOTIR-9797 · MOTIR-10035). A SetNull-preserved attribution of an
-    // act to a person, the same shape as `approval_gate.decidedById`, so it is
+    // (Story MOTIR-9797 · MOTIR-10035) and `requested_by_id` who asked for a
+    // release of a ref (MOTIR-10103). SetNull-preserved attributions of an act
+    // to a person, the same shape as `approval_gate.decidedById`, so they are
     // exported rather than excluded. A release a merge made carries no actor.
-    basis: 'Production releases the reader rolled back to.',
-    where: (userId) => ({ restoredById: userId }),
+    basis: 'Production releases the reader rolled back to or asked for.',
+    where: (userId) => ({ OR: [{ restoredById: userId }, { requestedById: userId }] }),
   },
 ];
 

@@ -40,7 +40,8 @@ import type {
   WorkItemValidityDto,
 } from '@/lib/dto/workItems';
 import { isMislabelledLinkAdvisory } from '@/lib/dto/workItems';
-import type { PlanValidityDto, PlanWithItemsDto } from '@/lib/dto/plans';
+import type { PlanValidityDto, PlanWithItemsDto, ProposalRescopeWarningDto } from '@/lib/dto/plans';
+import { proposalRescopeWarningsService } from '@/lib/services/proposalRescopeWarningsService';
 import type { SectionFindingDto } from '@/lib/dto/workItems';
 import { sectionFindingsFor } from '@/lib/workItems/sections/validity';
 import type { SprintBlockerDto, SprintValidityDto } from '@/lib/dto/sprints';
@@ -1040,6 +1041,31 @@ export const planValidityService = {
     return advisories.filter(
       (a): a is WorkItemProseShapeAdvisoryDto =>
         a.kind === 'shape' && (!isMislabelledLinkAdvisory(a) || bodyItems.has(a.item)),
+    );
+  },
+
+  /**
+   * Every `modify` on the plan that approve will send back from built work
+   * (MOTIR-10106) — the write doors' `rescopeWarnings`, asked of the whole plan so
+   * a close sees any that remain. Beside the verdict, never part of it: a re-scope
+   * is legitimate when what the card delivers changes. Read through the same gate
+   * as the projection (`caller: 'system'` keeps the browse floor alone).
+   */
+  async projectedRescopeWarnings(
+    planId: string,
+    ctx: ServiceContext,
+    opts: { caller?: 'actor' | 'system' } = {},
+  ): Promise<ProposalRescopeWarningDto[]> {
+    const plan =
+      opts.caller === 'system'
+        ? await plansService.getPlan(planId, ctx)
+        : await plansService.getPlanForReader(planId, ctx);
+    return proposalRescopeWarningsService.forProposals(
+      plan.items,
+      undefined,
+      (item) => `the \`modify\` of work item ${item.workItemId ?? '(unknown)'}`,
+      plan.projectId,
+      ctx,
     );
   },
 

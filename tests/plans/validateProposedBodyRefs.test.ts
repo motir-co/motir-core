@@ -184,6 +184,8 @@ describe('judgeBodyLinks', () => {
     thisPlanAddIds: new Set(['pi_here']),
     becameCard: new Map([['pi_old', 'cm_card']]),
     cardIds: new Set(['cm_card', 'cm_other']),
+    knownPrefixes: new Set(['MOTIR', 'ACME']),
+    cardByKey: new Map([['MOTIR-12', 'cm_twelve']]),
   };
   const judge = (descriptionMd: string) =>
     judgeBodyLinks(findBodyLinkCandidates({ descriptionMd }), known);
@@ -212,9 +214,7 @@ describe('judgeBodyLinks', () => {
   });
 
   it('names the canonical forms when nothing resolves, and leaves an ordinary card link alone', () => {
-    const [unknown, noId] = judge(
-      '[g](motir-ref:pi_gone) [n](motir-ref:<id>) [c](motir:cm_other) [z](motir:nothing)',
-    );
+    const [unknown, noId] = judge('[g](motir-ref:pi_gone) [n](motir-ref:<id>) [c](motir:cm_other)');
     expect(unknown).toMatchObject({
       correctedLink: null,
       canonicalForms: [...CANONICAL_ITEM_LINK_FORMS],
@@ -222,7 +222,33 @@ describe('judgeBodyLinks', () => {
     expect(unknown!.reason).toContain('pi_gone');
     expect(noId).toMatchObject({ link: '[n](motir-ref:<id>)', correctedLink: null });
     expect(noId!.reason).toContain('names no id');
-    expect(judge('[c](motir:cm_other) [z](motir:nothing)')).toEqual([]);
+    expect(judge('[c](motir:cm_other)')).toEqual([]);
+  });
+
+  // Bug MOTIR-10111 — a `motir:` link whose id names nothing at all.
+  it('warns a card link that names no card, corrected from the one key its label names', () => {
+    const link = '[MOTIR-12](motir:cmvlr0b0000000000000000000)';
+    const [w] = judge(`Scope: ${link}.`);
+    expect(w).toMatchObject({ link, correctedLink: '[MOTIR-12](motir:cm_twelve)' });
+    expect(w!.canonicalForms).toBeUndefined();
+    expect(w!.reason).toContain('cmvlr0b0000000000000000000');
+    expect(w!.reason).toContain('MOTIR-12');
+    // The key is read in any case, and the label's own wording is kept.
+    expect(judge('[see motir-12](motir:nope)')).toEqual([
+      expect.objectContaining({ correctedLink: '[see motir-12](motir:cm_twelve)' }),
+    ]);
+  });
+
+  it('names the canonical forms when the label names no key, several keys, or a key it cannot resolve', () => {
+    for (const label of ['the turn-on card', 'MOTIR-12 and MOTIR-13', 'MOTIR-99', 'UTF-8']) {
+      expect(judge(`[${label}](motir:nothing)`)).toEqual([
+        expect.objectContaining({
+          link: `[${label}](motir:nothing)`,
+          correctedLink: null,
+          canonicalForms: [...CANONICAL_ITEM_LINK_FORMS],
+        }),
+      ]);
+    }
   });
 
   it('prints a warning as one line, with the correction or the canonical forms', () => {

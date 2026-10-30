@@ -10,6 +10,7 @@ import type { HostedReleaseDto } from '@/lib/dto/hostedApplications';
 import { PUBLIC_ADDRESS_HREF } from '@/lib/hosting/productionRoom';
 import {
   CommitLabel,
+  CommitSubject,
   ReleaseStatePill,
   ReleaseTime,
   ReleaseTriggerLine,
@@ -49,6 +50,7 @@ export function CurrentReleaseCard({
             </p>
             <span className="flex min-w-0 items-baseline gap-2">
               <CommitLabel sha={release.commitSha} />
+              <CommitSubject subject={release.commitSubject} />
             </span>
           </div>
           <ReleaseStatePill release={release} />

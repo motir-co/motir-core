@@ -57,6 +57,16 @@ On a failure the step log shows why (a migrate exit code or stop reason with
 the last 50 migrate log lines, or the services' rollout states) and that every
 service is back on its previous revision.
 
+A service another deployer moves while the roll waits is the one exception
+(MOTIR-10117). A motir-infra deploy that changes a service's task definition
+makes its own revision PRIMARY. The roll then reports that service
+`SUPERSEDED`, fails without recording the digest, and leaves the service on
+the other deployer's revision. Forcing the previous revision back would undo
+the infra change, and every later deploy would copy the stale revision
+forward. The log names the service and the revision it was left on. Re-run the
+workflow once the other deploy has finished: it copies the revision each
+service runs now.
+
 The roll registers each service's next revision by copying the one it runs now,
 with only the image changed. So before it migrates or changes anything, the
 deploy refuses a service whose revision sets `MOTIR_BREACH_ENABLED` on a

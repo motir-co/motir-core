@@ -2,11 +2,12 @@ import type { PlanItemPatch } from '@/lib/dto/plans';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 import { PLANNING_STATUS_KEY } from '@/lib/planChange/targetLock';
 import { isMarkOnlyPatch } from '@/lib/plans/markOnlyPatch';
-import { patchRescopes } from '@/lib/plans/rescopeReset';
+import { patchRescopes, type RescopeTarget } from '@/lib/plans/rescopeReset';
 import {
   RESCOPE_OUTCOME_KEYS,
   modifyTargetStatusFor,
   priorStatusOf,
+  type ModifyTargetDecision,
 } from '@/lib/plans/rescopeStatus';
 import { RESTING_BLOCKED_KEY, RESTING_TODO_KEY } from '@/lib/plans/restingStatus';
 
@@ -14,7 +15,54 @@ import { RESTING_BLOCKED_KEY, RESTING_TODO_KEY } from '@/lib/plans/restingStatus
 // reason `rescopeStatus.ts` is one: it must say exactly what the approve does, and
 // a pure function is the shape a unit test pins without a database.
 
-type RescopeTarget = Parameters<typeof patchRescopes>[1];
+type StatusByKey = ReadonlyMap<string, Pick<WorkflowStatusDto, 'key' | 'label' | 'category'>>;
+
+/** What a `modify` target's park, and the plan around it, tell the status rule. */
+export interface PlanStatusContext {
+  park?: { priorStatus: string; statusHeld: boolean; planId: string | null } | undefined;
+  gainsChildren: boolean;
+}
+
+/** One target's status decision, with the statuses it was read from. */
+export interface ModifyStatusRead {
+  decision: ModifyTargetDecision;
+  /** The target's status as it reads now. */
+  from: Pick<WorkflowStatusDto, 'key' | 'label' | 'category'>;
+  /** The status it held before any park — what the decision was asked about. */
+  priorStatus: string;
+  prior: Pick<WorkflowStatusDto, 'key' | 'label' | 'category'> | undefined;
+}
+
+/**
+ * THE ONE READ of what approve will do to a `modify` target's status, before the
+ * press — shared by the review's status row ({@link planStatusChangeOf}) and the
+ * write doors' re-scope warning (`rescopeWarning.ts`, MOTIR-10106), so the planner
+ * is warned exactly when the reviewer is shown the move. `null` when the target's
+ * status is not in the workflow.
+ */
+export function readModifyStatus(
+  patch: PlanItemPatch,
+  target: RescopeTarget & { status: string },
+  statusByKey: StatusByKey,
+  context: PlanStatusContext,
+): ModifyStatusRead | null {
+  const from = statusByKey.get(target.status);
+  if (!from) return null;
+  const priorStatus = priorStatusOf(target.status, context.park);
+  const prior = statusByKey.get(priorStatus);
+  const markOnly = isMarkOnlyPatch(patch);
+  const decision = modifyTargetStatusFor({
+    priorStatus,
+    priorCategory: prior?.category ?? null,
+    rescopes: !markOnly && patchRescopes(patch, target),
+    markOnly,
+    gainsChildren: context.gainsChildren,
+    // The outcome is named, not predicted, so neither live read is made here.
+    hasOpenBlocker: false,
+    hasLiveRun: false,
+  });
+  return { decision, from, priorStatus, prior };
+}
 
 /** The `status` change row — the shape `PlanItemChangeDto` carries for it. */
 export interface PlanStatusChangeRow {
@@ -25,6 +73,18 @@ export interface PlanStatusChangeRow {
 
 /** "A or B", "A, B, or C" — the reviewer's list of possible outcomes. */
 const OR_LIST = new Intl.ListFormat('en', { style: 'long', type: 'disjunction' });
+
+/**
+ * The statuses a re-scope can land on, as the reader's list — `To Do, Blocked, or
+ * In Progress` — or `null` when the workflow has none of them. The review row and
+ * the write door's warning both name the outcome set with it.
+ */
+export function rescopeOutcomesText(statusByKey: StatusByKey): string | null {
+  const labels = RESCOPE_OUTCOME_KEYS.map((k) => statusByKey.get(k)?.label).filter(
+    (l): l is string => Boolean(l),
+  );
+  return labels.length > 0 ? OR_LIST.format(labels) : null;
+}
 
 /**
  * THE STATUS ROW — the one row no patch key produces, because the approve DERIVES
@@ -51,39 +111,24 @@ const OR_LIST = new Intl.ListFormat('en', { style: 'long', type: 'disjunction' }
 export function planStatusChangeOf(
   patch: PlanItemPatch,
   target: RescopeTarget & { status: string },
-  statusByKey: ReadonlyMap<string, Pick<WorkflowStatusDto, 'key' | 'label' | 'category'>>,
-  context: {
-    park?: { priorStatus: string; statusHeld: boolean; planId: string | null } | undefined;
-    gainsChildren: boolean;
-  },
+  statusByKey: StatusByKey,
+  context: PlanStatusContext,
 ): PlanStatusChangeRow | null {
-  const from = statusByKey.get(target.status);
-  if (!from) return null;
-  const priorStatus = priorStatusOf(target.status, context.park);
-  const prior = statusByKey.get(priorStatus);
-  const markOnly = isMarkOnlyPatch(patch);
-  const decision = modifyTargetStatusFor({
-    priorStatus,
-    priorCategory: prior?.category ?? null,
-    rescopes: !markOnly && patchRescopes(patch, target),
-    markOnly,
-    gainsChildren: context.gainsChildren,
-    // The outcome is named, not predicted, so neither live read is made here.
-    hasOpenBlocker: false,
-    hasLiveRun: false,
-  });
+  const read = readModifyStatus(patch, target, statusByKey, context);
+  if (!read) return null;
+  const { decision, from, priorStatus, prior } = read;
   const labelsOf = (keys: readonly string[]) =>
     keys.map((k) => statusByKey.get(k)?.label).filter((l): l is string => Boolean(l));
   const oneOf = (labels: string[]) => OR_LIST.format(labels);
 
   // A re-scope implies the prior status is the workflow's own: its category was read off it.
   if (decision.kind === 'rescope') {
-    const outcomes = labelsOf(RESCOPE_OUTCOME_KEYS);
-    if (outcomes.length === 0) return null;
+    const outcomes = rescopeOutcomesText(statusByKey);
+    if (outcomes === null) return null;
     return {
       field: 'status',
       from: from.label,
-      to: `${oneOf(outcomes)} (re-scoped while ${prior!.label}; decided when this plan is approved)`,
+      to: `${outcomes} (re-scoped while ${prior!.label}; decided when this plan is approved)`,
     };
   }
   if (target.status !== PLANNING_STATUS_KEY) return null;

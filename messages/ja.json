@@ -4228,10 +4228,12 @@
         "rolledBack": "ロールバック済み"
       },
       "trigger": {
+        "merge": "#{number} のマージ",
         "mergeDefault": "デフォルトブランチへのマージ",
         "redeploy": "再デプロイ · 本番設定の変更",
         "rollback": "ロールバックで復元 · {name}",
         "rollbackUnnamed": "ロールバックで復元",
+        "ref": "{ref} のデプロイ · {name}",
         "refUnnamed": "{ref} のデプロイ"
       },
       "address": {

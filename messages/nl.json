@@ -4228,10 +4228,12 @@
         "rolledBack": "Teruggedraaid"
       },
       "trigger": {
+        "merge": "Merge van #{number}",
         "mergeDefault": "Merge naar de standaardbranch",
         "redeploy": "Opnieuw gedeployd · productie-instellingen gewijzigd",
         "rollback": "Hersteld door terugdraaien · {name}",
         "rollbackUnnamed": "Hersteld door terugdraaien",
+        "ref": "Deploy van {ref} · {name}",
         "refUnnamed": "Deploy van {ref}"
       },
       "address": {

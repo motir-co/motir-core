@@ -4228,10 +4228,12 @@
         "rolledBack": "已回滚"
       },
       "trigger": {
+        "merge": "合并 #{number}",
         "mergeDefault": "合并到默认分支",
         "redeploy": "重新部署 · 生产设置已更改",
         "rollback": "由回滚恢复 · {name}",
         "rollbackUnnamed": "由回滚恢复",
+        "ref": "部署 {ref} · {name}",
         "refUnnamed": "部署 {ref}"
       },
       "address": {

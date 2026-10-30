@@ -4228,10 +4228,12 @@
         "rolledBack": "Revertida"
       },
       "trigger": {
+        "merge": "Merge de #{number}",
         "mergeDefault": "Merge en la rama predeterminada",
         "redeploy": "Redespliegue · cambió la configuración de producción",
         "rollback": "Restaurada por reversión · {name}",
         "rollbackUnnamed": "Restaurada por reversión",
+        "ref": "Despliegue de {ref} · {name}",
         "refUnnamed": "Despliegue de {ref}"
       },
       "address": {

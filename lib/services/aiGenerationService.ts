@@ -29,6 +29,7 @@ import type {
   CorrectProposalInput,
   PlanItemDto,
   ProposalLinkWarningDto,
+  ProposalRescopeWarningDto,
   PlanNarrationDto,
   PlanStepDto,
   PlanStepProviderWaitDto,
@@ -569,6 +570,7 @@ export const aiGenerationService = {
     planned: boolean;
     released?: boolean;
     warnings?: ProposalLinkWarningDto[];
+    rescopeWarnings?: ProposalRescopeWarningDto[];
   }> {
     const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       planRepository.findBySourceJobId(jobId, ctx.workspaceId, tx),
@@ -596,7 +598,11 @@ export const aiGenerationService = {
     let createdIds: string[] = [];
     // The item links this append KEPT that would ship dead (MOTIR-10104), handed
     // back to the planner on every return below — present only when there is one.
-    let linkWarnings: { warnings?: ProposalLinkWarningDto[] } = {};
+    // …and the `modify`s approve will send back from built work (MOTIR-10106).
+    let linkWarnings: {
+      warnings?: ProposalLinkWarningDto[];
+      rescopeWarnings?: ProposalRescopeWarningDto[];
+    } = {};
     if (proposals.length > 0) {
       // A ref written as a `<PREFIX>-<n>` KEY becomes the work item's id HERE, at
       // the append, or the append is refused `dangling` naming the key
@@ -611,7 +617,10 @@ export const aiGenerationService = {
       // second `modify` of one card MERGES into the row the plan already holds
       // (AMENDMENT 18 §2), so the batch's ids are no longer the last N rows.
       createdIds = result.appendedItemIds;
-      if (result.warnings) linkWarnings = { warnings: result.warnings };
+      linkWarnings = {
+        ...(result.warnings ? { warnings: result.warnings } : {}),
+        ...(result.rescopeWarnings ? { rescopeWarnings: result.rescopeWarnings } : {}),
+      };
     }
 
     // ⚠️ `final` MEANS *THIS PASS IS OVER*, and what that costs depends on which
@@ -685,7 +694,12 @@ export const aiGenerationService = {
     planItemId: string,
     input: UpdateProposalInput,
     ctx: ServiceContext,
-  ): Promise<{ planId: string; item: PlanItemDto; warnings?: ProposalLinkWarningDto[] }> {
+  ): Promise<{
+    planId: string;
+    item: PlanItemDto;
+    warnings?: ProposalLinkWarningDto[];
+    rescopeWarnings?: ProposalRescopeWarningDto[];
+  }> {
     const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       planRepository.findBySourceJobId(jobId, ctx.workspaceId, tx),
     );
@@ -695,7 +709,12 @@ export const aiGenerationService = {
     // plan, so by here the patched item is guaranteed present in the returned set.
     const item = result.items.find((i) => i.id === planItemId)!;
     // The links the deepen KEPT that would ship dead (MOTIR-10104).
-    return { planId: plan.id, item, ...(result.warnings ? { warnings: result.warnings } : {}) };
+    return {
+      planId: plan.id,
+      item,
+      ...(result.warnings ? { warnings: result.warnings } : {}),
+      ...(result.rescopeWarnings ? { rescopeWarnings: result.rescopeWarnings } : {}),
+    };
   },
 
   // The INTERNAL PROPOSAL READ (Story MOTIR-3595 · Subtask MOTIR-3598) — what
@@ -735,7 +754,12 @@ export const aiGenerationService = {
     planItemId: string,
     input: CorrectProposalInput,
     ctx: ServiceContext,
-  ): Promise<{ planId: string; item: PlanItemDto; warnings?: ProposalLinkWarningDto[] }> {
+  ): Promise<{
+    planId: string;
+    item: PlanItemDto;
+    warnings?: ProposalLinkWarningDto[];
+    rescopeWarnings?: ProposalRescopeWarningDto[];
+  }> {
     const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       planRepository.findBySourceJobId(jobId, ctx.workspaceId, tx),
     );
@@ -747,7 +771,12 @@ export const aiGenerationService = {
     // `correctProposal` throws `PlanItemNotFoundError` when the item is not on
     // the plan, so by here it is guaranteed present in the returned set.
     const item = result.items.find((i) => i.id === planItemId)!;
-    return { planId: plan.id, item, ...(result.warnings ? { warnings: result.warnings } : {}) };
+    return {
+      planId: plan.id,
+      item,
+      ...(result.warnings ? { warnings: result.warnings } : {}),
+      ...(result.rescopeWarnings ? { rescopeWarnings: result.rescopeWarnings } : {}),
+    };
   },
 
   // The INTERNAL WITHDRAW seam (Subtask MOTIR-3598) — the same shape, onto

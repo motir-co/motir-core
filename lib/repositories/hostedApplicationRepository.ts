@@ -7,11 +7,15 @@ import type { HostedApplicationWithReleases } from '@/lib/mappers/hostedApplicat
 // the table's `hosted_application_workspace_or_system` policy admits the system
 // context the release paths run under and the bound workspace's own session.
 
-/** Who restored a release, for its DTO (MOTIR-10035). */
-const RESTORED_BY = { restoredBy: { select: { id: true, name: true } } } as const;
+/** Who restored a release (MOTIR-10035) and who asked for it (MOTIR-10103),
+ *  for its DTO. */
+const RELEASE_PEOPLE = {
+  restoredBy: { select: { id: true, name: true } },
+  requestedBy: { select: { id: true, name: true } },
+} as const;
 const WITH_RELEASES = {
-  currentRelease: { include: RESTORED_BY },
-  previousRelease: { include: RESTORED_BY },
+  currentRelease: { include: RELEASE_PEOPLE },
+  previousRelease: { include: RELEASE_PEOPLE },
 } as const;
 /** The default reads never select the database URL's ciphertext: only
  *  `findDatabaseById` does, for the production database service (MOTIR-10028). */
