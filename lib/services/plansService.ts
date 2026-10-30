@@ -2,6 +2,7 @@ import {
   Prisma,
   type Plan,
   type PlanItem,
+  type PlanTargetLock,
   type WorkItem,
   type WorkItemKind,
 } from '@/generated/prisma/client';
@@ -3502,7 +3503,19 @@ async function restPlanTargets(
   tx: Prisma.TransactionClient,
   modifyTargets: ReadonlyMap<string, ModifyTargetFacts>,
 ): Promise<RestingMove[]> {
-  const locks = await planTargetLockRepository.listByPlanId(plan.id, tx);
+  // ⚠️ AND THE CONVERSATION'S HAND-PARKED TARGETS (MOTIR-9527 / MOTIR-9531). A plan a
+  // conversation produces parks nothing, so a target that was ALREADY at `planning`
+  // when the session took it has only the SESSION's lock (`priorStatus: 'planning'`,
+  // nothing held). Its resting status used to be written by the post-commit session
+  // release (bug MOTIR-8356) — best-effort, so when that release did not run the
+  // lease expired and the sweep, which cannot know the plan was approved, deleted the
+  // lock and left the card at Planning for good. It is an answer only the approve
+  // knows, so it is written here, in the approve's transaction, like the plan's own.
+  // Merged into the one work-item-id order every target path takes.
+  const locks = [
+    ...(await planTargetLockRepository.listByPlanId(plan.id, tx)),
+    ...(await sessionHandParkedLocks(plan, tx)),
+  ].sort((a, b) => (a.workItemId < b.workItemId ? -1 : a.workItemId > b.workItemId ? 1 : 0));
   if (locks.length === 0) return [];
 
   const moves: RestingMove[] = [];
@@ -3606,6 +3619,22 @@ async function restPlanTargets(
     });
   }
   return moves;
+}
+
+/**
+ * The locks this plan's CONVERSATION holds on cards that were hand-parked at
+ * `planning` before it took them — only when this plan is the session's latest,
+ * the rule the post-commit release applies, so approving an earlier plan of a
+ * conversation that has moved on gives back nothing it still holds.
+ */
+async function sessionHandParkedLocks(
+  plan: Plan,
+  tx: Prisma.TransactionClient,
+): Promise<PlanTargetLock[]> {
+  if (!plan.sessionId) return [];
+  if ((await planRepository.findLatestIdBySession(plan.sessionId, tx)) !== plan.id) return [];
+  const locks = await planTargetLockRepository.listBySessionId(plan.sessionId, tx);
+  return locks.filter(planTargetLockService.isHandParkedSessionLock);
 }
 
 /** What an approved `modify` did to its target, as the re-scope move reads it
@@ -5073,11 +5102,10 @@ async function releasePlanTargetLocks(
   }
 
   // The SESSION half: a plan produced by a planning conversation also hands that
-  // conversation's own leases back when it is decided. On an APPROVE
-  // (`opts.approved`) a target the session held while it was hand-parked at
-  // `planning` is RESTED at `todo` / `blocked`, because the conversation's plan
-  // parked nothing itself, so `restPlanTargets` found no plan-held lock to rest
-  // and this lock is the card's only record (bug MOTIR-8356).
+  // conversation's own leases back when it is decided. On an APPROVE a target the
+  // session held while it was hand-parked at `planning` has already been RESTED
+  // inside the approve's transaction (`restPlanTargets`, MOTIR-9527); `opts.approved`
+  // still rests one here for a lock that pass did not see (bug MOTIR-8356).
   if (!plan.sessionId) return;
   const sessionId = plan.sessionId;
   try {
