@@ -165,7 +165,11 @@ test('a project admin gives their public project an address of its own', async (
     await page.getByRole('dialog').getByRole('button', { name: 'Add domain' }).click();
     await domainAdded;
 
-    await expect(page.getByText('roadmap.acme.test')).toBeVisible();
+    // The row itself: the host also appears in its own DNS records (the TXT
+    // name and the pointing record), so a bare text match is ambiguous.
+    await expect(
+      page.getByRole('main').locator('li[data-status]').filter({ hasText: 'roadmap.acme.test' }),
+    ).toBeVisible();
     await expect(page.getByRole('main').getByText('Unverified')).toBeVisible();
     // The ownership record is shown on an unverified row, without a click.
     await expect(page.getByRole('cell', { name: '_motir-verify.roadmap.acme.test' })).toBeVisible();
