@@ -352,6 +352,12 @@ const PROVISIONING_SHAPES: ReadonlyArray<{ name: string; pattern: RegExp }> = [
   },
 ];
 
+/** The preview lifecycle's GitHub deployments client and its one caller (MOTIR-5776). */
+const PREVIEW_DEPLOYMENT_WRITERS = [
+  'lib/github/previewDeployments.ts',
+  'lib/services/previewLifecycleService.ts',
+] as const;
+
 /** Drop comments so a sentence ABOUT deployments is not a call. */
 function stripComments(source: string): string {
   return source
@@ -431,7 +437,21 @@ describe('seam 6 — no provisioning: nothing under lib/ or packages/cli/ create
     expect(files).toContain('lib/services/repoDeploymentService.ts');
     expect(files).toContain('packages/cli/src/closeOutHowToTest.ts');
     const hits = findProvisioningCalls(files, (f) => readFileSync(join(ROOT, f), 'utf8'));
-    expect(hits).toEqual([]);
+    // Story MOTIR-5766 (ADR MOTIR-5769 §8): a pull request's PREVIEW is Motir's
+    // own release, so Motir announces it as GitHub's deployment — the one
+    // sanctioned writer, confined to these two files. Everything else, the
+    // How-to-test ingestion and the CLI close-out included, still makes none.
+    const unexplained = hits.filter(
+      (h) => !PREVIEW_DEPLOYMENT_WRITERS.some((file) => h.startsWith(`${file}:`)),
+    );
+    expect(unexplained).toEqual([]);
+    // TIGHT: an allowance nothing matches any more is removed, not kept.
+    for (const file of PREVIEW_DEPLOYMENT_WRITERS) {
+      expect(
+        hits.some((h) => h.startsWith(`${file}:`)),
+        `stale allowance ${file}`,
+      ).toBe(true);
+    }
   });
 });
 
