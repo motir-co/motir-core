@@ -90,8 +90,6 @@ afterAll(async () => {
   await adminDb.$disconnect();
 });
 
-const ctx = () => ({ userId: acme.ownerId, workspaceId: acme.workspaceId });
-
 /** A reading from the certificate PORT — the shape the adapter returns. */
 function certificateState(over: { configured: boolean; issued: boolean }) {
   return {
@@ -156,10 +154,9 @@ describe('seam (b) — a domain walked to issued is the workspace host, never a 
   it('carries the lifecycle to `issued` and keeps every project on its motir.co URL', async () => {
     await onAPaidTier();
     const added = await customDomainService.add({
-      key: 'ACME',
+      workspaceId: acme.workspaceId,
       hostname: 'roadmap.acme.test',
       actorUserId: acme.ownerId,
-      ctx: ctx(),
     });
     expect(added.status).toBe('unverified');
 
@@ -167,10 +164,9 @@ describe('seam (b) — a domain walked to issued is the workspace host, never a 
     resolveTxt.mockResolvedValue([added.verification!.value]);
     requestCertificate.mockResolvedValue(certificateState({ configured: true, issued: false }));
     const verified = await customDomainService.verify({
-      key: 'ACME',
+      workspaceId: acme.workspaceId,
       addressId: added.id,
       actorUserId: acme.ownerId,
-      ctx: ctx(),
     });
     // ⚠️ A CERTIFICATE IS NEVER REQUESTED BEFORE THE TXT VERIFIES — ADR §5's
     // order, asserted at the seam rather than in the service that implements it.
@@ -184,9 +180,8 @@ describe('seam (b) — a domain walked to issued is the workspace host, never a 
     await publicAddressCertificatesService.refreshDueAddresses();
 
     const listed = await customDomainService.list({
-      key: 'ACME',
+      workspaceId: acme.workspaceId,
       actorUserId: acme.ownerId,
-      ctx: ctx(),
     });
     const live = listed.find((a) => a.hostname === 'roadmap.acme.test');
     expect(live?.status, 'the job did not carry the platform state home').toBe('issued');
@@ -243,10 +238,9 @@ describe('seam (e) — every record a customer must create reaches the payload t
     await onAPaidTier();
     for (const hostname of ['roadmap.acme.test', 'acme-roadmap.test']) {
       await customDomainService.add({
-        key: 'ACME',
+        workspaceId: acme.workspaceId,
         hostname,
         actorUserId: acme.ownerId,
-        ctx: ctx(),
       });
     }
 
@@ -254,9 +248,8 @@ describe('seam (e) — every record a customer must create reaches the payload t
     // value, which is the one path that could have carried a record the stored
     // row does not produce.
     const listed = await customDomainService.list({
-      key: 'ACME',
+      workspaceId: acme.workspaceId,
       actorUserId: acme.ownerId,
-      ctx: ctx(),
     });
 
     const subdomain = listed.find((a) => a.hostname === 'roadmap.acme.test');
@@ -300,9 +293,8 @@ describe('seam (e) — every record a customer must create reaches the payload t
     });
 
     const listed = await customDomainService.list({
-      key: 'ACME',
+      workspaceId: acme.workspaceId,
       actorUserId: acme.ownerId,
-      ctx: ctx(),
     });
     expect(listed.find((a) => a.hostname === `acme.${BASE}`)).toBeUndefined();
   });
@@ -320,23 +312,20 @@ describe('seam (c) — the cap holds when two adds race', () => {
     requestCertificate.mockResolvedValue(certificateState({ configured: false, issued: false }));
     const results = await Promise.allSettled([
       customDomainService.add({
-        key: 'ACME',
+        workspaceId: acme.workspaceId,
         hostname: 'one.acme.test',
         actorUserId: acme.ownerId,
-        ctx: ctx(),
       }),
       customDomainService.add({
-        key: 'ACME',
+        workspaceId: acme.workspaceId,
         hostname: 'two.acme.test',
         actorUserId: acme.ownerId,
-        ctx: ctx(),
       }),
     ]);
 
     const stored = await customDomainService.list({
-      key: 'ACME',
+      workspaceId: acme.workspaceId,
       actorUserId: acme.ownerId,
-      ctx: ctx(),
     });
     const domains = stored.filter((a) => a.kind === 'custom_domain');
     const fulfilled = results.filter((r) => r.status === 'fulfilled');

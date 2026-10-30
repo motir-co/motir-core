@@ -6,6 +6,7 @@ import { isCloud } from '@/lib/billing/availability';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { isTenantDomainConfigured } from '@/lib/publicAddresses/tenantDomain';
 import { publicSubdomainService } from '@/lib/services/publicSubdomainService';
+import { allSettledOrThrow } from '@/lib/async/allSettledOrThrow';
 import { customDomainService } from '@/lib/services/customDomainService';
 import { guardSettingsPage } from '../_guard';
 import { publicProjectPath, publicSiteOrigin } from '@/lib/publicProjects/urls';
@@ -94,9 +95,15 @@ export default async function ProjectPublicAddressPage() {
     );
   }
 
-  const [subdomain, addresses] = await Promise.all([
+  // `allSettledOrThrow`, never a bare `Promise.all`: each arm opens a
+  // transaction (MOTIR-3066).
+  const [subdomain, domains] = await allSettledOrThrow([
     publicSubdomainService.getForWorkspace(ctx.workspaceId, ctx.userId),
-    customDomainService.list({ key: ctx.project.identifier, actorUserId: ctx.userId, ctx }),
+    customDomainService.listForProjectRoom({
+      workspaceId: ctx.workspaceId,
+      projectKey: ctx.project.identifier,
+      actorUserId: ctx.userId,
+    }),
   ]);
 
   // `MOTIR_PUBLIC_SITE_URL` is server configuration, so the project's own
@@ -112,13 +119,14 @@ export default async function ProjectPublicAddressPage() {
         projectAddress={projectUrl.replace(/^https?:\/\//, '')}
         projectUrl={projectUrl}
       />
-      {/* MOTIR-4229's half. ⚠️ `canManage` IS `true` BY CONSTRUCTION HERE and is
-          passed anyway: the destination guard above already refused anyone
-          without `project:manage_access`, which is the key every one of the
-          section's writes asserts — so on THIS page the two cannot disagree. The
-          prop exists so the section does not inherit its host's gate by
-          assumption. */}
-      <CustomDomainsSection projectKey={ctx.project.identifier} canManage addresses={addresses} />
+      {/* A customer domain is the WORKSPACE's (MOTIR-9524): its writes assert
+          the workspace address gate, not this page's project permission, so
+          the service answers `canManage` on that axis. */}
+      <CustomDomainsSection
+        workspaceId={ctx.workspaceId}
+        canManage={domains.canManage}
+        addresses={domains.addresses}
+      />
     </div>
   );
 }

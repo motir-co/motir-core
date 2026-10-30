@@ -76,18 +76,18 @@ const PENDING: ReadonlySet<DomainStatus> = new Set<DomainStatus>([
 const TICK_MS = 30_000;
 
 export function CustomDomainsSection({
-  projectKey,
+  workspaceId,
   canManage,
   addresses,
 }: {
-  projectKey: string;
+  /** The workspace the domains belong to — the routes are workspace-scoped. */
+  workspaceId: string;
   /**
-   * ⚠️ `true` BY CONSTRUCTION WHERE THIS IS MOUNTED TODAY, and the prop stays
-   * anyway. The page's destination guard already refused anyone without
-   * `project:manage_access`, which is the same key every write below asserts —
-   * so on that page the two cannot disagree. The prop exists so the section does
-   * not INHERIT its host's gate by assumption: a second mount point that forgot
-   * to guard would otherwise ship controls that refuse.
+   * Whether the viewer may add, verify and remove — the workspace ADDRESS gate
+   * (an owner or admin), the same gate every write route asserts. The page
+   * computes it from the viewer's workspace role; a project's own access keys
+   * no longer decide anything here, because the domain belongs to the
+   * workspace, not to the project.
    */
   canManage: boolean;
   addresses: readonly PublicAddressDto[];
@@ -119,12 +119,15 @@ export function CustomDomainsSection({
   async function call(path: string, method: string, body?: unknown): Promise<boolean> {
     setBusy(true);
     try {
-      const res = await fetch(`/api/projects/${encodeURIComponent(projectKey)}${path}`, {
-        method,
-        ...(body
-          ? { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }
-          : {}),
-      });
+      const res = await fetch(
+        `/api/workspaces/${encodeURIComponent(workspaceId)}/custom-domains${path}`,
+        {
+          method,
+          ...(body
+            ? { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }
+            : {}),
+        },
+      );
       if (!res.ok) {
         const refusal = (await res.json().catch(() => ({}))) as { entitlement?: string };
         // The cap refusal is the upgrade prompt's TRIGGER — see the note on the
@@ -206,7 +209,7 @@ export function CustomDomainsSection({
               onToggleDns={() =>
                 setShowDnsFor((current) => (current === address.id ? null : address.id))
               }
-              onCheck={() => void call(`/public-addresses/${address.id}/verify`, 'POST')}
+              onCheck={() => void call(`/${address.id}/verify`, 'POST')}
               onRemove={() => setRemoving(address)}
             />
           ))}
@@ -217,7 +220,7 @@ export function CustomDomainsSection({
         open={adding}
         busy={busy}
         onOpenChange={setAdding}
-        onSubmit={(hostname) => call('/public-addresses', 'POST', { hostname })}
+        onSubmit={(hostname) => call('', 'POST', { hostname })}
       />
 
       <Modal
@@ -243,7 +246,7 @@ export function CustomDomainsSection({
               size="md"
               loading={busy}
               onClick={async () => {
-                if (removing && (await call(`/public-addresses/${removing.id}`, 'DELETE'))) {
+                if (removing && (await call(`/${removing.id}`, 'DELETE'))) {
                   setRemoving(null);
                 }
               }}

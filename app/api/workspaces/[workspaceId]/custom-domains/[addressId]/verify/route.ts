@@ -5,15 +5,13 @@ import { mapCustomDomainError } from '@/lib/publicAddresses/errorResponse';
 import { customDomainService } from '@/lib/services/customDomainService';
 import { getWorkspaceContext } from '@/lib/workspaces';
 
-// DELETE /api/projects/[key]/public-addresses/[addressId] — MOTIR-4216.
-//
-// Answers 204 even when the platform's certificate withdrawal fails: the row is
-// the source of truth for what we serve, and a certificate left behind for a
-// hostname that no longer points at us protects nothing. The service logs it.
+// POST /api/workspaces/[workspaceId]/custom-domains/[addressId]/verify — MOTIR-9524.
+// Prove ownership from DNS, then ask the platform for a certificate. Both are
+// side effects the SERVICE runs outside any transaction; this file only routes.
 
-export async function DELETE(
+export async function POST(
   _req: Request,
-  { params }: { params: Promise<{ key: string; addressId: string }> },
+  { params }: { params: Promise<{ workspaceId: string; addressId: string }> },
 ): Promise<Response> {
   const ctx = await getWorkspaceContext();
   if (!ctx) {
@@ -22,10 +20,11 @@ export async function DELETE(
   const hold = await refuseIfNonCompliant(ctx.userId);
   if (hold) return hold;
 
-  const { key, addressId } = await params;
+  const { workspaceId, addressId } = await params;
   try {
-    await customDomainService.remove({ key, addressId, actorUserId: ctx.userId, ctx });
-    return new NextResponse(null, { status: 204 });
+    return NextResponse.json(
+      await customDomainService.verify({ workspaceId, addressId, actorUserId: ctx.userId }),
+    );
   } catch (err) {
     const mapped = mapCustomDomainError(err);
     if (mapped) return mapped;

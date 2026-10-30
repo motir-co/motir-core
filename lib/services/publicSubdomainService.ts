@@ -142,7 +142,7 @@ export const publicSubdomainService = {
     now: Date = new Date(),
   ): Promise<PublicSubdomainDto | null> {
     assertAvailable();
-    await assertMember(workspaceId, actorUserId);
+    await assertAddressMember(workspaceId, actorUserId);
     return withWorkspaceContext({ userId: actorUserId, workspaceId }, async (tx) => {
       const live = await publicAddressRepository.findLiveSubdomainForWorkspace(workspaceId, tx);
       if (!live) return null;
@@ -362,15 +362,27 @@ function assertAvailable(): void {
   if (!isCloud()) throw new PublicAddressesUnavailableError();
 }
 
-async function assertMember(workspaceId: string, actorUserId: string): Promise<WorkspaceRole> {
+/**
+ * The membership gate every address read asserts — the workspace subdomain's
+ * and the workspace's customer domains' alike. A non-member gets the
+ * no-existence-leak 404.
+ */
+export async function assertAddressMember(
+  workspaceId: string,
+  actorUserId: string,
+): Promise<WorkspaceRole> {
   // The org Owner or an org Admin reads as `manager` in every workspace of the org.
   const role = await readReachRole(actorUserId, workspaceId);
   if (!role) throw new WorkspaceNotVisibleError();
   return role;
 }
 
-async function assertAddressAdmin(workspaceId: string, actorUserId: string): Promise<void> {
-  const role = await assertMember(workspaceId, actorUserId);
+/**
+ * The manage gate every address write asserts — exported so the customer-domain
+ * lifecycle uses this very function rather than a copy of it.
+ */
+export async function assertAddressAdmin(workspaceId: string, actorUserId: string): Promise<void> {
+  const role = await assertAddressMember(workspaceId, actorUserId);
   if (!roleMayManageAddress(role)) throw new SubdomainForbiddenError();
 }
 

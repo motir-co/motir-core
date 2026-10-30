@@ -245,6 +245,19 @@ export const publicAddressRepository = {
   },
 
   /**
+   * Name the application a customer domain serves, or unbind it with `null`
+   * (ADR MOTIR-9521 §1). The service has already asserted the application is
+   * the workspace's own.
+   */
+  async setApplication(
+    addressId: string,
+    applicationId: string | null,
+    tx: Prisma.TransactionClient,
+  ): Promise<PublicAddress> {
+    return tx.publicAddress.update({ where: { id: addressId }, data: { applicationId } });
+  },
+
+  /**
    * Remove an address.
    *
    * A removed custom domain, and a workspace subdomain that is renamed or

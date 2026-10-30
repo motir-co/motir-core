@@ -3,6 +3,7 @@ import { EntitlementExceededError } from '@/lib/billing/errors';
 import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import {
   AddressNotFoundError,
+  ApplicationNotFoundError,
   HostnameTakenError,
   InvalidHostnameError,
   NotACustomerDomainError,
@@ -37,8 +38,9 @@ const list = vi.fn();
 const add = vi.fn();
 const verify = vi.fn();
 const remove = vi.fn();
+const bind = vi.fn();
 vi.mock('@/lib/services/customDomainService', () => ({
-  customDomainService: { list, add, verify, remove },
+  customDomainService: { list, add, verify, remove, bind },
 }));
 
 const getWorkspaceContext = vi.fn();
@@ -47,19 +49,22 @@ vi.mock('@/lib/workspaces', () => ({ getWorkspaceContext }));
 const refuseIfNonCompliant = vi.fn();
 vi.mock('@/lib/auth/requireCompliantSession', () => ({ refuseIfNonCompliant }));
 
-const { GET, POST } = await import('@/app/api/projects/[key]/public-addresses/route');
-const { DELETE } = await import('@/app/api/projects/[key]/public-addresses/[addressId]/route');
+// MOTIR-9524 — a customer domain is a WORKSPACE asset, so its routes are
+// workspace-scoped and no project key reaches the service.
+const { GET, POST } = await import('@/app/api/workspaces/[workspaceId]/custom-domains/route');
+const { DELETE, PATCH } =
+  await import('@/app/api/workspaces/[workspaceId]/custom-domains/[addressId]/route');
 const { POST: VERIFY } =
-  await import('@/app/api/projects/[key]/public-addresses/[addressId]/verify/route');
+  await import('@/app/api/workspaces/[workspaceId]/custom-domains/[addressId]/verify/route');
 
 const CTX = { userId: 'u_1', workspaceId: 'ws_1' };
 const req = (body?: unknown) =>
-  new Request('https://app.motir.co/api/projects/PROD/public-addresses', {
+  new Request('https://app.motir.co/api/workspaces/ws_1/custom-domains', {
     method: 'POST',
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
-const keyParams = { params: Promise.resolve({ key: 'PROD' }) };
-const addressParams = { params: Promise.resolve({ key: 'PROD', addressId: 'addr_1' }) };
+const keyParams = { params: Promise.resolve({ workspaceId: 'ws_1' }) };
+const addressParams = { params: Promise.resolve({ workspaceId: 'ws_1', addressId: 'addr_1' }) };
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -73,11 +78,12 @@ describe('the gate runs before the service, on every route', () => {
     ['POST add', () => POST(req({ hostname: 'a.example' }), keyParams)],
     ['POST verify', () => VERIFY(new Request('https://app.motir.co/x'), addressParams)],
     ['DELETE remove', () => DELETE(new Request('https://app.motir.co/x'), addressParams)],
+    ['PATCH bind', () => PATCH(new Request('https://app.motir.co/x'), addressParams)],
   ])('%s answers 401 with no session, and calls nothing', async (_label, call) => {
     getWorkspaceContext.mockResolvedValue(null);
     const res = await call();
     expect(res.status).toBe(401);
-    for (const fn of [list, add, verify, remove]) {
+    for (const fn of [list, add, verify, remove, bind]) {
       expect(fn).not.toHaveBeenCalled();
     }
   });
@@ -87,17 +93,44 @@ describe('the happy paths hand through exactly one service call', () => {
   it('GET lists, POST adds with the hostname from the body', async () => {
     list.mockResolvedValue([]);
     expect((await GET(new Request('https://app.motir.co/x'), keyParams)).status).toBe(200);
-    expect(list).toHaveBeenCalledWith({ key: 'PROD', actorUserId: 'u_1', ctx: CTX });
+    expect(list).toHaveBeenCalledWith({ workspaceId: 'ws_1', actorUserId: 'u_1' });
 
     add.mockResolvedValue({ id: 'addr_1' });
     const res = await POST(req({ hostname: 'roadmap.acme.com' }), keyParams);
     expect(res.status).toBe(201);
     expect(add).toHaveBeenCalledWith({
-      key: 'PROD',
+      workspaceId: 'ws_1',
       hostname: 'roadmap.acme.com',
+      applicationId: null,
       actorUserId: 'u_1',
-      ctx: CTX,
     });
+
+    // The application the domain serves rides along when named (ADR MOTIR-9521 §1).
+    await POST(req({ hostname: 'roadmap.acme.com', applicationId: 'app_1' }), keyParams);
+    expect(add).toHaveBeenLastCalledWith(expect.objectContaining({ applicationId: 'app_1' }));
+  });
+
+  it('PATCH re-points, or unbinds with null — and refuses anything else', async () => {
+    bind.mockResolvedValue({ id: 'addr_1' });
+    const patch = (body: unknown) =>
+      PATCH(
+        new Request('https://app.motir.co/x', { method: 'PATCH', body: JSON.stringify(body) }),
+        addressParams,
+      );
+    expect((await patch({ applicationId: 'app_2' })).status).toBe(200);
+    expect(bind).toHaveBeenLastCalledWith({
+      workspaceId: 'ws_1',
+      addressId: 'addr_1',
+      applicationId: 'app_2',
+      actorUserId: 'u_1',
+    });
+    expect((await patch({ applicationId: null })).status).toBe(200);
+    expect(bind).toHaveBeenLastCalledWith(expect.objectContaining({ applicationId: null }));
+
+    bind.mockClear();
+    expect((await patch({})).status).toBe(400);
+    expect((await patch({ applicationId: 7 })).status).toBe(400);
+    expect(bind).not.toHaveBeenCalled();
   });
 
   it('DELETE answers 204 with NO body', async () => {
@@ -105,12 +138,12 @@ describe('the happy paths hand through exactly one service call', () => {
     const removed = await DELETE(new Request('https://app.motir.co/x'), addressParams);
     expect(removed.status).toBe(204);
     expect(await removed.text()).toBe('');
-    // The key reaches the service: it is the permission gate (MOTIR-9523).
+    // The workspace from the PATH reaches the service: it is the gate's scope
+    // (MOTIR-9524), checked against the actor's membership there.
     expect(remove).toHaveBeenCalledWith({
-      key: 'PROD',
+      workspaceId: 'ws_1',
       addressId: 'addr_1',
       actorUserId: 'u_1',
-      ctx: CTX,
     });
   });
 
@@ -134,7 +167,8 @@ describe('THE MAPPER — every typed refusal reaches its own status', () => {
   // `lib/publicAddresses/errorResponse.ts`, and a status that silently becomes
   // 500 is the failure this whole file exists for.
   it.each([
-    // The two the GATE itself raises — and the pair that was MISSING.
+    // The pair that was MISSING. No route here raises them since MOTIR-9524
+    // moved the gate to the workspace, but the shared mapper still owns them.
     [new ProjectNotFoundError('PROD'), 404],
     [new PermissionDeniedError('proj_1', 'project:manage_access'), 403],
     // 404 for off-cloud and for a workspace the actor cannot see: the same code
@@ -143,12 +177,15 @@ describe('THE MAPPER — every typed refusal reaches its own status', () => {
     [new PublicAddressesUnavailableError(), 404],
     [new WorkspaceNotVisibleError(), 404],
     [new AddressNotFoundError(), 404],
+    // Another workspace's application answers exactly like a missing one.
+    [new ApplicationNotFoundError(), 404],
     // 403 for a member who is not an admin: they can SEE the workspace, so
     // saying the control is admin-only leaks nothing.
     [new SubdomainForbiddenError(), 403],
     [new HostnameTakenError('roadmap.acme.com'), 409],
     [new InvalidHostnameError('not a host'), 422],
-    [new NotACustomerDomainError('acme.motir.site'), 422],
+    [new NotACustomerDomainError('acme.motir.site', 'tenant_base'), 422],
+    [new NotACustomerDomainError('motir.co', 'site_origin'), 422],
     // The billing surface's own shape, so one refusal does not render two ways.
     [new EntitlementExceededError('custom_domains', { limit: 0, usage: 0 }), 402],
     // Ours to retry, never the caller's to fix.

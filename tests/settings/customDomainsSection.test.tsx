@@ -60,7 +60,7 @@ function domain(over: Partial<PublicAddressDto> = {}): PublicAddressDto {
 
 function render(addresses: PublicAddressDto[], canManage = true) {
   return renderWithIntl(
-    <CustomDomainsSection projectKey="ROADMAP" canManage={canManage} addresses={addresses} />,
+    <CustomDomainsSection workspaceId="ws_1" canManage={canManage} addresses={addresses} />,
   );
 }
 
@@ -236,7 +236,7 @@ describe('panel 7 — removing a domain', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Remove domain' }));
 
     await waitFor(() => expect(refreshMock).toHaveBeenCalled());
-    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/projects/ROADMAP/public-addresses/addr_1');
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/workspaces/ws_1/custom-domains/addr_1');
     expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ method: 'DELETE' });
   });
 });
