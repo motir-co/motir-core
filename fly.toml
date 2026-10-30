@@ -407,9 +407,25 @@ kill_timeout = "90s"
 # TRIGGER to revise: the first sustained memory reading from a worker under real
 # job load, taken from the platform. Until then this is a floor set on one
 # controlled measurement, not a capacity claim.
+#
+# ⚠️ THE WORKER IS `performance-1x` TOO, NOT `shared-cpu-1x` (MOTIR-10119, 2026-10-30).
+# A shared-cpu-1x is guaranteed 1/16 of a core and runs on a burst balance. During
+# CI bursts (341–1,140 `system.ci-runner-boot` runs an hour) the worker drained it
+# and Fly throttled the machine, which Fly reports as `steal`. MEASURED from Fly's
+# managed Prometheus, median 1 GB machine per hour, 2026-10-29 19:00 to 10-30 17:00Z:
+# `fly_instance_cpu{mode="steal"}` at 70–92% of a core in every burst hour, against
+# 0.4–22% when quiet, while the worker itself used only 9–22% `user`. A throttled
+# process is frozen (`loop_block_frame=not_in_js`), so Prisma's 2 s / 5 s
+# transaction timers elapsed with idle connections in the pool. 367 of 12,771 boots
+# failed with P2028 over three days and dead-lettered (MOTIR-9635). It is the same
+# shape the `app` group showed on 2026-10-15, and the same remedy: a dedicated CPU
+# is not quota-throttled. If steal still appears here, this is the wrong lever.
+#
+# 2 GB because a performance-1x comes with no less. That is more than the 1 GB the
+# idle reading above asked for, not a new memory finding.
 [[vm]]
-  size      = "shared-cpu-1x"
-  memory    = "1gb"
+  size      = "performance-1x"
+  memory    = "2gb"
   cpus      = 1
   processes = ["worker"]
 
