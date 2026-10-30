@@ -33,7 +33,29 @@ describe('github.parseProductionImageRunEvent', () => {
       conclusion: 'success',
       runId: '9182736450',
       runAttempt: 1,
+      headCommitSubject: 'Show the delivery estimate on the basket',
+      pullRequestNumber: 48,
     });
+  });
+
+  it('reads a squash subject and its pull request, and still parses a run with no head commit (MOTIR-10103)', () => {
+    const squash = payload();
+    squash.workflow_run['head_commit'] = {
+      message: 'Add a column for the gift note (#47)\n\nBody',
+    };
+    expect(parse(squash)).toMatchObject({
+      headCommitSubject: 'Add a column for the gift note',
+      pullRequestNumber: 47,
+    });
+    for (const headCommit of [undefined, null, { message: 42 }, { message: '' }]) {
+      const body = payload();
+      body.workflow_run['head_commit'] = headCommit;
+      expect(parse(body)).toMatchObject({
+        headSha: '4f1c2b8e9a7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b',
+        headCommitSubject: null,
+        pullRequestNumber: null,
+      });
+    }
   });
 
   it('keeps a re-run attempt, and reads a missing or malformed attempt as 1', () => {

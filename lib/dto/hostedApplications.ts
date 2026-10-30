@@ -13,6 +13,13 @@ export interface HostedReleaseDto {
   applicationId: string;
   commitSha: string;
   ref: string | null;
+  /** The commit's subject line, null when the build did not report it
+   *  (MOTIR-10103). */
+  commitSubject: string | null;
+  /** The pull request a merge release came from, when its commit names one. */
+  pullRequestNumber: number | null;
+  /** Who asked for a release of a ref; null for any other release. */
+  requestedBy: { id: string; name: string } | null;
   cause: HostedReleaseCause;
   state: HostedReleaseState;
   artifactRef: string | null;

@@ -43,6 +43,8 @@ export const productionMergeRelease = defineJob(
         services.productionMergeRelease.runMergeRelease({
           projectRepositoryId: data.projectRepositoryId,
           headSha: data.headSha,
+          commitSubject: data.commitSubject ?? null,
+          pullRequestNumber: data.pullRequestNumber ?? null,
           conclusion: data.conclusion,
           attempt,
         }),

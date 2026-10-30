@@ -68,6 +68,11 @@ export interface DeployProductionReleaseInput {
   commitSha: string;
   /** The tag or branch the release was asked for, when asked by ref. */
   ref?: string | null;
+  /** What the release was (MOTIR-10103): the commit's subject, the pull
+   *  request a merge came from, and who asked for a release of a ref. */
+  commitSubject?: string | null;
+  pullRequestNumber?: number | null;
+  requestedById?: string | null;
   /** The image the caller built for that commit. */
   artifactRef: string;
   cause: HostedReleaseCause;
@@ -123,7 +128,15 @@ async function openRelease(
     const inFlight = await hostedReleaseRepository.findInFlightByApplication(applicationId, tx);
     if (inFlight) throw new ReleaseInProgressError(applicationId, inFlight.id, inFlight.state);
     const created = await hostedApplicationService.createRelease(
-      { applicationId, commitSha: input.commitSha, ref: input.ref ?? null, cause: input.cause },
+      {
+        applicationId,
+        commitSha: input.commitSha,
+        ref: input.ref ?? null,
+        commitSubject: input.commitSubject ?? null,
+        pullRequestNumber: input.pullRequestNumber ?? null,
+        requestedById: input.requestedById ?? null,
+        cause: input.cause,
+      },
       tx,
     );
     return hostedApplicationService.transitionRelease(
@@ -255,7 +268,10 @@ async function recordFailedRelease(
   projectRepositoryId: string,
   commitSha: string,
   reason: string,
-  options: { ref?: string | null; cause?: HostedReleaseCause } = {},
+  options: Pick<
+    DeployProductionReleaseInput,
+    'ref' | 'commitSubject' | 'pullRequestNumber' | 'requestedById'
+  > & { cause?: HostedReleaseCause } = {},
 ): Promise<HostedReleaseDto> {
   const app = await hostedApplicationService.ensureApplication(projectRepositoryId);
   return withSystemContext(async (tx) => {
@@ -264,6 +280,9 @@ async function recordFailedRelease(
         applicationId: app.id,
         commitSha,
         ref: options.ref ?? null,
+        commitSubject: options.commitSubject ?? null,
+        pullRequestNumber: options.pullRequestNumber ?? null,
+        requestedById: options.requestedById ?? null,
         cause: options.cause ?? 'merge',
       },
       tx,

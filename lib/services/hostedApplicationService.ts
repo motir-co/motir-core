@@ -79,6 +79,11 @@ export interface CreateReleaseInput {
   applicationId: string;
   commitSha: string;
   ref?: string | null;
+  /** The commit's subject, the pull request a merge came from, and who asked
+   *  for a release of a ref (MOTIR-10103). */
+  commitSubject?: string | null;
+  pullRequestNumber?: number | null;
+  requestedById?: string | null;
   cause: HostedReleaseCause;
 }
 
@@ -327,6 +332,9 @@ export const hostedApplicationService = {
           applicationId: app.id,
           commitSha: input.commitSha,
           ref: input.ref ?? null,
+          commitSubject: input.commitSubject ?? null,
+          pullRequestNumber: input.pullRequestNumber ?? null,
+          requestedById: input.requestedById ?? null,
           cause: input.cause,
         },
         tx,
