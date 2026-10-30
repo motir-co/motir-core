@@ -32,6 +32,7 @@
 
 import { appendFixtureFileSync, readFixtureFileSync } from '@/lib/test-fixture-file';
 import { HOSTING_MANIFEST_FILE_NAME } from '@/lib/hosting/manifest';
+import { escapeRegExp } from '@/lib/utils/regexp';
 import type { MockAgent } from 'undici';
 
 const GITHUB_ORIGIN = 'https://api.github.com';
@@ -95,7 +96,7 @@ const reply = (statusCode: number, data: object): MockReply => ({
 const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 
 const MANIFEST_PATH = new RegExp(
-  `^/repos/([^/]+)/([^/]+)/contents/${HOSTING_MANIFEST_FILE_NAME.replace(/\./g, '\\.')}(?:\\?.*)?$`,
+  `^/repos/([^/]+)/([^/]+)/contents/${escapeRegExp(HOSTING_MANIFEST_FILE_NAME)}(?:\\?.*)?$`,
 );
 const DEPLOYMENTS_PATH = /^\/repos\/([^/]+)\/([^/]+)\/deployments$/;
 const STATUSES_PATH = /^\/repos\/([^/]+)\/([^/]+)\/deployments\/([^/]+)\/statuses$/;

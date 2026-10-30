@@ -206,7 +206,9 @@ export function takeArmedFakeHostingFailure(
   const armed = readJson<ArmedFailures>(sidecar);
   const detail = armed?.[at]?.[op];
   if (!armed || detail === undefined) return null;
-  delete armed[at]![op];
-  writeJson(sidecar, armed);
+  // Rebuilt by spread rather than `delete armed[at][op]`: a spread defines own
+  // properties, so no key can reach a prototype even past `safeKey`.
+  const { [op]: _taken, ...rest } = armed[at]!;
+  writeJson(sidecar, { ...armed, [at]: rest });
   return detail;
 }
