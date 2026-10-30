@@ -8,9 +8,11 @@ import {
   neonDatabaseConfig,
 } from '../src/index';
 import {
+  NEON_SIM_BRANCH_STORAGE_BYTES,
   NEON_SIM_KEY,
   NEON_SIM_ORG,
   NEON_SIM_STORAGE_BYTES,
+  branchUriOf,
   createNeonApiSim,
   uriOf,
 } from './contract/neonApiSim';
@@ -248,6 +250,7 @@ describe('the Neon adapter', () => {
         orgId: NEON_SIM_ORG,
         regionId: 'aws-us-east-1',
         createdAt: START,
+        branches: new Map(),
         password: 'x',
         deleted: false,
       });
@@ -366,5 +369,119 @@ describe('the Neon adapter', () => {
       expect(call.body ?? '').not.toContain(NEON_SIM_KEY);
       expect(call.headers['authorization']).toBe(`Bearer ${NEON_SIM_KEY}`);
     }
+  });
+});
+
+// MOTIR-5772 — a preview's database is a branch of its application's preview
+// project (MOTIR-5769 §6), so what the branch calls send is pinned here.
+describe('the Neon adapter’s branches', () => {
+  async function withBranch() {
+    const harness = setup();
+    const { handle } = await harness.port.createDatabase({ applicationRef: 'r1-pv' });
+    return { ...harness, handle };
+  }
+
+  it('creates the branch from the root with a read-write compute, and its own URIs', async () => {
+    const { port, sim, handle } = await withBranch();
+    const created = await port.createBranch(handle, { name: 'pr-42' });
+    const post = sim.calls.filter((c) => c.method === 'POST').at(-1)!;
+    expect(post.url.pathname).toBe('/api/v2/projects/proj-1/branches');
+    expect(JSON.parse(post.body!)).toEqual({
+      branch: { name: 'pr-42' },
+      endpoints: [{ type: 'read_write' }],
+    });
+    const branch = [...sim.projects.get('proj-1')!.branches.values()][0]!;
+    expect(created).toEqual({
+      branch: { database: handle, branchRef: branch.id, name: 'pr-42' },
+      env: [
+        { name: 'DATABASE_URL', value: branchUriOf(branch, true), secret: true },
+        { name: 'DIRECT_URL', value: branchUriOf(branch, false), secret: true },
+      ],
+    });
+    const uris = sim.calls.filter((c) => c.url.pathname.endsWith('/connection_uri')).slice(-2);
+    expect(uris.map((c) => c.url.searchParams.get('branch_id'))).toEqual([branch.id, branch.id]);
+  });
+
+  it('finds an existing branch by exact name and sends no second POST', async () => {
+    const { port, sim, handle } = await withBranch();
+    await port.createBranch(handle, { name: 'pr-4' });
+    const posts = sim.calls.filter((c) => c.method === 'POST').length;
+    // `pr-4` is a prefix of `pr-42`: the search is fuzzy, the match is exact.
+    const longer = await port.createBranch(handle, { name: 'pr-42' });
+    const again = await port.createBranch(handle, { name: 'pr-4' });
+    expect(sim.calls.filter((c) => c.method === 'POST')).toHaveLength(posts + 1);
+    expect(again.branch.branchRef).not.toBe(longer.branch.branchRef);
+    expect(sim.projects.get('proj-1')!.branches.size).toBe(2);
+  });
+
+  it('retries a branch create on 423 only — a locked project created nothing', async () => {
+    const { port, sim, sleep, handle } = await withBranch();
+    sim.failNext((c) => c.method === 'POST' && c.url.pathname.endsWith('/branches'), 423, {
+      code: 'LOCKED',
+      message: 'project has running operations',
+    });
+    await port.createBranch(handle, { name: 'pr-1' });
+    expect(sleep).toHaveBeenCalled();
+    expect(sim.projects.get('proj-1')!.branches.size).toBe(1);
+    sim.failNext((c) => c.method === 'POST' && c.url.pathname.endsWith('/branches'), 500);
+    await expect(port.createBranch(handle, { name: 'pr-2' })).rejects.toMatchObject({
+      name: 'OrchestratorApiError',
+      status: 500,
+    });
+    expect(sim.projects.get('proj-1')!.branches.size).toBe(1);
+  });
+
+  it('a create that answers no branch is an API error, not a handle', async () => {
+    const { port, sim, handle } = await withBranch();
+    sim.failNext((c) => c.method === 'POST' && c.url.pathname.endsWith('/branches'), 201, {
+      operations: [],
+    });
+    await expect(port.createBranch(handle, { name: 'pr-1' })).rejects.toThrow(
+      /branch create returned no branch/,
+    );
+  });
+
+  it('reads the branch’s own counters for its usage, then deletes it', async () => {
+    const { port, sim, advanceSeconds, handle } = await withBranch();
+    const { branch } = await port.createBranch(handle, { name: 'pr-5' });
+    advanceSeconds(1_800);
+    const usage = await port.deleteBranch(branch);
+    expect(usage).toEqual({
+      provider: 'neon',
+      applicationRef: 'r1-pv',
+      since: new Date(START),
+      until: new Date(START + 1_800_000),
+      computeSeconds: 1_800,
+      storageBytes: NEON_SIM_BRANCH_STORAGE_BYTES,
+    });
+    const del = sim.calls.find((c) => c.method === 'DELETE')!;
+    expect(del.url.pathname).toBe(`/api/v2/projects/proj-1/branches/${branch.branchRef}`);
+    expect(sim.projects.get('proj-1')!.branches.size).toBe(0);
+    expect(sim.live()).toHaveLength(1);
+  });
+
+  it('a 404 on the delete itself is a branch already gone — deleted, not an error', async () => {
+    const { port, sim, handle } = await withBranch();
+    const { branch } = await port.createBranch(handle, { name: 'pr-6' });
+    sim.failNext((c) => c.method === 'DELETE', 404, { code: 'NOT_FOUND', message: 'gone' });
+    await expect(port.deleteBranch(branch)).resolves.toMatchObject({ applicationRef: 'r1-pv' });
+  });
+
+  it('a handle whose branch now carries another name is not deleted', async () => {
+    const { port, sim, handle } = await withBranch();
+    const { branch } = await port.createBranch(handle, { name: 'pr-8' });
+    const usage = await port.deleteBranch({ ...branch, name: 'pr-80' });
+    expect(usage).toMatchObject({ computeSeconds: 0, storageBytes: 0 });
+    expect(sim.calls.some((c) => c.method === 'DELETE')).toBe(false);
+    expect(sim.projects.get('proj-1')!.branches.size).toBe(1);
+  });
+
+  it('refuses an invalid name before any request', async () => {
+    const { port, sim, handle } = await withBranch();
+    const before = sim.calls.length;
+    await expect(port.createBranch(handle, { name: 'pr 1' })).rejects.toThrow(
+      /not a database branch name/,
+    );
+    expect(sim.calls).toHaveLength(before);
   });
 });

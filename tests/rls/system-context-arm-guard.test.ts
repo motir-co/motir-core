@@ -135,6 +135,13 @@ const WALLED_SITES: Record<string, string> = {
     'github_installation and github_repo, both armed, and nothing else. The write that follows is ' +
     'repo_deployment, whose repo_deployment_workspace_or_system policy carries the arm. ' +
     'No member, no work item, no tenant-only table. CLEAN.',
+  'lib/services/ciPreviewUsageMeterService.ts#writeSlices':
+    'build ∈ { the three inline closures in the same file: accrueRelease, recordBranchUsage ' +
+    '(which recordDeletedBranch reaches too) and recordDestroyedApp } (MOTIR-5777). Read in full: each calls only ' +
+    'previewUsageRepository.lastSliceEnd and .sumQuantity — aggregates over preview_usage, ' +
+    'whose preview_usage_system policy carries the arm — and builds slices in memory. The ' +
+    'block itself also locks preview_deployment (preview_deployment_workspace_or_system, ' +
+    'armed) and inserts into preview_usage. No member, no work item, no tenant-only table. CLEAN.',
   'lib/services/mergeQueueExitService.ts#recordExit':
     'write ∈ { the local `write` closure in the same method } — one implementation, ' +
     'read in full (MOTIR-5632). The system arm is taken ONLY when the workspace has no ' +

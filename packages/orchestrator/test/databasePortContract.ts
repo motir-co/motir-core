@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   DATABASE_DIRECT_ENV,
   DATABASE_POOLED_ENV,
+  DatabaseBranchNameInvalidError,
   DatabaseNotFoundError,
   type DatabasePort,
   type ReleaseEnvVar,
@@ -12,6 +13,9 @@ import {
 // `databaseFake.test.ts`; the Neon adapter joins with one
 // `runDatabasePortContract('neon', …)` call over its simulated API, which is
 // what lets the production and preview stories trust the fake.
+//
+// Branches (MOTIR-5772) are part of the contract: a preview's database is a
+// branch, and the lifecycle story tests against the fake.
 //
 // The credential rule is checked by VALUE, not by a prefix only one adapter
 // knows: every pair value the port hands out is collected, and every other
@@ -143,6 +147,102 @@ export function runDatabasePortContract(name: string, factory: () => DatabaseHar
         await port.deleteDatabase(a.handle),
         notFound,
         await thrown(() => port.usageSince(a.handle, new Date(0))),
+      ];
+      for (const value of returned) {
+        const text = serialised(value);
+        for (const secret of secrets) expect(text).not.toContain(secret);
+      }
+    });
+
+    it('creates a branch with its own two secret pairs, idempotent by name', async () => {
+      const { port } = factory();
+      const db = await port.createDatabase({ applicationRef: APP_A });
+      const first = await port.createBranch(db.handle, { name: 'pr-12' });
+      expect(first.branch.database).toEqual(db.handle);
+      expect(first.branch.name).toBe('pr-12');
+      expect(first.env.map((pair) => pair.name)).toEqual([
+        DATABASE_POOLED_ENV,
+        DATABASE_DIRECT_ENV,
+      ]);
+      expect(first.env.every((pair) => pair.secret && pair.value.length > 0)).toBe(true);
+      expect(secretsIn(first.env)).not.toEqual(secretsIn(db.env));
+      const again = await port.createBranch(db.handle, { name: 'pr-12' });
+      expect(again).toEqual(first);
+      const other = await port.createBranch(db.handle, { name: 'pr-13' });
+      expect(other.branch.branchRef).not.toBe(first.branch.branchRef);
+      expect(secretsIn(other.env)).not.toEqual(secretsIn(first.env));
+    });
+
+    it('refuses a branch name that is not a DNS label, and a branch of a gone database', async () => {
+      const { port } = factory();
+      const db = await port.createDatabase({ applicationRef: APP_A });
+      for (const name of ['', 'PR-1', 'pr_1', '-pr', 'pr-', 'x'.repeat(64)]) {
+        await expect(port.createBranch(db.handle, { name })).rejects.toBeInstanceOf(
+          DatabaseBranchNameInvalidError,
+        );
+      }
+      await port.deleteDatabase(db.handle);
+      await expect(port.createBranch(db.handle, { name: 'pr-1' })).rejects.toBeInstanceOf(
+        DatabaseNotFoundError,
+      );
+    });
+
+    it('deletes a branch with its usage, and a second delete is zero', async () => {
+      const { port, advanceSeconds } = factory();
+      const db = await port.createDatabase({ applicationRef: APP_A });
+      const { branch } = await port.createBranch(db.handle, { name: 'pr-7' });
+      advanceSeconds(90);
+      const usage = await port.deleteBranch(branch);
+      expect(usage.applicationRef).toBe(APP_A);
+      expect(usage.provider).toBe(port.provider);
+      expect(usage.until.getTime()).toBeGreaterThanOrEqual(usage.since.getTime());
+      expect(usage.computeSeconds).toBeGreaterThan(0);
+      expect(usage.storageBytes).toBeGreaterThan(0);
+      const again = await port.deleteBranch(branch);
+      expect(again.computeSeconds).toBe(0);
+      expect(again.storageBytes).toBe(0);
+      // The database itself is untouched, and a new branch of the name is a new one.
+      expect(await port.connectionEnv(db.handle)).toEqual(db.env);
+      const recreated = await port.createBranch(db.handle, { name: 'pr-7' });
+      expect(recreated.branch.branchRef).not.toBe(branch.branchRef);
+    });
+
+    it('reads a branch usage without deleting it, and a gone branch reads zero', async () => {
+      const { port, advanceSeconds } = factory();
+      const db = await port.createDatabase({ applicationRef: APP_A });
+      const { branch } = await port.createBranch(db.handle, { name: 'pr-5' });
+      advanceSeconds(120);
+      const read = await port.branchUsage(branch);
+      expect(read.applicationRef).toBe(APP_A);
+      expect(read.provider).toBe(port.provider);
+      expect(read.computeSeconds).toBeGreaterThan(0);
+      expect(read.storageBytes).toBeGreaterThan(0);
+      // Still there: the delete reports at least what the read did.
+      const deleted = await port.deleteBranch(branch);
+      expect(deleted.computeSeconds).toBeGreaterThanOrEqual(read.computeSeconds);
+      expect((await port.branchUsage(branch)).computeSeconds).toBe(0);
+    });
+
+    it('a branch goes with its database: deleting it afterwards is zero', async () => {
+      const { port } = factory();
+      const db = await port.createDatabase({ applicationRef: APP_A });
+      const { branch } = await port.createBranch(db.handle, { name: 'pr-3' });
+      await port.deleteDatabase(db.handle);
+      const usage = await port.deleteBranch(branch);
+      expect(usage.computeSeconds).toBe(0);
+      expect(usage.storageBytes).toBe(0);
+    });
+
+    it('returns no connection string in a branch handle, its usage or its errors', async () => {
+      const { port, advanceSeconds } = factory();
+      const db = await port.createDatabase({ applicationRef: APP_A });
+      const created = await port.createBranch(db.handle, { name: 'pr-9' });
+      const secrets = [...secretsIn(db.env), ...secretsIn(created.env)];
+      advanceSeconds(30);
+      const returned: unknown[] = [
+        created.branch,
+        await port.deleteBranch(created.branch),
+        await thrown(() => port.createBranch(db.handle, { name: 'Not A Label' })),
       ];
       for (const value of returned) {
         const text = serialised(value);

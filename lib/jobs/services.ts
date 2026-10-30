@@ -48,6 +48,9 @@ import { fleetPoolGrowthPassService } from '@/lib/services/fleetPoolGrowthPassSe
 import { hostAccountReconcileService } from '@/lib/services/hostAccountReconcileService';
 import { hostAccountStateService } from '@/lib/services/hostAccountStateService';
 import { hostingTenantAccountService } from '@/lib/services/hostingTenantAccountService';
+import { previewEnablementService } from '@/lib/services/previewEnablementService';
+import { previewLifecycleService } from '@/lib/services/previewLifecycleService';
+import { ciPreviewUsageMeterService } from '@/lib/services/ciPreviewUsageMeterService';
 import { ciLiveChargeService } from '@/lib/services/ciLiveChargeService';
 import { ciActionsGateService } from '@/lib/services/ciActionsGateService';
 import { ciRunnerBootService } from '@/lib/services/ciRunnerBootService';
@@ -145,6 +148,11 @@ export const jobServices = {
   hostAccountState: hostAccountStateService,
   // The enterprise tenant account reconcile (Story MOTIR-9792 · MOTIR-9942).
   hostingTenantAccountReconcile: hostingTenantAccountService,
+  // The preview enablement sweep (Story MOTIR-5766 · MOTIR-5775).
+  previewEnablement: previewEnablementService,
+  previewLifecycle: previewLifecycleService,
+  // Preview usage metered into the CI pool (Story MOTIR-5766 · MOTIR-5777).
+  ciPreviewUsageMeter: ciPreviewUsageMeterService,
   ciActionsGate: ciActionsGateService,
   ciRunnerBoot: ciRunnerBootService,
   // The GitHub-side reconcile of the fleet's queue (MOTIR-8976).

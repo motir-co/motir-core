@@ -1,5 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
 import { OrchestratorApiError } from '../../errors';
 import {
   CustomerRepositoryRefusedError,
@@ -8,7 +7,7 @@ import {
   ReleaseCommandUnsupportedError,
   ReleaseNotFoundError,
 } from '../../hosting/errors';
-import { hostingAppNames, sameEnvironment } from '../../hosting/names';
+import { hostingAppNames, pushNamespaceName, sameEnvironment } from '../../hosting/names';
 import { requireReleaseShape } from '../../hosting/shape';
 import type {
   DeployReleaseInput,
@@ -27,6 +26,17 @@ import type {
 } from '../../hosting/types';
 import { computeUsageFor, runningSecondsBetween, type RunTransition } from '../../hosting/usage';
 import { assertServerlessRuntime } from '../serverless/preflight';
+import {
+  armFakeHostingFailure,
+  emptyFakeHostingSlice,
+  fakeHostingPortKey,
+  fakeHostingStatePath,
+  readFakeHostingSlice,
+  resetFakeHostingSnapshot,
+  saveFakeHostingSlice,
+  takeArmedFakeHostingFailure,
+  type FakeHostingSlice,
+} from './hostingStore';
 
 // The FAKE hosting deploy port (MOTIR-5773) — the second implementation shipped
 // beside the Fly adapter, for the reason every port here has one: the preview
@@ -45,6 +55,22 @@ import { assertServerlessRuntime } from '../serverless/preflight';
 // `waiting_for_account` while the tenant account is not ready (and a repeat once
 // it is completes the SAME release), each shape answers its own upstream and
 // origin credential, and usage carries compute units from the shared size table.
+//
+// ACROSS PROCESSES (MOTIR-10098): with `MOTIR_FAKE_HOSTING_STATE_PATH` set, its
+// whole state is the slice `./hostingStore` keeps in that file — loaded before
+// every operation and control, saved after every mutation (reads never save, so a
+// read cannot roll back another process's write), armed failures in the store's
+// sidecar, release ids pid-suffixed. Unset, it is the in-memory closure it always
+// was. Only a fake built with `shareAcrossProcesses` takes the seam — the
+// composition root's singleton (MOTIR-10040); a fake a test builds itself stays
+// in memory even with the variable set.
+//
+// The HOLD sidecar (`<path>.hold.json`, `{ "held": ["deploy"] }`) is how a spec
+// in a THIRD process keeps a release open long enough to be seen building
+// (Story MOTIR-9797 · MOTIR-10040): a held operation waits, before it reads
+// anything, until the operation leaves the list — and fails at the "provider"
+// after `FAKE_HOSTING_HOLD_LIMIT_MS`, so a hold nobody releases ends the release
+// rather than the lane.
 
 export interface FakeHostedRelease {
   readonly releaseId: string;
@@ -68,6 +94,10 @@ export interface FakeHostedApp {
   health: 'deploying' | 'healthy' | 'unhealthy';
   running: boolean;
   transitions: RunTransition[];
+  /** Where the live release answers instead of the fake's template address —
+   *  an origin a lane points at a stand-in (MOTIR-10100). Null or absent: the
+   *  template. */
+  upstreamOverride?: string | null;
 }
 
 /** The port operations, as the fake's call log names them. */
@@ -83,9 +113,6 @@ export interface FakeHostingCall {
   readonly envNames?: readonly string[];
 }
 
-/** The operations a test can make fail once at the provider. */
-export type FakeFailableOperation = 'destroy' | 'destroyApp' | 'deploy' | 'runReleaseCommand';
-
 export interface FakeHostingControls {
   /** The fake's clock. */
   now(): Date;
@@ -99,13 +126,17 @@ export interface FakeHostingControls {
   app(appRef: string): FakeHostedApp | undefined;
   /** Every push credential minted, in order. */
   readonly mintedFor: readonly string[];
+  /** Every push namespace `ensurePushNamespace` made, in order of creation. */
+  pushNamespaces(): readonly string[];
+  /** The credentials minted for a namespace and not yet revoked. */
+  liveCredentials(pushNamespace: string): number;
   /** The next call of that operation fails at the "provider" with an
    *  `OrchestratorApiError` and changes nothing — a destroy that destroyed
    *  nothing, for the usage-always rule's error path; a deploy or a release
    *  command that never ran. `message` replaces the error's detail, so a test
    *  can make it carry something that must not leak. */
-  failNext(operation: FakeFailableOperation, message?: string): void;
-  /** Every port call, in order. */
+  failNext(operation: FakeHostingFailure, message?: string): void;
+  /** Every port call this process made, in order. */
   readonly calls: readonly FakeHostingCall[];
   /** How the next release commands end (default: exit 0). */
   setReleaseCommandResult(result: ReleaseCommandResult): void;
@@ -113,55 +144,31 @@ export interface FakeHostingControls {
    *  sets it false; while not ready an `aws` deploy waits in
    *  `waiting_for_account`. */
   setAccountReady(ready: boolean): void;
+  /** Point an app's live release at `address` — stored as its ORIGIN, the fact
+   *  the gate forwards to — or, with null, back at the template address. Moves
+   *  the address only: the release's state and origin credential are unchanged.
+   *  Refuses a value that is not an absolute http(s) URL, and an unknown app. */
+  setUpstream(appRef: string, address: string | null): void;
+  /** Forget every app, release, credential and armed failure — in the shared
+   *  store too, so a lane's next spec inherits nothing. */
+  reset(): void;
 }
 
-export interface FakeHostingOptions {
-  readonly target?: HostingDeployTarget;
-  readonly appPrefix?: string;
-  readonly start?: Date;
-  /** Repository ids `ensureApp` refuses as customer repositories (D1). */
-  readonly refuseRepositories?: readonly string[];
-  /** Whether the cross-process store seam applies (below). Only the composition
-   *  root's singleton takes it; a fake a test builds itself is in-memory only. */
-  readonly shareAcrossProcesses?: boolean;
-}
+/** The operations a test can make fail once at the "provider". */
+export type FakeHostingFailure =
+  | 'destroy'
+  | 'destroyApp'
+  | 'deploy'
+  | 'runReleaseCommand'
+  | 'ensurePushNamespace'
+  | 'revokeDeployCredentials';
 
-// ⚠️ THE CROSS-PROCESS *HOSTING* STORE (Story MOTIR-9797 · MOTIR-10040) — the
-// seam `./index.ts` (MOTIR-3828) and `./persistent.ts` carry, for the same
-// reason: in the E2E lane a merge's release is DEPLOYED by the job worker and
-// ROLLED BACK by the web server, so the two processes must see one provider.
-// An in-memory map in each would answer the rollback "no live release" for an
-// application the other process just made live.
-//
-// OPT-IN and file-backed: absent the variable, or for a fake built without
-// `shareAcrossProcesses`, this is the in-memory fake every vitest suite drives.
-// Under it, every operation reads the file before it runs and writes it after.
-//
-// The HOLD sidecar (`<path>.hold.json`, `{ "held": ["deploy"] }`) is how a spec
-// in a THIRD process keeps a release open long enough to be seen building: a
-// held operation waits, before it reads anything, until the operation leaves
-// the list — and fails at the "provider" after `FAKE_HOSTING_HOLD_LIMIT_MS`, so
-// a hold nobody releases ends the release rather than the lane.
-export const FAKE_HOSTING_STATE_PATH_ENV = 'MOTIR_FAKE_HOSTING_STATE_PATH';
+/** The name MOTIR-10030 gave the failable operations. */
+export type FakeFailableOperation = FakeHostingFailure;
+
 /** How long a held operation waits before it fails. */
 export const FAKE_HOSTING_HOLD_LIMIT_MS = 120_000;
 const HOLD_POLL_MS = 100;
-
-interface PersistedHostedApp extends Omit<FakeHostedApp, 'transitions'> {
-  transitions: Array<{ at: string; running: boolean }>;
-}
-
-interface PersistedHostingStore {
-  clock: number;
-  sequence: number;
-  apps: PersistedHostedApp[];
-  shapes: FakeHostedRelease[];
-}
-
-function hostingStatePath(): string | null {
-  const raw = process.env[FAKE_HOSTING_STATE_PATH_ENV];
-  return raw !== undefined && raw !== '' ? raw : null;
-}
 
 /** The operations the hold sidecar names, or none. A torn read holds nothing. */
 function heldOperations(path: string): readonly string[] {
@@ -173,6 +180,17 @@ function heldOperations(path: string): readonly string[] {
   } catch {
     return [];
   }
+}
+
+export interface FakeHostingOptions {
+  readonly target?: HostingDeployTarget;
+  readonly appPrefix?: string;
+  readonly start?: Date;
+  /** Repository ids `ensureApp` refuses as customer repositories (D1). */
+  readonly refuseRepositories?: readonly string[];
+  /** Whether the cross-process store seam applies. Only the composition root's
+   *  singleton takes it; a fake a test builds itself is in-memory only. */
+  readonly shareAcrossProcesses?: boolean;
 }
 
 /** The origin credential a forwarder sends to a release of that target and
@@ -195,63 +213,65 @@ function upstreamFor(appRef: string, shape: ReleaseShape | undefined): string {
   return `https://${appRef}.fake.invalid`;
 }
 
+/** The origin of an absolute http(s) address, or the typed refusal naming the app. */
+function originOf(appRef: string, address: string): string {
+  let url: URL | null = null;
+  try {
+    url = new URL(address);
+  } catch {
+    url = null;
+  }
+  if (!url || (url.protocol !== 'http:' && url.protocol !== 'https:')) {
+    throw new OrchestratorApiError(
+      'fake',
+      400,
+      `app ${appRef}: an upstream must be an absolute http(s) URL, not "${address}"`,
+    );
+  }
+  return url.origin;
+}
+
 export function createFakeHostingDeployPort(
   options: FakeHostingOptions = {},
 ): HostingDeployPort & FakeHostingControls {
   const target = options.target ?? 'fly';
   const prefix = options.appPrefix ?? 'mh-';
-  let clock = (options.start ?? new Date('2026-01-01T00:00:00Z')).getTime();
-  let sequence = 0;
-  const apps = new Map<string, FakeHostedApp>();
-  const mintedFor: string[] = [];
-  const failing = new Map<FakeFailableOperation, string | undefined>();
+  const key = fakeHostingPortKey(target, options.appPrefix);
+  const refused = new Set(options.refuseRepositories ?? []);
+  let state: FakeHostingSlice = emptyFakeHostingSlice(options.start);
+  // The take-once failures of an UNSHARED fake; a shared one arms the sidecar.
+  const failing = new Map<FakeHostingFailure, string | undefined>();
   const calls: FakeHostingCall[] = [];
   let commandResult: ReleaseCommandResult = { exitCode: 0, timedOut: false };
-  const refused = new Set(options.refuseRepositories ?? []);
-  // Every release's shape, kept past its destroy so a repeated destroy still
-  // reports usage in the unit of the release it names.
-  const shapes = new Map<string, FakeHostedRelease>();
-  let accountReady = true;
+  /** The shared store's path when this fake takes the seam, else null. */
   const sharedPath = (): string | null =>
-    options.shareAcrossProcesses ? hostingStatePath() : null;
+    options.shareAcrossProcesses ? fakeHostingStatePath() : null;
 
-  /** Read the shared file over this process's state. A no-op when the seam is off. */
-  function loadShared(path: string): void {
-    if (!existsSync(path)) return;
-    let parsed: PersistedHostingStore;
-    try {
-      parsed = JSON.parse(readFileSync(path, 'utf8')) as PersistedHostingStore;
-    } catch {
-      // A half-written file is a torn read: keep what this process has, and the
-      // next write replaces it.
-      return;
-    }
-    clock = parsed.clock;
-    sequence = parsed.sequence;
-    apps.clear();
-    for (const app of parsed.apps) {
-      apps.set(app.appRef, {
-        ...app,
-        transitions: app.transitions.map((t) => ({ at: new Date(t.at), running: t.running })),
-      });
-    }
-    shapes.clear();
-    for (const made of parsed.shapes) shapes.set(made.releaseId, made);
+  /** Under the seam, adopt what the file holds — an empty slice when nothing is
+   *  stored, because another process may have reset it; a torn file keeps ours. */
+  function load(): FakeHostingSlice {
+    if (!sharedPath()) return state;
+    const stored = readFakeHostingSlice(key);
+    if (stored === null) state = emptyFakeHostingSlice(options.start);
+    else if (stored !== 'torn') state = stored;
+    return state;
   }
 
-  /** Write this process's state to the shared file. */
-  function saveShared(path: string): void {
-    const out: PersistedHostingStore = {
-      clock,
-      sequence,
-      apps: [...apps.values()].map((app) => ({
-        ...app,
-        transitions: app.transitions.map((t) => ({ at: t.at.toISOString(), running: t.running })),
-      })),
-      shapes: [...shapes.values()],
-    };
-    mkdirSync(dirname(path), { recursive: true });
-    writeFileSync(path, JSON.stringify(out), 'utf8');
+  /** Persist the slice after a mutation — a no-op with the seam off. */
+  function save(): void {
+    if (sharedPath()) saveFakeHostingSlice(key, state);
+  }
+
+  function injectedFailure(operation: FakeHostingFailure): void {
+    let detail: string | null = null;
+    if (failing.has(operation)) {
+      detail = failing.get(operation) ?? `injected ${operation} failure`;
+      failing.delete(operation);
+    } else if (sharedPath()) {
+      detail = takeArmedFakeHostingFailure(key, operation);
+    }
+    if (detail === null) return;
+    throw new OrchestratorApiError('fake', 503, detail);
   }
 
   /** Wait while the hold sidecar names `operation`. */
@@ -265,17 +285,10 @@ export function createFakeHostingDeployPort(
     }
   }
 
-  function injectedFailure(operation: FakeFailableOperation): void {
-    if (!failing.has(operation)) return;
-    const message = failing.get(operation);
-    failing.delete(operation);
-    throw new OrchestratorApiError('fake', 503, message ?? `injected ${operation} failure`);
-  }
-
-  const now = () => new Date(clock);
+  const now = () => new Date(state.clock);
 
   function appOf(appRef: string): FakeHostedApp {
-    const app = apps.get(appRef);
+    const app = state.apps[appRef];
     if (!app) throw new OrchestratorApiError('fake', 404, `app ${appRef} does not exist`);
     return app;
   }
@@ -305,7 +318,7 @@ export function createFakeHostingDeployPort(
     runningSeconds: number,
   ): ReleaseUsage {
     const base = { target, appRef, releaseId, since, until, runningSeconds };
-    const shaped = shapes.get(releaseId);
+    const shaped = state.shapes[releaseId];
     if (!shaped?.shape) return base;
     return {
       ...base,
@@ -335,62 +348,99 @@ export function createFakeHostingDeployPort(
     return shape;
   }
 
+  /** A new release id — pid-suffixed under the seam, so two processes reading
+   *  one store never mint the same one. */
+  function nextReleaseId(): string {
+    state.sequence += 1;
+    return sharedPath() ? `rel-${process.pid}-${state.sequence}` : `rel-${state.sequence}`;
+  }
+
   function release(
     input: DeployReleaseInput,
     shape: ReleaseShape | undefined,
     releaseId?: string,
   ): FakeHostedRelease {
-    if (!releaseId) sequence += 1;
     const { artifact } = input;
     const image =
       artifact.kind === 'image' && artifact.digest
         ? `${artifact.ref}@${artifact.digest}`
         : artifact.ref;
     const made: FakeHostedRelease = {
-      releaseId: releaseId ?? `rel-${sequence}`,
+      releaseId: releaseId ?? nextReleaseId(),
       environment: input.environment,
       image,
       runtime: input.runtime,
       env: Object.fromEntries(input.env.map((v) => [v.name, v.value])),
       ...(shape ? { shape, ...(input.size ? { size: input.size } : {}) } : {}),
     };
-    shapes.set(made.releaseId, made);
+    state.shapes[made.releaseId] = made;
     return made;
   }
 
   const port: HostingDeployPort & FakeHostingControls = {
     target,
-    mintedFor,
     calls,
-    now,
+    get mintedFor() {
+      return load().mintedFor;
+    },
+    now: () => {
+      load();
+      return now();
+    },
     advanceSeconds(seconds) {
-      clock += seconds * 1000;
+      load().clock += seconds * 1000;
+      save();
     },
     setHealth(appRef, health) {
+      load();
       appOf(appRef).health = health;
+      save();
     },
     idleStop(appRef) {
+      load();
       setRunning(appOf(appRef), false);
+      save();
     },
     wake(appRef) {
+      load();
       setRunning(appOf(appRef), true);
+      save();
     },
-    app: (appRef) => apps.get(appRef),
+    app: (appRef) => load().apps[appRef],
+    pushNamespaces: () => [...load().namespaces],
+    liveCredentials: (pushNamespace) => load().liveTokens[pushNamespace] ?? 0,
     failNext(operation, message) {
-      failing.set(operation, message);
+      if (sharedPath()) {
+        armFakeHostingFailure(key, operation, message ?? `injected ${operation} failure`);
+      } else {
+        failing.set(operation, message);
+      }
     },
     setReleaseCommandResult(result) {
       commandResult = result;
     },
     setAccountReady(ready) {
-      accountReady = ready;
+      load().accountReady = ready;
+      save();
+    },
+    setUpstream(appRef, address) {
+      load();
+      const app = appOf(appRef);
+      app.upstreamOverride = address === null ? null : originOf(appRef, address);
+      save();
+    },
+    reset() {
+      state = emptyFakeHostingSlice(options.start);
+      failing.clear();
+      if (sharedPath()) resetFakeHostingSnapshot(key);
     },
 
     async ensureApp({ repositoryId, environment }) {
       if (refused.has(repositoryId)) throw new CustomerRepositoryRefusedError(repositoryId);
       const names = hostingAppNames(prefix, repositoryId, environment);
-      if (!apps.has(names.appRef)) {
-        apps.set(names.appRef, {
+      const { apps } = load();
+      if (!apps[names.appRef]) {
+        apps[names.appRef] = {
           ...names,
           environment,
           live: null,
@@ -399,27 +449,51 @@ export function createFakeHostingDeployPort(
           health: 'deploying',
           running: false,
           transitions: [],
-        });
+        };
+        save();
       }
       return names;
     },
 
+    async ensurePushNamespace({ repositoryId, kind }) {
+      if (refused.has(repositoryId)) throw new CustomerRepositoryRefusedError(repositoryId);
+      injectedFailure('ensurePushNamespace');
+      const pushNamespace = pushNamespaceName(prefix, repositoryId, kind);
+      const { namespaces } = load();
+      if (!namespaces.includes(pushNamespace)) namespaces.push(pushNamespace);
+      save();
+      return { pushNamespace, imageRepository: `registry.fake.invalid/${pushNamespace}` };
+    },
+
+    async revokeDeployCredentials({ pushNamespace }) {
+      injectedFailure('revokeDeployCredentials');
+      const { liveTokens } = load();
+      const revoked = liveTokens[pushNamespace] ?? 0;
+      delete liveTokens[pushNamespace];
+      save();
+      return { revoked };
+    },
+
     async mintDeployCredential({ pushNamespace }) {
+      const { mintedFor, liveTokens } = load();
       mintedFor.push(pushNamespace);
+      liveTokens[pushNamespace] = (liveTokens[pushNamespace] ?? 0) + 1;
+      save();
       return {
         kind: 'secret',
         pushNamespace,
         value: `fake-deploy-token-${pushNamespace}`,
-        expiresAt: new Date(clock + 90 * 86_400_000),
+        expiresAt: new Date(state.clock + 90 * 86_400_000),
       };
     },
 
     async deploy(input) {
-      injectedFailure('deploy');
       // As the serverless adapter: its manifest refusals come before anything
       // else, so a refused release finds no app and creates nothing.
+      injectedFailure('deploy');
       if (target === 'serverless') assertServerlessRuntime(input.runtime);
       const shape = shapeOf(input);
+      load();
       const app = appOf(input.appRef);
       if (!sameEnvironment(app.environment, input.environment)) {
         throw new OrchestratorApiError('fake', 409, `app ${app.appRef} is another environment's`);
@@ -427,8 +501,9 @@ export function createFakeHostingDeployPort(
       // A deploy held for the account resumes as the SAME release: the repeat
       // reuses the held release's id, so a resumed run never makes a second.
       const next = release(input, shape, app.pending?.releaseId);
-      if (target === 'aws' && !accountReady) {
+      if (target === 'aws' && !state.accountReady) {
         app.pending = next;
+        save();
         return handleFor(app, next);
       }
       app.pending = null;
@@ -436,11 +511,12 @@ export function createFakeHostingDeployPort(
       app.live = next;
       app.health = 'healthy';
       setRunning(app, true);
+      save();
       return handleFor(app, next);
     },
 
     async describe(handle): Promise<ReleaseDescription> {
-      const app = apps.get(handle.appRef);
+      const app = load().apps[handle.appRef];
       if (app?.pending) {
         return {
           state: 'waiting_for_account',
@@ -463,7 +539,7 @@ export function createFakeHostingDeployPort(
         state: app.running ? app.health : 'stopped',
         releaseId: app.live.releaseId,
         previousReleaseId: app.previous?.releaseId ?? null,
-        upstreamAddress: upstreamFor(app.appRef, app.live.shape),
+        upstreamAddress: app.upstreamOverride ?? upstreamFor(app.appRef, app.live.shape),
         // As the real adapters: a Fly release sits behind the origin-secret
         // guard (MOTIR-9947), a serverless one behind a SigV4-signed function
         // URL (MOTIR-9972), an AWS release behind its shape's credential.
@@ -472,6 +548,7 @@ export function createFakeHostingDeployPort(
     },
 
     async rollback({ appRef }) {
+      load();
       const app = appOf(appRef);
       if (!app.live) throw new ReleaseNotFoundError(appRef);
       if (!app.previous) throw new NoPreviousReleaseError(appRef);
@@ -479,18 +556,23 @@ export function createFakeHostingDeployPort(
       app.previous = app.live;
       app.live = restored;
       setRunning(app, true);
+      save();
       return handleFor(app, restored);
     },
 
     async usageSince(handle, since) {
+      load();
       return usage(appOf(handle.appRef), handle.releaseId, since);
     },
 
     async destroy(handle) {
       injectedFailure('destroy');
-      const app = apps.get(handle.appRef);
+      const app = load().apps[handle.appRef];
       if (!app || !app.live) {
-        if (app) app.pending = null;
+        if (app) {
+          app.pending = null;
+          save();
+        }
         return usageRecord(handle.appRef, handle.releaseId, now(), now(), 0);
       }
       const first = app.transitions[0]?.at ?? now();
@@ -498,19 +580,26 @@ export function createFakeHostingDeployPort(
       setRunning(app, false);
       app.live = null;
       app.previous = null;
+      save();
       return result;
     },
 
     async destroyApp({ appRef }) {
       injectedFailure('destroyApp');
-      const app = apps.get(appRef);
-      apps.delete(appRef);
+      const { apps, namespaces, liveTokens } = load();
+      const app = apps[appRef];
+      delete apps[appRef];
+      // On Fly a push namespace IS an app (`mh-<rid>-pv`), destroyed the same way
+      // at takeover (MOTIR-5776).
+      state.namespaces = namespaces.filter((n) => n !== appRef);
+      delete liveTokens[appRef];
+      save();
       if (!app?.live) return [];
       return [usage(app, app.live.releaseId, app.transitions[0]?.at ?? now())];
     },
 
     async listReleases({ appRef }): Promise<ReleaseSummary[]> {
-      const app = apps.get(appRef);
+      const app = load().apps[appRef];
       if (app?.pending) {
         return [{ handle: handleFor(app, app.pending), state: 'waiting_for_account' }];
       }
@@ -526,17 +615,21 @@ export function createFakeHostingDeployPort(
     async runReleaseCommand({ appRef }) {
       // As the real adapters: only Fly runs a one-off command of a release image.
       if (target !== 'fly') throw new ReleaseCommandUnsupportedError(target);
+      load();
       appOf(appRef);
       injectedFailure('runReleaseCommand');
       return commandResult;
     },
   };
 
-  // The call log wraps every operation, so a test can assert their ORDER — the
-  // migration before the deploy — without each operation logging itself.
+  // The call log and the hold wrap every operation, so a test can assert their
+  // ORDER — the migration before the deploy — without each operation logging
+  // itself, and a held operation waits before it reads the store.
   const operations: FakeHostingOperation[] = [
     'ensureApp',
+    'ensurePushNamespace',
     'mintDeployCredential',
+    'revokeDeployCredentials',
     'deploy',
     'describe',
     'rollback',
@@ -548,7 +641,7 @@ export function createFakeHostingDeployPort(
   ];
   const record = port as unknown as Record<FakeHostingOperation, (input: unknown) => unknown>;
   for (const operation of operations) {
-    const inner = record[operation].bind(port);
+    const inner = record[operation].bind(port) as (...args: unknown[]) => unknown;
     record[operation] = (input: unknown, ...rest: unknown[]) => {
       const fields = (input ?? {}) as {
         appRef?: unknown;
@@ -562,15 +655,10 @@ export function createFakeHostingDeployPort(
         ...(Array.isArray(fields.env) ? { envNames: fields.env.map((v) => v.name) } : {}),
       });
       const path = sharedPath();
-      if (!path) return (inner as (...args: unknown[]) => unknown)(input, ...rest);
+      if (!path) return inner(input, ...rest);
       return (async () => {
         await awaitRelease(path, operation);
-        loadShared(path);
-        try {
-          return await (inner as (...args: unknown[]) => Promise<unknown>)(input, ...rest);
-        } finally {
-          saveShared(path);
-        }
+        return inner(input, ...rest);
       })();
     };
   }

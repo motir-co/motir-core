@@ -352,6 +352,12 @@ const PROVISIONING_SHAPES: ReadonlyArray<{ name: string; pattern: RegExp }> = [
   },
 ];
 
+/** The preview lifecycle's GitHub deployments client and its one caller (MOTIR-5776). */
+const PREVIEW_DEPLOYMENT_WRITERS = [
+  'lib/github/previewDeployments.ts',
+  'lib/services/previewLifecycleService.ts',
+] as const;
+
 /** Drop comments so a sentence ABOUT deployments is not a call. */
 function stripComments(source: string): string {
   return source
@@ -443,12 +449,24 @@ describe('seam 6 — no provisioning: nothing under lib/ or packages/cli/ create
     expect(files).toContain('lib/services/repoDeploymentService.ts');
     expect(files).toContain('packages/cli/src/closeOutHowToTest.ts');
     const hits = findProvisioningCalls(files, (f) => readFileSync(join(ROOT, f), 'utf8'));
-    expect(hits.filter((h) => !PRODUCTION_RELEASE_POSTERS.has(h.slice(0, h.indexOf(':'))))).toEqual(
-      [],
-    );
+    // Story MOTIR-5766 (ADR MOTIR-5769 §8): a pull request's PREVIEW is Motir's
+    // own release too, so Motir announces it as GitHub's deployment — confined to
+    // its two files. Everything else, the How-to-test ingestion and the CLI
+    // close-out included, still makes none.
+    const sanctioned = (h: string) =>
+      PRODUCTION_RELEASE_POSTERS.has(h.slice(0, h.indexOf(':'))) ||
+      PREVIEW_DEPLOYMENT_WRITERS.some((file) => h.startsWith(`${file}:`));
+    expect(hits.filter((h) => !sanctioned(h))).toEqual([]);
     // Not vacuous either: the exception is real, and the ingestion writer is not in it.
     expect(hits.some((h) => h.startsWith('lib/github/repoDeployments.ts:'))).toBe(true);
     expect(PRODUCTION_RELEASE_POSTERS.has('lib/services/repoDeploymentService.ts')).toBe(false);
+    // TIGHT: a preview allowance nothing matches any more is removed, not kept.
+    for (const file of PREVIEW_DEPLOYMENT_WRITERS) {
+      expect(
+        hits.some((h) => h.startsWith(`${file}:`)),
+        `stale allowance ${file}`,
+      ).toBe(true);
+    }
   });
 });
 

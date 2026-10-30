@@ -13,6 +13,7 @@ import {
   unregisterHostingAdapter,
   type ReleaseRuntime,
 } from '@/lib/orchestrator';
+import { hostingFakeControls } from '@/lib/orchestrator/hosting';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -125,6 +126,21 @@ describe('getHostingDeployPort', () => {
     vi.stubEnv('MOTIR_HOSTING_GUARD_IMAGE', 'registry.fly.io/motir-hosting-guard@sha256:g');
     vi.stubEnv('MOTIR_HOSTING_ORIGIN_SECRET_KEY', 'k');
     expect(getHostingDeployPort('fly', { appPrefix: 'motir-deploy-check-' }).target).toBe('fly');
+  });
+});
+
+describe('hostingFakeControls (MOTIR-10098)', () => {
+  it('is the very fake the port hands back while the fake is selected', () => {
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fake');
+    const controls = hostingFakeControls('fly');
+    expect(controls).toBe(getHostingDeployPort('fly'));
+    expect(typeof controls.setUpstream).toBe('function');
+  });
+
+  it('refuses with the typed not-configured error under any other orchestrator', () => {
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', '');
+    expect(() => hostingFakeControls('fly')).toThrow(OrchestratorNotConfiguredError);
+    expect(() => hostingFakeControls('fly')).toThrow(/MOTIR_FLEET_ORCHESTRATOR=fake/);
   });
 });
 

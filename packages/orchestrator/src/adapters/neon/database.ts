@@ -1,7 +1,12 @@
 import { OrchestratorApiError } from '../../errors';
 import { databaseEnvPairs } from '../../database/env';
-import { DatabaseApplicationRefInvalidError, DatabaseNotFoundError } from '../../database/errors';
+import {
+  DatabaseApplicationRefInvalidError,
+  DatabaseNotFoundError,
+  assertDatabaseBranchName,
+} from '../../database/errors';
 import type {
+  DatabaseBranchHandle,
   DatabaseHandle,
   DatabasePort,
   DatabaseSummary,
@@ -30,6 +35,17 @@ import type { NeonDatabaseConfig } from './config';
 // delete that does not produce usage. Usage is Neon's consumption history v2
 // (`compute_unit_seconds`, by the hour, day or month by the window's age — the
 // endpoint the Launch plan serves) and the root branch's logical size.
+//
+// BRANCHES (MOTIR-5772). A preview's database is a Neon branch of its
+// application's preview project, made from the project's root (`main`, which
+// MOTIR-5769 §6 keeps data-free) with its own read-write compute; create is
+// idempotent by the branch's exact name, and its pairs are `connection_uri` read
+// for that branch. A branch's usage is read from the branch itself before it is
+// deleted — `compute_time_seconds` (CPU seconds, which on Neon's fractional
+// computes is compute-unit seconds) and its `logical_size` — because
+// consumption history v2 does not break a project down by branch. `branchUsage`
+// is the same read with no delete, for a meter that charges as a preview lives. A 404 on the
+// delete is a branch already gone, so teardown is idempotent.
 
 /** Every project this adapter makes is named with this prefix. */
 export const NEON_PROJECT_PREFIX = 'mh-';
@@ -66,9 +82,13 @@ interface NeonProjectsPage {
 }
 
 interface NeonBranch {
+  readonly id?: string;
+  readonly name?: string;
+  readonly created_at?: string;
   readonly default?: boolean;
   readonly primary?: boolean;
   readonly logical_size?: number;
+  readonly compute_time_seconds?: number;
 }
 
 interface NeonConsumption {
@@ -128,16 +148,25 @@ export function createNeonDatabasePort(
 
   /**
    * One Neon call. `missing` answers a 404 instead of throwing. Reads and
-   * deletes are retried on 423, 429 and 5xx; a create is never retried.
+   * deletes are retried on 423, 429 and 5xx; a create is never retried, except
+   * on 423 when `lockedRetry` says so — Neon's "project locked by a running
+   * operation", which created nothing (a branch asked for right after its
+   * project is the common case).
    */
   async function neon<T>(
     method: 'GET' | 'POST' | 'DELETE',
     path: string,
-    init: { query?: Record<string, string>; body?: unknown; missing?: T } = {},
+    init: {
+      query?: Record<string, string>;
+      body?: unknown;
+      missing?: T;
+      lockedRetry?: boolean;
+    } = {},
   ): Promise<T> {
     const url = new URL(`${NEON_API_BASE}${path}`);
     for (const [key, value] of Object.entries(init.query ?? {})) url.searchParams.set(key, value);
-    const attempts = method === 'POST' ? 1 : READ_ATTEMPTS;
+    const create = method === 'POST';
+    const attempts = create && !init.lockedRetry ? 1 : READ_ATTEMPTS;
     for (let attempt = 1; ; attempt += 1) {
       let res: Response;
       try {
@@ -160,7 +189,9 @@ export function createNeonDatabasePort(
       const body: unknown = await res.json().catch(() => null);
       if (res.ok) return body as T;
       if (res.status === 404 && 'missing' in init) return init.missing as T;
-      const retryable = res.status === 423 || res.status === 429 || res.status >= 500;
+      const retryable = create
+        ? res.status === 423
+        : res.status === 423 || res.status === 429 || res.status >= 500;
       if (retryable && attempt < attempts) {
         await sleep(RETRY_MS * attempt);
         continue;
@@ -201,13 +232,17 @@ export function createNeonDatabasePort(
     }
   }
 
-  async function connectionPairs(projectId: string): Promise<readonly ReleaseEnvVar[]> {
+  async function connectionPairs(
+    projectId: string,
+    branchId?: string,
+  ): Promise<readonly ReleaseEnvVar[]> {
     const uri = async (pooled: boolean) => {
       const out = await neon<{ uri?: string } | null>(
         'GET',
         `/projects/${encodeURIComponent(projectId)}/connection_uri`,
         {
           query: {
+            ...(branchId ? { branch_id: branchId } : {}),
             database_name: NEON_APP_DATABASE,
             role_name: NEON_APP_ROLE,
             pooled: String(pooled),
@@ -266,6 +301,42 @@ export function createNeonDatabasePort(
       until,
       computeSeconds: Math.round(compute),
       storageBytes: root?.logical_size ?? 0,
+    };
+  }
+
+  /** The project's branch of that exact name, or null. */
+  async function branchNamed(projectId: string, name: string): Promise<NeonBranch | null> {
+    const page = await neon<{ branches?: NeonBranch[] }>(
+      'GET',
+      `/projects/${encodeURIComponent(projectId)}/branches`,
+      { query: { search: name } },
+    );
+    return (page.branches ?? []).find((b) => b.name === name && b.id) ?? null;
+  }
+
+  /** The branch a handle names, or null when it, or its project, is gone. */
+  async function branchOf(handle: DatabaseBranchHandle): Promise<NeonBranch | null> {
+    const project = await projectOf(handle.database);
+    if (!project) return null;
+    const found = await neon<{ branch?: NeonBranch } | null>(
+      'GET',
+      `/projects/${encodeURIComponent(project.id)}/branches/${encodeURIComponent(handle.branchRef)}`,
+      { missing: null },
+    );
+    const branch = found?.branch;
+    return branch && branch.name === handle.name ? branch : null;
+  }
+
+  /** A branch's life-to-date usage, from the branch's own counters. */
+  function branchUsageOf(handle: DatabaseBranchHandle, branch: NeonBranch): DatabaseUsage {
+    const createdAt = Date.parse(branch.created_at ?? '');
+    return {
+      provider: 'neon',
+      applicationRef: handle.database.applicationRef,
+      since: Number.isNaN(createdAt) ? now() : new Date(createdAt),
+      until: now(),
+      computeSeconds: Math.round(branch.compute_time_seconds ?? 0),
+      storageBytes: branch.logical_size ?? 0,
     };
   }
 
@@ -334,6 +405,46 @@ export function createNeonDatabasePort(
         throw new OrchestratorApiError('neon', null, 'project still present after delete');
       }
       return usage;
+    },
+
+    async createBranch(handle, { name }) {
+      assertDatabaseBranchName(name);
+      const project = await projectOf(handle);
+      if (!project) throw new DatabaseNotFoundError(handle.applicationRef);
+      let branch = await branchNamed(project.id, name);
+      if (!branch) {
+        const created = await neon<{ branch?: NeonBranch }>(
+          'POST',
+          `/projects/${encodeURIComponent(project.id)}/branches`,
+          {
+            body: { branch: { name }, endpoints: [{ type: 'read_write' }] },
+            lockedRetry: true,
+          },
+        );
+        if (!created.branch?.id) {
+          throw new OrchestratorApiError('neon', null, 'branch create returned no branch');
+        }
+        branch = created.branch;
+      }
+      const ref: DatabaseBranchHandle = { database: handle, branchRef: branch.id!, name };
+      return { branch: ref, env: await connectionPairs(project.id, branch.id) };
+    },
+
+    async deleteBranch(handle) {
+      const branch = await branchOf(handle);
+      if (!branch) return nothing(handle.database.applicationRef);
+      const usage = branchUsageOf(handle, branch);
+      await neon(
+        'DELETE',
+        `/projects/${encodeURIComponent(handle.database.databaseRef)}/branches/${encodeURIComponent(handle.branchRef)}`,
+        { missing: null },
+      );
+      return usage;
+    },
+
+    async branchUsage(handle) {
+      const branch = await branchOf(handle);
+      return branch ? branchUsageOf(handle, branch) : nothing(handle.database.applicationRef);
     },
 
     async list(): Promise<DatabaseSummary[]> {

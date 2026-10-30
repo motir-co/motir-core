@@ -1,6 +1,6 @@
 // A scripted Neon API for the NEON database adapter (MOTIR-9973): an
-// organisation's projects, their connection URIs, their branches and their
-// consumption history v2. It answers the adapter's `fetch`, records every call
+// organisation's projects, their connection URIs, their branches (created,
+// read and deleted since MOTIR-5772) and their consumption history v2. It answers the adapter's `fetch`, records every call
 // with its headers, checks the key on each, and refuses one call on demand —
 // with a body that quotes a connection string, as a real error body can.
 
@@ -11,6 +11,18 @@ export interface NeonSimCall {
   readonly body: string | null;
 }
 
+export interface NeonSimBranch {
+  id: string;
+  name: string;
+  createdAt: number;
+  password: string;
+  /** Added to the seconds the branch has lived, as Neon's counter would be. */
+  computeTimeSeconds: number;
+  logicalSize: number;
+  /** The endpoints the create asked for, as sent. */
+  endpoints: unknown;
+}
+
 export interface NeonSimProject {
   id: string;
   name: string;
@@ -19,6 +31,8 @@ export interface NeonSimProject {
   createdAt: number;
   password: string;
   deleted: boolean;
+  /** The branches made from the root, by id — the root itself is not here. */
+  branches: Map<string, NeonSimBranch>;
 }
 
 export interface NeonApiSim {
@@ -34,6 +48,7 @@ export interface NeonApiSim {
 export const NEON_SIM_KEY = 'neon-sim-api-key-5f1e';
 export const NEON_SIM_ORG = 'org-autumn-mountain-12023030';
 export const NEON_SIM_STORAGE_BYTES = 30 * 1024 * 1024;
+export const NEON_SIM_BRANCH_STORAGE_BYTES = 8 * 1024 * 1024;
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -47,6 +62,11 @@ export function uriOf(project: NeonSimProject, pooled: boolean): string {
   return `postgresql://app:${project.password}@${host}/app?sslmode=require`;
 }
 
+export function branchUriOf(branch: NeonSimBranch, pooled: boolean): string {
+  const host = `ep-${branch.id}${pooled ? '-pooler' : ''}.us-east-1.aws.neon.tech`;
+  return `postgresql://app:${branch.password}@${host}/app?sslmode=require`;
+}
+
 export function createNeonApiSim(clock: () => number): NeonApiSim {
   const calls: NeonSimCall[] = [];
   const projects = new Map<string, NeonSimProject>();
@@ -58,6 +78,13 @@ export function createNeonApiSim(clock: () => number): NeonApiSim {
   let sequence = 0;
 
   const live = () => [...projects.values()].filter((p) => !p.deleted);
+  const branchView = (b: NeonSimBranch) => ({
+    id: b.id,
+    name: b.name,
+    created_at: new Date(b.createdAt).toISOString(),
+    compute_time_seconds: b.computeTimeSeconds + Math.floor((clock() - b.createdAt) / 1000),
+    logical_size: b.logicalSize,
+  });
   const view = (p: NeonSimProject) => ({
     id: p.id,
     name: p.name,
@@ -95,6 +122,7 @@ export function createNeonApiSim(clock: () => number): NeonApiSim {
         createdAt: clock(),
         password: `npg_secret${sequence}x`,
         deleted: false,
+        branches: new Map(),
       };
       projects.set(project.id, project);
       return json(201, {
@@ -143,12 +171,57 @@ export function createNeonApiSim(clock: () => number): NeonApiSim {
       if (q.get('database_name') !== 'app' || q.get('role_name') !== 'app') {
         return json(404, { code: 'NOT_FOUND', message: 'no such role' });
       }
-      return json(200, { uri: uriOf(project, q.get('pooled') === 'true') });
+      const pooled = q.get('pooled') === 'true';
+      const branchId = q.get('branch_id');
+      if (!branchId) return json(200, { uri: uriOf(project, pooled) });
+      const branch = project.branches.get(branchId);
+      if (!branch) return json(404, { code: 'NOT_FOUND', message: 'branch not found' });
+      return json(200, { uri: branchUriOf(branch, pooled) });
     }
     if (rest === '/branches' && method === 'GET') {
+      const search = q.get('search') ?? '';
+      const made = [...project.branches.values()]
+        .filter((b) => b.name.includes(search))
+        .map((b) => ({ ...branchView(b), default: false }));
+      const root = { id: `br-root-${project.id}`, name: 'main', default: true };
       return json(200, {
-        branches: [{ default: true, logical_size: NEON_SIM_STORAGE_BYTES }, { default: false }],
+        branches: [
+          ...('main'.includes(search) ? [{ ...root, logical_size: NEON_SIM_STORAGE_BYTES }] : []),
+          ...made,
+        ],
       });
+    }
+    if (rest === '/branches' && method === 'POST') {
+      const body = JSON.parse(call.body ?? '{}') as {
+        branch?: { name?: string };
+        endpoints?: unknown;
+      };
+      const name = body.branch?.name ?? '';
+      if ([...project.branches.values()].some((b) => b.name === name) || name === 'main') {
+        return json(409, { code: 'BRANCH_ALREADY_EXISTS', message: name });
+      }
+      sequence += 1;
+      const branch: NeonSimBranch = {
+        id: `br-${sequence}`,
+        name,
+        createdAt: clock(),
+        password: `npg_branch${sequence}x`,
+        computeTimeSeconds: 0,
+        logicalSize: NEON_SIM_BRANCH_STORAGE_BYTES,
+        endpoints: body.endpoints,
+      };
+      project.branches.set(branch.id, branch);
+      return json(201, { branch: branchView(branch), endpoints: [], operations: [] });
+    }
+    const branchPath = /^\/branches\/([^/]+)$/.exec(rest);
+    if (branchPath) {
+      const branch = project.branches.get(decodeURIComponent(branchPath[1]!));
+      if (!branch) return json(404, { code: 'NOT_FOUND', message: 'branch not found' });
+      if (method === 'GET') return json(200, { branch: branchView(branch) });
+      if (method === 'DELETE') {
+        project.branches.delete(branch.id);
+        return json(200, { branch: branchView(branch), operations: [] });
+      }
     }
     return json(405, { code: 'METHOD_NOT_ALLOWED', message: `${method} ${path}` });
   }

@@ -57,6 +57,12 @@ export interface CiEntitlementStateDTO {
   floorApplied: boolean;
   /** Linux-equivalent minutes consumed this period (the meter's one read). */
   consumedMinutes: number;
+  /**
+   * Where `consumedMinutes` went (MOTIR-5777): Actions minutes, and
+   * pull-request previews converted at MOTIR-5769 §9's factors. Additive — a
+   * surface that shows only the total is still right.
+   */
+  consumedBySource: { ci: number; preview: number };
   /** `max(0, pool − consumed)` — the "of 1,800 minutes" half of §7.3.1. */
   remainingMinutes: number;
   /** `max(0, consumed − pool)` — §7.3.4's "420 minutes over your included minutes". */

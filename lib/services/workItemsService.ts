@@ -52,6 +52,7 @@ import { customFieldDefinitionRepository } from '@/lib/repositories/customFieldD
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { githubPullRequestReviewRepository } from '@/lib/repositories/githubPullRequestReviewRepository';
+import { previewDeploymentRepository } from '@/lib/repositories/previewDeploymentRepository';
 import { countableReviewsAtHead, type CountableReview } from '@/lib/approvalGates/reviewVerdict';
 import { pullRequestHead } from '@/lib/github/pullRequestHead';
 import type { GithubPullRequestWithContext } from '@/lib/repositories/githubPullRequestRepository';
@@ -189,7 +190,11 @@ import {
 import { toWorkItemLinkDto } from '@/lib/mappers/workItemLinkMappers';
 import { toQuickViewData } from '@/lib/mappers/quickViewMappers';
 import { toFixDetailDto } from '@/lib/mappers/fixReasonMappers';
-import { toLinkedPullRequestDto, toWorkItemDeliveryDto } from '@/lib/mappers/githubMappers';
+import {
+  toLinkedPullRequestDto,
+  toWorkItemDeliveryDto,
+  type PreviewDeploymentFacts,
+} from '@/lib/mappers/githubMappers';
 import { standingMergeRefusals, standingQueueFailures } from './deliveryVerdict';
 import type { LinkedPullRequestDto, WorkItemDeliveryDto } from '@/lib/dto/github';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
@@ -1730,6 +1735,30 @@ async function recordBugFiledFinding(
  * pure function that DECIDES the gate, so a row and the gate can never disagree about what
  * counts — which is exactly the disagreement a reader would report as a bug.
  */
+/** The key a pull request's preview is looked up by: its repository and number —
+ *  the pair `preview_deployment`'s unique constraint is on. */
+function previewKey(repoId: string, pullRequestNumber: number): string {
+  return `${repoId}#${pullRequestNumber}`;
+}
+
+/**
+ * The PREVIEW of every pull request a card draws (Story MOTIR-5766 · MOTIR-10099),
+ * over ONE read for the card, keyed by {@link previewKey} — the shape
+ * {@link readGithubReviewsForRows} has, for the same reason: the rows are a list, and
+ * a read per row would make rendering one card N round trips. A pull request with no
+ * record is simply absent from the map.
+ */
+async function readPreviewsForPullRequests(
+  pullRequests: readonly { repoId: string; number: number }[],
+  tx: Prisma.TransactionClient,
+): Promise<Map<string, PreviewDeploymentFacts>> {
+  const rows = await previewDeploymentRepository.listForPullRequests(
+    pullRequests.map((pr) => ({ repoId: pr.repoId, pullRequestNumber: pr.number })),
+    tx,
+  );
+  return new Map(rows.map((row) => [previewKey(row.repoId, row.pullRequestNumber), row]));
+}
+
 async function readGithubReviewsForRows(
   rows: readonly GithubPullRequestWithContext[],
   workspaceId: string,
@@ -7421,7 +7450,14 @@ export const workItemsService = {
     return withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
       const rows = await githubPullRequestRepository.listByWorkItemWithContext(workItemId, tx);
       const reviews = await readGithubReviewsForRows(rows, ctx.workspaceId, tx);
-      return rows.map((row) => toLinkedPullRequestDto(row, reviews.get(row.id) ?? null));
+      const previews = await readPreviewsForPullRequests(rows, tx);
+      return rows.map((row) =>
+        toLinkedPullRequestDto(
+          row,
+          reviews.get(row.id) ?? null,
+          previews.get(previewKey(row.repoId, row.number)) ?? null,
+        ),
+      );
     });
   },
 
@@ -7467,11 +7503,18 @@ export const workItemsService = {
       const held = await standingQueueFailures(byId, tx);
       // …and its STANDING host merge refusal, with the host's own words (MOTIR-6735).
       const refused = await standingMergeRefusals(byId, tx);
+      // …and its PREVIEW (MOTIR-10099): `mergePullRequestRows` draws a row from this
+      // set too, so a pull request linked only here still shows its preview.
+      const previews = await readPreviewsForPullRequests(
+        rows.map((row) => row.pullRequest),
+        tx,
+      );
       return rows.map((row) =>
         toWorkItemDeliveryDto(
           row,
           held.get(row.githubPullRequestId) ?? null,
           refused.get(row.githubPullRequestId) ?? null,
+          previews.get(previewKey(row.pullRequest.repoId, row.pullRequest.number)) ?? null,
         ),
       );
     });

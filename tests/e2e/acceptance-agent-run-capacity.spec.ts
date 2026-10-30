@@ -145,7 +145,10 @@ function modelsRead(
     async (res) => {
       if (new URL(res.url()).pathname !== '/api/hosted-runs/models') return false;
       if (res.request().method() !== 'GET' || res.status() !== 200) return false;
-      return expected((await res.json()) as ModelsBody);
+      // A read the page dropped before its body was fetched (a navigation, a
+      // superseded poll) has no body left to read — it is not the read awaited.
+      const body = (await res.json().catch(() => null)) as ModelsBody | null;
+      return body !== null && expected(body);
     },
     { timeout: LABEL_CHANGE_MS },
   );

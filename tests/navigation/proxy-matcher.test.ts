@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import {
+  pathMatchers,
   segmentOf,
   strayProxyEntries,
   topLevelSegments as segmentsOf,
@@ -66,7 +67,7 @@ describe('proxy config.matcher', () => {
   it('covers every top-level segment of every signed-in route group', async () => {
     const { config } = await import('@/proxy');
 
-    const missing = uncoveredProxySegments(APP, SIGNED_IN_GROUPS, config.matcher).map(
+    const missing = uncoveredProxySegments(APP, SIGNED_IN_GROUPS, pathMatchers(config.matcher)).map(
       (segment) => `app/**/${segment} → add '/${segment}/:path*' to config.matcher`,
     );
 
@@ -98,7 +99,7 @@ describe('proxy config.matcher', () => {
     const PUBLIC_REDIRECT_SEGMENTS = ['explore', 'docs', 'legal', 'p'];
     const CORS_ONLY_SEGMENTS = ['api', '.well-known'];
     expect(
-      strayProxyEntries(APP, SIGNED_IN_GROUPS, config.matcher).filter(
+      strayProxyEntries(APP, SIGNED_IN_GROUPS, pathMatchers(config.matcher)).filter(
         (segment) =>
           segment !== APP_ROOT_SEGMENT &&
           !PUBLIC_REDIRECT_SEGMENTS.includes(segment) &&
@@ -115,7 +116,7 @@ describe('proxy config.matcher', () => {
     // can read into a 307 to a sign-in page that it cannot.
     const { config } = await import('@/proxy');
 
-    const apiEntries = config.matcher.filter((entry) => entry.startsWith('/api'));
+    const apiEntries = pathMatchers(config.matcher).filter((entry) => entry.startsWith('/api'));
     expect(apiEntries).toEqual(['/api/public/:path*']);
   });
 
@@ -125,7 +126,7 @@ describe('proxy config.matcher', () => {
     // exists; `app/(admin)/layout.tsx` must answer the anonymous request with
     // the ordinary 404 instead.
     const { config } = await import('@/proxy');
-    expect(config.matcher.map(segmentOf)).not.toContain('admin');
+    expect(pathMatchers(config.matcher).map(segmentOf)).not.toContain('admin');
     // …and the reason must stay in the file, or the exclusion decays into a gap
     // indistinguishable from the one this suite exists to catch.
     const source = await import('node:fs').then(({ readFileSync }) =>

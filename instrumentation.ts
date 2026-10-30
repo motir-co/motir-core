@@ -71,6 +71,12 @@
 //     registered BEFORE the repos seam and answers only the repositories its
 //     control names — see that module's header (MOTIR-5572).
 //
+//   - E2E_TEST_GITHUB_PREVIEW=1 → lib/test-github-preview-mock answers a preview's
+//     GitHub calls — its deployment, the deployment's statuses and the hosting
+//     manifest at the pull request's head — for the repositories its control names.
+//     They are made by the lifecycle's effects, so the lane sets this flag on the
+//     WORKER (MOTIR-5781). Registered before the merge seam — see that module's header.
+//
 //   - E2E_TEST_GITHUB_FLEET_ORG_CI=1 → lib/test-github-fleet-org-ci-mock answers the
 //     GitHub calls behind /admin/fleet-settings (the org's App installation, its
 //     repositories, their visibility, the workflow commit, the org's MOTIR_RUNNER

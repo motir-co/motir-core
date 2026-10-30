@@ -7873,6 +7873,14 @@
         "failing": "Vérifications en échec",
         "running": "Vérifications en cours"
       },
+      "preview": {
+        "building": "Aperçu en construction",
+        "ready": "Aperçu prêt",
+        "failed": "Échec de l’aperçu",
+        "failedReason": "Échec de l’aperçu · <tone>{reason}</tone>",
+        "closed": "Aperçu fermé",
+        "unknown": "Aperçu {state}"
+      },
       "linkPr": "Lier une pull request",
       "linkPrField": "Pull request à lier",
       "searchPlaceholder": "Rechercher des pull requests…",
@@ -16069,5 +16077,85 @@
     "pendingMark": "Traduction en cours",
     "showOriginal": "Afficher l’original",
     "showTranslation": "Afficher la traduction"
+  },
+  "previewGate": {
+    "frame": {
+      "tag": "Aperçu",
+      "brand": "Motir",
+      "footer": "Vous êtes sur <chip>{host}</chip>, un aperçu que Motir exécute pour une pull request. Motir ne réclame jamais votre mot de passe sur cette adresse. La connexion se fait uniquement sur app.motir.co."
+    },
+    "signIn": {
+      "banner": "Connectez-vous pour ouvrir l’aperçu sur <chip>{host}</chip>. Les aperçus ne sont ouverts qu’aux membres du projet."
+    },
+    "refused": {
+      "metaTitle": "Pas d’accès à cet aperçu",
+      "pill": "Aperçu",
+      "title": "Vous n’avez pas accès à cet aperçu",
+      "body": "Les aperçus ne sont ouverts qu’aux membres du projet auquel ils appartiennent. Si quelqu’un vous a partagé ce lien, demandez-lui de vous ajouter au projet, puis rouvrez le lien.",
+      "signedInAs": "Connecté en tant que <strong>{email}</strong>",
+      "home": "Aller sur Motir",
+      "switch": "Se connecter avec un autre compte",
+      "switchHint": "Vous reviendrez à cet aperçu après vous être connecté."
+    },
+    "building": {
+      "pill": "Construction",
+      "title": "Cet aperçu est en cours de construction",
+      "body": "La CI du dépôt construit l’image d’aperçu pour le dernier commit de cette pull request. Cela prend généralement quelques minutes.",
+      "refresh": "Cette page vérifie de nouveau toutes les 10 secondes et ouvre l’aperçu dès qu’il est prêt."
+    },
+    "starting": {
+      "pill": "Démarrage",
+      "title": "Cet aperçu est en cours de démarrage",
+      "body": "L’image est construite. Motir la démarre et attend que son contrôle d’intégrité réussisse."
+    },
+    "steps": {
+      "label": "Progression",
+      "build": "Construire l’image",
+      "start": "Démarrer l’aperçu",
+      "ready": "Prêt"
+    },
+    "facts": {
+      "workItem": "Élément de travail",
+      "pullRequest": "Pull request",
+      "pullRequestValue": "{repo} · #{n}"
+    },
+    "action": {
+      "openWorkItem": "Ouvrir {key} dans Motir",
+      "openPullRequest": "Ouvrir la pull request nº {n} sur GitHub"
+    },
+    "failed": {
+      "pill": "Échec",
+      "title": "Cet aperçu n’a pas démarré",
+      "body": "Rien ne tourne pour le dernier commit de cette pull request. Un nouveau push le reconstruit.",
+      "reasonTitle": "Ce qui s’est mal passé",
+      "checks": "L’élément de travail affiche les vérifications de cette pull request et leurs journaux.",
+      "reason": {
+        "imageBuild": "L’image d’aperçu n’a pas été construite : le workflow « Preview image » s’est terminé par « {conclusion} ». Son journal d’exécution sur GitHub en donne la raison.",
+        "healthTimeout": "L’aperçu n’a pas réussi son contrôle d’intégrité en {minutes} minutes.",
+        "healthFailed": "L’aperçu a démarré, mais a échoué à son contrôle d’intégrité.",
+        "fallback": "L’aperçu n’a pas pu démarrer."
+      }
+    },
+    "unsupported": {
+      "pill": "Indisponible dans les aperçus",
+      "title": "Les aperçus ne peuvent pas faire cela",
+      "websocket": "Les connexions en direct (websockets) ne passent pas par la passerelle des aperçus. Le reste de l’aperçu fonctionne normalement.",
+      "tooLarge": "Les requêtes de plus de 10 Mo ne peuvent pas être envoyées à un aperçu.",
+      "noLength": "Cette requête n’a pas indiqué sa taille, la passerelle des aperçus ne peut donc pas l’accepter."
+    },
+    "closed": {
+      "pill": "Fermé",
+      "title": "Cet aperçu a été arrêté",
+      "merged": "La pull request nº {n} a été fusionnée, Motir a donc arrêté son aperçu et supprimé sa base de données.",
+      "closed": "La pull request nº {n} a été fermée sans fusion, Motir a donc arrêté son aperçu et supprimé sa base de données.",
+      "takenOver": "Ce dépôt a quitté Motir, Motir a donc arrêté ses aperçus et supprimé leurs bases de données.",
+      "unknown": "Motir a arrêté cet aperçu et supprimé sa base de données."
+    },
+    "notFound": {
+      "pill": "Indisponible",
+      "title": "Il n’y a aucun aperçu ici",
+      "body": "Cette adresse n’appartient à aucun aperçu en cours d’exécution. Il a peut-être été arrêté, ou le lien est mal saisi.",
+      "home": "Aller sur Motir"
+    }
   }
 }

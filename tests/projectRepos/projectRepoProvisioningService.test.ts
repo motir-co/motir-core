@@ -25,6 +25,13 @@ import {
   type ActionsVariableFake,
 } from '../helpers/actionsVariableFake';
 import { spyOnJobDispatch, dispatchedEvents } from '../helpers/jobs';
+import {
+  createRepositoryActionsConfigFake,
+  type RepositoryActionsConfigFake,
+} from '../helpers/repositoryActionsConfigFake';
+import type { FakeHostingControls, HostingDeployPort } from '@motir/orchestrator';
+import { getHostingDeployPort, resetHostingFakes } from '@/lib/orchestrator/hosting';
+import { resetDatabaseFakes } from '@/lib/orchestrator/database';
 import * as jobDispatcher from '@/lib/jobs/engine/dispatcher';
 import {
   aiPlanGateService,
@@ -80,6 +87,9 @@ let nextRepoId: number;
  *  repository now syncs it, so this suite's GitHub serves those endpoints too. */
 let runnerGroups: RunnerGroupFake;
 let actionsVariables: ActionsVariableFake;
+/** The repositories' Actions secrets and variables — what switching previews on
+ *  writes at establishment (MOTIR-5775). */
+let repoActions: RepositoryActionsConfigFake;
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -127,6 +137,12 @@ function installGitHub(): void {
       // no longer describing what the product does.
       const variable = actionsVariables.handle(u, method, body);
       if (variable) return variable;
+      const repoConfig = await repoActions.handle(
+        u,
+        method,
+        typeof init?.body === 'string' ? init.body : null,
+      );
+      if (repoConfig) return repoConfig;
       // Create — either endpoint. The template endpoint names the NEW repo in the
       // body, exactly as the real one does.
       const generate = /\/repos\/([^/]+)\/([^/]+)\/generate$/.exec(u);
@@ -216,6 +232,7 @@ beforeEach(async () => {
   missingTemplates = new Set();
   nextRepoId = 900_001;
   actionsVariables = createActionsVariableFake(MOTIR_ORG);
+  repoActions = createRepositoryActionsConfigFake();
   runnerGroups = createRunnerGroupFake(MOTIR_ORG);
   const { privateKey } = generateKeyPairSync('rsa', {
     modulusLength: 2048,
@@ -1546,5 +1563,63 @@ describe('the project’s stored design choice reaches a design-system repo (MOT
     await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
 
     expect(calls.some((c) => c.url.includes('/git/'))).toBe(false);
+  });
+});
+
+describe('previews on at establishment (MOTIR-5775)', () => {
+  const fly = () => getHostingDeployPort('fly') as HostingDeployPort & FakeHostingControls;
+
+  it('switches previews on for a hosted starter row — and for nothing else in the set', async () => {
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fake');
+    resetHostingFakes();
+    resetDatabaseFakes();
+    const fx = await makeWorkItemFixture();
+    const webId = await addRow(fx, 'web', 'acme-web');
+    await projectRepoSetService.setHosting(
+      webId,
+      { target: 'fly', useCase: 'mvp', size: 'small' },
+      fx.ctx,
+    );
+    // An initialised api row, and a web row with no hosting target yet.
+    await addRow(fx, 'api', 'acme-api');
+    await addRow(fx, 'web', 'acme-site');
+
+    const result = await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
+    expect(result.rows.map((r) => r.outcome)).toEqual(['created', 'created', 'created']);
+
+    // The hosted starter row: its Fly push namespace, the token written as a
+    // repository secret through the GitHub API, and the org switch on.
+    expect(fly().pushNamespaces()).toEqual([`mh-${webId}-pv`]);
+    const secretWrites = repoActions.calls.filter((c) => c.method === 'PUT');
+    expect(secretWrites.map((c) => c.url)).toEqual([
+      `https://api.github.com/repos/${MOTIR_ORG}/acme-web/actions/secrets/MOTIR_FLY_PREVIEW_PUSH_TOKEN`,
+    ]);
+    expect(repoActions.secrets(`${MOTIR_ORG}/acme-web`).get('MOTIR_FLY_PREVIEW_PUSH_TOKEN')).toBe(
+      `fake-deploy-token-mh-${webId}-pv`,
+    );
+    expect(actionsVariables.variables.get('MOTIR_HOSTING_BUILD')).toMatchObject({ value: 'on' });
+
+    // The other two: nothing on GitHub, nothing on the port.
+    expect(repoActions.calls.filter((c) => !c.url.includes('/acme-web/'))).toEqual([]);
+    expect(fly().mintedFor).toEqual([`mh-${webId}-pv`]);
+  });
+
+  it('a row whose previews could not be switched on is still created', async () => {
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fake');
+    resetHostingFakes();
+    resetDatabaseFakes();
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const fx = await makeWorkItemFixture();
+    const webId = await addRow(fx, 'web', 'acme-web');
+    await projectRepoSetService.setHosting(
+      webId,
+      { target: 'fly', useCase: 'mvp', size: 'small' },
+      fx.ctx,
+    );
+    fly().failNext('ensurePushNamespace');
+
+    const result = await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
+    expect(result.rows[0]).toMatchObject({ rowId: webId, outcome: 'created' });
+    expect(repoActions.calls).toEqual([]);
   });
 });

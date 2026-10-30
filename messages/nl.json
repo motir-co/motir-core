@@ -7873,6 +7873,14 @@
         "failing": "Checks mislukt",
         "running": "Checks bezig"
       },
+      "preview": {
+        "building": "Voorbeeld wordt gebouwd",
+        "ready": "Voorbeeld klaar",
+        "failed": "Voorbeeld mislukt",
+        "failedReason": "Voorbeeld mislukt · <tone>{reason}</tone>",
+        "closed": "Voorbeeld gesloten",
+        "unknown": "Voorbeeld {state}"
+      },
       "linkPr": "Pull request koppelen",
       "linkPrField": "Te koppelen pull request",
       "searchPlaceholder": "Pull requests zoeken…",
@@ -16069,5 +16077,85 @@
     "pendingMark": "Bezig met vertalen",
     "showOriginal": "Origineel tonen",
     "showTranslation": "Vertaling tonen"
+  },
+  "previewGate": {
+    "frame": {
+      "tag": "Preview",
+      "brand": "Motir",
+      "footer": "Je bent op <chip>{host}</chip>, een preview die Motir draait voor een pull request. Motir vraagt op dit adres nooit om je wachtwoord. Inloggen gebeurt alleen op app.motir.co."
+    },
+    "signIn": {
+      "banner": "Log in om de preview op <chip>{host}</chip> te openen. Previews zijn alleen open voor leden van het project."
+    },
+    "refused": {
+      "metaTitle": "Geen toegang tot deze preview",
+      "pill": "Preview",
+      "title": "Je hebt geen toegang tot deze preview",
+      "body": "Previews zijn alleen open voor leden van het project waar ze bij horen. Heeft iemand deze link met je gedeeld? Vraag diegene dan om je aan het project toe te voegen en open de link opnieuw.",
+      "signedInAs": "Ingelogd als <strong>{email}</strong>",
+      "home": "Naar Motir",
+      "switch": "Inloggen met een ander account",
+      "switchHint": "Na het inloggen kom je terug bij deze preview."
+    },
+    "building": {
+      "pill": "Bouwen",
+      "title": "Deze preview wordt gebouwd",
+      "body": "De CI van de repository bouwt de preview-image voor de nieuwste commit van deze pull request. Dat duurt meestal een paar minuten.",
+      "refresh": "Deze pagina controleert elke 10 seconden opnieuw en opent de preview zodra die klaar is."
+    },
+    "starting": {
+      "pill": "Starten",
+      "title": "Deze preview wordt gestart",
+      "body": "De image is gebouwd. Motir start hem en wacht tot de statuscontrole slaagt."
+    },
+    "steps": {
+      "label": "Voortgang",
+      "build": "De image bouwen",
+      "start": "De preview starten",
+      "ready": "Klaar"
+    },
+    "facts": {
+      "workItem": "Werkitem",
+      "pullRequest": "Pull request",
+      "pullRequestValue": "{repo} · #{n}"
+    },
+    "action": {
+      "openWorkItem": "{key} openen in Motir",
+      "openPullRequest": "Pull request #{n} openen op GitHub"
+    },
+    "failed": {
+      "pill": "Mislukt",
+      "title": "Deze preview is niet gestart",
+      "body": "Er draait niets voor de nieuwste commit van deze pull request. Een nieuwe push bouwt hem opnieuw.",
+      "reasonTitle": "Wat er misging",
+      "checks": "Het werkitem toont de controles van deze pull request en hun logboeken.",
+      "reason": {
+        "imageBuild": "De preview-image is niet gebouwd: de workflow ‘Preview image’ eindigde met ‘{conclusion}’. Het uitvoeringslogboek op GitHub vertelt waarom.",
+        "healthTimeout": "De preview is niet binnen {minutes} minuten door de statuscontrole gekomen.",
+        "healthFailed": "De preview is gestart, maar de statuscontrole is mislukt.",
+        "fallback": "De preview kon niet starten."
+      }
+    },
+    "unsupported": {
+      "pill": "Niet beschikbaar in previews",
+      "title": "Previews kunnen dit niet",
+      "websocket": "Live-verbindingen (websockets) gaan niet door de preview-gateway. De rest van de preview werkt zoals gewoonlijk.",
+      "tooLarge": "Verzoeken groter dan 10 MB kunnen niet naar een preview worden gestuurd.",
+      "noLength": "Dit verzoek gaf zijn grootte niet op, dus de preview-gateway kan het niet aannemen."
+    },
+    "closed": {
+      "pill": "Gesloten",
+      "title": "Deze preview is uitgeschakeld",
+      "merged": "Pull request #{n} is gemerged, dus Motir heeft de preview uitgeschakeld en de database verwijderd.",
+      "closed": "Pull request #{n} is gesloten zonder merge, dus Motir heeft de preview uitgeschakeld en de database verwijderd.",
+      "takenOver": "Deze repository heeft Motir verlaten, dus Motir heeft de previews uitgeschakeld en hun databases verwijderd.",
+      "unknown": "Motir heeft deze preview uitgeschakeld en de database verwijderd."
+    },
+    "notFound": {
+      "pill": "Niet beschikbaar",
+      "title": "Hier is geen preview",
+      "body": "Dit adres hoort niet bij een draaiende preview. Mogelijk is die uitgeschakeld, of is de link verkeerd getypt.",
+      "home": "Naar Motir"
+    }
   }
 }

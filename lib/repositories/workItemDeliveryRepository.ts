@@ -61,6 +61,24 @@ export interface MergedDeliveryHostAddress {
 
 export const workItemDeliveryRepository = {
   /**
+   * The work item a pull request delivers — its OLDEST link — with the two facts
+   * the preview gate's pages show (MOTIR-5779): its identifier and title. Null
+   * when no card is linked. Runs in a transaction bound to the pull request's
+   * workspace, which `work_item`'s policy reads.
+   */
+  async findFirstWorkItemForPullRequest(
+    githubPullRequestId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ identifier: string; title: string } | null> {
+    const row = await tx.workItemDelivery.findFirst({
+      where: { githubPullRequestId },
+      orderBy: { createdAt: 'asc' },
+      select: { workItem: { select: { identifier: true, title: true } } },
+    });
+    return row?.workItem ?? null;
+  },
+
+  /**
    * One card's DELIVERY SET — every pull request delivering it, oldest link first.
    *
    * This is the read the completion gate and the CI promotion both ask, and they

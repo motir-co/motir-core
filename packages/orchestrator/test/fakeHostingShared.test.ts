@@ -103,7 +103,8 @@ describe('the fake hosting port’s shared store', () => {
     expect(await port.listReleases({ appRef })).toEqual([]);
 
     writeFileSync(`${path}.hold.json`, JSON.stringify({ held: [] }));
-    expect((await deploying).releaseId).toBe('rel-1');
+    // Under the store, a release id carries its process (MOTIR-10098).
+    expect((await deploying).releaseId).toMatch(/^rel-\d+-1$/);
   });
 
   it('holds nothing over a torn or shapeless sidecar', async () => {
@@ -112,7 +113,7 @@ describe('the fake hosting port’s shared store', () => {
     writeFileSync(`${path}.hold.json`, '{"held":');
     await port.deploy(input(appRef, 'one'));
     writeFileSync(`${path}.hold.json`, JSON.stringify({ held: 'deploy' }));
-    expect((await port.deploy(input(appRef, 'two'))).releaseId).toBe('rel-2');
+    expect((await port.deploy(input(appRef, 'two'))).releaseId).toMatch(/^rel-\d+-2$/);
   });
 
   it('fails a hold nobody releases at the provider, after the limit', async () => {

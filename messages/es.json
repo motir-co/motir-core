@@ -7873,6 +7873,14 @@
         "failing": "Comprobaciones fallidas",
         "running": "Comprobaciones en ejecución"
       },
+      "preview": {
+        "building": "Vista previa en construcción",
+        "ready": "Vista previa lista",
+        "failed": "Vista previa fallida",
+        "failedReason": "Vista previa fallida · <tone>{reason}</tone>",
+        "closed": "Vista previa cerrada",
+        "unknown": "Vista previa {state}"
+      },
       "linkPr": "Vincular pull request",
       "linkPrField": "Pull request que vincular",
       "searchPlaceholder": "Buscar pull requests…",
@@ -16069,5 +16077,85 @@
     "pendingMark": "Traduciendo",
     "showOriginal": "Mostrar original",
     "showTranslation": "Mostrar traducción"
+  },
+  "previewGate": {
+    "frame": {
+      "tag": "Vista previa",
+      "brand": "Motir",
+      "footer": "Estás en <chip>{host}</chip>, una vista previa que Motir ejecuta para un pull request. Motir nunca te pide la contraseña en esta dirección. El inicio de sesión solo se hace en app.motir.co."
+    },
+    "signIn": {
+      "banner": "Inicia sesión para abrir la vista previa en <chip>{host}</chip>. Las vistas previas solo están abiertas para los miembros del proyecto."
+    },
+    "refused": {
+      "metaTitle": "Sin acceso a esta vista previa",
+      "pill": "Vista previa",
+      "title": "No tienes acceso a esta vista previa",
+      "body": "Las vistas previas solo están abiertas para los miembros del proyecto al que pertenecen. Si alguien te compartió este enlace, pídele que te añada al proyecto y vuelve a abrir el enlace.",
+      "signedInAs": "Sesión iniciada como <strong>{email}</strong>",
+      "home": "Ir a Motir",
+      "switch": "Iniciar sesión con otra cuenta",
+      "switchHint": "Volverás a esta vista previa después de iniciar sesión."
+    },
+    "building": {
+      "pill": "Compilando",
+      "title": "Se está compilando esta vista previa",
+      "body": "La CI del repositorio está compilando la imagen de vista previa para el último commit de este pull request. Suele tardar unos minutos.",
+      "refresh": "Esta página vuelve a comprobarlo cada 10 segundos y abre la vista previa cuando está lista."
+    },
+    "starting": {
+      "pill": "Iniciando",
+      "title": "Se está iniciando esta vista previa",
+      "body": "La imagen está compilada. Motir la está iniciando y esperando a que pase su comprobación de estado."
+    },
+    "steps": {
+      "label": "Progreso",
+      "build": "Compilar la imagen",
+      "start": "Iniciar la vista previa",
+      "ready": "Lista"
+    },
+    "facts": {
+      "workItem": "Elemento de trabajo",
+      "pullRequest": "Pull request",
+      "pullRequestValue": "{repo} · #{n}"
+    },
+    "action": {
+      "openWorkItem": "Abrir {key} en Motir",
+      "openPullRequest": "Abrir el pull request #{n} en GitHub"
+    },
+    "failed": {
+      "pill": "Fallida",
+      "title": "Esta vista previa no se inició",
+      "body": "No hay nada en ejecución para el último commit de este pull request. Un nuevo push la vuelve a compilar.",
+      "reasonTitle": "Qué salió mal",
+      "checks": "El elemento de trabajo muestra las comprobaciones de este pull request y sus registros.",
+      "reason": {
+        "imageBuild": "La imagen de vista previa no se compiló: el flujo de trabajo “Preview image” terminó con “{conclusion}”. Su registro de ejecución en GitHub indica por qué.",
+        "healthTimeout": "La vista previa no pasó su comprobación de estado en {minutes} minutos.",
+        "healthFailed": "La vista previa se inició, pero no pasó su comprobación de estado.",
+        "fallback": "No se pudo iniciar la vista previa."
+      }
+    },
+    "unsupported": {
+      "pill": "No disponible en vistas previas",
+      "title": "Las vistas previas no pueden hacer esto",
+      "websocket": "Las conexiones en vivo (websockets) no pasan por la puerta de las vistas previas. El resto de la vista previa funciona con normalidad.",
+      "tooLarge": "No se pueden enviar solicitudes de más de 10 MB a una vista previa.",
+      "noLength": "Esta solicitud no indicó su tamaño, así que la puerta de las vistas previas no puede aceptarla."
+    },
+    "closed": {
+      "pill": "Cerrada",
+      "title": "Esta vista previa se ha apagado",
+      "merged": "El pull request #{n} se fusionó, así que Motir apagó su vista previa y eliminó su base de datos.",
+      "closed": "El pull request #{n} se cerró sin fusionarse, así que Motir apagó su vista previa y eliminó su base de datos.",
+      "takenOver": "Este repositorio ha salido de Motir, así que Motir apagó sus vistas previas y eliminó sus bases de datos.",
+      "unknown": "Motir apagó esta vista previa y eliminó su base de datos."
+    },
+    "notFound": {
+      "pill": "No disponible",
+      "title": "Aquí no hay ninguna vista previa",
+      "body": "Esta dirección no pertenece a ninguna vista previa en ejecución. Puede que se haya apagado o que el enlace esté mal escrito.",
+      "home": "Ir a Motir"
+    }
   }
 }

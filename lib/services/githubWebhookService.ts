@@ -43,6 +43,7 @@ import { ciAllowanceService } from './ciAllowanceService';
 import { ciActionsGateService } from './ciActionsGateService';
 import { projectRepoTakeoverService } from './projectRepoTakeoverService';
 import { readReportedCheckSet } from './checkSetReconcile';
+import { previewLifecycleService } from '@/lib/services/previewLifecycleService';
 import { repoDeploymentService } from './repoDeploymentService';
 import { productionMergeReleaseService } from './productionMergeReleaseService';
 import { withdrawPullRequestApprovalGatesOnHeadMove } from './pullRequestApprovalGates';
@@ -243,6 +244,24 @@ export type GithubWebhookResult =
   // A merge queue started testing a group (MOTIR-5633).
   | MergeGroupResult;
 
+/**
+ * The PREVIEW LIFECYCLE's share of a delivery (Story MOTIR-5766 · MOTIR-5776):
+ * a pull request's head or close, a preview-image run's completion. It runs
+ * BESIDE the event's own handler, never instead of it, and best-effort: a
+ * failure here must not fail the status sync or the CI meter on the same
+ * delivery, and the reaper finishes whatever a lost transition left.
+ */
+async function runPreviewLifecycle(eventType: string, run: () => Promise<unknown>): Promise<void> {
+  try {
+    await run();
+  } catch (err) {
+    console.error('[githubWebhookService] preview lifecycle failed; delivery acked', {
+      eventType,
+      error: err instanceof Error ? err.message : 'unknown',
+    });
+  }
+}
+
 export const githubWebhookService = {
   /**
    * Handle one verified delivery. `eventType` is the `X-GitHub-Event` header;
@@ -270,6 +289,9 @@ export const githubWebhookService = {
       case 'installation_repositories':
         return this.handleInstallationRepositories(body);
       case 'pull_request':
+        await runPreviewLifecycle('pull_request', () =>
+          previewLifecycleService.onPullRequest(body),
+        );
         return this.handlePullRequest(body, deliveryId);
       case 'pull_request_review':
         return this.handlePullRequestReview(body);
@@ -281,9 +303,11 @@ export const githubWebhookService = {
       case 'merge_group':
         return this.handleMergeGroup(body);
       case 'workflow_run': {
-        // One delivery, two listeners: the CI-minutes meter's answer is the
-        // delivery's result, and a completed `production-image` run of a Motir
-        // repository also starts its release (MOTIR-10031).
+        // One delivery, three listeners: the CI-minutes meter's answer is the
+        // delivery's result, a completed `production-image` run of a Motir
+        // repository also starts its release (MOTIR-10031), and a
+        // `preview-image` run moves its pull request's preview (MOTIR-5776).
+        await runPreviewLifecycle('workflow_run', () => previewLifecycleService.onImageRun(body));
         const metered = await this.handleWorkflowRun(body);
         await this.handleProductionImageRun(body);
         return metered;

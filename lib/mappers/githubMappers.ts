@@ -3,12 +3,14 @@ import type {
   GithubInstallation,
   GithubPullRequest,
   GithubRepo,
+  PreviewDeployment,
 } from '@/generated/prisma/client';
 import type {
   GithubIdentityDTO,
   GithubInstallationDTO,
   GithubRepoDTO,
   LinkedPullRequestDto,
+  LinkedPullRequestPreviewDto,
   PullRequestLinkCandidateDto,
   PullRequestMergeRecordDto,
   WorkItemDeliveryDto,
@@ -21,6 +23,7 @@ import type { WorkItemDeliveryWithChecks } from '@/lib/repositories/workItemDeli
 import { derivePrCiState } from '@/lib/github/prCiState';
 import { pullRequestHead } from '@/lib/github/pullRequestHead';
 import { isConflictedAtCurrentHead } from '@/lib/github/mergeability';
+import { previewUrl } from '@/lib/preview/url';
 
 // Prisma → DTO conversion for the GitHub integration (Story 7.10 · MOTIR-1498 /
 // MOTIR-891). The mapper is the enforcement point for "no secret crosses the API
@@ -71,15 +74,35 @@ export function toGithubInstallationDTO(
  * derives from the check rows at the latest recorded commit, and the link-out
  * URL is composed here so the client never string-builds it.
  */
+/** The columns of a `preview_deployment` row the Development row draws. */
+export type PreviewDeploymentFacts = Pick<PreviewDeployment, 'state' | 'host' | 'failureReason'>;
+
+/** A preview record → the row's preview (MOTIR-10099). The address is composed here,
+ *  by the one composer, so the client never string-builds it. */
+export function toLinkedPullRequestPreviewDto(
+  row: PreviewDeploymentFacts,
+): LinkedPullRequestPreviewDto {
+  return {
+    state: row.state,
+    host: row.host,
+    failureReason: row.failureReason,
+    url: previewUrl(row.host),
+  };
+}
+
 export function toLinkedPullRequestDto(
   row: GithubPullRequestWithContext,
   /** What this pull request's GitHub review says, already computed by the caller
    *  (MOTIR-5602). The mapper stays pure: the review needs two batched reads and a rule,
    *  and a mapper that did them would make one row a query. */
   githubReview: LinkedPullRequestDto['githubReview'] = null,
+  /** This pull request's preview record, already read by the caller in one batched
+   *  read for the card (MOTIR-10099) — or null when it has none. */
+  preview: PreviewDeploymentFacts | null = null,
 ): LinkedPullRequestDto {
   return {
     githubReview,
+    preview: preview ? toLinkedPullRequestPreviewDto(preview) : null,
     id: row.id,
     title: row.title ?? row.headRef,
     repo: `${row.repo.owner}/${row.repo.name}`,
@@ -139,13 +162,19 @@ export function toWorkItemDeliveryDto(
     headSha: string;
     refusedAt: Date;
   } | null,
+  /** The pull request's preview record, read once for the set (MOTIR-10099). */
+  preview: PreviewDeploymentFacts | null = null,
 ): WorkItemDeliveryDto {
   return {
-    pullRequest: toLinkedPullRequestDto({
-      ...row.pullRequest,
-      repo: row.repo,
-      checkRuns: row.pullRequest.checkRuns,
-    }),
+    pullRequest: toLinkedPullRequestDto(
+      {
+        ...row.pullRequest,
+        repo: row.repo,
+        checkRuns: row.pullRequest.checkRuns,
+      },
+      null,
+      preview,
+    ),
     defaultBranch: row.repo.defaultBranch,
     baseRef: row.pullRequest.baseRef,
     queueExit:

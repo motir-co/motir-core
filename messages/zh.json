@@ -7864,6 +7864,14 @@
         "failing": "检查失败",
         "running": "检查运行中"
       },
+      "preview": {
+        "building": "预览构建中",
+        "ready": "预览已就绪",
+        "failed": "预览失败",
+        "failedReason": "预览失败 · <tone>{reason}</tone>",
+        "closed": "预览已关闭",
+        "unknown": "预览 {state}"
+      },
       "linkPr": "关联拉取请求",
       "linkPrField": "要关联的拉取请求",
       "searchPlaceholder": "搜索拉取请求…",
@@ -16060,5 +16068,85 @@
     "pendingMark": "正在翻译",
     "showOriginal": "显示原文",
     "showTranslation": "显示译文"
+  },
+  "previewGate": {
+    "frame": {
+      "tag": "预览",
+      "brand": "Motir",
+      "footer": "你正在访问 <chip>{host}</chip>，这是 Motir 为一个拉取请求运行的预览。Motir 绝不会在此地址要求你输入密码。登录只在 app.motir.co 进行。"
+    },
+    "signIn": {
+      "banner": "登录以打开 <chip>{host}</chip> 上的预览。预览仅对项目成员开放。"
+    },
+    "refused": {
+      "metaTitle": "无权访问此预览",
+      "pill": "预览",
+      "title": "你无权访问此预览",
+      "body": "预览仅对其所属项目的成员开放。如果是别人分享给你的链接，请让对方把你加入该项目，然后重新打开链接。",
+      "signedInAs": "当前登录：<strong>{email}</strong>",
+      "home": "前往 Motir",
+      "switch": "使用其他账号登录",
+      "switchHint": "登录后你会回到此预览。"
+    },
+    "building": {
+      "pill": "构建中",
+      "title": "正在构建此预览",
+      "body": "仓库的 CI 正在为此拉取请求的最新提交构建预览镜像，通常需要几分钟。",
+      "refresh": "此页面每 10 秒检查一次，预览就绪后会自动打开。"
+    },
+    "starting": {
+      "pill": "启动中",
+      "title": "正在启动此预览",
+      "body": "镜像已构建完成。Motir 正在启动它，并等待健康检查通过。"
+    },
+    "steps": {
+      "label": "进度",
+      "build": "构建镜像",
+      "start": "启动预览",
+      "ready": "就绪"
+    },
+    "facts": {
+      "workItem": "工作项",
+      "pullRequest": "拉取请求",
+      "pullRequestValue": "{repo} · #{n}"
+    },
+    "action": {
+      "openWorkItem": "在 Motir 中打开 {key}",
+      "openPullRequest": "在 GitHub 上打开拉取请求 #{n}"
+    },
+    "failed": {
+      "pill": "失败",
+      "title": "此预览未能启动",
+      "body": "此拉取请求的最新提交没有在运行的预览。新的推送会重新构建它。",
+      "reasonTitle": "失败原因",
+      "checks": "工作项中可以查看此拉取请求的检查及其日志。",
+      "reason": {
+        "imageBuild": "预览镜像未能构建：「Preview image」工作流以「{conclusion}」结束。原因见其在 GitHub 上的运行日志。",
+        "healthTimeout": "预览未能在 {minutes} 分钟内通过健康检查。",
+        "healthFailed": "预览已启动，但未通过健康检查。",
+        "fallback": "预览无法启动。"
+      }
+    },
+    "unsupported": {
+      "pill": "预览中不可用",
+      "title": "预览无法执行此操作",
+      "websocket": "实时连接（WebSocket）无法通过预览网关。预览的其他功能照常可用。",
+      "tooLarge": "无法向预览发送大于 10 MB 的请求。",
+      "noLength": "此请求没有说明其大小，因此预览网关无法接受。"
+    },
+    "closed": {
+      "pill": "已关闭",
+      "title": "此预览已关闭",
+      "merged": "拉取请求 #{n} 已合并，因此 Motir 关闭了它的预览并删除了其数据库。",
+      "closed": "拉取请求 #{n} 未合并即被关闭，因此 Motir 关闭了它的预览并删除了其数据库。",
+      "takenOver": "此仓库已离开 Motir，因此 Motir 关闭了它的预览并删除了其数据库。",
+      "unknown": "Motir 已关闭此预览并删除了其数据库。"
+    },
+    "notFound": {
+      "pill": "不可用",
+      "title": "这里没有预览",
+      "body": "此地址不属于任何正在运行的预览。它可能已被关闭，或者链接输入有误。",
+      "home": "前往 Motir"
+    }
   }
 }
