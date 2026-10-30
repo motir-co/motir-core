@@ -1,3 +1,4 @@
+import { randomInt } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
 import type { APIRequestContext, Page } from '@playwright/test';
 import { adminDb } from './db-reset';
@@ -95,7 +96,7 @@ export async function seedProductionRoom(slug: string): Promise<ProductionSeed> 
 
   // Each run gets its own provider ids, so a GitHub id a previous run mirrored
   // can never resolve to this run's rows.
-  const base = 880_000_000 + (Date.now() % 1_000_000) * 10;
+  const base = 880_000_000 + randomInt(1_000_000) * 10;
   const mirrored = [
     { key: 'web', name: `shop-web-${slug}`, providerRepoId: String(base + 1) },
     { key: 'api', name: `shop-api-${slug}`, providerRepoId: String(base + 2) },
@@ -248,7 +249,7 @@ export async function deliverMerge(
   const res = await postSignedWebhook(request, 'workflow_run', {
     action: 'completed',
     workflow_run: {
-      id: 9_100_000_000 + (Date.now() % 1_000_000) * 100 + runSeq,
+      id: 9_100_000_000 + randomInt(1_000_000) * 100 + runSeq,
       name: 'production-image',
       head_branch: 'main',
       head_sha: headSha,
