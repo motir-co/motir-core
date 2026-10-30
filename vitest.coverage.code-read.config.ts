@@ -13,7 +13,8 @@ import baseConfig from './vitest.config';
 // ⚠️ WHAT IS GATED AND WHAT IS ONLY REPORTED.
 //   • GATED at the project floor — the three files this story WROTE:
 //     `lib/mcp/tools/readFile.ts`, `lib/mcp/tools/codeGraphRead.ts` and
-//     `lib/services/codeGraphReadService.ts`.
+//     `lib/services/codeGraphReadService.ts` — and the drift a read carries
+//     (MOTIR-10094), `lib/services/codeGraphReadDriftService.ts`.
 //   • REPORTED, NOT GATED — the two whole modules it WIDENED by one function
 //     each: `lib/services/repoFileReadService.ts` (`readProjectFile`) and
 //     `lib/ai/motirAiClient.ts` (`readCodeGraph`). A per-file number over either
@@ -35,6 +36,7 @@ export default defineConfig({
       'tests/mcp/code-read-tool-tables.test.ts',
       'tests/mcp/read-file.test.ts',
       'tests/mcp/code-graph-read.test.ts',
+      'tests/services/codeGraphReadDriftService.test.ts',
     ],
     coverage: {
       provider: 'v8',
@@ -44,6 +46,7 @@ export default defineConfig({
         'lib/mcp/tools/readFile.ts',
         'lib/mcp/tools/codeGraphRead.ts',
         'lib/services/codeGraphReadService.ts',
+        'lib/services/codeGraphReadDriftService.ts',
         'lib/services/repoFileReadService.ts',
         'lib/ai/motirAiClient.ts',
       ],
@@ -68,6 +71,12 @@ export default defineConfig({
           lines: 90,
         },
         'lib/services/codeGraphReadService.ts': {
+          statements: 90,
+          functions: 90,
+          branches: 90,
+          lines: 90,
+        },
+        'lib/services/codeGraphReadDriftService.ts': {
           statements: 90,
           functions: 90,
           branches: 90,

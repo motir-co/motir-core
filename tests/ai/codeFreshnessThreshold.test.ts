@@ -38,6 +38,9 @@ function repo(commitsBehind: number | null) {
     refreshFailing: false,
     // MOTIR-7132's field — no size refusal; the threshold is independent of it.
     graphTooLarge: null,
+    // MOTIR-10094's pair — the threshold reads the count, never the shas.
+    indexedSha: null,
+    defaultHead: null,
   };
 }
 

@@ -13,8 +13,64 @@ import type { CodeContextRepoDTO } from '@/lib/dto/codeContext';
  */
 export type CodeGraphReadTool = 'code_explore' | 'code_search' | 'code_grep';
 
+/**
+ * HOW FAR ONE REPOSITORY'S GRAPH TRAILS ITS DEFAULT BRANCH, as data (MOTIR-10094).
+ *
+ * Present on an `ok` answer for every repository the read covered whose indexed
+ * commit differs from its default branch's head — and absent for one at the head,
+ * so a current graph's answer carries no drift fields at all.
+ *
+ * ⚠️ THE PATHS, NOT THE COUNT, ARE THE FACT. One squash-merge is one commit and can
+ * be a whole story, so `commitsBehind: 1` says nothing about what the graph is
+ * missing. An absence the graph reports ("no X exists") holds only for code
+ * OUTSIDE `changedPaths`; where the searched area touches one, the default branch
+ * must be read (`read_file`) before the absence is written down.
+ */
+export interface CodeGraphDriftDTO {
+  /** `owner/name`. */
+  repoRef: string;
+  /** The commit the graph was built from. */
+  indexedSha: string;
+  /** The default branch's head, as last mirrored. */
+  defaultHead: string;
+  /** Commits between the two, when counted; `null` when not (never coerced to 0). */
+  commitsBehind: number | null;
+  /**
+   * The paths changed between `indexedSha` and `defaultHead`, from the git host's
+   * compare, at most `CODE_GRAPH_DRIFT_PATHS_MAX`
+   * (`lib/services/codeGraphDriftService.ts`). `null` ONLY when the host
+   * could not list them — `changedPathsUnavailable` then says why. Never an empty
+   * list standing in for "could not ask".
+   */
+  changedPaths: string[] | null;
+  /** True when the list was cut — by the host's own cap or by this answer's bound. */
+  changedPathsTruncated: boolean;
+  /** Why `changedPaths` is null: the host's own outcome for the compare. */
+  changedPathsUnavailable: CodeGraphDriftUnavailable | null;
+  /**
+   * The changed paths that name the searched area — a query word in the path, or
+   * under the `code_grep` `path` prefix. A LEAD, not a bound: a symbol's name need
+   * not appear in its file's path. Empty when none does, `null` when the paths
+   * could not be listed.
+   */
+  changedPathsInQueryArea: string[] | null;
+}
+
+/** The compare outcomes that leave a drift without a path list. */
+export type CodeGraphDriftUnavailable =
+  | 'too_large'
+  | 'no_such_ref'
+  | 'not_connected'
+  | 'revoked'
+  | 'host_error';
+
 export type CodeGraphReadDTO =
-  | { state: 'ok'; text: string }
+  | {
+      state: 'ok';
+      text: string;
+      /** Only when some repository read is behind its default branch (MOTIR-10094). */
+      drift?: CodeGraphDriftDTO[];
+    }
   /** The project's set holds no realized repository — decided in core, no ai call. */
   | { state: 'no_repositories' }
   | { state: 'repo_not_in_set'; repo: string; available: string[] }

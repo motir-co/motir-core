@@ -144,6 +144,11 @@ export async function resolveCodeContextState(
         // the render path on purpose; the count is computed by the recompute job
         // and read from a column, exactly like the head it is compared against.
         commitsBehind: resolveDriftCount(repo),
+        // The pair itself (MOTIR-10094), handed over as facts: the code-graph read
+        // lists the paths changed between them, and the planning envelope gives
+        // the hosted session the two shas to list them with.
+        indexedSha: repo.indexedHeadSha,
+        defaultHead: repo.defaultBranchHeadSha,
         // ⚠️ IS THE REFRESH DEAD? (MOTIR-2105.) The one fact that separates a
         // graph which will catch up from one that will keep drifting until
         // somebody acts — and the fact the DLQ held privately while every

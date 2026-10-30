@@ -5651,7 +5651,7 @@ amendment).
 
 | `state`             | Meaning                                                                                                     | Extra fields                                                                |
 | ------------------- | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `ok`                | The executor's text, unchanged.                                                                             | `text`                                                                      |
+| `ok`                | The executor's text, unchanged — plus the drift note below when a repository read is behind.                | `text`, `drift` (only when behind)                                          |
 | `no_repositories`   | The project's set holds no realized repository. Decided in core; motir-ai is not called.                    | —                                                                           |
 | `repo_not_in_set`   | `repo` matches no repository in the set. Decided in core; motir-ai is not called.                           | `repo`, `available`                                                         |
 | `not_indexed`       | A repository in the set has no graph yet. Enriched with core's own code-context facts.                      | `repoRef`, `indexState`, `commitsBehind`, `refreshFailing`, `graphTooLarge` |
@@ -5662,6 +5662,31 @@ amendment).
 
 A request motir-ai rejects as malformed stays an error, so it is seen rather
 than read as a soft state.
+
+**The drift (MOTIR-10094).** When a repository the read covered has a graph
+built from a commit other than its default branch's head, the `ok` answer
+carries a `drift` entry for it — and a graph at its head carries none, so a
+current answer is unchanged. One squash-merge is one commit and can be a whole
+story, so the entry hands over **what changed**, not only how much:
+
+| Field                     | Meaning                                                                                                                           |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `repoRef`                 | `owner/name`.                                                                                                                     |
+| `indexedSha`              | The commit the graph was built from.                                                                                              |
+| `defaultHead`             | The default branch's head, as last mirrored.                                                                                      |
+| `commitsBehind`           | Commits between the two when counted; `null` when not (never coerced to `0`).                                                     |
+| `changedPaths`            | The paths changed between the two, from the git host's compare, at most 50. `null` only when the host could not list them.        |
+| `changedPathsTruncated`   | `true` when the list was cut — by the host's own cap (300 on GitHub) or by this answer's bound. A cut list is never an empty one. |
+| `changedPathsUnavailable` | Why `changedPaths` is `null`: `too_large`, `no_such_ref`, `not_connected`, `revoked` or `host_error`.                             |
+| `changedPathsInQueryArea` | The changed paths naming the searched area — a word of the query in the path, or under `code_grep`'s `path`. A lead, not a bound. |
+
+The text gets a note after the executor's bytes saying the same, ending with the
+rule it exists for: **an absence in the answer holds only for code outside the
+changed paths** — where what was searched touches one, read it with `read_file`
+(the default branch, live) before writing it down. The compare is asked in
+parallel with the read and once per commit pair (a compare between two commits
+never changes, so its answer is cached); a compare that fails never fails the
+read. `code_grep` carries the same `drift`.
 
 **Permission: `ai:plan`, at the door and in the service** — as `get_code_health`
 and `read_file`, on the same argument (`docs/decisions/member-facing-permissions.md`

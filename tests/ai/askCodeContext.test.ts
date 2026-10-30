@@ -74,6 +74,8 @@ const CODE: JobPlanningCodeContext = {
       refreshInFlight: false,
       indexedAt: null,
       commitsBehind: null,
+      indexedSha: null,
+      defaultHead: null,
     },
   ],
 };
