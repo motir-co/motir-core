@@ -95,6 +95,10 @@ const STATUS_WRITE_VERDICTS: Record<string, readonly [Verdict, string]> = {
     'never-terminal',
     "THE RESTING STATUS (MOTIR-5646, AMENDMENT 16 D6) — a target its plan parked goes to the project's own `blocked` or `todo`, both resolved from the project's status list and both asserted `todo`-CATEGORY before the write, so this can neither enter nor leave the done category and no `completedAt` stamp is ever owed. It writes only when the row is still at `planning`, which the same plan put there, and the legality of `planning → <target>` is read from the project's graph first",
   ],
+  'lib/services/plansService.ts#writePlanDecidedStatus#workItemRepository.update': [
+    'never-terminal',
+    "THE RE-SCOPE MOVE (MOTIR-10102, AMENDMENT 28) — an approved `modify`'s target goes to the status `modifyTargetStatusFor` decided: its own prior status when that claims built work (in-progress CATEGORY, never done), or the project's `todo` / `blocked` / `in_progress`. The write resolves the target from the project's status list and refuses a done-CATEGORY one before it writes, so it can neither enter nor leave the done category and no `completedAt` stamp is ever owed",
+  ],
   'lib/services/workflowsService.ts#deleteStatus#workItemRepository.update': [
     'stamps-itself',
     'the status-DELETION reassign — a workflow-admin bulk move that walks no legal edges, so it cannot call the seam; it compares the deleted and target CATEGORIES and stamps or clears `completedAt` in the same patch',

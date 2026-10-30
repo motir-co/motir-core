@@ -4364,3 +4364,43 @@ approve will write for a NEW card, and the live list is still never substituted 
 
 **Not in scope.** motir-ai's `MODIFY_PATCH_KEYS` mirror and the planners' rules that would make use
 of the key; a plan authored there cannot propose a replacement until it learns it.
+
+## AMENDMENT 28 — a re-scoped card that claims BUILT work leaves that status, parked or not (bug MOTIR-10102, 2026-10-30)
+
+AMENDMENT 16 retired MOTIR-5359's re-scope reset on the premise that every `modify` target is parked
+by its own append and rested by D6/D7. A plan a planning CONVERSATION produces parks nothing — its
+session holds only its anchors — so a `modify` of any other card was never parked and never moved. On
+production a conversation plan rewrote MOTIR-5780's title and body and gave it three open blockers;
+the approve left it at `implemented`, still claiming the old body was built.
+
+**§1 — the rule (Yue, 2026-10-30).** When an approved plan changes a card's title, description or
+repository (`patchRescopes`), a card whose status claims its work is built — `implemented`,
+`in_review`, `approved`, and any custom status beside them in the in-progress category except
+`in_progress` and `planning` — leaves it for:
+
+- **`blocked`** when it has an open blocker after materialize, the plan's own `blockedByAdd` included;
+- else **`in_progress`** while a run is working it (an open leg on a running run that is not a
+  `review`);
+- else **`todo`**.
+
+It holds for every card the plan modifies, anchor or not, conversation plan or MCP / `plan.py` plan.
+The status the rule reads is the one the card held before any park (the lock's `priorStatus` when the
+lock moved it to `planning`).
+
+**§2 — D7 AMENDED for a card that claims built work.** A patch that changes only its type, size,
+priority, explanation, parent or edges gives it back the status it was parked FROM, not `todo`. D7's
+rows stand for every other card (`todo`, `blocked`, `in_progress`, a hand-parked card), and for a
+container the plan lays new children under. A mark-only `modify` and a `done` / `cancelled` target
+are untouched.
+
+**§3 — where it is written.** `lib/plans/rescopeStatus.ts` decides; `plansService.restPlanTargets`
+applies it to the targets this plan parked, and `settleUnparkedModifyTargets` to every other one. A
+card some other hold keeps at `planning` (a session's anchor, another undecided plan) gets the answer
+on that hold's `priorStatus`, so the hold's release gives it back there. The write is authoritative,
+like `releaseOne`'s restore: the approved plan is the decision, and the default graph declares
+neither `implemented → todo` nor `planning → implemented`.
+
+**§4 — the reviewer sees it.** `planReviewService.buildChanges` reads the same function and names the
+outcomes rather than predicting one: `To Do, Blocked, or In Progress (re-scoped while Implemented;
+decided when this plan is approved)`, or `<prior> (returned when this plan is approved)` for a card
+given back its own status.
