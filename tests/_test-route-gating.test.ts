@@ -9,6 +9,7 @@ import * as workItemLinksRoute from '@/app/api/%5Ftest/work-item-links/route';
 import * as legalManifestRoute from '@/app/api/%5Ftest/legal-manifest/route';
 import * as docsUrlRoute from '@/app/api/%5Ftest/docs-url/route';
 import * as monitorPollRoute from '@/app/api/%5Ftest/monitors/poll/route';
+import * as publicAddressFakesRoute from '@/app/api/%5Ftest/public-addresses/fakes/route';
 import { productionGate } from '@/app/api/%5Ftest/_helpers';
 import { LEGAL_DOCUMENTS_ENV } from '@/lib/legal/documents';
 import { DOCS_URL_ENV } from '@/lib/docs/links';
@@ -256,5 +257,20 @@ describe('_test/docs-url route — production gating and the door itself (MOTIR-
     vi.stubEnv('NODE_ENV', 'development');
     const res = await docsUrlRoute.PUT(new Request(URL, { method: 'PUT', body: 'not json' }));
     expect(res.status).toBe(400);
+  });
+});
+
+describe('_test/public-addresses/fakes route — production gating (MOTIR-9533)', () => {
+  it('returns 404 for POST when NODE_ENV=production, before reading a session or a body', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('E2E_PROD_HARNESS', '');
+    const res = await publicAddressFakesRoute.POST(
+      new Request('http://localhost/api/_test/public-addresses/fakes', {
+        method: 'POST',
+        body: JSON.stringify({ sweep: true }),
+      }),
+    );
+    expect(res.status).toBe(404);
+    expect(((await res.json()) as { code?: string }).code).toBe('NOT_FOUND');
   });
 });
