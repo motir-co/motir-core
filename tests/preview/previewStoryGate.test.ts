@@ -771,7 +771,7 @@ describe('seams 6 and 7 — one preview across two fake hosting instances over o
   });
 
   /** The job worker's instance: a fake of its own, over the same store file. */
-  const worker = () => createFakeHostingDeployPort({ target: 'fly' });
+  const worker = () => createFakeHostingDeployPort({ shareAcrossProcesses: true, target: 'fly' });
 
   it('seam 6 — a release the lifecycle deployed is answered by another instance with the same release', async () => {
     const fx = await makeWorkItemFixture();

@@ -189,6 +189,25 @@ export interface ReleaseSummary {
   readonly state: ReleaseState;
 }
 
+/** A one-off run of a release image (MOTIR-10030): a production release's
+ *  migration step, run against its database BEFORE the release takes traffic. */
+export interface RunReleaseCommandInput {
+  readonly appRef: string;
+  readonly artifact: ReleaseArtifact;
+  /** The command, split on whitespace into argv — no shell, as `startCommand`. */
+  readonly command: string;
+  readonly env: readonly ReleaseEnvVar[];
+  /** How long the command may run before it is stopped and reported timed out. */
+  readonly timeoutSeconds: number;
+}
+
+/** How a release command ended: its exit status ONLY — never its output, which
+ *  can echo the environment it ran with. `exitCode` is null when it timed out. */
+export interface ReleaseCommandResult {
+  readonly exitCode: number | null;
+  readonly timedOut: boolean;
+}
+
 export interface HostingDeployPort {
   readonly target: HostingDeployTarget;
   /** Create (or find) the isolation unit for one (repository, environment).
@@ -233,4 +252,8 @@ export interface HostingDeployPort {
   destroyApp(input: { appRef: string }): Promise<ReleaseUsage[]>;
   /** The app's releases; an app that does not exist has none. */
   listReleases(input: { appRef: string }): Promise<ReleaseSummary[]>;
+  /** Run one command of a release image to completion in the app, then remove
+   *  what ran it. It never serves traffic and never touches the live release.
+   *  A target that cannot throws `ReleaseCommandUnsupportedError`. */
+  runReleaseCommand(input: RunReleaseCommandInput): Promise<ReleaseCommandResult>;
 }

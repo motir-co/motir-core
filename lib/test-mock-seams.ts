@@ -89,6 +89,20 @@ export const E2E_MOCK_SEAMS: readonly MockSeam[] = [
     },
   },
   {
+    // Story MOTIR-9797 · MOTIR-10040 — a production release's GitHub calls, made
+    // by the job WORKER: the manifest read at the merged commit, the deployment
+    // and its statuses, and the org installation read before the token mint.
+    // ⚠️ BEFORE `E2E_TEST_GITHUB_MERGE` and `E2E_TEST_GITHUB_REPOS`: it claims only
+    // the repositories and orgs its control file names, and every other path of
+    // the host falls through to them.
+    flag: 'E2E_TEST_PRODUCTION_RELEASE',
+    message: 'GitHub production-release calls (manifest, deployments) mocked.',
+    install: async (agent) => {
+      const { installProductionReleaseMock } = await import('@/lib/test-production-release-mock');
+      installProductionReleaseMock(agent);
+    },
+  },
+  {
     // ⚠️ BEFORE `E2E_TEST_GITHUB_MERGE` and `E2E_TEST_GITHUB_REPOS`, and the order
     // is load-bearing: the REPOS seam answers every `POST /app/installations/*`
     // with one shared token, and this one claims only its own installation, so

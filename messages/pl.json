@@ -1954,6 +1954,7 @@
       "rules": "Reguły",
       "repositories": "Repozytoria",
       "environment": "Środowisko",
+      "production": "Produkcja",
       "monitoring": "Monitorowanie",
       "approvals": "Zatwierdzenia",
       "bugs": "Błędy"
@@ -4122,7 +4123,8 @@
         "translation": "To, czy treść pracy w tym projekcie jest tłumaczona dla każdego czytelnika, widzą osoby, które mogą czytać elementy pracy projektu. Zapytaj administratora projektu, jeśli potrzebujesz to zobaczyć.",
         "automation": "Automatyzacją projektu zarządzają administratorzy projektu. Poproś administratora, jeśli reguła wymaga zmiany.",
         "monitoring": "Połączeniem z monitorem błędów tego projektu zarządzają osoby, które mogą zarządzać integracjami. Poproś administratora projektu, jeśli Sentry trzeba połączyć lub połączyć ponownie.",
-        "environment": "Wartości środowiska repozytorium widzą osoby, które mogą przeglądać ten projekt. Zapytaj administratora projektu, jeśli potrzebujesz je zobaczyć."
+        "environment": "Wartości środowiska repozytorium widzą osoby, które mogą przeglądać ten projekt. Zapytaj administratora projektu, jeśli potrzebujesz je zobaczyć.",
+        "production": "Wydania repozytorium widzą osoby, które mogą przeglądać ten projekt. Zapytaj administratora projektu, jeśli potrzebujesz je zobaczyć."
       }
     },
     "organization": {
@@ -4289,6 +4291,99 @@
         "title": "Nie znaleziono repozytorium",
         "body": "Motir nie przechowuje środowiska dla tego repozytorium. Wybierz jedno z repozytoriów projektu hostowanych przez Motir.",
         "back": "Wróć do Środowiska"
+      }
+    },
+    "production": {
+      "title": "Produkcja",
+      "lede": "Co działa na produkcji dla każdej aplikacji tego projektu, co zrobiły ostatnie merge’e i jak cofnąć wadliwe wydanie.",
+      "repositoryLabel": "Repozytorium",
+      "role": {
+        "web": "Aplikacja webowa",
+        "api": "API",
+        "mobile": "Aplikacja mobilna",
+        "shared": "Kod współdzielony",
+        "infra": "Infrastruktura",
+        "other": "Inne"
+      },
+      "current": {
+        "eyebrow": "Działa na produkcji"
+      },
+      "state": {
+        "building": "Budowanie",
+        "live": "Na produkcji",
+        "failed": "Niepowodzenie",
+        "replaced": "Zastąpione",
+        "rolledBack": "Wycofane"
+      },
+      "trigger": {
+        "mergeDefault": "Merge do domyślnej gałęzi",
+        "redeploy": "Ponowne wdrożenie · zmieniono ustawienia produkcji",
+        "rollback": "Przywrócone przez wycofanie · {name}",
+        "rollbackUnnamed": "Przywrócone przez wycofanie",
+        "refUnnamed": "Wdrożenie {ref}"
+      },
+      "address": {
+        "newTab": "(otwiera się w nowej karcie)",
+        "copy": "Kopiuj",
+        "copied": "Skopiowano",
+        "copyAria": "Kopiuj {address}",
+        "none": "Brak adresu — zarezerwuj adres motir.site dla obszaru roboczego w sekcji <link>Adres publiczny</link>."
+      },
+      "rollback": {
+        "action": "Wycofaj",
+        "helper": "Przywraca produkcję do wydania sprzed tego.",
+        "unavailable": "Nie ma jeszcze wcześniejszego wydania, do którego można wrócić."
+      },
+      "history": {
+        "heading": "Historia wydań",
+        "more": "Pokaż więcej wydań",
+        "moreError": "Nie udało się wczytać kolejnych wydań. Spróbuj ponownie."
+      },
+      "failedNewer": "Najnowsze wydanie się nie powiodło, więc nic, co działa, się nie zmieniło. {commit} nadal działa na produkcji.",
+      "reason": {
+        "build": "Budowanie nie powiodło się przed wdrożeniem.",
+        "migration": "Migracja nie powiodła się.",
+        "migrationExit": "Migracja nie powiodła się z kodem wyjścia {code}.",
+        "migrationTimedOut": "Przekroczono limit czasu migracji.",
+        "superseded": "Trwało inne wydanie, więc to nigdy się nie rozpoczęło.",
+        "deploy": "Wdrożenie nie powiodło się, zanim przejęło ruch."
+      },
+      "dialog": {
+        "title": "Wycofać {repository}?",
+        "leaving": "Opuszczane",
+        "returning": "Powrót do",
+        "body": "Produkcja wraca do kodu i wartości środowiska tamtego wydania pod adresem {address}. Schemat bazy danych nie jest cofany: migracje wykonane przez nowsze wydanie pozostają zastosowane.",
+        "bodyNoAddress": "Produkcja wraca do kodu i wartości środowiska tamtego wydania. Schemat bazy danych nie jest cofany: migracje wykonane przez nowsze wydanie pozostają zastosowane.",
+        "confirm": "Wycofaj",
+        "submitting": "Wycofywanie…",
+        "cancel": "Anuluj",
+        "error": "Wycofanie nie zostało ukończone. {commit} nadal obsługuje produkcję. Spróbuj ponownie.",
+        "retry": "Spróbuj ponownie"
+      },
+      "refusal": {
+        "noPreviousRelease": "Nie ma wcześniejszego wydania, do którego można wrócić.",
+        "releaseInProgress": "Trwa wydanie. Wycofaj, gdy się zakończy.",
+        "conflict": "Produkcja zmieniła się w trakcie wycofywania. Zamknij to okno i sprawdź, co teraz działa.",
+        "forbidden": "Tylko administratorzy projektu mogą wycofywać.",
+        "notFound": "To repozytorium nie jest już dla ciebie dostępne."
+      },
+      "readOnly": {
+        "note": "Widzisz każde wydanie. Tylko administratorzy projektu mogą wycofywać."
+      },
+      "empty": {
+        "title": "Na produkcji jeszcze nic nie ma",
+        "body": "Zmerguj pull request do main, a Motir go zbuduje i uruchomi tutaj, z jego adresem."
+      },
+      "loading": "Wczytywanie wydań…",
+      "loadError": {
+        "title": "Nie udało się wczytać wydań",
+        "body": "Nie ma to wpływu na produkcję. Spróbuj ponownie za chwilę."
+      },
+      "retry": "Spróbuj ponownie",
+      "notFound": {
+        "title": "Nie znaleziono repozytorium",
+        "body": "Motir prowadzi produkcję tylko dla repozytoriów, które hostuje. Wybierz jedno z repozytoriów tego projektu.",
+        "back": "Wróć do Produkcji"
       }
     },
     "workspaceAddress": {

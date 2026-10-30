@@ -95,3 +95,14 @@ export class IdlePolicyUnsupportedError extends Error {
     this.name = 'IdlePolicyUnsupportedError';
   }
 }
+
+/** The target has no way to run a one-off command of a release image yet (the
+ *  serverless and AWS targets, MOTIR-10030): refused by name before anything is
+ *  created, so a release that needs a migration fails rather than skipping it. */
+export class ReleaseCommandUnsupportedError extends Error {
+  readonly code = 'HOSTING_RELEASE_COMMAND_UNSUPPORTED' as const;
+  constructor(readonly target: string) {
+    super(`The ${target} target cannot run a one-off release command.`);
+    this.name = 'ReleaseCommandUnsupportedError';
+  }
+}

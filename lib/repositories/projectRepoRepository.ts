@@ -990,6 +990,54 @@ export const projectRepoRepository = {
   },
 
   /**
+   * The facts a PRODUCTION home is decided from (Story MOTIR-9797 · MOTIR-10026):
+   * tenancy, name, seed source, establish state and hosting target. A read by id
+   * alone, like {@link findHostingIdentityInTx} — the caller holds a
+   * `withSystemContext` transaction (`project_repository_system_read`).
+   */
+  async findDeployFactsInTx(id: string, tx: Prisma.TransactionClient) {
+    return tx.projectRepo.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        workspaceId: true,
+        projectId: true,
+        name: true,
+        seedSource: true,
+        state: true,
+        hostingTarget: true,
+        hostingSize: true,
+        githubRepo: { select: { owner: true, name: true, defaultBranch: true } },
+      },
+    });
+  },
+
+  /**
+   * One page of the repositories production enablement's backfill walks
+   * (MOTIR-10027): established, not a customer repository, Fly-targeted and
+   * realized on GitHub, in id order after `afterId`. A platform read across
+   * workspaces — the caller holds a `withSystemContext` transaction.
+   */
+  async listProductionCandidatesInTx(
+    afterId: string | null,
+    take: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string }>> {
+    return tx.projectRepo.findMany({
+      where: {
+        ...(afterId ? { id: { gt: afterId } } : {}),
+        state: { in: [...ESTABLISHED_PROJECT_REPO_STATES] },
+        hostingTarget: 'fly',
+        seedSource: { not: SEED_SOURCE_ORGANIZATION },
+        githubRepoId: { not: null },
+      },
+      select: { id: true },
+      orderBy: { id: 'asc' },
+      take,
+    });
+  },
+
+  /**
    * A row's HOSTING IDENTITY for the AWS adapter (MOTIR-10010): its seed source
    * (a customer repository is never hosted), the organisation its workspace
    * belongs to, and its realized GitHub repository's id, if any. A platform read

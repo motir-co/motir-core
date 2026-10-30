@@ -9,6 +9,7 @@ import {
 } from '@/lib/services/aiPlanGateService';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
+import { productionEnablementService } from '@/lib/services/productionEnablementService';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { seedRegistryService } from '@/lib/services/seedRegistryService';
 import { SeedResolutionError } from '@/lib/seedRegistry/errors';
@@ -486,6 +487,12 @@ async function establishRow(
     // `ineligible` with no call). A failure leaves a working repository whose
     // previews the daily sweep switches on, so it never fails the row.
     await previewEnablementService.enableQuietly(row.id);
+
+    // PRODUCTION, ONCE THE REPOSITORY IS ESTABLISHED (MOTIR-10027): a Fly-targeted
+    // Motir repository with a web manifest gets its production app, credential
+    // and workflow variables. Quiet by contract — a repository whose enablement
+    // failed is a working repository, and the backfill switches it on later.
+    await productionEnablementService.enableQuietly(row.id);
 
     return {
       rowId: row.id,

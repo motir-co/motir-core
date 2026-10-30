@@ -40,6 +40,7 @@
     "db:backfill:pr-base-ref": "tsx --tsconfig tsconfig.node.json scripts/backfill-pull-request-base-ref.ts",
     "db:backfill:ci-state": "tsx --tsconfig tsconfig.node.json scripts/backfill-work-item-ci-state.ts",
     "db:backfill:fix-reason": "tsx --tsconfig tsconfig.node.json scripts/backfill-fix-reason.ts",
+    "hosting:backfill:production": "tsx --tsconfig tsconfig.node.json scripts/backfill-production-enablement.ts",
     "db:backfill:resume-state": "tsx --tsconfig tsconfig.node.json scripts/backfill-resume-state.ts",
     "db:cleanup:legacy-subdomain-aliases": "tsx --tsconfig tsconfig.node.json scripts/cleanup-legacy-subdomain-aliases.ts",
     "db:backfill:plan-gates": "tsx --tsconfig tsconfig.node.json scripts/backfill-plan-approval-gates.ts",

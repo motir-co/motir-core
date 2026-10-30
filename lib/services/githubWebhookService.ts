@@ -45,6 +45,7 @@ import { projectRepoTakeoverService } from './projectRepoTakeoverService';
 import { readReportedCheckSet } from './checkSetReconcile';
 import { previewLifecycleService } from '@/lib/services/previewLifecycleService';
 import { repoDeploymentService } from './repoDeploymentService';
+import { productionMergeReleaseService } from './productionMergeReleaseService';
 import { withdrawPullRequestApprovalGatesOnHeadMove } from './pullRequestApprovalGates';
 import { resolveDeliveredWorkItems } from './changeRequestWorkItems';
 import { recomputeWorkItemFixReason } from './fixReasonService';
@@ -301,9 +302,16 @@ export const githubWebhookService = {
         return this.handleCiStatus(body);
       case 'merge_group':
         return this.handleMergeGroup(body);
-      case 'workflow_run':
+      case 'workflow_run': {
+        // One delivery, three listeners: the CI-minutes meter's answer is the
+        // delivery's result, a completed `production-image` run of a Motir
+        // repository also starts its release (MOTIR-10031), and a
+        // `preview-image` run moves its pull request's preview (MOTIR-5776).
         await runPreviewLifecycle('workflow_run', () => previewLifecycleService.onImageRun(body));
-        return this.handleWorkflowRun(body);
+        const metered = await this.handleWorkflowRun(body);
+        await this.handleProductionImageRun(body);
+        return metered;
+      }
       case 'workflow_job':
         return this.handleWorkflowJob(body);
       case 'repository':
@@ -1010,6 +1018,30 @@ export const githubWebhookService = {
         error: err instanceof Error ? err.message : 'unknown',
       });
       return { event: 'workflow_run', outcome: 'failed' };
+    }
+  },
+
+  /**
+   * The production half of a `workflow_run` delivery (Story MOTIR-9797 ·
+   * MOTIR-10031): a completed `production-image` run for a push to a Motir
+   * repository's default branch enqueues its release. Every decision is
+   * `productionMergeReleaseService`'s; this only normalizes and dispatches.
+   * Never throws: a failure is logged with ids only and the delivery is acked,
+   * exactly as the meter's is.
+   */
+  async handleProductionImageRun(body: Record<string, unknown>): Promise<void> {
+    const run = getGitProvider(PROVIDER).parseProductionImageRunEvent?.(body);
+    const installationId = readInstallationId(body);
+    if (!run || !installationId) return;
+    try {
+      await productionMergeReleaseService.handleProductionImageRun(run, installationId);
+    } catch (err) {
+      console.error('[githubWebhookService] production merge release failed; delivery acked', {
+        runId: run.runId,
+        runAttempt: run.runAttempt,
+        providerRepoId: run.providerRepoId,
+        error: err instanceof Error ? err.name : 'unknown',
+      });
     }
   },
 

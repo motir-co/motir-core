@@ -1954,6 +1954,7 @@
       "rules": "Regeln",
       "repositories": "Repositorys",
       "environment": "Umgebung",
+      "production": "Produktion",
       "monitoring": "Monitoring",
       "approvals": "Genehmigungen",
       "bugs": "Bugs"
@@ -4122,7 +4123,8 @@
         "translation": "Ob die Arbeitsinhalte dieses Projekts für jede lesende Person übersetzt werden, sehen Personen, die die Arbeitselemente des Projekts lesen können. Fragen Sie einen Projektadministrator, wenn Sie es sehen müssen.",
         "automation": "Die Projektautomatisierung wird von Projektadministratoren verwaltet. Wenden Sie sich an einen Administrator, wenn eine Regel geändert werden muss.",
         "monitoring": "Die Verbindung dieses Projekts zum Fehlermonitor wird von Personen verwaltet, die Integrationen verwalten dürfen. Wenden Sie sich an einen Projektadministrator, wenn Sentry verbunden oder neu verbunden werden muss.",
-        "environment": "Die Umgebungswerte eines Repositorys sehen Personen, die dieses Projekt durchsuchen können. Fragen Sie einen Projektadministrator, wenn Sie sie sehen müssen."
+        "environment": "Die Umgebungswerte eines Repositorys sehen Personen, die dieses Projekt durchsuchen können. Fragen Sie einen Projektadministrator, wenn Sie sie sehen müssen.",
+        "production": "Die Releases eines Repositorys sehen Personen, die dieses Projekt durchsuchen können. Fragen Sie einen Projektadministrator, wenn Sie sie sehen müssen."
       }
     },
     "organization": {
@@ -4289,6 +4291,99 @@
         "title": "Repository nicht gefunden",
         "body": "Motir führt für dieses Repository keine Umgebung. Wählen Sie eines der Repositorys des Projekts, die Motir hostet.",
         "back": "Zurück zu Umgebung"
+      }
+    },
+    "production": {
+      "title": "Produktion",
+      "lede": "Was für jede App dieses Projekts live ist, was die letzten Merges bewirkt haben und wie Sie ein fehlerhaftes Release rückgängig machen.",
+      "repositoryLabel": "Repository",
+      "role": {
+        "web": "Web-App",
+        "api": "API",
+        "mobile": "Mobile App",
+        "shared": "Gemeinsamer Code",
+        "infra": "Infrastruktur",
+        "other": "Sonstiges"
+      },
+      "current": {
+        "eyebrow": "Läuft in Produktion"
+      },
+      "state": {
+        "building": "Wird gebaut",
+        "live": "Live",
+        "failed": "Fehlgeschlagen",
+        "replaced": "Ersetzt",
+        "rolledBack": "Zurückgesetzt"
+      },
+      "trigger": {
+        "mergeDefault": "Merge in den Standard-Branch",
+        "redeploy": "Erneutes Deployment · Produktionseinstellungen geändert",
+        "rollback": "Durch Rollback wiederhergestellt · {name}",
+        "rollbackUnnamed": "Durch Rollback wiederhergestellt",
+        "refUnnamed": "Deployment von {ref}"
+      },
+      "address": {
+        "newTab": "(öffnet in einem neuen Tab)",
+        "copy": "Kopieren",
+        "copied": "Kopiert",
+        "copyAria": "{address} kopieren",
+        "none": "Noch keine Adresse – beanspruchen Sie unter <link>Öffentliche Adresse</link> eine motir.site-Adresse für den Arbeitsbereich."
+      },
+      "rollback": {
+        "action": "Zurücksetzen",
+        "helper": "Setzt die Produktion auf das Release vor diesem zurück.",
+        "unavailable": "Es gibt noch kein früheres Release, zu dem zurückgekehrt werden kann."
+      },
+      "history": {
+        "heading": "Release-Verlauf",
+        "more": "Weitere Releases anzeigen",
+        "moreError": "Weitere Releases konnten nicht geladen werden. Versuchen Sie es erneut."
+      },
+      "failedNewer": "Das neueste Release ist fehlgeschlagen, daher hat sich am laufenden Stand nichts geändert. {commit} ist weiterhin live.",
+      "reason": {
+        "build": "Der Build ist vor dem Deployment fehlgeschlagen.",
+        "migration": "Die Migration ist fehlgeschlagen.",
+        "migrationExit": "Die Migration ist mit Exit-Code {code} fehlgeschlagen.",
+        "migrationTimedOut": "Die Migration hat das Zeitlimit überschritten.",
+        "superseded": "Ein anderes Release lief gerade, daher wurde dieses nie gestartet.",
+        "deploy": "Das Deployment ist fehlgeschlagen, bevor es Traffic übernommen hat."
+      },
+      "dialog": {
+        "title": "{repository} zurücksetzen?",
+        "leaving": "Verlassen wird",
+        "returning": "Zurück zu",
+        "body": "Die Produktion kehrt zu Code und Umgebungswerten dieses Release unter {address} zurück. Das Datenbankschema wird nicht zurückgesetzt: Migrationen des neueren Release bleiben angewendet.",
+        "bodyNoAddress": "Die Produktion kehrt zu Code und Umgebungswerten dieses Release zurück. Das Datenbankschema wird nicht zurückgesetzt: Migrationen des neueren Release bleiben angewendet.",
+        "confirm": "Zurücksetzen",
+        "submitting": "Wird zurückgesetzt…",
+        "cancel": "Abbrechen",
+        "error": "Das Zurücksetzen wurde nicht abgeschlossen. {commit} läuft weiterhin in Produktion. Versuchen Sie es erneut.",
+        "retry": "Erneut versuchen"
+      },
+      "refusal": {
+        "noPreviousRelease": "Es gibt kein früheres Release, zu dem zurückgekehrt werden kann.",
+        "releaseInProgress": "Ein Release läuft gerade. Setzen Sie zurück, sobald es abgeschlossen ist.",
+        "conflict": "Die Produktion hat sich während des Zurücksetzens geändert. Schließen Sie dies und prüfen Sie, was jetzt live ist.",
+        "forbidden": "Nur Projektadministratoren können zurücksetzen.",
+        "notFound": "Dieses Repository ist für Sie nicht mehr verfügbar."
+      },
+      "readOnly": {
+        "note": "Sie können jedes Release sehen. Nur Projektadministratoren können zurücksetzen."
+      },
+      "empty": {
+        "title": "Noch nichts in Produktion",
+        "body": "Mergen Sie einen Pull Request in main, und Motir baut ihn und stellt ihn hier mit seiner Adresse live."
+      },
+      "loading": "Releases werden geladen…",
+      "loadError": {
+        "title": "Die Releases konnten nicht geladen werden",
+        "body": "Die Produktion ist nicht betroffen. Versuchen Sie es gleich noch einmal."
+      },
+      "retry": "Erneut versuchen",
+      "notFound": {
+        "title": "Repository nicht gefunden",
+        "body": "Motir betreibt Produktion nur für die Repositorys, die es hostet. Wählen Sie eines der Repositorys dieses Projekts.",
+        "back": "Zurück zu Produktion"
       }
     },
     "workspaceAddress": {

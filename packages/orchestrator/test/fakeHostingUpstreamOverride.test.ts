@@ -49,7 +49,10 @@ afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-async function deployed(port = createFakeHostingDeployPort({ target: 'fly' }), rid = 'cmr1') {
+async function deployed(
+  port = createFakeHostingDeployPort({ shareAcrossProcesses: true, target: 'fly' }),
+  rid = 'cmr1',
+) {
   const { appRef } = await port.ensureApp({ repositoryId: rid, environment: PREVIEW });
   const handle = await port.deploy(input(appRef));
   return { port, appRef, handle };
@@ -59,7 +62,7 @@ describe('setUpstream on the fake hosting port', () => {
   it('crosses instances over one store, both ways', async () => {
     const { port: a, appRef, handle } = await deployed();
     a.setUpstream(appRef, STAND_IN);
-    const b = createFakeHostingDeployPort({ target: 'fly' });
+    const b = createFakeHostingDeployPort({ shareAcrossProcesses: true, target: 'fly' });
     expect((await b.describe(handle)).upstreamAddress).toBe(STAND_IN);
     b.setUpstream(appRef, 'http://127.0.0.1:4600');
     expect((await a.describe(handle)).upstreamAddress).toBe('http://127.0.0.1:4600');
@@ -110,17 +113,17 @@ describe('setUpstream on the fake hosting port', () => {
   it('survives a deploy made by another instance', async () => {
     const { port: a, appRef } = await deployed();
     a.setUpstream(appRef, STAND_IN);
-    const b = createFakeHostingDeployPort({ target: 'fly' });
+    const b = createFakeHostingDeployPort({ shareAcrossProcesses: true, target: 'fly' });
     const next = await b.deploy(input(appRef));
     expect((await a.describe(next)).upstreamAddress).toBe(STAND_IN);
-    const fresh = createFakeHostingDeployPort({ target: 'fly' });
+    const fresh = createFakeHostingDeployPort({ shareAcrossProcesses: true, target: 'fly' });
     const described = await fresh.describe(next);
     expect(described.releaseId).toBe(next.releaseId);
     expect(described.upstreamAddress).toBe(STAND_IN);
   });
 
   it('never gives a held release an address', async () => {
-    const port = createFakeHostingDeployPort({ target: 'aws' });
+    const port = createFakeHostingDeployPort({ shareAcrossProcesses: true, target: 'aws' });
     const { appRef } = await port.ensureApp({ repositoryId: 'cmr1', environment: PREVIEW });
     port.setAccountReady(false);
     const held = await port.deploy(input(appRef));

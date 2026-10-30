@@ -59,7 +59,7 @@ describe('hostingFakeControls', () => {
 describe('the spec helper', () => {
   it('reaches what another instance over the lane file made', async () => {
     vi.stubEnv(FAKE_HOSTING_STATE_PATH_ENV, join(dir, 'state.json'));
-    const worker = createFakeHostingDeployPort({ target: 'fly' });
+    const worker = createFakeHostingDeployPort({ shareAcrossProcesses: true, target: 'fly' });
     const { appRef } = await worker.ensureApp({ repositoryId: 'cmr1', environment: PREVIEW });
     expect(previewHostingFake('fly').app(appRef)?.appRef).toBe(appRef);
     resetPreviewHosting();

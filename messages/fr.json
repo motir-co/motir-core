@@ -1954,6 +1954,7 @@
       "rules": "Règles",
       "repositories": "Dépôts",
       "environment": "Environnement",
+      "production": "Production",
       "monitoring": "Surveillance",
       "approvals": "Approbations",
       "bugs": "Bugs"
@@ -4122,7 +4123,8 @@
         "translation": "Le fait que le contenu de travail de ce projet soit traduit pour chaque lecteur est visible par les personnes qui peuvent lire les éléments de travail du projet. Contactez un administrateur du projet si vous avez besoin de le voir.",
         "automation": "L’automatisation du projet est gérée par les administrateurs du projet. Adressez-vous à un administrateur si une règle doit être modifiée.",
         "monitoring": "La connexion de ce projet à un outil de surveillance des erreurs est gérée par les personnes qui peuvent gérer les intégrations. Adressez-vous à un administrateur du projet si Sentry doit être connecté ou reconnecté.",
-        "environment": "Les valeurs d’environnement d’un dépôt sont visibles par les personnes qui peuvent parcourir ce projet. Contactez un administrateur du projet si vous avez besoin de les voir."
+        "environment": "Les valeurs d’environnement d’un dépôt sont visibles par les personnes qui peuvent parcourir ce projet. Contactez un administrateur du projet si vous avez besoin de les voir.",
+        "production": "Les versions déployées d’un dépôt sont visibles par les personnes qui peuvent parcourir ce projet. Contactez un administrateur du projet si vous avez besoin de les voir."
       }
     },
     "organization": {
@@ -4289,6 +4291,99 @@
         "title": "Dépôt introuvable",
         "body": "Motir ne conserve aucun environnement pour ce dépôt. Choisissez l’un des dépôts du projet hébergés par Motir.",
         "back": "Retour à Environnement"
+      }
+    },
+    "production": {
+      "title": "Production",
+      "lede": "Ce qui est en ligne pour chaque application de ce projet, ce qu’ont fait les derniers merges et comment annuler une version défectueuse.",
+      "repositoryLabel": "Dépôt",
+      "role": {
+        "web": "Application web",
+        "api": "API",
+        "mobile": "Application mobile",
+        "shared": "Code partagé",
+        "infra": "Infrastructure",
+        "other": "Autre"
+      },
+      "current": {
+        "eyebrow": "En production"
+      },
+      "state": {
+        "building": "En construction",
+        "live": "En ligne",
+        "failed": "Échec",
+        "replaced": "Remplacée",
+        "rolledBack": "Annulée"
+      },
+      "trigger": {
+        "mergeDefault": "Merge dans la branche par défaut",
+        "redeploy": "Redéploiement · paramètres de production modifiés",
+        "rollback": "Restaurée par retour arrière · {name}",
+        "rollbackUnnamed": "Restaurée par retour arrière",
+        "refUnnamed": "Déploiement de {ref}"
+      },
+      "address": {
+        "newTab": "(s’ouvre dans un nouvel onglet)",
+        "copy": "Copier",
+        "copied": "Copié",
+        "copyAria": "Copier {address}",
+        "none": "Pas encore d’adresse : réservez une adresse motir.site pour l’espace de travail dans <link>Adresse publique</link>."
+      },
+      "rollback": {
+        "action": "Revenir en arrière",
+        "helper": "Ramène la production à la version précédant celle-ci.",
+        "unavailable": "Il n’y a pas encore de version antérieure vers laquelle revenir."
+      },
+      "history": {
+        "heading": "Historique des versions",
+        "more": "Afficher plus de versions",
+        "moreError": "Impossible de charger plus de versions. Réessayez."
+      },
+      "failedNewer": "La version la plus récente a échoué : rien n’a changé dans ce qui est servi. {commit} est toujours en ligne.",
+      "reason": {
+        "build": "Le build a échoué avant le déploiement.",
+        "migration": "La migration a échoué.",
+        "migrationExit": "La migration a échoué avec le code de sortie {code}.",
+        "migrationTimedOut": "La migration a dépassé le délai imparti.",
+        "superseded": "Une autre version était en cours : celle-ci n’a jamais démarré.",
+        "deploy": "Le déploiement a échoué avant de recevoir du trafic."
+      },
+      "dialog": {
+        "title": "Revenir en arrière sur {repository} ?",
+        "leaving": "Version quittée",
+        "returning": "Retour à",
+        "body": "La production revient au code et aux valeurs d’environnement de cette version sur {address}. Le schéma de la base de données n’est pas restauré : les migrations exécutées par la version plus récente restent appliquées.",
+        "bodyNoAddress": "La production revient au code et aux valeurs d’environnement de cette version. Le schéma de la base de données n’est pas restauré : les migrations exécutées par la version plus récente restent appliquées.",
+        "confirm": "Revenir en arrière",
+        "submitting": "Retour en arrière…",
+        "cancel": "Annuler",
+        "error": "Le retour en arrière n’a pas abouti. {commit} sert toujours la production. Réessayez.",
+        "retry": "Réessayer"
+      },
+      "refusal": {
+        "noPreviousRelease": "Il n’y a pas de version antérieure vers laquelle revenir.",
+        "releaseInProgress": "Une version est en cours. Revenez en arrière une fois qu’elle est terminée.",
+        "conflict": "La production a changé pendant le retour en arrière. Fermez cette fenêtre et vérifiez ce qui est en ligne maintenant.",
+        "forbidden": "Seuls les administrateurs du projet peuvent revenir en arrière.",
+        "notFound": "Ce dépôt ne vous est plus accessible."
+      },
+      "readOnly": {
+        "note": "Vous pouvez voir toutes les versions. Seuls les administrateurs du projet peuvent revenir en arrière."
+      },
+      "empty": {
+        "title": "Rien en production pour l’instant",
+        "body": "Fusionnez une pull request dans main : Motir la construit et la met en ligne ici, avec son adresse."
+      },
+      "loading": "Chargement des versions…",
+      "loadError": {
+        "title": "Impossible de charger les versions",
+        "body": "La production n’est pas affectée. Réessayez dans un instant."
+      },
+      "retry": "Réessayer",
+      "notFound": {
+        "title": "Dépôt introuvable",
+        "body": "Motir n’exécute la production que pour les dépôts qu’il héberge. Choisissez l’un des dépôts de ce projet.",
+        "back": "Retour à Production"
       }
     },
     "workspaceAddress": {

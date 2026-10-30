@@ -1,8 +1,10 @@
+import { existsSync, readFileSync } from 'node:fs';
 import { OrchestratorApiError } from '../../errors';
 import {
   CustomerRepositoryRefusedError,
   IdlePolicyUnsupportedError,
   NoPreviousReleaseError,
+  ReleaseCommandUnsupportedError,
   ReleaseNotFoundError,
 } from '../../hosting/errors';
 import { hostingAppNames, pushNamespaceName, sameEnvironment } from '../../hosting/names';
@@ -13,6 +15,7 @@ import type {
   HostingDeployTarget,
   HostingEnvironment,
   OriginCredentialKind,
+  ReleaseCommandResult,
   ReleaseDescription,
   ReleaseHandle,
   ReleaseRuntime,
@@ -58,7 +61,16 @@ import {
 // every operation and control, saved after every mutation (reads never save, so a
 // read cannot roll back another process's write), armed failures in the store's
 // sidecar, release ids pid-suffixed. Unset, it is the in-memory closure it always
-// was.
+// was. Only a fake built with `shareAcrossProcesses` takes the seam — the
+// composition root's singleton (MOTIR-10040); a fake a test builds itself stays
+// in memory even with the variable set.
+//
+// The HOLD sidecar (`<path>.hold.json`, `{ "held": ["deploy"] }`) is how a spec
+// in a THIRD process keeps a release open long enough to be seen building
+// (Story MOTIR-9797 · MOTIR-10040): a held operation waits, before it reads
+// anything, until the operation leaves the list — and fails at the "provider"
+// after `FAKE_HOSTING_HOLD_LIMIT_MS`, so a hold nobody releases ends the release
+// rather than the lane.
 
 export interface FakeHostedRelease {
   readonly releaseId: string;
@@ -88,6 +100,19 @@ export interface FakeHostedApp {
   upstreamOverride?: string | null;
 }
 
+/** The port operations, as the fake's call log names them. */
+export type FakeHostingOperation = Exclude<keyof HostingDeployPort, 'target'>;
+
+/** One call the fake received, in order (MOTIR-10030): which operation, on which
+ *  app when it names one, and — for a release command — the command it ran. */
+export interface FakeHostingCall {
+  readonly operation: FakeHostingOperation;
+  readonly appRef: string | null;
+  readonly command?: string;
+  /** The names of the environment it was given — never the values. */
+  readonly envNames?: readonly string[];
+}
+
 export interface FakeHostingControls {
   /** The fake's clock. */
   now(): Date;
@@ -107,8 +132,14 @@ export interface FakeHostingControls {
   liveCredentials(pushNamespace: string): number;
   /** The next call of that operation fails at the "provider" with an
    *  `OrchestratorApiError` and changes nothing — a destroy that destroyed
-   *  nothing, for the usage-always rule's error path. */
-  failNext(operation: FakeHostingFailure): void;
+   *  nothing, for the usage-always rule's error path; a deploy or a release
+   *  command that never ran. `message` replaces the error's detail, so a test
+   *  can make it carry something that must not leak. */
+  failNext(operation: FakeHostingFailure, message?: string): void;
+  /** Every port call this process made, in order. */
+  readonly calls: readonly FakeHostingCall[];
+  /** How the next release commands end (default: exit 0). */
+  setReleaseCommandResult(result: ReleaseCommandResult): void;
   /** Whether the organisation's AWS tenant account is ready. Ready unless a test
    *  sets it false; while not ready an `aws` deploy waits in
    *  `waiting_for_account`. */
@@ -127,8 +158,29 @@ export interface FakeHostingControls {
 export type FakeHostingFailure =
   | 'destroy'
   | 'destroyApp'
+  | 'deploy'
+  | 'runReleaseCommand'
   | 'ensurePushNamespace'
   | 'revokeDeployCredentials';
+
+/** The name MOTIR-10030 gave the failable operations. */
+export type FakeFailableOperation = FakeHostingFailure;
+
+/** How long a held operation waits before it fails. */
+export const FAKE_HOSTING_HOLD_LIMIT_MS = 120_000;
+const HOLD_POLL_MS = 100;
+
+/** The operations the hold sidecar names, or none. A torn read holds nothing. */
+function heldOperations(path: string): readonly string[] {
+  const hold = `${path}.hold.json`;
+  if (!existsSync(hold)) return [];
+  try {
+    const parsed = JSON.parse(readFileSync(hold, 'utf8')) as { held?: unknown };
+    return Array.isArray(parsed.held) ? parsed.held.filter((h) => typeof h === 'string') : [];
+  } catch {
+    return [];
+  }
+}
 
 export interface FakeHostingOptions {
   readonly target?: HostingDeployTarget;
@@ -136,6 +188,9 @@ export interface FakeHostingOptions {
   readonly start?: Date;
   /** Repository ids `ensureApp` refuses as customer repositories (D1). */
   readonly refuseRepositories?: readonly string[];
+  /** Whether the cross-process store seam applies. Only the composition root's
+   *  singleton takes it; a fake a test builds itself is in-memory only. */
+  readonly shareAcrossProcesses?: boolean;
 }
 
 /** The origin credential a forwarder sends to a release of that target and
@@ -185,12 +240,17 @@ export function createFakeHostingDeployPort(
   const refused = new Set(options.refuseRepositories ?? []);
   let state: FakeHostingSlice = emptyFakeHostingSlice(options.start);
   // The take-once failures of an UNSHARED fake; a shared one arms the sidecar.
-  const failing = new Set<FakeHostingFailure>();
+  const failing = new Map<FakeHostingFailure, string | undefined>();
+  const calls: FakeHostingCall[] = [];
+  let commandResult: ReleaseCommandResult = { exitCode: 0, timedOut: false };
+  /** The shared store's path when this fake takes the seam, else null. */
+  const sharedPath = (): string | null =>
+    options.shareAcrossProcesses ? fakeHostingStatePath() : null;
 
   /** Under the seam, adopt what the file holds — an empty slice when nothing is
    *  stored, because another process may have reset it; a torn file keeps ours. */
   function load(): FakeHostingSlice {
-    if (!fakeHostingStatePath()) return state;
+    if (!sharedPath()) return state;
     const stored = readFakeHostingSlice(key);
     if (stored === null) state = emptyFakeHostingSlice(options.start);
     else if (stored !== 'torn') state = stored;
@@ -199,13 +259,30 @@ export function createFakeHostingDeployPort(
 
   /** Persist the slice after a mutation — a no-op with the seam off. */
   function save(): void {
-    saveFakeHostingSlice(key, state);
+    if (sharedPath()) saveFakeHostingSlice(key, state);
   }
 
   function injectedFailure(operation: FakeHostingFailure): void {
-    const armed = failing.delete(operation);
-    if (!armed && takeArmedFakeHostingFailure(key, operation) === null) return;
-    throw new OrchestratorApiError('fake', 503, `injected ${operation} failure`);
+    let detail: string | null = null;
+    if (failing.has(operation)) {
+      detail = failing.get(operation) ?? `injected ${operation} failure`;
+      failing.delete(operation);
+    } else if (sharedPath()) {
+      detail = takeArmedFakeHostingFailure(key, operation);
+    }
+    if (detail === null) return;
+    throw new OrchestratorApiError('fake', 503, detail);
+  }
+
+  /** Wait while the hold sidecar names `operation`. */
+  async function awaitRelease(path: string, operation: FakeHostingOperation): Promise<void> {
+    const deadline = Date.now() + FAKE_HOSTING_HOLD_LIMIT_MS;
+    while (heldOperations(path).includes(operation)) {
+      if (Date.now() >= deadline) {
+        throw new OrchestratorApiError('fake', 504, `held ${operation} was never released`);
+      }
+      await new Promise((resolve) => setTimeout(resolve, HOLD_POLL_MS));
+    }
   }
 
   const now = () => new Date(state.clock);
@@ -275,9 +352,7 @@ export function createFakeHostingDeployPort(
    *  one store never mint the same one. */
   function nextReleaseId(): string {
     state.sequence += 1;
-    return fakeHostingStatePath()
-      ? `rel-${process.pid}-${state.sequence}`
-      : `rel-${state.sequence}`;
+    return sharedPath() ? `rel-${process.pid}-${state.sequence}` : `rel-${state.sequence}`;
   }
 
   function release(
@@ -302,8 +377,9 @@ export function createFakeHostingDeployPort(
     return made;
   }
 
-  return {
+  const port: HostingDeployPort & FakeHostingControls = {
     target,
+    calls,
     get mintedFor() {
       return load().mintedFor;
     },
@@ -333,12 +409,15 @@ export function createFakeHostingDeployPort(
     app: (appRef) => load().apps[appRef],
     pushNamespaces: () => [...load().namespaces],
     liveCredentials: (pushNamespace) => load().liveTokens[pushNamespace] ?? 0,
-    failNext(operation) {
-      if (fakeHostingStatePath()) {
-        armFakeHostingFailure(key, operation, `injected ${operation} failure`);
+    failNext(operation, message) {
+      if (sharedPath()) {
+        armFakeHostingFailure(key, operation, message ?? `injected ${operation} failure`);
       } else {
-        failing.add(operation);
+        failing.set(operation, message);
       }
+    },
+    setReleaseCommandResult(result) {
+      commandResult = result;
     },
     setAccountReady(ready) {
       load().accountReady = ready;
@@ -353,7 +432,7 @@ export function createFakeHostingDeployPort(
     reset() {
       state = emptyFakeHostingSlice(options.start);
       failing.clear();
-      resetFakeHostingSnapshot(key);
+      if (sharedPath()) resetFakeHostingSnapshot(key);
     },
 
     async ensureApp({ repositoryId, environment }) {
@@ -411,6 +490,7 @@ export function createFakeHostingDeployPort(
     async deploy(input) {
       // As the serverless adapter: its manifest refusals come before anything
       // else, so a refused release finds no app and creates nothing.
+      injectedFailure('deploy');
       if (target === 'serverless') assertServerlessRuntime(input.runtime);
       const shape = shapeOf(input);
       load();
@@ -531,5 +611,56 @@ export function createFakeHostingDeployPort(
         },
       ];
     },
+
+    async runReleaseCommand({ appRef }) {
+      // As the real adapters: only Fly runs a one-off command of a release image.
+      if (target !== 'fly') throw new ReleaseCommandUnsupportedError(target);
+      load();
+      appOf(appRef);
+      injectedFailure('runReleaseCommand');
+      return commandResult;
+    },
   };
+
+  // The call log and the hold wrap every operation, so a test can assert their
+  // ORDER — the migration before the deploy — without each operation logging
+  // itself, and a held operation waits before it reads the store.
+  const operations: FakeHostingOperation[] = [
+    'ensureApp',
+    'ensurePushNamespace',
+    'mintDeployCredential',
+    'revokeDeployCredentials',
+    'deploy',
+    'describe',
+    'rollback',
+    'usageSince',
+    'destroy',
+    'destroyApp',
+    'listReleases',
+    'runReleaseCommand',
+  ];
+  const record = port as unknown as Record<FakeHostingOperation, (input: unknown) => unknown>;
+  for (const operation of operations) {
+    const inner = record[operation].bind(port) as (...args: unknown[]) => unknown;
+    record[operation] = (input: unknown, ...rest: unknown[]) => {
+      const fields = (input ?? {}) as {
+        appRef?: unknown;
+        command?: unknown;
+        env?: ReadonlyArray<{ name: string }>;
+      };
+      calls.push({
+        operation,
+        appRef: typeof fields.appRef === 'string' ? fields.appRef : null,
+        ...(typeof fields.command === 'string' ? { command: fields.command } : {}),
+        ...(Array.isArray(fields.env) ? { envNames: fields.env.map((v) => v.name) } : {}),
+      });
+      const path = sharedPath();
+      if (!path) return inner(input, ...rest);
+      return (async () => {
+        await awaitRelease(path, operation);
+        return inner(input, ...rest);
+      })();
+    };
+  }
+  return port;
 }

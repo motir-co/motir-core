@@ -12,6 +12,8 @@ import type {
   DeployReleaseInput,
   HostingDeployPort,
   HostingEnvironment,
+  ReleaseArtifact,
+  ReleaseCommandResult,
   ReleaseDescription,
   ReleaseHandle,
   ReleaseIdlePolicy,
@@ -22,6 +24,7 @@ import type {
 } from '../../hosting/types';
 import { runningSecondsBetween, type RunTransition } from '../../hosting/usage';
 import {
+  exitCodeOf,
   flyErrorDetail,
   flyGraphqlRequest,
   flyMachinesClientFor,
@@ -104,6 +107,10 @@ export function flyHostingConfig(): FlyHostingConfig {
   };
 }
 
+/** A one-off command polls Fly's wait endpoint in windows of at most this long
+ *  (its own ceiling is 60 s). */
+const COMMAND_WAIT_WINDOW_SECONDS = 60;
+
 /** Machine metadata the adapter reads back. */
 export const HOSTING_RELEASE_METADATA = {
   marker: 'motir_hosting',
@@ -179,8 +186,7 @@ function idleService(idle: ReleaseIdlePolicy) {
     : { autostop: 'off', autostart: true, min_machines_running: 1 };
 }
 
-function imageOf(input: DeployReleaseInput): string {
-  const { artifact } = input;
+function imageOf({ artifact }: { artifact: ReleaseArtifact }): string {
   if (artifact.kind !== 'image') throw new ReleaseArtifactUnsupportedError('fly', artifact.kind);
   return artifact.digest ? `${artifact.ref}@${artifact.digest}` : artifact.ref;
 }
@@ -625,6 +631,69 @@ export function createFlyHostingDeployPort(
         handle: handleOf(appRef, m),
         state: releaseStateOf(m.state, []),
       }));
+    },
+
+    // A one-off Machine of the release image (MOTIR-10030): no service, no guard,
+    // never restarted, so it takes no traffic and runs the command once. It is
+    // destroyed after its exit status is read — kept until then because a
+    // destroyed Machine's events may already be gone.
+    async runReleaseCommand({ appRef, artifact, command, env, timeoutSeconds }) {
+      const created = await flyRequest(appPath(appRef, '/machines'), {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          name: `command-${newReleaseId()}`,
+          region: config.region,
+          config: {
+            image: imageOf({ artifact }),
+            init: { exec: argvOf(command) },
+            env: Object.fromEntries(env.map((v) => [v.name, v.value])),
+            guest: PRODUCTION_GUEST.small,
+            restart: { policy: 'no' },
+            auto_destroy: false,
+            metadata: { [HOSTING_RELEASE_METADATA.marker]: 'command' },
+          },
+        }),
+      });
+      const parsed = await readFlyJson(created);
+      if (!created.ok) {
+        throw new OrchestratorApiError('fly', created.status, flyErrorDetail(parsed));
+      }
+      const machine = toFlyMachine(parsed);
+      if (!machine) {
+        throw new OrchestratorApiError(
+          'fly',
+          created.status,
+          'machine create returned an unexpected shape',
+        );
+      }
+      const path = `/machines/${encodeURIComponent(machine.id)}`;
+      try {
+        const deadline = now().getTime() + timeoutSeconds * 1000;
+        for (;;) {
+          const remaining = Math.ceil((deadline - now().getTime()) / 1000);
+          if (remaining <= 0)
+            return { exitCode: null, timedOut: true } satisfies ReleaseCommandResult;
+          const window = Math.min(COMMAND_WAIT_WINDOW_SECONDS, remaining);
+          const waited = await flyRequest(
+            appPath(appRef, `${path}/wait?state=stopped&timeout=${window}`),
+            { method: 'GET', token, timeoutMs: (window + 10) * 1000 },
+          );
+          if (waited.ok) break;
+          // 408: the window passed with the command still running.
+          if (waited.status !== 408) {
+            throw new OrchestratorApiError(
+              'fly',
+              waited.status,
+              flyErrorDetail(await readFlyJson(waited)),
+            );
+          }
+        }
+        const read = await readMachine(appRef, machine.id);
+        return { exitCode: read ? exitCodeOf(read.machine) : null, timedOut: false };
+      } finally {
+        await flyRequest(appPath(appRef, `${path}?force=true`), { method: 'DELETE', token });
+      }
     },
   };
 }

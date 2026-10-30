@@ -62,8 +62,8 @@ afterEach(() => {
 });
 
 const pair = () => [
-  createFakeHostingDeployPort({ target: 'fly' }),
-  createFakeHostingDeployPort({ target: 'fly' }),
+  createFakeHostingDeployPort({ shareAcrossProcesses: true, target: 'fly' }),
+  createFakeHostingDeployPort({ shareAcrossProcesses: true, target: 'fly' }),
 ];
 
 describe('the fake hosting port over a shared state file', () => {
@@ -73,7 +73,7 @@ describe('the fake hosting port over a shared state file', () => {
     const handle = await b!.deploy(input(appRef));
     expect(existsSync(path)).toBe(true);
 
-    const fresh = createFakeHostingDeployPort({ target: 'fly' });
+    const fresh = createFakeHostingDeployPort({ shareAcrossProcesses: true, target: 'fly' });
     const [listed] = await fresh.listReleases({ appRef });
     expect(listed?.handle.releaseId).toBe(handle.releaseId);
     const described = await fresh.describe(handle);
@@ -169,7 +169,7 @@ describe('the fake hosting port over a shared state file', () => {
     // An instance that had loaded the app forgets it too: nothing stored is empty.
     expect(b!.app(appRef)).toBeUndefined();
 
-    const fresh = createFakeHostingDeployPort({ target: 'fly' });
+    const fresh = createFakeHostingDeployPort({ shareAcrossProcesses: true, target: 'fly' });
     expect(fresh.app(appRef)).toBeUndefined();
     expect(await fresh.listReleases({ appRef })).toEqual([]);
     expect(fresh.mintedFor).toEqual([]);
@@ -180,7 +180,7 @@ describe('the fake hosting port over a shared state file', () => {
     const [a] = pair();
     const { appRef } = await a!.ensureApp({ repositoryId: RID, environment: PREVIEW });
     writeFileSync(path, '{"fly:": {"apps": ', 'utf8');
-    const port = createFakeHostingDeployPort({ target: 'fly' });
+    const port = createFakeHostingDeployPort({ shareAcrossProcesses: true, target: 'fly' });
     const made = await port.ensureApp({ repositoryId: RID, environment: PREVIEW });
     expect(made.appRef).toBe(appRef);
     const handle = await port.deploy(input(appRef));
@@ -196,8 +196,12 @@ describe('the fake hosting port over a shared state file', () => {
   });
 
   it('keeps two port keys in disjoint slices', async () => {
-    const fly = createFakeHostingDeployPort({ target: 'fly' });
-    const narrowed = createFakeHostingDeployPort({ target: 'fly', appPrefix: 'motir-check-' });
+    const fly = createFakeHostingDeployPort({ shareAcrossProcesses: true, target: 'fly' });
+    const narrowed = createFakeHostingDeployPort({
+      shareAcrossProcesses: true,
+      target: 'fly',
+      appPrefix: 'motir-check-',
+    });
     const mine = await fly.ensureApp({ repositoryId: RID, environment: PREVIEW });
     const theirs = await narrowed.ensureApp({ repositoryId: RID, environment: PREVIEW });
     expect(narrowed.app(mine.appRef)).toBeUndefined();

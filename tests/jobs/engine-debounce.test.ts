@@ -10,6 +10,8 @@ import { debouncedRunAt, resolveDebounceKey } from '@/lib/jobs/engine/debounce';
 import { parseEventExpression, resolveEventExpression } from '@/lib/jobs/engine/eventExpression';
 import { codeGraphRefresh } from '@/lib/jobs/definitions/codeGraphRefresh';
 import { pageEmbeddingRequested } from '@/lib/jobs/definitions/pageEmbedding';
+import { productionConfigRedeploy } from '@/lib/jobs/definitions/productionConfigRedeploy';
+import { releaseDeploymentStatus } from '@/lib/jobs/definitions/releaseDeploymentStatus';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import type { CodeGraphRefreshData } from '@/lib/jobs/types';
@@ -571,5 +573,106 @@ describe('pageEmbeddingRequested — a typing burst on one page is ONE run (MOTI
 
     const rows = await rowsFor(pageEmbeddingRequested.id);
     expect(rows.map((r) => r.debounceKey).sort()).toEqual(['page_1', 'page_2']);
+  });
+});
+
+describe('productionConfigRedeploy — a burst of saves to one repository is ONE run (MOTIR-10032)', () => {
+  // Every save to a repository's environment configuration emits
+  // `environment.config.changed`. The redeploy job folds one repository's
+  // production burst into one run, and keeps the environment in the key so a
+  // preview save never becomes the "latest event" of a production burst.
+  const CONFIG_TRIGGER = 'environment.config.changed';
+
+  async function workspace(): Promise<string> {
+    const owner = await usersService.createUser({
+      email: 'debounce-config@example.com',
+      password: 'hunter2hunter2',
+      name: 'Debounce',
+    });
+    const ws = await workspacesService.createWorkspace({ name: 'Config', ownerUserId: owner.id });
+    return ws.workspace.id;
+  }
+
+  const change = (
+    workspaceId: string,
+    projectRepositoryId: string,
+    environment: 'production' | 'preview',
+  ) => ({
+    workspaceId,
+    projectRepositoryId,
+    environment,
+    name: 'GREETING',
+    action: 'replaced' as const,
+    actorId: 'user_1',
+  });
+
+  it('coalesces a same-repository production burst into one row, due 30 s after the last', async () => {
+    const workspaceId = await workspace();
+    const before = Date.now();
+    for (let i = 0; i < 5; i++) {
+      await dispatchEventToEngine(CONFIG_TRIGGER, change(workspaceId, 'repo_1', 'production'));
+    }
+    const after = Date.now();
+
+    const rows = await rowsFor(productionConfigRedeploy.id);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.debounceKey).toBe('repo_1/production');
+    expect(rows[0]!.runAt.getTime()).toBeGreaterThanOrEqual(before + 30_000);
+    expect(rows[0]!.runAt.getTime()).toBeLessThanOrEqual(after + 30_000 + 5_000);
+  });
+
+  it('keeps two repositories, and a repository’s two environments, as separate runs', async () => {
+    const workspaceId = await workspace();
+    await dispatchEventToEngine(CONFIG_TRIGGER, change(workspaceId, 'repo_1', 'production'));
+    await dispatchEventToEngine(CONFIG_TRIGGER, change(workspaceId, 'repo_1', 'preview'));
+    await dispatchEventToEngine(CONFIG_TRIGGER, change(workspaceId, 'repo_2', 'production'));
+
+    const rows = await rowsFor(productionConfigRedeploy.id);
+    expect(rows.map((r) => r.debounceKey).sort()).toEqual([
+      'repo_1/preview',
+      'repo_1/production',
+      'repo_2/production',
+    ]);
+  });
+});
+
+describe('releaseDeploymentStatus — a release’s burst of state changes is ONE run (MOTIR-10033)', () => {
+  // A release's creation and its first move commit together, and each emits
+  // `hosted-release.status`. The status job folds one release's burst into one
+  // run; the run reads the release as it stands and posts what it is owed.
+  const STATUS_EVENT = 'hosted-release.status';
+
+  async function workspace(): Promise<string> {
+    const owner = await usersService.createUser({
+      email: 'debounce-release-status@example.com',
+      password: 'hunter2hunter2',
+      name: 'Debounce',
+    });
+    const ws = await workspacesService.createWorkspace({ name: 'Releases', ownerUserId: owner.id });
+    return ws.workspace.id;
+  }
+
+  it('coalesces a same-release burst into one row, due 2 s after the last', async () => {
+    const workspaceId = await workspace();
+    const before = Date.now();
+    for (let i = 0; i < 3; i++) {
+      await dispatchEventToEngine(STATUS_EVENT, { workspaceId, releaseId: 'rel_1' });
+    }
+    const after = Date.now();
+
+    const rows = await rowsFor(releaseDeploymentStatus.id);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.debounceKey).toBe('rel_1');
+    expect(rows[0]!.runAt.getTime()).toBeGreaterThanOrEqual(before + 2_000);
+    expect(rows[0]!.runAt.getTime()).toBeLessThanOrEqual(after + 2_000 + 5_000);
+  });
+
+  it('keeps two releases as separate runs', async () => {
+    const workspaceId = await workspace();
+    await dispatchEventToEngine(STATUS_EVENT, { workspaceId, releaseId: 'rel_1' });
+    await dispatchEventToEngine(STATUS_EVENT, { workspaceId, releaseId: 'rel_2' });
+
+    const rows = await rowsFor(releaseDeploymentStatus.id);
+    expect(rows.map((r) => r.debounceKey).sort()).toEqual(['rel_1', 'rel_2']);
   });
 });

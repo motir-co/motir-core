@@ -41,3 +41,282 @@ export class HostingManifestInvalidError extends Error {
     this.reason = first.reason;
   }
 }
+
+// ── The application record and its releases (Story MOTIR-9797 · MOTIR-10026) ──
+
+/** A customer repository (seed source `organization`) is never hosted by Motir
+ *  (Decision MOTIR-5769, D1). → 409 */
+export class CustomerRepositoryNotDeployableError extends Error {
+  readonly code = 'CUSTOMER_REPOSITORY_NOT_DEPLOYABLE' as const;
+  constructor(readonly projectRepositoryId: string) {
+    super(`Repository ${projectRepositoryId} is a customer repository; Motir does not host it.`);
+    this.name = 'CustomerRepositoryNotDeployableError';
+  }
+}
+
+/** The repository row names no repository that exists yet. → 409 */
+export class RepositoryNotEstablishedError extends Error {
+  readonly code = 'REPOSITORY_NOT_ESTABLISHED' as const;
+  constructor(
+    readonly projectRepositoryId: string,
+    readonly state: string,
+  ) {
+    super(`Repository ${projectRepositoryId} is not established (state ${state}).`);
+    this.name = 'RepositoryNotEstablishedError';
+  }
+}
+
+/** The repository has no hosting target, so there is nowhere to run it. → 409 */
+export class HostingTargetMissingError extends Error {
+  readonly code = 'HOSTING_TARGET_MISSING' as const;
+  constructor(readonly projectRepositoryId: string) {
+    super(`Repository ${projectRepositoryId} has no hosting target.`);
+    this.name = 'HostingTargetMissingError';
+  }
+}
+
+/** A release move outside the edge table, or one whose release already moved
+ *  (`actual` is then its current state, or null when it no longer exists). → 409 */
+export class IllegalReleaseTransitionError extends Error {
+  readonly code = 'ILLEGAL_RELEASE_TRANSITION' as const;
+  constructor(
+    readonly releaseId: string,
+    readonly from: string,
+    readonly to: string,
+    readonly actual: string | null,
+  ) {
+    super(
+      `Release ${releaseId} cannot move ${from} → ${to}` +
+        (actual === from ? '.' : ` (it is ${actual ?? 'gone'}).`),
+    );
+    this.name = 'IllegalReleaseTransitionError';
+  }
+}
+
+/** The release belongs to another application. → 409 */
+export class ReleaseNotOfApplicationError extends Error {
+  readonly code = 'RELEASE_NOT_OF_APPLICATION' as const;
+  constructor(
+    readonly releaseId: string,
+    readonly applicationId: string,
+  ) {
+    super(`Release ${releaseId} is not a release of application ${applicationId}.`);
+    this.name = 'ReleaseNotOfApplicationError';
+  }
+}
+
+/** No hosted application (or repository row) by that id. → 404 */
+export class ApplicationNotFoundError extends Error {
+  readonly code = 'APPLICATION_NOT_FOUND' as const;
+  constructor(readonly id: string) {
+    super(`No hosted application for ${id}.`);
+    this.name = 'ApplicationNotFoundError';
+  }
+}
+
+/** The step of production enablement that failed (MOTIR-10027). */
+export type ProductionEnablementStep =
+  | 'repository'
+  | 'manifest'
+  | 'application'
+  | 'app'
+  | 'credential'
+  | 'environment'
+  | 'secret'
+  | 'variables'
+  | 'record';
+
+/**
+ * Production enablement stopped at `step`. Every step is idempotent, so running
+ * enablement again repairs it; the target variable is written last, so a failure
+ * never leaves the workflow able to run. `detail` never carries a credential.
+ * → 502
+ */
+export class ProductionEnablementFailedError extends Error {
+  readonly code = 'PRODUCTION_ENABLEMENT_FAILED' as const;
+  constructor(
+    readonly projectRepositoryId: string,
+    readonly step: ProductionEnablementStep,
+    readonly detail: string,
+  ) {
+    super(`Production enablement of ${projectRepositoryId} failed at ${step}: ${detail}`);
+    this.name = 'ProductionEnablementFailedError';
+  }
+}
+
+/** The application's target runs on a database kind this story does not
+ *  provision (the AWS target's managed database is its adapter story's). Refused
+ *  before any provider call (MOTIR-10028). → 422 */
+export class ProductionDatabaseKindUnsupportedError extends Error {
+  readonly code = 'PRODUCTION_DATABASE_KIND_UNSUPPORTED' as const;
+  constructor(readonly target: string) {
+    super(`The ${target} target has no serverless Postgres production database.`);
+    this.name = 'ProductionDatabaseKindUnsupportedError';
+  }
+}
+
+/**
+ * The database port could not create the production database. It carries the
+ * provider's HTTP status and the error's code ONLY — never a message or a body,
+ * either of which can hold a connection string — and nothing was written, so a
+ * retry is safe (MOTIR-10028). → 502
+ */
+export class ProductionDatabaseProvisioningError extends Error {
+  readonly code = 'PRODUCTION_DATABASE_PROVISIONING_FAILED' as const;
+  constructor(
+    readonly applicationId: string,
+    readonly status: number | null,
+    readonly causeCode: string,
+  ) {
+    super(
+      `The production database of ${applicationId} could not be created (${causeCode}${
+        status === null ? '' : `, HTTP ${status}`
+      }).`,
+    );
+    this.name = 'ProductionDatabaseProvisioningError';
+  }
+}
+
+/** The application's database URL is not stored, or fails to decrypt (wrong key
+ *  or a tampered ciphertext). No value is returned (MOTIR-10028). → 500 */
+export class ProductionDatabaseUnreadableError extends Error {
+  readonly code = 'PRODUCTION_DATABASE_UNREADABLE' as const;
+  constructor(
+    readonly applicationId: string,
+    readonly reason: 'absent' | 'undecryptable',
+  ) {
+    super(`The production database URL of ${applicationId} is ${reason}.`);
+    this.name = 'ProductionDatabaseUnreadableError';
+  }
+}
+
+/** A release of the application is still `building` or `releasing`; the caller
+ *  retries or coalesces (MOTIR-10030). Nothing was written. → 409 */
+export class ReleaseInProgressError extends Error {
+  readonly code = 'RELEASE_IN_PROGRESS' as const;
+  constructor(
+    readonly applicationId: string,
+    readonly releaseId: string,
+    readonly state: string,
+  ) {
+    super(`Application ${applicationId} is already releasing (${releaseId} is ${state}).`);
+    this.name = 'ReleaseInProgressError';
+  }
+}
+
+/** The manifest's migration step did not succeed: its exit status, or a time-out.
+ *  Caught by the release service into the release's `failure_reason` (MOTIR-10030). */
+export class ReleaseMigrationFailedError extends Error {
+  readonly code = 'RELEASE_MIGRATION_FAILED' as const;
+  constructor(
+    readonly releaseId: string,
+    readonly exitCode: number | null,
+    readonly timedOut: boolean,
+  ) {
+    super(
+      `The migration of release ${releaseId} ${
+        timedOut ? 'timed out' : `exited with status ${exitCode ?? 'unknown'}`
+      }.`,
+    );
+    this.name = 'ReleaseMigrationFailedError';
+  }
+}
+
+/** The step of a production release that failed (MOTIR-10030). */
+export type ReleaseStep = 'manifest' | 'database' | 'environment' | 'app' | 'migrate' | 'deploy';
+
+/**
+ * A production release step failed. It carries the step, the provider's HTTP
+ * status and the error's code ONLY — never a message, which can hold an
+ * environment value or a connection string (MOTIR-10030). → 502
+ */
+export class ReleaseDeployFailedError extends Error {
+  readonly code = 'RELEASE_DEPLOY_FAILED' as const;
+  constructor(
+    readonly releaseId: string,
+    readonly step: ReleaseStep,
+    readonly status: number | null,
+    readonly causeCode: string,
+  ) {
+    super(
+      `Release ${releaseId} failed at ${step} (${causeCode}${status === null ? '' : `, HTTP ${status}`}).`,
+    );
+    this.name = 'ReleaseDeployFailedError';
+  }
+}
+
+/** Where posting a release's GitHub deployment status stopped (MOTIR-10033). */
+export type ReleaseStatusPostStep = 'repository' | 'deployment' | 'status';
+
+/**
+ * Posting a release's GitHub deployment status failed — the step and the HTTP
+ * status ONLY. Thrown out of the status job so the job retries; it never reaches
+ * the release's own state change, which committed before the job was enqueued.
+ */
+export class ReleaseStatusPostError extends Error {
+  readonly code = 'RELEASE_STATUS_POST_FAILED' as const;
+  constructor(
+    readonly releaseId: string,
+    readonly step: ReleaseStatusPostStep,
+    readonly status: number | null,
+  ) {
+    super(
+      `Release ${releaseId}: posting its deployment status failed at ${step}${status === null ? '' : ` (HTTP ${status})`}.`,
+    );
+    this.name = 'ReleaseStatusPostError';
+  }
+}
+
+/** The actor may not roll back production: they do not hold the project's
+ *  administration permission (MOTIR-10035). → 403 */
+export class RollbackNotPermittedError extends Error {
+  readonly code = 'ROLLBACK_NOT_PERMITTED' as const;
+  constructor(readonly projectRepositoryId: string) {
+    super(`Rolling back ${projectRepositoryId} needs the project's administration permission.`);
+    this.name = 'RollbackNotPermittedError';
+  }
+}
+
+/** The application has no release a rollback can restore — no previous
+ *  pointer, or one that never went live (MOTIR-10035). → 409 */
+export class NoPreviousReleaseError extends Error {
+  readonly code = 'NO_PREVIOUS_RELEASE' as const;
+  constructor(readonly applicationId: string) {
+    super(`Application ${applicationId} has no previous release to roll back to.`);
+    this.name = 'NoPreviousReleaseError';
+  }
+}
+
+/** The step of a rollback that failed (MOTIR-10035). */
+export type RollbackStep = 'app' | 'rollback' | 'verify';
+
+/**
+ * The deploy port's rollback failed — the step, the HTTP status and a code ONLY,
+ * never the provider's message. Nothing moved: the previous release is still the
+ * one serving and every row is as it was (MOTIR-10035). → 502
+ */
+export class RollbackFailedError extends Error {
+  readonly code = 'ROLLBACK_FAILED' as const;
+  constructor(
+    readonly applicationId: string,
+    readonly step: RollbackStep,
+    readonly status: number | null,
+    readonly causeCode: string,
+  ) {
+    super(
+      `Rolling back ${applicationId} failed at ${step}: ${causeCode}${status === null ? '' : ` (HTTP ${status})`}.`,
+    );
+    this.name = 'RollbackFailedError';
+  }
+}
+
+/** A release-history cursor that did not decode (MOTIR-10036). Thrown rather
+ *  than swallowed, so the route answers 400 instead of restarting from the
+ *  newest page for ever. → 400 */
+export class InvalidReleaseCursorError extends Error {
+  readonly code = 'INVALID_RELEASE_CURSOR' as const;
+  constructor() {
+    super('Invalid release cursor.');
+    this.name = 'InvalidReleaseCursorError';
+  }
+}

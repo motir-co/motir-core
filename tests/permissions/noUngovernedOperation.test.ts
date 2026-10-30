@@ -307,9 +307,14 @@ function methodIsGated(key: string, seen = new Set<string>()): boolean {
   const memo = gateMemo.get(key);
   if (memo !== undefined) return memo;
   if (seen.has(key) || seen.size > 6) return false;
-  const body = BODIES.get(key);
-  if (body === undefined) return false;
   const svc = key.slice(0, key.indexOf('.'));
+  // A SHORTHAND service object — `export const svc = { getPanel, rollback };` —
+  // has no indented method bodies for `serviceBodies` to find: each member IS a
+  // module-local function of the same name (MOTIR-10036). Without this hop every
+  // operation behind such a service read as UNGOVERNED however plainly the
+  // function asserted, which is the MOTIR-2304 failure in another file shape.
+  const body = BODIES.get(key) ?? LOCALS.get(svc)?.get(key.slice(svc.length + 1));
+  if (body === undefined) return false;
   const gated = bodyIsGated(svc, body, new Set(seen).add(key));
   if (gated) gateMemo.set(key, true);
   return gated;
@@ -589,6 +594,17 @@ describe('the guard can actually fail (a guard never seen red is not evidence)',
     expect(callsLocal('await other.assertBoardConfigAdmin(x);', 'assertBoardConfigAdmin')).toBe(
       false,
     );
+  });
+
+  it('resolves a SHORTHAND service object to its module-local functions', () => {
+    // The MOTIR-10036 regression, pinned: `productionPanelService` and
+    // `productionRollbackService` export `{ fn, … }` objects, and their gates sit
+    // in the module-local functions those members name.
+    expect(methodIsGated('productionRollbackService.rollbackProduction')).toBe(true);
+    expect(methodIsGated('productionPanelService.getProductionPanel')).toBe(true);
+    expect(methodIsGated('productionPanelService.rollback')).toBe(true);
+    // Negative control: a shorthand member that does not exist is not gated.
+    expect(methodIsGated('productionPanelService.__doesNotExist')).toBe(false);
   });
 
   it('sees the three real privately-named gates, and reads their operations as governed', () => {

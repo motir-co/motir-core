@@ -10,6 +10,7 @@ import {
   sameEnvironment,
   type DeployReleaseInput,
   type HostingEnvironment,
+  ReleaseCommandUnsupportedError,
 } from '../src/index';
 
 // The FAKE hosting deploy port (MOTIR-5773): the state machine the preview and
@@ -298,5 +299,95 @@ describe('the fake push namespace and its credentials (MOTIR-5775)', () => {
       fake.revokeDeployCredentials({ pushNamespace: 'mh-cmrepo1-pv' }),
     ).rejects.toBeInstanceOf(OrchestratorApiError);
     expect(fake.liveCredentials('mh-cmrepo1-pv')).toBe(1);
+  });
+});
+
+describe('the fake hosting port: call log and release commands (MOTIR-10030)', () => {
+  const runtime = {
+    port: 3000,
+    healthCheck: { path: '/api/health' },
+    startCommand: 'node server.js',
+    database: { kind: 'postgres' as const },
+  };
+
+  it('logs every call in order, naming the app, the command and only the env names', async () => {
+    const fake = createFakeHostingDeployPort();
+    const { appRef } = await fake.ensureApp({
+      repositoryId: 'r1',
+      environment: { kind: 'production' },
+    });
+    const artifact = { kind: 'image' as const, ref: 'registry.fly.io/mh-r1:abc' };
+    const env = [{ name: 'DATABASE_URL', value: 'postgresql://secret@db/app', secret: true }];
+    await fake.runReleaseCommand({ appRef, artifact, command: 'migrate', env, timeoutSeconds: 60 });
+    await fake.deploy({
+      appRef,
+      environment: { kind: 'production' },
+      artifact,
+      runtime,
+      env,
+      idle: { mode: 'always_on' },
+    });
+
+    expect(fake.calls.map((c) => c.operation)).toEqual([
+      'ensureApp',
+      'runReleaseCommand',
+      'deploy',
+    ]);
+    expect(fake.calls[1]).toEqual({
+      operation: 'runReleaseCommand',
+      appRef,
+      command: 'migrate',
+      envNames: ['DATABASE_URL'],
+    });
+    expect(JSON.stringify(fake.calls)).not.toContain('secret@db');
+    expect(fake.calls[0]!.appRef).toBeNull();
+  });
+
+  it('ends a command as it is told, and fails a command or a deploy once with the given message', async () => {
+    const fake = createFakeHostingDeployPort();
+    const { appRef } = await fake.ensureApp({
+      repositoryId: 'r1',
+      environment: { kind: 'production' },
+    });
+    const artifact = { kind: 'image' as const, ref: 'img' };
+    const input = { appRef, artifact, command: 'migrate', env: [], timeoutSeconds: 60 };
+    expect(await fake.runReleaseCommand(input)).toEqual({ exitCode: 0, timedOut: false });
+    fake.setReleaseCommandResult({ exitCode: null, timedOut: true });
+    expect(await fake.runReleaseCommand(input)).toEqual({ exitCode: null, timedOut: true });
+
+    fake.failNext('runReleaseCommand');
+    await expect(fake.runReleaseCommand(input)).rejects.toThrow(
+      /injected runReleaseCommand failure/,
+    );
+    fake.failNext('deploy', 'boom postgresql://leak');
+    await expect(
+      fake.deploy({
+        appRef,
+        environment: { kind: 'production' },
+        artifact,
+        runtime,
+        env: [],
+        idle: { mode: 'always_on' },
+      }),
+    ).rejects.toThrow(/boom/);
+    expect(fake.app(appRef)!.live).toBeNull();
+    await expect(fake.runReleaseCommand({ ...input, appRef: 'mh-none' })).rejects.toMatchObject({
+      status: 404,
+    });
+  });
+
+  it('refuses a release command off Fly, as the serverless and AWS adapters do', async () => {
+    for (const target of ['serverless', 'aws'] as const) {
+      const fake = createFakeHostingDeployPort({ target });
+      await expect(
+        fake.runReleaseCommand({
+          appRef: 'mh-r1',
+          artifact: { kind: 'image', ref: 'x' },
+          command: 'm',
+          env: [],
+          timeoutSeconds: 1,
+        }),
+      ).rejects.toBeInstanceOf(ReleaseCommandUnsupportedError);
+    }
   });
 });

@@ -17,7 +17,12 @@ export interface SimMachine {
   version: string;
   config: Record<string, unknown>;
   versions: Array<{ version: string; user_config: Record<string, unknown> }>;
-  events: Array<{ type: string; status: string; timestamp: number }>;
+  events: Array<{
+    type: string;
+    status: string;
+    timestamp: number;
+    request?: { exit_event: { exit_code: number } };
+  }>;
   checks: Array<{ name: string; status: string }>;
 }
 
@@ -58,6 +63,9 @@ export interface HostingFlySim {
   readonly tokens: Map<string, SimToken[]>;
   /** Answer a call before the simulator does; return null to pass. */
   readonly overrides: Array<(call: FlyCall) => Response | null>;
+  /** The exit statuses the next one-off Machines stop with, in order (0 when
+   *  empty) — what `/wait?state=stopped` answers for a command Machine. */
+  readonly exitCodes: number[];
   /** A `fetch` to stub globally. */
   fetch(url: string, init: RequestInit): Promise<Response>;
 }
@@ -68,6 +76,7 @@ export function createHostingFlySim(clock: () => number): HostingFlySim {
   const apps = new Map<string, SimMachine[]>();
   const tokens = new Map<string, SimToken[]>();
   const overrides: Array<(call: FlyCall) => Response | null> = [];
+  const exitCodes: number[] = [];
   let seq = 0;
 
   function simulate(call: FlyCall): Response {
@@ -123,6 +132,18 @@ export function createHostingFlySim(clock: () => number): HostingFlySim {
     const m = machines.find((x) => x.id === id);
     if (!m) return flyJson(404, { error: 'machine not found' });
     if (parts[4] === 'versions') return flyJson(200, [...m.versions].reverse());
+    if (parts[4] === 'wait') {
+      // The command runs to its end at once: the Machine stops with the next
+      // queued exit status.
+      m.state = 'stopped';
+      m.events.push({
+        type: 'exit',
+        status: 'stopped',
+        timestamp: clock(),
+        request: { exit_event: { exit_code: exitCodes.shift() ?? 0 } },
+      });
+      return flyJson(200, { ok: true });
+    }
     if (call.method === 'GET') return flyJson(200, machineBody(m));
     if (call.method === 'DELETE') {
       machines.splice(machines.indexOf(m), 1);
@@ -170,6 +191,7 @@ export function createHostingFlySim(clock: () => number): HostingFlySim {
     apps,
     tokens,
     overrides,
+    exitCodes,
     async fetch(url, init) {
       const headers = (init.headers ?? {}) as Record<string, string>;
       const call: FlyCall = {

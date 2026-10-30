@@ -470,6 +470,8 @@ model User {
   capacityAlertSettingsUpdated     CapacityAlertSetting[]              @relation("CapacityAlertSettingUpdater")
   /// Environment-configuration changes this user made (MOTIR-9960). SetNull on delete.
   environmentConfigChanges         EnvironmentConfigChange[]           @relation("EnvironmentConfigChangeActor")
+  /// Production releases this user restored by a rollback (MOTIR-10035). SetNull on delete.
+  hostedReleasesRestored           HostedRelease[]                     @relation("HostedReleaseRestoredBy")
 
   @@index([lastActiveProjectId])
   @@map("user")
@@ -1637,6 +1639,12 @@ model Workspace {
   /// dead weight.
   requiresTwoFactor Boolean @default(false) @map("requires_two_factor")
 
+  /// The application the bare workspace host serves (Decision MOTIR-9790 §2,
+  /// ADR public-tenant-addresses §8 AMENDMENT 4). Set by
+  /// `hostedApplicationService.ensureApplication` when the workspace has none;
+  /// null until the workspace's first hosted application exists.
+  defaultApplicationId String? @unique @map("default_application_id")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1669,6 +1677,10 @@ model Workspace {
   repoDeployments             RepoDeployment[]
   // Motir's own previews of pull requests (MOTIR-5772). Cascade.
   previewDeployments          PreviewDeployment[]
+  // Production hosting (Story MOTIR-9797 · MOTIR-10026).
+  hostedApplications          HostedApplication[]          @relation("HostedApplicationWorkspace")
+  hostedReleases              HostedRelease[]
+  defaultApplication          HostedApplication?           @relation("WorkspaceDefaultApplication", fields: [defaultApplicationId], references: [id], onDelete: SetNull)
   /// Approval gates scoped to this workspace (the routing read's tenancy half).
   approvalGates               ApprovalGate[]
   /// Automatic hosted re-runs after a design Revise (MOTIR-700).
@@ -2274,6 +2286,7 @@ model Project {
   // INTENDED repository, ordered, primary first. Cascade: deleting a project
   // removes its set (the plan for repos that only existed for that project).
   repos                       ProjectRepo[]
+  hostedApplications          HostedApplication[]
   // The project's runner groups in CONNECTED orgs (Story MOTIR-8699 · MOTIR-8712)
   // — one per org other than the provisioning org that owns some of the project's
   // private repositories and has the provisioning App installed. The provisioning
@@ -10542,6 +10555,7 @@ model ProjectRepo {
   /// MOTIR-9795 · MOTIR-9960). Cascade: deleting the repository deletes both.
   environmentConfigEntries EnvironmentConfigEntry[]
   environmentConfigChanges EnvironmentConfigChange[]
+  hostedApplication        HostedApplication?
 
   /// The first uniqueness guarantee: at most one row per `(project, name)`, so two
   /// rows can never race for one repo name. Enforced in the DATABASE — the service
@@ -12192,6 +12206,128 @@ enum HostingTarget {
   aws
 
   @@map("hosting_target")
+}
+
+/// The life of one production release (Story MOTIR-9797 · MOTIR-10026). Mirrors
+/// `HOSTED_RELEASE_STATES` in `lib/hosting/vocabulary.ts`, whose edge table says
+/// which moves are legal.
+enum HostedReleaseState {
+  building
+  releasing
+  live
+  failed
+  replaced
+  rolled_back
+
+  @@map("hosted_release_state")
+}
+
+/// Why a release was made. Mirrors `HOSTED_RELEASE_CAUSES`.
+enum HostedReleaseCause {
+  merge
+  config_change
+  ref
+  rollback
+
+  @@map("hosted_release_cause")
+}
+
+/// The production home of ONE Motir repository (Story MOTIR-9797 · MOTIR-10026).
+/// Keyed on the `project_repository` row, never the project: a project can hold
+/// several repositories, each deployed on its own. A customer repository (seed
+/// source `organization`) never gets one (`lib/hosting/deployEligibility.ts`).
+///
+/// RLS: `hosted_application_workspace_or_system` (FOR ALL) — the release paths
+/// write from webhooks and jobs under `withSystemContext`, a member's session
+/// reads its own workspace's rows.
+model HostedApplication {
+  id                      String        @id @default(cuid())
+  workspaceId             String        @map("workspace_id")
+  projectId               String        @map("project_id")
+  projectRepositoryId     String        @unique @map("project_repository_id")
+  target                  HostingTarget
+  /// The application's label in its host, `<slug>--<workspace label>`; unique in
+  /// the workspace (ADR public-tenant-addresses §8 AMENDMENT 4).
+  slug                    String
+  /// The production host without scheme, e.g. `shop--acme.motir.site`. Stored
+  /// and looked up, never parsed; null while the workspace has no claimed label.
+  productionAddress       String?       @unique @map("production_address")
+  currentReleaseId        String?       @unique @map("current_release_id")
+  previousReleaseId       String?       @unique @map("previous_release_id")
+  /// The production database (written by the database card, MOTIR-10028). The
+  /// URL is stored only encrypted, and no DTO carries it.
+  databaseProjectId       String?       @map("database_project_id")
+  databaseUrlCiphertext   String?       @map("database_url_ciphertext")
+  /// Production switched on (MOTIR-10027): the Fly app (`mh-<rid>`), when it was
+  /// first enabled, and when its deploy token was last minted (re-minted when
+  /// fewer than 14 of its 90 days remain, ADR MOTIR-5769 §4). The token itself is
+  /// never stored.
+  productionAppName       String?       @map("production_app_name")
+  productionEnabledAt     DateTime?     @map("production_enabled_at")
+  productionTokenMintedAt DateTime?     @map("production_token_minted_at")
+  createdAt               DateTime      @default(now()) @map("created_at")
+  updatedAt               DateTime      @updatedAt @map("updated_at")
+
+  workspace         Workspace       @relation("HostedApplicationWorkspace", fields: [workspaceId], references: [id], onDelete: Cascade)
+  project           Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectRepository ProjectRepo     @relation(fields: [projectRepositoryId], references: [id], onDelete: Cascade)
+  currentRelease    HostedRelease?  @relation("HostedApplicationCurrentRelease", fields: [currentReleaseId], references: [id], onDelete: SetNull)
+  previousRelease   HostedRelease?  @relation("HostedApplicationPreviousRelease", fields: [previousReleaseId], references: [id], onDelete: SetNull)
+  releases          HostedRelease[] @relation("HostedApplicationReleases")
+  defaultOf         Workspace?      @relation("WorkspaceDefaultApplication")
+
+  @@unique([workspaceId, slug])
+  @@index([projectId])
+  @@map("hosted_application")
+}
+
+/// One release of a commit on a hosted application. A config redeploy of the
+/// same commit is a NEW row, so `(application_id, commit_sha)` is not unique.
+model HostedRelease {
+  id                 String             @id @default(cuid())
+  workspaceId        String             @map("workspace_id")
+  applicationId      String             @map("application_id")
+  commitSha          String             @map("commit_sha")
+  /// The tag or branch the release was asked for, when it was asked by ref.
+  ref                String?
+  cause              HostedReleaseCause
+  state              HostedReleaseState @default(building)
+  artifactRef        String?            @map("artifact_ref")
+  /// The deploy port's handle for this release.
+  providerReleaseId  String?            @map("provider_release_id")
+  /// The deploy port's `providerRef` for the release (a Fly Machine id) —
+  /// with the provider release id, what rebuilds its `ReleaseHandle` (MOTIR-10034).
+  providerRef        String?            @map("provider_ref")
+  failureReason      String?            @map("failure_reason")
+  /// Seconds the release ran live (written by the usage card, MOTIR-10034).
+  usageSeconds       Int?               @map("usage_seconds")
+  /// The end of the last window added to `usageSeconds`; the next settle reads
+  /// from here (from `liveAt` the first time) (MOTIR-10034).
+  usageSettledUntil  DateTime?          @map("usage_settled_until") @db.Timestamptz(3)
+  /// Who restored this release by a rollback, and when (MOTIR-10035); null for
+  /// a release never restored.
+  restoredById       String?            @map("restored_by_id")
+  restoredAt         DateTime?          @map("restored_at") @db.Timestamptz(3)
+  /// The GitHub deployment Motir created for this release on its repository
+  /// (MOTIR-10033), set once.
+  githubDeploymentId String?            @map("github_deployment_id")
+  /// The last deployment status posted for it (a `ReleaseDeploymentState`).
+  statusPostedState  String?            @map("status_posted_state")
+  createdAt          DateTime           @default(now()) @map("created_at")
+  liveAt             DateTime?          @map("live_at")
+  endedAt            DateTime?          @map("ended_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+
+  workspace   Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  application HostedApplication  @relation("HostedApplicationReleases", fields: [applicationId], references: [id], onDelete: Cascade)
+  currentOf   HostedApplication? @relation("HostedApplicationCurrentRelease")
+  previousOf  HostedApplication? @relation("HostedApplicationPreviousRelease")
+  restoredBy  User?              @relation("HostedReleaseRestoredBy", fields: [restoredById], references: [id], onDelete: SetNull)
+
+  @@index([applicationId, createdAt])
+  @@index([workspaceId])
+  @@index([restoredById])
+  @@map("hosted_release")
 }
 
 /// What a Motir repo's app is for (requirement R3/D4). Mirrors

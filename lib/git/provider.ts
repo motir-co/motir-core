@@ -14,6 +14,7 @@ import type {
   NormalizedStatusEvent,
   NormalizedWorkflowJob,
   NormalizedWorkflowJobEvent,
+  NormalizedProductionImageRun,
   NormalizedWorkflowRunEvent,
   RepoFileReadResult,
   CommitComparison,
@@ -541,6 +542,15 @@ export interface GitProvider {
    * no GitLab job the fleet would ever boot a runner for.
    */
   parseWorkflowJobEvent?(rawPayload: unknown): NormalizedWorkflowJobEvent | null;
+
+  /**
+   * Normalize a raw COMPLETED-workflow-run webhook payload into the facts a
+   * production release decides on (Story MOTIR-9797 · MOTIR-10031), or `null`
+   * when it is not a completed run or a field is missing. PURE. Beside
+   * {@link parseWorkflowRunEvent}, which is the meter's and is left as it is.
+   * OPTIONAL: production is built only in Motir's own GitHub organisations.
+   */
+  parseProductionImageRunEvent?(rawPayload: unknown): NormalizedProductionImageRun | null;
 
   // --- Preview deployments (Story MOTIR-4906 · MOTIR-5329) -------------------
 
