@@ -55,17 +55,21 @@ const VERIFY = ['getParameter', 'describeTaskDefinition', 'imageExists'];
 const MIGRATE = ['describeTaskDefinition', 'registerTaskDefinition', 'runTask', 'describeTask'];
 const FIND = ['listServices', 'describeServices', 'describeTaskDefinition'];
 const ROLL = ['registerTaskDefinition', 'updateService', 'describeServices'];
+// The services are found BEFORE the migrate task (MOTIR-10093), so FIND's last
+// call and the migrate's first, both describeTaskDefinition, squash into one, and
+// the roll reads the service's definition again before it registers.
+const FIND_THEN_MIGRATE = [...FIND, ...MIGRATE.slice(1)];
+const READ_AND_ROLL = ['describeTaskDefinition', ...ROLL];
 
 describe('the deploy, start to finish', () => {
-  it('success: verify, migrate, find, roll, then the digest write last, exit 0', async () => {
+  it('success: verify, find, migrate, roll, then the digest write last, exit 0', async () => {
     const { aws } = fleet();
     const { code } = await deploy(aws);
     expect(code).toBe(0);
     expect(squash(aws.methods())).toEqual([
       ...VERIFY,
-      ...MIGRATE,
-      ...FIND,
-      ...ROLL,
+      ...FIND_THEN_MIGRATE,
+      ...READ_AND_ROLL,
       'putParameter',
     ]);
     expect(aws.params.get(DIGEST_PARAM)).toBe(DIGEST);
@@ -76,7 +80,7 @@ describe('the deploy, start to finish', () => {
     aws.migrate = migrateExits(1);
     const { code } = await deploy(aws);
     expect(code).toBe(1);
-    expect(squash(aws.methods())).toEqual([...VERIFY, ...MIGRATE, 'tailLog']);
+    expect(squash(aws.methods())).toEqual([...VERIFY, ...FIND_THEN_MIGRATE, 'tailLog']);
     expect(aws.services.get('web')).toBe(previous);
     expect(aws.params.get(DIGEST_PARAM)).toBe(OLD_DIGEST);
   });
@@ -88,9 +92,8 @@ describe('the deploy, start to finish', () => {
     expect(code).toBe(1);
     expect(squash(aws.methods())).toEqual([
       ...VERIFY,
-      ...MIGRATE,
-      ...FIND,
-      ...ROLL,
+      ...FIND_THEN_MIGRATE,
+      ...READ_AND_ROLL,
       'updateService',
     ]);
     expect(aws.calls.at(-1)).toEqual(['updateService', 'motir-prod-core', 'web', previous]);
@@ -105,9 +108,8 @@ describe('the deploy, start to finish', () => {
     expect(code).toBe(1);
     expect(squash(aws.methods())).toEqual([
       ...VERIFY,
-      ...MIGRATE,
-      ...FIND,
-      ...ROLL,
+      ...FIND_THEN_MIGRATE,
+      ...READ_AND_ROLL,
       'updateService',
     ]);
     expect(aws.methods().filter((m) => m === 'describeServices').length).toBeGreaterThan(3);

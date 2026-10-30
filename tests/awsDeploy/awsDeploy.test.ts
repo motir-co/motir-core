@@ -106,7 +106,11 @@ describe('a successful deploy', () => {
     await deploy(aws);
     const methods = aws.methods();
     const firstUpdate = methods.indexOf('updateService');
-    expect(methods.indexOf('runTask')).toBeLessThan(methods.indexOf('listServices'));
+    // The services are only READ before the migrate task (MOTIR-10093), and changed after it.
+    expect(methods.indexOf('listServices')).toBeLessThan(methods.indexOf('runTask'));
+    expect(methods.lastIndexOf('registerTaskDefinition')).toBeGreaterThan(
+      methods.indexOf('runTask'),
+    );
     expect(methods.lastIndexOf('describeTask')).toBeLessThan(firstUpdate);
     expect(methods.indexOf('putParameter')).toBe(methods.length - 1);
     expect(methods.lastIndexOf('describeServices')).toBeLessThan(methods.indexOf('putParameter'));
@@ -222,7 +226,7 @@ describe('a failed migrate', () => {
     expect(code).toBe(1);
     expect(aws.methods()).not.toContain('updateService');
     expect(aws.methods()).not.toContain('putParameter');
-    expect(aws.methods()).not.toContain('listServices');
+    expect(aws.registered.map((r) => r.family)).not.toContain('motir-prod-core-worker');
     expect(aws.params.get(DIGEST_PARAM)).toBe(OLD_DIGEST);
     expect(err.at(-1)).toMatch(message);
     expect(err).toContain('  Applying migration 20261028_x');
@@ -283,16 +287,54 @@ describe('a failed roll', () => {
     expect(aws.methods()).not.toContain('putParameter');
   });
 
-  it('refuses before changing any service when no service runs the core image', async () => {
+  it('refuses before migrating or changing any service when no service runs the core image', async () => {
     const aws = new FakeDeployAws();
     aws.addService('ai', OTHER_REPO);
     const { code, err } = await deploy(aws);
     expect(code).toBe(1);
-    expect(aws.methods()).not.toContain('updateService');
+    expect(aws.methods().filter((m) => CHANGES.includes(m))).toEqual([]);
     expect(aws.methods()).not.toContain('putParameter');
     expect(err.at(-1)).toBe(
       `error: no service in cluster ${CLUSTER} runs ${CORE_REPO}; pass --no-roll for the first deploy`,
     );
+  });
+});
+
+describe('a deploy during a breach run (MOTIR-10093)', () => {
+  it('refuses before migrating, registering or rolling anything, and records nothing', async () => {
+    const { aws } = coreFleet();
+    const breach = aws.addBreachRevision('worker');
+    const { code, err, result } = await deploy(aws);
+    expect(code).toBe(1);
+    expect(aws.methods().filter((m) => CHANGES.includes(m))).toEqual([]);
+    expect(aws.registered).toEqual([]);
+    expect(aws.services.get('worker')).toBe(breach);
+    expect(aws.params.get(DIGEST_PARAM)).toBe(OLD_DIGEST);
+    expect(err.at(-1)).toBe(
+      'error: Error: the service worker runs motir-prod-core-worker:9, whose worker container ' +
+        'sets MOTIR_BREACH_ENABLED: a breach run holds it. Nothing was migrated, registered or ' +
+        'rolled; point the service back at its own revision once the breach ends, then deploy again',
+    );
+    expect(result).toMatchObject({ migrate: null, services: [], recorded: false });
+  });
+
+  it('deploys once the service is back on its own revision', async () => {
+    const { aws, previous } = coreFleet();
+    aws.addBreachRevision('worker');
+    aws.services.set('worker', previous.worker);
+    const { code } = await deploy(aws);
+    expect(code).toBe(0);
+    expect(aws.registered.flatMap((r) => r.containerDefinitions ?? [])).not.toContainEqual(
+      expect.objectContaining({ environment: expect.anything() }),
+    );
+  });
+
+  it('is not consulted with --no-roll, which touches no service', async () => {
+    const { aws } = coreFleet();
+    aws.addBreachRevision('worker');
+    const { code } = await deploy(aws, ['--digest', DIGEST, '--no-roll']);
+    expect(code).toBe(0);
+    expect(aws.methods()).not.toContain('listServices');
   });
 });
 

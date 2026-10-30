@@ -137,6 +137,15 @@ aws ecs run-task \
 `<service>` is the same name. Before reading the alarm, confirm in Container
 Insights that the task appears under `ServiceName` `motir-core-<service>`.
 
+**Never point the service at a breach revision.** The override is the whole
+method: the service's own revision is never edited, so a core deploy that runs
+during the breach rolls the real service and leaves the one-off task alone. A
+hand-registered revision that sets `MOTIR_BREACH_ENABLED`, with the service
+pointed at it, is what a deploy would copy into the service's next release. The
+deploy refuses such a service rather than copy it (MOTIR-10093,
+[the AWS deploy](../aws-deploy.md)), so that route also blocks every core
+deploy until the service is pointed back.
+
 ### Memory — `motir-<service>-memory`
 
 ```json

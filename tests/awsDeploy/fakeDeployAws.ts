@@ -133,6 +133,26 @@ export class FakeDeployAws implements DeployAws {
     return arn;
   }
 
+  /**
+   * Point `name` at a hand-registered breach revision, as a breach card does
+   * (MOTIR-10093): the breach command, and the guard set on its container.
+   */
+  addBreachRevision(name: string) {
+    const live = this.definitions.get(this.services.get(name) ?? '');
+    const [main] = live?.containerDefinitions ?? [];
+    const arn = this.addDefinition(
+      taskDefinition(`motir-prod-core-${name}`, 9, [
+        {
+          ...main,
+          command: ['node', 'breach/breach.mjs', 'memory', '--percent', '90'],
+          environment: [{ name: 'MOTIR_BREACH_ENABLED', value: 'true' }],
+        },
+      ]),
+    );
+    this.services.set(name, arn);
+    return arn;
+  }
+
   /** The AWS action names issued, in order. */
   actions(): string[] {
     return this.calls.map(([method]) => ACTION_OF[method as keyof typeof ACTION_OF] ?? method);
