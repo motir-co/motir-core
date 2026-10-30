@@ -1,10 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import type { HostingTarget, Prisma } from '@/generated/prisma/client';
-import { dbRead } from '@/lib/db';
 import type { HostedApplicationWithReleases } from '@/lib/mappers/hostedApplicationMappers';
 
 // Single-op data access for `hosted_application` — one production home per Motir
-// repository row (Story MOTIR-9797 · MOTIR-10026). Writes take a required `tx`;
+// repository row (Story MOTIR-9797 · MOTIR-10026). Reads and writes take a required `tx`;
 // the table's `hosted_application_workspace_or_system` policy admits the system
 // context the release paths run under and the bound workspace's own session.
 
@@ -39,10 +38,9 @@ export interface HostedApplicationInsert {
 export const hostedApplicationRepository = {
   async findById(
     id: string,
-    tx?: Prisma.TransactionClient,
+    tx: Prisma.TransactionClient,
   ): Promise<HostedApplicationWithReleases | null> {
-    const client = tx ?? dbRead;
-    return client.hostedApplication.findUnique({
+    return tx.hostedApplication.findUnique({
       where: { id },
       include: WITH_RELEASES,
       omit: WITHOUT_SECRET,
@@ -51,10 +49,9 @@ export const hostedApplicationRepository = {
 
   async findByProjectRepository(
     projectRepositoryId: string,
-    tx?: Prisma.TransactionClient,
+    tx: Prisma.TransactionClient,
   ): Promise<HostedApplicationWithReleases | null> {
-    const client = tx ?? dbRead;
-    return client.hostedApplication.findUnique({
+    return tx.hostedApplication.findUnique({
       where: { projectRepositoryId },
       include: WITH_RELEASES,
       omit: WITHOUT_SECRET,
@@ -63,10 +60,9 @@ export const hostedApplicationRepository = {
 
   async findByProductionAddress(
     productionAddress: string,
-    tx?: Prisma.TransactionClient,
+    tx: Prisma.TransactionClient,
   ): Promise<HostedApplicationWithReleases | null> {
-    const client = tx ?? dbRead;
-    return client.hostedApplication.findUnique({
+    return tx.hostedApplication.findUnique({
       where: { productionAddress },
       include: WITH_RELEASES,
       omit: WITHOUT_SECRET,

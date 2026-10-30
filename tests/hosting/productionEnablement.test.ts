@@ -12,7 +12,9 @@ import type { HostingTarget } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import {
   CustomerRepositoryNotDeployableError,
+  HostingTargetMissingError,
   ProductionEnablementFailedError,
+  RepositoryNotEstablishedError,
 } from '@/lib/hosting/errors';
 import {
   HOSTING_TARGET_VARIABLE,
@@ -20,6 +22,8 @@ import {
   PRODUCTION_PUSH_TOKEN_SECRET,
 } from '@/lib/hosting/productionEnablementNames';
 import { getHostingDeployPort } from '@/lib/orchestrator/hosting';
+import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
+import { hostedApplicationService } from '@/lib/services/hostedApplicationService';
 import { productionEnablementService as service } from '@/lib/services/productionEnablementService';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
@@ -510,5 +514,87 @@ describe('backfillProductionEnablement', () => {
         outcome: 'already_enabled',
       });
     }
+  });
+});
+
+// MOTIR-10038 — the refusals and failure shapes the story's coverage floor found
+// no case for.
+describe('the edges of enablement', () => {
+  it('refuses an unestablished repository and one with no target, before any call', async () => {
+    const fx = await workspace();
+    const pending = await motirRepo(fx);
+    await adminDb.projectRepo.update({ where: { id: pending }, data: { state: 'proposed' } });
+    const untargeted = await motirRepo(fx, { hostingTarget: null });
+
+    await expect(service.enableProduction(pending)).rejects.toBeInstanceOf(
+      RepositoryNotEstablishedError,
+    );
+    await expect(service.enableProduction(untargeted)).rejects.toBeInstanceOf(
+      HostingTargetMissingError,
+    );
+    expect(calls).toEqual([]);
+  });
+
+  it('refuses a credential that is not a secret for the app, at the credential step', async () => {
+    const fx = await workspace();
+    const id = await motirRepo(fx);
+    vi.spyOn(getHostingDeployPort('fly'), 'mintDeployCredential').mockResolvedValue({
+      kind: 'secret',
+      pushNamespace: 'someone-else',
+      value: 'v',
+      expiresAt: new Date(),
+    });
+
+    await expect(service.enableProduction(id)).rejects.toMatchObject({ step: 'credential' });
+    expect((await appRow(id))?.productionEnabledAt ?? null).toBeNull();
+  });
+
+  it('names a non-Error failure unknown, and passes a step-named failure through', async () => {
+    const fx = await workspace();
+    const id = await motirRepo(fx);
+    vi.spyOn(getHostingDeployPort('fly'), 'mintDeployCredential').mockRejectedValue('nope');
+    await expect(service.enableProduction(id)).rejects.toMatchObject({
+      step: 'credential',
+      message: expect.stringContaining('unknown'),
+    });
+
+    vi.spyOn(hostedApplicationService, 'ensureApplication').mockRejectedValue(
+      new ProductionEnablementFailedError(id, 'record', 'already named'),
+    );
+    await expect(service.enableProduction(id)).rejects.toMatchObject({ step: 'record' });
+  });
+
+  it('logs an untyped creation-path failure as unknown, and never throws', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const fx = await workspace();
+    const id = await motirRepo(fx);
+    vi.spyOn(service, 'enableProduction').mockRejectedValue('nope');
+
+    await expect(service.enableQuietly(id)).resolves.toBeUndefined();
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('production not switched on'),
+      id,
+      'unknown',
+      'unknown',
+    );
+  });
+
+  it('pages the backfill past a full page, recording an untyped failure as unknown', async () => {
+    const full = Array.from({ length: 50 }, (_, i) => ({ id: `row-${i}` }));
+    const list = vi
+      .spyOn(projectRepoRepository, 'listProductionCandidatesInTx')
+      .mockResolvedValueOnce(full)
+      .mockResolvedValueOnce([{ id: 'row-last' }]);
+    vi.spyOn(service, 'enableProduction')
+      .mockRejectedValueOnce(new Error('boom'))
+      .mockRejectedValueOnce('nope')
+      .mockResolvedValue({ outcome: 'already_enabled', applicationId: 'a', appName: 'n' });
+
+    const entries = await service.backfillProductionEnablement();
+
+    expect(entries).toHaveLength(51);
+    expect(list.mock.calls.map((c) => c[0])).toEqual([null, 'row-49']);
+    expect(entries[0]!.result).toEqual({ outcome: 'failed', step: 'unknown', detail: 'boom' });
+    expect(entries[1]!.result).toEqual({ outcome: 'failed', step: 'unknown', detail: 'unknown' });
   });
 });

@@ -15,6 +15,8 @@ import {
   refuseLabel,
 } from '@/lib/publicAddresses/reservedNames';
 
+import { adrReservedNames } from '../helpers/reservedNamesAdr';
+
 // The subdomain label grammar and the reserved set — Story MOTIR-3878 · Subtask
 // MOTIR-4209. `docs/decisions/public-tenant-addresses.md` §8 is the record.
 //
@@ -218,17 +220,23 @@ describe('the constants agree with the ADR', () => {
   };
 
   it('§8 rules 1 and 2 are exactly RESERVED_SUBDOMAIN_LABELS', () => {
-    const section = adr.slice(adr.indexOf('### The reserved-name set'));
-    const listed = (from: string, to: string): string[] => {
-      const text = section.slice(section.indexOf(from), section.indexOf(to));
-      return [...text.matchAll(/`([a-z0-9-]+)`/g)].map((m) => m[1]!);
-    };
-    const named = [
-      ...listed('1. **Is one of', '2. **Is an impersonation'),
-      ...listed('2. **Is an impersonation', '3. **Is structurally'),
-    ];
+    const named = adrReservedNames(adr);
     expect(named).toHaveLength(42 + 16);
     expect(new Set(named)).toEqual(RESERVED_SUBDOMAIN_LABELS);
+  });
+
+  // The story check of MOTIR-9797 (MOTIR-10038): the derivation above is a
+  // guard only if an edit to ONE side shows as a difference.
+  it('disagrees when a name is added to the ADR alone, or to the constant alone', () => {
+    const rule1 = adr.indexOf('1. **Is one of');
+    const amended = `${adr.slice(0, rule1)}1. **Is one of \`zzstory\` ${adr.slice(
+      rule1 + '1. **Is one of'.length,
+    )}`;
+    expect(adrReservedNames(amended)).toContain('zzstory');
+    expect(new Set(adrReservedNames(amended))).not.toEqual(RESERVED_SUBDOMAIN_LABELS);
+    expect(new Set(adrReservedNames(adr))).not.toEqual(
+      new Set([...RESERVED_SUBDOMAIN_LABELS, 'zzstory']),
+    );
   });
 
   it('AMENDMENT 4 §4 table', () => {

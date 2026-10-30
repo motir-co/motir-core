@@ -298,6 +298,16 @@ describe('POST …/production/rollback', () => {
     expect(text).not.toMatch(SECRETISH);
   });
 
+  it('rethrows an error it has no status for, so the framework answers 500', async () => {
+    const s = await setup();
+    const id = await repo(s.fx);
+    s.asAdmin();
+    const { productionPanelService } = await import('@/lib/services/productionPanelService');
+    vi.spyOn(productionPanelService, 'rollback').mockRejectedValue(new Error('unexpected'));
+
+    await expect(rollback('ACME', id)).rejects.toThrow('unexpected');
+  });
+
   it('rolls back only the repository its path names', async () => {
     const s = await setup();
     const web = await repo(s.fx, 'web');

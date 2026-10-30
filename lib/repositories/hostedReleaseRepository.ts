@@ -5,12 +5,12 @@ import type {
   HostingTarget,
   Prisma,
 } from '@/generated/prisma/client';
-import { dbRead } from '@/lib/db';
 import type { HostedReleaseRow } from '@/lib/mappers/hostedApplicationMappers';
 
 // Single-op data access for `hosted_release` — one row per release of a commit
-// on a hosted application (Story MOTIR-9797 · MOTIR-10026). Writes take a
-// required `tx`.
+// on a hosted application (Story MOTIR-9797 · MOTIR-10026). Reads and
+// writes take a required `tx`: the table is policy-gated, so no read runs
+// outside a bound context.
 
 /** Who restored a release, for its DTO (MOTIR-10035). */
 const RESTORED_BY = { restoredBy: { select: { id: true, name: true } } } as const;
@@ -65,9 +65,8 @@ export const hostedReleaseRepository = {
     return tx.hostedRelease.create({ data: input });
   },
 
-  async findById(id: string, tx?: Prisma.TransactionClient): Promise<HostedReleaseRow | null> {
-    const client = tx ?? dbRead;
-    return client.hostedRelease.findUnique({ where: { id }, include: RESTORED_BY });
+  async findById(id: string, tx: Prisma.TransactionClient): Promise<HostedReleaseRow | null> {
+    return tx.hostedRelease.findUnique({ where: { id }, include: RESTORED_BY });
   },
 
   /**
@@ -105,10 +104,9 @@ export const hostedReleaseRepository = {
   async listByApplication(
     applicationId: string,
     take: number,
-    tx?: Prisma.TransactionClient,
+    tx: Prisma.TransactionClient,
   ): Promise<HostedReleaseRow[]> {
-    const client = tx ?? dbRead;
-    return client.hostedRelease.findMany({
+    return tx.hostedRelease.findMany({
       where: { applicationId },
       include: RESTORED_BY,
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],

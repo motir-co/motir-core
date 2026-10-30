@@ -39,6 +39,40 @@ const MEASURED = [
   // MOTIR-9947 — the guard image's server. Its process entry (`main.ts`) runs
   // only in a child process the guard suite spawns, out of v8's reach here.
   'packages/hosting-guard/src/guard.ts',
+  // Story MOTIR-9797 (production deploy of main) — MOTIR-10038's coverage floor:
+  // every app file the story added that carries code. Measured by the story
+  // suite (`tests/hosting/productionDeployStory.test.ts`) plus each card's own.
+  'lib/github/repoActionsConfig.ts',
+  'lib/github/repoDeployments.ts',
+  'lib/hosting/applicationAddress.ts',
+  'lib/hosting/deployEligibility.ts',
+  'lib/hosting/productionArtifact.ts',
+  'lib/hosting/productionDatabase.ts',
+  'lib/hosting/productionEnablementNames.ts',
+  'lib/hosting/productionPanelErrors.ts',
+  'lib/hosting/releaseCursor.ts',
+  'lib/hosting/releaseDeploymentStatus.ts',
+  'lib/hosting/releaseEnvironment.ts',
+  'lib/hosting/releaseUsage.ts',
+  'lib/jobs/definitions/productionConfigRedeploy.ts',
+  'lib/jobs/definitions/productionMergeRelease.ts',
+  'lib/jobs/definitions/releaseDeploymentStatus.ts',
+  'lib/mappers/hostedApplicationMappers.ts',
+  'lib/repositories/hostedApplicationRepository.ts',
+  'lib/repositories/hostedReleaseRepository.ts',
+  'lib/services/hostedApplicationService.ts',
+  'lib/services/hostedReleaseUsageService.ts',
+  'lib/services/hostedRepositoryAccessService.ts',
+  'lib/services/productionConfigRedeployService.ts',
+  'lib/services/productionDatabaseService.ts',
+  'lib/services/productionEnablementService.ts',
+  'lib/services/productionMergeReleaseService.ts',
+  'lib/services/productionPanelService.ts',
+  'lib/services/productionReleaseService.ts',
+  'lib/services/productionRollbackService.ts',
+  'lib/services/releaseDeploymentStatusService.ts',
+  'app/api/projects/\\[key\\]/repositories/\\[rowId\\]/production/route.ts',
+  'app/api/projects/\\[key\\]/repositories/\\[rowId\\]/production/rollback/route.ts',
 ];
 
 /**
@@ -57,6 +91,27 @@ export const SHARED_NOT_FLOORED = [
   'lib/projectRepos/errors.ts',
   'lib/repositories/projectRepoRepository.ts',
   'lib/services/projectRepoSetService.ts',
+  // Story MOTIR-9797 — the shared files it changed by a few lines each (the
+  // webhook's two new handlers, the job registry and event map, the repo row's
+  // deploy facts, the workspace slug read, the deployment store's environment),
+  // reached by the story suite and measured with their own stories' suites.
+  'lib/git/provider.ts',
+  'lib/git/providers/github.ts',
+  'lib/git/types.ts',
+  'lib/jobs/registry.ts',
+  'lib/jobs/services.ts',
+  'lib/jobs/types.ts',
+  'lib/publicAddresses/reservedNames.ts',
+  'lib/repositories/repoDeploymentRepository.ts',
+  'lib/repositories/workspaceRepository.ts',
+  'lib/services/githubWebhookService.ts',
+  'lib/services/projectRepoProvisioningService.ts',
+  'lib/services/repoDeploymentService.ts',
+  // Types only — nothing executes, so nothing to floor.
+  'lib/dto/hostedApplications.ts',
+  'lib/dto/productionPanel.ts',
+  // Argv and console around `productionEnablementService`, which IS floored.
+  'scripts/backfill-production-enablement.ts',
 ];
 
 export default defineConfig({
@@ -91,6 +146,23 @@ export default defineConfig({
       'tests/hosting/releaseDeploymentStatus.test.ts',
       // MOTIR-10035 — rollback's three errors.
       'tests/hosting/productionRollbackService.test.ts',
+      // Story MOTIR-9797 — the story suite (MOTIR-10038) and every card suite
+      // that measures one of its floored files.
+      'tests/hosting/productionDeployStory.test.ts',
+      'tests/hosting/productionMergeRelease.test.ts',
+      'tests/hosting/productionConfigRedeploy.test.ts',
+      'tests/hosting/hostedReleaseUsageService.test.ts',
+      'tests/hosting/releaseDeploymentStatusVocabulary.test.ts',
+      'tests/hosting/releaseEnvironment.test.ts',
+      'tests/hosting/productionDatabaseBoundary.test.ts',
+      'tests/hosting/productionRollbackBoundary.test.ts',
+      'tests/hosting/productionPanelService.test.ts',
+      'tests/api/productionPanelRoutes.test.ts',
+      'tests/git/parseProductionImageRunEvent.test.ts',
+      'tests/publicAddresses/reservedNames.test.ts',
+      'tests/rls/hostedApplicationRls.test.ts',
+      'tests/github/repoActionsConfig.test.ts',
+      'tests/github/repoDeployments.test.ts',
     ],
     coverage: {
       provider: 'v8',
