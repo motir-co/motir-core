@@ -82,6 +82,10 @@ export interface FakeHostedApp {
   health: 'deploying' | 'healthy' | 'unhealthy';
   running: boolean;
   transitions: RunTransition[];
+  /** Where the live release answers instead of the fake's template address —
+   *  an origin a lane points at a stand-in (MOTIR-10100). Null or absent: the
+   *  template. */
+  upstreamOverride?: string | null;
 }
 
 export interface FakeHostingControls {
@@ -109,6 +113,11 @@ export interface FakeHostingControls {
    *  sets it false; while not ready an `aws` deploy waits in
    *  `waiting_for_account`. */
   setAccountReady(ready: boolean): void;
+  /** Point an app's live release at `address` — stored as its ORIGIN, the fact
+   *  the gate forwards to — or, with null, back at the template address. Moves
+   *  the address only: the release's state and origin credential are unchanged.
+   *  Refuses a value that is not an absolute http(s) URL, and an unknown app. */
+  setUpstream(appRef: string, address: string | null): void;
   /** Forget every app, release, credential and armed failure — in the shared
    *  store too, so a lane's next spec inherits nothing. */
   reset(): void;
@@ -147,6 +156,24 @@ function upstreamFor(appRef: string, shape: ReleaseShape | undefined): string {
   if (shape === 'function') return `https://${appRef}.lambda-url.fake.invalid`;
   if (shape === 'container') return `https://${appRef}.alb.fake.invalid`;
   return `https://${appRef}.fake.invalid`;
+}
+
+/** The origin of an absolute http(s) address, or the typed refusal naming the app. */
+function originOf(appRef: string, address: string): string {
+  let url: URL | null = null;
+  try {
+    url = new URL(address);
+  } catch {
+    url = null;
+  }
+  if (!url || (url.protocol !== 'http:' && url.protocol !== 'https:')) {
+    throw new OrchestratorApiError(
+      'fake',
+      400,
+      `app ${appRef}: an upstream must be an absolute http(s) URL, not "${address}"`,
+    );
+  }
+  return url.origin;
 }
 
 export function createFakeHostingDeployPort(
@@ -317,6 +344,12 @@ export function createFakeHostingDeployPort(
       load().accountReady = ready;
       save();
     },
+    setUpstream(appRef, address) {
+      load();
+      const app = appOf(appRef);
+      app.upstreamOverride = address === null ? null : originOf(appRef, address);
+      save();
+    },
     reset() {
       state = emptyFakeHostingSlice(options.start);
       failing.clear();
@@ -426,7 +459,7 @@ export function createFakeHostingDeployPort(
         state: app.running ? app.health : 'stopped',
         releaseId: app.live.releaseId,
         previousReleaseId: app.previous?.releaseId ?? null,
-        upstreamAddress: upstreamFor(app.appRef, app.live.shape),
+        upstreamAddress: app.upstreamOverride ?? upstreamFor(app.appRef, app.live.shape),
         // As the real adapters: a Fly release sits behind the origin-secret
         // guard (MOTIR-9947), a serverless one behind a SigV4-signed function
         // URL (MOTIR-9972), an AWS release behind its shape's credential.
