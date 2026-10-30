@@ -9,7 +9,9 @@
  *      (MOTIR-10093) — the roll clones each service's live revision;
  *   3. run the migrate task from it once; only exit 0 continues;
  *   4. roll the services onto it and wait for every PRIMARY deployment to complete;
- *   5. on a failure or a timeout, put each back on the revision it ran before;
+ *   5. on a failure or a timeout, put each back on the revision it ran before,
+ *      except a service another deployer moved meanwhile (MOTIR-10117), which
+ *      stays where that deployer put it;
  *   6. only then record the digest in `/<prefix>/core/image-digest`, which the
  *      next motir-infra deploy builds the services from.
  *
@@ -136,14 +138,32 @@ async function roll(
   result: DeployResult,
   log: DeployLog,
 ): Promise<string | null> {
+  const updated = new Map<string, string>();
   try {
-    const rolled = await rollServices(aws, target.cluster, services, image, options.timeoutMs, log);
+    const rolled = await rollServices(
+      aws,
+      target.cluster,
+      services,
+      image,
+      options.timeoutMs,
+      log,
+      updated,
+    );
     result.services = rolled.services;
     if (rolled.ok) return null;
   } catch (err) {
     log(`roll: ${err instanceof Error ? err.message : 'failed'}`);
   }
-  await rollBack(aws, target.cluster, services, log);
+  await rollBack(aws, target.cluster, services, updated, log);
+  const superseded = result.services.filter((s) => s.rolloutState === 'SUPERSEDED');
+  if (superseded.length > 0) {
+    const names = superseded.map((s) => s.name).join(', ');
+    return (
+      `the roll was superseded: another deployer moved ${names} to a revision of its own ` +
+      'while this deploy waited, and it was left there; every other service is back on its ' +
+      'previous revision. Re-run the deploy, which copies the revision each service runs now'
+    );
+  }
   return 'the roll did not complete; every service is back on its previous revision';
 }
 
