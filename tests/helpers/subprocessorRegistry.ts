@@ -135,6 +135,8 @@ export const NOT_A_VENDOR_HOST: Readonly<Record<string, string>> = {
   'evil.example': 'negative-case fixture for URL validation',
   'motir.example.com': 'documentation placeholder',
   'device-handoff.invalid': 'RFC 2606 invalid TLD, used in a fixture',
+  'preview.invalid':
+    'RFC 2606 invalid TLD, the parse base lib/preview/gate.ts resolves a return path against — never fetched (MOTIR-5779)',
   'evil.test':
     'negative-case fixture for URL validation, in comments only — the sibling of `evil.example` above (MOTIR-4114)',
   'placeholder.invalid':

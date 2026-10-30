@@ -254,10 +254,9 @@ export const previewGateService = {
         if (linked) {
           workItem = {
             ...linked,
-            url: new URL(
-              `/items/${encodeURIComponent(linked.identifier)}`,
-              resolveBaseUrlTrimmed(),
-            ).toString(),
+            // Absolute, as the notification links are: the gate page is served
+            // on the preview host, so the link leaves it for the app.
+            url: `${resolveBaseUrlTrimmed()}/items/${encodeURIComponent(linked.identifier)}`,
           };
         }
       }

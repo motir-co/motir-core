@@ -23,6 +23,9 @@ import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { PREVIEW_HOST, makePreviewGateFixture } from '../helpers/previewGateFixture';
 
+/** A per-round database reset's measured budget (see the case that uses it). */
+const RACE_TEST_TIMEOUT_MS = 60_000;
+
 const sessionCookie = vi.hoisted(() => ({ value: null as string | null }));
 vi.mock('better-auth/cookies', () => ({
   getSessionCookie: () => sessionCookie.value,
@@ -205,18 +208,26 @@ describe('a member with a gate cookie', () => {
     expect(res.headers.get('x-middleware-override-headers')?.split(',')).not.toContain('cookie');
   });
 
-  it('a non-ready preview is rewritten to the gate page, its address kept', async () => {
-    for (const state of ['building', 'starting', 'failed', 'closed'] as const) {
-      await truncateAuthTables();
-      resetPreviewRouteCache();
-      await makePreviewGateFixture({ state });
-      const res = await send(`https://${PREVIEW_HOST}/invoices`, {
-        headers: { cookie: passCookie() },
-      });
-      expect(rewrittenTo(res)?.pathname, state).toBe(PREVIEW_GATE_PAGE_PATH);
-      expect(res.headers.get('location')).toBeNull();
-    }
-  });
+  // Four rounds, each truncating the auth tables and seeding a fresh fixture:
+  // 3.8 s locally, alone. The 15 s default is a unit budget; under shard
+  // contention a truncate per round is lock-wait bound (MOTIR-4089), so the
+  // budget is RACE_TEST_TIMEOUT_MS.
+  it(
+    'a non-ready preview is rewritten to the gate page, its address kept',
+    { timeout: RACE_TEST_TIMEOUT_MS },
+    async () => {
+      for (const state of ['building', 'starting', 'failed', 'closed'] as const) {
+        await truncateAuthTables();
+        resetPreviewRouteCache();
+        await makePreviewGateFixture({ state });
+        const res = await send(`https://${PREVIEW_HOST}/invoices`, {
+          headers: { cookie: passCookie() },
+        });
+        expect(rewrittenTo(res)?.pathname, state).toBe(PREVIEW_GATE_PAGE_PATH);
+        expect(res.headers.get('location')).toBeNull();
+      }
+    },
+  );
 
   it('a write to a non-ready preview is a 503, never a page', async () => {
     await makePreviewGateFixture({ state: 'building' });

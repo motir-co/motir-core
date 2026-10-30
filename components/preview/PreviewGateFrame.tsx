@@ -25,7 +25,7 @@ export function PreviewGateFrame({
   children: ReactNode;
 }) {
   return (
-    <div className="flex min-h-screen flex-col items-center gap-6 bg-(--el-surface) pb-10">
+    <div className="flex min-h-dvh flex-col items-center gap-6 bg-(--el-surface) pb-10">
       <header className="flex w-full items-center gap-2 border-b border-(--el-border) bg-(--el-page-bg) px-(--spacing-card-padding) py-(--spacing-card-padding-12) text-(--el-text)">
         <BrandMark size={24} label={brand} />
         <Pill tone="private" className="ml-1">

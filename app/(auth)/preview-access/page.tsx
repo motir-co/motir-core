@@ -6,10 +6,9 @@ import { Lock } from 'lucide-react';
 import { Pill } from '@/components/ui/Pill';
 import { buttonVariants } from '@/components/ui/Button';
 import { getSession } from '@/lib/auth';
-import { TWO_FACTOR_REQUIRED_PATH } from '@/lib/auth/twoFactorGate';
+import { assertTwoFactorCompliance } from '@/lib/auth/twoFactorGate';
 import { PREVIEW_ACCESS_PATH } from '@/lib/preview/gate';
 import { previewGateService } from '@/lib/services/previewGateService';
-import { twoFactorPolicyService } from '@/lib/services/twoFactorPolicyService';
 import { cn } from '@/lib/utils/cn';
 import { SwitchAccountButton } from './_components/SwitchAccountButton';
 
@@ -57,12 +56,7 @@ export default async function PreviewAccessPage({ searchParams }: { searchParams
   // not let into anything. This group is exempt from the layout-level gate
   // (`tests/navigation/two-factor-gate-coverage.test.ts`), so the page asks, and
   // sends the person back HERE once enrolled.
-  if (!session.impersonation) {
-    const requirement = await twoFactorPolicyService.resolveRequirement(session.user.id);
-    if (requirement.required && !requirement.compliant) {
-      redirect(`${TWO_FACTOR_REQUIRED_PATH}?${new URLSearchParams({ next: self }).toString()}`);
-    }
-  }
+  if (!session.impersonation) await assertTwoFactorCompliance(session.user.id, self);
 
   const result = await previewGateService.admit({ userId: session.user.id, host, returnPath });
   if (result.admitted) redirect(result.url);
