@@ -881,7 +881,9 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // section finding — advisory channel only, outside the verdict.
     // Re-pinned for MOTIR-9938, summary UNCHANGED: the mislabelled-link advisory
     // now scans proposed explanations too — beside the verdict, never in it.
-    descriptionFingerprint: '6a2d9d6bf0f4',
+    // Re-pinned for MOTIR-10087, summary UNCHANGED: `advisories` widens to every
+    // shape family on the plan's proposals — still beside the verdict, never in it.
+    descriptionFingerprint: '5979fea073d6',
   },
   get_plan_status: {
     // Re-pinned for MOTIR-3064, summary UNCHANGED and deliberately so: the tool

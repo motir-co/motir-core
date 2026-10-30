@@ -5061,12 +5061,25 @@ PROJECTION: a PROPOSED cross-level edge is a `cross_level` rejection instead, so
 what it reports is a COMMITTED cross-level edge (the link door writes one —
 MOTIR-6509). `valid` is `true` only when all four lists are empty.
 
-**`advisories` rides beside the verdict and never changes it (MOTIR-9007).** It
-lists every `likely-mislabelled-link` shape advisory in a body the plan
-PROPOSES — an `add`'s description or explanation, or a `modify` that rewrites
-either — as `{ kind: "shape", item, severity, label, targetId, targetKey, field }`
-(`field` is `descriptionMd` or `explanationMd`, MOTIR-9938): a
-`[label](motir:<id>)` link whose label names a work-item key the id does not
+**`advisories` rides beside the verdict and never changes it (MOTIR-9007,
+widened by MOTIR-10087).** It lists every SHAPE advisory (`kind: "shape"`) on a
+card the plan PROPOSES — an `add` (keyed `planItem:<id>`) or a card a `modify`
+patches — the same entries `validate_work_item { planId }` yields for that card:
+`likely-self-blocking-design` (`designCriterionIndex` + `surfaceCriterionIndex`),
+`likely-repo-straddle` and `likely-ordering-violation` (`criterionIndex`),
+`likely-over-gate-sizing`, `likely-post-merge-child-under-container`,
+`under-authored`, `likely-blocker-count-mismatch` and
+`body-edit-above-field-move`. The reference and subsumption families are not
+shape and stay `validate_work_item`'s. A runner reads a two-index entry as LIFT
+and stops, so a planner disposes of each before sealing: re-word the criterion,
+lift the design half into its own card, or record on the card why it is a false
+positive.
+
+`likely-mislabelled-link` keeps its narrower scope: it is listed only for a body
+the plan writes — an `add`'s description or explanation, or a `modify` that
+rewrites either — as `{ kind: "shape", item, severity, label, targetId,
+targetKey, field }` (`field` is `descriptionMd` or `explanationMd`, MOTIR-9938):
+a `[label](motir:<id>)` link whose label names a work-item key the id does not
 open, or whose id opens no card at all (`targetKey: null`). Fix the id before
 sealing. The internal `validate-plan-forest` route answers the same
 `advisories` beside its verdict (MOTIR-9873), so motir-ai's forest close can

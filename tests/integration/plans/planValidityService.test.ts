@@ -1229,7 +1229,9 @@ describe('the MISLABELLED-LINK advisory on a PROPOSED body (MOTIR-9007)', () => 
     );
 
     // … and over the whole plan, for `validate_plan`.
-    const whole = await planValidityService.projectedLinkAdvisories(planId, fx.ctx);
+    const whole = (await planValidityService.projectedShapeAdvisories(planId, fx.ctx)).filter(
+      isMislabelledLinkAdvisory,
+    );
     expect(new Set(whole.map((a) => `${a.item} ${a.targetKey}`))).toEqual(
       new Set([`${child.identifier} null`, `${addRef} ${opened.identifier}`]),
     );
@@ -1270,7 +1272,7 @@ describe('the MISLABELLED-LINK advisory on a PROPOSED body (MOTIR-9007)', () => 
       fx.ctx,
     );
     expect(subtree.advisories.filter(isMislabelledLinkAdvisory)).toEqual([expected]);
-    expect(await planValidityService.projectedLinkAdvisories(planId, fx.ctx)).toEqual([expected]);
+    expect(await planValidityService.projectedShapeAdvisories(planId, fx.ctx)).toEqual([expected]);
   });
 
   it('the whole-plan check scans PROPOSED bodies only — an untouched committed card is not the plan’s finding', async () => {
@@ -1299,7 +1301,7 @@ describe('the MISLABELLED-LINK advisory on a PROPOSED body (MOTIR-9007)', () => 
     });
     await plansService.markPlanned(planId, fx.ctx);
 
-    expect(await planValidityService.projectedLinkAdvisories(planId, fx.ctx)).toEqual([]);
+    expect(await planValidityService.projectedShapeAdvisories(planId, fx.ctx)).toEqual([]);
   });
 });
 
