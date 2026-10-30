@@ -6,9 +6,11 @@ import type { HostedApplicationDto, HostedReleaseDto } from '@/lib/dto/hostedApp
 // copied — the rows these map are read without it (MOTIR-10028) — so no caller
 // of a service can reach the database URL through a DTO.
 
-/** A release row, with the person who restored it when the read loaded them. */
+/** A release row, with the people who restored it and asked for it when the
+ *  read loaded them. */
 export type HostedReleaseRow = HostedRelease & {
   restoredBy?: { id: string; name: string } | null;
+  requestedBy?: { id: string; name: string } | null;
 };
 
 export function toHostedReleaseDto(row: HostedReleaseRow): HostedReleaseDto {
@@ -17,6 +19,9 @@ export function toHostedReleaseDto(row: HostedReleaseRow): HostedReleaseDto {
     applicationId: row.applicationId,
     commitSha: row.commitSha,
     ref: row.ref,
+    commitSubject: row.commitSubject,
+    pullRequestNumber: row.pullRequestNumber,
+    requestedBy: row.requestedBy ? { id: row.requestedBy.id, name: row.requestedBy.name } : null,
     cause: row.cause,
     state: row.state,
     artifactRef: row.artifactRef,

@@ -4316,10 +4316,12 @@
         "rolledBack": "Annulée"
       },
       "trigger": {
+        "merge": "Merge de #{number}",
         "mergeDefault": "Merge dans la branche par défaut",
         "redeploy": "Redéploiement · paramètres de production modifiés",
         "rollback": "Restaurée par retour arrière · {name}",
         "rollbackUnnamed": "Restaurée par retour arrière",
+        "ref": "Déploiement de {ref} · {name}",
         "refUnnamed": "Déploiement de {ref}"
       },
       "address": {

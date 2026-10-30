@@ -60,6 +60,28 @@ export function CommitLabel({ sha }: { sha: string }) {
   );
 }
 
+/** The commit's subject line beside its hash (MOTIR-10103); nothing for a
+ *  release that does not know it. Cut to one line on the card and the history;
+ *  the dialog lets it wrap. */
+export function CommitSubject({
+  subject,
+  truncate = true,
+}: {
+  subject: string | null;
+  truncate?: boolean;
+}) {
+  if (!subject) return null;
+  return (
+    <span
+      className={`min-w-0 font-sans text-sm text-(--el-text)${truncate ? ' truncate' : ''}`}
+      title={truncate ? subject : undefined}
+      data-testid="production-commit-subject"
+    >
+      {subject}
+    </span>
+  );
+}
+
 /** When the release last went live by a person's hand (a restore), else when it
  *  was made: relative, with the absolute time on hover. */
 export function ReleaseTime({
@@ -100,7 +122,10 @@ export function AbsoluteReleaseTime({
 export function ReleaseTriggerLine({
   release,
 }: {
-  release: Pick<HostedReleaseDto, 'cause' | 'ref' | 'restoredBy'>;
+  release: Pick<
+    HostedReleaseDto,
+    'cause' | 'ref' | 'restoredBy' | 'pullRequestNumber' | 'requestedBy'
+  >;
 }) {
   const t = useTranslations('settings.production');
   const trigger = releaseTriggerLabel(release);

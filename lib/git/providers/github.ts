@@ -8,6 +8,7 @@ import {
 } from '@/lib/github/appAuth';
 import { githubAppRoleForRepo } from '@/lib/github/appRoleForRepo';
 import { motirOwnedOrgLogins } from '@/lib/ciMetering/ownedOrgs';
+import { mergeCommitFacts } from '@/lib/hosting/mergeCommit';
 import {
   CHANGED_FILES_MAX,
   CHANGED_FILES_TIMEOUT_MS,
@@ -1741,6 +1742,9 @@ export const githubProvider: GitProvider = {
       typeof rawAttempt === 'number' && Number.isInteger(rawAttempt) && rawAttempt > 0
         ? rawAttempt
         : 1;
+    // What the merge was, for the Production panel (MOTIR-10103) — the head
+    // commit's message only; a delivery without one still releases.
+    const headCommit = mergeCommitFacts(asRecord(run['head_commit'])?.['message']);
     return {
       providerRepoId,
       repoOwner,
@@ -1752,6 +1756,8 @@ export const githubProvider: GitProvider = {
       conclusion,
       runId,
       runAttempt,
+      headCommitSubject: headCommit.subject,
+      pullRequestNumber: headCommit.pullRequestNumber,
     };
   },
 

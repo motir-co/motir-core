@@ -9,6 +9,7 @@ import type {
   ProposedFieldsInput,
   PlanWithItemsDto,
   ProposalLinkWarningDto,
+  ProposalRescopeWarningDto,
   ProposalInput,
   UpdateProposalInput,
   CorrectProposalInput,
@@ -1536,6 +1537,21 @@ function linkWarningsText(warnings: readonly ProposalLinkWarningDto[] | undefine
   );
 }
 
+/**
+ * The `modify`s a write KEPT that approve will send back from built work
+ * (MOTIR-10106), as the lines a caller reads under the summary — one per card.
+ * Empty when the write left none, so a clean write reads as it always did.
+ */
+export function rescopeWarningsText(
+  warnings: readonly ProposalRescopeWarningDto[] | undefined,
+): string {
+  if (!warnings || warnings.length === 0) return '';
+  return (
+    `\n\nWritten, with ${warnings.length} card(s) approve will re-open:\n` +
+    warnings.map((w) => `- ${w.proposal}: ${w.message}`).join('\n')
+  );
+}
+
 function summarizeAppend(plan: PlanWithItemsDto, planItemIds: string[], revision: boolean): string {
   const closing = (): string => {
     if (revision)
@@ -1845,10 +1861,14 @@ export async function runAddPlanItems(
     args.proposals.length === 0
       ? summarizeClose(plan)
       : summarizeAppend(plan, planItemIds, args.revision === true) +
-          linkWarningsText(appended.warnings),
+          linkWarningsText(appended.warnings) +
+          rescopeWarningsText(appended.rescopeWarnings),
     derived(
       planAppendPayload,
-      presentMcpPlanAppend({ ...plan, warnings: appended.warnings }, planItemIds),
+      presentMcpPlanAppend(
+        { ...plan, warnings: appended.warnings, rescopeWarnings: appended.rescopeWarnings },
+        planItemIds,
+      ),
     ),
   );
 }
@@ -1919,7 +1939,8 @@ export async function runUpdatePlanItem(
 
   return toolOk(
     summarizeDeepen(plan, args.planItemId, changed, args.revision === true) +
-      linkWarningsText(plan.warnings),
+      linkWarningsText(plan.warnings) +
+      rescopeWarningsText(plan.rescopeWarnings),
     derived(planPayload, presentMcpPlan(plan)),
   );
 }
@@ -1980,7 +2001,9 @@ export async function runUpdatePlanProposal(
   const plan = await plansService.correctProposal(args.planId, args.planItemId, resolved, ctx);
 
   return toolOk(
-    summarizeCorrection(plan, args.planItemId, changed) + linkWarningsText(plan.warnings),
+    summarizeCorrection(plan, args.planItemId, changed) +
+      linkWarningsText(plan.warnings) +
+      rescopeWarningsText(plan.rescopeWarnings),
     derived(planPayload, presentMcpPlan(plan)),
   );
 }
