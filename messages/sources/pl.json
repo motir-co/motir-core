@@ -6940,7 +6940,7 @@
   "planningWorkspace.planOffer.clearEnough": "Clear enough to plan as stated.",
   "planningWorkspace.planOffer.nothingSettled": "Nothing was settled, so the request is planned as stated.",
   "planningWorkspace.planOffer.requirementSaved": "Saved as <link>{title}</link> in Requirements Docs.",
-  "planningWorkspace.planOffer.requirementNotSaved": "<lead>Couldn’t save the requirement.</lead> Nothing was started. Confirm is still here — try it again.",
+  "planningWorkspace.planOffer.requirementPageNotSaved": "<lead>Couldn’t save the requirement as a page.</lead> Planning still uses it.",
   "planningWorkspace.logBugOffer.label": "Offer to log a bug",
   "planningWorkspace.logBugOffer.writeNew": "File a new bug",
   "planningWorkspace.logBugOffer.writeAnchored": "Add the diagnosis to <chip>{key}</chip>",

@@ -158,14 +158,14 @@ describe('the composed requirement arms of the jobs mock (MOTIR-9441)', () => {
     expect(offer).not.toHaveProperty('requirement');
   });
 
-  it('journals a plan submit’s requirement, page and whether it carried answers', async () => {
+  it('journals a plan submit’s requirement, confirmation and whether it carried answers', async () => {
     declare([]);
-    const page = { pageId: 'page-1', title: 'Export the board' };
+    const confirmed = { conversationId: 'conv-1', offerTurnId: 'turn-1' };
 
     await submitJob(
       'plan',
       tenant,
-      { requirement: REQUIREMENT, requirementPage: page },
+      { requirement: REQUIREMENT, requirementConfirmed: confirmed },
       { userId: 'user-1' },
     );
     await submitJob(
@@ -180,14 +180,14 @@ describe('the composed requirement arms of the jobs mock (MOTIR-9441)', () => {
     expect(supplied).toMatchObject({
       kind: 'plan',
       requirement: REQUIREMENT,
-      requirementPage: page,
+      requirementConfirmed: confirmed,
       hasCarriedAnswers: false,
     });
     expect(carried).toMatchObject({ kind: 'plan', hasCarriedAnswers: true });
     expect(carried).not.toHaveProperty('requirement');
     expect(bare).toMatchObject({ kind: 'plan', hasCarriedAnswers: false });
     expect(bare).not.toHaveProperty('requirement');
-    expect(bare).not.toHaveProperty('requirementPage');
+    expect(bare).not.toHaveProperty('requirementConfirmed');
   });
 
   it('journals an ask submit’s conversation turns, and none on a first turn', async () => {

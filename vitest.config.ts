@@ -3531,6 +3531,13 @@ export default defineConfig({
         'lib/services/requirementPageService.ts',
         'lib/ai/requirementMarkdown.ts',
         'lib/planning/requirementPane.ts',
+        // Bug MOTIR-10091 — the requirement page saved by a background job after the start.
+        // MEASURED against `tests/integration/planning/planOfferRequirementPage` and
+        // `composedRequirementSeam`, statements / branches / functions / lines:
+        // requirementPageSaveService.ts 95.74 / 90 / 100 / 100; planOfferRequirementPage.ts
+        // 100 / 100 / 100 / 100. Pinned at the floor below.
+        'lib/services/requirementPageSaveService.ts',
+        'lib/jobs/definitions/planOfferRequirementPage.ts',
         // Story MOTIR-9539 · MOTIR-9615 — the provider-capacity story's new modules (the
         // gateway capacity client, its fake and provider, the threshold function, the
         // raised-alert store, the alert evaluation and its minutely job, the staff
@@ -3969,6 +3976,19 @@ export default defineConfig({
           statements: 90,
         },
         'app/api/ai/plan-change/session/offer/decline/route.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // Bug MOTIR-10091 — measured above, pinned at the floor.
+        'lib/services/requirementPageSaveService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/jobs/definitions/planOfferRequirementPage.ts': {
           lines: 90,
           functions: 90,
           branches: 90,

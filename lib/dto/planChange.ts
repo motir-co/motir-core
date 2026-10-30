@@ -582,12 +582,14 @@ export interface PlanAnswerOfferDto {
    *  only on a `plan` offer — one with no target, or a targeted one whose target's
    *  description does not state the WHAT (MOTIR-9878); absent otherwise, never `null`. */
   requirement?: SubmittedRequirement;
-  /** The page Confirm saved the requirement to (MOTIR-9436). Present only on a `plan`
-   *  offer carrying a requirement, once a confirm has written it; kept for a retry. */
+  /** The page the requirement was saved to (MOTIR-9436). Present only on a `plan` offer
+   *  carrying a requirement, once the background save after its confirm has written it
+   *  (MOTIR-10091). */
   requirementPage?: { pageId: string; title: string };
-  /** `true` when the last Confirm could not save the requirement page and started
-   *  nothing (MOTIR-9436); the offer is pending again. Absent otherwise. */
-  requirementSaveFailed?: true;
+  /** `true` when that background save failed every attempt (MOTIR-10091): the run is
+   *  unaffected, and the rail's confirmed line says the page could not be saved. Absent
+   *  otherwise. */
+  requirementPageFailed?: true;
   /** The bug a `log_bug` offer would write (MOTIR-9322); absent on a `plan` offer.
    *  On a `log_bug` offer, `requestMd` is the new bug's title. */
   bug?: LogBugOfferDto;

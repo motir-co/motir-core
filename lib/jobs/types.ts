@@ -30,6 +30,7 @@
 
 import type { DesignAutoRerunRequestedData } from '@/lib/services/designAutoRerunService';
 import type { GateResumeRequestedData } from '@/lib/services/gateResumeRequest';
+import type { PlanOfferRequirementPageRequestedData } from '@/lib/services/requirementPageSaveService';
 import type { TransactionalEmail } from '@/lib/services/emailService';
 import type { HostedAgentSession } from '@/lib/services/hostedAgentContainerService';
 
@@ -755,6 +756,11 @@ export interface JobEventDataMap {
    *  hosted agent if it was hosted, and record what happened. Emitted by both decide
    *  doors AFTER the decision commits. */
   'run/gate-resume.requested': GateResumeRequestedData;
+  /** A plan offer carrying a composed requirement was CONFIRMED (MOTIR-10091): save the
+   *  requirement as its page in Requirements Docs and record it on the offer. Emitted by
+   *  the confirm AFTER the transaction that claimed the offer commits; keyed by the offer
+   *  turn, so one offer gets one page. */
+  'plan-offer/requirement-page.requested': PlanOfferRequirementPageRequestedData;
   /** A push moved a repository's DEFAULT branch (MOTIR-5914): re-read the host's
    *  mergeability of every open pull request that targets it, and withdraw the question
    *  over any that now conflict. Emitted by the push webhook after its own write. */
@@ -966,6 +972,7 @@ export type JobEventData<N extends JobEventName> = JobEventDataMap[N];
  */
 export type { DesignAutoRerunRequestedData };
 export type { GateResumeRequestedData };
+export type { PlanOfferRequirementPageRequestedData };
 
 export type WorkspaceScopedEventName = Exclude<JobEventName, `system.${string}`>;
 

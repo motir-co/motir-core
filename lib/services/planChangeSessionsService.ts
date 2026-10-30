@@ -51,7 +51,7 @@ import { readPlanningTurn } from '@/lib/planning/plannerTurn';
 import { readCodeUnreadable } from '@/lib/planning/codeUnreadable';
 import { readCodeUnsearchable, type CodeUnsearchableRepo } from '@/lib/planning/codeUnsearchable';
 import { getJob } from '@/lib/ai/motirAiClient';
-import type { CarriedAnswers, SubmittedRequirement } from '@/lib/ai/types';
+import type { CarriedAnswers, RequirementConfirmation, SubmittedRequirement } from '@/lib/ai/types';
 import { turnSubmitKey } from '@/lib/ai/turnSubmitKey';
 import { readGuideTurnRecord, type GuideTurnRecord } from '@/lib/ai/guideWorkItem';
 import type {
@@ -3161,8 +3161,9 @@ export const planChangeSessionsService = {
     requirement?: SubmittedRequirement,
     opts: {
       planAgainOf?: string | null;
-      /** The saved requirement page (MOTIR-9436): rides the job beside `requirement`. */
-      requirementPage?: { pageId: string; title: string };
+      /** Which offer's requirement the person confirmed (MOTIR-10091): rides the job
+       *  beside `requirement`, so motir-ai keeps it as the planner's own. */
+      requirementConfirmed?: RequirementConfirmation;
       /** Send NO carried answers (MOTIR-9436): a confirmed offer's composed requirement
        *  already holds what Grill me settled, and a second copy would be folded in twice. */
       omitCarriedAnswers?: boolean;
@@ -3286,7 +3287,7 @@ export const planChangeSessionsService = {
       sessionId: session.id,
       ...(idempotencyKey ? { idempotencyKey } : {}),
       ...(carriedAnswers ? { carriedAnswers } : {}),
-      ...(opts.requirementPage ? { requirementPage: opts.requirementPage } : {}),
+      ...(opts.requirementConfirmed ? { requirementConfirmed: opts.requirementConfirmed } : {}),
     };
     let submitted: { jobId: string; planId: string };
     try {
