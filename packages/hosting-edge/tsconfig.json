@@ -1,0 +1,29 @@
+{
+  // The edge forwarder's own PROJECT, referenced from `tsconfig.solution.json` so
+  // `pnpm typecheck` covers it (as `packages/orchestrator`'s). The image runs
+  // these files with Node's type stripping, so only erasable syntax is allowed
+  // and relative imports name their `.ts` file.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "erasableSyntaxOnly": true,
+    "allowImportingTsExtensions": true,
+    "skipLibCheck": true,
+    "types": ["node"],
+    "composite": true,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "noEmit": false,
+    "rootDir": ".",
+    "outDir": "../../.tsout/packages/hosting-edge",
+    "tsBuildInfoFile": "../../.tsout/packages/hosting-edge/tsconfig.tsbuildinfo"
+  },
+  "include": ["src/**/*.ts"]
+}

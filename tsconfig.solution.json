@@ -21,6 +21,7 @@
     { "path": "./tsconfig.scripts.json" },
     { "path": "./packages/orchestrator" },
     { "path": "./packages/hosting-guard" },
+    { "path": "./packages/hosting-edge" },
     { "path": "./packages/pages" }
   ]
 }
