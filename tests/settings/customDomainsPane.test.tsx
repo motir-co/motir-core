@@ -78,6 +78,7 @@ function domain(over: Partial<PublicAddressDto> = {}): PublicAddressDto {
     issuedAt: null,
     failureReason: null,
     failureKind: null,
+    certificateExpiresAt: null,
     ...over,
   };
 }

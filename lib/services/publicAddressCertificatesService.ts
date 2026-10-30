@@ -141,6 +141,7 @@ export const publicAddressCertificatesService = {
               failureReason: address.failureReason,
               failureKind: address.failureKind,
               lastCheckedAt: state.checkedAt,
+              ...expiryOf(state),
             });
             continue;
           }
@@ -193,6 +194,7 @@ type NextRow = {
   failureKind?: PublicAddressFailureKind | null;
   lastCheckedAt: Date;
   issuedAt?: Date;
+  certificateExpiresAt?: Date;
 };
 
 /**
@@ -216,16 +218,17 @@ export function nextStatus(
     // OWNERSHIP FIRST: it is the security property. A domain whose owner can no
     // longer prove it must not keep serving, however healthy its certificate.
     if (ownership === false) {
-      return failedFor(address, 'txt_lost', txtLostReason(address), state.checkedAt);
+      return failedFor(address, 'txt_lost', txtLostReason(address), state);
     }
     if (ownership === true && !state.configured) {
-      return failedFor(address, 'pointing_lost', pointingLostReason(address), state.checkedAt);
+      return failedFor(address, 'pointing_lost', pointingLostReason(address), state);
     }
     if (address.status === 'issued') return null;
     return {
       status: 'issued',
       failureReason: null,
       lastCheckedAt: state.checkedAt,
+      ...expiryOf(state),
       // Exactly once: the FIRST time this row becomes issued. A renewal is not a
       // new issuance from the customer's point of view, and overwriting the date
       // on every renewal would lose when the address actually went live.
@@ -257,10 +260,27 @@ function failedFor(
   address: PublicAddress,
   kind: PublicAddressFailureKind,
   reason: string,
-  checkedAt: Date,
+  state: CertificateState,
 ): NextRow | null {
   if (address.status === 'failed' && address.failureKind === kind) return null;
-  return { status: 'failed', failureReason: reason, failureKind: kind, lastCheckedAt: checkedAt };
+  return {
+    status: 'failed',
+    failureReason: reason,
+    failureKind: kind,
+    lastCheckedAt: state.checkedAt,
+    ...expiryOf(state),
+  };
+}
+
+/**
+ * The reading's certificate expiry as a write, or nothing (MOTIR-9526).
+ *
+ * ⚠️ DO NOT CLEAR WHAT YOU COULD NOT READ. A reading with no date — or with no
+ * certificate — writes nothing, so the stored date survives and the row keeps
+ * saying what was last known; only a reading that carries a date overwrites it.
+ */
+function expiryOf(state: CertificateState): { certificateExpiresAt?: Date } {
+  return state.issued && state.expiresAt ? { certificateExpiresAt: state.expiresAt } : {};
 }
 
 function txtLostReason(address: PublicAddress): string {

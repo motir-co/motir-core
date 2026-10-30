@@ -81,6 +81,9 @@ function state(hostname: string): CertificateState {
     issued: true,
     dnsRequirements: [],
     checkedAt: new Date(),
+    // The fake has no certificate to read a date from, and inventing one is
+    // exactly what the port forbids.
+    expiresAt: null,
   };
 }
 

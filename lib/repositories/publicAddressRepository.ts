@@ -244,6 +244,11 @@ export const publicAddressRepository = {
       failureKind?: PublicAddressFailureKind | null;
       lastCheckedAt?: Date;
       issuedAt?: Date | null;
+      /**
+       * Only ever a date: a write not given one leaves the stored expiry alone,
+       * because a reading that carried no date is not evidence there is none.
+       */
+      certificateExpiresAt?: Date;
     },
     tx: Prisma.TransactionClient,
   ): Promise<PublicAddress> {

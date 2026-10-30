@@ -163,4 +163,10 @@ export interface PublicAddressDto {
    * the certificate was never issued.
    */
   readonly failureKind: 'txt_lost' | 'pointing_lost' | 'certificate_lost' | null;
+  /**
+   * When the certificate expires, as the platform last reported it (MOTIR-9526);
+   * `null` when no reading has carried a date. The pane renders it and computes
+   * none of its own.
+   */
+  readonly certificateExpiresAt: string | null;
 }

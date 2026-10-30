@@ -93,7 +93,14 @@ beforeEach(async () => {
     request: async (hostname: string) => {
       trace.push('cert.request');
       const { issued } = await onRequest();
-      return { hostname, configured: true, issued, dnsRequirements: [], checkedAt: new Date() };
+      return {
+        hostname,
+        configured: true,
+        issued,
+        dnsRequirements: [],
+        checkedAt: new Date(),
+        expiresAt: null,
+      };
     },
     check: async (hostname: string) => {
       trace.push('cert.check');
@@ -105,6 +112,7 @@ beforeEach(async () => {
         issued: true,
         dnsRequirements: [],
         checkedAt: new Date(),
+        expiresAt: null,
       };
     },
     remove: async () => {

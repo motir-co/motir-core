@@ -20,7 +20,10 @@ const { createTestWorkspace } = await import('../fixtures');
 
 let workspaceId: string;
 /** What the stubbed port reports for every hostname this run. */
-let answer: { configured: boolean; issued: boolean } | Error = { configured: true, issued: false };
+let answer: { configured: boolean; issued: boolean; expiresAt?: Date | null } | Error = {
+  configured: true,
+  issued: false,
+};
 /** What the stubbed resolver answers for `_motir-verify.<host>`: by default the
  *  row's own token (see `seed`), i.e. ownership still proven. */
 let txt: (name: string) => string[] | Error = (name) => [
@@ -56,7 +59,7 @@ beforeEach(async () => {
     },
     check: async (hostname: string) => {
       if (answer instanceof Error) throw answer;
-      return { hostname, ...answer, dnsRequirements: [], checkedAt: new Date() };
+      return { hostname, expiresAt: null, ...answer, dnsRequirements: [], checkedAt: new Date() };
     },
     remove: async () => {},
   });
@@ -147,6 +150,53 @@ describe('the transitions that matter', () => {
     const row = await adminDb.publicAddress.findUniqueOrThrow({ where: { id: a.id } });
     expect(row.status).toBe('issued');
     expect(row.lastCheckedAt!.getTime()).toBeGreaterThan(before!.getTime());
+  });
+});
+
+describe('the certificate EXPIRY is read, never computed (MOTIR-9526)', () => {
+  const EXPIRY = new Date('2027-01-28T12:00:00.000Z');
+
+  it('stores the reading’s date on a healthy issued row without moving status, issuedAt or kind', async () => {
+    const a = await seed('live.acme.test', 'issued', { hoursAgo: 2 });
+    const issuedAt = new Date(Date.now() - 86_400_000);
+    await adminDb.publicAddress.update({ where: { id: a.id }, data: { issuedAt } });
+    answer = { configured: true, issued: true, expiresAt: EXPIRY };
+
+    const summary = await publicAddressCertificatesService.refreshDueAddresses();
+    expect(summary.changed).toBe(0);
+    const row = await adminDb.publicAddress.findUniqueOrThrow({ where: { id: a.id } });
+    expect(row.certificateExpiresAt?.toISOString()).toBe(EXPIRY.toISOString());
+    expect([row.status, row.failureKind]).toEqual(['issued', null]);
+    expect(row.issuedAt?.toISOString()).toBe(issuedAt.toISOString());
+  });
+
+  it('carries the date on the transition INTO issued', async () => {
+    const a = await seed('pending.acme.test', 'pending_certificate');
+    answer = { configured: true, issued: true, expiresAt: EXPIRY };
+    await publicAddressCertificatesService.refreshDueAddresses();
+    const row = await adminDb.publicAddress.findUniqueOrThrow({ where: { id: a.id } });
+    expect(row.status).toBe('issued');
+    expect(row.certificateExpiresAt?.toISOString()).toBe(EXPIRY.toISOString());
+  });
+
+  it('a reading with NO date keeps the stored one — it is not evidence there is none', async () => {
+    const a = await seed('live.acme.test', 'issued', { hoursAgo: 2 });
+    await adminDb.publicAddress.update({
+      where: { id: a.id },
+      data: { certificateExpiresAt: EXPIRY },
+    });
+    answer = { configured: true, issued: true, expiresAt: null };
+    await publicAddressCertificatesService.refreshDueAddresses();
+    const row = await adminDb.publicAddress.findUniqueOrThrow({ where: { id: a.id } });
+    expect(row.certificateExpiresAt?.toISOString()).toBe(EXPIRY.toISOString());
+  });
+
+  it('a row that has never had a date reads back null', async () => {
+    const a = await seed('live.acme.test', 'issued', { hoursAgo: 2 });
+    answer = { configured: true, issued: true, expiresAt: null };
+    await publicAddressCertificatesService.refreshDueAddresses();
+    const row = await adminDb.publicAddress.findUniqueOrThrow({ where: { id: a.id } });
+    expect(row.certificateExpiresAt).toBeNull();
   });
 });
 
@@ -311,6 +361,7 @@ describe('one bad hostname does not wedge the sweep', () => {
           issued: true,
           dnsRequirements: [],
           checkedAt: new Date(),
+          expiresAt: null,
         };
       },
       remove: async () => {},

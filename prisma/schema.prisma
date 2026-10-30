@@ -13768,28 +13768,31 @@ enum PublicAddressFailureKind {
 /// `workspace_id = app.workspace_id` comparison with no join — the pattern
 /// `project_membership`, `work_item` and `project_key_alias` all use.
 model PublicAddress {
-  id                String                    @id @default(cuid())
-  workspaceId       String                    @map("workspace_id")
+  id                   String                    @id @default(cuid())
+  workspaceId          String                    @map("workspace_id")
   /// The application a customer domain serves (ADR MOTIR-9521 §1). NULL for a
   /// subdomain, and for a customer domain not bound to an application yet or
   /// whose application was removed — the domain is unbound, never deleted.
-  applicationId     String?                   @map("application_id")
-  hostname          String                    @unique
-  kind              PublicAddressKind
-  status            PublicAddressStatus
+  applicationId        String?                   @map("application_id")
+  hostname             String                    @unique
+  kind                 PublicAddressKind
+  status               PublicAddressStatus
   /// The `_motir-verify.<host>` TXT value. Custom domains only — a subdomain of
   /// our own base needs no ownership proof.
-  verificationToken String?                   @map("verification_token")
+  verificationToken    String?                   @map("verification_token")
   /// When the platform was last asked about this address (MOTIR-4219). Also the
   /// job's sweep cursor, which is why it is half of an index.
-  lastCheckedAt     DateTime?                 @map("last_checked_at")
-  issuedAt          DateTime?                 @map("issued_at")
+  lastCheckedAt        DateTime?                 @map("last_checked_at")
+  issuedAt             DateTime?                 @map("issued_at")
   /// Always set when `status` is `failed` — see the enum's note.
-  failureReason     String?                   @map("failure_reason")
+  failureReason        String?                   @map("failure_reason")
   /// Which proof was lost; cleared whenever `failureReason` is (MOTIR-9526).
-  failureKind       PublicAddressFailureKind? @map("failure_kind")
-  createdAt         DateTime                  @default(now()) @map("created_at")
-  updatedAt         DateTime                  @updatedAt @map("updated_at")
+  failureKind          PublicAddressFailureKind? @map("failure_kind")
+  /// When the hostname's certificate expires, as the platform last reported it
+  /// (MOTIR-9526). Read, never computed; a reading with no date leaves it alone.
+  certificateExpiresAt DateTime?                 @map("certificate_expires_at")
+  createdAt            DateTime                  @default(now()) @map("created_at")
+  updatedAt            DateTime                  @updatedAt @map("updated_at")
 
   workspace   Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   application HostedApplication? @relation("HostedApplicationCustomDomains", fields: [applicationId], references: [id], onDelete: SetNull)

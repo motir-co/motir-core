@@ -100,11 +100,11 @@ beforeEach(async () => {
       requests.push(hostname);
       const state = edge[hostname] ?? { configured: true, issued: true };
       edge[hostname] = state;
-      return { hostname, ...state, dnsRequirements: [], checkedAt: new Date() };
+      return { hostname, ...state, dnsRequirements: [], checkedAt: new Date(), expiresAt: null };
     },
     check: async (hostname: string) => {
       const state = edge[hostname] ?? { configured: true, issued: false };
-      return { hostname, ...state, dnsRequirements: [], checkedAt: new Date() };
+      return { hostname, ...state, dnsRequirements: [], checkedAt: new Date(), expiresAt: null };
     },
     remove: async (hostname: string) => {
       if (removeFails) throw new Error('edge unreachable');
