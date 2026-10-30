@@ -316,6 +316,28 @@ process.env['MOTIR_FAKE_IMAGE_CATALOG_PATH'] ??= path.resolve(
 process.env['MOTIR_FAKE_HOSTING_STATE_PATH'] ??= path.resolve(
   'out/playwright-output-acceptance/.fake-hosting.json',
 );
+// Story MOTIR-5766 · MOTIR-5781 — the PREVIEW HOST, served in this lane the way
+// production serves it. `preview.localhost` because a browser resolves it to
+// loopback; the spec maps it onto its HTTPS front (`preview-tls-front.ts`) so the
+// gate's `https://<host>` redirects and its `__Host-` cookie work unchanged — no
+// `MOTIR_PREVIEW_SCHEME`. The two keys are test values: the gate's admission
+// signing key, and the key a release's origin secret derives from, which the job
+// worker (deploy) and the app server (forward) must share. Set on the RUNNER, so
+// the worker inherits them, and handed to the webServer below.
+process.env['MOTIR_PREVIEW_DOMAIN'] ??= 'preview.localhost';
+process.env['MOTIR_HOSTING_GATE_SIGNING_KEY'] ??= 'e2e-preview-gate-signing-key';
+process.env['MOTIR_HOSTING_ORIGIN_SECRET_KEY'] ??= 'e2e-preview-origin-secret-key';
+process.env['E2E_PREVIEW_TLS_PORT'] ??= '3293';
+// …and a preview's GitHub calls (its deployment, statuses and hosting manifest),
+// which the lifecycle makes from the JOB WORKER: `lib/test-github-preview-mock.ts`,
+// mirrored there by `githubPreviewSeamEnv` beside the merge seam that mints its token.
+process.env['MOTIR_GITHUB_PREVIEW_CONTROL_PATH'] ??= path.resolve(
+  '/tmp/motir-acceptance-github-preview-control.json',
+);
+process.env['MOTIR_GITHUB_PREVIEW_JOURNAL_PATH'] ??= path.resolve(
+  '/tmp/motir-acceptance-github-preview-journal.jsonl',
+);
+process.env['E2E_JOB_WORKER_GITHUB_PREVIEW_SEAM'] ??= '1';
 // The stall watchdog's test-only config seam (`hostedRunStallWindowMs`,
 // `lib/hostedRuns/limits.ts`) — shortened from the real 15 minutes so the
 // "stalled" case can run in this lane at all. Read directly by whichever
@@ -669,6 +691,10 @@ export default defineConfig({
         MOTIR_FAKE_PERSISTENT_STATE_PATH: process.env['MOTIR_FAKE_PERSISTENT_STATE_PATH']!,
         // The fake hosting port's store (MOTIR-10098) — see its block above this config.
         MOTIR_FAKE_HOSTING_STATE_PATH: process.env['MOTIR_FAKE_HOSTING_STATE_PATH']!,
+        // The preview host (MOTIR-5781) — see its block above this config.
+        MOTIR_PREVIEW_DOMAIN: process.env['MOTIR_PREVIEW_DOMAIN']!,
+        MOTIR_HOSTING_GATE_SIGNING_KEY: process.env['MOTIR_HOSTING_GATE_SIGNING_KEY']!,
+        MOTIR_HOSTING_ORIGIN_SECRET_KEY: process.env['MOTIR_HOSTING_ORIGIN_SECRET_KEY']!,
         // The fake AWS (MOTIR-9429) — see its block above this config.
         MOTIR_FAKE_AWS_STATE_PATH: process.env['MOTIR_FAKE_AWS_STATE_PATH']!,
         MOTIR_FAKE_FLEET_SWITCH_PATH: process.env['MOTIR_FAKE_FLEET_SWITCH_PATH']!,

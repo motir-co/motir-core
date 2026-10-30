@@ -217,6 +217,40 @@ export function previewHostingSeamEnv(): Record<string, string> {
   return path ? { MOTIR_FAKE_HOSTING_STATE_PATH: path } : {};
 }
 
+/** The preview configuration a lifecycle effect reads, by name, when the lane sets it. */
+const PREVIEW_WORKER_ENV = [
+  'MOTIR_PREVIEW_DOMAIN',
+  'MOTIR_PREVIEW_SCHEME',
+  'MOTIR_HOSTING_ORIGIN_SECRET_KEY',
+] as const;
+
+/**
+ * A PREVIEW'S GITHUB CALLS, mirrored into the worker (Story MOTIR-5766 ·
+ * MOTIR-5781). The lifecycle's effects run HERE: they create the preview's GitHub
+ * deployment, post its statuses and read the hosting manifest at the pull
+ * request's head, so the seam that answers them (`lib/test-github-preview-mock.ts`)
+ * must be installed in this process, with its control and journal files. Its state
+ * lives in those files, so a copy in the app server would agree with this one.
+ *
+ * ⚠️ IT CARRIES NO TOKEN MINT OF ITS OWN: the installation token those calls carry is
+ * the merge seam's (`githubMergeSeamEnv`), so the lane turns both on together.
+ *
+ * Opt-in (`E2E_JOB_WORKER_GITHUB_PREVIEW_SEAM=1`, set by the acceptance config).
+ */
+export function githubPreviewSeamEnv(): Record<string, string> {
+  if (process.env['E2E_JOB_WORKER_GITHUB_PREVIEW_SEAM'] !== '1') return {};
+  const env: Record<string, string> = { E2E_TEST_GITHUB_PREVIEW: '1' };
+  for (const name of [
+    'MOTIR_GITHUB_PREVIEW_CONTROL_PATH',
+    'MOTIR_GITHUB_PREVIEW_JOURNAL_PATH',
+    ...PREVIEW_WORKER_ENV,
+  ]) {
+    const value = process.env[name];
+    if (value) env[name] = value;
+  }
+  return env;
+}
+
 /**
  * THE motir-ai EMBEDDINGS SEAM, mirrored into the worker (Story MOTIR-9490 ·
  * MOTIR-9577).
@@ -431,6 +465,8 @@ export async function startJobWorker(): Promise<void> {
       ...embeddingsSeamEnv(),
       // The fake hosting port's shared store — see `previewHostingSeamEnv`.
       ...previewHostingSeamEnv(),
+      // A preview's GitHub deployment and manifest — see `githubPreviewSeamEnv`.
+      ...githubPreviewSeamEnv(),
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -554,6 +590,8 @@ export async function startSpecJobWorker(routingFile: string): Promise<Date> {
       ...embeddingsSeamEnv(),
       // The fake hosting port's shared store — see `previewHostingSeamEnv`.
       ...previewHostingSeamEnv(),
+      // A preview's GitHub deployment and manifest — see `githubPreviewSeamEnv`.
+      ...githubPreviewSeamEnv(),
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });

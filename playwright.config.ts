@@ -160,6 +160,18 @@ process.env['MOTIR_FLEET_ORCHESTRATOR'] ??= 'fake';
 process.env['MOTIR_FAKE_HOSTING_STATE_PATH'] ??= path.resolve(
   'out/playwright-output/.fake-hosting.json',
 );
+// Story MOTIR-5766 · MOTIR-5781 — the PREVIEW HOST, served in this lane the way
+// production serves it. `preview.localhost` because a browser resolves it to
+// loopback; the spec maps it onto its HTTPS front (`preview-tls-front.ts`) so the
+// gate's `https://<host>` redirects and its `__Host-` cookie work unchanged — no
+// `MOTIR_PREVIEW_SCHEME`. The two keys are test values: the gate's admission
+// signing key, and the key a release's origin secret derives from, which the job
+// worker (deploy) and the app server (forward) must share. Set on the RUNNER, so
+// the worker inherits them, and handed to the webServer below.
+process.env['MOTIR_PREVIEW_DOMAIN'] ??= 'preview.localhost';
+process.env['MOTIR_HOSTING_GATE_SIGNING_KEY'] ??= 'e2e-preview-gate-signing-key';
+process.env['MOTIR_HOSTING_ORIGIN_SECRET_KEY'] ??= 'e2e-preview-origin-secret-key';
+process.env['E2E_PREVIEW_TLS_PORT'] ??= '3093';
 
 /**
  * Playwright config for motir-core's E2E auth smoke suite.
@@ -468,6 +480,10 @@ export default defineConfig({
         MOTIR_FLEET_ORCHESTRATOR: process.env['MOTIR_FLEET_ORCHESTRATOR'] ?? 'fake',
         // The fake hosting port's shared store (MOTIR-10098) — see its default above.
         MOTIR_FAKE_HOSTING_STATE_PATH: process.env['MOTIR_FAKE_HOSTING_STATE_PATH']!,
+        // The preview host (MOTIR-5781) — see its block above this config.
+        MOTIR_PREVIEW_DOMAIN: process.env['MOTIR_PREVIEW_DOMAIN']!,
+        MOTIR_HOSTING_GATE_SIGNING_KEY: process.env['MOTIR_HOSTING_GATE_SIGNING_KEY']!,
+        MOTIR_HOSTING_ORIGIN_SECRET_KEY: process.env['MOTIR_HOSTING_ORIGIN_SECRET_KEY']!,
       },
     },
   ],

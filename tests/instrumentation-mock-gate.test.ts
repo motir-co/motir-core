@@ -54,6 +54,7 @@ const blob = vi.hoisted(() => ({ installBlobStoreMock: vi.fn() }));
 const billing = vi.hoisted(() => ({ installBillingBoundaryMock: vi.fn() }));
 const githubRepos = vi.hoisted(() => ({ installGithubReposMock: vi.fn() }));
 const githubMerge = vi.hoisted(() => ({ installGithubMergeMock: vi.fn() }));
+const githubPreview = vi.hoisted(() => ({ installGithubPreviewMock: vi.fn() }));
 const githubAccounts = vi.hoisted(() => ({ installGithubAccountsMock: vi.fn() }));
 const githubFleetOrgCi = vi.hoisted(() => ({ installGithubFleetOrgCiMock: vi.fn() }));
 const codeHealth = vi.hoisted(() => ({ installCodeHealthBoundaryMock: vi.fn() }));
@@ -75,6 +76,7 @@ vi.mock('@/lib/test-blob-mock', () => blob);
 vi.mock('@/lib/test-billing-mock', () => billing);
 vi.mock('@/lib/test-github-repos-mock', () => githubRepos);
 vi.mock('@/lib/test-github-merge-mock', () => githubMerge);
+vi.mock('@/lib/test-github-preview-mock', () => githubPreview);
 vi.mock('@/lib/test-github-accounts-mock', () => githubAccounts);
 vi.mock('@/lib/test-github-fleet-org-ci-mock', () => githubFleetOrgCi);
 vi.mock('@/lib/test-code-health-mock', () => codeHealth);
@@ -103,6 +105,8 @@ const INSTALLERS: Record<string, ReturnType<typeof vi.fn>[]> = {
   // MOTIR-5572 — the GitHub MERGE seam, registered here in the same change that adds
   // it to the shipped table.
   E2E_TEST_GITHUB_MERGE: [githubMerge.installGithubMergeMock],
+  // MOTIR-5781 — a preview's GitHub deployment, statuses and hosting manifest (Story MOTIR-5766).
+  E2E_TEST_GITHUB_PREVIEW: [githubPreview.installGithubPreviewMock],
   // MOTIR-8225 — the Git room's account + repository pickers (Story MOTIR-8216).
   E2E_TEST_GITHUB_ACCOUNTS: [githubAccounts.installGithubAccountsMock],
   // MOTIR-8717 — the GitHub calls behind /admin/fleet-settings (Story MOTIR-8699).
