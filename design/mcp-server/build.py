@@ -62,6 +62,7 @@ SUMMARIES = {
     "get_code_health": "Each repository's index state, latest code-health audit summary and derived coding convention — what the hosted planner reads.",
     "get_coding_convention": "One repository's coding convention in full — derived or edited by a person, with its version — what a change in that repository follows.",
     "read_file": "One file's text from a project repository at a ref — capped, line-ranged, every absence a named outcome.",
+    "list_changed_files": "The paths a branch changed in a project repository — bounded, every absence a named outcome.",
     "code_explore": "Explore the hosted code graph around a query — the hosted planner's own answer, paged, every absence a named state.",
     "code_search": "Search the hosted code graph for symbols by name — the hosted planner's own answer, paged.",
     "code_grep": "Search the indexed file contents for text — string literals, comments and non-code files the symbol search cannot see.",

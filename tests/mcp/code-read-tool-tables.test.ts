@@ -38,7 +38,13 @@ import { mcpToolArgs } from '../helpers/mcpToolArgs';
 // asserted in `code-read-tool-docs.test.ts`, which imports nothing from `lib/` so
 // it can run in the database-free docs-guard lane on a docs-only pull request.
 
-const CODE_READ_TOOLS = ['read_file', 'code_explore', 'code_search', 'code_grep'] as const;
+const CODE_READ_TOOLS = [
+  'read_file',
+  'list_changed_files',
+  'code_explore',
+  'code_search',
+  'code_grep',
+] as const;
 
 const catalogue = new Map(mcpToolRows().map((r) => [r.name as string, r]));
 const fixtureArgs = mcpToolArgs({

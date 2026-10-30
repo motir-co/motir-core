@@ -1954,6 +1954,38 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  list_changed_files: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The project key the sprint belongs to — the prefix chosen for that project at creation (e.g. "ACME"), not a reserved value.',
+      },
+      repo: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The repository — one in this project’s set, by its bare name ("motir-core") or as `owner/name`, case-insensitively: the `repo` of an `inFlightCode` entry on `get_work_item` passes straight through.',
+      },
+      head: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The branch (or commit) whose changes to list — the `branch` of an `inFlightCode` entry on `get_work_item`.',
+      },
+      base: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'OPTIONAL. The ref to compare against. Omit for the repository’s default branch, which is what you want for a pull request that targets it; pass the entry’s `baseRef` when it names a different one.',
+      },
+    },
+    required: ['projectKey', 'repo', 'head'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   list_designs: {
     type: 'object',
     properties: {
@@ -4416,6 +4448,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   link_page: 'Link page',
   link_pull_request: 'Link pull request',
   link_work_items: 'Link work items',
+  list_changed_files: 'List changed files',
   list_designs: 'List designs',
   list_folders: 'List folders',
   list_projects: 'List projects',
@@ -4751,6 +4784,7 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
     idempotentHint: true,
     openWorldHint: false,
   },
+  list_changed_files: { title: 'List changed files', readOnlyHint: true, openWorldHint: true },
   list_designs: { title: 'List designs', readOnlyHint: true, openWorldHint: false },
   list_folders: { title: 'List folders', readOnlyHint: true, openWorldHint: false },
   list_projects: { title: 'List projects', readOnlyHint: true, openWorldHint: false },
