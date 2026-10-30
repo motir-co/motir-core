@@ -136,9 +136,9 @@ const inputSchema = {
     .describe(
       'Replace the repository SET wholesale — EVERY repository this item ships ' +
         'in, ORDERED, the FIRST element being the PRIMARY the CLI is dispatched ' +
-        'into. The item does not complete until every repository on the list has a ' +
-        "pull request merged onto that repository's own default branch, so use it " +
-        'for a card that legitimately spans repositories (a story or a task — ONE ' +
+        'into. The list does not decide completion: the item completes when every ' +
+        "pull request LINKED to it has merged onto its repository's default branch. " +
+        'Use it for a card that legitimately spans repositories (a story or a task — ONE ' +
         'SUBTASK is still ONE REPO). Same validation as create; `[]` clears the ' +
         "set. MUTUALLY EXCLUSIVE with targetRepo, which IS this list's first " +
         'element: supplying both is rejected rather than silently resolved.',

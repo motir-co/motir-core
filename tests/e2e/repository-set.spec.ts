@@ -282,17 +282,12 @@ test('a card that ships in two repositories holds until BOTH have merged', async
     await beat();
   });
 
-  // ⚠️ EACH pull request is linked WHEN IT OPENS, not both up front. Since
-  // MOTIR-3674 the title naming `twoRepo.identifier` associates nothing — an
-  // unlinked delivery resolves `no_work_item` — so a link is what makes the hold
-  // below a statement about the repository SET at all.
-  //
-  // The ordering is load-bearing and it is the product's, not the harness's.
-  // Linking BOTH before the first merge gives the card two delivery links, and
-  // the DELIVERY-set gate (MOTIR-3659) then holds it first —
-  // `deferred_incomplete_delivery_set`, a true answer to a different question
-  // than the one this receipt asks. Linking each as it opens is both what a run
-  // does and what keeps `deferred_incomplete_repo_set` the assertion.
+  // ⚠️ BOTH pull requests are linked and opened BEFORE the first merge. Since
+  // MOTIR-10135 completion counts the card's LINKED pull requests, not its
+  // repository list: a repository with no pull request no longer holds the card,
+  // so the hold below is the DELIVERY set's (`deferred_incomplete_delivery_set`,
+  // MOTIR-3659) — the second repository's pull request is open. The surface
+  // names that pull request as still open, which is what this chapter shows.
   const headRef = `subtask/${twoRepo.identifier.toLowerCase()}-repository-set`;
 
   // ── 4 — the first merge, and the HOLD. The product change. ────────────────
@@ -305,35 +300,6 @@ test('a card that ships in two repositories holds until BOTH have merged', async
       repo: E2E_REPO,
       expectOutcome: 'transitioned',
     });
-    await deliver(page, {
-      action: 'closed',
-      identifier: twoRepo.identifier,
-      number: 5101,
-      repo: E2E_REPO,
-      merged: true,
-      // THE ASSERTION THIS STORY EXISTS FOR: not `transitioned`.
-      expectOutcome: 'deferred_incomplete_repo_set',
-    });
-
-    await page.goto(`/items/${twoRepo.identifier}`);
-    // Still held — the hold, on the surface. The status it holds AT became
-    // `Implemented` with MOTIR-2999 (an open pull request whose build has not
-    // reported is delivered, not reviewable); what this chapter asserts is
-    // unchanged, which is that the card did NOT complete on the first merge.
-    await expect(statusCard(page).getByText('Implemented', { exact: true })).toBeVisible();
-    await beat();
-
-    // And the surface says WHICH repository is still outstanding — the hold plus
-    // its explanation, not just the hold.
-    const card = repositoriesCard(page);
-    await expect(card.getByText(/1 of 2 delivered/)).toBeVisible();
-    await expect(card.getByText(new RegExp(`${E2E_REPO_SECOND.name}.*outstanding`))).toBeVisible();
-    await beat();
-    await beat();
-  });
-
-  // ── 5 — the second merge completes it ─────────────────────────────────────
-  await chapter('Merge the SECOND repository — the card completes', async () => {
     await linkPr(page, {
       workItemId: twoRepo.id,
       repo: E2E_REPO_SECOND,
@@ -347,6 +313,38 @@ test('a card that ships in two repositories holds until BOTH have merged', async
       repo: E2E_REPO_SECOND,
       expectOutcome: 'noop',
     });
+    await deliver(page, {
+      action: 'closed',
+      identifier: twoRepo.identifier,
+      number: 5101,
+      repo: E2E_REPO,
+      merged: true,
+      // THE ASSERTION THIS STORY EXISTS FOR: not `transitioned`.
+      expectOutcome: 'deferred_incomplete_delivery_set',
+    });
+
+    await page.goto(`/items/${twoRepo.identifier}`);
+    // Still held — the hold, on the surface. The status it holds AT became
+    // `Implemented` with MOTIR-2999 (an open pull request whose build has not
+    // reported is delivered, not reviewable); what this chapter asserts is
+    // unchanged, which is that the card did NOT complete on the first merge.
+    await expect(statusCard(page).getByText('Implemented', { exact: true })).toBeVisible();
+    await beat();
+
+    // And the surface says WHICH pull request is still holding it — the hold plus
+    // its explanation, not just the hold. Since MOTIR-10135 that is the delivery
+    // caption (MOTIR-3660), the same shortfall the gate held on.
+    const card = repositoriesCard(page);
+    await expect(card.getByText(/1 of 2 deliveries merged/)).toBeVisible();
+    await expect(
+      card.getByText(new RegExp(`${E2E_REPO_SECOND.name}#5102 is still open`)),
+    ).toBeVisible();
+    await beat();
+    await beat();
+  });
+
+  // ── 5 — the second merge completes it ─────────────────────────────────────
+  await chapter('Merge the SECOND repository — the card completes', async () => {
     await deliver(page, {
       action: 'closed',
       identifier: twoRepo.identifier,

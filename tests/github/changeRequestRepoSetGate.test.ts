@@ -11,35 +11,31 @@ import { truncateAuthTables } from '../helpers/db';
 import { linkWorkspaceReposToProject } from '../helpers/projectRepoLink';
 import { linkPrByIdentifier } from '../helpers/prLink';
 
-// MOTIR-2729 — THE REPOSITORY-SET GATE, the third completion gate and the reason
-// the repository SET exists.
+// COMPLETION COUNTS THE LINKED PULL REQUESTS, NOT THE REPOSITORY LIST (MOTIR-10135).
 //
-// The two shipped gates both reason about change requests that EXIST:
-// `deferred_non_default_base` reads the merge in hand, `deferred_open_pr` counts
-// linked rows with `state: 'open'`. A repository whose pull request has NOT BEEN
-// OPENED writes no row at all, so the count is zero and the item completes on half
-// its work — which is what happened on 2026-08-11 (MOTIR-2664). The missing input
-// was never the count; it was the EXPECTED side.
+// MOTIR-2729 built a third completion gate on the item's repository SET: every
+// repository on `targetRepos` had to have a merged linked pull request before a
+// merge could complete the item. The list is a planning guess about where work
+// may land, and runs routinely find one listed repository needs nothing — so the
+// gate held items at In Review after every real pull request had merged
+// (MOTIR-7180, MOTIR-8811, MOTIR-9235, and MOTIR-10135's own MOTIR-10106). The
+// merge sync no longer reads the list; the delivery-set gate (MOTIR-3659), the
+// open-PR gate (MOTIR-1604) and the default-branch check (MOTIR-1873) decide.
 //
 // Real Postgres, the real webhook service, the real provider seam — no mocks (the
 // motir-core convention). What is pinned here:
 //
-//   1. Two repositories, one merged and the other with NO PR ROW AT ALL → HELD.
-//      This is the case the shipped gates structurally cannot see, and it is the
-//      card's primary test.
-//   2. The second merge completes it.
-//   3. An empty set behaves EXACTLY as it does today — the common case, and every
-//      card in the product.
-//   4. A one-repository card behaves exactly as it does today.
-//   5. The gate ORDER: a non-default base still reports `deferred_non_default_base`,
-//      and an open sibling still reports `deferred_open_pr` — the more specific
-//      diagnosis wins where both hold.
-//   6. A sibling repository whose only merged PR landed on a NON-default branch does
-//      NOT satisfy it — the composition of MOTIR-1873 and MOTIR-1604, and the reason
-//      `github_pull_request.base_ref` had to be persisted at all.
-//   7. A merged row with a NULL base (mirrored before the column existed) holds, and
-//      says so in its own words rather than naming a branch Motir does not know.
-//   8. The hold posts its note ONCE per merge and a failed note never breaks the hold.
+//   1. A three-repository item with linked pull requests in two of them completes
+//      on the second merge, with no repository-set hold and no "Still outstanding"
+//      note — the card's acceptance case, and the reproduction of MOTIR-10106.
+//   2. A two-repository item with one linked pull request completes on its merge:
+//      the other repository needed no change, and nothing waits for it.
+//   3. The same item stays held while a linked pull request is still OPEN, or when
+//      one merged onto a NON-default base — the gates that count pull requests
+//      that EXIST are unchanged. A merged row with an UNKNOWN base still holds.
+//   4. An empty set and a one-repository set complete exactly as before.
+//   5. A hold posts its note ONCE per merge however often the host redelivers.
+//   6. The mirror still records the base branch — the column those gates read.
 
 const PASSWORD = 'hunter2hunter2';
 const INSTALLATION_ID = 'inst-repo-set';
@@ -52,6 +48,7 @@ interface RepoSpec {
 
 const CORE: RepoSpec = { name: 'motir-core', providerRepoId: '7001', defaultBranch: 'main' };
 const AI: RepoSpec = { name: 'motir-ai', providerRepoId: '7002', defaultBranch: 'trunk' };
+const META: RepoSpec = { name: 'motir-meta', providerRepoId: '7003', defaultBranch: 'main' };
 
 /** A workspace + project + a work item, plus a mirrored installation carrying
  *  every repo in `repos`. The item is left at `in_progress` unless a delivery
@@ -184,68 +181,75 @@ afterAll(async () => {
   await adminDb.$disconnect();
 });
 
-describe('the repository-SET gate — the case the shipped gates cannot see', () => {
-  it('HOLDS a two-repository item when the other repository has NO pull request row at all', async () => {
+describe('completion counts the LINKED pull requests, not the repository list (MOTIR-10135)', () => {
+  it('completes a three-repository item when its two linked pull requests have merged', async () => {
     const { item } = await makeScenario(
-      'set-hold@example.com',
-      [CORE, AI],
-      ['motir-core', 'motir-ai'],
+      'set-three@example.com',
+      [CORE, AI, META],
+      ['motir-core', 'motir-ai', 'motir-meta'],
     );
     await open(item.identifier, CORE, 1);
-    // Only motir-core's PR exists. motir-ai's has never been opened, so it writes
-    // no row — `countOtherOpenByWorkItem` returns 0 and the shipped gate would
-    // complete the item here.
-    const result = await merge(item.identifier, CORE, 1);
-
-    expect(result).toMatchObject({ outcome: 'deferred_incomplete_repo_set' });
-    expect(await statusOf(item.id)).toBe('implemented');
-  });
-
-  it('NAMES the outstanding repository on the item, so the hold is not a mystery', async () => {
-    const { item } = await makeScenario(
-      'set-note@example.com',
-      [CORE, AI],
-      ['motir-core', 'motir-ai'],
-    );
-    await open(item.identifier, CORE, 1);
-    await merge(item.identifier, CORE, 1);
-
-    const bodies = await commentBodies(item.id);
-    expect(bodies).toHaveLength(1);
-    expect(bodies[0]).toContain('motir-ai');
-    // It states the condition that WILL complete the item — a hold that does not
-    // say what unblocks it reads as a stuck integration.
-    expect(bodies[0]).toContain('default branch');
-    expect(bodies[0]).not.toContain('motir-core');
-  });
-
-  it('COMPLETES when the second repository merges onto its own default branch', async () => {
-    const { item } = await makeScenario(
-      'set-complete@example.com',
-      [CORE, AI],
-      ['motir-core', 'motir-ai'],
-    );
-    await open(item.identifier, CORE, 1);
-    await merge(item.identifier, CORE, 1);
-    expect(await statusOf(item.id)).toBe('implemented');
-
     await open(item.identifier, AI, 2);
+
+    const first = await merge(item.identifier, CORE, 1);
+    // The sibling is still OPEN, so the delivery-set gate holds — unchanged.
+    expect(first).toMatchObject({ outcome: 'deferred_incomplete_delivery_set' });
+    expect(await statusOf(item.id)).toBe('implemented');
+
     // `trunk`, not `main` — the mirrored default branch, never a hard-coded guess.
     const second = await merge(item.identifier, AI, 2, 'trunk');
 
+    // motir-meta has no pull request at all, and nothing waits for it.
     expect(second).toMatchObject({ outcome: 'transitioned', toStatus: 'done' });
     expect(await statusOf(item.id)).toBe('done');
+    const bodies = await commentBodies(item.id);
+    expect(bodies.some((b) => b.includes('Still outstanding'))).toBe(false);
+    expect(bodies.some((b) => b.includes('motir-meta'))).toBe(false);
   });
 
-  it('does NOT count a sibling repository’s merge onto a NON-default branch', async () => {
-    // The composition of MOTIR-1873 and MOTIR-1604: motir-ai's change request
-    // merged, truthfully, onto a branch that is not its trunk. `merged: true`
-    // forever, no path to `trunk`. Without the recorded base this would read as
-    // satisfied and the item would complete on a stranded merge.
+  it('completes a two-repository item on the merge of its ONE linked pull request', async () => {
     const { item } = await makeScenario(
-      'set-stranded@example.com',
+      'set-one-linked@example.com',
       [CORE, AI],
       ['motir-core', 'motir-ai'],
+    );
+    await open(item.identifier, CORE, 1);
+    // motir-ai's pull request was never opened — the run found it needed no
+    // change. Before MOTIR-10135 this merge held the item and named motir-ai.
+    const result = await merge(item.identifier, CORE, 1);
+
+    expect(result).toMatchObject({ outcome: 'transitioned', toStatus: 'done' });
+    expect(await statusOf(item.id)).toBe('done');
+    expect(await commentBodies(item.id)).toEqual([]);
+  });
+});
+
+describe('the gates that count pull requests that EXIST still hold', () => {
+  it('holds while a linked pull request in another repository is still OPEN', async () => {
+    const { item } = await makeScenario(
+      'set-order-open@example.com',
+      [CORE, AI, META],
+      ['motir-core', 'motir-ai', 'motir-meta'],
+    );
+    await open(item.identifier, CORE, 1);
+    await open(item.identifier, AI, 2);
+    const result = await merge(item.identifier, CORE, 1);
+
+    // `deferred_incomplete_delivery_set` names the still-open pull request and
+    // says what would complete the item (`work-item-delivery-links.md` Q3).
+    expect(result).toMatchObject({ outcome: 'deferred_incomplete_delivery_set' });
+    expect((await commentBodies(item.id)).at(-1)).toContain('Still open');
+    expect(await statusOf(item.id)).toBe('implemented');
+  });
+
+  it('holds when a linked pull request merged onto a NON-default branch', async () => {
+    // The composition of MOTIR-1873 and MOTIR-1604: motir-ai's change request
+    // merged, truthfully, onto a branch that is not its trunk. `merged: true`
+    // forever, no path to `trunk`.
+    const { item } = await makeScenario(
+      'set-stranded@example.com',
+      [CORE, AI, META],
+      ['motir-core', 'motir-ai', 'motir-meta'],
     );
     await open(item.identifier, AI, 2, 'feature/stack-base');
     const stranded = await merge(item.identifier, AI, 2, 'feature/stack-base');
@@ -254,14 +258,6 @@ describe('the repository-SET gate — the case the shipped gates cannot see', ()
     await open(item.identifier, CORE, 1);
     const result = await merge(item.identifier, CORE, 1);
 
-    // ⚠️ The DIAGNOSIS moved with MOTIR-3674 and the design is unchanged. Both
-    // pull requests are LINKED now (the parse that used to associate them is
-    // gone), so each carries a `work_item_delivery` row and the delivery-set
-    // gate — more specific, evaluated first (`work-item-delivery-links.md` Q3)
-    // — answers before the repository-set gate is asked. Its note names the same
-    // fact in the pull request's own terms: this one merged somewhere that is
-    // not its repository's trunk. The HOLD is identical, which is the property
-    // this case exists for.
     expect(result).toMatchObject({ outcome: 'deferred_incomplete_delivery_set' });
     expect(await statusOf(item.id)).toBe('implemented');
     expect((await commentBodies(item.id)).at(-1)).toContain('Merged, but not onto the trunk');
@@ -274,6 +270,8 @@ describe('the repository-SET gate — the case the shipped gates cannot see', ()
       ['motir-core', 'motir-ai'],
     );
     await open(item.identifier, AI, 2);
+    await open(item.identifier, CORE, 1);
+    // motir-core is still open, so this merge is held whatever its base says.
     await merge(item.identifier, AI, 2, 'trunk');
     // Put the row back into the shape a PR mirrored BEFORE `base_ref` existed has.
     await adminDb.githubPullRequest.updateMany({
@@ -281,25 +279,35 @@ describe('the repository-SET gate — the case the shipped gates cannot see', ()
       data: { baseRef: null },
     });
 
-    await open(item.identifier, CORE, 1);
     const result = await merge(item.identifier, CORE, 1);
 
-    // Same gate shift as the case above (MOTIR-3674): linked deliveries mean the
-    // delivery-set gate answers first. It carries the SAME unknown-base wording,
-    // which is what this case is really pinning.
     expect(result).toMatchObject({ outcome: 'deferred_incomplete_delivery_set' });
     expect(await statusOf(item.id)).toBe('implemented');
     const note = (await commentBodies(item.id)).at(-1)!;
-    // UNKNOWN in both directions: it must not claim the repository is outstanding
-    // (the merge may well have reached the trunk), and it must not claim a branch.
+    // UNKNOWN in both directions: it must not claim the work is outstanding (the
+    // merge may well have reached the trunk), and it must not claim a branch.
     expect(note).toContain('No record of which branch');
     expect(note).toContain('motir-ai');
     expect(note).not.toContain('Still outstanding');
   });
+
+  it('a NON-default merge still reports deferred_non_default_base', async () => {
+    const { item } = await makeScenario(
+      'set-order-base@example.com',
+      [CORE, AI],
+      ['motir-core', 'motir-ai'],
+    );
+    await open(item.identifier, CORE, 1, 'release/1.x');
+    const result = await merge(item.identifier, CORE, 1, 'release/1.x');
+
+    // A merge with no path to the trunk is not completion at all.
+    expect(result).toMatchObject({ outcome: 'deferred_non_default_base' });
+    expect(await statusOf(item.id)).toBe('implemented');
+  });
 });
 
-describe('the gate ABSTAINS wherever the product behaves as it does today', () => {
-  it('an item carrying NO repositories completes on the first merge, exactly as before', async () => {
+describe('an empty or one-repository set behaves exactly as before', () => {
+  it('an item carrying NO repositories completes on the first merge', async () => {
     const { item } = await makeScenario('set-empty@example.com', [CORE], []);
     await open(item.identifier, CORE, 1);
     const result = await merge(item.identifier, CORE, 1);
@@ -317,43 +325,9 @@ describe('the gate ABSTAINS wherever the product behaves as it does today', () =
     expect(result).toMatchObject({ outcome: 'transitioned', toStatus: 'done' });
     expect(await statusOf(item.id)).toBe('done');
   });
-
-  it('a NON-default merge still reports deferred_non_default_base — checked BEFORE this gate', async () => {
-    const { item } = await makeScenario(
-      'set-order-base@example.com',
-      [CORE, AI],
-      ['motir-core', 'motir-ai'],
-    );
-    await open(item.identifier, CORE, 1, 'release/1.x');
-    const result = await merge(item.identifier, CORE, 1, 'release/1.x');
-
-    // A merge with no path to the trunk is not PARTIAL completion, it is none —
-    // so the stronger statement wins even though the set is also incomplete.
-    expect(result).toMatchObject({ outcome: 'deferred_non_default_base' });
-  });
-
-  it('an OPEN sibling still reports deferred_open_pr — the more specific diagnosis wins', async () => {
-    const { item } = await makeScenario(
-      'set-order-open@example.com',
-      [CORE, AI],
-      ['motir-core', 'motir-ai'],
-    );
-    await open(item.identifier, CORE, 1);
-    await open(item.identifier, AI, 2);
-    const result = await merge(item.identifier, CORE, 1);
-
-    // ⚠️ THREE gates hold here now (MOTIR-3674). With both pull requests linked,
-    // `deferred_incomplete_delivery_set` is the most specific of them and is
-    // evaluated first: it names the still-open pull request AND says what would
-    // complete the item, which is what `deferred_open_pr` was preferred for over
-    // "motir-ai has no merge". The ordering is `work-item-delivery-links.md` Q3's.
-    expect(result).toMatchObject({ outcome: 'deferred_incomplete_delivery_set' });
-    expect((await commentBodies(item.id)).at(-1)).toContain('Still open');
-    expect(await statusOf(item.id)).toBe('implemented');
-  });
 });
 
-describe('the hold is idempotent under redelivery', () => {
+describe('a hold is idempotent under redelivery', () => {
   it('posts its note ONCE per merge, however many times the host redelivers', async () => {
     const { item } = await makeScenario(
       'set-redeliver@example.com',
@@ -361,17 +335,18 @@ describe('the hold is idempotent under redelivery', () => {
       ['motir-core', 'motir-ai'],
     );
     await open(item.identifier, CORE, 1);
+    await open(item.identifier, AI, 2);
     await merge(item.identifier, CORE, 1);
     await merge(item.identifier, CORE, 1);
     const third = await merge(item.identifier, CORE, 1);
 
-    expect(third).toMatchObject({ outcome: 'deferred_incomplete_repo_set' });
+    expect(third).toMatchObject({ outcome: 'deferred_incomplete_delivery_set' });
     expect(await commentBodies(item.id)).toHaveLength(1);
     expect(await statusOf(item.id)).toBe('implemented');
   });
 });
 
-describe('the mirror RECORDS the base — the column the gate reads', () => {
+describe('the mirror RECORDS the base — the column the gates read', () => {
   it('persists the base branch of every delivery, on open and on merge', async () => {
     const { item } = await makeScenario('set-baseref@example.com', [CORE, AI], ['motir-core']);
     await open(item.identifier, CORE, 1);

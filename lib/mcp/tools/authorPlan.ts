@@ -451,8 +451,8 @@ const proposedFieldsSchema = z
       .optional()
       .describe(
         'EVERY repository this item ships in, ORDERED — the first element is the PRIMARY dispatch ' +
-          'routes to, and the item does not complete until every one of them has a merged pull ' +
-          'request. Bare names or the `owner/name` form, validated against the PROJECT’s repository ' +
+          'routes to. The list does not decide completion: the item completes when every pull ' +
+          'request LINKED to it has merged. Bare names or the `owner/name` form, validated against the PROJECT’s repository ' +
           'domain at approve by the same resolver `create_work_item` uses. MUTUALLY EXCLUSIVE with ' +
           '`targetRepo` and `targetRepositories` — one field, three spellings — and supplying two is ' +
           'rejected here rather than silently resolved. `[]` is the empty set.',

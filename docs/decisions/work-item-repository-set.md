@@ -1328,6 +1328,29 @@ merge.
   published CLIs, so a new member would fail every older client. To a dispatched agent the two mean
   the same thing: nothing to do in that repository.
 
+## Amendment 2026-10-30 (MOTIR-10135) — completion follows the LINKED pull requests, not the repository set
+
+The repository-set gate held a card until **every repository on it** had seen a merge. A card
+pinned to `[A, B, C]` whose work shipped in A and B, each through a linked pull request merged
+onto its trunk, was held at `deferred_incomplete_repo_set` and got a _Still outstanding_ comment
+naming C, although nothing would ever merge there. The list is a planning guess about where the
+work will land; the linked pull requests are the record of where it did.
+
+- **The merge path no longer asks the repository-set question.** `changeRequestStatusSync`
+  decides with three gates: no other linked change request open (MOTIR-1604), this merge landed
+  on the default branch (MOTIR-1873), and every linked delivery landed on its own trunk
+  (MOTIR-3659). `deferred_incomplete_repo_set` and its merge comment are gone from that path.
+- **The re-check asks the same question.** `repoSetCompletionService.reevaluateItem` holds on an
+  open linked change request, then — once at least one linked delivery has merged onto its
+  trunk — on the delivery set only (`held_incomplete_delivery_set`). An item with **no** landed
+  delivery still falls back to the repository-set classifier, so a set edit or a no-PR
+  repository can still be re-checked, and an empty set still abstains.
+- **`targetRepos` describes where work ships; it does not decide completion.** The MCP
+  descriptions of `create_work_item`, `update_work_item` and `author_plan` say so. A repository
+  left on the list that saw no change misreports the card, and the run records why.
+- The repository panel's delivery states (§ the six, then seven, states above) are unchanged —
+  they remain a reader's view, not a gate.
+
 ## Consequences
 
 - The completion gate acquires an EXPECTED side, which is the whole point: a card can

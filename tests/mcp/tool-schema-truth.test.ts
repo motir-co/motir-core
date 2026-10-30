@@ -253,3 +253,26 @@ describe('what the schemas actually carry — the three facts a reader needs', (
     expect(list.items).toBeDefined();
   });
 });
+
+describe('`targetRepos` does not promise to wait for every repository (MOTIR-10135)', () => {
+  // Completion follows the pull requests LINKED to the item, each merged onto
+  // its repository's default branch; the list records where work ships and no
+  // longer holds the item for a repository that needed no change. A schema
+  // that still told an agent otherwise would have it open empty pull requests
+  // to "complete" a repository.
+  const SCHEMAS_WITH_TARGET_REPOS = [
+    'create_work_item',
+    'update_work_item',
+    'add_plan_items',
+  ] as const;
+
+  it.each(SCHEMAS_WITH_TARGET_REPOS)(
+    '%s says completion follows the linked pull requests',
+    (tool) => {
+      const text = JSON.stringify(MCP_TOOL_INPUT_SCHEMAS[tool]);
+      expect(text).not.toMatch(/does not complete until EVERY repository/i);
+      expect(text).not.toMatch(/until EVERY repository on the list/i);
+      expect(text).toContain('every pull request LINKED to it');
+    },
+  );
+});
