@@ -4316,10 +4316,12 @@
         "rolledBack": "Wycofane"
       },
       "trigger": {
+        "merge": "Merge #{number}",
         "mergeDefault": "Merge do domyślnej gałęzi",
         "redeploy": "Ponowne wdrożenie · zmieniono ustawienia produkcji",
         "rollback": "Przywrócone przez wycofanie · {name}",
         "rollbackUnnamed": "Przywrócone przez wycofanie",
+        "ref": "Wdrożenie {ref} · {name}",
         "refUnnamed": "Wdrożenie {ref}"
       },
       "address": {

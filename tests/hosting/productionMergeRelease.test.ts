@@ -249,6 +249,8 @@ describe('a completed production-image run for a push to main', () => {
       workspaceId: fx.workspaceId,
       projectRepositoryId: repo.projectRepositoryId,
       headSha: SHA_A,
+      commitSubject: 'Show the delivery estimate on the basket',
+      pullRequestNumber: 48,
       conclusion: 'success',
       runId: '9182736450',
       runAttempt: 1,
@@ -265,6 +267,8 @@ describe('a completed production-image run for a push to main', () => {
       commitSha: SHA_A,
       artifactRef: `registry.fly.io/${repo.appName}:${SHA_A}`,
       cause: 'merge',
+      commitSubject: 'Show the delivery estimate on the basket',
+      pullRequestNumber: 48,
     });
     const [release] = await releasesOf(repo.projectRepositoryId);
     expect(release).toMatchObject({
@@ -272,6 +276,9 @@ describe('a completed production-image run for a push to main', () => {
       state: 'live',
       cause: 'merge',
       artifactRef: `registry.fly.io/${repo.appName}:${SHA_A}`,
+      commitSubject: 'Show the delivery estimate on the basket',
+      pullRequestNumber: 48,
+      requestedById: null,
     });
     expect((await pointers(repo.projectRepositoryId)).currentReleaseId).toBe(release!.id);
     expect(logged.join('\n')).not.toMatch(SECRETISH);
@@ -294,7 +301,12 @@ describe('a completed production-image run for a push to main', () => {
       const failed = (await releasesOf(repo.projectRepositoryId)).find(
         (r) => r.commitSha === SHA_B,
       );
-      expect(failed).toMatchObject({ state: 'failed', failureReason: `build ${conclusion}` });
+      expect(failed).toMatchObject({
+        state: 'failed',
+        failureReason: `build ${conclusion}`,
+        commitSubject: 'Show the delivery estimate on the basket',
+        pullRequestNumber: 48,
+      });
       expect(await pointers(repo.projectRepositoryId)).toEqual(before);
       expect(hosting().calls.filter((c) => c.operation === 'deploy')).toHaveLength(deploysBefore);
     },

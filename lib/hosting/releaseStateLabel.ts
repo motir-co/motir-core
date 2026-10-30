@@ -59,10 +59,12 @@ export interface ReleaseTriggerLabel {
   kind: ReleaseTriggerKind;
   /** Under `settings.production`. */
   labelKey:
+    | 'trigger.merge'
     | 'trigger.mergeDefault'
     | 'trigger.redeploy'
     | 'trigger.rollback'
     | 'trigger.rollbackUnnamed'
+    | 'trigger.ref'
     | 'trigger.refUnnamed';
   values: Record<string, string>;
 }
@@ -72,12 +74,15 @@ export interface ReleaseTriggerLabel {
  * restored reads `Restored by rollback · <name>` whatever first made it: the
  * restore is the latest thing that put it live. Otherwise its cause decides.
  *
- * A release stores neither the pull request a merge came from nor who asked for
- * a ref, so the merge and ref lines are the design's sentences without them
- * (MOTIR-10037's recorded deviation).
+ * A merge says its pull request and a ref says who asked for it (MOTIR-10103);
+ * a release that does not know them — one made before they were stored, or a
+ * merge whose commit names no pull request — says the sentence without them.
  */
 export function releaseTriggerLabel(
-  release: Pick<HostedReleaseDto, 'cause' | 'ref' | 'restoredBy'>,
+  release: Pick<
+    HostedReleaseDto,
+    'cause' | 'ref' | 'restoredBy' | 'pullRequestNumber' | 'requestedBy'
+  >,
 ): ReleaseTriggerLabel {
   if (release.restoredBy) {
     return {
@@ -88,13 +93,25 @@ export function releaseTriggerLabel(
   }
   switch (release.cause) {
     case 'merge':
-      return { kind: 'merge', labelKey: 'trigger.mergeDefault', values: {} };
+      return release.pullRequestNumber
+        ? {
+            kind: 'merge',
+            labelKey: 'trigger.merge',
+            values: { number: String(release.pullRequestNumber) },
+          }
+        : { kind: 'merge', labelKey: 'trigger.mergeDefault', values: {} };
     case 'config_change':
       return { kind: 'redeploy', labelKey: 'trigger.redeploy', values: {} };
     case 'rollback':
       return { kind: 'rollback', labelKey: 'trigger.rollbackUnnamed', values: {} };
     case 'ref':
-      return { kind: 'ref', labelKey: 'trigger.refUnnamed', values: { ref: release.ref ?? '' } };
+      return release.requestedBy
+        ? {
+            kind: 'ref',
+            labelKey: 'trigger.ref',
+            values: { ref: release.ref ?? '', name: release.requestedBy.name },
+          }
+        : { kind: 'ref', labelKey: 'trigger.refUnnamed', values: { ref: release.ref ?? '' } };
   }
 }
 

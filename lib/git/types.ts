@@ -420,6 +420,11 @@ export interface NormalizedProductionImageRun {
   runId: string;
   /** The run attempt; a re-run of the workflow increments it. */
   runAttempt: number;
+  /** The head commit's subject as the panel shows it, null when the delivery
+   *  carried no message (MOTIR-10103). */
+  headCommitSubject: string | null;
+  /** The pull request the head commit merged, when its message names one. */
+  pullRequestNumber: number | null;
 }
 
 /** A QUEUED CI job, normalized across providers — consumed by the runner-fleet

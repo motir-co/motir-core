@@ -9,6 +9,7 @@ import type { HostedReleaseDto } from '@/lib/dto/hostedApplications';
 import { releaseStateLabel } from '@/lib/hosting/releaseStateLabel';
 import {
   CommitLabel,
+  CommitSubject,
   ReleaseFailureReason,
   ReleaseStatePill,
   ReleaseTime,
@@ -84,6 +85,7 @@ function ReleaseRow({ release, address }: { release: HostedReleaseDto; address: 
       <div className="flex items-center justify-between gap-3">
         <span className="flex min-w-0 items-baseline gap-2">
           <CommitLabel sha={release.commitSha} />
+          <CommitSubject subject={release.commitSubject} />
         </span>
         <ReleaseStatePill release={release} />
       </div>

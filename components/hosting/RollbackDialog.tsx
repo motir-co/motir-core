@@ -7,7 +7,7 @@ import { Modal } from '@/components/ui/Modal';
 import type { HostedReleaseDto } from '@/lib/dto/hostedApplications';
 import type { ProductionRefusalKey } from '@/lib/hosting/productionPanelClient';
 import { shortCommit } from '@/lib/hosting/releaseStateLabel';
-import { AbsoluteReleaseTime, CommitLabel } from '@/components/hosting/releaseParts';
+import { AbsoluteReleaseTime, CommitLabel, CommitSubject } from '@/components/hosting/releaseParts';
 
 // The ROLL BACK CONFIRMATION (Story MOTIR-9797 · MOTIR-10037, design MOTIR-10024
 // panels 8–10): an alert dialog naming the release being LEFT and the one it
@@ -100,6 +100,7 @@ function ReleaseTerm({ label, release }: { label: string; release: HostedRelease
       <dt className="font-sans text-xs font-medium text-(--el-text-secondary)">{label}</dt>
       <dd className="flex items-baseline gap-2">
         <CommitLabel sha={release.commitSha} />
+        <CommitSubject subject={release.commitSubject} truncate={false} />
         <AbsoluteReleaseTime release={release} />
       </dd>
     </div>

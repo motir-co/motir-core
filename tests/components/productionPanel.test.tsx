@@ -35,6 +35,9 @@ function release(overrides: Partial<HostedReleaseDto> = {}): HostedReleaseDto {
     applicationId: 'app-1',
     commitSha: sha,
     ref: null,
+    commitSubject: null,
+    pullRequestNumber: null,
+    requestedBy: null,
     cause: 'merge',
     state: 'replaced',
     artifactRef: null,
@@ -133,6 +136,50 @@ describe('the current release card', () => {
     expect(link.getAttribute('rel')).toBe('noopener noreferrer');
     expect(link.textContent).toContain('(opens in a new tab)');
     expect(screen.queryByTestId('production-no-address-note')).toBeNull();
+  });
+
+  it('shows the commit subject and the pull request a merge came from (MOTIR-10103)', async () => {
+    const live = release({
+      state: 'live',
+      commitSubject: 'Show the delivery estimate on the basket',
+      pullRequestNumber: 48,
+    });
+    const previous = release({
+      state: 'replaced',
+      commitSubject: 'Add a column for the gift note',
+      pullRequestNumber: 47,
+    });
+    const ref = release({
+      state: 'replaced',
+      cause: 'ref',
+      ref: 'v1.4.0',
+      requestedBy: { id: 'u2', name: 'Sam Lee' },
+    });
+    render(
+      panel({ currentRelease: live, previousRelease: previous, releases: [live, previous, ref] }),
+    );
+    const card = screen.getByTestId('production-current-release');
+    const subject = within(card).getByTestId('production-commit-subject');
+    expect(subject.textContent).toBe('Show the delivery estimate on the basket');
+    expect(subject.getAttribute('title')).toBe('Show the delivery estimate on the basket');
+    expect(within(card).getByTestId('production-trigger').textContent).toBe('Merge of #48');
+
+    const rows = screen.getAllByTestId('production-release-row');
+    expect(within(rows[1]!).getByTestId('production-commit-subject').textContent).toBe(
+      'Add a column for the gift note',
+    );
+    expect(within(rows[1]!).getByTestId('production-trigger').textContent).toBe('Merge of #47');
+    // A release that does not know its subject shows the commit alone.
+    expect(within(rows[2]!).queryByTestId('production-commit-subject')).toBeNull();
+    expect(within(rows[2]!).getByTestId('production-trigger').textContent).toBe(
+      'Deploy of v1.4.0 · Sam Lee',
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Roll back' }));
+    await flush();
+    const terms = within(screen.getByRole('alertdialog')).getAllByRole('definition');
+    expect(terms[0]!.textContent).toContain('Show the delivery estimate on the basket');
+    expect(terms[1]!.textContent).toContain('Add a column for the gift note');
   });
 
   it('copies the address and reads Copied for two seconds, announced politely', async () => {
