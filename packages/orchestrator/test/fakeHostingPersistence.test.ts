@@ -239,6 +239,19 @@ describe('the store API', () => {
     expect(takeArmedFakeHostingFailure('aws:', 'destroy')).toBe('other');
   });
 
+  it('refuses a key or an operation that would address the prototype', () => {
+    saveFakeHostingSlice(KEY, emptyFakeHostingSlice());
+    for (const bad of ['__proto__', 'constructor', 'prototype']) {
+      expect(() => saveFakeHostingSlice(bad, emptyFakeHostingSlice())).toThrow(/not a fake/);
+      expect(() => readFakeHostingSlice(bad)).toThrow(/not a fake/);
+      expect(() => resetFakeHostingSnapshot(bad)).toThrow(/not a fake/);
+      expect(() => armFakeHostingFailure(bad, 'destroy', 'x')).toThrow(/not a fake/);
+      expect(() => takeArmedFakeHostingFailure(bad, 'destroy')).toThrow(/not a fake/);
+      expect(() => armFakeHostingFailure(KEY, bad as 'destroy', 'x')).toThrow(/not a fake/);
+    }
+    expect(({} as Record<string, unknown>)['polluted']).toBeUndefined();
+  });
+
   it('touches no file with the seam off', () => {
     delete process.env[FAKE_HOSTING_STATE_PATH_ENV];
     expect(fakeHostingStatePath()).toBeNull();

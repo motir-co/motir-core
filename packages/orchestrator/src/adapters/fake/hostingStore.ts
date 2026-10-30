@@ -100,6 +100,18 @@ function revive(slice: FakeHostingSlice): FakeHostingSlice {
   return slice;
 }
 
+/** The names a store key may never be: each one reaches `Object.prototype`
+ *  through the plain records the store parses its JSON into. */
+const UNSAFE_KEYS: ReadonlySet<string> = new Set(['__proto__', 'constructor', 'prototype']);
+
+/** `key`, refused when it would address the prototype rather than a slice. A
+ *  port key is `<target>:<prefix>` and never one of these; the check exists so a
+ *  caller passing anything else cannot write through the store's records. */
+function safeKey(key: string): string {
+  if (UNSAFE_KEYS.has(key)) throw new Error(`"${key}" is not a fake hosting store key`);
+  return key;
+}
+
 /** What the file says about `key`: its slice, `null` when nothing is stored for
  *  it (no file, or no slice — another process reset it), or `'torn'` when the
  *  file cannot be read, so a port keeps what it has. `null` with the seam off. */
@@ -108,7 +120,7 @@ export function readFakeHostingSlice(key: string): FakeHostingSlice | null | 'to
   if (!path || !existsSync(path)) return null;
   const store = readJson<Record<string, FakeHostingSlice>>(path);
   if (!store) return 'torn';
-  const slice = store[key];
+  const slice = store[safeKey(key)];
   return slice ? revive(slice) : null;
 }
 
@@ -122,7 +134,10 @@ export function loadFakeHostingSlice(key: string): FakeHostingSlice | null {
 export function saveFakeHostingSlice(key: string, slice: FakeHostingSlice): void {
   const path = fakeHostingStatePath();
   if (!path) return;
-  writeJson(path, { ...readJson<Record<string, FakeHostingSlice>>(path), [key]: slice });
+  writeJson(path, {
+    ...readJson<Record<string, FakeHostingSlice>>(path),
+    [safeKey(key)]: slice,
+  });
 }
 
 /** What the store holds for `key` — for a process that holds only the file. */
@@ -156,12 +171,12 @@ export function resetFakeHostingSnapshot(key: string): void {
   if (!path || !sidecar) return;
   const store = readJson<Record<string, FakeHostingSlice>>(path);
   if (store) {
-    delete store[key];
+    delete store[safeKey(key)];
     writeJson(path, store);
   }
   const armed = readJson<ArmedFailures>(sidecar);
   if (armed) {
-    delete armed[key];
+    delete armed[safeKey(key)];
     writeJson(sidecar, armed);
   }
 }
@@ -174,8 +189,9 @@ export function armFakeHostingFailure(
 ): void {
   const sidecar = failuresPath();
   if (!sidecar) return;
+  const at = safeKey(key);
   const armed = readJson<ArmedFailures>(sidecar) ?? {};
-  writeJson(sidecar, { ...armed, [key]: { ...armed[key], [operation]: detail } });
+  writeJson(sidecar, { ...armed, [at]: { ...armed[at], [safeKey(operation)]: detail } });
 }
 
 /** Take (consume) the failure armed for `key`'s `operation`: its detail, or null. */
@@ -185,10 +201,12 @@ export function takeArmedFakeHostingFailure(
 ): string | null {
   const sidecar = failuresPath();
   if (!sidecar) return null;
+  const at = safeKey(key);
+  const op = safeKey(operation) as FakeHostingFailure;
   const armed = readJson<ArmedFailures>(sidecar);
-  const detail = armed?.[key]?.[operation];
+  const detail = armed?.[at]?.[op];
   if (!armed || detail === undefined) return null;
-  delete armed[key]![operation];
+  delete armed[at]![op];
   writeJson(sidecar, armed);
   return detail;
 }
