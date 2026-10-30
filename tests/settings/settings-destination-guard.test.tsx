@@ -223,8 +223,9 @@ describe('the refusal DECISION, over every destination × role (MOTIR-2469)', ()
   // MOTIR-6995 — bar ONE room: Hosted agent opens on `work_item:edit`, which a
   // member holds, so a member stands in it read-only (design MOTIR-6991).
   // MOTIR-8830 — and bar Translation, whose view key is `project:browse`.
-  it('a MEMBER is refused everything but Environment, Hosted agent and Translation, each with its OWN copy key', () => {
-    const admitted = new Set(['environment', 'hosted-agent', 'translation']);
+  // MOTIR-10037 — and bar Production, whose view key is `project:browse` too.
+  it('a MEMBER is refused everything but Environment, Production, Hosted agent and Translation, each with its OWN copy key', () => {
+    const admitted = new Set(['environment', 'production', 'hosted-agent', 'translation']);
     const refused = PROJECT_SETTINGS_NAV.filter((entry) => !admitted.has(entry.id));
     const keys = refused.map(
       (entry) => resolveSettingsRefusal(entry.id, BUILTIN_ROLE_PERMISSIONS.member)!.descriptionKey,
@@ -235,6 +236,8 @@ describe('the refusal DECISION, over every destination × role (MOTIR-2469)', ()
     expect(resolveSettingsRefusal('translation', BUILTIN_ROLE_PERMISSIONS.member)).toBeNull();
     // Environment's view key is `project:browse` (MOTIR-9966): a member reads it.
     expect(resolveSettingsRefusal('environment', BUILTIN_ROLE_PERMISSIONS.member)).toBeNull();
+    // So is Production's (MOTIR-10037).
+    expect(resolveSettingsRefusal('production', BUILTIN_ROLE_PERMISSIONS.member)).toBeNull();
     // A VIEWER holds `project:browse` too, so it is admitted to Translation as well.
     expect(resolveSettingsRefusal('translation', BUILTIN_ROLE_PERMISSIONS.viewer)).toBeNull();
     // Its refusal copy still exists, for the actor who lacks the view key.

@@ -1954,6 +1954,7 @@
       "rules": "Regole",
       "repositories": "Repository",
       "environment": "Ambiente",
+      "production": "Produzione",
       "monitoring": "Monitoraggio",
       "approvals": "Approvazioni",
       "bugs": "Bug"
@@ -4122,7 +4123,8 @@
         "translation": "Se i contenuti di lavoro di questo progetto vengono tradotti per ogni lettore è mostrato alle persone che possono leggere gli elementi di lavoro del progetto. Chiedi a un amministratore del progetto se hai bisogno di vederlo.",
         "automation": "L’automazione del progetto è gestita dagli amministratori del progetto. Chiedi a un amministratore se devi modificare una regola.",
         "monitoring": "Il collegamento al sistema di monitoraggio degli errori di questo progetto è gestito da chi può gestire le integrazioni. Chiedi a un amministratore del progetto se Sentry va collegato o ricollegato.",
-        "environment": "I valori di ambiente di un repository sono mostrati alle persone che possono consultare questo progetto. Chiedi a un amministratore del progetto se hai bisogno di vederli."
+        "environment": "I valori di ambiente di un repository sono mostrati alle persone che possono consultare questo progetto. Chiedi a un amministratore del progetto se hai bisogno di vederli.",
+        "production": "I rilasci di un repository sono mostrati alle persone che possono consultare questo progetto. Chiedi a un amministratore del progetto se hai bisogno di vederli."
       }
     },
     "organization": {
@@ -4283,6 +4285,99 @@
         "title": "Repository non trovato",
         "body": "Motir non conserva alcun ambiente per questo repository. Scegli uno dei repository del progetto ospitati da Motir.",
         "back": "Torna ad Ambiente"
+      }
+    },
+    "production": {
+      "title": "Produzione",
+      "lede": "Cosa è online per ogni app di questo progetto, cosa hanno fatto gli ultimi merge e come annullare un rilascio difettoso.",
+      "repositoryLabel": "Repository",
+      "role": {
+        "web": "App web",
+        "api": "API",
+        "mobile": "App mobile",
+        "shared": "Codice condiviso",
+        "infra": "Infrastruttura",
+        "other": "Altro"
+      },
+      "current": {
+        "eyebrow": "In produzione"
+      },
+      "state": {
+        "building": "In build",
+        "live": "Online",
+        "failed": "Non riuscito",
+        "replaced": "Sostituito",
+        "rolledBack": "Annullato"
+      },
+      "trigger": {
+        "mergeDefault": "Merge nel branch predefinito",
+        "redeploy": "Nuovo deploy · impostazioni di produzione modificate",
+        "rollback": "Ripristinato con rollback · {name}",
+        "rollbackUnnamed": "Ripristinato con rollback",
+        "refUnnamed": "Deploy di {ref}"
+      },
+      "address": {
+        "newTab": "(si apre in una nuova finestra)",
+        "copy": "Copia",
+        "copied": "Copiato",
+        "copyAria": "Copia {address}",
+        "none": "Ancora nessun indirizzo: rivendica un indirizzo motir.site per lo spazio di lavoro in <link>Indirizzo pubblico</link>."
+      },
+      "rollback": {
+        "action": "Esegui rollback",
+        "helper": "Riporta la produzione al rilascio precedente a questo.",
+        "unavailable": "Non c’è ancora un rilascio precedente a cui tornare."
+      },
+      "history": {
+        "heading": "Cronologia dei rilasci",
+        "more": "Mostra altri rilasci",
+        "moreError": "Impossibile caricare altri rilasci. Riprova."
+      },
+      "failedNewer": "Il rilascio più recente non è riuscito, quindi ciò che è in servizio non è cambiato. {commit} è ancora online.",
+      "reason": {
+        "build": "La build non è riuscita prima del deploy.",
+        "migration": "La migrazione non è riuscita.",
+        "migrationExit": "La migrazione non è riuscita con codice di uscita {code}.",
+        "migrationTimedOut": "La migrazione è andata in timeout.",
+        "superseded": "Era in corso un altro rilascio, quindi questo non è mai partito.",
+        "deploy": "Il deploy non è riuscito prima di ricevere traffico."
+      },
+      "dialog": {
+        "title": "Eseguire il rollback di {repository}?",
+        "leaving": "Si lascia",
+        "returning": "Si torna a",
+        "body": "La produzione torna al codice e ai valori di ambiente di quel rilascio su {address}. Lo schema del database non viene ripristinato: le migrazioni eseguite dal rilascio più recente restano applicate.",
+        "bodyNoAddress": "La produzione torna al codice e ai valori di ambiente di quel rilascio. Lo schema del database non viene ripristinato: le migrazioni eseguite dal rilascio più recente restano applicate.",
+        "confirm": "Esegui rollback",
+        "submitting": "Rollback in corso…",
+        "cancel": "Annulla",
+        "error": "Il rollback non è stato completato. {commit} è ancora in produzione. Riprova.",
+        "retry": "Riprova"
+      },
+      "refusal": {
+        "noPreviousRelease": "Non c’è un rilascio precedente a cui tornare.",
+        "releaseInProgress": "C’è un rilascio in corso. Esegui il rollback quando è terminato.",
+        "conflict": "La produzione è cambiata durante il rollback. Chiudi questa finestra e controlla cosa è online ora.",
+        "forbidden": "Solo gli amministratori del progetto possono eseguire il rollback.",
+        "notFound": "Questo repository non è più disponibile per te."
+      },
+      "readOnly": {
+        "note": "Puoi vedere tutti i rilasci. Solo gli amministratori del progetto possono eseguire il rollback."
+      },
+      "empty": {
+        "title": "Ancora niente in produzione",
+        "body": "Esegui il merge di una pull request in main e Motir ne fa la build e la mette online qui, con il suo indirizzo."
+      },
+      "loading": "Caricamento dei rilasci…",
+      "loadError": {
+        "title": "Impossibile caricare i rilasci",
+        "body": "La produzione non è interessata. Riprova tra un momento."
+      },
+      "retry": "Riprova",
+      "notFound": {
+        "title": "Repository non trovato",
+        "body": "Motir gestisce la produzione solo per i repository che ospita. Scegli uno dei repository di questo progetto.",
+        "back": "Torna a Produzione"
       }
     },
     "workspaceAddress": {

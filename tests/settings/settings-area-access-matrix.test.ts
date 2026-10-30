@@ -298,12 +298,12 @@ describe('settings-area role-gating matrix — nav visibility (driven from the r
           // MOTIR-8830 — and a fourth: Translation's view key is `project:browse`, so
           // anyone who can browse sees it, read-only, in registry order.
           // MOTIR-9966 — and Environment, whose view key is also `project:browse`
-          // (General, so it leads).
+          // (General, so it leads). MOTIR-10037 — and Production, right after it.
           if (held.has('project:administer')) {
             expect(visible).toEqual(PROJECT_SETTINGS_NAV);
           } else {
             expect(visible.map((e) => e.id)).toEqual([
-              ...(held.has('project:browse') ? ['environment'] : []),
+              ...(held.has('project:browse') ? ['environment', 'production'] : []),
               ...(held.has('work_item:edit') ? ['hosted-agent'] : []),
               ...(held.has('project:browse') ? ['translation'] : []),
             ]);

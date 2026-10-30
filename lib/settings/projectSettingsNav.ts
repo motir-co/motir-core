@@ -11,6 +11,7 @@ import {
   KeyRound,
   Languages,
   Link2,
+  Rocket,
   ShieldCheck,
   SlidersHorizontal,
   Sparkles,
@@ -340,6 +341,33 @@ export const PROJECT_SETTINGS_NAV: SettingsNavEntry[] = [
     // only as Set. VERIFIED: `environmentConfigService.list` and `listChanges`
     // assert `project:browse`. Its evidence row is in
     // `tests/settings/projectSettingsNav.test.ts`'s VIEW_KEY_EVIDENCE.
+    viewPermission: 'project:browse',
+    // A PROJECT fact: absent from a project holding no repository Motir hosts.
+    motirRepositoriesOnly: true,
+  },
+  {
+    id: 'production',
+    group: 'general',
+    href: '/settings/project/production',
+    // `Rocket` — the glyph the approved design draws (MOTIR-10024).
+    icon: Rocket,
+    labelKey: 'nav.production',
+    // Story MOTIR-9797 · MOTIR-10037, drawn by MOTIR-10024
+    // (`design/hosting/production.mock.html` · `design/hosting/design-notes.md`
+    // § Where it lives). What is live in production for a Motir repository, its
+    // release history and Roll back. DIRECTLY UNDER Environment, its own room for
+    // the same reason Environment is: it has a member view.
+    //
+    // VERIFIED (write key): `productionRollbackService` refuses an actor without
+    // `project:administer` (`RollbackNotPermittedError`), and the panel read
+    // reports it as `isAdministrator`. The key is named here so the rail row and
+    // the guard read one source.
+    permission: 'project:administer',
+    // ⚠️ A DISTINCT VIEW KEY, DECIDED BY THE APPROVED DESIGN (MOTIR-10024): every
+    // member who can browse the project reads its releases. VERIFIED:
+    // `productionPanelService.getProductionPanel` asserts `project:browse`. Its
+    // evidence row is in `tests/settings/projectSettingsNav.test.ts`'s
+    // VIEW_KEY_EVIDENCE.
     viewPermission: 'project:browse',
     // A PROJECT fact: absent from a project holding no repository Motir hosts.
     motirRepositoriesOnly: true,

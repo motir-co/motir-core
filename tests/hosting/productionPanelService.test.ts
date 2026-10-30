@@ -28,9 +28,11 @@ import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { hostedRepositoryAccessService } from '@/lib/services/hostedRepositoryAccessService';
 import {
   productionPanelService as service,
+  RELEASE_PAGE_DEFAULT,
   RELEASE_PAGE_MAX,
 } from '@/lib/services/productionPanelService';
 import { productionReleaseService } from '@/lib/services/productionReleaseService';
+import { projectAccessService } from '@/lib/services/projectAccessService';
 import { projectMembersService } from '@/lib/services/projectMembersService';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { releaseDeploymentStatusService } from '@/lib/services/releaseDeploymentStatusService';
@@ -183,6 +185,32 @@ describe('getProductionPanel', () => {
     expect((await service.getProductionPanel({ ...input, limit: 500 })).releases).toHaveLength(3);
     expect((await service.getProductionPanel({ ...input, limit: 0 })).releases).toHaveLength(1);
     expect(RELEASE_PAGE_MAX).toBe(50);
+  });
+
+  it('defaults to the design’s five rows a page (MOTIR-10037)', async () => {
+    const { fx } = await setup();
+    const id = await repo(fx);
+    await releases(id, 6);
+    const input = { projectKey: fx.projectIdentifier, projectRepositoryId: id, actor: fx.ctx };
+
+    const page = await service.getProductionPanel(input);
+    expect(RELEASE_PAGE_DEFAULT).toBe(5);
+    expect(page.releases).toHaveLength(5);
+    expect(page.nextCursor).not.toBeNull();
+  });
+
+  it('refuses as not found an actor its own read finds without the view key', async () => {
+    const { fx } = await setup();
+    const id = await repo(fx);
+    vi.spyOn(projectAccessService, 'getPermissions').mockResolvedValue(new Set());
+
+    await expect(
+      service.getProductionPanel({
+        projectKey: fx.projectIdentifier,
+        projectRepositoryId: id,
+        actor: fx.ctx,
+      }),
+    ).rejects.toBeInstanceOf(ProjectNotFoundError);
   });
 
   it('answers an empty panel before a first release, writing nothing', async () => {

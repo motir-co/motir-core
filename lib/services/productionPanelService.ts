@@ -3,6 +3,7 @@ import type { ProductionPanelDto } from '@/lib/dto/productionPanel';
 import { CustomerRepositoryNotDeployableError } from '@/lib/hosting/errors';
 import { decodeReleaseCursor, encodeReleaseCursor } from '@/lib/hosting/releaseCursor';
 import { ProjectRepoNotFoundError } from '@/lib/projectRepos/errors';
+import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { isOrganizationSeedSource } from '@/lib/projectRepos/vocabulary';
 import { hostedApplicationService } from '@/lib/services/hostedApplicationService';
 import { productionRollbackService } from '@/lib/services/productionRollbackService';
@@ -22,8 +23,10 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 // exists. Only the rollback itself answers forbidden, to an administrator check
 // the rollback service owns.
 
-/** The release history's page size, and its ceiling. */
-export const RELEASE_PAGE_DEFAULT = 20;
+/** The release history's page size — the five rows a page of the approved design
+ *  draws before Show more (MOTIR-10024) — and its ceiling. The rollback answers
+ *  the first page at this size too, so the panel it re-renders keeps its length. */
+export const RELEASE_PAGE_DEFAULT = 5;
 export const RELEASE_PAGE_MAX = 50;
 
 export interface ProductionPanelInput {
@@ -64,6 +67,10 @@ async function panelFor(
   // Decoded first, so a malformed cursor is a 400 even before any release exists.
   const decoded = input.cursor ? decodeReleaseCursor(input.cursor) : null;
   const permissions = await projectAccessService.getPermissions(projectId, actor);
+  // The room's VIEW key, asserted where the read happens (the settings rail's
+  // `production` entry names it). `projectsService.getByKey` already refused a
+  // non-browser; this keeps the key the door opens on in the read itself.
+  if (!permissions.has('project:browse')) throw new ProjectNotFoundError(projectId);
   const isAdministrator = permissions.has('project:administer');
   const app = await hostedApplicationService.getApplicationForRepository(
     actor.workspaceId,
