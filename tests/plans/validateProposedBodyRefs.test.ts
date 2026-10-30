@@ -3,15 +3,21 @@ import { describe, expect, it } from 'vitest';
 import { InvalidProposalError } from '@/lib/plans/errors';
 import {
   assertBodyRefsResolve,
+  bodyLinkWarningLine,
+  CANONICAL_ITEM_LINK_FORMS,
+  findBodyLinkCandidates,
   findMalformedIntraPlanRefs,
   findUnresolvedIntraPlanRefIds,
-  validateProposedBodyRefs,
+  judgeBodyLinks,
+  type BodyLinkResolution,
 } from '@/lib/plans/validateProposedBodyRefs';
 import { rewriteIntraPlanRefs } from '@/lib/mentions/workItemRefs';
 
-// Bug MOTIR-6494 — the ONE validator every plan-proposal door calls for the
-// item links in a proposal's bodies. Pure, so pinned here without a database;
-// `tests/mcp/plan-body-refs.test.ts` proves each door reaches it.
+// Bugs MOTIR-6494 · MOTIR-10104 — the ONE judgement every plan-proposal door
+// applies to the item links in a proposal's bodies: found, judged and WARNED,
+// never refused. Pure, so pinned here without a database;
+// `tests/integration/plans/proposalLinkWarnings.test.ts` and
+// `tests/mcp/plan-body-refs.test.ts` prove each door reaches it.
 
 function refusal(run: () => void): InvalidProposalError | null {
   try {
@@ -111,37 +117,126 @@ describe('findMalformedIntraPlanRefs — linear on hostile input (CodeQL js/poly
   });
 });
 
-describe('validateProposedBodyRefs', () => {
-  it('refuses on either body with INVALID_PROPOSAL, naming the field, the token and the canonical form', () => {
-    for (const field of ['descriptionMd', 'explanationMd'] as const) {
-      const err = refusal(() =>
-        validateProposedBodyRefs(
-          { [field]: 'After [the schema](motir-ref:pi42).' },
-          'Proposal "X"',
-        ),
-      );
-      expect(err).not.toBeNull();
-      expect(err!.code).toBe('INVALID_PROPOSAL');
-      expect(err!.message).toContain('Proposal "X"');
-      expect(err!.message).toContain(field);
-      expect(err!.message).toContain('`[the schema](motir-ref:pi42)`');
-      expect(err!.message).toContain('[label](motir-ref:planItem:<planItemId>)');
+describe('findBodyLinkCandidates', () => {
+  it('reads each malformed `motir-ref:` link and each `motir:` link, per field, with its label and id', () => {
+    expect(
+      findBodyLinkCandidates({
+        descriptionMd:
+          'After [the schema](motir-ref:pi42), [ok](motir-ref:planItem:pi1), ' +
+          '[odd](motir-ref:planitem:pi7), [none](motir-ref:<id>) and [card](motir:cm1).',
+        explanationMd: 'Because [the schema](motir-ref:pi42).',
+      }),
+    ).toEqual([
+      {
+        field: 'descriptionMd',
+        link: '[the schema](motir-ref:pi42)',
+        label: 'the schema',
+        id: 'pi42',
+        scheme: 'motir-ref',
+      },
+      {
+        field: 'descriptionMd',
+        link: '[odd](motir-ref:planitem:pi7)',
+        label: 'odd',
+        id: 'pi7',
+        scheme: 'motir-ref',
+      },
+      {
+        field: 'descriptionMd',
+        link: '[none](motir-ref:<id>)',
+        label: 'none',
+        id: null,
+        scheme: 'motir-ref',
+      },
+      {
+        field: 'descriptionMd',
+        link: '[card](motir:cm1)',
+        label: 'card',
+        id: 'cm1',
+        scheme: 'motir',
+      },
+      {
+        field: 'explanationMd',
+        link: '[the schema](motir-ref:pi42)',
+        label: 'the schema',
+        id: 'pi42',
+        scheme: 'motir-ref',
+      },
+    ]);
+  });
+
+  it('skips links inside code, a malformed `motir:` destination, and absent or null bodies', () => {
+    expect(findBodyLinkCandidates({})).toEqual([]);
+    expect(findBodyLinkCandidates({ descriptionMd: null, explanationMd: null })).toEqual([]);
+    expect(
+      findBodyLinkCandidates({
+        descriptionMd:
+          'Syntax `[x](motir-ref:abc)` and `[y](motir:cm2)`; [bad](motir:a b); [dup](motir:c3) [dup](motir:c3)',
+      }),
+    ).toEqual([
+      { field: 'descriptionMd', link: '[dup](motir:c3)', label: 'dup', id: 'c3', scheme: 'motir' },
+    ]);
+  });
+});
+
+describe('judgeBodyLinks', () => {
+  const known: BodyLinkResolution = {
+    thisPlanAddIds: new Set(['pi_here']),
+    becameCard: new Map([['pi_old', 'cm_card']]),
+    cardIds: new Set(['cm_card', 'cm_other']),
+  };
+  const judge = (descriptionMd: string) =>
+    judgeBodyLinks(findBodyLinkCandidates({ descriptionMd }), known);
+
+  it('corrects a link to THIS plan’s proposal to the canonical token, in either scheme', () => {
+    for (const link of ['[x](motir-ref:pi_here)', '[x](motir:pi_here)']) {
+      const [w] = judge(link);
+      expect(w).toMatchObject({ link, correctedLink: '[x](motir-ref:planItem:pi_here)' });
+      expect(w!.canonicalForms).toBeUndefined();
     }
   });
 
-  it('passes absent, null and well-formed bodies', () => {
-    expect(refusal(() => validateProposedBodyRefs({}, 'P'))).toBeNull();
-    expect(
-      refusal(() => validateProposedBodyRefs({ descriptionMd: null, explanationMd: null }, 'P')),
-    ).toBeNull();
-    expect(
-      refusal(() =>
-        validateProposedBodyRefs(
-          { descriptionMd: '[a](motir-ref:planItem:x1)', explanationMd: 'why' },
-          'P',
-        ),
-      ),
-    ).toBeNull();
+  it('corrects a link to an earlier plan’s proposal to the card it became, in either scheme', () => {
+    for (const link of ['[the host card](motir-ref:pi_old)', '[the host card](motir:pi_old)']) {
+      expect(judge(link)).toEqual([
+        expect.objectContaining({ link, correctedLink: '[the host card](motir:cm_card)' }),
+      ]);
+    }
+    expect(judge('[x](motir-ref:planItem:pi_old)')).toEqual([]); // canonical: not this check's
+  });
+
+  it('corrects a card named in the proposal scheme to the card scheme', () => {
+    expect(judge('[c](motir-ref:cm_other)')).toEqual([
+      expect.objectContaining({ correctedLink: '[c](motir:cm_other)' }),
+    ]);
+  });
+
+  it('names the canonical forms when nothing resolves, and leaves an ordinary card link alone', () => {
+    const [unknown, noId] = judge(
+      '[g](motir-ref:pi_gone) [n](motir-ref:<id>) [c](motir:cm_other) [z](motir:nothing)',
+    );
+    expect(unknown).toMatchObject({
+      correctedLink: null,
+      canonicalForms: [...CANONICAL_ITEM_LINK_FORMS],
+    });
+    expect(unknown!.reason).toContain('pi_gone');
+    expect(noId).toMatchObject({ link: '[n](motir-ref:<id>)', correctedLink: null });
+    expect(noId!.reason).toContain('names no id');
+    expect(judge('[c](motir:cm_other) [z](motir:nothing)')).toEqual([]);
+  });
+
+  it('prints a warning as one line, with the correction or the canonical forms', () => {
+    const [fixed, open] = judge('[x](motir-ref:pi_here) [g](motir-ref:pi_gone)');
+    expect(bodyLinkWarningLine(fixed!)).toContain('write `[x](motir-ref:planItem:pi_here)`');
+    expect(bodyLinkWarningLine(open!)).toContain(
+      'write one of `[label](motir:<workItemId>)` or `[label](motir-ref:planItem:<planItemId>)`',
+    );
+    expect(bodyLinkWarningLine(open!)).toContain(
+      '`descriptionMd` carries `[g](motir-ref:pi_gone)`',
+    );
+    expect(bodyLinkWarningLine({ ...open!, canonicalForms: undefined })).toContain(
+      '`[label](motir:<workItemId>)`',
+    );
   });
 });
 
