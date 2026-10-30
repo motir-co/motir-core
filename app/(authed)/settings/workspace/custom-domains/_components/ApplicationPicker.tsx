@@ -30,13 +30,19 @@ export function ApplicationPicker({
   disabled?: boolean;
 }) {
   const t = useTranslations('settings.customDomains');
+  // Two applications of one project share its name. The option's label is its
+  // accessible name, so where a name repeats the slug joins the label itself —
+  // a slug beside it as decoration would leave two options a reader cannot tell
+  // apart.
+  const repeated = new Set(
+    applications.map((a) => a.name).filter((name, i, all) => all.indexOf(name) !== i),
+  );
   const options: ComboboxOption<string>[] = [
-    ...applications.map((a) => ({
-      value: a.id,
-      label: a.name,
-      secondary: a.slug,
-      keywords: a.slug,
-    })),
+    ...applications.map((a) =>
+      repeated.has(a.name)
+        ? { value: a.id, label: `${a.name} (${a.slug})`, keywords: a.slug }
+        : { value: a.id, label: a.name, secondary: a.slug, keywords: a.slug },
+    ),
     // Last, after every application. The shipped Combobox has no separator row,
     // and a blank group header would be an empty heading to a screen reader.
     { value: NO_APPLICATION, label: t('dialog.appNone') },

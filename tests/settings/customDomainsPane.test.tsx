@@ -295,6 +295,19 @@ describe('the application a domain serves (delta panels A–F)', () => {
     );
   });
 
+  it('two applications with one name are told apart by their slug in the option’s name', () => {
+    const blog: DomainApplicationDto = { id: 'app_blog', name: 'Shop', slug: 'blog' };
+    render([domain({ status: 'issued', applicationId: SHOP.id })], {
+      applications: [SHOP, blog],
+    });
+    fireEvent.click(screen.getByRole('button', { name: `${copy.app.change} for shop.acme.com` }));
+    fireEvent.click(
+      within(screen.getByRole('dialog')).getByRole('combobox', { name: copy.dialog.appLabel }),
+    );
+    expect(screen.getByRole('option', { name: 'Shop (shop)' })).toBeTruthy();
+    expect(screen.getByRole('option', { name: 'Shop (blog)' })).toBeTruthy();
+  });
+
   it('an unbound row offers Choose application', () => {
     render([domain({ status: 'issued' })], { applications: [SHOP] });
     expect(
