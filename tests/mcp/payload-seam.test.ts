@@ -1093,6 +1093,48 @@ describe('the work-loop payloads', () => {
     expect(derived(planPayload, plan).id).toBe('plan-1');
   });
 
+  it('the plan carries a write’s `rescopeWarnings` only when it left one (MOTIR-10106)', () => {
+    const base = {
+      id: 'plan-1',
+      projectId: 'proj-1',
+      status: 'planned' as const,
+      title: 'A plan',
+      summary: null,
+      sourceJobId: null,
+      origin: 'user' as const,
+      itemCount: 1,
+      createdAt: '2026-08-06T00:00:00.000Z',
+      plannedAt: null,
+      decidedAt: null,
+      decidedById: null,
+      createdById: null,
+      authorSource: 'mcp' as const,
+      authorHarness: null,
+      authorModel: null,
+      decisionReason: null,
+      sessionId: null,
+      sharpenedRequirement: null,
+      items: [{ id: 'p-1' }],
+    };
+    const warning = {
+      planItemId: 'p-1',
+      proposal: 'proposal 1 (modify MOTIR-5779)',
+      workItemId: 'wi-1',
+      identifier: 'MOTIR-5779',
+      status: 'implemented',
+      statusLabel: 'Implemented',
+      outcomes: 'To Do, Blocked, or In Progress',
+      fields: ['title' as const],
+      message: 'MOTIR-5779 is Implemented; this modify sends it back at approve.',
+    };
+    const warned = presentMcpPlan({ ...base, rescopeWarnings: [warning] } as never);
+    expect(warned.rescopeWarnings).toEqual([warning]);
+    expect(derived(planPayload, warned).rescopeWarnings).toEqual([warning]);
+    expect(presentMcpPlan({ ...base, rescopeWarnings: [] } as never)).not.toHaveProperty(
+      'rescopeWarnings',
+    );
+  });
+
   it('the activity page keeps its OPAQUE cursor and passes the envelope through', () => {
     const built = derived(activityPagePayload, {
       nextCursor: 'opaque-composite',
