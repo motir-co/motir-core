@@ -3,10 +3,15 @@ import { db } from '@/lib/db';
 import { InvalidProposalError } from '@/lib/plans/errors';
 import { CANONICAL_ITEM_LINK_FORMS } from '@/lib/plans/validateProposedBodyRefs';
 import { plansService } from '@/lib/services/plansService';
+import { usersService } from '@/lib/services/usersService';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { workspacesService } from '@/lib/services/workspacesService';
+import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
+import { createTestProject } from '../../fixtures/projectFixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { projectAccessData } from '../../helpers/projectAccess';
 
 // Bug MOTIR-10104 — a broken item link in a proposal body is a WARNING, not a
 // failed write. Every proposal write door (the append's `add` / `modify`, the
@@ -186,6 +191,121 @@ describe('a sound link is not warned, whatever else the plan carries (MOTIR-1010
     expect(result).not.toHaveProperty('warnings');
     await plansService.markPlanned(planId, fx.ctx);
     expect(await plansService.checkApprovability(planId, fx.ctx)).toEqual([]);
+  });
+});
+
+// Bug MOTIR-10111 — a `motir:` link whose id names no card at all (a zero-padded
+// id written from memory) is warned at the write, with the link computed from the
+// one key its label names when the writer can open that card.
+describe('a card link that names no card is warned, corrected from its label (MOTIR-10111)', () => {
+  const DEAD_ID = 'cmvlr0b0000000000000000000';
+
+  async function appendWithBody(fx: WorkItemFixture, planId: string, descriptionMd: string) {
+    return plansService.addProposals(
+      planId,
+      [{ op: 'add', proposedFields: { title: 'Links a card', kind: 'task', descriptionMd } }],
+      fx.ctx,
+    );
+  }
+
+  it('a label naming a browsable key is kept and warned with that card’s link', async () => {
+    const fx = await makeWorkItemFixture();
+    const { planId } = await openPlanWithSibling(fx);
+    const cardId = await seedItem(fx, 'The turn-on card');
+    const card = await adminDb.workItem.findUniqueOrThrow({ where: { id: cardId } });
+    const link = `[${card.identifier}](motir:${DEAD_ID})`;
+
+    const result = await appendWithBody(fx, planId, `Scope boundary: ${link}.`);
+
+    const row = await adminDb.planItem.findUniqueOrThrow({
+      where: { id: result.appendedItemIds[0]! },
+    });
+    expect((row.proposedFields as { descriptionMd?: string }).descriptionMd).toContain(link);
+    expect(result.warnings).toEqual([
+      {
+        planItemId: result.appendedItemIds[0],
+        proposal: '“Links a card”',
+        field: 'descriptionMd',
+        link,
+        reason: expect.stringContaining(DEAD_ID),
+        correctedLink: `[${card.identifier}](motir:${cardId})`,
+      },
+    ]);
+  });
+
+  it('a label naming no key is warned with no correction and the canonical forms', async () => {
+    const fx = await makeWorkItemFixture();
+    const { planId } = await openPlanWithSibling(fx);
+    const link = `[the turn-on card](motir:${DEAD_ID})`;
+
+    const result = await appendWithBody(fx, planId, `See ${link}.`);
+
+    expect(result.warnings).toEqual([
+      expect.objectContaining({
+        link,
+        correctedLink: null,
+        canonicalForms: [...CANONICAL_ITEM_LINK_FORMS],
+      }),
+    ]);
+  });
+
+  it('a key in a project the writer cannot browse gets no correction and leaks no id', async () => {
+    const fx = await makeWorkItemFixture();
+    const secretProject = await createTestProject({
+      workspaceId: fx.workspaceId,
+      actorUserId: fx.ownerId,
+      identifier: 'SECRET',
+    });
+    await adminDb.project.update({
+      where: { id: secretProject.id },
+      data: projectAccessData('members'),
+    });
+    const secret = await workItemsService.createWorkItem(
+      { projectId: secretProject.id, kind: 'task', title: 'Classified' },
+      fx.ctx,
+    );
+    const plain = await usersService.createUser({
+      email: `plain-${secretProject.id}@ex.com`,
+      password: 'correct-horse-battery-staple',
+      name: 'Plain',
+    });
+    await workspacesService.addMember({ userId: plain.id, workspaceId: fx.workspaceId });
+    const plainCtx: ServiceContext = { userId: plain.id, workspaceId: fx.workspaceId };
+    const link = `[${secret.identifier}](motir:${DEAD_ID})`;
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Re-plan' }, plainCtx);
+
+    const asPlain = await plansService.addProposals(
+      plan.id,
+      [{ op: 'add', proposedFields: { title: 'Links it', kind: 'task', descriptionMd: link } }],
+      plainCtx,
+    );
+
+    expect(asPlain.warnings).toEqual([
+      expect.objectContaining({
+        link,
+        correctedLink: null,
+        canonicalForms: [...CANONICAL_ITEM_LINK_FORMS],
+      }),
+    ]);
+    expect(JSON.stringify(asPlain.warnings)).not.toContain(secret.id);
+
+    // The owner, who can open SECRET-1, is handed the link that works.
+    const ownerPlan = await plansService.createPlan(fx.projectId, { title: 'Owner' }, fx.ctx);
+    const asOwner = await appendWithBody(fx, ownerPlan.id, link);
+    expect(asOwner.warnings).toEqual([
+      expect.objectContaining({ correctedLink: `[${secret.identifier}](motir:${secret.id})` }),
+    ]);
+  });
+
+  it('a link to an existing card is not warned, as before', async () => {
+    const fx = await makeWorkItemFixture();
+    const { planId } = await openPlanWithSibling(fx);
+    const cardId = await seedItem(fx, 'An existing card');
+    const card = await adminDb.workItem.findUniqueOrThrow({ where: { id: cardId } });
+
+    const result = await appendWithBody(fx, planId, `See [${card.identifier}](motir:${cardId}).`);
+
+    expect(result).not.toHaveProperty('warnings');
   });
 });
 

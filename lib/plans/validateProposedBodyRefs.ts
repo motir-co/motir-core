@@ -32,6 +32,7 @@
 
 import { InvalidProposalError } from '@/lib/plans/errors';
 import { parseIntraPlanRefIds } from '@/lib/mentions/workItemRefs';
+import { labelWorkItemKeys } from '@/lib/workItems/proseVsGraph';
 
 /** Where a link's label ends and a `motir-ref:` destination begins. */
 const MOTIR_REF_LINK_JOIN = '](motir-ref:';
@@ -219,6 +220,10 @@ export interface BodyLinkResolution {
   becameCard: ReadonlyMap<string, string>;
   /** Ids that name a card the reader can see. */
   cardIds: ReadonlySet<string>;
+  /** The keys of the projects the reader can browse, upper-cased — what makes a label's `ACME-12` a key. */
+  knownPrefixes: ReadonlySet<string>;
+  /** A key a dead `motir:` link's label names (upper-cased) → the id of that card, one the reader can see. */
+  cardByKey: ReadonlyMap<string, string>;
 }
 
 /** One link a write KEPT that would ship dead, and how to fix it. */
@@ -239,8 +244,9 @@ export interface BodyLinkWarning {
  * WARNED, never refused: the write that carries it is kept, and the warning
  * names the corrected token whenever the id names something — a proposal on
  * this plan, an earlier plan's proposal that became a card, or a card itself.
- * A `motir:` link to an id that is none of the plan items is an ordinary card
- * link and is not this check's business.
+ * A `motir:` link to a card the reader can see is an ordinary card link and is
+ * not warned. One whose id names nothing at all is (MOTIR-10111), corrected from
+ * the key its label names when that key is one card the reader can see.
  */
 export function judgeBodyLinks(
   candidates: readonly BodyLinkCandidate[],
@@ -306,15 +312,44 @@ function judgeMotir(c: BodyLinkCandidate, known: BodyLinkResolution): BodyLinkWa
     };
   }
   const card = known.becameCard.get(c.id);
-  if (!card) return null;
-  return {
+  if (card) {
+    return {
+      field: c.field,
+      link: c.link,
+      reason:
+        'it names a proposal of an earlier, approved plan rather than the card that proposal ' +
+        'became, so it opens nothing',
+      correctedLink: `[${c.label}](motir:${card})`,
+    };
+  }
+  if (known.cardIds.has(c.id)) return null;
+  return deadCardLinkWarning(c, known);
+}
+
+/**
+ * A `motir:` link whose id names no plan item, no earlier proposal and no card
+ * the reader can see (MOTIR-10111) — the zero-padded id copied from memory. The
+ * label usually names the card it meant, so the correction is computed from it
+ * when it names exactly ONE key and that key is a card the reader can see. A
+ * card the reader cannot see is absent from `cardByKey`, so it reads exactly as
+ * a key that names nothing and the warning never carries its id.
+ */
+function deadCardLinkWarning(c: BodyLinkCandidate, known: BodyLinkResolution): BodyLinkWarning {
+  const base = {
     field: c.field,
     link: c.link,
-    reason:
-      'it names a proposal of an earlier, approved plan rather than the card that proposal ' +
-      'became, so it opens nothing',
-    correctedLink: `[${c.label}](motir:${card})`,
+    reason: `no proposal on this plan, no earlier proposal and no card you can see carries the id \`${c.id}\`, so it opens nothing`,
   };
+  const keys = labelWorkItemKeys(c.label, known.knownPrefixes);
+  const card = keys.length === 1 ? known.cardByKey.get(keys[0]!) : undefined;
+  if (card) {
+    return {
+      ...base,
+      reason: `${base.reason} — its label names ${keys[0]}`,
+      correctedLink: `[${c.label}](motir:${card})`,
+    };
+  }
+  return { ...base, correctedLink: null, canonicalForms: [...CANONICAL_ITEM_LINK_FORMS] };
 }
 
 /** One warning as a line a refusal or a tool result can print. */
