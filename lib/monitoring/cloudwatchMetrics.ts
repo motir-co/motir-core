@@ -27,6 +27,13 @@ import { monitorEventLoopDelay, type IntervalHistogram } from 'node:perf_hooks';
 // resets the histogram. A block that ended just before a tick is in the interval
 // that tick reports; a block long enough to stall the tick itself is reported on
 // the first tick after it ends, since the histogram recorded it meanwhile.
+//
+// ⚠️ THE FIRST INTERVAL IS NOT PUBLISHED (MOTIR-10141). A web task's boot stalls
+// its loop for 2–2.5 s while Next loads its route modules for the first requests,
+// and that stall lands in the first interval. Published, it fired the 2000 ms
+// event-loop-block alarm, one datapoint of three, on every deploy. So the first
+// tick resets the histogram and writes nothing; every later interval publishes,
+// so a block after the first minute still alarms on its own datapoint.
 
 export const EMF_INTERVAL_MS = 60_000;
 
@@ -144,7 +151,15 @@ export function startEventLoopDelayPublisher(
 
   const histogram = monitorEventLoopDelay({ resolution: RESOLUTION_MS });
   histogram.enable();
-  const timer = setInterval(() => emitDelay(settings, histogram), EMF_INTERVAL_MS);
+  let bootInterval = true;
+  const timer = setInterval(() => {
+    if (bootInterval) {
+      bootInterval = false;
+      histogram.reset();
+      return;
+    }
+    emitDelay(settings, histogram);
+  }, EMF_INTERVAL_MS);
   // Never keep a process alive for a measurement.
   timer.unref();
   const publisher: EventLoopDelayPublisher = { settings, histogram, timer };

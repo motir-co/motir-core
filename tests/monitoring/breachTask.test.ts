@@ -400,6 +400,9 @@ describe('runLoopBreach', () => {
               MONITORING_CLOUDWATCH_NAMESPACE: 'Motir/Test',
               MONITORING_CLOUDWATCH_SERVICE: 'rehearsal',
             });
+            // The publisher drops its first interval (MOTIR-10141); a real
+            // 300 s breach blocks well past it, so pass that tick here.
+            vi.advanceTimersByTime(EMF_INTERVAL_MS);
           },
         },
       );
