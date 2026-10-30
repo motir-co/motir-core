@@ -25,7 +25,6 @@ import {
   namesDesignAsset,
   namesDesignDocumentAmendment,
   namesRenderedSurface,
-  stripTestDoubleFileTokens,
   type RepoCandidate,
 } from '@/lib/workItems/proseVsGraph';
 import {
@@ -1528,25 +1527,102 @@ describe('a test double named by its FILE is not a design asset — MOTIR-10088'
     'the mock draws the panel that `lib/test-ai-jobs-mock.ts` feeds',
     'tests/x.test.ts asserts what the mock shows',
     'the board-mock.png export of the mock is committed',
-  ])('a drawing is still a design asset beside a stripped path: %s', (line) => {
+  ])('a drawing is still a design asset beside a code path: %s', (line) => {
+    expect(namesDesignAsset(line)).toBe(true);
+  });
+});
+
+describe('a bare "mock" is a test double unless it is plainly a drawing — MOTIR-10112', () => {
+  /**
+   * The REST pages story's integration gate in plan `cmvixgpa503mchmrkh0tbr6j7`
+   * (2026-10-24), a server-only `type: test` card. Criterion 9 was read as the
+   * DESIGN criterion and criterion 5 as the SURFACE one, so the card was its own
+   * design blocker. Criteria 5 and 9 are the card's own words; the rest are
+   * trimmed to the shape of an integration gate. It draws nothing.
+   */
+  const GATE_CARD = [
+    '## Acceptance criteria',
+    '',
+    '1. `POST /api/v1/pages` creates a page and answers 201 with its id.',
+    '2. `GET /api/v1/pages/{id}` answers the page body as markdown.',
+    '3. `PATCH /api/v1/pages/{id}` replaces the body and records one revision.',
+    '4. `DELETE /api/v1/pages/{id}` archives the page and answers 204.',
+    '5. The emitted OpenAPI document lists all four page operations.',
+    '6. A token without the page scope is refused with 403 on every operation.',
+    '7. A page in another workspace answers 404, never 403.',
+    '8. Every error body is `problem+json`.',
+    '9. The tests run against real Postgres and mock only the session or auth seam the other v1 tests mock.',
+  ].join('\n');
+
+  it('the integration-gate card is not reported as its own design blocker', () => {
+    expect(selfBlockingDesignCriteria(GATE_CARD)).toBeNull();
+  });
+
+  it.each(['Run as the other v1 tests mock.', 'The tests mock only the auth seam.'])(
+    'a double in ordinary English is not a design asset: %s',
+    (line) => {
+      expect(namesDesignAsset(line)).toBe(false);
+      const card = [
+        '## Acceptance criteria',
+        '',
+        `1. ${line}`,
+        '2. The emitted OpenAPI document lists all four page operations.',
+      ].join('\n');
+      expect(selfBlockingDesignCriteria(card)).toBeNull();
+    },
+  );
+
+  it.each([
+    'the stub replaces the fetch, and every other caller keeps its mock',
+    'the double is a mock, not a spy',
+    'each test resets its mocks between cases',
+    'only the clock is mocked',
+  ])('a mock with no drawing word is a test double: %s', (line) => {
+    expect(namesDesignAsset(line)).toBe(false);
+  });
+
+  it.each([
+    'The mock shows the panel’s empty state',
+    'the mock clearly draws the Target column',
+    "the mock's empty state",
+    'every state is drawn in the delta mock',
+    'the mocks of each panel are committed',
+    'a delta mock beside the shipped one',
+  ])('a mock in a drawing sense is still a design asset: %s', (line) => {
     expect(namesDesignAsset(line)).toBe(true);
   });
 
-  it('strips only the file tokens, and leaves the prose and a drawing path', () => {
-    expect(stripTestDoubleFileTokens('lib/test-ai-jobs-mock.ts passes the mock')).toBe(
-      '  passes the mock',
-    );
-    expect(stripTestDoubleFileTokens('see (tests/x.mock.ts).')).toBe('see  ');
-    expect(stripTestDoubleFileTokens('design/x/y.mock.html and @/lib/foo')).toBe(
-      'design/x/y.mock.html and @/lib/foo',
-    );
+  it('still fires on a code card that draws AND renders the same state', () => {
+    const drawn = [
+      '## Acceptance criteria',
+      '',
+      '1. Draw the empty state in `design/x/y.mock.html`.',
+      '2. Render the empty state.',
+    ].join('\n');
+    expect(selfBlockingDesignCriteria(drawn)).toEqual({
+      designCriterionIndex: 1,
+      surfaceCriterionIndex: 2,
+    });
+
+    const shown = [
+      '## Acceptance criteria',
+      '',
+      "1. The mock shows the panel's empty state.",
+      '2. The settings page renders the empty state.',
+    ].join('\n');
+    expect(selfBlockingDesignCriteria(shown)).toEqual({
+      designCriterionIndex: 1,
+      surfaceCriterionIndex: 2,
+    });
   });
 });
 
 describe('isSelfBlockingDesignCheckExempt — the TYPE scope test (MOTIR-6245)', () => {
-  it('exempts a `type: design` card, and nothing else', () => {
+  it('exempts a `type: design` card and a `type: test` card, and nothing else', () => {
     expect(isSelfBlockingDesignCheckExempt('design')).toBe(true);
-    for (const type of ['code', 'test', 'content', 'chore', 'decision', 'deploy']) {
+    // A test card draws nothing there is to lift (MOTIR-10112).
+    expect(isSelfBlockingDesignCheckExempt('test')).toBe(true);
+    for (const type of ['code', 'content', 'chore', 'decision', 'deploy']) {
       expect(isSelfBlockingDesignCheckExempt(type)).toBe(false);
     }
     // Untyped is a real answer and is NOT exempt — the check still asks the prose.

@@ -859,7 +859,9 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // section finding — advisory channel only, outside the verdict.
     // Re-pinned for MOTIR-9938, summary UNCHANGED: the mislabelled-link advisory
     // now scans the explanation too — still advisory, outside the verdict.
-    descriptionFingerprint: 'f5357970c9f9',
+    // Re-pinned for MOTIR-10112, summary UNCHANGED: `likely-self-blocking-design`
+    // now exempts `type: test` beside `type: design` — advisory channel only.
+    descriptionFingerprint: '2601f9f3a510',
   },
   get_plan_authoring_state: {
     // MOTIR-9821: the live read an author session makes before it wires an edge onto a sibling.

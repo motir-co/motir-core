@@ -689,9 +689,13 @@ is a LIFT rather than a cut: the design criterion becomes its own `type: design`
 card and what is left is `blocked_by` it, so somebody sees the drawing before the
 files written to match it (Principle #13). It fires only for a **childless** card
 — a container's design child can be reviewed before its code children run, which
-is exactly the shape the finding asks for — that is **not itself `type: design`**:
-a design card IS the card the lift would create, so it is never reported, whatever
-its criteria say (MOTIR-6245). A criterion whose own deliverable is a design asset
+is exactly the shape the finding asks for — that is **not itself `type: design`
+or `type: test`**: a design card IS the card the lift would create, so it is never
+reported, whatever its criteria say (MOTIR-6245), and a test card draws nothing
+there is to lift (MOTIR-10112). A bare _mock_ in a criterion is read as a test
+double unless it is plainly a drawing — _the mock shows / draws …_, _the mock's
+panel_, _drawn in the mock_ — while a design file (`design/…`, `.mock.html`,
+`.pen`) and _mockup_ always count (MOTIR-10112). A criterion whose own deliverable is a design asset
 is also never read as the rendered surface, which keeps a code card's own mock
 criterion out of the surface arm. Read literally the planning-time
 design gate is SATISFIED on such a card, because the `type: design` subtask a UI
