@@ -1295,6 +1295,25 @@ describe('THE DESIGN GATE advisory — a card that draws its own design and then
     });
   });
 
+  it('EXEMPTS a `type: test` card — it writes tests and draws nothing (MOTIR-10112)', async () => {
+    // The same body that reports on a `code` card is silent on a `test` one: a
+    // test card has no design criterion to lift, and its criteria name test
+    // doubles constantly.
+    const fx = await makeWorkItemFixture();
+    const testCard = await makeDesignCard(
+      fx,
+      'Gate the composer',
+      MOTIR_6236_DESIGN_CARD_CRITERIA,
+      { type: 'test' },
+    );
+
+    expect(
+      (await buildDispatchProseAdvisories(testCard, fx.ctx)).filter(
+        (a) => a.severity === 'likely-self-blocking-design',
+      ),
+    ).toEqual([]);
+  });
+
   it('EXEMPTS a card that HOLDS children — and the child count is read, not assumed', async () => {
     // The dispatch path does not carry `hasChildren` on its row shape, so this
     // also pins that the lazy row read actually happens for a card whose PROSE
