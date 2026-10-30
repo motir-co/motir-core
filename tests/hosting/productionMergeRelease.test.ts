@@ -284,6 +284,30 @@ describe('a completed production-image run for a push to main', () => {
     expect(logged.join('\n')).not.toMatch(SECRETISH);
   });
 
+  it('releases a job enqueued before the subject and pull request were carried, with both null', async () => {
+    const fx = await workspace();
+    const repo = await motirRepo(fx);
+    const deploy = vi.spyOn(productionReleaseService, 'deployProductionRelease');
+    const {
+      commitSubject: _subject,
+      pullRequestNumber: _pr,
+      ...older
+    } = (await hearAndTake(repo)).data;
+
+    const { result } = await runJob(older as MergeReleaseRequestedData);
+
+    expect(result).toMatchObject({ outcome: 'released', state: 'live' });
+    expect(deploy).toHaveBeenCalledWith(
+      expect.objectContaining({ commitSubject: null, pullRequestNumber: null }),
+    );
+    const [release] = await releasesOf(repo.projectRepositoryId);
+    expect(release).toMatchObject({
+      commitSha: SHA_A,
+      commitSubject: null,
+      pullRequestNumber: null,
+    });
+  });
+
   it.each(['failure', 'timed_out'])(
     'records a failed build (%s) without deploying or moving a pointer',
     async (conclusion) => {
