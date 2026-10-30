@@ -95,6 +95,19 @@ export interface JobCodeRepo {
   indexState?: CodeGraphIndexState;
   /** Commits the default branch is ahead of the graph. `null` = not countable. */
   commitsBehind?: number | null;
+  /**
+   * THE PAIR THE DRIFT IS ABOUT (MOTIR-10094) — the commit the graph was built
+   * from and the default branch's head, `null` while either is unknown. Optional
+   * for `indexState`'s reason: absent means nobody said.
+   *
+   * ⚠️ THEY ARE WHAT MAKE A DRIFT CHECKABLE. A count says how many commits the
+   * graph is missing and nothing about WHERE — one squash-merge can be a whole
+   * story — so the session is handed the two shas to list the changed paths with
+   * (`list_changed_files { repoRef, base: indexedSha, head: defaultHead }`), on
+   * demand, rather than a provider compare on the submit path.
+   */
+  indexedSha?: string | null;
+  defaultHead?: string | null;
 }
 
 /** The `context.code` unit of a planning-job envelope (the plural contract). */
@@ -278,6 +291,9 @@ export interface JobCodeRepoState extends JobCodeRepo {
   indexedAt: Date | null;
   /** Drift in COMMITS. Always null until its producer ships (MOTIR-4644). */
   commitsBehind: number | null;
+  /** The graph's commit and the default branch's head (MOTIR-10094); `null` when unknown. */
+  indexedSha: string | null;
+  defaultHead: string | null;
 }
 
 export interface JobPlanningCodeContext {
@@ -441,6 +457,8 @@ export async function resolvePlanningCodeContext(ctx: {
       refreshInFlight: disposition.refreshInFlight,
       indexedAt: joined?.indexedAt ?? null,
       commitsBehind: joined?.commitsBehind ?? null,
+      indexedSha: joined?.indexedSha ?? null,
+      defaultHead: joined?.defaultHead ?? null,
     });
   }
 
@@ -489,7 +507,13 @@ export async function withCodeFreshness(
       // ⚠️ NO JOIN ⇒ NO FIELDS. Spreading `undefined` in would put the keys on
       // the wire carrying nothing, which reads to a consumer as an answer.
       if (!joined) return repo;
-      return { ...repo, indexState: joined.indexState, commitsBehind: joined.commitsBehind };
+      return {
+        ...repo,
+        indexState: joined.indexState,
+        commitsBehind: joined.commitsBehind,
+        indexedSha: joined.indexedSha,
+        defaultHead: joined.defaultHead,
+      };
     }),
   };
 }

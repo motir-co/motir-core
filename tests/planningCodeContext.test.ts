@@ -341,6 +341,10 @@ describe('resolvePlanningCodeContext', () => {
       refreshInFlight: true,
       indexedAt: expect.any(Date),
       commitsBehind: null,
+      // MOTIR-10094 — the pair rides the envelope, so the session can list what
+      // changed between the graph's commit and the head.
+      indexedSha: SHA_A,
+      defaultHead: SHA_B,
     });
     // Through `enqueueCodeGraphRefresh` — the same event and debounce key a push
     // uses, rather than a second trigger with its own semantics — but as a

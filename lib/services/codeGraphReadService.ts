@@ -6,7 +6,12 @@ import {
   MotirAiUnavailableError,
 } from '@/lib/ai/errors';
 import type { CodeContextRepoDTO } from '@/lib/dto/codeContext';
-import type { CodeGraphReadDTO, CodeGraphReadTool } from '@/lib/dto/codeGraphRead';
+import type {
+  CodeGraphDriftDTO,
+  CodeGraphReadDTO,
+  CodeGraphReadTool,
+} from '@/lib/dto/codeGraphRead';
+import { codeGraphReadDriftService } from '@/lib/services/codeGraphReadDriftService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { projectsService } from '@/lib/services/projectsService';
 import { resolveCodeContextState } from '@/lib/services/codeContextService';
@@ -27,11 +32,16 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 //     answered with the set and no round trip;
 //   - COMMITS-BEHIND on `not_indexed` / `content_not_indexed`, which motir-ai has
 //     no figure for;
+//   - the DRIFT on `ok` (MOTIR-10094): for every repository read whose graph trails
+//     its default branch, the two commits, the count and the PATHS changed between
+//     them — so an absence read off a stale graph is never mistaken for one on the
+//     default branch. motir-ai holds no git credential and no head sha;
 //   - the BOUNDARY'S FAILURES, mapped to `graph_unavailable` with a reason code.
 //
 // ⚠️ NO RE-RENDERING. `ok.text` is the planner executor's bytes, and the story's
 // parity claim (the MCP agent reads what the hosted planner reads) rests on this
-// service passing it through untouched.
+// service passing it through untouched. The drift rides BESIDE it, as data; the
+// tool appends its note after those bytes, never inside them.
 
 /** Match an agent's `repo` against the set: `owner/name` first, then the bare name. */
 function matchRepo(repo: string, repoSet: readonly string[]): string | null {
@@ -57,6 +67,7 @@ function enrich(
   answer: RawCodeGraphRead,
   repos: readonly CodeContextRepoDTO[],
   repoSet: readonly string[],
+  drift: readonly CodeGraphDriftDTO[],
 ): CodeGraphReadDTO {
   switch (answer.state) {
     case 'not_indexed': {
@@ -84,7 +95,10 @@ function enrich(
     case 'repo_not_in_set':
       return { state: 'repo_not_in_set', repo: answer.repoRef, available: [...repoSet] };
     case 'ok':
-      return { state: 'ok', text: answer.text };
+      // A graph at its head carries no drift fields at all.
+      return drift.length > 0
+        ? { state: 'ok', text: answer.text, drift: [...drift] }
+        : { state: 'ok', text: answer.text };
     case 'graph_unavailable':
       return { state: 'graph_unavailable', reason: answer.reason };
     case 'no_graph':
@@ -135,7 +149,29 @@ export const codeGraphReadService = {
       repoFilter = [matched];
     }
 
-    let answer: RawCodeGraphRead;
+    // The drift is asked IN PARALLEL with the read, so a host compare adds no
+    // latency the read does not already spend; it never rejects (the service
+    // reports a failed compare as data), and it is used only on an `ok` answer.
+    const readRepos = repoFilter ? repos.filter((r) => repoFilter.includes(r.repoRef)) : repos;
+    const driftRead = codeGraphReadDriftService
+      .forRead(
+        project.id,
+        readRepos,
+        tool === 'code_grep'
+          ? {
+              text: args.pattern ?? '',
+              ...(args.path !== undefined ? { pathPrefix: args.path } : {}),
+            }
+          : { text: args.query ?? '' },
+        ctx,
+      )
+      .catch((err: unknown): CodeGraphDriftDTO[] => {
+        console.error('[codeGraphRead] drift not read; the answer goes out without it', { err });
+        return [];
+      });
+
+    let answer: RawCodeGraphRead | undefined;
+    let failure: unknown;
     try {
       answer = await readCodeGraph({
         coreWorkspaceId: ctx.workspaceId,
@@ -154,10 +190,16 @@ export const codeGraphReadService = {
         },
       });
     } catch (err) {
-      const reason = failureReason(err);
-      if (reason === null) throw err;
+      failure = err;
+    }
+    // ⚠️ SETTLED ON EVERY PATH, not only the `ok` one: a drift left running after the
+    // answer goes out is database and host work nobody awaits.
+    const drift = await driftRead;
+    if (answer === undefined) {
+      const reason = failureReason(failure);
+      if (reason === null) throw failure;
       return { state: 'graph_unavailable', reason };
     }
-    return enrich(answer, repos, repoSet);
+    return enrich(answer, repos, repoSet, answer.state === 'ok' ? drift : []);
   },
 };

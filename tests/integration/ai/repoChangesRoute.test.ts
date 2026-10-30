@@ -5,6 +5,11 @@ import { mintJobToken } from '@/lib/ai/jobToken';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { getGitProvider } from '@/lib/git';
+import {
+  CHANGED_FILES_CACHE_MAX,
+  _resetChangedFilesCache,
+} from '@/lib/services/repoChangesService';
+import type { ChangedFilesResult } from '@/lib/git/types';
 import { GET } from '@/app/api/internal/ai/repo-changes/route';
 import { createTestWorkspace, createTestProject } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
@@ -38,6 +43,7 @@ beforeEach(async () => {
   process.env['CORE_CALLBACK_SECRET'] = SERVICE_SECRET;
   await truncateAuthTables();
   _resetInstallationTokenCache();
+  _resetChangedFilesCache();
 });
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -335,4 +341,77 @@ describe('GET /api/internal/ai/repo-changes — an in-set repository', () => {
     expect(body).not.toContain(SERVICE_SECRET);
     expect(body).not.toContain(token);
   });
+});
+
+describe('GET /api/internal/ai/repo-changes — the commit-pair cache (MOTIR-10094)', () => {
+  const BASE = '6dcb09b5b57875f334f61aebed695e2e4193db5e';
+  const sha = (n: number) => n.toString(16).padStart(40, '0');
+
+  /** The provider's compare, counted, answering `answer` — no host is reached. */
+  function counted(answer: (base: string, head: string) => ChangedFilesResult) {
+    const github = getGitProvider('github');
+    return vi
+      .spyOn(github, 'listChangedFiles')
+      .mockImplementation(async (_i, _o, _n, base, head) => answer(base, head));
+  }
+  const ok = (base: string, head: string): ChangedFilesResult => ({
+    outcome: 'ok',
+    base,
+    head,
+    files: [{ path: 'lib/a.ts', status: 'added' }],
+    truncated: false,
+    baseSha: base,
+    headSha: head,
+  });
+  const get = (token: string, base: string, head: string) =>
+    GET(
+      req(`/api/internal/ai/repo-changes?repoRef=moooon/motir-core&head=${head}&base=${base}`, {
+        bearer: SERVICE_SECRET,
+        token,
+      }),
+    );
+
+  it('a pair of full shas is compared ONCE; the second ask is the same answer from the cache', async () => {
+    const { token } = await seed();
+    const compare = counted(ok);
+    const first = await (await get(token, BASE, HEAD_SHA)).json();
+    const second = await (await get(token, BASE.toUpperCase(), HEAD_SHA)).json();
+    expect(compare).toHaveBeenCalledTimes(1);
+    expect(second).toEqual(first);
+    expect(first).toMatchObject({ result: { outcome: 'ok', files: [{ path: 'lib/a.ts' }] } });
+  });
+
+  it('a branch NAME is never cached — it moves', async () => {
+    const { token } = await seed();
+    const compare = counted(ok);
+    await get(token, 'trunk', HEAD_SHA);
+    await get(token, 'trunk', HEAD_SHA);
+    expect(compare).toHaveBeenCalledTimes(2);
+  });
+
+  it('too_large is kept; a failure to ASK is not', async () => {
+    const { token } = await seed();
+    const large = counted((base, head) => ({ outcome: 'too_large', base, head }));
+    await get(token, BASE, HEAD_SHA);
+    await get(token, BASE, HEAD_SHA);
+    expect(large).toHaveBeenCalledTimes(1);
+    vi.restoreAllMocks();
+
+    const failing = counted((base, head) => ({ outcome: 'host_error', base, head, detail: 'x' }));
+    await get(token, BASE, sha(7));
+    await get(token, BASE, sha(7));
+    expect(failing).toHaveBeenCalledTimes(2);
+  });
+
+  it(`keeps at most ${CHANGED_FILES_CACHE_MAX} pairs, dropping the oldest first`, async () => {
+    const { token } = await seed();
+    const compare = counted(ok);
+    for (let i = 1; i <= CHANGED_FILES_CACHE_MAX + 1; i += 1) await get(token, BASE, sha(i));
+    expect(compare).toHaveBeenCalledTimes(CHANGED_FILES_CACHE_MAX + 1);
+    // The newest is still kept; the first one asked was dropped to make room.
+    await get(token, BASE, sha(CHANGED_FILES_CACHE_MAX + 1));
+    expect(compare).toHaveBeenCalledTimes(CHANGED_FILES_CACHE_MAX + 1);
+    await get(token, BASE, sha(1));
+    expect(compare).toHaveBeenCalledTimes(CHANGED_FILES_CACHE_MAX + 2);
+  }, 120_000);
 });

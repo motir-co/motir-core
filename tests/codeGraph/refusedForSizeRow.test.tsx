@@ -43,6 +43,8 @@ function repo(overrides: Partial<CodeContextRepoDTO> = {}): CodeContextRepoDTO {
     indexState: 'stale',
     indexedAt: null,
     commitsBehind: 1,
+    indexedSha: null,
+    defaultHead: null,
     refreshFailing: true,
     graphTooLarge: { sizeBytes: 1_503_238_553, capBytes: GIB },
     ...overrides,

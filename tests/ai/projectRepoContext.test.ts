@@ -402,6 +402,8 @@ describe('the planning-job ENVELOPE', () => {
             refreshInFlight: false,
             indexedAt: null,
             commitsBehind: null,
+            indexedSha: null,
+            defaultHead: null,
           },
         ],
       },
@@ -567,6 +569,8 @@ describe('the planning-job ENVELOPE', () => {
           refreshInFlight: false,
           indexedAt: null,
           commitsBehind: null,
+          indexedSha: null,
+          defaultHead: null,
         },
       ],
     });

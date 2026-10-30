@@ -83,12 +83,20 @@ export interface CodeGraphIndexFacts {
 export function deriveCodeGraphIndexState(facts: CodeGraphIndexFacts): CodeGraphIndexState {
   if (facts.hasRunningIndex) return 'indexing';
   if (!facts.hasSucceededIndex) return 'never';
-  if (
-    facts.defaultBranchHeadSha !== null &&
-    facts.indexedHeadSha !== null &&
-    facts.defaultBranchHeadSha !== facts.indexedHeadSha
-  ) {
-    return 'stale';
-  }
+  if (graphTrailsHead(facts.indexedHeadSha, facts.defaultBranchHeadSha)) return 'stale';
   return 'indexed';
+}
+
+/**
+ * DOES THE GRAPH TRAIL THE DEFAULT BRANCH? — the sha comparison itself, and its one
+ * home (MOTIR-10094). True only when BOTH shas are known and DIFFER; a missing
+ * comparand is "not known yet", never a difference (the null rule above).
+ *
+ * It is the comparison arm 3 makes, lifted out so a reader that needs the bare
+ * fact — the code-graph READ, which reports what the graph is missing even while
+ * a re-index is in flight and the state therefore reads `indexing` — asks this
+ * function rather than writing a second comparison.
+ */
+export function graphTrailsHead(indexedSha: string | null, headSha: string | null): boolean {
+  return indexedSha !== null && headSha !== null && indexedSha !== headSha;
 }

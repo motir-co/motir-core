@@ -34,6 +34,44 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 // internal route and the MCP `list_changed_files` tool (MOTIR-10069), both a
 // model asking on purpose.
 
+// ── THE COMMIT-PAIR CACHE (MOTIR-10094) ─────────────────────────────────────
+// A compare between two COMMIT SHAS never changes: commits are immutable, so the
+// paths one changed against the other are the same answer for ever. The graph
+// DRIFT every MCP code read now carries (`codeGraphDriftService`) asks exactly
+// that question — the graph's indexed commit against the default branch's head —
+// once per read, and a planning session reads dozens of times between pushes. So
+// an answer for a pair of full shas is kept, keyed on the CONNECTED repository's
+// id (never the caller's spelling) and the two shas.
+//
+// ⚠️ ONLY THE ANSWERS A COMMIT PAIR FIXES ARE KEPT: `ok` and `too_large`. A branch
+// NAME moves, so a pair naming one is never cached; and `no_such_ref`, `revoked`,
+// `not_connected` and `host_error` are facts about the CONNECTION or the moment,
+// which the next call may answer differently.
+
+/** A full git object id — SHA-1 (40) or SHA-256 (64) hex. A branch name never is. */
+const FULL_SHA = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i;
+
+/** How many commit-pair answers one process keeps; the oldest is dropped first. */
+export const CHANGED_FILES_CACHE_MAX = 256;
+
+const pairCache = new Map<string, ChangedFilesResult>();
+
+function rememberPair(key: string, result: ChangedFilesResult): ChangedFilesResult {
+  if (result.outcome !== 'ok' && result.outcome !== 'too_large') return result;
+  pairCache.delete(key);
+  pairCache.set(key, result);
+  while (pairCache.size > CHANGED_FILES_CACHE_MAX) {
+    const oldest = pairCache.keys().next().value as string;
+    pairCache.delete(oldest);
+  }
+  return result;
+}
+
+/** Test-only: forget every cached commit-pair answer. */
+export function _resetChangedFilesCache(): void {
+  pairCache.clear();
+}
+
 export interface RepoChangesContext {
   userId: string;
   workspaceId: string;
@@ -99,6 +137,14 @@ export const repoChangesService = {
     const resolvedHead = head.trim();
     const refs = { base: resolvedBase, head: resolvedHead };
 
+    // A pair of full shas is answered from the cache when it has been asked before.
+    const pairKey =
+      FULL_SHA.test(resolvedBase) && FULL_SHA.test(resolvedHead)
+        ? `${connected.id}:${resolvedBase.toLowerCase()}:${resolvedHead.toLowerCase()}`
+        : null;
+    const cached = pairKey ? pairCache.get(pairKey) : undefined;
+    if (cached) return cached;
+
     let provider;
     try {
       provider = getGitProvider(connected.installation.provider as GitProviderId);
@@ -110,13 +156,14 @@ export const repoChangesService = {
 
     // The STORED canonical coordinates, never the caller's spelling.
     try {
-      return await provider.listChangedFiles(
+      const result = await provider.listChangedFiles(
         connected.installation.installationId,
         connected.owner,
         connected.name,
         resolvedBase,
         resolvedHead,
       );
+      return pairKey ? rememberPair(pairKey, result) : result;
     } catch (err) {
       // The provider returns every answer it names; a throw is "we could not ask".
       return {

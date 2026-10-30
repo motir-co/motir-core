@@ -1,7 +1,11 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import type { CodeGraphReadDTO, CodeGraphReadTool } from '@/lib/dto/codeGraphRead';
+import type {
+  CodeGraphDriftDTO,
+  CodeGraphReadDTO,
+  CodeGraphReadTool,
+} from '@/lib/dto/codeGraphRead';
 import { codeGraphReadService, type CodeGraphReadArgs } from '@/lib/services/codeGraphReadService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { McpContextResolver } from '../context';
@@ -101,11 +105,56 @@ const grepSchema = {
     .describe('OPTIONAL. The page size — how many matching lines to return per page.'),
 };
 
+/** How many changed paths the drift note prints per repository; the payload carries the rest. */
+const DRIFT_NOTE_PATHS = 20;
+
+const short = (sha: string) => sha.slice(0, 7);
+
+function listPaths(paths: readonly string[]): string {
+  const shown = paths.slice(0, DRIFT_NOTE_PATHS).join(', ');
+  return paths.length > DRIFT_NOTE_PATHS
+    ? `${shown}, and ${paths.length - DRIFT_NOTE_PATHS} more in \`drift\``
+    : shown;
+}
+
+/** One repository's drift line: the pair, the count, the changed paths and the query's share of them. */
+function describeDrift(d: CodeGraphDriftDTO): string {
+  const count =
+    d.commitsBehind === null
+      ? 'an uncounted number of commits'
+      : `${d.commitsBehind} commit${d.commitsBehind === 1 ? '' : 's'}`;
+  const head = `- ${d.repoRef}: the graph is at ${short(d.indexedSha)}, ${count} behind the default branch at ${short(d.defaultHead)}.`;
+  if (d.changedPaths === null) {
+    return `${head} What changed could not be listed (${d.changedPathsUnavailable}), so every absence in this answer is unproven for that repository: read the default branch with \`read_file\` before writing one.`;
+  }
+  if (d.changedPaths.length === 0) {
+    return `${head} No file changed between the two commits, so the graph's code is the default branch's.`;
+  }
+  const changed = `${d.changedPathsTruncated ? 'At least these' : 'These'} ${d.changedPaths.length} paths changed since: ${listPaths(d.changedPaths)}${d.changedPathsTruncated ? ' (the list was cut)' : ''}.`;
+  const area =
+    d.changedPathsInQueryArea && d.changedPathsInQueryArea.length > 0
+      ? ` The searched area touches ${d.changedPathsInQueryArea.length} of them: ${listPaths(d.changedPathsInQueryArea)} — read those with \`read_file\` at the default branch before you write anything is absent.`
+      : ' None of them names the searched area, but a symbol need not be named in its file’s path.';
+  return `${head} ${changed}${area}`;
+}
+
+/**
+ * THE DRIFT NOTE (MOTIR-10094) — appended AFTER the executor's bytes, never inside
+ * them, so the graph's answer stays the hosted planner's answer byte for byte.
+ */
+export function renderCodeGraphDrift(drift: readonly CodeGraphDriftDTO[]): string {
+  return [
+    'THE GRAPH IS BEHIND THE DEFAULT BRANCH for the repositories below, so this answer is the code as it was at the graph’s commit.',
+    ...drift.map(describeDrift),
+    'An absence in this answer ("no X exists", "not on main") holds only for code OUTSIDE the changed paths; where what you searched touches one, read it with `read_file` (the default branch, live) before you write it.',
+  ].join('\n');
+}
+
 /** The one-line summary for a non-`ok` state: the state, then what to do next. */
 export function summarizeCodeGraphRead(dto: CodeGraphReadDTO): string {
   switch (dto.state) {
     case 'ok':
-      return dto.text;
+      return dto.drift ? `${dto.text}\n\n${renderCodeGraphDrift(dto.drift)}` : dto.text;
     case 'no_repositories':
       return 'This project has no repository in its set, so there is no code graph to read. Plan without code facts, and do not assert any.';
     case 'repo_not_in_set':
@@ -178,7 +227,9 @@ export const runCodeGrep = (
 ): Promise<CallToolResult> => run('code_grep', args, ctx);
 
 const STATES =
-  'Every answer carries a `state`: `ok` (the text), `no_repositories`, `repo_not_in_set` (with ' +
+  'Every answer carries a `state`: `ok` (the text, plus `drift` when a repository read is behind ' +
+  'its default branch: the graph’s commit, the head, `commitsBehind` and the `changedPaths` since — ' +
+  'an absence holds only outside them), `no_repositories`, `repo_not_in_set` (with ' +
   '`available`), `not_indexed` (with the repo’s index state and commits behind), `no_graph`, ' +
   '`stale_cursor`, `invalid_cursor`, or `graph_unavailable` (with a `reason`) — none of them an ' +
   'error, and none means the project has no code.';

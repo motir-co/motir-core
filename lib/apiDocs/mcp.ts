@@ -636,17 +636,23 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   code_explore: {
     summary:
       "The hosted code graph around a query — the hosted planner's own answer, paged, every absence a named state.",
-    descriptionFingerprint: 'b2e5bdc1492a',
+    // Re-pinned for MOTIR-10094: the description now names the `drift` entry a read off a graph
+    // behind its default branch carries. The summary was re-read and still says what the tool does.
+    descriptionFingerprint: '829f9a5594b5',
   },
   code_search: {
     summary:
       "Symbols matching a name in the hosted code graph — the hosted planner's own answer, paged.",
-    descriptionFingerprint: '0b634bf94bd4',
+    // Re-pinned for MOTIR-10094: the description now names the `drift` entry a read off a graph
+    // behind its default branch carries. The summary was re-read and still says what the tool does.
+    descriptionFingerprint: '0976e4761ef1',
   },
   code_grep: {
     summary:
       "Lines matching a text or pattern in the indexed file contents — string literals, comments and non-code files the symbol search cannot see — the hosted planner's own answer, paged.",
-    descriptionFingerprint: '94eb063eb23b',
+    // Re-pinned for MOTIR-10094: the description now names the `drift` entry a read off a graph
+    // behind its default branch carries. The summary was re-read and still says what the tool does.
+    descriptionFingerprint: 'bb73c179712f',
   },
   skeleton: {
     // Re-pinned for MOTIR-5410: the description now names the folder placement

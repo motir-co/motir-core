@@ -572,6 +572,9 @@ describe('aiGenerationService.startGeneration — the context.code envelope seam
             refreshInFlight: false,
             indexedAt: null,
             commitsBehind: null,
+            // MOTIR-10094's pair — null while the repository has never been indexed.
+            indexedSha: null,
+            defaultHead: null,
           },
           {
             provider: 'github',
@@ -583,6 +586,9 @@ describe('aiGenerationService.startGeneration — the context.code envelope seam
             refreshInFlight: false,
             indexedAt: null,
             commitsBehind: null,
+            // MOTIR-10094's pair — null while the repository has never been indexed.
+            indexedSha: null,
+            defaultHead: null,
           },
           {
             provider: 'github',
@@ -594,6 +600,9 @@ describe('aiGenerationService.startGeneration — the context.code envelope seam
             refreshInFlight: false,
             indexedAt: null,
             commitsBehind: null,
+            // MOTIR-10094's pair — null while the repository has never been indexed.
+            indexedSha: null,
+            defaultHead: null,
           },
           {
             provider: 'github',
@@ -605,6 +614,9 @@ describe('aiGenerationService.startGeneration — the context.code envelope seam
             refreshInFlight: false,
             indexedAt: null,
             commitsBehind: null,
+            // MOTIR-10094's pair — null while the repository has never been indexed.
+            indexedSha: null,
+            defaultHead: null,
           },
         ],
       },
