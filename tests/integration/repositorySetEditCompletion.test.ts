@@ -26,11 +26,20 @@ import { linkWorkspaceReposToProject } from '../helpers/projectRepoLink';
 // delivery rows, the gate, the workflow, RLS — and every assertion reads the
 // item's status out of the database after `updateWorkItem` returned. The edit is
 // the ONLY event between the held state and the asserted one.
+//
+// ⚠️ SINCE MOTIR-10135 A MERGE NO LONGER PRODUCES THAT HELD STATE: completion
+// counts the item's linked pull requests, so the merge of A's one pull request
+// completes the card. The held state still EXISTS — every card the old rule held
+// before the fix shipped sits in it (MOTIR-10106) — so the fixture writes it the
+// way it arose: the merge recorded on the mirror, and no delivery deciding it.
+// The re-check, asked by the edit or by an operator, is what completes such a
+// card now, and the last block pins that it asks the merge's own question.
 
 const PASSWORD = 'hunter2hunter2';
 const INSTALLATION_ID = 'inst-repo-set-edit';
 const CORE = { name: 'motir-core', providerRepoId: '8101', defaultBranch: 'main' };
 const AI = { name: 'motir-ai', providerRepoId: '8102', defaultBranch: 'main' };
+const META = { name: 'motir-meta', providerRepoId: '8103', defaultBranch: 'main' };
 
 afterAll(async () => {
   await db.$disconnect();
@@ -45,7 +54,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-async function scenario(email: string) {
+async function scenario(email: string, targetRepos: string[] = [CORE.name, AI.name]) {
   const user = await usersService.createUser({ email, password: PASSWORD, name: 'Owner' });
   const { workspace } = await workspacesService.createWorkspace({
     name: 'Acme',
@@ -64,7 +73,7 @@ async function scenario(email: string) {
       accountLogin: 'moooon',
       accountType: 'Organization',
     },
-    repos: [CORE, AI].map((r) => ({
+    repos: [CORE, AI, META].map((r) => ({
       providerRepoId: r.providerRepoId,
       owner: 'moooon',
       name: r.name,
@@ -75,7 +84,7 @@ async function scenario(email: string) {
   await linkWorkspaceReposToProject({
     workspaceId: workspace.id,
     projectId: project.id,
-    names: [CORE.name, AI.name],
+    names: [CORE.name, AI.name, META.name],
   });
   const ctx = { userId: user.id, workspaceId: workspace.id };
   const item = await workItemsService.createWorkItem(
@@ -83,7 +92,7 @@ async function scenario(email: string) {
       projectId: project.id,
       kind: 'task',
       title: 'Ships in two repositories, needed one',
-      targetRepos: [CORE.name, AI.name],
+      targetRepos,
     },
     ctx,
   );
@@ -129,13 +138,22 @@ async function openLinked(s: Scenario, repo: typeof CORE, number: number) {
   await pr(s, repo, number, 'opened');
 }
 
-/** The MOTIR-9190 shape: A's pull request merged, B has none, the card HELD. */
+/** Record pull request `number` on the mirror as closed — merged onto `baseRef`
+ *  when given — WITHOUT a delivery: the state a merge the old rule held left
+ *  behind (MOTIR-10135). */
+async function recordClosed(number: number, merge?: { baseRef: string }) {
+  await adminDb.githubPullRequest.updateMany({
+    where: { number },
+    data: { state: 'closed', merged: merge !== undefined, ...(merge ?? {}) },
+  });
+}
+
+/** The MOTIR-9190 shape: A's pull request merged, B has none, the card HELD —
+ *  as the repository-set gate left it before MOTIR-10135 (see the header). */
 async function heldOnTheOtherRepository(email: string) {
   const s = await scenario(email);
   await openLinked(s, CORE, 1);
-  expect(await pr(s, CORE, 1, 'closed', true)).toMatchObject({
-    outcome: 'deferred_incomplete_repo_set',
-  });
+  await recordClosed(1, { baseRef: CORE.defaultBranch });
   expect(await statusOf(s.item.id)).toBe('implemented');
   return s;
 }
@@ -246,5 +264,79 @@ describe('the edit completes nothing the gate would not (the outcomes still appl
 
     expect(dto.targetRepos).toEqual([CORE.name]);
     expect(dto.status).toBe('implemented');
+  });
+});
+
+describe('the re-check asks the merge’s question — the linked pull requests (MOTIR-10135)', () => {
+  /** A card listing three repositories, with linked pull requests in two. */
+  async function threeRepositoriesTwoLinked(email: string) {
+    const s = await scenario(email, [CORE.name, AI.name, META.name]);
+    await openLinked(s, CORE, 1);
+    await openLinked(s, AI, 2);
+    expect(await statusOf(s.item.id)).toBe('implemented');
+    return s;
+  }
+
+  it('COMPLETES a card whose linked pull requests have all merged, whatever else it lists', async () => {
+    const s = await threeRepositoriesTwoLinked('reeval-complete@example.com');
+    await recordClosed(1, { baseRef: CORE.defaultBranch });
+    await recordClosed(2, { baseRef: AI.defaultBranch });
+
+    const verdict = await repoSetCompletionService.reevaluateItem(s.item.id);
+
+    // motir-meta has no pull request, and nothing waits for it.
+    expect(verdict).toMatchObject({ outcome: 'transitioned', toStatus: 'done' });
+    expect(verdict.shortfall.outstanding).toEqual([]);
+    expect(await statusOf(s.item.id)).toBe('done');
+  });
+
+  it('HOLDS while a linked pull request is still open', async () => {
+    const s = await threeRepositoriesTwoLinked('reeval-open@example.com');
+    await recordClosed(1, { baseRef: CORE.defaultBranch });
+
+    const verdict = await repoSetCompletionService.reevaluateItem(s.item.id);
+
+    expect(verdict).toMatchObject({ outcome: 'held_open_change_request' });
+    expect(await statusOf(s.item.id)).toBe('implemented');
+  });
+
+  it('HOLDS when a linked pull request merged onto a NON-default base, and names it', async () => {
+    const s = await threeRepositoriesTwoLinked('reeval-stranded@example.com');
+    await recordClosed(1, { baseRef: CORE.defaultBranch });
+    await recordClosed(2, { baseRef: 'feature/stack-base' });
+
+    const verdict = await repoSetCompletionService.reevaluateItem(s.item.id);
+
+    expect(verdict).toMatchObject({
+      outcome: 'held_incomplete_delivery_set',
+      deliveryShortfall: { outstanding: [], strandedBase: ['moooon/motir-ai#2'], unknownBase: [] },
+    });
+    expect(await statusOf(s.item.id)).toBe('implemented');
+  });
+
+  it('a dry run DECIDES the same hold and writes nothing', async () => {
+    const s = await threeRepositoriesTwoLinked('reeval-dry@example.com');
+    await recordClosed(1, { baseRef: CORE.defaultBranch });
+    await recordClosed(2, { baseRef: 'feature/stack-base' });
+
+    const verdict = await repoSetCompletionService.reevaluateItem(s.item.id, { dryRun: true });
+
+    expect(verdict.outcome).toBe('held_incomplete_delivery_set');
+    expect(await statusOf(s.item.id)).toBe('implemented');
+  });
+
+  it('with NO landed delivery it still asks the repository set — nothing shipped', async () => {
+    // Both pull requests were closed unmerged: no evidence the work happened, so
+    // the list is still read and the card is held on it.
+    const s = await threeRepositoriesTwoLinked('reeval-none-landed@example.com');
+    await recordClosed(1);
+    await recordClosed(2);
+
+    const verdict = await repoSetCompletionService.reevaluateItem(s.item.id);
+
+    expect(verdict).toMatchObject({ outcome: 'held_incomplete_repo_set' });
+    expect(verdict.shortfall.outstanding).toEqual([CORE.name, AI.name, META.name]);
+    expect(verdict.deliveryShortfall).toBeUndefined();
+    expect(await statusOf(s.item.id)).toBe('implemented');
   });
 });

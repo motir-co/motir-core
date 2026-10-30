@@ -29,9 +29,13 @@ import { linkPrByIdentifier } from '../helpers/prLink';
 //
 //   1. The card's reproduction: c1 (web) delivered by a merge linked to the
 //      story, c2 (api) Done through its OWN merged pull request → COMPLETES.
-//   2. It stays a hold when c2's pull request is open, closed unmerged, or merged
-//      onto a non-default base — the three ways a linked change request has not
-//      put the work on the trunk.
+//   2. ⚠️ SINCE MOTIR-10135 THE MERGE NO LONGER READS THE REPOSITORY SET AT ALL:
+//      completion counts the story's OWN linked pull requests, so c2's pull
+//      request being open, closed unmerged or merged onto a non-default base no
+//      longer holds the story — it is linked to c2, not to the story. These were
+//      HOLDS; they are pinned as completions so the accepted trade-off is a
+//      decision on record rather than a silent change. The panel still reads
+//      `delivered_by_child` (case 4).
 //   3. An abandoned closed attempt beside the merge that shipped does not hold.
 //   4. The item panel reads the same answer the gate acted on.
 
@@ -190,42 +194,45 @@ describe('a repository delivered by a child’s OWN merged pull request', () => 
     expect(await statusOf(fx.story.id)).toBe('done');
   });
 
-  it('still HOLDS while that child’s pull request is OPEN', async () => {
+  it('completes while that child’s pull request is OPEN (MOTIR-10135)', async () => {
     const fx = await scenario('child-open@example.com');
     await open(fx.apiHalf.identifier, AI, 5);
     // The status door refuses Done while the card's own pull request is open, so
     // write it underneath that door — a status that says Done beside a pull
-    // request that says the work has not landed. The pull request wins.
+    // request that says the work has not landed. The story merge no longer reads it.
     await adminDb.workItem.update({ where: { id: fx.apiHalf.id }, data: { status: 'done' } });
 
     expect(await deliver(fx.story.identifier, CORE, 1)).toMatchObject({
-      outcome: 'deferred_incomplete_repo_set',
+      outcome: 'transitioned',
+      toStatus: 'done',
     });
-    expect(await statusOf(fx.story.id)).not.toBe('done');
+    expect(await statusOf(fx.story.id)).toBe('done');
   });
 
-  it('still HOLDS when that child’s pull request was CLOSED UNMERGED', async () => {
+  it('completes when that child’s pull request was CLOSED UNMERGED (MOTIR-10135)', async () => {
     const fx = await scenario('child-closed@example.com');
     await open(fx.apiHalf.identifier, AI, 5);
     await event('closed', fx.apiHalf.identifier, AI, 5, false, { closed: true });
     await workItemsService.updateStatus(fx.apiHalf.id, 'done', fx.ctx);
 
     expect(await deliver(fx.story.identifier, CORE, 1)).toMatchObject({
-      outcome: 'deferred_incomplete_repo_set',
+      outcome: 'transitioned',
+      toStatus: 'done',
     });
-    expect(await statusOf(fx.story.id)).not.toBe('done');
+    expect(await statusOf(fx.story.id)).toBe('done');
   });
 
-  it('still HOLDS when that child’s pull request merged onto a NON-DEFAULT base', async () => {
+  it('completes when that child’s pull request merged onto a NON-DEFAULT base (MOTIR-10135)', async () => {
     const fx = await scenario('child-side-branch@example.com');
     // Merged onto a side branch: `merged: true` for ever, and never on the trunk.
     await deliver(fx.apiHalf.identifier, AI, 5, 'release/next');
     await workItemsService.updateStatus(fx.apiHalf.id, 'done', fx.ctx);
 
     expect(await deliver(fx.story.identifier, CORE, 1)).toMatchObject({
-      outcome: 'deferred_incomplete_repo_set',
+      outcome: 'transitioned',
+      toStatus: 'done',
     });
-    expect(await statusOf(fx.story.id)).not.toBe('done');
+    expect(await statusOf(fx.story.id)).toBe('done');
   });
 
   it('an abandoned closed attempt beside the merged one does not hold it', async () => {

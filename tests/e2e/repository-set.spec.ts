@@ -282,17 +282,12 @@ test('a card that ships in two repositories holds until BOTH have merged', async
     await beat();
   });
 
-  // ⚠️ EACH pull request is linked WHEN IT OPENS, not both up front. Since
-  // MOTIR-3674 the title naming `twoRepo.identifier` associates nothing — an
-  // unlinked delivery resolves `no_work_item` — so a link is what makes the hold
-  // below a statement about the repository SET at all.
-  //
-  // The ordering is load-bearing and it is the product's, not the harness's.
-  // Linking BOTH before the first merge gives the card two delivery links, and
-  // the DELIVERY-set gate (MOTIR-3659) then holds it first —
-  // `deferred_incomplete_delivery_set`, a true answer to a different question
-  // than the one this receipt asks. Linking each as it opens is both what a run
-  // does and what keeps `deferred_incomplete_repo_set` the assertion.
+  // ⚠️ BOTH pull requests are linked and opened BEFORE the first merge. Since
+  // MOTIR-10135 completion counts the card's LINKED pull requests, not its
+  // repository list: a repository with no pull request no longer holds the card,
+  // so the hold below is the DELIVERY set's (`deferred_incomplete_delivery_set`,
+  // MOTIR-3659) — the second repository's pull request is open. The surface still
+  // names that repository as outstanding, which is what this chapter shows.
   const headRef = `subtask/${twoRepo.identifier.toLowerCase()}-repository-set`;
 
   // ── 4 — the first merge, and the HOLD. The product change. ────────────────
@@ -305,6 +300,19 @@ test('a card that ships in two repositories holds until BOTH have merged', async
       repo: E2E_REPO,
       expectOutcome: 'transitioned',
     });
+    await linkPr(page, {
+      workItemId: twoRepo.id,
+      repo: E2E_REPO_SECOND,
+      number: 5102,
+      headRef,
+    });
+    await deliver(page, {
+      action: 'opened',
+      identifier: twoRepo.identifier,
+      number: 5102,
+      repo: E2E_REPO_SECOND,
+      expectOutcome: 'noop',
+    });
     await deliver(page, {
       action: 'closed',
       identifier: twoRepo.identifier,
@@ -312,7 +320,7 @@ test('a card that ships in two repositories holds until BOTH have merged', async
       repo: E2E_REPO,
       merged: true,
       // THE ASSERTION THIS STORY EXISTS FOR: not `transitioned`.
-      expectOutcome: 'deferred_incomplete_repo_set',
+      expectOutcome: 'deferred_incomplete_delivery_set',
     });
 
     await page.goto(`/items/${twoRepo.identifier}`);
@@ -334,19 +342,6 @@ test('a card that ships in two repositories holds until BOTH have merged', async
 
   // ── 5 — the second merge completes it ─────────────────────────────────────
   await chapter('Merge the SECOND repository — the card completes', async () => {
-    await linkPr(page, {
-      workItemId: twoRepo.id,
-      repo: E2E_REPO_SECOND,
-      number: 5102,
-      headRef,
-    });
-    await deliver(page, {
-      action: 'opened',
-      identifier: twoRepo.identifier,
-      number: 5102,
-      repo: E2E_REPO_SECOND,
-      expectOutcome: 'noop',
-    });
     await deliver(page, {
       action: 'closed',
       identifier: twoRepo.identifier,

@@ -8,13 +8,14 @@ import { repoNameKey } from './repoName';
  * (Story MOTIR-3655 · MOTIR-3659, ADR `docs/decisions/work-item-delivery-links.md`).
  *
  * ── What this answers, and why it is not the repository-set gate ───────────
- * `deferred_incomplete_repo_set` asks *"has every repository this card CARRIES
- * seen a merge?"* — a declaration about work that was PROMISED, which can hold a
- * card for a repository whose pull request was never opened at all. This asks
- * *"has every pull request that DELIVERS this card merged?"* — evidence about
- * work that HAPPENED. The two are kept apart on purpose: a card can satisfy
- * either without the other, and collapsing them loses the distinction in the
- * direction that closes a card early.
+ * The repository-set gate asks *"has every repository this card CARRIES seen a
+ * merge?"* — a declaration about work that was PROMISED, which can hold a card
+ * for a repository whose pull request was never opened at all. This asks *"has
+ * every pull request that DELIVERS this card merged?"* — evidence about work
+ * that HAPPENED. Since MOTIR-10135 the evidence wins: once a card has a landed
+ * delivery ({@link hasLandedDelivery}) it completes on this set alone, and the
+ * repository list is read only by the re-check of a card with no landed
+ * delivery at all.
  *
  * ── The comparison is PER REPOSITORY, deliberately ────────────────────────
  * A member is landed when its pull request is merged **onto its own
@@ -75,6 +76,53 @@ export function deliveryMemberState(row: {
 }): DeliveryMember['state'] {
   if (row.merged) return 'merged';
   return row.state === 'open' ? 'open' : 'closed';
+}
+
+/** A stored delivery row, in the fields {@link deliveryMembersOf} reads — the
+ *  shape `workItemDeliveryRepository.listByWorkItem` returns. */
+export interface StoredDeliveryRow {
+  repo: { owner: string; name: string; defaultBranch: string };
+  pullRequest: { number: number; state: string; merged: boolean; baseRef: string | null };
+}
+
+/**
+ * A card's stored delivery rows as the members this module reasons over.
+ *
+ * One mapping for the two callers that decide completion — the merge sync and the
+ * event-free re-check (`repoSetCompletionService`) — so the re-check can never
+ * read a member differently from the merge it stands in for (MOTIR-10135).
+ */
+export function deliveryMembersOf(rows: readonly StoredDeliveryRow[]): DeliveryMember[] {
+  return rows.map((d) => ({
+    repoLabel: `${d.repo.owner}/${d.repo.name}`,
+    number: d.pullRequest.number,
+    // ⚠️ THE COLLAPSE, not the raw `merged` flag (MOTIR-5004). The stored row
+    // keeps `state` and `merged` apart; passing only the boolean threw away the
+    // difference between a pull request that has not merged YET and one that was
+    // CLOSED and never will, and the gate then held the card for the latter for
+    // ever.
+    state: deliveryMemberState(d.pullRequest),
+    baseRef: d.pullRequest.baseRef,
+    defaultBranch: d.repo.defaultBranch,
+  }));
+}
+
+/**
+ * Whether ANY member has LANDED — merged onto its own repository's default branch
+ * (MOTIR-10135).
+ *
+ * This is what retires the repository-SET gate for a card. A landed delivery is
+ * evidence that the card's work happened, and from then on the card completes on
+ * its delivery set alone: the repository list is a planning guess about where the
+ * work might land, not a promise that every repository on it gets a pull request.
+ * A card with no landed member — every delivery still open, closed unmerged, or
+ * merged somewhere the trunk cannot vouch for — has no such evidence, and the
+ * re-check keeps asking the repository set.
+ */
+export function hasLandedDelivery(members: readonly DeliveryMember[]): boolean {
+  return members.some(
+    (m) => m.state === 'merged' && m.baseRef !== null && m.baseRef === m.defaultBranch,
+  );
 }
 
 export interface DeliverySetShortfall {
@@ -159,7 +207,8 @@ export function hasDeliverySetShortfall(shortfall: DeliverySetShortfall): boolea
  * ── The bug this closes, stated exactly ───────────────────────────────────
  * `classifyRepoDelivery` calls a repository `delivered` when **any** linked pull
  * request merged onto its default branch. That is the right answer to
- * `deferred_incomplete_repo_set`'s question — *has this repository seen a
+ * the repository-set question (the retired `deferred_incomplete_repo_set` hold,
+ * MOTIR-10135; the re-check still asks it when nothing landed) — *has this repository seen a
  * merge?* — and the WRONG answer for a reader, because a card with two pull
  * requests in ONE repository, one merged and one open, then reads `Delivered`
  * while `deferred_incomplete_delivery_set` is holding it. The rail would assert

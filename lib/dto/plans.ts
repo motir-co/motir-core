@@ -269,8 +269,8 @@ export interface PlanItemProposedFields {
    * a card they already approved, with a window in between where dispatch routes
    * on the WRONG pin.
    *
-   * Element 0 is the PRIMARY — the repository dispatch routes to — and the item
-   * does not complete until every element has a merged pull request of its own.
+   * Element 0 is the PRIMARY — the repository dispatch routes to. The list does
+   * not decide completion: the item's linked pull requests do (MOTIR-10135).
    * Bare names or the `owner/name` ref form, validated at approve against the
    * PROJECT's repository domain by the SAME resolver the direct path calls
    * (`resolveAuthoredRepoPinsInProject`), so the two doors cannot disagree about

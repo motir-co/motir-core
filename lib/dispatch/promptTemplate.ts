@@ -2016,12 +2016,15 @@ function multiRepoPerItemPrWorkflow(
     // card, the completion gate counted it `awaiting`, and the card was held at
     // its last status for ever after the real work merged. The agent is the one
     // reader who KNOWS the repository needs nothing, so it settles the card.
+    // Since MOTIR-10135 the list no longer holds the card (completion counts the
+    // linked pull requests), so this is hygiene: the list should say where the
+    // work shipped, and nothing depends on the edit any more.
     'If one repository turns out to need no change at all, open no pull request there.',
     `Take it off the card instead: call the update_work_item tool with key ${src.key}`,
     'and targetRepos set to the repositories you DID change, in their current order.',
-    'The item completes only when every repository on its list has merged, so a',
-    'repository left there holds it open for ever. Then record why as a point of your',
-    'ONE record_run_discrepancy call — planAsked: that repository; built: no change;',
+    'The list records where the work shipped, so a repository left on it misreports',
+    'the card. Then record why as a point of your ONE record_run_discrepancy call —',
+    'planAsked: that repository; built: no change;',
     'why: what made the change unnecessary — and name it in your outcome report.',
   ];
 }

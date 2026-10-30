@@ -159,7 +159,7 @@ describe('1 — the write→read SEAM: one card, real Postgres, three consumers'
 });
 
 describe('2 — the completion gate against a REAL set, driven by real deliveries', () => {
-  it('HOLDS on a repository with no PR ROW AT ALL, and completes on its merge', async () => {
+  it('HOLDS while a linked pull request is open, and completes on its merge', async () => {
     const fx = await scenario('gate@example.com');
     const item = await workItemsService.createWorkItem(
       {
@@ -192,8 +192,12 @@ describe('2 — the completion gate against a REAL set, driven by real deliverie
         }),
       );
 
+    // Both pull requests are linked and open. Since MOTIR-10135 a repository with
+    // NO pull request no longer holds a card — completion counts the LINKED pull
+    // requests — so the hold here is the delivery set's: motir-ai's is still open.
     await open(CORE, 1);
-    expect(await merge(CORE, 1)).toMatchObject({ outcome: 'deferred_incomplete_repo_set' });
+    await open(AI, 2);
+    expect(await merge(CORE, 1)).toMatchObject({ outcome: 'deferred_incomplete_delivery_set' });
     // Held, NOT done — which is this test's claim. The status the hold leaves it
     // at is `implemented` since MOTIR-2999: an opened pull request says the code
     // is pushed, and only a green build makes it reviewable. No check ever
@@ -202,15 +206,16 @@ describe('2 — the completion gate against a REAL set, driven by real deliverie
       'implemented',
     );
 
-    await open(AI, 2);
     expect(await merge(AI, 2)).toMatchObject({ outcome: 'transitioned', toStatus: 'done' });
     expect((await adminDb.workItem.findUnique({ where: { id: item.id } }))!.status).toBe('done');
   });
 
-  it('the SURFACE and the GATE agree about the same card, at the same moment', async () => {
-    // The story's own failure mode, asserted where it would actually bite: a
-    // panel saying `delivered` about a repository the gate is holding the card
-    // for. Both sides are read from the live row, after a real delivery.
+  it('the SURFACE lists a repository with no pull request, and the GATE completes the card anyway', async () => {
+    // Since MOTIR-10135 the two answer different questions on purpose: the panel
+    // still draws every repository on the list (its placeholder rows are out of
+    // that card's scope), and the gate counts the LINKED pull requests — so a
+    // repository the run found needed no change no longer holds the card. Both
+    // sides are read from the live row, after a real delivery.
     const fx = await scenario('agree@example.com');
     const item = await workItemsService.createWorkItem(
       {
@@ -246,14 +251,9 @@ describe('2 — the completion gate against a REAL set, driven by real deliverie
       { repo: 'motir-core', state: 'delivered', primary: true, role: 'other' },
       { repo: 'motir-ai', state: 'awaiting', primary: false, role: 'other' },
     ]);
-    // …and the gate's, which is HOLDING the card. They name the same repository.
-    // `implemented` rather than `in_review` since MOTIR-2999 — the pull request
-    // is open and no build has reported, so the card is delivered but not yet
-    // reviewable. What matters to this test is that it is not `done`.
-    expect(row!.status).toBe('implemented');
-    expect(delivery.filter((d) => d.state !== 'delivered').map((d) => d.repo)).toEqual([
-      'motir-ai',
-    ]);
+    // …and the gate's: its one linked pull request merged onto the trunk, so the
+    // card is done whatever else the list names.
+    expect(row!.status).toBe('done');
   });
 });
 

@@ -225,7 +225,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
                   type: 'array',
                   items: { type: 'string' },
                   description:
-                    'EVERY repository this item ships in, ORDERED — the first element is the PRIMARY dispatch routes to, and the item does not complete until every one of them has a merged pull request. Bare names or the `owner/name` form, validated against the PROJECT’s repository domain at approve by the same resolver `create_work_item` uses. MUTUALLY EXCLUSIVE with `targetRepo` and `targetRepositories` — one field, three spellings — and supplying two is rejected here rather than silently resolved. `[]` is the empty set.',
+                    'EVERY repository this item ships in, ORDERED — the first element is the PRIMARY dispatch routes to. The list does not decide completion: the item completes when every pull request LINKED to it has merged. Bare names or the `owner/name` form, validated against the PROJECT’s repository domain at approve by the same resolver `create_work_item` uses. MUTUALLY EXCLUSIVE with `targetRepo` and `targetRepositories` — one field, three spellings — and supplying two is rejected here rather than silently resolved. `[]` is the empty set.',
                 },
                 targetRepositories: {
                   type: 'array',
@@ -1378,7 +1378,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         type: 'array',
         items: { type: 'string' },
         description:
-          'Optional: EVERY repository this item ships in, ORDERED — bare repo names (e.g. ["motir-core", "motir-ai"]) or the "owner/name" form. The FIRST element is the PRIMARY: the one dispatch routes the CLI to. The rest record where the item\'s other work lands, and the item does not complete until EVERY repository on the list has a pull request merged onto that repository\'s own default branch. Each element is validated against the project\'s repository domain; duplicates collapse, blank elements are dropped, and one unknown element rejects the whole write. Use it for a card that legitimately spans repositories — ONE SUBTASK is still ONE REPO, so this is for a story or a task, not a subtask. `[]` is the empty set. MUTUALLY EXCLUSIVE with targetRepo, which IS this list\'s first element: supplying both is rejected rather than silently resolved.',
+          'Optional: EVERY repository this item ships in, ORDERED — bare repo names (e.g. ["motir-core", "motir-ai"]) or the "owner/name" form. The FIRST element is the PRIMARY: the one dispatch routes the CLI to. The rest record where the item\'s other work may land. The list does not decide completion: the item completes when every pull request LINKED to it has merged onto its repository\'s default branch, so a listed repository that needed no change never holds it open. Each element is validated against the project\'s repository domain; duplicates collapse, blank elements are dropped, and one unknown element rejects the whole write. Use it for a card that legitimately spans repositories — ONE SUBTASK is still ONE REPO, so this is for a story or a task, not a subtask. `[]` is the empty set. MUTUALLY EXCLUSIVE with targetRepo, which IS this list\'s first element: supplying both is rejected rather than silently resolved.',
       },
       targetRepositories: {
         type: 'array',
@@ -4207,7 +4207,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         type: 'array',
         items: { type: 'string' },
         description:
-          "Replace the repository SET wholesale — EVERY repository this item ships in, ORDERED, the FIRST element being the PRIMARY the CLI is dispatched into. The item does not complete until every repository on the list has a pull request merged onto that repository's own default branch, so use it for a card that legitimately spans repositories (a story or a task — ONE SUBTASK is still ONE REPO). Same validation as create; `[]` clears the set. MUTUALLY EXCLUSIVE with targetRepo, which IS this list's first element: supplying both is rejected rather than silently resolved.",
+          "Replace the repository SET wholesale — EVERY repository this item ships in, ORDERED, the FIRST element being the PRIMARY the CLI is dispatched into. The list does not decide completion: the item completes when every pull request LINKED to it has merged onto its repository's default branch. Use it for a card that legitimately spans repositories (a story or a task — ONE SUBTASK is still ONE REPO). Same validation as create; `[]` clears the set. MUTUALLY EXCLUSIVE with targetRepo, which IS this list's first element: supplying both is rejected rather than silently resolved.",
       },
       targetRepositories: {
         type: 'array',

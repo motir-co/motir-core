@@ -194,9 +194,10 @@ const inputSchema = {
       'Optional: EVERY repository this item ships in, ORDERED — bare repo names ' +
         '(e.g. ["motir-core", "motir-ai"]) or the "owner/name" form. The FIRST ' +
         'element is the PRIMARY: the one dispatch routes the CLI to. The rest ' +
-        "record where the item's other work lands, and the item does not complete " +
-        'until EVERY repository on the list has a pull request merged onto that ' +
-        "repository's own default branch. Each element is validated against the " +
+        "record where the item's other work may land. The list does not decide " +
+        'completion: the item completes when every pull request LINKED to it has ' +
+        "merged onto its repository's default branch, so a listed repository that " +
+        'needed no change never holds it open. Each element is validated against the ' +
         "project's repository domain; duplicates collapse, blank elements are " +
         'dropped, and one unknown element rejects the whole write. Use it for a ' +
         'card that legitimately spans repositories — ONE SUBTASK is still ONE REPO, ' +

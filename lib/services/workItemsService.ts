@@ -1640,13 +1640,15 @@ async function latchCiGreen(
  * Re-run the repository-SET completion gate after an edit CHANGED an item's
  * repository set (MOTIR-9235).
  *
- * The merge comment `changeRequestStatusSync` posts on a held card tells the
- * person to remove a repository the work does not ship in — and until this
+ * The merge comment `changeRequestStatusSync` once posted on a held card told
+ * the person to remove a repository the work does not ship in — and until this
  * existed, doing so changed nothing: the gate runs on a DELIVERY, and an edit is
  * not one, so the card waited for an operator to run
  * `pnpm db:reevaluate:repo-set` against production. This asks the same question
  * at the moment the answer changed, through the module that owns it, so no rule
- * is restated here: an empty set, an open linked pull request and an undecided
+ * is restated here. Since MOTIR-10135 the merge no longer holds on the set once
+ * a linked delivery landed, and neither does this; an item with no landed
+ * delivery is still re-checked against its set. An empty set, an open linked pull request and an undecided
  * plan hold all still keep the item where it is.
  *
  * Returns the item as it stands afterwards — re-read only when it moved, so the
@@ -3392,7 +3394,7 @@ export const workItemsService = {
     //
     // The completion gate runs on a delivery, so an item held for a repository
     // that never had work to ship stayed held after the person removed that
-    // repository — the very step the merge comment tells them to take. After the
+    // repository — the step the old merge comment told them to take. After the
     // commit, so the gate reads the set this edit wrote.
     if (result.repoSetChanged) return reevaluateRepoSetCompletion(result.dto, ctx);
 
