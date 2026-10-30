@@ -4,14 +4,16 @@
  * onto core's Fargate services, in the one order that is safe:
  *
  *   1. verify the digest and that the image exists;
- *   2. run the migrate task from it once; only exit 0 continues;
- *   3. find the cluster's services that run the core image;
- *   4. roll them all onto it and wait for every PRIMARY deployment to complete;
+ *   2. find the cluster's services that run the core image, and refuse before
+ *      anything changes when none does or one runs a breach revision
+ *      (MOTIR-10093) — the roll clones each service's live revision;
+ *   3. run the migrate task from it once; only exit 0 continues;
+ *   4. roll the services onto it and wait for every PRIMARY deployment to complete;
  *   5. on a failure or a timeout, put each back on the revision it ran before;
  *   6. only then record the digest in `/<prefix>/core/image-digest`, which the
  *      next motir-infra deploy builds the services from.
  *
- * `--no-roll` runs 1, 2 and 6 only: the first deploy, before the services exist.
+ * `--no-roll` runs 1, 3 and 6 only: the first deploy, before the services exist.
  *
  * It reads `AWS_REGION` and `AWS_DEPLOY_NAME_PREFIX` and nothing else from the
  * environment; the deploy role's credentials reach the SDK through its default
@@ -23,7 +25,13 @@ import { parseArgs } from 'node:util';
 import { pathToFileURL } from 'node:url';
 import { awsSdkPorts, type DeployAws } from './ports';
 import { runMigrate, type DeployLog, type DeployTarget, type MigrateResult } from './migrateRun';
-import { findCoreServices, rollBack, rollServices, type RolledService } from './rollingDeploy';
+import {
+  findCoreServices,
+  rollBack,
+  rollServices,
+  type CoreService,
+  type RolledService,
+} from './rollingDeploy';
 import { ecrRepositoryName, imageRepository } from './taskDefinitions';
 
 export const EXIT_OK = 0;
@@ -118,20 +126,16 @@ async function recordDigest(aws: DeployAws, prefix: string, digest: string): Pro
   return true;
 }
 
-/** Steps 3 to 5; `null` on success, else why the roll failed. */
+/** Steps 4 and 5; `null` on success, else why the roll failed. */
 async function roll(
   aws: DeployAws,
   target: DeployTarget,
-  repository: string,
+  services: CoreService[],
   image: string,
   options: DeployOptions,
   result: DeployResult,
   log: DeployLog,
 ): Promise<string | null> {
-  const services = await findCoreServices(aws, target.cluster, repository);
-  if (services.length === 0) {
-    return `no service in cluster ${target.cluster} runs ${repository}; pass --no-roll for the first deploy`;
-  }
   try {
     const rolled = await rollServices(aws, target.cluster, services, image, options.timeoutMs, log);
     result.services = rolled.services;
@@ -153,12 +157,17 @@ async function deploy(
   const target = await readTarget(aws, options.namePrefix);
   const repository = await verifyImage(aws, target, options.digest);
   const image = `${repository}@${options.digest}`;
+  // Read before anything changes: a refusal here leaves the database unmigrated.
+  const services = options.noRoll ? [] : await findCoreServices(aws, target.cluster, repository);
+  if (!options.noRoll && services.length === 0) {
+    return `no service in cluster ${target.cluster} runs ${repository}; pass --no-roll for the first deploy`;
+  }
   log(`deploy: ${image} to ${target.cluster}`);
   const migrate: MigrateResult = await runMigrate(aws, target, image, options.timeoutMs, log);
   result.migrate = { taskArn: migrate.taskArn, exitCode: migrate.exitCode };
   if (!migrate.ok) return `migrate ${migrate.reason}; no service changed`;
   if (!options.noRoll) {
-    const failure = await roll(aws, target, repository, image, options, result, log);
+    const failure = await roll(aws, target, services, image, options, result, log);
     if (failure) return failure;
   }
   result.recorded = await recordDigest(aws, options.namePrefix, options.digest);
