@@ -642,7 +642,7 @@ export function registerValidateWorkItem(
         'alone (with `threshold`, the observed `storyPoints` and `estimateMinutes`, and no ' +
         'criterion index, because the remedy is to SPLIT the card rather than cut it at a line), ' +
         'or `likely-self-blocking-design` when ' +
-        'a CHILDLESS card that is not itself `type: design` is its OWN design blocker — one ' +
+        'a CHILDLESS card that is not itself `type: design` or `type: test` is its OWN design blocker — one ' +
         'criterion produces a design asset and ' +
         'another builds the rendered surface that drawing decides (with BOTH 1-based indices, ' +
         '`designCriterionIndex` and `surfaceCriterionIndex`, because the remedy LIFTS the design ' +
