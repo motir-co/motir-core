@@ -1045,9 +1045,41 @@ export interface ProposalLinkWarningDto {
   canonicalForms?: string[];
 }
 
-/** A proposal write door's answer: the plan, and the links it kept that need fixing. */
+/** A field whose change re-scopes a card (`patchRescopes`); the repository axis is one, however it is spelled. */
+export type RescopeField = 'title' | 'descriptionMd' | 'repository';
+
+/**
+ * ONE `modify` APPROVE WILL SEND BACK FROM BUILT WORK (MOTIR-10106) — on the
+ * response of every proposal write door as `rescopeWarnings`, and on
+ * `validate_plan` for every such proposal on the plan, present only when there is
+ * at least one. The write is kept: a re-scope is legitimate when what the card
+ * delivers changes. The warning tells the author what the reviewer's status row
+ * already says — the card leaves the status that claims its work is built — so a
+ * correction of record is not mistaken for one.
+ */
+export interface ProposalRescopeWarningDto {
+  planItemId: string;
+  /** The proposal as a refusal names it. */
+  proposal: string;
+  /** The card the `modify` targets. */
+  workItemId: string;
+  /** Its key, e.g. `MOTIR-5779`. */
+  identifier: string;
+  /** The status it holds before any park (`implemented`), and its label. */
+  status: string;
+  statusLabel: string;
+  /** What approve may move it to, as the review row names them: `To Do, Blocked, or In Progress`. */
+  outcomes: string;
+  /** The patch fields that re-scope it (`patchRescopes`). */
+  fields: RescopeField[];
+  /** The whole warning, as a caller reads it. */
+  message: string;
+}
+
+/** A proposal write door's answer: the plan, and what it kept that the author should look at. */
 export type PlanWithItemsAndWarningsDto = PlanWithItemsDto & {
   warnings?: ProposalLinkWarningDto[];
+  rescopeWarnings?: ProposalRescopeWarningDto[];
 };
 
 /** A cursor-paginated page of plans, newest first. */

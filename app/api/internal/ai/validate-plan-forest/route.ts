@@ -100,7 +100,14 @@ export async function POST(req: Request): Promise<Response> {
       opts,
     );
     const advisories = await planValidityService.projectedShapeAdvisories(planId, auth.ctx, opts);
-    return NextResponse.json({ ...result, advisories });
+    // The `modify`s approve will send back from built work (MOTIR-10106), beside
+    // the verdict — informational, never a reason to re-open the phase.
+    const rescopeWarnings = await planValidityService.projectedRescopeWarnings(
+      planId,
+      auth.ctx,
+      opts,
+    );
+    return NextResponse.json({ ...result, advisories, rescopeWarnings });
   } catch (err) {
     if (err instanceof PlanNotFoundError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });

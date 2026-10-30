@@ -351,6 +351,8 @@ describe('POST /api/internal/ai/validate-plan-forest', () => {
       sectionFindings: expect.any(Array),
       // The link advisories ride beside the verdict (MOTIR-9873); none here.
       advisories: [],
+      // …and so do the `modify`s approve would re-open (MOTIR-10106); none here.
+      rescopeWarnings: [],
     });
 
     // Invalid: a new root add gated by a not-done cross-project item.
@@ -416,6 +418,7 @@ describe('POST /api/internal/ai/validate-plan-forest', () => {
           criteria: 'no-heading',
         },
       ],
+      rescopeWarnings: [],
     });
   });
 

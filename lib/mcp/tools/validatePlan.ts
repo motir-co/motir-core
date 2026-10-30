@@ -2,7 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { planValidityService } from '@/lib/services/planValidityService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
-import type { PlanValidityDto } from '@/lib/dto/plans';
+import type { PlanValidityDto, ProposalRescopeWarningDto } from '@/lib/dto/plans';
 import {
   advisoryBlockLines,
   crossLevelEdgeLines,
@@ -69,13 +69,18 @@ interface ValidatePlanArgs {
 function summarize(
   result: PlanValidityDto,
   advisories: readonly WorkItemProseShapeAdvisoryDto[],
+  rescopeWarnings: readonly ProposalRescopeWarningDto[] = [],
 ): string {
   // The shape advisories over the plan's proposals (MOTIR-9007, widened to every
-  // shape family by MOTIR-10087) ride beside the verdict and never change it.
-  const linkLines = advisoryBlockLines(
-    advisories,
-    `NOT a blocker — the plan is ${result.valid ? 'still VALID' : 'unaffected'} either way`,
-  );
+  // shape family by MOTIR-10087) ride beside the verdict and never change it —
+  // and so do the `modify`s approve will send back from built work (MOTIR-10106).
+  const linkLines = [
+    ...advisoryBlockLines(
+      advisories,
+      `NOT a blocker — the plan is ${result.valid ? 'still VALID' : 'unaffected'} either way`,
+    ),
+    ...rescopeWarningLines(rescopeWarnings),
+  ];
   if (result.valid) {
     return [
       `Plan ${result.planId} is VALID — it would be ACCEPTED by approve, and every item in ` +
@@ -124,6 +129,20 @@ function summarize(
   return lines.join('\n');
 }
 
+/**
+ * The `modify`s approve will send back from built work (MOTIR-10106), one line per
+ * card — `[]` when there are none, so a plan without one reads as it always did.
+ */
+export function rescopeWarningLines(warnings: readonly ProposalRescopeWarningDto[]): string[] {
+  if (warnings.length === 0) return [];
+  return [
+    '',
+    `${warnings.length} \`modify\`(s) approve will send back from built work — NOT a blocker; ` +
+      'keep each only if what the card delivers changes:',
+    ...warnings.map((w) => `  planItem:${w.planItemId} (${w.identifier}): ${w.message}`),
+  ];
+}
+
 export async function runValidatePlan(
   args: ValidatePlanArgs,
   ctx: ServiceContext,
@@ -132,13 +151,18 @@ export async function runValidatePlan(
     // The plan is read through `plansService.getPlan`, which resolves the
     // project AND asserts browse on it — so there is no project argument to
     // take and no second access check to add here.
-    const [result, advisories] = await Promise.all([
+    const [result, advisories, rescopeWarnings] = await Promise.all([
       planValidityService.validateProjectedPlan(args.planId, ctx, args.condition),
       planValidityService.projectedShapeAdvisories(args.planId, ctx),
+      planValidityService.projectedRescopeWarnings(args.planId, ctx),
     ]);
     return toolOk(
-      summarize(result, advisories),
-      exempt('validate_plan', { ...result, advisories } as unknown as Record<string, unknown>),
+      summarize(result, advisories, rescopeWarnings),
+      exempt('validate_plan', {
+        ...result,
+        advisories,
+        rescopeWarnings,
+      } as unknown as Record<string, unknown>),
     );
   } catch (err) {
     return toToolError(err);
@@ -191,9 +215,14 @@ export function registerValidatePlan(server: McpServer, resolveContext: McpConte
         'whose label names a different key than the card the id opens, or whose id opens no ' +
         'card — `targetKey: null` — with the `field` it sits in). A runner STOPS on a ' +
         'two-index entry, so dispose of each before sealing: re-word the criterion, lift it, or ' +
-        'record on the card why it is a false positive. Returns ' +
-        '`{ planId, valid, rejections: [...], blockers: [...], invalidEdges: [...], ' +
-        'crossLevelEdges: [...], sectionFindings: [...], advisories: [...] }`; an item named ' +
+        'record on the card why it is a false positive. Also beside the verdict, ' +
+        '`rescopeWarnings` lists every `modify` approve will send back from built work — a ' +
+        'patch changing the title, description or repository of a card at Implemented, In ' +
+        'Review or Approved, which approve moves to To Do, Blocked or In Progress — naming the ' +
+        'card, its status and the fields; keep each only if what the card delivers changes. ' +
+        'Returns `{ planId, valid, rejections: [...], blockers: [...], invalidEdges: [...], ' +
+        'crossLevelEdges: [...], sectionFindings: [...], advisories: [...], ' +
+        'rescopeWarnings: [...] }`; an item named ' +
         '`planItem:<id>` is a PROPOSAL in this plan, not a work item. ' +
         '`condition` defaults to `loose` (a done dependency outside the plan counts as ' +
         'satisfied); `tight` requires every dependency to be IN the projection. This is the ' +
