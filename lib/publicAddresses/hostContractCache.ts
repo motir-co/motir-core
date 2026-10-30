@@ -9,10 +9,10 @@
 //   a retired name can keep answering for at most HOST_CONTRACT_MAX_AGE_SECONDS,
 //   and only from a cache that honours `max-age`.
 //
-// ⚠️ NO `stale-while-revalidate`. A revalidate window lets a cache serve the
+// ⚠️ NO STALE-SERVING DIRECTIVE. A revalidate window lets a cache serve the
 // stale answer while it refetches, which is exactly a retired name answering
-// past the bound. The previous header (`max-age=60, stale-while-revalidate=300`)
-// let it answer for up to six minutes and said so nowhere.
+// past the bound. The previous header (`max-age=60` plus a 300-second
+// revalidate window) let it answer for up to six minutes and said so nowhere.
 //
 // ⚠️ A 404 IS NEVER CACHED. A name freed by a release can be claimed seconds
 // later; a cached refusal would hide the new owner's address for the length of
