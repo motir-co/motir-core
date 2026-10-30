@@ -15,11 +15,17 @@ import en from '@/messages/en.json';
  *
  * The first test is the recording: an owner reaches the workspace Custom domains
  * pane by both doors, is refused a Motir address in its own words, adds a
- * subdomain, watches it reach Issued, loses the ownership TXT and sees the
- * failure with its Re-check, restores it and recovers, then removes the domain
- * through the confirm that says nothing is reserved. The rest are the arms a
- * reviewer does not need to watch: the apex records and `pointing_lost`, the
- * free-tier upsell and the read-only member.
+ * subdomain naming one of the workspace's applications in the picker, watches
+ * it reach Issued with that application on its row, loses the ownership TXT and
+ * sees the failure with its Re-check, restores it and recovers, then removes the
+ * domain through the confirm that says nothing is reserved. The rest are the
+ * arms a reviewer does not need to watch: a domain added naming no application
+ * and then bound, a bound domain re-pointed, the apex records and
+ * `pointing_lost`, the free-tier upsell and the read-only member.
+ *
+ * The workspace has TWO applications of one project, `shop` and `blog`. They
+ * share the project's name, which is the case where the picker and the row tell
+ * them apart by slug (design `custom-domains--application.mock.html`).
  *
  * ── WHY THE ACCEPTANCE LANE ────────────────────────────────────────────────
  * Custom domains are cloud-only and tier-gated. The main lane runs cloud-off,
@@ -58,7 +64,15 @@ const MEMBER = 'domains-member@motir.test';
 const FREE_OWNER = 'domains-free@motir.test';
 const PANE = '/settings/workspace/custom-domains';
 const SUBDOMAIN = 'app.acme.test';
+const UNBOUND = 'docs.acme.test';
 const APEX = 'acme.test';
+/** The project both seeded applications belong to, so the name they share. */
+const APP_NAME = 'Acme roadmap';
+const apps = { shop: '', blog: '' };
+/** The option a picker offers for one of the two same-named applications. */
+const optionName = (slug: string) => `${APP_NAME} (${slug})`;
+/** The Application line of a row naming that application. */
+const serves = (slug: string) => `Serves ${APP_NAME} ${slug}.`;
 const CNAME_TARGET = 'edge.motir.e2e';
 const A_RECORD = '192.0.2.10';
 const AAAA_RECORD = '2001:db8::10';
@@ -73,6 +87,10 @@ const addWrite = (page: Page) =>
   page.waitForResponse((r) => pathOf(r) === domainsBase() && r.request().method() === 'POST');
 const verifyWrite = (page: Page) =>
   page.waitForResponse((r) => pathOf(r).endsWith('/verify') && r.request().method() === 'POST');
+const bindWrite = (page: Page) =>
+  page.waitForResponse(
+    (r) => pathOf(r).startsWith(`${domainsBase()}/`) && r.request().method() === 'PATCH',
+  );
 const removeWrite = (page: Page) =>
   page.waitForResponse(
     (r) => pathOf(r).startsWith(`${domainsBase()}/`) && r.request().method() === 'DELETE',
@@ -113,18 +131,72 @@ async function sweepNow(page: Page, host: string) {
   expect(sweep?.scanned).toBeGreaterThan(0);
 }
 
-async function addDomain(page: Page, host: string): Promise<PublicAddressDto> {
+/** Choose an option in an application picker inside `scope`. */
+async function pick(page: Page, scope: ReturnType<Page['getByRole']>, option: string) {
+  await scope.getByRole('combobox', { name: copy.dialog.appLabel }).click();
+  await page.getByRole('option', { name: option, exact: true }).click();
+}
+
+/**
+ * Add a domain, choosing `application` in the picker: an application's slug, or
+ * `null` for `No application yet`. Asserts the POST carried that choice.
+ */
+async function addDomain(
+  page: Page,
+  host: string,
+  application: keyof typeof apps | null,
+): Promise<PublicAddressDto> {
   await pane(page).getByRole('button', { name: copy.add }).click();
   const dialog = page.getByRole('dialog', { name: copy.dialog.title });
   await dialog.getByRole('textbox', { name: copy.dialog.label }).fill(host);
+  // Two applications: nothing is preselected, so Add waits for the choice.
+  await expect(dialog.getByRole('button', { name: copy.add })).toBeDisabled();
+  await pick(page, dialog, application ? optionName(application) : copy.dialog.appNone);
   const added = addWrite(page);
   await dialog.getByRole('button', { name: copy.add }).click();
   const res = await added;
+  expect(res.request().postDataJSON()).toEqual({
+    hostname: host,
+    applicationId: application ? apps[application] : null,
+  });
   expect(res.status(), await res.text()).toBe(201);
   const dto = (await res.json()) as PublicAddressDto;
   expect(dto).toMatchObject({ hostname: host, status: 'unverified' });
   await expect(dialog).toHaveCount(0);
   return dto;
+}
+
+/** Check now on an unverified row, and wait for Issued. */
+async function checkNow(page: Page, host: string) {
+  const verified = verifyWrite(page);
+  await row(page, host).getByRole('button', { name: copy.action.checkNow }).click();
+  const res = await verified;
+  expect(res.status(), await res.text()).toBe(200);
+  await expect(row(page, host).getByText(copy.status.issued, { exact: true })).toBeVisible();
+}
+
+/** A hosted application of the workspace, as the picker lists it. */
+async function seedApplication(workspace: string, project: string, slug: string, position: string) {
+  const repo = await adminDb.projectRepo.create({
+    data: {
+      workspaceId: workspace,
+      projectId: project,
+      role: 'web',
+      name: slug,
+      position,
+      seedSource: 'initialised',
+    },
+  });
+  const app = await adminDb.hostedApplication.create({
+    data: {
+      workspaceId: workspace,
+      projectId: project,
+      projectRepositoryId: repo.id,
+      target: 'fly',
+      slug,
+    },
+  });
+  return app.id;
 }
 
 async function seedOwner(email: string, name: string, workspaceName: string, key: string) {
@@ -152,6 +224,8 @@ test.beforeAll(async () => {
 
   const a = await seedOwner(OWNER, 'Ada Owner', 'Acme', 'ROADMAP');
   workspaceId = a.workspace.id;
+  apps.shop = await seedApplication(a.workspace.id, a.project.id, 'shop', 'a0');
+  apps.blog = await seedApplication(a.workspace.id, a.project.id, 'blog', 'a1');
   const { organizationId } = await adminDb.workspace.findUniqueOrThrow({
     where: { id: a.workspace.id },
     select: { organizationId: true },
@@ -233,6 +307,7 @@ test('a workspace owner adds a domain, watches it go live, loses and restores it
       await pane(page).getByRole('button', { name: copy.add }).click();
       const dialog = page.getByRole('dialog', { name: copy.dialog.title });
       await dialog.getByRole('textbox', { name: copy.dialog.label }).fill('shop.motir.e2e');
+      await pick(page, dialog, optionName('shop'));
       const refused = addWrite(page);
       await dialog.getByRole('button', { name: copy.add }).click();
       const res = await refused;
@@ -248,19 +323,22 @@ test('a workspace owner adds a domain, watches it go live, loses and restores it
     },
   );
 
-  await chapter('Adding a subdomain: Unverified, with the TXT and the CNAME', async () => {
-    added = await addDomain(page, SUBDOMAIN);
-    const r = row(page, SUBDOMAIN);
-    await expect(r.getByText(copy.status.unverified, { exact: true })).toBeVisible();
-    await expect(r.getByRole('cell', { name: `_motir-verify.${SUBDOMAIN}` })).toBeVisible();
-    await expect(r.getByRole('cell', { name: added.verification!.value })).toBeVisible();
-    await expect(r.getByRole('cell', { name: 'CNAME', exact: true })).toBeVisible();
-    await expect(r.getByRole('cell', { name: CNAME_TARGET })).toBeVisible();
-    await expect(r.getByRole('cell', { name: 'A', exact: true })).toHaveCount(0);
-    await expect(r.getByRole('cell', { name: 'AAAA', exact: true })).toHaveCount(0);
-    await expect(r.getByRole('button', { name: copy.action.copy }).first()).toBeVisible();
-    await beat();
-  });
+  await chapter(
+    'Adding a subdomain for the shop: Unverified, with the TXT and the CNAME',
+    async () => {
+      added = await addDomain(page, SUBDOMAIN, 'shop');
+      const r = row(page, SUBDOMAIN);
+      await expect(r.getByText(copy.status.unverified, { exact: true })).toBeVisible();
+      await expect(r.getByRole('cell', { name: `_motir-verify.${SUBDOMAIN}` })).toBeVisible();
+      await expect(r.getByRole('cell', { name: added.verification!.value })).toBeVisible();
+      await expect(r.getByRole('cell', { name: 'CNAME', exact: true })).toBeVisible();
+      await expect(r.getByRole('cell', { name: CNAME_TARGET })).toBeVisible();
+      await expect(r.getByRole('cell', { name: 'A', exact: true })).toHaveCount(0);
+      await expect(r.getByRole('cell', { name: 'AAAA', exact: true })).toHaveCount(0);
+      await expect(r.getByRole('button', { name: copy.action.copy }).first()).toBeVisible();
+      await beat();
+    },
+  );
 
   await chapter('Check now: ownership proven, the certificate Issued', async () => {
     const verified = verifyWrite(page);
@@ -275,7 +353,8 @@ test('a workspace owner adds a domain, watches it go live, loses and restores it
       'href',
       `https://${SUBDOMAIN}`,
     );
-    await expect(r.getByText(copy.app.none)).toBeVisible();
+    // The application chosen in the picker, by name and slug.
+    await expect(r.getByText(serves('shop'))).toBeVisible();
     await expect(pane(page).getByText(NEVER)).toHaveCount(0);
     await beat();
   });
@@ -337,6 +416,60 @@ test('a workspace owner adds a domain, watches it go live, loses and restores it
   });
 });
 
+test('a domain added naming no application serves nothing until it is bound, then re-points', async ({
+  page,
+}) => {
+  await signIn(page, OWNER, PASSWORD);
+  await page.goto(PANE);
+  await expect(pane(page).getByRole('button', { name: copy.add })).toBeVisible({
+    timeout: FIRST_PAINT_MS,
+  });
+
+  await addDomain(page, UNBOUND, null);
+  await checkNow(page, UNBOUND);
+  const r = row(page, UNBOUND);
+  await expect(r.getByText(copy.app.none)).toBeVisible();
+  await r.getByRole('button', { name: copy.action.showDns }).click();
+  const records = await r.locator('table').allTextContents();
+  expect(records.length).toBeGreaterThan(0);
+
+  // Bind it: the control reads Choose, and the confirm says what changes.
+  await r.getByRole('button', { name: `${copy.app.choose} for ${UNBOUND}` }).click();
+  let dialog = page.getByRole('dialog', { name: copy.app.title.replace('{host}', UNBOUND) });
+  await expect(dialog.getByRole('button', { name: copy.app.save })).toBeDisabled();
+  await pick(page, dialog, optionName('blog'));
+  await expect(
+    dialog.getByText(copy.app.confirm.replace('{host}', UNBOUND).replace('{app}', APP_NAME)),
+  ).toBeVisible();
+  let bound = bindWrite(page);
+  await dialog.getByRole('button', { name: copy.app.save }).click();
+  let res = await bound;
+  expect(res.request().postDataJSON()).toEqual({ applicationId: apps.blog });
+  expect(res.status(), await res.text()).toBe(200);
+  await expect(dialog).toHaveCount(0);
+  await expect(r.getByText(serves('blog'))).toBeVisible();
+  await expect(r).toHaveAttribute('data-status', 'issued');
+
+  // Re-point it at the other application: the row names it, nothing else moves.
+  await r.getByRole('button', { name: `${copy.app.change} for ${UNBOUND}` }).click();
+  dialog = page.getByRole('dialog', { name: copy.app.title.replace('{host}', UNBOUND) });
+  await pick(page, dialog, optionName('shop'));
+  bound = bindWrite(page);
+  await dialog.getByRole('button', { name: copy.app.save }).click();
+  res = await bound;
+  expect(res.request().postDataJSON()).toEqual({ applicationId: apps.shop });
+  expect(res.status(), await res.text()).toBe(200);
+  await expect(r.getByText(serves('shop'))).toBeVisible();
+
+  const stored = await storedRow(page, UNBOUND);
+  expect(stored).toMatchObject({ status: 'issued', applicationId: apps.shop, failureKind: null });
+  await page.reload();
+  await expect(row(page, UNBOUND)).toHaveAttribute('data-status', 'issued');
+  await expect(row(page, UNBOUND).getByText(serves('shop'))).toBeVisible();
+  await row(page, UNBOUND).getByRole('button', { name: copy.action.showDns }).click();
+  expect(await row(page, UNBOUND).locator('table').allTextContents()).toEqual(records);
+});
+
 test('an apex domain is offered A and AAAA, and an un-pointed one fails with its records', async ({
   page,
 }) => {
@@ -346,7 +479,7 @@ test('an apex domain is offered A and AAAA, and an un-pointed one fails with its
     timeout: FIRST_PAINT_MS,
   });
 
-  await addDomain(page, APEX);
+  await addDomain(page, APEX, 'shop');
   let r = row(page, APEX);
   await expect(r.getByRole('cell', { name: 'A', exact: true })).toBeVisible();
   await expect(r.getByRole('cell', { name: A_RECORD })).toBeVisible();
@@ -405,4 +538,12 @@ test('a member who cannot manage domains reads the list, with no Add or Remove',
   await expect(pane(page).getByRole('button', { name: copy.add })).toHaveCount(0);
   await expect(pane(page).getByRole('button', { name: copy.action.remove })).toHaveCount(0);
   await expect(pane(page).getByRole('button', { name: copy.action.recheck })).toHaveCount(0);
+  // The application each issued row serves is read, never changed.
+  await expect(row(page, UNBOUND).getByText(serves('shop'))).toBeVisible();
+  await expect(pane(page).getByRole('button', { name: new RegExp(copy.app.change) })).toHaveCount(
+    0,
+  );
+  await expect(pane(page).getByRole('button', { name: new RegExp(copy.app.choose) })).toHaveCount(
+    0,
+  );
 });
