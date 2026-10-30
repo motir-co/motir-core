@@ -62,17 +62,33 @@ export interface SubdomainReleaseDto {
 // application record exists yet, so every live workspace host answers
 // `no_application`; the `application` outcome is owed with that record.
 
-/** A live workspace host with no application to serve yet. */
+/** A live host with no application to serve yet. */
 export interface PublicHostNoApplicationDto {
   readonly kind: 'no_application';
   readonly workspace: { readonly name: string };
 }
 
 /**
+ * An issued customer host whose domain names an application with a production
+ * release (ADR MOTIR-9521 §3). `upstream` is present ONLY for the edge's
+ * bearer: an anonymous caller never learns where an application lives.
+ */
+export interface PublicHostApplicationDto {
+  readonly kind: 'application';
+  readonly workspace: { readonly name: string };
+  readonly application: { readonly id: string; readonly slug: string };
+  readonly upstream?: {
+    readonly origin: string;
+    readonly appRef: string;
+    readonly credential: 'origin_secret' | 'aws_sigv4' | 'none';
+  };
+}
+
+/**
  * What a `Host` answers. The `project` outcome is retired (ADR MOTIR-9521 §1:
  * a customer domain serves an application, never a project).
  */
-export type PublicHostResolutionDto = PublicHostNoApplicationDto;
+export type PublicHostResolutionDto = PublicHostApplicationDto | PublicHostNoApplicationDto;
 
 /**
  * A project's addresses, as the renderer needs them (ADR §7).

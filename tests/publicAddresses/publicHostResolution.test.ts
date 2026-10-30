@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
@@ -14,14 +14,31 @@ import type { ProjectAccessMode } from '@/generated/prisma/client';
 // IDENTICALLY. A resolver that refused everything would pass every
 // denial test ever written.
 
+// The one seam to the hosting runtime (MOTIR-9525). Stubbed: what a target's
+// port answers is the hosting suite's business; what the CONTRACT does with the
+// answer — and that it asks only for the edge — is this file's.
+const resolveApplicationTarget = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/publicAddresses/applicationTarget', () => ({ resolveApplicationTarget }));
+
+const EDGE_TOKEN = 'edge-contract-token-for-tests';
+const UPSTREAM = {
+  origin: 'https://mh-shop.fly.dev',
+  appRef: 'mh-shop',
+  credential: 'origin_secret',
+} as const;
+
 const { db } = await import('@/lib/db');
 const { publicAddressesService, PublicHostNotFoundError, normaliseHost } =
   await import('@/lib/services/publicAddressesService');
 const { PublicAddressesUnavailableError } = await import('@/lib/publicAddresses/errors');
 const { publicSubdomainService } = await import('@/lib/services/publicSubdomainService');
 const { GET: resolveRoute } = await import('@/app/api/public/hosts/[host]/route');
-const { HOST_CONTRACT_CACHE_CONTROL, HOST_CONTRACT_MAX_AGE_SECONDS, NOT_FOUND_CACHE_CONTROL } =
-  await import('@/lib/publicAddresses/hostContractCache');
+const {
+  HOST_CONTRACT_CACHE_CONTROL,
+  HOST_CONTRACT_CREDENTIALED_CACHE_CONTROL,
+  HOST_CONTRACT_MAX_AGE_SECONDS,
+  NOT_FOUND_CACHE_CONTROL,
+} = await import('@/lib/publicAddresses/hostContractCache');
 const { createTestWorkspace } = await import('../fixtures');
 
 const BASE = 'motir.example';
@@ -39,11 +56,15 @@ beforeEach(async () => {
   await truncateAuthTables();
   process.env['MOTIR_CLOUD'] = 'true';
   process.env['MOTIR_PUBLIC_TENANT_DOMAIN'] = BASE;
+  process.env['MOTIR_EDGE_CONTRACT_TOKEN'] = EDGE_TOKEN;
+  resolveApplicationTarget.mockReset();
+  resolveApplicationTarget.mockResolvedValue(UPSTREAM);
   host = await seedTenant('acme', 'ACME', 'public');
 });
 
 afterEach(() => {
   delete process.env['MOTIR_CLOUD'];
+  delete process.env['MOTIR_EDGE_CONTRACT_TOKEN'];
   delete process.env['MOTIR_PUBLIC_TENANT_DOMAIN'];
 });
 
@@ -87,10 +108,9 @@ describe('the two shapes that RESOLVE', () => {
     expect(r).toEqual({ kind: 'no_application', workspace: { name: 'Acme' } });
   });
 
-  it('an ISSUED customer domain names no project — it answers no_application', async () => {
-    // ADR MOTIR-9521 §1: a customer domain is the workspace's and names at most
-    // one application. The `project` outcome is retired; until the contract
-    // carries `application` (MOTIR-9525) the domain has nothing to serve.
+  it('an ISSUED but UNBOUND customer domain answers no_application', async () => {
+    // ADR MOTIR-9521 §1, §3: a customer domain is the workspace's and names at
+    // most one application. Naming none, it has nothing to serve.
     await seedCustomDomain(host, 'roadmap.acme.test', 'issued');
     const r = await publicAddressesService.resolveHost('roadmap.acme.test');
     expect(r).toEqual({ kind: 'no_application', workspace: { name: 'Acme' } });
@@ -101,6 +121,68 @@ describe('the two shapes that RESOLVE', () => {
     await expect(publicAddressesService.resolveHost(`acme.${BASE}:443`)).resolves.toMatchObject({
       kind: 'no_application',
     });
+  });
+});
+
+describe('the APPLICATION outcome (ADR MOTIR-9521 §3)', () => {
+  it('a domain naming an application with a production release answers it — with NO upstream', async () => {
+    const app = await seedApplication(host, { released: true });
+    await seedCustomDomain(host, 'shop.acme.test', 'issued', app.id);
+    const r = await publicAddressesService.resolveHost('shop.acme.test');
+    expect(r).toEqual({
+      kind: 'application',
+      workspace: { name: 'Acme' },
+      application: { id: app.id, slug: 'shop' },
+    });
+    // An anonymous read never asks the runtime: a Fly upstream wakes on any request.
+    expect(resolveApplicationTarget).not.toHaveBeenCalled();
+  });
+
+  it('the edge (credentialed) gets the upstream the seam names', async () => {
+    const app = await seedApplication(host, { released: true });
+    await seedCustomDomain(host, 'shop.acme.test', 'issued', app.id);
+    const r = await publicAddressesService.resolveHost('shop.acme.test', { credentialed: true });
+    expect(r).toEqual({
+      kind: 'application',
+      workspace: { name: 'Acme' },
+      application: { id: app.id, slug: 'shop' },
+      upstream: UPSTREAM,
+    });
+  });
+
+  it('an application with NO production release answers no_application', async () => {
+    const app = await seedApplication(host, { released: false });
+    await seedCustomDomain(host, 'shop.acme.test', 'issued', app.id);
+    await expect(
+      publicAddressesService.resolveHost('shop.acme.test', { credentialed: true }),
+    ).resolves.toEqual({ kind: 'no_application', workspace: { name: 'Acme' } });
+  });
+
+  it('to the edge, a release the target no longer serves answers no_application', async () => {
+    resolveApplicationTarget.mockResolvedValue(null);
+    const app = await seedApplication(host, { released: true });
+    await seedCustomDomain(host, 'shop.acme.test', 'issued', app.id);
+    await expect(
+      publicAddressesService.resolveHost('shop.acme.test', { credentialed: true }),
+    ).resolves.toEqual({ kind: 'no_application', workspace: { name: 'Acme' } });
+  });
+
+  it('answers for a workspace with NO public project — a domain is not a project page', async () => {
+    const priv = await seedTenant('priv2', 'PRIV2', 'members');
+    await seedCustomDomain(priv, 'secret.acme.test', 'issued');
+    await expect(publicAddressesService.resolveHost('secret.acme.test')).resolves.toEqual({
+      kind: 'no_application',
+      workspace: { name: 'priv2' },
+    });
+  });
+
+  it('a REMOVED domain stops answering at once — the same 404 as an unknown host', async () => {
+    const app = await seedApplication(host, { released: true });
+    const row = await seedCustomDomain(host, 'shop.acme.test', 'issued', app.id);
+    await adminDb.publicAddress.delete({ where: { id: row.id } });
+    await expect(publicAddressesService.resolveHost('shop.acme.test')).rejects.toBeInstanceOf(
+      PublicHostNotFoundError,
+    );
   });
 });
 
@@ -199,14 +281,6 @@ describe('everything else refuses IDENTICALLY', () => {
     );
   });
 
-  it('a customer domain of a workspace with no public project', async () => {
-    const priv = await seedTenant('priv2', 'PRIV2', 'members');
-    await seedCustomDomain(priv, 'secret.acme.test', 'issued');
-    await expect(publicAddressesService.resolveHost('secret.acme.test')).rejects.toBeInstanceOf(
-      PublicHostNotFoundError,
-    );
-  });
-
   it('OFF-CLOUD, every host — the capability is absent, not hidden', async () => {
     await seedSubdomain(host, `acme.${BASE}`);
     delete process.env['MOTIR_CLOUD'];
@@ -220,10 +294,13 @@ describe('the route’s cache bound — a retired name answers for 30 seconds at
   // Story MOTIR-4528 · MOTIR-9511. The database side of rule 2 is exact; a
   // cached 200 is what could keep a retired name answering, so the header IS
   // the promise.
-  const call = (h: string) =>
-    resolveRoute(new Request(`https://app.motir.co/api/public/hosts/${h}`), {
-      params: Promise.resolve({ host: h }),
-    });
+  const call = (h: string, authorization?: string) =>
+    resolveRoute(
+      new Request(`https://app.motir.co/api/public/hosts/${h}`, {
+        headers: authorization ? { authorization } : {},
+      }),
+      { params: Promise.resolve({ host: h }) },
+    );
 
   it('a 200 carries exactly `public, max-age=30`, with no revalidate window', async () => {
     await seedSubdomain(host, `acme.${BASE}`);
@@ -233,6 +310,23 @@ describe('the route’s cache bound — a retired name answers for 30 seconds at
     expect(res.headers.get('Cache-Control')).toBe(HOST_CONTRACT_CACHE_CONTROL);
     expect(res.headers.get('Cache-Control')).toBe('public, max-age=30');
     expect(res.headers.get('Cache-Control')).not.toContain('stale-while-revalidate');
+  });
+
+  it('the EDGE’s 200 is private with the same bound, and every 200 varies on Authorization', async () => {
+    const app = await seedApplication(host, { released: true });
+    await seedCustomDomain(host, 'shop.acme.test', 'issued', app.id);
+    const edge = await call('shop.acme.test', `Bearer ${EDGE_TOKEN}`);
+    expect(edge.status).toBe(200);
+    expect(edge.headers.get('Cache-Control')).toBe(HOST_CONTRACT_CREDENTIALED_CACHE_CONTROL);
+    expect(edge.headers.get('Cache-Control')).toBe('private, max-age=30');
+    expect(edge.headers.get('Vary')).toBe('Authorization');
+    expect(await edge.json()).toMatchObject({ kind: 'application', upstream: UPSTREAM });
+
+    // A wrong token is simply anonymous: no upstream, the shared bound.
+    const stranger = await call('shop.acme.test', 'Bearer not-the-token');
+    expect(stranger.headers.get('Cache-Control')).toBe(HOST_CONTRACT_CACHE_CONTROL);
+    expect(stranger.headers.get('Vary')).toBe('Authorization');
+    expect(await stranger.json()).not.toHaveProperty('upstream');
   });
 
   it('a 404 is `no-store`, and a legacy alias gets the same 404 body as an unknown host', async () => {
@@ -367,15 +461,55 @@ function seedCustomDomain(
   t: Tenant,
   hostname: string,
   status: 'unverified' | 'issued' | 'pending_certificate',
+  applicationId: string | null = null,
 ) {
   return adminDb.publicAddress.create({
     data: {
       workspaceId: t.workspaceId,
+      applicationId,
       hostname,
       kind: 'custom_domain',
       status,
       verificationToken: `motir-verify-${hostname}`,
     },
+  });
+}
+
+/** A hosted application of the tenant, with or without a production release. */
+async function seedApplication(t: Tenant, { released }: { released: boolean }) {
+  const repo = await adminDb.projectRepo.create({
+    data: {
+      workspaceId: t.workspaceId,
+      projectId: t.projectId,
+      role: 'web',
+      name: 'shop',
+      position: 'a0',
+      seedSource: 'initialised',
+    },
+  });
+  const app = await adminDb.hostedApplication.create({
+    data: {
+      workspaceId: t.workspaceId,
+      projectId: t.projectId,
+      projectRepositoryId: repo.id,
+      target: 'fly',
+      slug: 'shop',
+      productionAppName: 'mh-shop',
+    },
+  });
+  if (!released) return app;
+  const release = await adminDb.hostedRelease.create({
+    data: {
+      workspaceId: t.workspaceId,
+      applicationId: app.id,
+      commitSha: 'a'.repeat(40),
+      cause: 'merge',
+      state: 'live',
+    },
+  });
+  return adminDb.hostedApplication.update({
+    where: { id: app.id },
+    data: { currentReleaseId: release.id },
   });
 }
 

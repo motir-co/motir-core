@@ -47,6 +47,35 @@ export const hostedApplicationRepository = {
     });
   },
 
+  /**
+   * What the host contract reads of the application a customer domain names
+   * (ADR MOTIR-9521 §3) — run under the system context, since the contract is
+   * anonymous and the domain row already proved which workspace it is.
+   */
+  async findForHostContract(
+    id: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{
+    id: string;
+    workspaceId: string;
+    slug: string;
+    target: HostingTarget;
+    productionAppName: string | null;
+    currentReleaseId: string | null;
+  } | null> {
+    return tx.hostedApplication.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        workspaceId: true,
+        slug: true,
+        target: true,
+        productionAppName: true,
+        currentReleaseId: true,
+      },
+    });
+  },
+
   async findByProjectRepository(
     projectRepositoryId: string,
     tx: Prisma.TransactionClient,
