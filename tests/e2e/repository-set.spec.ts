@@ -286,8 +286,8 @@ test('a card that ships in two repositories holds until BOTH have merged', async
   // MOTIR-10135 completion counts the card's LINKED pull requests, not its
   // repository list: a repository with no pull request no longer holds the card,
   // so the hold below is the DELIVERY set's (`deferred_incomplete_delivery_set`,
-  // MOTIR-3659) — the second repository's pull request is open. The surface still
-  // names that repository as outstanding, which is what this chapter shows.
+  // MOTIR-3659) — the second repository's pull request is open. The surface
+  // names that pull request as still open, which is what this chapter shows.
   const headRef = `subtask/${twoRepo.identifier.toLowerCase()}-repository-set`;
 
   // ── 4 — the first merge, and the HOLD. The product change. ────────────────
@@ -331,11 +331,14 @@ test('a card that ships in two repositories holds until BOTH have merged', async
     await expect(statusCard(page).getByText('Implemented', { exact: true })).toBeVisible();
     await beat();
 
-    // And the surface says WHICH repository is still outstanding — the hold plus
-    // its explanation, not just the hold.
+    // And the surface says WHICH pull request is still holding it — the hold plus
+    // its explanation, not just the hold. Since MOTIR-10135 that is the delivery
+    // caption (MOTIR-3660), the same shortfall the gate held on.
     const card = repositoriesCard(page);
-    await expect(card.getByText(/1 of 2 delivered/)).toBeVisible();
-    await expect(card.getByText(new RegExp(`${E2E_REPO_SECOND.name}.*outstanding`))).toBeVisible();
+    await expect(card.getByText(/1 of 2 deliveries merged/)).toBeVisible();
+    await expect(
+      card.getByText(new RegExp(`${E2E_REPO_SECOND.name}#5102 is still open`)),
+    ).toBeVisible();
     await beat();
     await beat();
   });
