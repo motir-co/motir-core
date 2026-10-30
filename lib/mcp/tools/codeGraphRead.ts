@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type {
+  CodeGraphCommitDTO,
   CodeGraphDriftDTO,
   CodeGraphReadDTO,
   CodeGraphReadTool,
@@ -150,11 +151,23 @@ export function renderCodeGraphDrift(drift: readonly CodeGraphDriftDTO[]): strin
   ].join('\n');
 }
 
+/**
+ * THE COMMIT LINE (MOTIR-10122) — the commit each repository's graph was built at,
+ * full sha, appended after the executor's bytes like the drift note. A planning
+ * session's recorded reads cite it, and `plan.py` takes it from this text, the
+ * only part of a result its session stream carries.
+ */
+export function renderCodeGraphCommits(commits: readonly CodeGraphCommitDTO[]): string {
+  return `Graph commit${commits.length === 1 ? '' : 's'} read: ${commits.map((c) => `${c.repoRef}@${c.indexedSha}`).join(', ')}.`;
+}
+
 /** The one-line summary for a non-`ok` state: the state, then what to do next. */
 export function summarizeCodeGraphRead(dto: CodeGraphReadDTO): string {
   switch (dto.state) {
-    case 'ok':
-      return dto.drift ? `${dto.text}\n\n${renderCodeGraphDrift(dto.drift)}` : dto.text;
+    case 'ok': {
+      const text = dto.drift ? `${dto.text}\n\n${renderCodeGraphDrift(dto.drift)}` : dto.text;
+      return dto.commits.length > 0 ? `${text}\n\n${renderCodeGraphCommits(dto.commits)}` : text;
+    }
     case 'no_repositories':
       return 'This project has no repository in its set, so there is no code graph to read. Plan without code facts, and do not assert any.';
     case 'repo_not_in_set':

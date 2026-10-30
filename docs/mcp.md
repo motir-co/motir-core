@@ -329,7 +329,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **108 tools**.
+`initialize` handshake and registers **109 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -5007,6 +5007,28 @@ report_plan_step({ planId, sessionKey: "author-3", narration: ["Splitting the ex
 // → { planId, sessionKey: "author-3", narration: [{ seq: 7, body: "Splitting the export into two stories." }] }
 ```
 
+**Record the session's code reads (MOTIR-10122).** Send `codeReads` (instead of
+`step`, and with no `target`) with the reads the session made, in the order it made
+them — at most 50 per call. Each is `{ tool, repo?, path?, startLine?, endLine?,
+askedRef?, query?, commits: [{ repo?, sha, dirty? }], outcome, lines?, hits?,
+detail? }`: what it asked, the commits it was read at, and how much came back,
+**never the code** (a read carrying `text` or `content` is refused, and every
+string is capped). `sha` is a RESOLVED commit id — 7 to 64 hex characters, never a
+branch name; a read whose ref resolved to nothing carries `commits: []`. A local
+planner records its checkout's `HEAD` and marks `dirty: true` when the working
+tree had changes. Unlike narration, a code read needs NO step: plan.py's
+conversation session reads code before the plan exists, and posts its reads once
+it does. They are kept with the plan; read them back with
+[`get_plan_code_reads`](#get_plan_code_reads--what-each-planning-session-read).
+
+```jsonc
+report_plan_step({ planId, sessionKey: "author-3", codeReads: [
+  { tool: "read_file", repo: "acme/web", path: "lib/export.ts", startLine: 1, endLine: 80,
+    askedRef: "main", commits: [{ sha: "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b" }],
+    outcome: "found", lines: 80 } ] })
+// → { planId, sessionKey: "author-3", codeReads: [{ seq: 12, tool: "read_file" }] }
+```
+
 Requires **`ai:view_plan`**, the key every plan-authoring write names. A `motir run`
 credential (`CLI_TOKEN_GRANT`) does not carry it and cannot reach this tool: a run
 executing one work item has no business reporting progress on a plan.
@@ -5015,7 +5037,10 @@ Errors: `PLAN_NOT_FOUND`; `PLAN_NOT_GENERATING` off `generating`, naming the
 status; `PLAN_STEP_INVALID` for a target on `settle` or `end`, a ref naming nothing
 on this plan or in its project, a `folder:` ref, or a key that names no work item;
 and, for `narration`, both or neither of `step` / `narration`, a `target`, an empty
-or over-long batch, a blank sentence, or a session that holds no step.
+or over-long batch, a blank sentence, or a session that holds no step; for
+`codeReads`, another arm or a `target` alongside it, an empty or over-long batch,
+a read with no `tool` or `outcome`, a `sha` that is not hex, or a read carrying
+`text` / `content`.
 
 ##### `hold_plan_revision` — hold a plan still while you revise it
 
@@ -5171,6 +5196,32 @@ the plan DECISIONS (approve / decline / append), and this one decides nothing.
 
 Errors: an unknown / other-tenant `planId` returns `PLAN_NOT_FOUND`
 (404-not-403, no existence leak).
+
+##### `get_plan_code_reads` — what each planning session read
+
+The code reads a plan's planner sessions recorded through `report_plan_step`'s
+`codeReads`, in call order (a plan-wide `seq`), for BOTH planners: the hosted
+planner's `read_file` / `code_explore` / `code_search` / `code_grep`, and plan.py's
+own MCP reads beside its local `Read`, `Grep`, `Glob`, `git show`, `git grep` and
+`git log`. A check of the plan reads it to tell a session that read the file
+holding a fact from one that read another file, or nothing.
+
+```jsonc
+get_plan_code_reads({ planId, sessionKey?: "author-3", afterSeq?: 0, limit?: 500 })
+// → { planId,
+//     reads: [{ seq: 12, sessionKey: "author-3", tool: "read_file", repo: "acme/web",
+//               path: "lib/export.ts", startLine: 1, endLine: 80, askedRef: "main", query: null,
+//               commits: [{ sha: "9f86d08…" }], outcome: "found", lines: 80, hits: null,
+//               detail: null, createdAt: "…" }],
+//     sessions: [{ sessionKey: "author-3", stepKind: "author", targetRef: "planItem:…", targetTitle: "…" }],
+//     nextAfterSeq: null }
+```
+
+`sessions` carries the step words of every session on the page (a session that
+never reported a step — plan.py's conversation — has none). Page with
+`afterSeq: nextAfterSeq` until it is `null`. `project:browse`, through the same
+reader gate as `get_plan`, on a plan in any status; read-only. Errors:
+`PLAN_NOT_FOUND` for an unknown or other-tenant plan.
 
 ##### `get_plan_authoring_state` — WHICH SIBLINGS have not started (MOTIR-9821)
 
@@ -5606,6 +5657,12 @@ to CHECK a code fact before writing it into a card.
 | `startLine`  | integer | no       | 1-based, inclusive. With `endLine`, the range is clamped to the file and headed `lines a-b of N`.    |
 | `endLine`    | integer | no       | 1-based, inclusive. Omit with `startLine` set to read to the end of the file.                        |
 
+**The commit it was read at (MOTIR-10122).** The ref is resolved to the commit it
+names first, and the file is read AT that commit, so a moving branch cannot change
+between the two. Every outcome that reached the host with a resolved ref carries
+`commitSha` (the full id), and its summary says `at <ref> (commit <sha>)` — the
+text a session stream carries, which is where plan.py records it from.
+
 **The cap and the range.** The text returned — the range when one is asked for,
 else the whole file — is capped at **24,000 characters**, motir-ai's
 `FILE_CONTENT_CAP`. Over the cap it is cut, and ends with a SENTENCE, never a
@@ -5727,16 +5784,22 @@ amendment).
 
 **Output** — `structuredContent.state`, every one a **non-error** result:
 
-| `state`             | Meaning                                                                                                     | Extra fields                                                                |
-| ------------------- | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `ok`                | The executor's text, unchanged — plus the drift note below when a repository read is behind.                | `text`, `drift` (only when behind)                                          |
-| `no_repositories`   | The project's set holds no realized repository. Decided in core; motir-ai is not called.                    | —                                                                           |
-| `repo_not_in_set`   | `repo` matches no repository in the set. Decided in core; motir-ai is not called.                           | `repo`, `available`                                                         |
-| `not_indexed`       | A repository in the set has no graph yet. Enriched with core's own code-context facts.                      | `repoRef`, `indexState`, `commitsBehind`, `refreshFailing`, `graphTooLarge` |
-| `no_graph`          | No repository of the set has a graph.                                                                       | —                                                                           |
-| `stale_cursor`      | The code changed since that page — re-run without `cursor`.                                                 | —                                                                           |
-| `invalid_cursor`    | A cursor this read did not issue.                                                                           | —                                                                           |
-| `graph_unavailable` | The graph could not be read: motir-ai's own reason, or `ai_unreachable` / `ai_not_configured` / `ai_error`. | `reason`                                                                    |
+| `state`             | Meaning                                                                                                            | Extra fields                                                                |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| `ok`                | The executor's text, unchanged — plus the drift note below when a repository read is behind, then the commit line. | `text`, `commits`, `drift` (only when behind)                               |
+| `no_repositories`   | The project's set holds no realized repository. Decided in core; motir-ai is not called.                           | —                                                                           |
+| `repo_not_in_set`   | `repo` matches no repository in the set. Decided in core; motir-ai is not called.                                  | `repo`, `available`                                                         |
+| `not_indexed`       | A repository in the set has no graph yet. Enriched with core's own code-context facts.                             | `repoRef`, `indexState`, `commitsBehind`, `refreshFailing`, `graphTooLarge` |
+| `no_graph`          | No repository of the set has a graph.                                                                              | —                                                                           |
+| `stale_cursor`      | The code changed since that page — re-run without `cursor`.                                                        | —                                                                           |
+| `invalid_cursor`    | A cursor this read did not issue.                                                                                  | —                                                                           |
+| `graph_unavailable` | The graph could not be read: motir-ai's own reason, or `ai_unreachable` / `ai_not_configured` / `ai_error`.        | `reason`                                                                    |
+
+**The commit line (MOTIR-10122).** An `ok` answer carries `commits: [{ repoRef,
+indexedSha }]` — the commit each read repository's graph was built at, full id —
+and its text ends with `Graph commit(s) read: owner/name@<sha>, ….`. A repository
+with no graph is left out; a planning session records these as the commits its
+graph read was made at.
 
 A request motir-ai rejects as malformed stays an error, so it is seen rather
 than read as a soft state.

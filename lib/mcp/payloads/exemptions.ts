@@ -70,6 +70,10 @@ export const EXEMPT_TOOLS = {
   validate_sprint:
     'The same verdict shape over a sprint’s membership. Same boundary, same reason — it ' +
     'describes whether a set of work can finish, which is not a thing v1 returns.',
+  get_plan_code_reads:
+    'Returns the CODE READS each planner session of a plan made — tool, arguments, the ' +
+    'commits read at and the outcome — a planning-evidence read for a check of the plan, not ' +
+    'a resource. No `/api/v1` operation returns plan sessions or their reads (MOTIR-10122).',
   get_plan_authoring_state:
     'Returns each proposal’s AUTHORING STATE (`not_started` / `authoring` / `authored`), ' +
     'derived from the plan’s live planner-session steps — a planning read for an author ' +

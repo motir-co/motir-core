@@ -17,6 +17,7 @@ import type {
   NormalizedProductionImageRun,
   NormalizedWorkflowRunEvent,
   RepoFileReadResult,
+  RefResolution,
   CommitComparison,
   ChangedFilesResult,
   ChangeRequestMergeability,
@@ -261,6 +262,29 @@ export interface GitProvider {
     path: string,
     ref: string,
   ): Promise<RepoFileReadResult>;
+
+  /**
+   * WHICH COMMIT `ref` NAMES (MOTIR-10122) — a branch, a tag or an abbreviated
+   * sha resolved to the full object id, so a file read can be made AT that
+   * commit and cite it. A planning session's code reads are kept per plan, and a
+   * check that opens them later must read the code the session saw: a branch name
+   * is not that, because the default branch moves within one plan.
+   *
+   * ⚠️ REQUIRED, for {@link readFileAtRef}'s reason: both hosts answer it with one
+   * call (GitHub `GET /repos/{owner}/{name}/commits/{ref}` with the `sha` media
+   * type, GitLab `GET /api/v4/projects/:id/repository/commits/:ref`), in the
+   * process that holds the token.
+   *
+   * ⚠️ IT RETURNS ITS FAILURES as named members of {@link RefResolution}, never by
+   * throwing, except for a status no arm names. Implementations MUST bound the
+   * request with {@link REPO_FILE_READ_TIMEOUT_MS}.
+   */
+  resolveRef(
+    installationId: string,
+    owner: string,
+    name: string,
+    ref: string,
+  ): Promise<RefResolution>;
 
   /**
    * HOW FAR `head` IS AHEAD OF `base`, IN COMMITS (MOTIR-4644) — the drift count

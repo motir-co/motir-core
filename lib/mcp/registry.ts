@@ -150,6 +150,7 @@ import {
   GET_PLAN_AUTHORING_STATE_TOOL_NAME,
   registerGetPlanAuthoringState,
 } from './tools/getPlanAuthoringState';
+import { GET_PLAN_CODE_READS_TOOL_NAME, registerGetPlanCodeReads } from './tools/getPlanCodeReads';
 import { CREATE_SPRINT_TOOL_NAME, registerCreateSprint } from './tools/createSprint';
 import { UPDATE_SPRINT_TOOL_NAME, registerUpdateSprint } from './tools/updateSprint';
 import { DELETE_SPRINT_TOOL_NAME, registerDeleteSprint } from './tools/deleteSprint';
@@ -295,6 +296,7 @@ export const MCP_TOOL_NAMES = [
   VALIDATE_WORK_ITEM_TOOL_NAME,
   VALIDATE_PLAN_TOOL_NAME,
   GET_PLAN_AUTHORING_STATE_TOOL_NAME,
+  GET_PLAN_CODE_READS_TOOL_NAME,
   CREATE_SPRINT_TOOL_NAME,
   UPDATE_SPRINT_TOOL_NAME,
   DELETE_SPRINT_TOOL_NAME,
@@ -586,6 +588,9 @@ export function registerMcpTools(
   // Which proposals are authored, being authored, or not started (MOTIR-9821) —
   // the live read an author session makes before it wires an edge onto a sibling.
   registerGetPlanAuthoringState(target, resolveContext);
+  // What each planner session read, at which commit (MOTIR-10122) — the evidence
+  // a check of a plan attributes a defect from.
+  registerGetPlanCodeReads(target, resolveContext);
   registerCreateSprint(target, resolveContext);
   registerUpdateSprint(target, resolveContext);
   registerDeleteSprint(target, resolveContext);

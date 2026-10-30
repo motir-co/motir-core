@@ -24,6 +24,7 @@ import {
   PLANNER_RECORD_MAX_BYTES,
 } from '@/lib/dto/plans';
 import { PLAN_NARRATION_BATCH_MAX, PLAN_NARRATION_SENTENCE_MAX } from '@/lib/plans/planNarration';
+import { PLAN_CODE_READ_BATCH_MAX } from '@/lib/plans/planCodeRead';
 import {
   TODO_COMMAND_MAX_LENGTH,
   TODO_NOTES_MAX_LENGTH,
@@ -1288,7 +1289,7 @@ const reportPlanStepInputSchema = {
         '`author` (writing `target`, or an item not on the plan yet with no target), or `end` ' +
         '(the session finished — clears its step; never a target). A step report also records ' +
         'the words a person reads at the head of that session’s narration. Send exactly one ' +
-        'of `step` or `narration`.',
+        'of `step`, `narration` or `codeReads`.',
     ),
   narration: z
     .array(z.string())
@@ -1301,6 +1302,59 @@ const reportPlanStepInputSchema = {
         'Refused with PLAN_STEP_INVALID when sent with `step` or `target`, when a sentence is ' +
         'empty, or when the session has not reported `settle`, `lay` or `author` yet. Nothing ' +
         'is recorded on a refusal.',
+    ),
+  codeReads: z
+    .array(
+      z.object({
+        tool: z
+          .string()
+          .describe(
+            'The tool: `read_file` · `code_explore` · `code_search` · `code_grep`, or a local ' +
+              'one (`Read` · `Grep` · `Glob` · `git show` · `git grep` · `git log`).',
+          ),
+        repo: z.string().optional().describe('`owner/name`, or the local checkout’s name.'),
+        path: z.string().optional().describe('A read’s path, or a search’s path prefix / glob.'),
+        startLine: z.number().int().min(1).optional(),
+        endLine: z.number().int().min(1).optional(),
+        askedRef: z
+          .string()
+          .optional()
+          .describe('The ref the call ASKED for (`main`) — a label, not what it was read at.'),
+        query: z.string().optional().describe('A search’s query or pattern.'),
+        commits: z
+          .array(
+            z.object({
+              repo: z.string().optional(),
+              sha: z.string().describe('The RESOLVED commit id, 7–64 hex — never a branch name.'),
+              dirty: z.boolean().optional().describe('A local checkout with uncommitted changes.'),
+            }),
+          )
+          .optional()
+          .describe(
+            'Every commit the read was made at: the resolved ref of a file read, the graph’s ' +
+              'commit for a code-graph read, the checkout HEAD for a local read. Empty only ' +
+              'when nothing resolved.',
+          ),
+        outcome: z
+          .string()
+          .describe('The result’s outcome code: `found`, `ok`, `not_found`, `too_large`, …'),
+        lines: z.number().int().min(0).optional().describe('Lines a read returned.'),
+        hits: z.number().int().min(0).optional().describe('Matches a search returned.'),
+        detail: z
+          .string()
+          .optional()
+          .describe('A short refusal or failure detail — never content.'),
+      }),
+    )
+    .optional()
+    .describe(
+      'Instead of `step`: the session’s CODE READS, in the order it made them, appended to the ' +
+        `plan’s kept read log under \`sessionKey\` (at most ${PLAN_CODE_READ_BATCH_MAX} per ` +
+        'call). Records what was asked, the commit it was read at and how much came back — never ' +
+        'the code. Needs no step: a session may post its reads before or after it holds one. ' +
+        'Refused with PLAN_STEP_INVALID when sent with `step` or `target`, or when a read is ' +
+        'malformed (a `sha` that is not hex is refused). Nothing is recorded on a refusal. ' +
+        'Read them back with `get_plan_code_reads`.',
     ),
   target: z
     .string()
@@ -1321,6 +1375,7 @@ interface ReportPlanStepArgs {
   step?: PlanStepValue;
   target?: string;
   narration?: string[];
+  codeReads?: unknown[];
 }
 
 interface UpdatePlanProposalArgs extends UpdatePlanItemArgs {
@@ -2104,9 +2159,23 @@ export async function runReportPlanStep(
       targetRef,
       ...(args.step !== undefined ? { step: args.step } : {}),
       ...(args.narration !== undefined ? { narration: args.narration } : {}),
+      ...(args.codeReads !== undefined ? { codeReads: args.codeReads } : {}),
     },
     ctx,
   );
+  if (result.kind === 'codeReads') {
+    const n = result.codeReads.length;
+    const payload = exempt(REPORT_PLAN_STEP_TOOL_NAME, {
+      planId: args.planId,
+      sessionKey: args.sessionKey,
+      codeReads: result.codeReads.map((row) => ({ seq: row.seq, tool: row.tool })),
+    });
+    return toolOk(
+      `Recorded ${n} code read${n === 1 ? '' : 's'} for session \`${args.sessionKey}\` on plan ` +
+        `${args.planId}.`,
+      payload,
+    );
+  }
   if (result.kind === 'narration') {
     const n = result.narration.length;
     const payload = exempt(REPORT_PLAN_STEP_TOOL_NAME, {
@@ -2556,6 +2625,9 @@ export function registerAuthorPlan(server: McpServer, resolveContext: McpContext
         'refused with PLAN_NOT_GENERATING and nothing changes. Between steps, send ' +
         '`narration` (instead of `step`) with a few plain sentences on what the session is ' +
         'doing and why: a person reads them in the plan’s chat panel, and they are kept. ' +
+        'Send `codeReads` (instead of `step`) with the session’s code reads — what it asked, the ' +
+        'commit it read at, what came back, never the code — so a check of the plan can see what ' +
+        'each card was written from; they are kept and read back with `get_plan_code_reads`. ' +
         'IT IS ADVISORY: every refusal ' +
         'comes back as a code and a sentence, and a refused report should NOT stop you ' +
         'planning — carry on with the plan. It changes nothing about the plan’s proposals. ' +

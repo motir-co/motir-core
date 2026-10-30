@@ -13,7 +13,11 @@ import { CLI_TOKEN_GRANT } from '@/lib/mcp/toolPermissions';
 import { apiTokensService } from '@/lib/services/apiTokensService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workspacesService } from '@/lib/services/workspacesService';
-import type { GithubMergeCall, GithubMergeControl } from '@/lib/test-github-merge-mock';
+import {
+  e2eRefSha,
+  type GithubMergeCall,
+  type GithubMergeControl,
+} from '@/lib/test-github-merge-mock';
 import type {
   CodeGraphReadFixture,
   CodeGraphReadJournalLine,
@@ -239,10 +243,14 @@ test('a planning agent lists the code-read tools and reads a file at the default
     });
     expect(data['outcome']).toBe('found');
     expect(data['ref']).toBe('main');
+    // The ref is resolved to a commit and the read is made AT it (MOTIR-10122).
+    const mainSha = e2eRefSha(CORE_REF, 'main');
+    expect(data['commitSha']).toBe(mainSha);
     expect(text).toContain('MAIN TEXT');
+    expect(text).toContain(`main (commit ${mainSha})`);
     const reads = contentsReads();
     expect(reads).toHaveLength(1);
-    expect(reads[0]!.path).toBe(`/repos/${CORE_REF}/contents/src/hello.ts?ref=main`);
+    expect(reads[0]!.path).toBe(`/repos/${CORE_REF}/contents/src/hello.ts?ref=${mainSha}`);
   });
 
   await test.step('a branch ref reads that branch’s text, and the ref reaches the host', async () => {
@@ -252,12 +260,13 @@ test('a planning agent lists the code-read tools and reads a file at the default
       path: 'src/hello.ts',
       ref: 'feature/x',
     });
-    expect(data).toMatchObject({ outcome: 'found', ref: 'feature/x' });
+    const branchSha = e2eRefSha(CORE_REF, 'feature/x');
+    expect(data).toMatchObject({ outcome: 'found', ref: 'feature/x', commitSha: branchSha });
     expect(text).toContain('BRANCH TEXT');
     expect(text).not.toContain('MAIN TEXT');
     const reads = contentsReads();
     expect(reads).toHaveLength(2);
-    expect(reads[1]!.path).toBe(`/repos/${CORE_REF}/contents/src/hello.ts?ref=feature%2Fx`);
+    expect(reads[1]!.path).toBe(`/repos/${CORE_REF}/contents/src/hello.ts?ref=${branchSha}`);
   });
 
   await test.step('a missing file is the named not_found, not an error', async () => {
