@@ -158,6 +158,13 @@ const ORG_SWEEP: Record<string, { tables: string[]; source: 'scan' | 'hand'; why
     source: 'scan',
     why: 'organization_active',
   },
+  'lib/services/ciPreviewUsageMeterService.ts#chargeOrganization': {
+    tables: ['organization'],
+    source: 'scan',
+    why:
+      'the org row read for `isMeta` before a preview-usage charge (Story MOTIR-5766 · ' +
+      'MOTIR-5777) — the same read as ciMinutesMeterService#isMeta, organization_active',
+  },
   'lib/services/ciMinutesMeterService.ts#meterWorkflowRun': {
     tables: ['project_repository', 'workspace'],
     source: 'scan',
