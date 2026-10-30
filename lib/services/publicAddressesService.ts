@@ -1,5 +1,6 @@
 import { isCloud } from '@/lib/billing/availability';
 import type { PublicHostResolutionDto, PublicProjectAddressesDto } from '@/lib/dto/publicAddresses';
+import { applicationAccessOf } from '@/lib/publicAddresses/applicationAccess';
 import { resolveApplicationTarget } from '@/lib/publicAddresses/applicationTarget';
 import { PublicAddressesUnavailableError } from '@/lib/publicAddresses/errors';
 import { isTenantDomainConfigured, tenantBaseDomain } from '@/lib/publicAddresses/tenantDomain';
@@ -136,6 +137,18 @@ export const publicAddressesService = {
       !application.currentReleaseId
     ) {
       return noApplication;
+    }
+
+    // ⚠️ A MEMBERS-ONLY APPLICATION IS NEVER SERVED ON A CUSTOMER HOST
+    // (MOTIR-9819): the member gate stands only on `motir.site`. Fails closed —
+    // an absent or unknown setting is members only.
+    if (applicationAccessOf(application.access) !== 'public') {
+      return {
+        kind: 'members_only_application',
+        workspace: { name: workspace.name },
+        application: { id: application.id, slug: application.slug },
+        opensAt: application.productionAddress,
+      };
     }
 
     const answer = {

@@ -85,10 +85,26 @@ export interface PublicHostApplicationDto {
 }
 
 /**
+ * An issued customer host naming a MEMBERS-ONLY application (MOTIR-9819). The
+ * member gate stands only on `motir.site`, so the edge answers a page saying the
+ * app opens at `opensAt` (its production address, when it has one) — never the
+ * application itself.
+ */
+export interface PublicHostMembersOnlyApplicationDto {
+  readonly kind: 'members_only_application';
+  readonly workspace: { readonly name: string };
+  readonly application: { readonly id: string; readonly slug: string };
+  readonly opensAt: string | null;
+}
+
+/**
  * What a `Host` answers. The `project` outcome is retired (ADR MOTIR-9521 §1:
  * a customer domain serves an application, never a project).
  */
-export type PublicHostResolutionDto = PublicHostApplicationDto | PublicHostNoApplicationDto;
+export type PublicHostResolutionDto =
+  | PublicHostApplicationDto
+  | PublicHostMembersOnlyApplicationDto
+  | PublicHostNoApplicationDto;
 
 /**
  * A project's addresses, as the renderer needs them (ADR §7).

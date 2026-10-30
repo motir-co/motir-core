@@ -62,8 +62,12 @@ export const hostedApplicationRepository = {
     target: HostingTarget;
     productionAppName: string | null;
     currentReleaseId: string | null;
+    productionAddress: string | null;
+    /** Who may open it. No column holds it yet (MOTIR-9817 adds it), so it reads
+     *  `null`, which `applicationAccessOf` treats as members only. */
+    access: string | null;
   } | null> {
-    return tx.hostedApplication.findUnique({
+    const row = await tx.hostedApplication.findUnique({
       where: { id },
       select: {
         id: true,
@@ -72,8 +76,10 @@ export const hostedApplicationRepository = {
         target: true,
         productionAppName: true,
         currentReleaseId: true,
+        productionAddress: true,
       },
     });
+    return row ? { ...row, access: null } : null;
   },
 
   async findByProjectRepository(

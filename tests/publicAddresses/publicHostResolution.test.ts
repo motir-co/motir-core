@@ -40,6 +40,17 @@ const {
   NOT_FOUND_CACHE_CONTROL,
 } = await import('@/lib/publicAddresses/hostContractCache');
 const { createTestWorkspace } = await import('../fixtures');
+const { hostedApplicationRepository } =
+  await import('@/lib/repositories/hostedApplicationRepository');
+const { applicationAccessOf } = await import('@/lib/publicAddresses/applicationAccess');
+
+// ⚠️ No column holds an application's access setting yet (MOTIR-9817 adds it),
+// so the repository reads it as `null` — members only. The application tests
+// stand in the setting the repository will read, and nothing else.
+const readForHostContract = hostedApplicationRepository.findForHostContract.bind(
+  hostedApplicationRepository,
+);
+let storedAccess: string | null = 'public';
 
 const BASE = 'motir.example';
 
@@ -59,12 +70,20 @@ beforeEach(async () => {
   process.env['MOTIR_EDGE_CONTRACT_TOKEN'] = EDGE_TOKEN;
   resolveApplicationTarget.mockReset();
   resolveApplicationTarget.mockResolvedValue(UPSTREAM);
+  storedAccess = 'public';
+  vi.spyOn(hostedApplicationRepository, 'findForHostContract').mockImplementation(
+    async (id, tx) => {
+      const row = await readForHostContract(id, tx);
+      return row ? { ...row, access: storedAccess } : null;
+    },
+  );
   host = await seedTenant('acme', 'ACME', 'public');
 });
 
 afterEach(() => {
   delete process.env['MOTIR_CLOUD'];
   delete process.env['MOTIR_EDGE_CONTRACT_TOKEN'];
+  vi.restoreAllMocks();
   delete process.env['MOTIR_PUBLIC_TENANT_DOMAIN'];
 });
 
@@ -174,6 +193,39 @@ describe('the APPLICATION outcome (ADR MOTIR-9521 §3)', () => {
       kind: 'no_application',
       workspace: { name: 'priv2' },
     });
+  });
+
+  it('a MEMBERS-ONLY application is never served on a customer host (MOTIR-9819)', async () => {
+    // The member gate stands only on motir.site; no decision puts it on a
+    // customer host, so the contract refuses — even to the edge.
+    storedAccess = 'members_only';
+    const app = await seedApplication(host, { released: true });
+    await seedCustomDomain(host, 'shop.acme.test', 'issued', app.id);
+    const r = await publicAddressesService.resolveHost('shop.acme.test', { credentialed: true });
+    expect(r).toEqual({
+      kind: 'members_only_application',
+      workspace: { name: 'Acme' },
+      application: { id: app.id, slug: 'shop' },
+      opensAt: 'shop--acme.motir.example',
+    });
+    expect(r).not.toHaveProperty('upstream');
+    expect(resolveApplicationTarget).not.toHaveBeenCalled();
+  });
+
+  it('FAILS CLOSED: an application with no access setting is members only', async () => {
+    // What ships today, with no spy in the way: the column does not exist yet.
+    vi.mocked(hostedApplicationRepository.findForHostContract).mockRestore();
+    const app = await seedApplication(host, { released: true });
+    await seedCustomDomain(host, 'shop.acme.test', 'issued', app.id);
+    await expect(
+      publicAddressesService.resolveHost('shop.acme.test', { credentialed: true }),
+    ).resolves.toMatchObject({ kind: 'members_only_application' });
+
+    // And the reader itself: only an explicit `public` opens a customer host.
+    expect(applicationAccessOf('public')).toBe('public');
+    for (const stored of [null, undefined, 'members_only', 'PUBLIC', '', 42]) {
+      expect(applicationAccessOf(stored), String(stored)).toBe('members_only');
+    }
   });
 
   it('a REMOVED domain stops answering at once — the same 404 as an unknown host', async () => {
@@ -495,6 +547,7 @@ async function seedApplication(t: Tenant, { released }: { released: boolean }) {
       target: 'fly',
       slug: 'shop',
       productionAppName: 'mh-shop',
+      productionAddress: 'shop--acme.motir.example',
     },
   });
   if (!released) return app;
