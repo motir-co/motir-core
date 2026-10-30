@@ -140,6 +140,7 @@ import {
   findUnresolvedIntraPlanRefIds,
 } from '@/lib/plans/validateProposedBodyRefs';
 import { proposalLinkWarningsService } from '@/lib/services/proposalLinkWarningsService';
+import { proposalRescopeWarningsService } from '@/lib/services/proposalRescopeWarningsService';
 import { patchRescopes } from '@/lib/plans/rescopeReset';
 import { committedPlanTargets } from '@/lib/plans/planTargets';
 import { restingStatusFor } from '@/lib/plans/restingStatus';
@@ -227,6 +228,7 @@ import type {
   PlanWithItemsDto,
   PlanWithItemsAndWarningsDto,
   ProposalLinkWarningDto,
+  ProposalRescopeWarningDto,
   ProposalInput,
   UpdateProposalInput,
   CorrectProposalInput,
@@ -2518,22 +2520,37 @@ function planItemLabel(item: PlanItem): string {
 }
 
 /**
- * Attach the item-link WARNINGS of the proposals a write touched (MOTIR-10104) —
- * present only when there is one, so a clean write answers exactly as before.
+ * Attach the WARNINGS of the proposals a write touched — present only when there
+ * is one, so a clean write answers exactly as before: the item links it kept that
+ * would ship dead (MOTIR-10104), and the `modify`s approve will send back from
+ * built work (MOTIR-10106).
  */
-async function withLinkWarnings<T extends object>(
+async function withLinkWarnings<T extends { projectId: string }>(
   answer: T,
   items: readonly PlanItem[],
   writtenIds: readonly string[],
   ctx: ServiceContext,
-): Promise<T & { warnings?: ProposalLinkWarningDto[] }> {
+): Promise<
+  T & { warnings?: ProposalLinkWarningDto[]; rescopeWarnings?: ProposalRescopeWarningDto[] }
+> {
   const warnings = await proposalLinkWarningsService.forWrittenProposals(
     items,
     writtenIds,
     planItemLabel,
     ctx,
   );
-  return warnings.length > 0 ? { ...answer, warnings } : answer;
+  const rescopeWarnings = await proposalRescopeWarningsService.forProposals(
+    items,
+    writtenIds,
+    planItemLabel,
+    answer.projectId,
+    ctx,
+  );
+  return {
+    ...answer,
+    ...(warnings.length > 0 ? { warnings } : {}),
+    ...(rescopeWarnings.length > 0 ? { rescopeWarnings } : {}),
+  };
 }
 
 /**
