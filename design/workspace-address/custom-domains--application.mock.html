@@ -1,0 +1,1706 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · Workspace settings › Custom domains — the application a domain serves
+    </title>
+    <!--
+      DELTA MOCK — WORKSPACE SETTINGS › CUSTOM DOMAINS, the application a
+      domain serves and the apex records.
+
+      AMENDS `custom-domains.mock.html` (the asset of record, a record and not
+      edited) in four places and NOTHING ELSE:
+        panel 5   the Add-domain dialog gains the APPLICATION PICKER
+        panel 8   the Application line names the CHOSEN application, and the
+                  row gains the APPLICATION CONTROL
+        panel 12  the read-only row keeps the line and has no control
+        panel 6   the apex records are motir-edge's OWN addresses — a
+                  REPLACEMENT of that panel's apex half and its note
+      Every other panel (0–4, 7, 9–11, and panel 6's subdomain half) stands
+      exactly as drawn there.
+
+      ── WHAT IT IS BUILT FROM ────────────────────────────────────────────────
+      * The token block and every component class are copied unchanged from
+        `custom-domains.mock.html`. The additions are named in the "Added by
+        this delta" block at the end of the style.
+      * The picker is the shipped Combobox (single select): its trigger in the
+        Input's grammar and its listbox of options. The Application control is
+        a ghost Button that opens THE SAME picker in a Modal — one element,
+        reached from the dialog and from the row.
+
+      ── ONE SCENARIO ────────────────────────────────────────────────────────
+      The Acme workspace hosts two applications: Shop (slug `shop`) and Docs
+      (slug `docs`). Today is 30 October 2026. Record values are configuration
+      (MOTIR_PUBLIC_ADDRESS_A_RECORDS / _AAAA_RECORDS / _CNAME_TARGET), so this
+      board draws what each value IS, never a literal address.
+
+      ── PANELS (a multi-panel board — inspect EVERY panel) ───────────────────
+        A   the Add-domain dialog — no application · one · several (open) ·
+            narrow, with a long name                       (amends panel 5)
+        B   the domain row — bound · unbound · no longer listed
+                                                           (amends panel 8)
+        C   the Application control, open — on a bound, an unbound and a
+            no-longer-listed row
+        D   the change — confirm · saving · failed
+        E   read-only — the line without the control       (amends panel 12)
+        F   the apex records — the edge's own addresses · an address list
+            unset                                          (replaces panel 6's apex)
+
+      ── INK ─────────────────────────────────────────────────────────────────
+      As the asset of record: secondary copy on `--el-text-secondary`; no text
+      on `--el-text-muted` or `--el-text-faint`; the inline error on
+      `--el-danger-on-surface`.
+    -->
+    <style>
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fbf0c4;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        /* Shape tokens — the [data-display-style] swap layer (default values) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 16px;
+        --radius-control: 6px;
+        --radius-badge: 9999px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.06);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px rgba(15, 15, 15, 0.18);
+        --spacing-card-padding: 24px;
+        --spacing-input-x: 12px;
+        --spacing-input-y: 8px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-input: 40px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-strong: var(--color-stone);
+        --el-link: var(--color-link);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-highlight: var(--color-accent);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        /* The ink for danger TEXT on a page (theme.css's own derivation).
+           --el-danger-text is the ink for a danger FILL and is legal only on
+           an element carrying bg-(--el-danger); this mock uses it only on
+           the danger Button's fill. */
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --focus-ring-color: var(--color-primary);
+      }
+      /* ── The Tier-3 block, RE-EMITTED for any nested [data-theme] scope ──
+         Panel 9b puts data-theme="dark" on a DIV, not on <html>. Tier-0
+         --color-* flips there, but the Tier-3 --el-* above are declared on
+         :root and keep resolving against the OUTER palette — so the dark panel
+         paints the LIGHT page background while every hue around it goes dark.
+         MEASURED by tests/design-dark-parity.test.ts, which caught exactly that
+         on this asset. Re-declaring them on [data-theme] makes each nested
+         scope recompute them against its OWN Tier-0 values.
+         ⚠️ PLACED BEFORE the [data-theme='dark'] block, never after: both are
+         one attribute selector, so equal specificity and the later one wins
+         (design/settings/two-factor.mock.html). ── */
+      [data-theme] {
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-strong: var(--color-stone);
+        --el-link: var(--color-link);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-highlight: var(--color-accent);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #332d12;
+        --color-link: #58a6ff;
+        --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+        --shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.6);
+      }
+      /* ── Board chrome ──────────────────────────────────────────────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        line-height: 1.5;
+      }
+      .board {
+        padding: 32px;
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+      .boardTitle {
+        font-size: 22px;
+        font-weight: 600;
+        margin: 0 0 4px;
+        color: var(--el-text);
+      }
+      .boardSub {
+        color: var(--el-text-secondary);
+        margin: 0 0 28px;
+        max-width: 78ch;
+      }
+      .panel {
+        margin: 0 0 34px;
+      }
+      .panelLabel {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+        margin: 0 0 8px;
+      }
+      .panelNote {
+        color: var(--el-text-secondary);
+        margin: 0 0 12px;
+        max-width: 88ch;
+      }
+      .stage {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 20px;
+        box-shadow: var(--shadow-subtle);
+      }
+      .stage.tight {
+        padding: 0;
+        overflow: hidden;
+      }
+      .row2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        align-items: start;
+      }
+      .row2n {
+        display: grid;
+        grid-template-columns: 1.15fr 0.85fr;
+        gap: 20px;
+        align-items: start;
+      }
+
+      /* ── Card (components/ui/Card) ─────────────────────────────────── */
+      .card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle);
+      }
+      .cardHead {
+        padding: 16px var(--spacing-card-padding) 12px;
+        border-bottom: 1px solid var(--el-border);
+      }
+      .cardTitle {
+        font-size: 15px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .cardSub {
+        color: var(--el-text-secondary);
+        margin: 4px 0 0;
+        font-size: 13px;
+      }
+      .cardBody {
+        padding: var(--spacing-card-padding);
+      }
+      .cardBody.tightY {
+        padding-top: 16px;
+        padding-bottom: 16px;
+      }
+
+      /* ── Button (components/ui/Button) ─────────────────────────────── */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        height: var(--height-btn-sm);
+        padding: 0 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font: inherit;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        border-color: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-danger {
+        background: var(--el-danger);
+        border-color: var(--el-danger);
+        color: var(--el-danger-text);
+      }
+      .btn-ghost {
+        background: transparent;
+        border-color: transparent;
+        color: var(--el-text-secondary);
+      }
+      .btn[disabled],
+      .btn.is-disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .btn-icon {
+        width: var(--height-btn-sm);
+        padding: 0;
+      }
+
+      /* ── Input (components/ui/Input) ───────────────────────────────── */
+      .field {
+        display: block;
+      }
+      .label {
+        display: block;
+        font-size: 13px;
+        font-weight: 500;
+        margin: 0 0 6px;
+        color: var(--el-text);
+      }
+      .input {
+        display: flex;
+        align-items: center;
+        height: var(--height-input);
+        padding: 0 var(--spacing-input-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font: inherit;
+      }
+      .input.mono {
+        font-family: var(--font-mono);
+        font-size: 13px;
+      }
+      .input.is-error {
+        border-color: var(--el-danger);
+      }
+      .input .ph {
+        color: var(--el-text-secondary);
+      }
+      .inputGroup {
+        display: flex;
+        align-items: stretch;
+      }
+      .inputGroup .input {
+        border-top-right-radius: 0;
+        border-bottom-right-radius: 0;
+        flex: 1;
+        min-width: 0;
+      }
+      .suffix {
+        display: flex;
+        align-items: center;
+        padding: 0 var(--spacing-input-x);
+        border: 1px solid var(--el-border);
+        border-left: 0;
+        border-radius: 0 var(--radius-input) var(--radius-input) 0;
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        font-family: var(--font-mono);
+        font-size: 13px;
+        white-space: nowrap;
+      }
+      .helper {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        margin: 6px 0 0;
+      }
+      .helper .prev {
+        font-family: var(--font-mono);
+        color: var(--el-text);
+      }
+      .helperError {
+        font-size: 12px;
+        color: var(--el-danger-on-surface);
+        margin: 6px 0 0;
+        font-weight: 500;
+      }
+
+      /* ── Pill (components/ui/Pill) — tint bg + --el-text-strong ────── */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text-strong);
+        background: var(--el-muted);
+        white-space: nowrap;
+      }
+      .pill-ok {
+        background: var(--el-tint-mint);
+      }
+      .pill-info {
+        background: var(--el-tint-sky);
+      }
+      .pill-wait {
+        background: var(--el-tint-yellow);
+      }
+      .pill-bad {
+        background: var(--el-tint-rose);
+      }
+      .pill-alias {
+        background: var(--el-tint-lavender);
+      }
+      .pill-neutral {
+        background: var(--el-muted);
+      }
+      .dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 9999px;
+        background: currentColor;
+        flex: none;
+      }
+
+      /* ── Address row ───────────────────────────────────────────────── */
+      .addr {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        background: var(--el-surface-soft);
+        min-height: var(--height-control);
+      }
+      .addr .host {
+        font-family: var(--font-mono);
+        font-size: 13px;
+        color: var(--el-text);
+        min-width: 0;
+        overflow-wrap: anywhere;
+      }
+      .addr .grow {
+        flex: 1;
+        min-width: 0;
+      }
+      .mono {
+        font-family: var(--font-mono);
+      }
+
+      /* ── DNS instruction table ─────────────────────────────────────── */
+      .dns {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      .dns th {
+        text-align: left;
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+        font-weight: 600;
+        padding: 0 10px 6px 0;
+      }
+      .dns td {
+        padding: 8px 10px 8px 0;
+        border-top: 1px solid var(--el-border);
+        vertical-align: top;
+        color: var(--el-text);
+      }
+      .dns td.v {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        overflow-wrap: anywhere;
+      }
+      .dns td.act {
+        width: 1%;
+        white-space: nowrap;
+      }
+
+      /* ── State table (panel 5) ─────────────────────────────────────── */
+      .states {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      .states th {
+        text-align: left;
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+        font-weight: 600;
+        padding: 0 12px 8px 0;
+      }
+      .states td {
+        padding: 10px 12px 10px 0;
+        border-top: 1px solid var(--el-border);
+        vertical-align: top;
+        color: var(--el-text);
+      }
+      .states td.mean {
+        color: var(--el-text-secondary);
+      }
+      .states td.act {
+        white-space: nowrap;
+      }
+
+      /* ── Radio card (primary picker) ───────────────────────────────── */
+      .radio {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        padding: 12px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        background: var(--el-page-bg);
+      }
+      .radio + .radio {
+        margin-top: 8px;
+      }
+      .radio.is-on {
+        border-color: var(--el-accent);
+        background: var(--el-tint-lavender);
+      }
+      .radio.is-off {
+        opacity: 0.55;
+      }
+      .ring {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        margin-top: 2px;
+        border-radius: 9999px;
+        border: 1.5px solid var(--el-border-strong);
+        background: var(--el-page-bg);
+      }
+      .radio.is-on .ring {
+        border-color: var(--el-accent);
+        box-shadow: inset 0 0 0 4px var(--el-accent);
+      }
+      .radio .rtitle {
+        font-family: var(--font-mono);
+        font-size: 13px;
+        color: var(--el-text);
+        overflow-wrap: anywhere;
+      }
+      .radio .rsub {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        margin-top: 2px;
+      }
+
+      /* ── Rail (settings-area.mock.html grammar — COMPOSED, not redrawn) ── */
+      .rail {
+        width: 232px;
+        flex: none;
+        border-right: 1px solid var(--el-border);
+        padding: 12px 8px;
+        background: var(--el-page-bg);
+      }
+      .railGroup + .railGroup {
+        margin-top: 14px;
+      }
+      .railGroupLabel {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+        padding: 0 10px 6px;
+      }
+      .railRow {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        color: var(--el-text);
+        font-size: 13px;
+      }
+      .railRow.is-active {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        font-weight: 500;
+      }
+      .railRow.is-new {
+        outline: 2px solid var(--el-highlight);
+        outline-offset: 1px;
+      }
+      .glyph {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        color: var(--el-text-secondary);
+      }
+      .railRow.is-active .glyph {
+        color: var(--el-text-strong);
+      }
+
+      /* ── Shell (composed by citation) ──────────────────────────────── */
+      .shell {
+        display: flex;
+        min-height: 320px;
+        background: var(--el-page-bg);
+      }
+      .shellMain {
+        flex: 1;
+        min-width: 0;
+        padding: 20px 24px;
+        background: var(--el-surface-soft);
+      }
+      .crumb {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        margin: 0 0 12px;
+      }
+      .h1 {
+        font-size: 18px;
+        font-weight: 600;
+        margin: 0 0 4px;
+        color: var(--el-text);
+      }
+      .col {
+        max-width: 672px;
+      }
+
+      /* ── Modal (components/ui/Modal) ───────────────────────────────── */
+      .scrim {
+        background: var(--el-surface);
+        border-radius: var(--radius-card);
+        padding: 24px;
+        display: flex;
+        justify-content: center;
+      }
+      .modal {
+        width: 440px;
+        max-width: 100%;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-modal);
+        box-shadow: var(--shadow-modal);
+        padding: 20px;
+      }
+      .modalTitle {
+        font-size: 15px;
+        font-weight: 600;
+        margin: 0 0 8px;
+        color: var(--el-text);
+      }
+      .modalBody {
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        margin: 0 0 16px;
+      }
+      .modalFoot {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+
+      /* ── Callout / EmptyState ──────────────────────────────────────── */
+      .empty {
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-control);
+        padding: 22px;
+        text-align: center;
+        background: var(--el-surface-soft);
+      }
+      .empty .etitle {
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0 0 4px;
+      }
+      .empty .esub {
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        margin: 0 0 14px;
+      }
+      .callout {
+        border: 1px solid var(--el-border);
+        border-left: 3px solid var(--el-accent);
+        border-radius: var(--radius-control);
+        background: var(--el-tint-lavender);
+        padding: 12px 14px;
+        font-size: 13px;
+        color: var(--el-text-strong);
+      }
+      .callout.warn {
+        border-left-color: var(--el-warning);
+        background: var(--el-tint-yellow);
+      }
+      .callout.danger {
+        border-left-color: var(--el-danger);
+        background: var(--el-tint-rose);
+      }
+      .callout .ctitle {
+        font-weight: 600;
+        display: block;
+        margin-bottom: 3px;
+      }
+
+      /* ── Tooltip ───────────────────────────────────────────────────── */
+      .tip {
+        display: inline-block;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        font-size: 12px;
+        padding: 5px 9px;
+        border-radius: var(--radius-control);
+        box-shadow: var(--shadow-elevated);
+      }
+
+      /* ── Misc ──────────────────────────────────────────────────────── */
+      .stack > * + * {
+        margin-top: 12px;
+      }
+      .stack-sm > * + * {
+        margin-top: 8px;
+      }
+      .flex {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .between {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .grow {
+        flex: 1;
+        min-width: 0;
+      }
+      .sec {
+        color: var(--el-text-secondary);
+      }
+      .sec13 {
+        color: var(--el-text-secondary);
+        font-size: 13px;
+      }
+      .sec12 {
+        color: var(--el-text-secondary);
+        font-size: 12px;
+      }
+      .strong {
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+      .danger {
+        color: var(--el-danger-on-surface);
+      }
+      .cite {
+        font-size: 11px;
+        color: var(--el-text-secondary);
+        border-top: 1px dashed var(--el-border);
+        margin-top: 10px;
+        padding-top: 8px;
+      }
+      .cite code {
+        font-family: var(--font-mono);
+      }
+      .halo {
+        outline: 2px solid var(--el-highlight);
+        outline-offset: 2px;
+        border-radius: var(--radius-control);
+      }
+      .num {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 18px;
+        height: 18px;
+        border-radius: 9999px;
+        background: var(--el-highlight);
+        color: var(--el-text-inverted);
+        font-size: 11px;
+        font-weight: 700;
+        flex: none;
+      }
+      .phone {
+        width: 390px;
+        height: 844px;
+        overflow: hidden;
+        border: 1px solid var(--el-border-strong);
+        border-radius: 22px;
+        background: var(--el-page-bg);
+        padding: 14px;
+      }
+      .darkStage {
+        background: var(--el-page-bg);
+        border-radius: var(--radius-card);
+        padding: 20px;
+      }
+      /* ── Added by this asset ───────────────────────────────────────── */
+      /* Toast (components/ui/Toast) — the shipped success / danger grammar:
+         the hue in the border and the glyph, the words on --el-text. Copied
+         from workspace-address.mock.html's own additions. */
+      .toast {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        width: 360px;
+        max-width: 100%;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-left: 3px solid var(--el-success);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 12px 14px;
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .toast .tglyph {
+        color: var(--el-success);
+        font-weight: 700;
+      }
+      .toast .ttitle {
+        font-weight: 600;
+        display: block;
+      }
+      .toast .tbody {
+        color: var(--el-text-secondary);
+        display: block;
+        margin-top: 2px;
+      }
+      /* The skeleton grammar of components/ui/PageSkeleton.tsx */
+      .skel {
+        height: 14px;
+        border-radius: var(--radius-control);
+        background: var(--el-muted);
+      }
+      .skel.tall {
+        height: var(--height-control);
+      }
+      .linkText {
+        color: var(--el-link);
+        font-size: 13px;
+        text-decoration: none;
+      }
+      .spin {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border-radius: 9999px;
+        border: 2px solid currentColor;
+        border-right-color: transparent;
+        flex: none;
+      }
+      /* The Domains list row: the address row's grammar, with a second line
+         for the Application line and the expiry, and the records under it. */
+      .domain {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        background: var(--el-surface-soft);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+      }
+      .domain + .domain {
+        margin-top: 8px;
+      }
+      .domain .top {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-height: var(--height-control);
+      }
+      .domain .host {
+        font-family: var(--font-mono);
+        font-size: 13px;
+        color: var(--el-text);
+        overflow-wrap: anywhere;
+      }
+      .domain a.host {
+        color: var(--el-link);
+        text-decoration: none;
+      }
+      .domain .meta {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        margin: 2px 0 6px;
+      }
+      .domain .appLine {
+        font-size: 13px;
+        color: var(--el-text);
+        margin: 4px 0 6px;
+      }
+      .domain .acts {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 8px;
+      }
+      /* The DNS records panel: a small table on the page surface so its
+         secondary copy keeps its contrast (it sits inside the row, on white). */
+      .records {
+        margin-top: 8px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        background: var(--el-page-bg);
+        padding: 10px 12px;
+      }
+      .records table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      .records th {
+        text-align: left;
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        padding: 0 8px 6px 0;
+      }
+      .records td {
+        padding: 6px 8px 6px 0;
+        border-top: 1px solid var(--el-border);
+        vertical-align: top;
+        color: var(--el-text);
+      }
+      .records td.v {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        overflow-wrap: anywhere;
+      }
+      .records td.act {
+        text-align: right;
+        white-space: nowrap;
+      }
+      .records .rnote {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        margin: 8px 0 0;
+      }
+      .copy {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        height: 24px;
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font: inherit;
+        font-size: 12px;
+      }
+      /* The count beside a disabled Add — text, never only a tooltip. */
+      .capLine {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        margin: 6px 0 0;
+        text-align: right;
+      }
+      .capLine strong {
+        color: var(--el-text-strong);
+      }
+      .row3 {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+        align-items: start;
+      }
+      /* The failure banner's expected value, on the callout's own tint. */
+      .expect {
+        display: block;
+        margin: 6px 0 8px;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-strong);
+        overflow-wrap: anywhere;
+      }
+
+      /* ── Added by this delta ─────────────────────────────────────────── */
+      /* Three element tokens the Combobox consumes that the asset of record
+         never declared. Each maps to a Tier-0 value already in the block above,
+         on :root and on every nested [data-theme] scope alike. */
+      :root,
+      [data-theme] {
+        --el-option-active-bg: var(--color-muted);
+        --el-text-identifier: var(--color-slate);
+        --el-icon-muted: var(--color-muted-foreground);
+      }
+      /* The Combobox trigger — the Input's box, with the chevron at its end. */
+      .combo {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-input);
+        padding: 0 var(--spacing-input-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font-size: 14px;
+        min-width: 0;
+      }
+      .combo .name {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .combo .ph {
+        flex: 1;
+        color: var(--el-text-secondary);
+      }
+      .combo .chev {
+        margin-left: auto;
+        color: var(--el-icon-muted);
+      }
+      /* The listbox — drawn IN FLOW under its trigger, so the board shows both. */
+      .listbox {
+        margin-top: 4px;
+        padding: 4px;
+        display: flex;
+        flex-direction: column;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        box-shadow: var(--shadow-elevated);
+      }
+      .listbox .opt {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 14px;
+        color: var(--el-text);
+        min-width: 0;
+      }
+      .listbox .opt.active {
+        background: var(--el-option-active-bg);
+      }
+      .listbox .opt .name {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .listbox .opt .slug,
+      .combo .slug,
+      .appLine .slug {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-identifier);
+        white-space: nowrap;
+      }
+      .listbox .opt .slug {
+        margin-left: auto;
+      }
+      .listbox .opt .tick {
+        width: 14px;
+        color: var(--el-link);
+      }
+      .listbox .sep {
+        height: 1px;
+        margin: 4px 0;
+        background: var(--el-border);
+      }
+      /* The settled line that stands in for the picker when there is nothing to pick. */
+      .settled {
+        margin: 0;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      /* The Application line and its control, side by side; the control wraps under it. */
+      .appRow {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 4px 12px;
+      }
+      .appRow .appLine {
+        flex: 1 1 220px;
+        min-width: 0;
+      }
+      .domain .appLine strong {
+        overflow-wrap: anywhere;
+      }
+      /* A configured value drawn as what it is, never as a literal address. */
+      .records td.cfg {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .narrow {
+        max-width: 360px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="board">
+      <h1 class="boardTitle">Custom domains — the application a domain serves</h1>
+      <p class="boardSub">
+        A customer domain names exactly one of the workspace's hosted applications, or none yet. The
+        owner chooses it when adding the domain and can change it on the domain's row; the row is
+        the one place the choice is read back. Scenario: the Acme workspace, which hosts
+        <strong>Shop</strong> (<code class="mono">shop</code>) and <strong>Docs</strong> (<code
+          class="mono"
+          >docs</code
+        >). Every panel not drawn here stands as
+        <code class="mono">custom-domains.mock.html</code> draws it.
+      </p>
+
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <section class="panel">
+        <p class="panelLabel">
+          Panel A — the Add-domain dialog · amends panel 5 · no application, one, several
+        </p>
+        <p class="panelNote">
+          The dialog gains its second field, the application picker, under the domain. With no
+          hosted application there is nothing to pick, so a settled line stands in its place and Add
+          domain stays enabled. With exactly one, it is preselected. With several, nothing is
+          preselected and No application yet is an explicit choice. The five refusals of panel 5 are
+          unchanged and sit under the Domain field as drawn there.
+        </p>
+        <div class="row3">
+          <div class="scrim">
+            <div class="modal" role="dialog" aria-labelledby="aT1">
+              <p class="modalTitle" id="aT1">Add a domain</p>
+              <label class="field">
+                <span class="label">Domain</span>
+                <span class="input mono">shop.acme.com</span>
+              </label>
+              <p class="helper sec12" style="margin: 6px 0 16px">
+                A subdomain like shop.acme.com or a root domain like acme.com.
+              </p>
+              <p class="label">Application</p>
+              <p class="settled" style="margin-bottom: 16px">
+                This workspace has no hosted application yet. The domain is added naming none, and
+                you can choose its application on its row once one exists.
+              </p>
+              <div class="modalFoot">
+                <button class="btn btn-ghost">Cancel</button>
+                <button class="btn btn-primary">Add domain</button>
+              </div>
+            </div>
+          </div>
+          <div class="scrim">
+            <div class="modal" role="dialog" aria-labelledby="aT2">
+              <p class="modalTitle" id="aT2">Add a domain</p>
+              <label class="field">
+                <span class="label">Domain</span>
+                <span class="input mono">shop.acme.com</span>
+              </label>
+              <p class="helper sec12" style="margin: 6px 0 16px">
+                A subdomain like shop.acme.com or a root domain like acme.com.
+              </p>
+              <label class="field">
+                <span class="label">Application</span>
+                <span class="combo" role="combobox" aria-expanded="false">
+                  <span class="name">Shop</span><span class="slug">shop</span>
+                  <span class="chev" aria-hidden="true">▾</span>
+                </span>
+              </label>
+              <p class="helper sec12" style="margin: 6px 0 16px">
+                The application this domain will serve. You can change it later on the domain's row.
+              </p>
+              <div class="modalFoot">
+                <button class="btn btn-ghost">Cancel</button>
+                <button class="btn btn-primary">Add domain</button>
+              </div>
+            </div>
+          </div>
+          <div class="scrim">
+            <div class="modal" role="dialog" aria-labelledby="aT3">
+              <p class="modalTitle" id="aT3">Add a domain</p>
+              <label class="field">
+                <span class="label">Domain</span>
+                <span class="input mono">shop.acme.com</span>
+              </label>
+              <p class="helper sec12" style="margin: 6px 0 16px">
+                A subdomain like shop.acme.com or a root domain like acme.com.
+              </p>
+              <label class="field">
+                <span class="label">Application</span>
+                <span class="combo" role="combobox" aria-expanded="true">
+                  <span class="ph">Choose an application</span>
+                  <span class="chev" aria-hidden="true">▴</span>
+                </span>
+              </label>
+              <span class="listbox" role="listbox" aria-label="Application">
+                <span class="opt active" role="option" aria-selected="false"
+                  ><span class="tick" aria-hidden="true"></span><span class="name">Shop</span
+                  ><span class="slug">shop</span></span
+                >
+                <span class="opt" role="option" aria-selected="false"
+                  ><span class="tick" aria-hidden="true"></span><span class="name">Docs</span
+                  ><span class="slug">docs</span></span
+                >
+                <span class="sep" aria-hidden="true"></span>
+                <span class="opt" role="option" aria-selected="false"
+                  ><span class="tick" aria-hidden="true"></span
+                  ><span class="name">No application yet</span></span
+                >
+              </span>
+              <p class="helper sec12" style="margin: 6px 0 16px">
+                The application this domain will serve. You can change it later on the domain's row.
+              </p>
+              <div class="modalFoot">
+                <button class="btn btn-ghost">Cancel</button>
+                <button class="btn btn-primary" disabled>Add domain</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="panelNote" style="margin-top: 16px">
+          Several applications: Add domain stays disabled until a choice is made, No application yet
+          included, so naming none is a decision the owner took. Focus order: dialog, Domain,
+          Application, Cancel, Add domain.
+        </p>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <section class="panel">
+        <p class="panelLabel">
+          Panel B — the domain row · amends panel 8 · bound, unbound, no longer listed
+        </p>
+        <p class="panelNote">
+          The Application line names the chosen application, with its slug beside it. Unbound, it
+          says the domain names no application and serves nothing yet, and promises nothing more:
+          the Application control beside it is how the owner fixes it. A row naming an application
+          that is no longer listed says so, and never falls back to the unbound words. The
+          certificate line and the actions of panel 8 are unchanged.
+        </p>
+        <div class="row3">
+          <div class="stage">
+            <div class="domain">
+              <div class="top">
+                <a class="host grow">shop.acme.com ↗</a>
+                <span class="pill pill-ok"
+                  ><span class="dot" aria-hidden="true"></span> Issued</span
+                >
+              </div>
+              <div class="appRow">
+                <p class="appLine">Serves <strong>Shop</strong> <span class="slug">shop</span>.</p>
+                <button class="btn btn-ghost" aria-label="Change application for shop.acme.com">
+                  Change application
+                </button>
+              </div>
+              <p class="meta">Certificate renews on its own · valid until 28 January 2027</p>
+              <div class="acts">
+                <button class="btn btn-ghost">Show DNS records</button>
+                <button class="btn btn-ghost">Remove</button>
+              </div>
+            </div>
+          </div>
+          <div class="stage">
+            <div class="domain">
+              <div class="top">
+                <a class="host grow">acme.com ↗</a>
+                <span class="pill pill-ok"
+                  ><span class="dot" aria-hidden="true"></span> Issued</span
+                >
+              </div>
+              <div class="appRow">
+                <p class="appLine">This domain names no application, so it serves nothing yet.</p>
+                <button class="btn btn-ghost" aria-label="Choose application for acme.com">
+                  Choose application
+                </button>
+              </div>
+              <p class="meta">Certificate renews on its own · valid until 28 January 2027</p>
+              <div class="acts">
+                <button class="btn btn-ghost">Show DNS records</button>
+                <button class="btn btn-ghost">Remove</button>
+              </div>
+            </div>
+          </div>
+          <div class="stage">
+            <div class="domain">
+              <div class="top">
+                <a class="host grow">docs.acme.com ↗</a>
+                <span class="pill pill-ok"
+                  ><span class="dot" aria-hidden="true"></span> Issued</span
+                >
+              </div>
+              <div class="appRow">
+                <p class="appLine">
+                  The application this domain named is no longer available, so it serves nothing.
+                </p>
+                <button class="btn btn-ghost" aria-label="Change application for docs.acme.com">
+                  Change application
+                </button>
+              </div>
+              <p class="meta">Certificate renews on its own · valid until 28 January 2027</p>
+              <div class="acts">
+                <button class="btn btn-ghost">Show DNS records</button>
+                <button class="btn btn-ghost">Remove</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <section class="panel">
+        <p class="panelLabel">
+          Panel C — the Application control, open · on a bound, an unbound and a no-longer-listed
+          row
+        </p>
+        <p class="panelNote">
+          The same picker as the Add-domain dialog, in a Modal titled for the domain. The
+          application the domain names now is preselected and ticked; Save stays disabled until the
+          selection differs from it. A no-longer-listed application is not an option, so nothing is
+          preselected and any choice is a change.
+        </p>
+        <div class="row3">
+          <div class="scrim">
+            <div class="modal" role="dialog" aria-labelledby="cT1">
+              <p class="modalTitle" id="cT1">Application for shop.acme.com</p>
+              <label class="field">
+                <span class="label">Application</span>
+                <span class="combo" role="combobox" aria-expanded="true">
+                  <span class="name">Shop</span><span class="slug">shop</span>
+                  <span class="chev" aria-hidden="true">▴</span>
+                </span>
+              </label>
+              <span class="listbox" role="listbox" aria-label="Application">
+                <span class="opt active" role="option" aria-selected="true"
+                  ><span class="tick" aria-hidden="true">✓</span><span class="name">Shop</span
+                  ><span class="slug">shop</span></span
+                >
+                <span class="opt" role="option" aria-selected="false"
+                  ><span class="tick" aria-hidden="true"></span><span class="name">Docs</span
+                  ><span class="slug">docs</span></span
+                >
+                <span class="sep" aria-hidden="true"></span>
+                <span class="opt" role="option" aria-selected="false"
+                  ><span class="tick" aria-hidden="true"></span
+                  ><span class="name">No application yet</span></span
+                >
+              </span>
+              <div class="modalFoot" style="margin-top: 16px">
+                <button class="btn btn-ghost">Cancel</button>
+                <button class="btn btn-primary" disabled>Save</button>
+              </div>
+            </div>
+          </div>
+          <div class="scrim">
+            <div class="modal" role="dialog" aria-labelledby="cT2">
+              <p class="modalTitle" id="cT2">Application for acme.com</p>
+              <label class="field">
+                <span class="label">Application</span>
+                <span class="combo" role="combobox" aria-expanded="true">
+                  <span class="name">No application yet</span>
+                  <span class="chev" aria-hidden="true">▴</span>
+                </span>
+              </label>
+              <span class="listbox" role="listbox" aria-label="Application">
+                <span class="opt active" role="option" aria-selected="false"
+                  ><span class="tick" aria-hidden="true"></span><span class="name">Shop</span
+                  ><span class="slug">shop</span></span
+                >
+                <span class="opt" role="option" aria-selected="false"
+                  ><span class="tick" aria-hidden="true"></span><span class="name">Docs</span
+                  ><span class="slug">docs</span></span
+                >
+                <span class="sep" aria-hidden="true"></span>
+                <span class="opt" role="option" aria-selected="true"
+                  ><span class="tick" aria-hidden="true">✓</span
+                  ><span class="name">No application yet</span></span
+                >
+              </span>
+              <div class="modalFoot" style="margin-top: 16px">
+                <button class="btn btn-ghost">Cancel</button>
+                <button class="btn btn-primary" disabled>Save</button>
+              </div>
+            </div>
+          </div>
+          <div class="scrim">
+            <div class="modal" role="dialog" aria-labelledby="cT3">
+              <p class="modalTitle" id="cT3">Application for docs.acme.com</p>
+              <label class="field">
+                <span class="label">Application</span>
+                <span class="combo" role="combobox" aria-expanded="true">
+                  <span class="ph">Choose an application</span>
+                  <span class="chev" aria-hidden="true">▴</span>
+                </span>
+              </label>
+              <span class="listbox" role="listbox" aria-label="Application">
+                <span class="opt active" role="option" aria-selected="false"
+                  ><span class="tick" aria-hidden="true"></span><span class="name">Shop</span
+                  ><span class="slug">shop</span></span
+                >
+                <span class="opt" role="option" aria-selected="false"
+                  ><span class="tick" aria-hidden="true"></span><span class="name">Docs</span
+                  ><span class="slug">docs</span></span
+                >
+                <span class="sep" aria-hidden="true"></span>
+                <span class="opt" role="option" aria-selected="false"
+                  ><span class="tick" aria-hidden="true"></span
+                  ><span class="name">No application yet</span></span
+                >
+              </span>
+              <div class="modalFoot" style="margin-top: 16px">
+                <button class="btn btn-ghost">Cancel</button>
+                <button class="btn btn-primary" disabled>Save</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <section class="panel">
+        <p class="panelLabel">Panel D — the change · confirm, saving, failed</p>
+        <p class="panelNote">
+          Once the selection differs, the Modal states what the save changes and what it does not,
+          and Save is enabled. Saving: Save shows its spinner and both buttons are disabled; the row
+          is unchanged until the write answers. Failed: the message sits above the footer, Save
+          reads Retry, and the row still names the application it named before.
+        </p>
+        <div class="row3">
+          <div class="scrim">
+            <div class="modal" role="dialog" aria-labelledby="dT1">
+              <p class="modalTitle" id="dT1">Application for shop.acme.com</p>
+              <label class="field">
+                <span class="label">Application</span>
+                <span class="combo" role="combobox" aria-expanded="false">
+                  <span class="name">Docs</span><span class="slug">docs</span>
+                  <span class="chev" aria-hidden="true">▾</span>
+                </span>
+              </label>
+              <p class="modalBody" style="margin-top: 12px">
+                shop.acme.com serves Docs as soon as you save. Its certificate, the DNS records at
+                your provider and its status stay as they are.
+              </p>
+              <div class="modalFoot">
+                <button class="btn btn-ghost">Cancel</button>
+                <button class="btn btn-primary">Save</button>
+              </div>
+            </div>
+          </div>
+          <div class="scrim">
+            <div class="modal" role="dialog" aria-labelledby="dT2">
+              <p class="modalTitle" id="dT2">Application for shop.acme.com</p>
+              <label class="field">
+                <span class="label">Application</span>
+                <span class="combo" role="combobox" aria-disabled="true">
+                  <span class="name">Docs</span><span class="slug">docs</span>
+                  <span class="chev" aria-hidden="true">▾</span>
+                </span>
+              </label>
+              <p class="modalBody" style="margin-top: 12px">
+                shop.acme.com serves Docs as soon as you save. Its certificate, the DNS records at
+                your provider and its status stay as they are.
+              </p>
+              <div class="modalFoot">
+                <button class="btn btn-ghost" disabled>Cancel</button>
+                <button class="btn btn-primary" disabled aria-busy="true">
+                  <span class="spin" aria-hidden="true"></span> Saving…
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="scrim">
+            <div class="modal" role="dialog" aria-labelledby="dT3">
+              <p class="modalTitle" id="dT3">Application for shop.acme.com</p>
+              <label class="field">
+                <span class="label">Application</span>
+                <span class="combo" role="combobox" aria-expanded="false">
+                  <span class="name">No application yet</span>
+                  <span class="chev" aria-hidden="true">▾</span>
+                </span>
+              </label>
+              <p class="modalBody" style="margin-top: 12px">
+                shop.acme.com stops serving Shop as soon as you save, and serves nothing until you
+                choose an application. Its certificate, the DNS records at your provider and its
+                status stay as they are.
+              </p>
+              <p class="helperError" role="alert" style="margin: 0 0 12px">
+                The application was not changed. Try again in a moment.
+              </p>
+              <div class="modalFoot">
+                <button class="btn btn-ghost">Cancel</button>
+                <button class="btn btn-primary">Retry</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <section class="panel">
+        <p class="panelLabel">Panel E — read-only · amends panel 12 · narrow, with a long name</p>
+        <p class="panelNote">
+          A member who cannot manage domains reads the Application line; the Application control is
+          absent, not disabled. At a narrow width a long application name wraps inside the line, and
+          on a manager's row the control wraps under the line rather than overflowing it.
+        </p>
+        <div class="row2">
+          <div class="stage">
+            <div class="domain">
+              <div class="top">
+                <a class="host grow">shop.acme.com ↗</a>
+                <span class="pill pill-ok"
+                  ><span class="dot" aria-hidden="true"></span> Issued</span
+                >
+              </div>
+              <p class="appLine">Serves <strong>Shop</strong> <span class="slug">shop</span>.</p>
+            </div>
+            <p class="sec12" style="margin: 12px 0 0">
+              Only a workspace owner or admin can add or remove domains.
+            </p>
+          </div>
+          <div class="stage narrow">
+            <div class="domain">
+              <div class="top">
+                <a class="host grow">store.acme.com ↗</a>
+                <span class="pill pill-ok"
+                  ><span class="dot" aria-hidden="true"></span> Issued</span
+                >
+              </div>
+              <div class="appRow">
+                <p class="appLine">
+                  Serves <strong>Acme Storefront and Customer Accounts Portal</strong>
+                  <span class="slug">storefront</span>.
+                </p>
+                <button class="btn btn-ghost" aria-label="Change application for store.acme.com">
+                  Change application
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <section class="panel">
+        <p class="panelLabel">
+          Panel F — the apex records · replaces panel 6's apex half · the edge's own addresses
+        </p>
+        <p class="panelNote">
+          A root domain points its A and AAAA records at the addresses motir-edge holds for customer
+          domains — Motir's own, not an address other sites use. The values are configuration and
+          are drawn here as what they are. When an address list is not configured its row is absent,
+          never blank or invented, and the ownership TXT still shows. The subdomain half of panel 6
+          (one CNAME and the TXT, no note) is unchanged.
+        </p>
+        <div class="row2">
+          <div class="stage">
+            <div class="domain">
+              <div class="top">
+                <span class="host grow">acme.com</span>
+                <span class="pill pill-wait"
+                  ><span class="dot" aria-hidden="true"></span> Unverified</span
+                >
+              </div>
+              <p class="meta">Create these 3 records at your DNS provider, then check.</p>
+              <div class="records">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Type</th>
+                      <th>Name</th>
+                      <th>Value</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>A</td>
+                      <td class="v">@</td>
+                      <td class="cfg">the edge's IPv4 address</td>
+                      <td class="act"><button class="copy">Copy</button></td>
+                    </tr>
+                    <tr>
+                      <td>AAAA</td>
+                      <td class="v">@</td>
+                      <td class="cfg">the edge's IPv6 address</td>
+                      <td class="act"><button class="copy">Copy</button></td>
+                    </tr>
+                    <tr>
+                      <td>TXT</td>
+                      <td class="v">_motir-verify</td>
+                      <td class="v">motir-verify-k7P…2cB</td>
+                      <td class="act"><button class="copy">Copy</button></td>
+                    </tr>
+                  </tbody>
+                </table>
+                <p class="rnote">
+                  A root domain cannot take a CNAME, so it points at Motir's own addresses, which
+                  motir-edge holds for customer domains. If they ever change we will tell you before
+                  they do.
+                </p>
+              </div>
+              <div class="acts">
+                <button class="btn btn-primary">Check now</button>
+                <button class="btn btn-ghost">Remove</button>
+              </div>
+            </div>
+          </div>
+          <div class="stage">
+            <div class="domain">
+              <div class="top">
+                <span class="host grow">acme.com</span>
+                <span class="pill pill-wait"
+                  ><span class="dot" aria-hidden="true"></span> Unverified</span
+                >
+              </div>
+              <p class="meta">Create these 2 records at your DNS provider, then check.</p>
+              <div class="records">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Type</th>
+                      <th>Name</th>
+                      <th>Value</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>A</td>
+                      <td class="v">@</td>
+                      <td class="cfg">the edge's IPv4 address</td>
+                      <td class="act"><button class="copy">Copy</button></td>
+                    </tr>
+                    <tr>
+                      <td>TXT</td>
+                      <td class="v">_motir-verify</td>
+                      <td class="v">motir-verify-k7P…2cB</td>
+                      <td class="act"><button class="copy">Copy</button></td>
+                    </tr>
+                  </tbody>
+                </table>
+                <p class="rnote">
+                  A root domain cannot take a CNAME, so it points at Motir's own addresses, which
+                  motir-edge holds for customer domains. If they ever change we will tell you before
+                  they do.
+                </p>
+              </div>
+              <div class="acts">
+                <button class="btn btn-primary">Check now</button>
+                <button class="btn btn-ghost">Remove</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="panelNote" style="margin-top: 16px">
+          Right: the IPv6 list is not configured, so its AAAA row is absent and the heading counts
+          two records.
+        </p>
+      </section>
+    </div>
+  </body>
+</html>
