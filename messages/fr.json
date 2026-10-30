@@ -4404,8 +4404,13 @@
       "dialog": {
         "title": "Ajouter un domaine",
         "label": "Domaine",
-        "helper": "Un sous-domaine comme shop.acme.com ou un domaine racine comme acme.com. Il servira l’application de cet espace de travail.",
-        "cancel": "Annuler"
+        "helper": "Un sous-domaine comme shop.acme.com ou un domaine racine comme acme.com.",
+        "cancel": "Annuler",
+        "appLabel": "Application",
+        "appHelper": "L’application que ce domaine servira. Vous pourrez la changer plus tard sur la ligne du domaine.",
+        "appChoose": "Choisir une application",
+        "appNone": "Pas encore d’application",
+        "noApps": "Cet espace de travail n’a encore aucune application hébergée. Le domaine est ajouté sans en nommer, et vous pourrez choisir son application sur sa ligne dès qu’il en existe une."
       },
       "refuse": {
         "tenantBase": "{host} est une adresse Motir. Votre espace de travail répond déjà sous {base} : définissez ce nom dans Adresse publique.",
@@ -4422,17 +4427,28 @@
       },
       "records": {
         "heading": "{count, plural, one {Créez cet enregistrement chez votre fournisseur DNS, puis lancez le contrôle.} other {Créez ces # enregistrements chez votre fournisseur DNS, puis lancez le contrôle.}}",
-        "apexNote": "Un domaine racine ne peut pas utiliser de CNAME ; il pointe donc vers les adresses de Motir. L’adresse IPv4 est partagée avec d’autres domaines Motir ; si elle change un jour, nous vous préviendrons avant.",
+        "apexNote": "Un domaine racine ne peut pas recevoir de CNAME : il pointe donc vers les adresses propres de Motir, que motir-edge réserve aux domaines clients. Si elles changent un jour, nous vous préviendrons avant.",
         "type": "Type",
         "name": "Nom",
         "value": "Valeur"
       },
       "pending": "Propriété confirmée. Émission du certificat en cours : cela prend généralement quelques minutes. Cette page se met à jour toute seule.",
       "app": {
-        "serves": "Sert l’application de cet espace de travail.",
-        "none": "Aucune application n’est encore déployée pour cet espace de travail ; ce domaine la servira dès qu’il y en aura une."
+        "serves": "Sert <b>{app}</b> <code>{slug}</code>.",
+        "none": "Ce domaine ne nomme aucune application, il ne sert donc encore rien.",
+        "gone": "L’application que nommait ce domaine n’est plus disponible, il ne sert donc rien.",
+        "change": "Changer d’application",
+        "choose": "Choisir l’application",
+        "controlLabel": "{action} pour {host}",
+        "title": "Application de {host}",
+        "save": "Enregistrer",
+        "saving": "Enregistrement…",
+        "confirm": "{host} sert {app} dès que vous enregistrez. Son certificat, les enregistrements DNS chez votre fournisseur et son statut restent inchangés.",
+        "confirmNone": "{host} cesse de servir {previous} dès que vous enregistrez, et ne sert rien tant que vous n’avez pas choisi d’application. Son certificat, les enregistrements DNS chez votre fournisseur et son statut restent inchangés.",
+        "error": "L’application n’a pas été changée. Réessayez dans un instant."
       },
       "cert": "Le certificat se renouvelle tout seul.",
+      "certUntil": "Le certificat se renouvelle tout seul · valide jusqu’au {date}",
       "fail": {
         "txt": "Nous ne voyons plus votre enregistrement de propriété",
         "txtBody": "Rétablissez cet enregistrement TXT chez votre fournisseur DNS :",

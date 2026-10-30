@@ -4404,8 +4404,13 @@
       "dialog": {
         "title": "Add a domain",
         "label": "Domain",
-        "helper": "A subdomain like shop.acme.com or a root domain like acme.com. It will serve this workspace's application.",
-        "cancel": "Cancel"
+        "helper": "A subdomain like shop.acme.com or a root domain like acme.com.",
+        "cancel": "Cancel",
+        "appLabel": "Application",
+        "appHelper": "The application this domain will serve. You can change it later on the domain's row.",
+        "appChoose": "Choose an application",
+        "appNone": "No application yet",
+        "noApps": "This workspace has no hosted application yet. The domain is added naming none, and you can choose its application on its row once one exists."
       },
       "refuse": {
         "tenantBase": "{host} is a Motir address. Your workspace already answers under {base} — set that name in Public address.",
@@ -4422,17 +4427,28 @@
       },
       "records": {
         "heading": "{count, plural, one {Create this record at your DNS provider, then check.} other {Create these # records at your DNS provider, then check.}}",
-        "apexNote": "A root domain cannot take a CNAME, so it points at Motir's addresses. The IPv4 address is shared with other Motir domains; if it ever changes we will tell you before it does.",
+        "apexNote": "A root domain cannot take a CNAME, so it points at Motir's own addresses, which motir-edge holds for customer domains. If they ever change we will tell you before they do.",
         "type": "Type",
         "name": "Name",
         "value": "Value"
       },
       "pending": "Ownership confirmed. Issuing the certificate — this usually takes a few minutes. This page updates on its own.",
       "app": {
-        "serves": "Serves this workspace's application.",
-        "none": "No application is deployed for this workspace yet — this domain will serve it as soon as one is."
+        "serves": "Serves <b>{app}</b> <code>{slug}</code>.",
+        "none": "This domain names no application, so it serves nothing yet.",
+        "gone": "The application this domain named is no longer available, so it serves nothing.",
+        "change": "Change application",
+        "choose": "Choose application",
+        "controlLabel": "{action} for {host}",
+        "title": "Application for {host}",
+        "save": "Save",
+        "saving": "Saving…",
+        "confirm": "{host} serves {app} as soon as you save. Its certificate, the DNS records at your provider and its status stay as they are.",
+        "confirmNone": "{host} stops serving {previous} as soon as you save, and serves nothing until you choose an application. Its certificate, the DNS records at your provider and its status stay as they are.",
+        "error": "The application was not changed. Try again in a moment."
       },
       "cert": "The certificate renews on its own.",
+      "certUntil": "The certificate renews on its own · valid until {date}",
       "fail": {
         "txt": "We can no longer see your ownership record",
         "txtBody": "Restore this TXT record at your DNS provider:",

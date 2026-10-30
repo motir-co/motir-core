@@ -6,7 +6,7 @@ import {
   CustomDomainsPane,
   refusalOf,
 } from '@/app/(authed)/settings/workspace/custom-domains/_components/CustomDomainsPane';
-import type { PublicAddressDto } from '@/lib/dto/publicAddresses';
+import type { DomainApplicationDto, PublicAddressDto } from '@/lib/dto/publicAddresses';
 
 // THE CUSTOM DOMAINS PANE (Story MOTIR-4533 · MOTIR-9529) — design
 // `design/workspace-address/custom-domains.mock.html` panels 1–12.
@@ -83,9 +83,17 @@ function domain(over: Partial<PublicAddressDto> = {}): PublicAddressDto {
   };
 }
 
+const SHOP: DomainApplicationDto = { id: 'app_shop', name: 'Shop', slug: 'shop' };
+const DOCS: DomainApplicationDto = { id: 'app_docs', name: 'Docs', slug: 'docs' };
+
 function render(
   addresses: PublicAddressDto[],
-  over: { canManage?: boolean; maxDomains?: number | null; loadFailed?: boolean } = {},
+  over: {
+    canManage?: boolean;
+    maxDomains?: number | null;
+    loadFailed?: boolean;
+    applications?: DomainApplicationDto[];
+  } = {},
 ) {
   return renderWithIntl(
     <CustomDomainsPane
@@ -93,6 +101,7 @@ function render(
       baseDomain="motir.site"
       workspaceHost="acme.motir.site"
       addresses={addresses}
+      applications={over.applications ?? []}
       canManage={over.canManage ?? true}
       maxDomains={over.maxDomains === undefined ? null : over.maxDomains}
       loadFailed={over.loadFailed ?? false}
@@ -199,8 +208,98 @@ describe('the DNS records panel', () => {
     expect(screen.getByText(TXT.value)).toBeTruthy();
 
     cleanup();
-    render([domain({ status: 'issued', applicationId: 'app_1' })]);
-    expect(screen.getByText(copy.app.serves)).toBeTruthy();
+    render([domain({ status: 'issued', applicationId: SHOP.id })], { applications: [SHOP] });
+    expect(document.querySelector('[data-application="bound"]')?.textContent).toBe(
+      'Serves Shop shop.',
+    );
+  });
+});
+
+describe('the application a domain serves (delta panels A–F)', () => {
+  it('an id the workspace no longer lists says so, and never reads as unbound', () => {
+    render([domain({ status: 'issued', applicationId: 'app_gone' })], { applications: [SHOP] });
+    expect(screen.getByText(copy.app.gone)).toBeTruthy();
+    expect(screen.queryByText(copy.app.none)).toBeNull();
+  });
+
+  it('the certificate line carries the platform’s expiry, and drops the clause without one', () => {
+    render([domain({ status: 'issued', certificateExpiresAt: '2027-01-28T00:00:00.000Z' })]);
+    expect(screen.getByText(/valid until .*2027/)).toBeTruthy();
+    cleanup();
+    render([domain({ status: 'issued' })]);
+    expect(screen.getByText(copy.cert)).toBeTruthy();
+  });
+
+  it('an apex note names the edge’s own addresses, never a shared one', () => {
+    expect(copy.records.apexNote).toContain('own addresses');
+    expect(copy.records.apexNote).not.toMatch(/shared/i);
+  });
+
+  it('the control names its domain, and Save waits for a different choice', () => {
+    render([domain({ status: 'issued', applicationId: SHOP.id })], {
+      applications: [SHOP, DOCS],
+    });
+    fireEvent.click(screen.getByRole('button', { name: `${copy.app.change} for shop.acme.com` }));
+    const dialog = screen.getByRole('dialog', { name: 'Application for shop.acme.com' });
+    const save = within(dialog).getByRole('button', { name: copy.app.save }) as HTMLButtonElement;
+    expect(save.disabled).toBe(true);
+    fireEvent.click(within(dialog).getByRole('combobox', { name: copy.dialog.appLabel }));
+    fireEvent.click(screen.getByRole('option', { name: /Docs/ }));
+    expect(save.disabled).toBe(false);
+    expect(dialog.textContent).toContain('shop.acme.com serves Docs as soon as you save.');
+  });
+
+  it('PATCHes the re-point and the row names the new application', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => domain({ status: 'issued', applicationId: DOCS.id }),
+    });
+    render([domain({ status: 'issued', applicationId: SHOP.id })], {
+      applications: [SHOP, DOCS],
+    });
+    fireEvent.click(screen.getByRole('button', { name: `${copy.app.change} for shop.acme.com` }));
+    const dialog = screen.getByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('combobox', { name: copy.dialog.appLabel }));
+    fireEvent.click(screen.getByRole('option', { name: /Docs/ }));
+    fireEvent.click(within(dialog).getByRole('button', { name: copy.app.save }));
+
+    await waitFor(() =>
+      expect(document.querySelector('[data-application="bound"]')?.textContent).toBe(
+        'Serves Docs docs.',
+      ),
+    );
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/workspaces/ws_1/custom-domains/addr_1');
+    expect(fetchMock.mock.calls[0]?.[1].method).toBe('PATCH');
+    expect(JSON.parse(fetchMock.mock.calls[0]?.[1].body as string)).toEqual({
+      applicationId: DOCS.id,
+    });
+  });
+
+  it('unbinding says what stops, and a failed save leaves the row as it was with Retry', async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 500, json: async () => ({}) });
+    render([domain({ status: 'issued', applicationId: SHOP.id })], { applications: [SHOP] });
+    fireEvent.click(screen.getByRole('button', { name: `${copy.app.change} for shop.acme.com` }));
+    const dialog = screen.getByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('combobox', { name: copy.dialog.appLabel }));
+    fireEvent.click(screen.getByRole('option', { name: copy.dialog.appNone }));
+    expect(dialog.textContent).toContain('shop.acme.com stops serving Shop as soon as you save');
+    fireEvent.click(within(dialog).getByRole('button', { name: copy.app.save }));
+
+    await waitFor(() => expect(screen.getByText(copy.app.error)).toBeTruthy());
+    expect(within(dialog).getByRole('button', { name: copy.action.retry })).toBeTruthy();
+    expect(JSON.parse(fetchMock.mock.calls[0]?.[1].body as string)).toEqual({
+      applicationId: null,
+    });
+    expect(document.querySelector('[data-application="bound"]')?.textContent).toBe(
+      'Serves Shop shop.',
+    );
+  });
+
+  it('an unbound row offers Choose application', () => {
+    render([domain({ status: 'issued' })], { applications: [SHOP] });
+    expect(
+      screen.getByRole('button', { name: `${copy.app.choose} for shop.acme.com` }),
+    ).toBeTruthy();
   });
 });
 
@@ -272,7 +371,49 @@ describe('adding a domain', () => {
     expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/workspaces/ws_1/custom-domains');
     expect(JSON.parse(fetchMock.mock.calls[0]?.[1].body as string)).toEqual({
       hostname: 'shop.acme.com',
+      applicationId: null,
     });
+  });
+
+  it('with no application the picker is absent and its line stands in', () => {
+    render([]);
+    fireEvent.click(screen.getByRole('button', { name: copy.add }));
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText(copy.dialog.noApps)).toBeTruthy();
+    expect(within(dialog).queryByRole('combobox')).toBeNull();
+  });
+
+  it('one application is preselected and sent as applicationId', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 201,
+      json: async () => domain({ status: 'unverified', applicationId: SHOP.id }),
+    });
+    render([], { applications: [SHOP] });
+    fireEvent.click(screen.getByRole('button', { name: copy.add }));
+    fireEvent.change(screen.getByLabelText(copy.dialog.label), {
+      target: { value: 'shop.acme.com' },
+    });
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: copy.add }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(JSON.parse(fetchMock.mock.calls[0]?.[1].body as string)).toEqual({
+      hostname: 'shop.acme.com',
+      applicationId: SHOP.id,
+    });
+  });
+
+  it('several applications: nothing is preselected and Add waits for a choice', () => {
+    render([], { applications: [SHOP, DOCS] });
+    fireEvent.click(screen.getByRole('button', { name: copy.add }));
+    const dialog = screen.getByRole('dialog');
+    fireEvent.change(screen.getByLabelText(copy.dialog.label), {
+      target: { value: 'shop.acme.com' },
+    });
+    const add = within(dialog).getByRole('button', { name: copy.add }) as HTMLButtonElement;
+    expect(add.disabled).toBe(true);
+    fireEvent.click(within(dialog).getByRole('combobox', { name: copy.dialog.appLabel }));
+    fireEvent.click(screen.getByRole('option', { name: copy.dialog.appNone }));
+    expect(add.disabled).toBe(false);
   });
 
   it.each([
@@ -393,6 +534,15 @@ describe('the reader who may not manage', () => {
     expect(screen.queryByRole('button', { name: copy.add })).toBeNull();
     expect(screen.queryByRole('button', { name: copy.action.remove })).toBeNull();
     expect(screen.queryByRole('button', { name: copy.action.checkNow })).toBeNull();
+  });
+
+  it('reads an issued row’s application with no control to change it', () => {
+    render([domain({ status: 'issued', applicationId: SHOP.id })], {
+      canManage: false,
+      applications: [SHOP],
+    });
+    expect(screen.getByText(/Serves/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /application for/i })).toBeNull();
   });
 });
 

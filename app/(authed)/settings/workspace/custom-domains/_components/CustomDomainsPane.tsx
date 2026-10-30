@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useTranslations } from 'next-intl';
+import { useFormatter, useTranslations } from 'next-intl';
 import { Copy } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -13,14 +13,23 @@ import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Pill } from '@/components/ui/Pill';
 import { useToast } from '@/components/ui/Toast';
-import type { DnsInstructionDto, PublicAddressDto } from '@/lib/dto/publicAddresses';
+import type {
+  DnsInstructionDto,
+  DomainApplicationDto,
+  PublicAddressDto,
+} from '@/lib/dto/publicAddresses';
+import { ApplicationControl } from './ApplicationControl';
+import { ApplicationPicker, NO_APPLICATION } from './ApplicationPicker';
 
 /**
  * THE CUSTOM DOMAINS PANE (Story MOTIR-4533 · MOTIR-9529), built to
  * `design/workspace-address/custom-domains.mock.html` panels 1–12, over the
  * workspace routes (MOTIR-9524) and the failure kinds the sweep writes
  * (MOTIR-9526). Ported from the project room's `CustomDomainsSection`, which it
- * replaces: the same `call` shape and the same tick, on workspace URLs.
+ * replaces: the same `call` shape and the same tick, on workspace URLs. The
+ * application a domain serves — the add dialog's picker, the Application line
+ * by name and the Application control — is the delta
+ * `custom-domains--application.mock.html` panels A–F (MOTIR-10125).
  *
  * ── ⚠️ THE STATE MAP IS A TOTAL `Record`, AND THAT IS THE POINT ───────────
  *
@@ -91,6 +100,7 @@ export function CustomDomainsPane({
   baseDomain,
   workspaceHost,
   addresses,
+  applications,
   canManage,
   maxDomains,
   loadFailed,
@@ -101,6 +111,8 @@ export function CustomDomainsPane({
   /** The workspace's own `motir.site` host, which the upsell names; null if unclaimed. */
   workspaceHost: string | null;
   addresses: readonly PublicAddressDto[];
+  /** The workspace's applications, which the picker offers and the rows name. */
+  applications: readonly DomainApplicationDto[];
   /** The workspace address gate every write asserts (`roleMayManageAddress`). */
   canManage: boolean;
   /** The tier's cap; `null` = no cap, `0` = not on this plan. */
@@ -144,12 +156,12 @@ export function CustomDomainsPane({
     return `/api/workspaces/${encodeURIComponent(workspaceId)}/custom-domains${path}`;
   }
 
-  async function add(hostname: string): Promise<Refusal | null> {
+  async function add(hostname: string, applicationId: string | null): Promise<Refusal | null> {
     try {
       const res = await fetch(base(), {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ hostname }),
+        body: JSON.stringify({ hostname, applicationId }),
       });
       const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
       if (!res.ok) return refusalOf(res.status, body, hostname);
@@ -187,6 +199,23 @@ export function CustomDomainsPane({
           return next;
         });
       }
+    }
+  }
+
+  async function bind(address: PublicAddressDto, applicationId: string | null): Promise<boolean> {
+    try {
+      const res = await fetch(base(`/${encodeURIComponent(address.id)}`), {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ applicationId }),
+      });
+      if (!res.ok) return false;
+      const dto = (await res.json()) as PublicAddressDto;
+      setRows((current) => current.map((r) => (r.id === dto.id ? dto : r)));
+      router.refresh();
+      return true;
+    } catch {
+      return false;
     }
   }
 
@@ -276,9 +305,11 @@ export function CustomDomainsPane({
             <DomainRow
               key={address.id}
               address={address}
+              applications={applications}
               canManage={canManage}
               checking={checking.has(address.id)}
               onCheck={() => void check(address)}
+              onBind={(applicationId) => bind(address, applicationId)}
               onRemove={() => setRemoving(address)}
             />
           ))}
@@ -288,6 +319,7 @@ export function CustomDomainsPane({
       <AddDomainModal
         open={adding}
         baseDomain={baseDomain}
+        applications={applications}
         onOpenChange={setAdding}
         onSubmit={add}
       />
@@ -307,18 +339,23 @@ export function CustomDomainsPane({
 
 function DomainRow({
   address,
+  applications,
   canManage,
   checking,
   onCheck,
+  onBind,
   onRemove,
 }: {
   address: PublicAddressDto;
+  applications: readonly DomainApplicationDto[];
   canManage: boolean;
   checking: boolean;
   onCheck: () => void;
+  onBind: (applicationId: string | null) => Promise<boolean>;
   onRemove: () => void;
 }) {
   const t = useTranslations('settings.customDomains');
+  const format = useFormatter();
   const state = STATES[address.status];
   const [dnsOpen, setDnsOpen] = useState(false);
   // `role="alert"` only when the status CHANGES to a failure while the pane is
@@ -399,12 +436,23 @@ function DomainRow({
 
       {state.pill === 'issued' ? (
         <>
-          {/* The Application line. The DTO carries the bound application's id,
-              not its name, so the line says whether one is bound. */}
-          <p className="font-sans text-[13px] text-(--el-text)">
-            {address.applicationId ? t('app.serves') : t('app.none')}
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <ApplicationLine address={address} applications={applications} />
+            {canManage ? (
+              <ApplicationControl address={address} applications={applications} onSave={onBind} />
+            ) : null}
+          </div>
+          {/* The date is the platform's, as the sweep last read it; a reading
+              that carried none drops the clause rather than inventing one. */}
+          <p className="font-sans text-[12px] text-(--el-text-secondary)">
+            {address.certificateExpiresAt
+              ? t('certUntil', {
+                  date: format.dateTime(new Date(address.certificateExpiresAt), {
+                    dateStyle: 'medium',
+                  }),
+                })
+              : t('cert')}
           </p>
-          <p className="font-sans text-[12px] text-(--el-text-secondary)">{t('cert')}</p>
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="secondary" size="sm" onClick={() => setDnsOpen((o) => !o)}>
               {dnsOpen ? t('action.hideDns') : t('action.showDns')}
@@ -489,6 +537,43 @@ function DomainRow({
   );
 }
 
+/**
+ * The Application line (delta panels B, E): a sentence, not a badge. Bound
+ * names the application; unbound promises nothing about serving later; an id
+ * the workspace no longer lists says so, and never reads as unbound.
+ */
+function ApplicationLine({
+  address,
+  applications,
+}: {
+  address: PublicAddressDto;
+  applications: readonly DomainApplicationDto[];
+}) {
+  const t = useTranslations('settings.customDomains');
+  const bound = address.applicationId
+    ? applications.find((a) => a.id === address.applicationId)
+    : undefined;
+  return (
+    <p
+      data-application={bound ? 'bound' : address.applicationId ? 'gone' : 'none'}
+      className="min-w-0 flex-1 font-sans text-[13px] break-words text-(--el-text)"
+    >
+      {bound
+        ? t.rich('app.serves', {
+            app: bound.name,
+            slug: bound.slug,
+            b: (chunks) => <strong className="font-semibold">{chunks}</strong>,
+            code: (chunks) => (
+              <span className="font-mono text-(--el-text-identifier)">{chunks}</span>
+            ),
+          })
+        : address.applicationId
+          ? t('app.gone')
+          : t('app.none')}
+    </p>
+  );
+}
+
 /** The records the customer creates (design panels 6–7). */
 function DnsTable({
   rows,
@@ -565,16 +650,22 @@ function CopyValue({ value }: { value: string }) {
 function AddDomainModal({
   open,
   baseDomain,
+  applications,
   onOpenChange,
   onSubmit,
 }: {
   open: boolean;
   baseDomain: string;
+  applications: readonly DomainApplicationDto[];
   onOpenChange: (open: boolean) => void;
-  onSubmit: (hostname: string) => Promise<Refusal | null>;
+  onSubmit: (hostname: string, applicationId: string | null) => Promise<Refusal | null>;
 }) {
   const t = useTranslations('settings.customDomains');
+  // One application: preselected. Several: nothing, so the owner chooses. None:
+  // the picker is absent and the domain is added naming none.
+  const preselect = applications.length === 1 ? applications[0]!.id : null;
   const [hostname, setHostname] = useState('');
+  const [application, setApplication] = useState<string | null>(preselect);
   const [refusal, setRefusal] = useState<Refusal | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -598,6 +689,7 @@ function AddDomainModal({
   function close(next: boolean) {
     if (!next) {
       setHostname('');
+      setApplication(preselect);
       setRefusal(null);
     }
     onOpenChange(next);
@@ -605,21 +697,35 @@ function AddDomainModal({
 
   return (
     <Modal open={open} onOpenChange={close} title={t('dialog.title')}>
-      <div className="flex flex-col gap-4">
-        <Input
-          label={t('dialog.label')}
-          value={hostname}
-          onChange={(e) => {
-            setHostname(e.target.value);
-            setRefusal(null);
-          }}
-          helperText={refusal ? undefined : t('dialog.helper')}
-          error={refusal ? message(refusal) : undefined}
-          disabled={busy}
-          spellCheck={false}
-          autoComplete="off"
-        />
-        <div className="flex justify-end gap-2">
+      <div className="flex min-h-0 flex-1 flex-col">
+        <Modal.Body className="gap-4">
+          <Input
+            label={t('dialog.label')}
+            value={hostname}
+            onChange={(e) => {
+              setHostname(e.target.value);
+              setRefusal(null);
+            }}
+            helperText={refusal ? undefined : t('dialog.helper')}
+            error={refusal ? message(refusal) : undefined}
+            disabled={busy}
+            spellCheck={false}
+            autoComplete="off"
+          />
+          {applications.length === 0 ? (
+            <p className="font-sans text-[13px] leading-[1.6] text-(--el-text-secondary)">
+              {t('dialog.noApps')}
+            </p>
+          ) : (
+            <ApplicationPicker
+              applications={applications}
+              value={application}
+              onChange={setApplication}
+              disabled={busy}
+            />
+          )}
+        </Modal.Body>
+        <Modal.Footer className="shrink-0">
           <Button variant="ghost" size="sm" disabled={busy} onClick={() => close(false)}>
             {t('dialog.cancel')}
           </Button>
@@ -627,10 +733,17 @@ function AddDomainModal({
             variant="primary"
             size="sm"
             loading={busy}
-            disabled={hostname.trim() === '' || refusal !== null}
+            disabled={
+              hostname.trim() === '' ||
+              refusal !== null ||
+              (applications.length > 0 && application === null)
+            }
             onClick={async () => {
               setBusy(true);
-              const refused = await onSubmit(hostname.trim());
+              const refused = await onSubmit(
+                hostname.trim(),
+                application === null || application === NO_APPLICATION ? null : application,
+              );
               setBusy(false);
               // A refusal keeps the dialog open with its own sentence under the
               // field; success closes it and the row appears Unverified.
@@ -640,7 +753,7 @@ function AddDomainModal({
           >
             {t('add')}
           </Button>
-        </div>
+        </Modal.Footer>
       </div>
     </Modal>
   );

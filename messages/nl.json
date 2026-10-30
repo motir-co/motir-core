@@ -4404,8 +4404,13 @@
       "dialog": {
         "title": "Een domein toevoegen",
         "label": "Domein",
-        "helper": "Een subdomein zoals shop.acme.com of een hoofddomein zoals acme.com. Het biedt de applicatie van deze werkruimte aan.",
-        "cancel": "Annuleren"
+        "helper": "Een subdomein zoals shop.acme.com of een hoofddomein zoals acme.com.",
+        "cancel": "Annuleren",
+        "appLabel": "Applicatie",
+        "appHelper": "De applicatie die dit domein aanbiedt. Je kunt hem later wijzigen in de rij van het domein.",
+        "appChoose": "Kies een applicatie",
+        "appNone": "Nog geen applicatie",
+        "noApps": "Deze werkruimte heeft nog geen gehoste applicatie. Het domein wordt toegevoegd zonder er een te noemen, en je kunt de applicatie in de rij kiezen zodra er een is."
       },
       "refuse": {
         "tenantBase": "{host} is een Motir-adres. Je werkruimte is al bereikbaar onder {base} — stel die naam in bij Openbaar adres.",
@@ -4422,17 +4427,28 @@
       },
       "records": {
         "heading": "{count, plural, one {Maak dit record aan bij je DNS-provider en controleer daarna.} other {Maak deze # records aan bij je DNS-provider en controleer daarna.}}",
-        "apexNote": "Een hoofddomein kan geen CNAME hebben, dus het wijst naar de adressen van Motir. Het IPv4-adres wordt gedeeld met andere Motir-domeinen; als het ooit verandert, laten we je dat vooraf weten.",
+        "apexNote": "Een hoofddomein kan geen CNAME hebben, dus het wijst naar Motirs eigen adressen, die motir-edge voor klantdomeinen vasthoudt. Als ze ooit veranderen, laten we het je vooraf weten.",
         "type": "Type",
         "name": "Naam",
         "value": "Waarde"
       },
       "pending": "Eigendom bevestigd. Het certificaat wordt uitgegeven — dit duurt meestal een paar minuten. Deze pagina werkt zichzelf bij.",
       "app": {
-        "serves": "Biedt de applicatie van deze werkruimte aan.",
-        "none": "Er is nog geen applicatie geïmplementeerd voor deze werkruimte — dit domein biedt haar aan zodra er een is."
+        "serves": "Biedt <b>{app}</b> <code>{slug}</code> aan.",
+        "none": "Dit domein noemt geen applicatie, dus het biedt nog niets aan.",
+        "gone": "De applicatie die dit domein noemde is niet meer beschikbaar, dus het biedt niets aan.",
+        "change": "Applicatie wijzigen",
+        "choose": "Applicatie kiezen",
+        "controlLabel": "{action} voor {host}",
+        "title": "Applicatie voor {host}",
+        "save": "Opslaan",
+        "saving": "Opslaan…",
+        "confirm": "{host} biedt {app} aan zodra je opslaat. Het certificaat, de DNS-records bij je provider en de status blijven zoals ze zijn.",
+        "confirmNone": "{host} stopt met het aanbieden van {previous} zodra je opslaat, en biedt niets aan tot je een applicatie kiest. Het certificaat, de DNS-records bij je provider en de status blijven zoals ze zijn.",
+        "error": "De applicatie is niet gewijzigd. Probeer het zo opnieuw."
       },
       "cert": "Het certificaat wordt automatisch vernieuwd.",
+      "certUntil": "Het certificaat wordt automatisch vernieuwd · geldig tot {date}",
       "fail": {
         "txt": "We zien je eigendomsrecord niet meer",
         "txtBody": "Herstel dit TXT-record bij je DNS-provider:",

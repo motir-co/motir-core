@@ -127,6 +127,17 @@ export interface DnsInstructionDto {
 }
 
 /**
+ * One hosted application as the Custom domains pane's picker offers it
+ * (MOTIR-9529, design `custom-domains--application.mock.html`): the id sent as
+ * `applicationId`, the name shown and the slug beside it.
+ */
+export interface DomainApplicationDto {
+  readonly id: string;
+  readonly name: string;
+  readonly slug: string;
+}
+
+/**
  * One customer domain, as the settings pane renders it (MOTIR-4216).
  *
  * `status` crosses the wire as the store's enum, TOTAL — the pane draws one row

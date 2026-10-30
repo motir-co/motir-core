@@ -4404,8 +4404,13 @@
       "dialog": {
         "title": "Adicionar um domínio",
         "label": "Domínio",
-        "helper": "Um subdomínio como shop.acme.com ou um domínio raiz como acme.com. Ele servirá o aplicativo deste espaço de trabalho.",
-        "cancel": "Cancelar"
+        "helper": "Um subdomínio como shop.acme.com ou um domínio raiz como acme.com.",
+        "cancel": "Cancelar",
+        "appLabel": "Aplicativo",
+        "appHelper": "O aplicativo que este domínio vai servir. Você pode mudá-lo depois na linha do domínio.",
+        "appChoose": "Escolha um aplicativo",
+        "appNone": "Nenhum aplicativo ainda",
+        "noApps": "Este espaço de trabalho ainda não tem aplicativo hospedado. O domínio é adicionado sem nomear nenhum, e você pode escolher o aplicativo na linha dele quando existir um."
       },
       "refuse": {
         "tenantBase": "{host} é um endereço do Motir. Seu espaço de trabalho já responde em {base} — defina esse nome em Endereço público.",
@@ -4422,17 +4427,28 @@
       },
       "records": {
         "heading": "{count, plural, one {Crie este registro no seu provedor de DNS e depois confira.} other {Crie estes # registros no seu provedor de DNS e depois confira.}}",
-        "apexNote": "Um domínio raiz não pode usar CNAME, então ele aponta para os endereços do Motir. O endereço IPv4 é compartilhado com outros domínios do Motir; se ele mudar, avisaremos você antes.",
+        "apexNote": "Um domínio raiz não aceita CNAME, então ele aponta para os endereços próprios da Motir, que o motir-edge reserva para domínios de clientes. Se eles mudarem, avisaremos você antes.",
         "type": "Tipo",
         "name": "Nome",
         "value": "Valor"
       },
       "pending": "Propriedade confirmada. Emitindo o certificado — isso costuma levar alguns minutos. Esta página se atualiza sozinha.",
       "app": {
-        "serves": "Serve o aplicativo deste espaço de trabalho.",
-        "none": "Ainda não há aplicativo implantado neste espaço de trabalho — este domínio vai servi-lo assim que houver um."
+        "serves": "Serve <b>{app}</b> <code>{slug}</code>.",
+        "none": "Este domínio não nomeia nenhum aplicativo, então ainda não serve nada.",
+        "gone": "O aplicativo que este domínio nomeava não está mais disponível, então ele não serve nada.",
+        "change": "Mudar aplicativo",
+        "choose": "Escolher aplicativo",
+        "controlLabel": "{action} para {host}",
+        "title": "Aplicativo de {host}",
+        "save": "Salvar",
+        "saving": "Salvando…",
+        "confirm": "{host} serve {app} assim que você salvar. O certificado, os registros DNS no seu provedor e o status continuam como estão.",
+        "confirmNone": "{host} para de servir {previous} assim que você salvar e não serve nada até você escolher um aplicativo. O certificado, os registros DNS no seu provedor e o status continuam como estão.",
+        "error": "O aplicativo não foi alterado. Tente de novo em instantes."
       },
       "cert": "O certificado se renova sozinho.",
+      "certUntil": "O certificado se renova sozinho · válido até {date}",
       "fail": {
         "txt": "Não vemos mais o seu registro de propriedade",
         "txtBody": "Restaure este registro TXT no seu provedor de DNS:",

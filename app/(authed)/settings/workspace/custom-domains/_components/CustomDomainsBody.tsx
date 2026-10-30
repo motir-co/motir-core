@@ -2,7 +2,7 @@ import { allSettledOrThrow } from '@/lib/async/allSettledOrThrow';
 import { customDomainService } from '@/lib/services/customDomainService';
 import { publicSubdomainService } from '@/lib/services/publicSubdomainService';
 import { tenantBaseDomain } from '@/lib/publicAddresses/tenantDomain';
-import type { PublicAddressDto } from '@/lib/dto/publicAddresses';
+import type { DomainApplicationDto, PublicAddressDto } from '@/lib/dto/publicAddresses';
 import { CustomDomainsPane } from './CustomDomainsPane';
 
 // The Custom domains page's reads (MOTIR-9529), below the page's Suspense
@@ -17,6 +17,7 @@ export async function CustomDomainsBody({
   actorUserId: string;
 }) {
   let addresses: PublicAddressDto[] = [];
+  let applications: DomainApplicationDto[] = [];
   let canManage = false;
   let maxDomains: number | null = null;
   let workspaceHost: string | null = null;
@@ -28,7 +29,7 @@ export async function CustomDomainsBody({
       customDomainService.listForPane({ workspaceId, actorUserId }),
       publicSubdomainService.getForWorkspace(workspaceId, actorUserId),
     ]);
-    ({ addresses, canManage, maxDomains } = pane);
+    ({ addresses, applications, canManage, maxDomains } = pane);
     workspaceHost = subdomain?.hostname ?? null;
   } catch (err) {
     // The pane's load-error state: one line and a retry, rather than the
@@ -43,6 +44,7 @@ export async function CustomDomainsBody({
       baseDomain={tenantBaseDomain()}
       workspaceHost={workspaceHost}
       addresses={addresses}
+      applications={applications}
       canManage={canManage}
       maxDomains={maxDomains}
       loadFailed={loadFailed}

@@ -4404,8 +4404,13 @@
       "dialog": {
         "title": "Dodaj domenę",
         "label": "Domena",
-        "helper": "Subdomena, np. shop.acme.com, lub domena główna, np. acme.com. Będzie udostępniać aplikację tego obszaru roboczego.",
-        "cancel": "Anuluj"
+        "helper": "Subdomena, np. shop.acme.com, lub domena główna, np. acme.com.",
+        "cancel": "Anuluj",
+        "appLabel": "Aplikacja",
+        "appHelper": "Aplikacja, którą będzie udostępniać ta domena. Możesz ją później zmienić w wierszu domeny.",
+        "appChoose": "Wybierz aplikację",
+        "appNone": "Jeszcze bez aplikacji",
+        "noApps": "Ten obszar roboczy nie ma jeszcze hostowanej aplikacji. Domena zostanie dodana bez aplikacji, a gdy jakaś powstanie, wybierzesz ją w wierszu domeny."
       },
       "refuse": {
         "tenantBase": "{host} to adres Motir. Twój obszar roboczy odpowiada już pod {base} — ustaw tę nazwę w sekcji Adres publiczny.",
@@ -4422,17 +4427,28 @@
       },
       "records": {
         "heading": "{count, plural, one {Utwórz ten rekord u swojego dostawcy DNS, a potem sprawdź.} few {Utwórz te # rekordy u swojego dostawcy DNS, a potem sprawdź.} many {Utwórz te # rekordów u swojego dostawcy DNS, a potem sprawdź.} other {Utwórz te # rekordu u swojego dostawcy DNS, a potem sprawdź.}}",
-        "apexNote": "Domena główna nie może mieć rekordu CNAME, więc wskazuje adresy Motir. Adres IPv4 jest współdzielony z innymi domenami Motir; jeśli kiedyś się zmieni, uprzedzimy Cię wcześniej.",
+        "apexNote": "Domena główna nie może mieć rekordu CNAME, więc wskazuje na własne adresy Motir, które motir-edge utrzymuje dla domen klientów. Jeśli kiedyś się zmienią, uprzedzimy cię wcześniej.",
         "type": "Typ",
         "name": "Nazwa",
         "value": "Wartość"
       },
       "pending": "Własność potwierdzona. Trwa wystawianie certyfikatu — zwykle zajmuje to kilka minut. Ta strona odświeża się sama.",
       "app": {
-        "serves": "Udostępnia aplikację tego obszaru roboczego.",
-        "none": "W tym obszarze roboczym nie wdrożono jeszcze żadnej aplikacji — ta domena udostępni ją, gdy tylko się pojawi."
+        "serves": "Udostępnia <b>{app}</b> <code>{slug}</code>.",
+        "none": "Ta domena nie wskazuje żadnej aplikacji, więc jeszcze niczego nie udostępnia.",
+        "gone": "Aplikacja wskazana przez tę domenę nie jest już dostępna, więc domena niczego nie udostępnia.",
+        "change": "Zmień aplikację",
+        "choose": "Wybierz aplikację",
+        "controlLabel": "{action} dla {host}",
+        "title": "Aplikacja dla {host}",
+        "save": "Zapisz",
+        "saving": "Zapisywanie…",
+        "confirm": "{host} udostępnia {app} od chwili zapisania. Certyfikat, rekordy DNS u twojego dostawcy i status pozostają bez zmian.",
+        "confirmNone": "{host} przestaje udostępniać {previous} od chwili zapisania i nie udostępnia niczego, dopóki nie wybierzesz aplikacji. Certyfikat, rekordy DNS u twojego dostawcy i status pozostają bez zmian.",
+        "error": "Aplikacja nie została zmieniona. Spróbuj ponownie za chwilę."
       },
       "cert": "Certyfikat odnawia się automatycznie.",
+      "certUntil": "Certyfikat odnawia się automatycznie · ważny do {date}",
       "fail": {
         "txt": "Nie widzimy już Twojego rekordu własności",
         "txtBody": "Przywróć ten rekord TXT u swojego dostawcy DNS:",

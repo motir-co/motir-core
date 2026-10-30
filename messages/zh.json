@@ -4404,8 +4404,13 @@
       "dialog": {
         "title": "添加域名",
         "label": "域名",
-        "helper": "子域名（如 shop.acme.com）或根域名（如 acme.com）。它将提供此工作区的应用。",
-        "cancel": "取消"
+        "helper": "子域名（如 shop.acme.com）或根域名（如 acme.com）。",
+        "cancel": "取消",
+        "appLabel": "应用",
+        "appHelper": "此域名将提供的应用。之后可以在域名所在行更改。",
+        "appChoose": "选择应用",
+        "appNone": "暂无应用",
+        "noApps": "此工作区还没有托管的应用。域名会在不指定应用的情况下添加，有了应用后可以在其所在行选择。"
       },
       "refuse": {
         "tenantBase": "{host} 是 Motir 地址。你的工作区已在 {base} 下响应——请在“公开地址”中设置该名称。",
@@ -4422,17 +4427,28 @@
       },
       "records": {
         "heading": "{count, plural, other {在你的 DNS 服务商处创建以下 # 条记录，然后检查。}}",
-        "apexNote": "根域名不能使用 CNAME，因此它指向 Motir 的地址。该 IPv4 地址与其他 Motir 域名共享；如果它将来变化，我们会提前通知你。",
+        "apexNote": "根域名不能使用 CNAME，因此它指向 Motir 自有的地址，由 motir-edge 专为客户域名保留。如果这些地址有变，我们会提前告诉你。",
         "type": "类型",
         "name": "名称",
         "value": "值"
       },
       "pending": "所有权已确认。正在签发证书——通常需要几分钟。此页面会自动更新。",
       "app": {
-        "serves": "提供此工作区的应用。",
-        "none": "此工作区还没有部署应用——一旦部署，此域名就会提供它。"
+        "serves": "提供 <b>{app}</b> <code>{slug}</code>。",
+        "none": "此域名未指定应用，因此暂不提供任何内容。",
+        "gone": "此域名指定的应用已不可用，因此不提供任何内容。",
+        "change": "更改应用",
+        "choose": "选择应用",
+        "controlLabel": "为 {host} {action}",
+        "title": "{host} 的应用",
+        "save": "保存",
+        "saving": "正在保存…",
+        "confirm": "保存后 {host} 立即提供 {app}。其证书、DNS 服务商处的记录和状态保持不变。",
+        "confirmNone": "保存后 {host} 立即停止提供 {previous}，在你选择应用之前不提供任何内容。其证书、DNS 服务商处的记录和状态保持不变。",
+        "error": "应用未更改。请稍后再试。"
       },
       "cert": "证书会自动续期。",
+      "certUntil": "证书会自动续期 · 有效期至 {date}",
       "fail": {
         "txt": "我们无法再看到你的所有权记录",
         "txtBody": "请在你的 DNS 服务商处恢复这条 TXT 记录：",

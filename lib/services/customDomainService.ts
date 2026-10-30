@@ -1,7 +1,11 @@
 import { randomBytes } from 'node:crypto';
 
 import { isCloud } from '@/lib/billing/availability';
-import type { DnsInstructionDto, PublicAddressDto } from '@/lib/dto/publicAddresses';
+import type {
+  DnsInstructionDto,
+  DomainApplicationDto,
+  PublicAddressDto,
+} from '@/lib/dto/publicAddresses';
 import {
   CertificateProviderRefusedError,
   CertificateProviderUnavailableError,
@@ -98,21 +102,26 @@ export const customDomainService = {
    * The workspace Custom domains pane's read (MOTIR-9529): the domains, whether
    * the viewer may WRITE them (the workspace address gate every write asserts,
    * so a control never appears and then refuses) and the tier's cap (`null` =
-   * none). Computed here so the page reads no role and no tier of its own.
+   * none). Computed here so the page reads no role and no tier of its own. With
+   * them the workspace's applications, which the picker offers and the
+   * Application line names — read in the same transaction, so a failed read is
+   * the pane's load error and never a picker of its own that failed.
    */
   async listForPane(input: WorkspaceScopedInput): Promise<{
     addresses: PublicAddressDto[];
+    applications: DomainApplicationDto[];
     canManage: boolean;
     maxDomains: number | null;
   }> {
     assertAvailable();
     const role = await assertAddressMember(input.workspaceId, input.actorUserId);
-    const { addresses, organizationId } = await withWorkspaceContext(
+    const { addresses, applications, organizationId } = await withWorkspaceContext(
       { userId: input.actorUserId, workspaceId: input.workspaceId },
       async (tx) => ({
         addresses: (
           await publicAddressRepository.listCustomDomainsForWorkspaceInTx(input.workspaceId, tx)
         ).map(toDto),
+        applications: await hostedApplicationRepository.listForDomainPicker(input.workspaceId, tx),
         organizationId: await workspaceRepository.findOrganizationId(input.workspaceId, tx),
       }),
     );
@@ -121,7 +130,7 @@ export const customDomainService = {
     const maxDomains = organizationId
       ? await entitlementsService.customDomainCap(organizationId)
       : null;
-    return { addresses, canManage: roleMayManageAddress(role), maxDomains };
+    return { addresses, applications, canManage: roleMayManageAddress(role), maxDomains };
   },
 
   /**

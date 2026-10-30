@@ -4404,8 +4404,13 @@
       "dialog": {
         "title": "Domain hinzufügen",
         "label": "Domain",
-        "helper": "Eine Subdomain wie shop.acme.com oder eine Stammdomain wie acme.com. Sie liefert die Anwendung dieses Arbeitsbereichs aus.",
-        "cancel": "Abbrechen"
+        "helper": "Eine Subdomain wie shop.acme.com oder eine Stammdomain wie acme.com.",
+        "cancel": "Abbrechen",
+        "appLabel": "Anwendung",
+        "appHelper": "Die Anwendung, die diese Domain ausliefert. Du kannst sie später in der Zeile der Domain ändern.",
+        "appChoose": "Anwendung auswählen",
+        "appNone": "Noch keine Anwendung",
+        "noApps": "Dieser Arbeitsbereich hat noch keine gehostete Anwendung. Die Domain wird ohne Anwendung hinzugefügt, und du kannst ihre Anwendung in ihrer Zeile wählen, sobald es eine gibt."
       },
       "refuse": {
         "tenantBase": "{host} ist eine Motir-Adresse. Ihr Arbeitsbereich ist bereits unter {base} erreichbar – legen Sie diesen Namen unter „Öffentliche Adresse“ fest.",
@@ -4422,17 +4427,28 @@
       },
       "records": {
         "heading": "{count, plural, one {Legen Sie diesen Eintrag bei Ihrem DNS-Anbieter an und prüfen Sie dann.} other {Legen Sie diese # Einträge bei Ihrem DNS-Anbieter an und prüfen Sie dann.}}",
-        "apexNote": "Eine Stammdomain kann keinen CNAME haben, daher zeigt sie auf die Adressen von Motir. Die IPv4-Adresse wird mit anderen Motir-Domains geteilt; falls sie sich je ändert, informieren wir Sie vorher.",
+        "apexNote": "Eine Stammdomain kann keinen CNAME haben, daher zeigt sie auf Motirs eigene Adressen, die motir-edge für Kundendomains bereithält. Falls sie sich je ändern, sagen wir es dir vorher.",
         "type": "Typ",
         "name": "Name",
         "value": "Wert"
       },
       "pending": "Inhaberschaft bestätigt. Das Zertifikat wird ausgestellt – das dauert meist einige Minuten. Diese Seite aktualisiert sich selbst.",
       "app": {
-        "serves": "Liefert die Anwendung dieses Arbeitsbereichs aus.",
-        "none": "Für diesen Arbeitsbereich ist noch keine Anwendung bereitgestellt – diese Domain liefert sie aus, sobald es eine gibt."
+        "serves": "Liefert <b>{app}</b> <code>{slug}</code> aus.",
+        "none": "Diese Domain nennt keine Anwendung und liefert daher noch nichts aus.",
+        "gone": "Die Anwendung, die diese Domain nannte, ist nicht mehr verfügbar, daher liefert sie nichts aus.",
+        "change": "Anwendung ändern",
+        "choose": "Anwendung wählen",
+        "controlLabel": "{action} für {host}",
+        "title": "Anwendung für {host}",
+        "save": "Speichern",
+        "saving": "Wird gespeichert…",
+        "confirm": "{host} liefert {app} aus, sobald du speicherst. Das Zertifikat, die DNS-Einträge bei deinem Anbieter und der Status bleiben, wie sie sind.",
+        "confirmNone": "{host} liefert {previous} nicht mehr aus, sobald du speicherst, und liefert nichts aus, bis du eine Anwendung wählst. Das Zertifikat, die DNS-Einträge bei deinem Anbieter und der Status bleiben, wie sie sind.",
+        "error": "Die Anwendung wurde nicht geändert. Versuche es gleich noch einmal."
       },
       "cert": "Das Zertifikat erneuert sich selbst.",
+      "certUntil": "Das Zertifikat erneuert sich selbst · gültig bis {date}",
       "fail": {
         "txt": "Wir sehen Ihren Inhaberschaftseintrag nicht mehr",
         "txtBody": "Stellen Sie diesen TXT-Eintrag bei Ihrem DNS-Anbieter wieder her:",

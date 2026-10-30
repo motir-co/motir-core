@@ -108,6 +108,24 @@ export const hostedApplicationRepository = {
     });
   },
 
+  /**
+   * The workspace's applications as the Custom domains pane's picker names them
+   * (MOTIR-9529): the id it sends, the owning project's name it shows and the
+   * slug beside it, by name then slug. An application carries no name of its
+   * own, so its project's is the one a member recognises.
+   */
+  async listForDomainPicker(
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ id: string; name: string; slug: string }[]> {
+    const rows = await tx.hostedApplication.findMany({
+      where: { workspaceId },
+      select: { id: true, slug: true, project: { select: { name: true } } },
+      orderBy: [{ project: { name: 'asc' } }, { slug: 'asc' }],
+    });
+    return rows.map((r) => ({ id: r.id, name: r.project.name, slug: r.slug }));
+  },
+
   /** Every slug the workspace's applications hold — what a new slug must avoid. */
   async listSlugsInWorkspace(workspaceId: string, tx: Prisma.TransactionClient): Promise<string[]> {
     const rows = await tx.hostedApplication.findMany({

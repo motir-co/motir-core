@@ -542,6 +542,32 @@ describe('the application a domain names (ADR MOTIR-9521 §1)', () => {
       }),
     ).rejects.toBeInstanceOf(ApplicationNotFoundError);
   });
+
+  it('the pane reads the workspace’s applications by name and slug, and never another’s (MOTIR-9529)', async () => {
+    const blog = await seedApplication(ctx.workspaceId, projectId, 'blog');
+    const shop = await seedApplication(ctx.workspaceId, projectId, 'shop');
+    const other = await createTestWorkspace({ name: 'Elsewhere' });
+    const otherProject = await adminDb.project.create({
+      data: {
+        workspaceId: other.workspace.id,
+        name: 'Elsewhere',
+        slug: 'elsewhere',
+        identifier: 'ELSW',
+        ...projectAccessData('public'),
+      },
+    });
+    await seedApplication(other.workspace.id, otherProject.id, 'theirs');
+
+    const pane = await customDomainService.listForPane({
+      workspaceId: ctx.workspaceId,
+      actorUserId,
+    });
+    // An application has no name of its own: the picker shows its project's.
+    expect(pane.applications).toEqual([
+      { id: blog, name: 'Acme', slug: 'blog' },
+      { id: shop, name: 'Acme', slug: 'shop' },
+    ]);
+  });
 });
 
 describe('a certificate left behind is the next owner’s (ADR MOTIR-9521 §6)', () => {
