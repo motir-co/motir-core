@@ -98,7 +98,9 @@ const removeWrite = (page: Page) =>
 const pane = (page: Page) => page.getByRole('main');
 /** A domain row — the `li` the pane marks with its status. */
 const rows = (page: Page) => pane(page).locator('li[data-status]');
-const row = (page: Page, host: string) => rows(page).filter({ hasText: host });
+// Exact on the hostname: `acme.test` is a suffix of the other hosts this file adds.
+const row = (page: Page, host: string) =>
+  rows(page).filter({ has: page.getByText(host, { exact: true }) });
 
 /** The committed row, read from the list route rather than from the pane. */
 async function storedRow(page: Page, host: string): Promise<PublicAddressDto | undefined> {
