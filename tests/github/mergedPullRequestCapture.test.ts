@@ -662,6 +662,8 @@ describe('no shipped consumer of GithubPullRequest changes shape', () => {
     // MOTIR-5916 ADDS `baseRef` and `conflicted` — the branch the row targets and whether
     // the host reports it conflicted AT its head, which the row's *Conflicts with {base}*
     // pill and the `conflict` withdrawal band name (design/github § 30).
+    // MOTIR-10099 ADDS `preview` — the pull request's preview deployment, or null when
+    // it has none, which the row's preview line draws (design/preview).
     expect(Object.keys(dto).sort()).toEqual(
       [
         'baseRef',
@@ -671,6 +673,7 @@ describe('no shipped consumer of GithubPullRequest changes shape', () => {
         'headSha',
         'id',
         'number',
+        'preview',
         'repo',
         'state',
         'title',
