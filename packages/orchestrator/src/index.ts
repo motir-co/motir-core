@@ -54,6 +54,7 @@ export * from './hosting/usage';
 export * from './hosting/shape';
 export * from './hosting/originSecret';
 export * from './adapters/fake/hosting';
+export * from './adapters/fake/hostingStore';
 export * from './adapters/fly/hosting';
 export * from './adapters/serverless';
 // The DATABASE PORT (MOTIR-9971): an application's own database and its fake.

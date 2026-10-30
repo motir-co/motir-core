@@ -309,6 +309,13 @@ process.env['MOTIR_FAKE_PERSISTENT_STATE_PATH'] ??= path.resolve(
 process.env['MOTIR_FAKE_IMAGE_CATALOG_PATH'] ??= path.resolve(
   'out/playwright-output-acceptance/.fake-image-catalog.json',
 );
+// Story MOTIR-5766 · MOTIR-10098 — the fake HOSTING port's store, on the same
+// terms as the persistent fleet above: the job worker deploys a preview, the
+// webServer's gate reads its release, and the spec arranges both through
+// `tests/e2e/_helpers/preview-hosting.ts`.
+process.env['MOTIR_FAKE_HOSTING_STATE_PATH'] ??= path.resolve(
+  'out/playwright-output-acceptance/.fake-hosting.json',
+);
 // The stall watchdog's test-only config seam (`hostedRunStallWindowMs`,
 // `lib/hostedRuns/limits.ts`) — shortened from the real 15 minutes so the
 // "stalled" case can run in this lane at all. Read directly by whichever
@@ -660,6 +667,8 @@ export default defineConfig({
         MOTIR_HOSTED_RUN_JOURNAL_PATH,
         MOTIR_FAKE_CONTAINER_STATE_PATH: process.env['MOTIR_FAKE_CONTAINER_STATE_PATH']!,
         MOTIR_FAKE_PERSISTENT_STATE_PATH: process.env['MOTIR_FAKE_PERSISTENT_STATE_PATH']!,
+        // The fake hosting port's store (MOTIR-10098) — see its block above this config.
+        MOTIR_FAKE_HOSTING_STATE_PATH: process.env['MOTIR_FAKE_HOSTING_STATE_PATH']!,
         // The fake AWS (MOTIR-9429) — see its block above this config.
         MOTIR_FAKE_AWS_STATE_PATH: process.env['MOTIR_FAKE_AWS_STATE_PATH']!,
         MOTIR_FAKE_FLEET_SWITCH_PATH: process.env['MOTIR_FAKE_FLEET_SWITCH_PATH']!,

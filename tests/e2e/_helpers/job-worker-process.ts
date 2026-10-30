@@ -204,6 +204,20 @@ export function hostedRunSeamEnv(): Record<string, string> {
 }
 
 /**
+ * THE FAKE HOSTING PORT'S SHARED STORE (Story MOTIR-5766 · MOTIR-10098). A
+ * preview's lifecycle deploys, polls and destroys in THIS process (its effects
+ * are jobs), while the app server's gate reads the release and the spec arranges
+ * both — so all three must read one file. The runner defaults the path in both
+ * lane configs; it is forwarded here BY NAME, from both spawn sites, rather than
+ * left to `...process.env`, under this file's rule that a variable a job handler
+ * reads is mirrored here.
+ */
+export function previewHostingSeamEnv(): Record<string, string> {
+  const path = process.env['MOTIR_FAKE_HOSTING_STATE_PATH'];
+  return path ? { MOTIR_FAKE_HOSTING_STATE_PATH: path } : {};
+}
+
+/**
  * THE motir-ai EMBEDDINGS SEAM, mirrored into the worker (Story MOTIR-9490 ·
  * MOTIR-9577).
  *
@@ -415,6 +429,8 @@ export async function startJobWorker(): Promise<void> {
       // The hosted-run gateway/motir-ai/GitHub seams — see `hostedRunSeamEnv`.
       ...hostedRunSeamEnv(),
       ...embeddingsSeamEnv(),
+      // The fake hosting port's shared store — see `previewHostingSeamEnv`.
+      ...previewHostingSeamEnv(),
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -536,6 +552,8 @@ export async function startSpecJobWorker(routingFile: string): Promise<Date> {
       // The hosted-run gateway/motir-ai/GitHub seams — see `hostedRunSeamEnv`.
       ...hostedRunSeamEnv(),
       ...embeddingsSeamEnv(),
+      // The fake hosting port's shared store — see `previewHostingSeamEnv`.
+      ...previewHostingSeamEnv(),
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });

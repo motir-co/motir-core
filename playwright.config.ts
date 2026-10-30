@@ -149,6 +149,17 @@ const EMAIL_FAULT_FILE = process.env['EMAIL_FAULT_PATH'];
 // spec or seed helper that reads the selector sees the same answer the server
 // does. `??=` keeps a deliberate local override (e.g. a `fly` smoke) possible.
 process.env['MOTIR_FLEET_ORCHESTRATOR'] ??= 'fake';
+// Story MOTIR-5766 · MOTIR-10098 — the fake HOSTING port's shared store. A
+// preview's lifecycle deploys and destroys in the job worker, the gate reads the
+// release in the app server, and a spec arranges both: three processes, so the
+// fake keeps its state in one file they all read (`packages/orchestrator/src/
+// adapters/fake/hostingStore.ts`). Defaulted on the RUNNER so the spec reads it
+// directly; the webServer env below and the job worker's
+// (`previewHostingSeamEnv`) carry it by name. A run-time file under `out/`,
+// never committed.
+process.env['MOTIR_FAKE_HOSTING_STATE_PATH'] ??= path.resolve(
+  'out/playwright-output/.fake-hosting.json',
+);
 
 /**
  * Playwright config for motir-core's E2E auth smoke suite.
@@ -455,6 +466,8 @@ export default defineConfig({
         // child's environment for these keys, so an inherited `fly` from the
         // developer's shell cannot leak in.
         MOTIR_FLEET_ORCHESTRATOR: process.env['MOTIR_FLEET_ORCHESTRATOR'] ?? 'fake',
+        // The fake hosting port's shared store (MOTIR-10098) — see its default above.
+        MOTIR_FAKE_HOSTING_STATE_PATH: process.env['MOTIR_FAKE_HOSTING_STATE_PATH']!,
       },
     },
   ],

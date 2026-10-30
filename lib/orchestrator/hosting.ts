@@ -7,9 +7,11 @@ import {
   createFakeHostingDeployPort,
   createFlyHostingDeployPort,
   createServerlessHostingDeployPort,
+  fakeHostingPortKey,
   flyHostingConfig,
   OrchestratorNotConfiguredError,
   serverlessHostingConfig,
+  type FakeHostingControls,
   type HostingDeployPort,
   type HostingDeployTarget,
   type ReleaseUsage,
@@ -90,7 +92,8 @@ export function getHostingDeployPort(
 ): HostingDeployPort {
   const { appPrefix } = options;
   if (selectedOrchestratorProvider() === 'fake') {
-    const key = `${target}:${appPrefix ?? ''}`;
+    // The fake's own store key, so a shared slice and this cache cannot drift.
+    const key = fakeHostingPortKey(target, appPrefix);
     let fake = hostingFakes.get(key);
     if (!fake) {
       fake = observed(
@@ -162,6 +165,25 @@ export const awsHostingAdapter: HostingAdapterFactory = () =>
   createConfiguredAwsHostingPort(hostingOriginSecretKey());
 
 registerHostingAdapter('aws', awsHostingAdapter);
+
+/**
+ * The fake this process's port IS, with its controls (Story MOTIR-5766 ·
+ * MOTIR-10098) — so an E2E spec arranges and inspects the preview hosting the
+ * app server and the job worker act on, through the fake's own API rather than
+ * its store file. The very object `getHostingDeployPort` hands back; the typed
+ * not-configured error when the orchestrator is not the fake.
+ */
+export function hostingFakeControls(
+  target: HostingDeployTarget,
+  options: HostingPortOptions = {},
+): HostingDeployPort & FakeHostingControls {
+  if (selectedOrchestratorProvider() !== 'fake') {
+    throw new OrchestratorNotConfiguredError(
+      'hosting fake controls exist only while MOTIR_FLEET_ORCHESTRATOR=fake',
+    );
+  }
+  return getHostingDeployPort(target, options) as HostingDeployPort & FakeHostingControls;
+}
 
 /** Drop the per-target fakes — for tests. */
 export function resetHostingFakes(): void {

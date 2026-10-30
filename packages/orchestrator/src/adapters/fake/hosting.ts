@@ -23,6 +23,17 @@ import type {
 } from '../../hosting/types';
 import { computeUsageFor, runningSecondsBetween, type RunTransition } from '../../hosting/usage';
 import { assertServerlessRuntime } from '../serverless/preflight';
+import {
+  armFakeHostingFailure,
+  emptyFakeHostingSlice,
+  fakeHostingPortKey,
+  fakeHostingStatePath,
+  readFakeHostingSlice,
+  resetFakeHostingSnapshot,
+  saveFakeHostingSlice,
+  takeArmedFakeHostingFailure,
+  type FakeHostingSlice,
+} from './hostingStore';
 
 // The FAKE hosting deploy port (MOTIR-5773) — the second implementation shipped
 // beside the Fly adapter, for the reason every port here has one: the preview
@@ -41,6 +52,13 @@ import { assertServerlessRuntime } from '../serverless/preflight';
 // `waiting_for_account` while the tenant account is not ready (and a repeat once
 // it is completes the SAME release), each shape answers its own upstream and
 // origin credential, and usage carries compute units from the shared size table.
+//
+// ACROSS PROCESSES (MOTIR-10098): with `MOTIR_FAKE_HOSTING_STATE_PATH` set, its
+// whole state is the slice `./hostingStore` keeps in that file — loaded before
+// every operation and control, saved after every mutation (reads never save, so a
+// read cannot roll back another process's write), armed failures in the store's
+// sidecar, release ids pid-suffixed. Unset, it is the in-memory closure it always
+// was.
 
 export interface FakeHostedRelease {
   readonly releaseId: string;
@@ -91,6 +109,9 @@ export interface FakeHostingControls {
    *  sets it false; while not ready an `aws` deploy waits in
    *  `waiting_for_account`. */
   setAccountReady(ready: boolean): void;
+  /** Forget every app, release, credential and armed failure — in the shared
+   *  store too, so a lane's next spec inherits nothing. */
+  reset(): void;
 }
 
 /** The operations a test can make fail once at the "provider". */
@@ -133,28 +154,37 @@ export function createFakeHostingDeployPort(
 ): HostingDeployPort & FakeHostingControls {
   const target = options.target ?? 'fly';
   const prefix = options.appPrefix ?? 'mh-';
-  let clock = (options.start ?? new Date('2026-01-01T00:00:00Z')).getTime();
-  let sequence = 0;
-  const apps = new Map<string, FakeHostedApp>();
-  const mintedFor: string[] = [];
-  const failing = new Set<FakeHostingFailure>();
-  const namespaces = new Set<string>();
-  const liveTokens = new Map<string, number>();
+  const key = fakeHostingPortKey(target, options.appPrefix);
   const refused = new Set(options.refuseRepositories ?? []);
-  // Every release's shape, kept past its destroy so a repeated destroy still
-  // reports usage in the unit of the release it names.
-  const shapes = new Map<string, FakeHostedRelease>();
-  let accountReady = true;
+  let state: FakeHostingSlice = emptyFakeHostingSlice(options.start);
+  // The take-once failures of an UNSHARED fake; a shared one arms the sidecar.
+  const failing = new Set<FakeHostingFailure>();
+
+  /** Under the seam, adopt what the file holds — an empty slice when nothing is
+   *  stored, because another process may have reset it; a torn file keeps ours. */
+  function load(): FakeHostingSlice {
+    if (!fakeHostingStatePath()) return state;
+    const stored = readFakeHostingSlice(key);
+    if (stored === null) state = emptyFakeHostingSlice(options.start);
+    else if (stored !== 'torn') state = stored;
+    return state;
+  }
+
+  /** Persist the slice after a mutation — a no-op with the seam off. */
+  function save(): void {
+    saveFakeHostingSlice(key, state);
+  }
 
   function injectedFailure(operation: FakeHostingFailure): void {
-    if (!failing.delete(operation)) return;
+    const armed = failing.delete(operation);
+    if (!armed && takeArmedFakeHostingFailure(key, operation) === null) return;
     throw new OrchestratorApiError('fake', 503, `injected ${operation} failure`);
   }
 
-  const now = () => new Date(clock);
+  const now = () => new Date(state.clock);
 
   function appOf(appRef: string): FakeHostedApp {
-    const app = apps.get(appRef);
+    const app = state.apps[appRef];
     if (!app) throw new OrchestratorApiError('fake', 404, `app ${appRef} does not exist`);
     return app;
   }
@@ -184,7 +214,7 @@ export function createFakeHostingDeployPort(
     runningSeconds: number,
   ): ReleaseUsage {
     const base = { target, appRef, releaseId, since, until, runningSeconds };
-    const shaped = shapes.get(releaseId);
+    const shaped = state.shapes[releaseId];
     if (!shaped?.shape) return base;
     return {
       ...base,
@@ -214,60 +244,91 @@ export function createFakeHostingDeployPort(
     return shape;
   }
 
+  /** A new release id — pid-suffixed under the seam, so two processes reading
+   *  one store never mint the same one. */
+  function nextReleaseId(): string {
+    state.sequence += 1;
+    return fakeHostingStatePath()
+      ? `rel-${process.pid}-${state.sequence}`
+      : `rel-${state.sequence}`;
+  }
+
   function release(
     input: DeployReleaseInput,
     shape: ReleaseShape | undefined,
     releaseId?: string,
   ): FakeHostedRelease {
-    if (!releaseId) sequence += 1;
     const { artifact } = input;
     const image =
       artifact.kind === 'image' && artifact.digest
         ? `${artifact.ref}@${artifact.digest}`
         : artifact.ref;
     const made: FakeHostedRelease = {
-      releaseId: releaseId ?? `rel-${sequence}`,
+      releaseId: releaseId ?? nextReleaseId(),
       environment: input.environment,
       image,
       runtime: input.runtime,
       env: Object.fromEntries(input.env.map((v) => [v.name, v.value])),
       ...(shape ? { shape, ...(input.size ? { size: input.size } : {}) } : {}),
     };
-    shapes.set(made.releaseId, made);
+    state.shapes[made.releaseId] = made;
     return made;
   }
 
   return {
     target,
-    mintedFor,
-    now,
+    get mintedFor() {
+      return load().mintedFor;
+    },
+    now: () => {
+      load();
+      return now();
+    },
     advanceSeconds(seconds) {
-      clock += seconds * 1000;
+      load().clock += seconds * 1000;
+      save();
     },
     setHealth(appRef, health) {
+      load();
       appOf(appRef).health = health;
+      save();
     },
     idleStop(appRef) {
+      load();
       setRunning(appOf(appRef), false);
+      save();
     },
     wake(appRef) {
+      load();
       setRunning(appOf(appRef), true);
+      save();
     },
-    app: (appRef) => apps.get(appRef),
-    pushNamespaces: () => [...namespaces],
-    liveCredentials: (pushNamespace) => liveTokens.get(pushNamespace) ?? 0,
+    app: (appRef) => load().apps[appRef],
+    pushNamespaces: () => [...load().namespaces],
+    liveCredentials: (pushNamespace) => load().liveTokens[pushNamespace] ?? 0,
     failNext(operation) {
-      failing.add(operation);
+      if (fakeHostingStatePath()) {
+        armFakeHostingFailure(key, operation, `injected ${operation} failure`);
+      } else {
+        failing.add(operation);
+      }
     },
     setAccountReady(ready) {
-      accountReady = ready;
+      load().accountReady = ready;
+      save();
+    },
+    reset() {
+      state = emptyFakeHostingSlice(options.start);
+      failing.clear();
+      resetFakeHostingSnapshot(key);
     },
 
     async ensureApp({ repositoryId, environment }) {
       if (refused.has(repositoryId)) throw new CustomerRepositoryRefusedError(repositoryId);
       const names = hostingAppNames(prefix, repositoryId, environment);
-      if (!apps.has(names.appRef)) {
-        apps.set(names.appRef, {
+      const { apps } = load();
+      if (!apps[names.appRef]) {
+        apps[names.appRef] = {
           ...names,
           environment,
           live: null,
@@ -276,7 +337,8 @@ export function createFakeHostingDeployPort(
           health: 'deploying',
           running: false,
           transitions: [],
-        });
+        };
+        save();
       }
       return names;
     },
@@ -285,25 +347,31 @@ export function createFakeHostingDeployPort(
       if (refused.has(repositoryId)) throw new CustomerRepositoryRefusedError(repositoryId);
       injectedFailure('ensurePushNamespace');
       const pushNamespace = pushNamespaceName(prefix, repositoryId, kind);
-      namespaces.add(pushNamespace);
+      const { namespaces } = load();
+      if (!namespaces.includes(pushNamespace)) namespaces.push(pushNamespace);
+      save();
       return { pushNamespace, imageRepository: `registry.fake.invalid/${pushNamespace}` };
     },
 
     async revokeDeployCredentials({ pushNamespace }) {
       injectedFailure('revokeDeployCredentials');
-      const revoked = liveTokens.get(pushNamespace) ?? 0;
-      liveTokens.delete(pushNamespace);
+      const { liveTokens } = load();
+      const revoked = liveTokens[pushNamespace] ?? 0;
+      delete liveTokens[pushNamespace];
+      save();
       return { revoked };
     },
 
     async mintDeployCredential({ pushNamespace }) {
+      const { mintedFor, liveTokens } = load();
       mintedFor.push(pushNamespace);
-      liveTokens.set(pushNamespace, (liveTokens.get(pushNamespace) ?? 0) + 1);
+      liveTokens[pushNamespace] = (liveTokens[pushNamespace] ?? 0) + 1;
+      save();
       return {
         kind: 'secret',
         pushNamespace,
         value: `fake-deploy-token-${pushNamespace}`,
-        expiresAt: new Date(clock + 90 * 86_400_000),
+        expiresAt: new Date(state.clock + 90 * 86_400_000),
       };
     },
 
@@ -312,6 +380,7 @@ export function createFakeHostingDeployPort(
       // else, so a refused release finds no app and creates nothing.
       if (target === 'serverless') assertServerlessRuntime(input.runtime);
       const shape = shapeOf(input);
+      load();
       const app = appOf(input.appRef);
       if (!sameEnvironment(app.environment, input.environment)) {
         throw new OrchestratorApiError('fake', 409, `app ${app.appRef} is another environment's`);
@@ -319,8 +388,9 @@ export function createFakeHostingDeployPort(
       // A deploy held for the account resumes as the SAME release: the repeat
       // reuses the held release's id, so a resumed run never makes a second.
       const next = release(input, shape, app.pending?.releaseId);
-      if (target === 'aws' && !accountReady) {
+      if (target === 'aws' && !state.accountReady) {
         app.pending = next;
+        save();
         return handleFor(app, next);
       }
       app.pending = null;
@@ -328,11 +398,12 @@ export function createFakeHostingDeployPort(
       app.live = next;
       app.health = 'healthy';
       setRunning(app, true);
+      save();
       return handleFor(app, next);
     },
 
     async describe(handle): Promise<ReleaseDescription> {
-      const app = apps.get(handle.appRef);
+      const app = load().apps[handle.appRef];
       if (app?.pending) {
         return {
           state: 'waiting_for_account',
@@ -364,6 +435,7 @@ export function createFakeHostingDeployPort(
     },
 
     async rollback({ appRef }) {
+      load();
       const app = appOf(appRef);
       if (!app.live) throw new ReleaseNotFoundError(appRef);
       if (!app.previous) throw new NoPreviousReleaseError(appRef);
@@ -371,18 +443,23 @@ export function createFakeHostingDeployPort(
       app.previous = app.live;
       app.live = restored;
       setRunning(app, true);
+      save();
       return handleFor(app, restored);
     },
 
     async usageSince(handle, since) {
+      load();
       return usage(appOf(handle.appRef), handle.releaseId, since);
     },
 
     async destroy(handle) {
       injectedFailure('destroy');
-      const app = apps.get(handle.appRef);
+      const app = load().apps[handle.appRef];
       if (!app || !app.live) {
-        if (app) app.pending = null;
+        if (app) {
+          app.pending = null;
+          save();
+        }
         return usageRecord(handle.appRef, handle.releaseId, now(), now(), 0);
       }
       const first = app.transitions[0]?.at ?? now();
@@ -390,23 +467,26 @@ export function createFakeHostingDeployPort(
       setRunning(app, false);
       app.live = null;
       app.previous = null;
+      save();
       return result;
     },
 
     async destroyApp({ appRef }) {
       injectedFailure('destroyApp');
-      const app = apps.get(appRef);
-      apps.delete(appRef);
+      const { apps, namespaces, liveTokens } = load();
+      const app = apps[appRef];
+      delete apps[appRef];
       // On Fly a push namespace IS an app (`mh-<rid>-pv`), destroyed the same way
       // at takeover (MOTIR-5776).
-      namespaces.delete(appRef);
-      liveTokens.delete(appRef);
+      state.namespaces = namespaces.filter((n) => n !== appRef);
+      delete liveTokens[appRef];
+      save();
       if (!app?.live) return [];
       return [usage(app, app.live.releaseId, app.transitions[0]?.at ?? now())];
     },
 
     async listReleases({ appRef }): Promise<ReleaseSummary[]> {
-      const app = apps.get(appRef);
+      const app = load().apps[appRef];
       if (app?.pending) {
         return [{ handle: handleFor(app, app.pending), state: 'waiting_for_account' }];
       }
