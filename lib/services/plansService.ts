@@ -138,8 +138,8 @@ import { isMarkOnlyPatch } from '@/lib/plans/markOnlyPatch';
 import {
   assertBodyRefsResolve,
   findUnresolvedIntraPlanRefIds,
-  validateProposedBodyRefs,
 } from '@/lib/plans/validateProposedBodyRefs';
+import { proposalLinkWarningsService } from '@/lib/services/proposalLinkWarningsService';
 import { patchRescopes } from '@/lib/plans/rescopeReset';
 import { committedPlanTargets } from '@/lib/plans/planTargets';
 import { restingStatusFor } from '@/lib/plans/restingStatus';
@@ -222,6 +222,8 @@ import type {
   PlanApprovabilityRejectionDto,
   PlanStatusCountsDto,
   PlanWithItemsDto,
+  PlanWithItemsAndWarningsDto,
+  ProposalLinkWarningDto,
   ProposalInput,
   UpdateProposalInput,
   CorrectProposalInput,
@@ -845,12 +847,9 @@ function validateProposal(p: ProposalInput): void {
       p.proposedFields,
       proposalLabel({ op: p.op, title: p.proposedFields.title }),
     );
-    // The bodies' INTRA-PLAN item links (bug MOTIR-6494) — a link approve cannot
-    // rewrite is refused here, by the ONE validator every proposal door shares.
-    validateProposedBodyRefs(
-      p.proposedFields,
-      proposalLabel({ op: p.op, title: p.proposedFields.title }),
-    );
+    // The bodies' INTRA-PLAN item links are NOT refused here (MOTIR-10104): a
+    // broken one is kept and WARNED on the response (`addProposals`), and approve
+    // refuses the plan while it remains.
     // The repo ROLE (MOTIR-1912) — checked HERE, at the append, because the check
     // is pure (a closed vocabulary, no repository need exist) and the producer is
     // a machine: telling motir-ai its role is unknown while it is still writing
@@ -919,8 +918,7 @@ function validateProposal(p: ProposalInput): void {
     // string-or-null note, and nothing else: the mark is kind- and status-agnostic.
     validateProposedObsolescence(p.patch, proposalLabel({ op: p.op, workItemId: p.workItemId }));
     // A `modify`'s rewritten bodies are rewritten at approve too (MOTIR-3804), so
-    // they are held to the same link check as an `add`'s (bug MOTIR-6494).
-    validateProposedBodyRefs(p.patch, proposalLabel({ op: p.op, workItemId: p.workItemId }));
+    // their links are WARNED like an `add`'s (bugs MOTIR-6494 · MOTIR-10104).
     // A `modify` may RE-PIN the role (MOTIR-1912) — same vocabulary check as the
     // `add` path, so the two cannot disagree about what a role is.
     assertKnownRepoRole(
@@ -2504,6 +2502,35 @@ function authoredTargetRepoRole(item: PlanItem): unknown {
 function proposalLabel(p: { op: string; workItemId?: string | null; title?: string }): string {
   if (p.op === 'add') return p.title?.trim() ? `“${p.title.trim()}”` : 'an untitled `add`';
   return `the \`${p.op}\` of work item ${p.workItemId ?? '(unknown)'}`;
+}
+
+/** A persisted proposal, named as {@link proposalLabel} names one at a door. */
+function planItemLabel(item: PlanItem): string {
+  const title = (item.proposedFields as { title?: unknown } | null)?.title;
+  return proposalLabel({
+    op: item.op,
+    workItemId: item.workItemId,
+    title: typeof title === 'string' ? title : undefined,
+  });
+}
+
+/**
+ * Attach the item-link WARNINGS of the proposals a write touched (MOTIR-10104) —
+ * present only when there is one, so a clean write answers exactly as before.
+ */
+async function withLinkWarnings<T extends object>(
+  answer: T,
+  items: readonly PlanItem[],
+  writtenIds: readonly string[],
+  ctx: ServiceContext,
+): Promise<T & { warnings?: ProposalLinkWarningDto[] }> {
+  const warnings = await proposalLinkWarningsService.forWrittenProposals(
+    items,
+    writtenIds,
+    planItemLabel,
+    ctx,
+  );
+  return warnings.length > 0 ? { ...answer, warnings } : answer;
 }
 
 /**
@@ -4605,7 +4632,7 @@ async function editAddProposal(
   input: UpdateProposalInput,
   ctx: ServiceContext,
   mode: AddProposalEditMode,
-): Promise<PlanWithItemsDto> {
+): Promise<PlanWithItemsAndWarningsDto> {
   const expectedStatus = mode === 'deepen' ? 'generating' : 'planned';
   const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
     planRepository.findById(planId, ctx.workspaceId, tx),
@@ -4657,7 +4684,7 @@ async function editAddProposal(
       return { row: fresh, items: allItems };
     },
   );
-  return toPlanWithItemsDto(row, items);
+  return withLinkWarnings(toPlanWithItemsDto(row, items), items, [planItemId], ctx);
 }
 
 /**
@@ -4717,12 +4744,9 @@ async function applyAddProposalEdit(
     next.kind ?? DEFAULT_PROPOSED_KIND,
     proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
   );
-  // And the bodies' item links on the MERGED result (bug MOTIR-6494).
-  validateProposedBodyRefs(
-    next,
-    proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
-  );
-  // ...and the links THIS edit writes must name a proposal on the plan (bug
+  // The bodies' malformed item links are WARNED on the edit's response, not
+  // refused (bugs MOTIR-6494 · MOTIR-10104) — `editAddProposal`.
+  // The links THIS edit writes must name a proposal on the plan (bug
   // MOTIR-9175), the rendered body when it carries `sections` (bug MOTIR-9836).
   // Only the bodies the edit writes are judged, so a proposal that inherited a
   // dangling link can still be repaired by an unrelated edit.
@@ -5506,7 +5530,7 @@ export const plansService = {
     incoming: ProposalInput[],
     ctx: ServiceContext,
     opts: { revision?: boolean } = {},
-  ): Promise<PlanWithItemsDto & { appendedItemIds: string[] }> {
+  ): Promise<PlanWithItemsAndWarningsDto & { appendedItemIds: string[] }> {
     const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       planRepository.findById(planId, ctx.workspaceId, tx),
     );
@@ -5986,10 +6010,15 @@ export const plansService = {
       // including the typed refusals thrown a few lines up.
       throw containPrismaFailure(err, 'plan proposal append');
     }
-    return {
-      ...toPlanWithItemsDto(result.row, result.items),
-      appendedItemIds: result.appendedItemIds,
-    };
+    return withLinkWarnings(
+      {
+        ...toPlanWithItemsDto(result.row, result.items),
+        appendedItemIds: result.appendedItemIds,
+      },
+      result.items,
+      result.appendedItemIds,
+      ctx,
+    );
   },
 
   /**
@@ -6033,6 +6062,14 @@ export const plansService = {
 
     try {
       await runPersistGate(items, ctx, terminalStatusKeys, plan.projectId);
+      // The bodies' item links (MOTIR-10104) — approve's own second question, asked
+      // the same way here so the validator and the button cannot disagree.
+      const linkBlocker = await proposalLinkWarningsService.firstShippingBlocker(
+        items,
+        planItemLabel,
+        ctx,
+      );
+      if (linkBlocker) throw linkBlocker;
       return [];
     } catch (err) {
       if (
@@ -6574,7 +6611,7 @@ export const plansService = {
     planItemId: string,
     input: UpdateProposalInput,
     ctx: ServiceContext,
-  ): Promise<PlanWithItemsDto> {
+  ): Promise<PlanWithItemsAndWarningsDto> {
     return editAddProposal(planId, planItemId, input, ctx, 'review');
   },
 
@@ -6604,7 +6641,7 @@ export const plansService = {
     planItemId: string,
     input: UpdateProposalInput,
     ctx: ServiceContext,
-  ): Promise<PlanWithItemsDto> {
+  ): Promise<PlanWithItemsAndWarningsDto> {
     return editAddProposal(planId, planItemId, input, ctx, 'deepen');
   },
 
@@ -6626,7 +6663,7 @@ export const plansService = {
     planItemId: string,
     input: UpdateProposalInput,
     ctx: ServiceContext,
-  ): Promise<PlanWithItemsDto> {
+  ): Promise<PlanWithItemsAndWarningsDto> {
     return editAddProposal(planId, planItemId, input, ctx, 'revise');
   },
 
@@ -6819,7 +6856,7 @@ export const plansService = {
     input: CorrectProposalInput,
     ctx: ServiceContext,
     opts: { byReviewer?: boolean } = {},
-  ): Promise<PlanWithItemsDto> {
+  ): Promise<PlanWithItemsAndWarningsDto> {
     input = normalizeCorrectionEdges(input);
     const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       planRepository.findById(planId, ctx.workspaceId, tx),
@@ -7025,12 +7062,8 @@ export const plansService = {
             next.kind ?? DEFAULT_PROPOSED_KIND,
             proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
           );
-          // The bodies' item links, on the MERGED result (bug MOTIR-6494).
-          validateProposedBodyRefs(
-            next,
-            proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
-          );
-          // ...and the links the correction writes must name a proposal on the plan
+          // A malformed item link is WARNED on the response (MOTIR-10104), and
+          // the links the correction writes must name a proposal on the plan
           // (bug MOTIR-9175), judged on the bodies it writes (bug MOTIR-9836).
           assertEditBodyRefsResolve(
             current,
@@ -7143,11 +7176,8 @@ export const plansService = {
                 );
               });
             }
-            // The replacement patch's bodies, held to the append's link check (bug MOTIR-6494).
-            validateProposedBodyRefs(
-              input.patch ?? {},
-              proposalLabel({ op: item.op, workItemId: item.workItemId }),
-            );
+            // The replacement patch's malformed links are WARNED on the response
+            // (MOTIR-10104); a canonical link to no proposal is refused (MOTIR-9175).
             assertBodyRefsResolve(
               input.patch ?? {},
               new Set(all.filter((i) => i.op === 'add').map((i) => i.id)),
@@ -7373,7 +7403,7 @@ export const plansService = {
         return { row: fresh, items: await planItemRepository.findByPlan(planId, tx) };
       },
     );
-    return toPlanWithItemsDto(row, items);
+    return withLinkWarnings(toPlanWithItemsDto(row, items), items, [planItemId], ctx);
   },
 
   /**
@@ -9053,6 +9083,19 @@ async function prepareApprove(planId: string, ctx: ServiceContext) {
     // again in the right order anyway.
     if (plan.status === 'planned') assertPlanHasProposals(planId, preItems);
     await runPersistGate(preItems, ctx, terminalStatusKeys, plan.projectId);
+    // ⚠️ A MALFORMED BODY LINK STOPS APPROVE (MOTIR-10104). The write doors KEEP a
+    // body carrying one and answer with a warning naming the corrected link, so
+    // this is the one place it can still be refused before it ships as dead text.
+    // It is deliberately NOT part of `runPersistGate`: the correction doors run that
+    // gate before/after, and a correction that writes a link it was warned about
+    // must be kept, not rolled back. Bodies do not drift under the row locks, so
+    // the pre-transaction pass is the whole check.
+    const linkBlocker = await proposalLinkWarningsService.firstShippingBlocker(
+      preItems,
+      planItemLabel,
+      ctx,
+    );
+    if (linkBlocker) throw linkBlocker;
 
     // The proposed repo PINS (MOTIR-1884), normalized + validated against this
     // PROJECT's repository set. Out here because the domain read opens its own

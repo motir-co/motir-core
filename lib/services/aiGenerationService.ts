@@ -28,6 +28,7 @@ import type { RevisionReasonBranch } from '@/lib/plans/revisionReason';
 import type {
   CorrectProposalInput,
   PlanItemDto,
+  ProposalLinkWarningDto,
   PlanNarrationDto,
   PlanStepDto,
   PlanStepProviderWaitDto,
@@ -562,7 +563,13 @@ export const aiGenerationService = {
        */
       authorModel?: string | null;
     } = {},
-  ): Promise<{ planId: string; planItemIds: string[]; planned: boolean; released?: boolean }> {
+  ): Promise<{
+    planId: string;
+    planItemIds: string[];
+    planned: boolean;
+    released?: boolean;
+    warnings?: ProposalLinkWarningDto[];
+  }> {
     const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       planRepository.findBySourceJobId(jobId, ctx.workspaceId, tx),
     );
@@ -587,6 +594,9 @@ export const aiGenerationService = {
     }
 
     let createdIds: string[] = [];
+    // The item links this append KEPT that would ship dead (MOTIR-10104), handed
+    // back to the planner on every return below — present only when there is one.
+    let linkWarnings: { warnings?: ProposalLinkWarningDto[] } = {};
     if (proposals.length > 0) {
       // A ref written as a `<PREFIX>-<n>` KEY becomes the work item's id HERE, at
       // the append, or the append is refused `dangling` naming the key
@@ -601,6 +611,7 @@ export const aiGenerationService = {
       // second `modify` of one card MERGES into the row the plan already holds
       // (AMENDMENT 18 §2), so the batch's ids are no longer the last N rows.
       createdIds = result.appendedItemIds;
+      if (result.warnings) linkWarnings = { warnings: result.warnings };
     }
 
     // ⚠️ `final` MEANS *THIS PASS IS OVER*, and what that costs depends on which
@@ -613,7 +624,13 @@ export const aiGenerationService = {
     // `{ proposals: [], final: true }` shape MOTIR-3193's CLOSE already sends.
     if (opts.revision) {
       if (!opts.final) {
-        return { planId: plan.id, planItemIds: createdIds, planned: false, released: false };
+        return {
+          planId: plan.id,
+          planItemIds: createdIds,
+          planned: false,
+          released: false,
+          ...linkWarnings,
+        };
       }
       const closed = await plansService.closeRevision(plan.id, ctx, opts.actor ?? EMPTY_ACTOR, {
         summary: opts.summary ?? null,
@@ -625,6 +642,7 @@ export const aiGenerationService = {
         planItemIds: createdIds,
         planned: closed.planned,
         released: closed.released,
+        ...linkWarnings,
       };
     }
 
@@ -649,7 +667,7 @@ export const aiGenerationService = {
       planned = closed.status === 'planned';
     }
 
-    return { planId: plan.id, planItemIds: createdIds, planned };
+    return { planId: plan.id, planItemIds: createdIds, planned, ...linkWarnings };
   },
 
   // The INTERNAL generation-time DEEPEN seam (7.4.4a · MOTIR-1441): PATCH one
@@ -667,7 +685,7 @@ export const aiGenerationService = {
     planItemId: string,
     input: UpdateProposalInput,
     ctx: ServiceContext,
-  ): Promise<{ planId: string; item: PlanItemDto }> {
+  ): Promise<{ planId: string; item: PlanItemDto; warnings?: ProposalLinkWarningDto[] }> {
     const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       planRepository.findBySourceJobId(jobId, ctx.workspaceId, tx),
     );
@@ -676,7 +694,8 @@ export const aiGenerationService = {
     // `deepenProposal` throws `PlanItemNotFoundError` if the item isn't in the
     // plan, so by here the patched item is guaranteed present in the returned set.
     const item = result.items.find((i) => i.id === planItemId)!;
-    return { planId: plan.id, item };
+    // The links the deepen KEPT that would ship dead (MOTIR-10104).
+    return { planId: plan.id, item, ...(result.warnings ? { warnings: result.warnings } : {}) };
   },
 
   // The INTERNAL PROPOSAL READ (Story MOTIR-3595 · Subtask MOTIR-3598) — what
@@ -716,7 +735,7 @@ export const aiGenerationService = {
     planItemId: string,
     input: CorrectProposalInput,
     ctx: ServiceContext,
-  ): Promise<{ planId: string; item: PlanItemDto }> {
+  ): Promise<{ planId: string; item: PlanItemDto; warnings?: ProposalLinkWarningDto[] }> {
     const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       planRepository.findBySourceJobId(jobId, ctx.workspaceId, tx),
     );
@@ -728,7 +747,7 @@ export const aiGenerationService = {
     // `correctProposal` throws `PlanItemNotFoundError` when the item is not on
     // the plan, so by here it is guaranteed present in the returned set.
     const item = result.items.find((i) => i.id === planItemId)!;
-    return { planId: plan.id, item };
+    return { planId: plan.id, item, ...(result.warnings ? { warnings: result.warnings } : {}) };
   },
 
   // The INTERNAL WITHDRAW seam (Subtask MOTIR-3598) — the same shape, onto

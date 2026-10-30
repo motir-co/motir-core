@@ -205,8 +205,9 @@ export interface PlanItemProposedFields {
    * `[label](motir:<workItemId>)` for an existing item, or
    * `[label](motir-ref:planItem:<planItemId>)` for another `add` in this plan,
    * rewritten to `motir:<id>` at materialize. The `planItem:` prefix is part of
-   * the token: `motir-ref:<id>` without it is refused at every proposal door
-   * (`lib/plans/validateProposedBodyRefs.ts`, bug MOTIR-6494).
+   * the token: `motir-ref:<id>` without it is kept but WARNED at every proposal
+   * door, with the corrected link when the server can compute it, and refused at
+   * approve (`lib/plans/validateProposedBodyRefs.ts`, bugs MOTIR-6494 · MOTIR-10104).
    */
   explanationMd?: string | null;
   explanationSource?: string | null;
@@ -1015,6 +1016,39 @@ export interface SharpeningWriteBackResult {
 export interface PlanWithItemsDto extends PlanDto {
   items: PlanItemDto[];
 }
+
+/**
+ * ONE ITEM LINK A PROPOSAL WRITE KEPT THAT WOULD SHIP DEAD (MOTIR-10104) — on the
+ * response of every proposal write door (the append, the deepen, the correction)
+ * as `warnings`, present only when there is at least one. The write is NOT
+ * refused: the body is stored as sent, and approve refuses the plan while a
+ * malformed `motir-ref:` link remains, so the warning is the author's chance to
+ * fix it in the same session.
+ */
+export interface ProposalLinkWarningDto {
+  /** The proposal the link sits in. */
+  planItemId: string;
+  /** The proposal as a refusal names it — its title, or the `modify`'s target. */
+  proposal: string;
+  field: 'descriptionMd' | 'explanationMd';
+  /** The link exactly as written. */
+  link: string;
+  /** Why it would ship as dead text. */
+  reason: string;
+  /**
+   * The link to write in its place, when the server can compute it: the card an
+   * earlier plan's proposal became (`[label](motir:<cardId>)`), or this plan's
+   * proposal in the canonical token (`[label](motir-ref:planItem:<id>)`).
+   */
+  correctedLink: string | null;
+  /** The two canonical forms — present only when `correctedLink` is `null`. */
+  canonicalForms?: string[];
+}
+
+/** A proposal write door's answer: the plan, and the links it kept that need fixing. */
+export type PlanWithItemsAndWarningsDto = PlanWithItemsDto & {
+  warnings?: ProposalLinkWarningDto[];
+};
 
 /** A cursor-paginated page of plans, newest first. */
 export interface PlanListPageDto {

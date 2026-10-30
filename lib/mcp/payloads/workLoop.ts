@@ -22,7 +22,7 @@ import { PLAN_DECISION_REASONS } from '@/lib/dto/plans';
 import type { DispatchPromptDto } from '@/lib/dto/dispatch';
 import type { WorkItemContinueClaimDto } from '@/lib/dto/workItemContinue';
 import type { WorkItemRepairClaimDto } from '@/lib/dto/workItemRepair';
-import type { PlanOutcomeDto, PlanWithItemsDto } from '@/lib/dto/plans';
+import type { PlanOutcomeDto, PlanWithItemsAndWarningsDto } from '@/lib/dto/plans';
 import { redactNativeActor } from '@/lib/plans/redactNativeModel';
 import { definePayload } from './define';
 import { parsedSectionsSchema } from './parsedSectionsSchema';
@@ -271,12 +271,31 @@ export const mcpPlanSchema = planSchema.omit({ proposals: true, proposalCount: t
    * read time, keyed by plan item id. Present only when `includeSections` was asked.
    */
   parsedSections: z.record(z.string(), parsedSectionsSchema).optional(),
+  /**
+   * The item links a proposal WRITE kept that would ship dead (MOTIR-10104) — on
+   * `add_plan_items`, `update_plan_item` and `update_plan_proposal`, present only
+   * when the write left at least one. Each names the corrected link when the
+   * server can compute it; approve refuses the plan while a malformed one remains.
+   */
+  warnings: z
+    .array(
+      z.object({
+        planItemId: z.string(),
+        proposal: z.string(),
+        field: z.enum(['descriptionMd', 'explanationMd']),
+        link: z.string(),
+        reason: z.string(),
+        correctedLink: z.string().nullable(),
+        canonicalForms: z.array(z.string()).optional(),
+      }),
+    )
+    .optional(),
 });
 export type McpPlan = z.infer<typeof mcpPlanSchema>;
 
 /** Map a plan — the shared envelope fields through v1's shape. */
 export function presentMcpPlan(
-  plan: PlanWithItemsDto,
+  plan: PlanWithItemsAndWarningsDto,
   folders?: ReadonlyMap<string, { folderId: string; folderPath: string[] | null }>,
 ): McpPlan {
   return {
@@ -312,6 +331,7 @@ export function presentMcpPlan(
           folderPath: folders.get(item.id)?.folderPath ?? null,
         }))
       : plan.items,
+    ...(plan.warnings && plan.warnings.length > 0 ? { warnings: plan.warnings } : {}),
   };
 }
 
@@ -342,7 +362,10 @@ export const mcpPlanAppendSchema = mcpPlanSchema.extend({
 export type McpPlanAppend = z.infer<typeof mcpPlanAppendSchema>;
 
 /** Map an append result — the plan through the shared shape, plus the new ids. */
-export function presentMcpPlanAppend(plan: PlanWithItemsDto, planItemIds: string[]): McpPlanAppend {
+export function presentMcpPlanAppend(
+  plan: PlanWithItemsAndWarningsDto,
+  planItemIds: string[],
+): McpPlanAppend {
   return { ...presentMcpPlan(plan), planItemIds };
 }
 

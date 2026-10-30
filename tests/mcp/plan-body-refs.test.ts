@@ -20,10 +20,14 @@ import {
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
-// A proposal body's item link WITHOUT the `planItem:` prefix is REFUSED at every
-// plan door (bug MOTIR-6494). `[label](motir-ref:<id>)` matched no reader, so it
-// was accepted at the append and shipped as dead text at approve. Each door is
-// proven by CALLING it: the three MCP tools a plan author writes bodies through.
+// A proposal body's item link WITHOUT the `planItem:` prefix is KEPT and WARNED
+// at every plan door (bugs MOTIR-6494 · MOTIR-10104). `[label](motir-ref:<id>)`
+// matches no reader, so approve would ship it as dead text; MOTIR-6494 refused
+// the whole write over it, which threw away a body that was otherwise right.
+// Each door now stores the body, says "written, with N links to fix" under its
+// summary, and carries the warning — with the corrected link — on the
+// structured payload. Each door is proven by CALLING it: the three MCP tools a
+// plan author writes bodies through.
 //
 // Real Postgres, the real MCP server over the in-memory transport.
 
@@ -69,11 +73,24 @@ async function appendSibling(client: Client, planId: string): Promise<string> {
   return ids(appended)[0]!;
 }
 
-function expectRefusedNaming(result: CallToolResult, token: string): void {
-  expect(result.isError).toBe(true);
-  expect(text(result)).toContain('INVALID_PROPOSAL');
+interface Warning {
+  planItemId: string;
+  field: string;
+  link: string;
+  correctedLink: string | null;
+}
+const warnings = (r: CallToolResult) =>
+  (r.structuredContent as unknown as { warnings?: Warning[] }).warnings;
+
+/** The write landed, and it says which link to fix and how. */
+function expectWrittenAndWarned(result: CallToolResult, token: string, corrected: string): void {
+  expect(result.isError).toBeFalsy();
+  expect(text(result)).toContain('Written, with 1 link(s) to fix');
   expect(text(result)).toContain(token);
-  expect(text(result)).toContain('motir-ref:planItem:<planItemId>');
+  expect(text(result)).toContain(`Write \`${corrected}\` instead.`);
+  expect(warnings(result)).toEqual([
+    expect.objectContaining({ link: token, correctedLink: corrected }),
+  ]);
 }
 
 beforeEach(async () => {
@@ -86,7 +103,7 @@ afterAll(async () => {
 });
 
 describe('add_plan_items — the APPEND door', () => {
-  it('refuses an `add` whose descriptionMd links a sibling without `planItem:`, naming the token, and appends nothing', async () => {
+  it('keeps an `add` whose descriptionMd links a sibling without `planItem:`, warning with the canonical token', async () => {
     const fx = await makeWorkItemFixture();
     const client = await connectClient(fx.ctx);
     const planId = await openPlan(client, fx);
@@ -102,13 +119,13 @@ describe('add_plan_items — the APPEND door', () => {
         },
       ],
     });
-    expectRefusedNaming(result, token);
-    expect(text(result)).toContain('descriptionMd');
-    expect(await adminDb.planItem.count({ where: { planId } })).toBe(1);
+    expectWrittenAndWarned(result, token, `[the sibling](motir-ref:planItem:${sibling})`);
+    expect(warnings(result)![0]!.field).toBe('descriptionMd');
+    expect(await adminDb.planItem.count({ where: { planId } })).toBe(2);
     await client.close();
   });
 
-  it('refuses the same form in an `add`’s explanationMd and in a `modify`’s patch', async () => {
+  it('keeps the same form in an `add`’s explanationMd and in a `modify`’s patch, warning on each', async () => {
     const fx = await makeWorkItemFixture();
     const client = await connectClient(fx.ctx);
     const planId = await openPlan(client, fx);
@@ -122,8 +139,8 @@ describe('add_plan_items — the APPEND door', () => {
         { op: 'add', proposedFields: { title: 'Why', kind: 'task', explanationMd: token } },
       ],
     });
-    expectRefusedNaming(onExplanation, token);
-    expect(text(onExplanation)).toContain('explanationMd');
+    expectWrittenAndWarned(onExplanation, token, `[x](motir-ref:planItem:${sibling})`);
+    expect(warnings(onExplanation)![0]!.field).toBe('explanationMd');
 
     const onPatch = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
       planId,
@@ -131,7 +148,7 @@ describe('add_plan_items — the APPEND door', () => {
         { op: 'modify', workItemId: target.id, patch: { descriptionMd: `Now after ${token}.` } },
       ],
     });
-    expectRefusedNaming(onPatch, token);
+    expectWrittenAndWarned(onPatch, token, `[x](motir-ref:planItem:${sibling})`);
     await client.close();
   });
 
@@ -150,13 +167,15 @@ describe('add_plan_items — the APPEND door', () => {
           proposedFields: {
             title: 'Links it',
             kind: 'task',
-            // A link inside inline code is literal text, not a link, so it is not refused.
+            // A link inside inline code is literal text, not a link, so it is not warned.
             descriptionMd: `Needs [the sibling](motir-ref:planItem:${sibling}). Syntax: \`[x](motir-ref:<id>)\`.`,
           },
         },
       ],
     });
     expect(appended.isError).toBeFalsy();
+    expect(warnings(appended)).toBeUndefined();
+    expect(text(appended)).not.toContain('link(s) to fix');
 
     await plansService.approvePlan(planId, fx.ctx);
     const [created, linker] = await Promise.all([
@@ -173,7 +192,7 @@ describe('add_plan_items — the APPEND door', () => {
 });
 
 describe('update_plan_item — the DEEPEN door', () => {
-  it('refuses a deepen whose body links a sibling without `planItem:`, and leaves the proposal as it was', async () => {
+  it('keeps a deepen whose body links a sibling without `planItem:`, and warns with the canonical token', async () => {
     const fx = await makeWorkItemFixture();
     const client = await connectClient(fx.ctx);
     const planId = await openPlan(client, fx);
@@ -185,15 +204,17 @@ describe('update_plan_item — the DEEPEN door', () => {
       planItemId: sibling,
       explanationMd: `Matters because of ${token}.`,
     });
-    expectRefusedNaming(result, token);
+    expectWrittenAndWarned(result, token, `[the sibling](motir-ref:planItem:${sibling})`);
     const row = await adminDb.planItem.findUniqueOrThrow({ where: { id: sibling } });
-    expect((row.proposedFields as { explanationMd?: string }).explanationMd).toBeUndefined();
+    expect((row.proposedFields as { explanationMd?: string }).explanationMd).toBe(
+      `Matters because of ${token}.`,
+    );
     await client.close();
   });
 });
 
 describe('update_plan_proposal — the CORRECTION door', () => {
-  it('refuses a correction of an `add` and of a `modify`’s patch on a CLOSED plan', async () => {
+  it('keeps a correction of an `add` and of a `modify`’s patch on a CLOSED plan, warning on each — and approve refuses until it is fixed', async () => {
     const fx = await makeWorkItemFixture();
     const client = await connectClient(fx.ctx);
     const planId = await openPlan(client, fx);
@@ -214,14 +235,18 @@ describe('update_plan_proposal — the CORRECTION door', () => {
       planItemId: addId!,
       descriptionMd: `See ${token}.`,
     });
-    expectRefusedNaming(onAdd, token);
+    const corrected = `[the add](motir-ref:planItem:${addId})`;
+    expectWrittenAndWarned(onAdd, token, corrected);
 
     const onModify = await call(client, UPDATE_PLAN_PROPOSAL_TOOL_NAME, {
       planId,
       planItemId: modifyId!,
       patch: { priority: 'low', descriptionMd: `After ${token}.` },
     });
-    expectRefusedNaming(onModify, token);
+    expectWrittenAndWarned(onModify, token, corrected);
+
+    // The kept link stops approve, naming the same correction.
+    await expect(plansService.approvePlan(planId, fx.ctx)).rejects.toThrow(corrected);
     await client.close();
   });
 });

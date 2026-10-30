@@ -10,27 +10,33 @@
 // rewritten, not reported unresolved, and not refused, so it shipped as dead
 // text on the approved card.
 //
-// So the append refuses it, the way MOTIR-3539 refuses an unresolvable
-// structural ref: every `](motir-ref:` link a body carries must be the canonical
-// token. This module is the ONE implementation, called by the append
-// (`validateProposal`, both an `add`'s `proposedFields` and a `modify`'s
-// `patch`), the deepen (`editAddProposal`) and the correction
-// (`correctProposal`), so the doors cannot disagree about what a well-formed
-// link is.
+// MOTIR-6494 made every proposal door REFUSE such a link. MOTIR-10104 turned the
+// refusal into a WARNING: a body that is otherwise right was thrown away over one
+// link, and the refusal named only the general format while the server could
+// compute the exact link that works — an old plan item that became a card, or a
+// proposal of this plan written without its prefix. So every door (the append's
+// `add` / `modify`, the deepen, the correction) KEEPS the write, and its response
+// carries one warning per broken link (`findBodyLinkCandidates` → the service's
+// lookup → `judgeBodyLinks`), naming the corrected token whenever it is
+// computable. What still stops a broken link is APPROVE: it refuses a plan whose
+// bodies still hold a malformed `motir-ref:` link, naming the same correction,
+// and `validate_plan` reports it as a rejection before anyone presses the button.
 //
 // A link inside Markdown CODE — a fenced block or an inline span — renders
 // literally rather than as a link, so it is not a dead link and is skipped: a
 // card that DOCUMENTS the token syntax must stay authorable.
 //
-// PURE: no DB, no `tx`. Every refusal is an `InvalidProposalError` (a 422 with
-// code `INVALID_PROPOSAL` on every door), the family every other
-// proposal-content refusal uses.
+// PURE: no DB, no `tx`. The one refusal left here is MOTIR-9175's
+// `assertBodyRefsResolve`, an `InvalidProposalError` (a 422 with code
+// `INVALID_PROPOSAL` on every door).
 
 import { InvalidProposalError } from '@/lib/plans/errors';
 import { parseIntraPlanRefIds } from '@/lib/mentions/workItemRefs';
 
 /** Where a link's label ends and a `motir-ref:` destination begins. */
 const MOTIR_REF_LINK_JOIN = '](motir-ref:';
+/** Where a link's label ends and a `motir:` (card) destination begins. */
+const MOTIR_LINK_JOIN = '](motir:';
 
 /** The canonical token, anchored — `INTRA_PLAN_REF_TOKEN_RE`'s shape. */
 const CANONICAL_MOTIR_REF_LINK_RE = /^\[[^\]\[]*\]\(motir-ref:planItem:[A-Za-z0-9_-]+\)$/;
@@ -92,14 +98,14 @@ function withoutCode(text: string): string {
  */
 export function findMalformedIntraPlanRefs(text: string): string[] {
   const found: string[] = [];
-  for (const token of motirRefLinks(withoutCode(text))) {
+  for (const token of linksJoinedBy(withoutCode(text), MOTIR_REF_LINK_JOIN)) {
     if (!CANONICAL_MOTIR_REF_LINK_RE.test(token) && !found.includes(token)) found.push(token);
   }
   return found;
 }
 
 /**
- * Every `[label](motir-ref:…)` link in `text` — a label holding no bracket, a
+ * Every `[label](<join>…)` link in `text` — a label holding no bracket, a
  * destination running to the first `)` on its line — canonical or not.
  *
  * A single left-to-right pass rather than a regex: an unanchored pattern with a
@@ -109,7 +115,7 @@ export function findMalformedIntraPlanRefs(text: string): string[] {
  * character is visited once: a destination with no `)` before its line ends
  * is not a link, and nothing inside it can start one that closes.
  */
-function motirRefLinks(text: string): string[] {
+function linksJoinedBy(text: string, join: string): string[] {
   const links: string[] = [];
   let open = -1; // the last `[` with no bracket after it — a label's start
   let i = 0;
@@ -118,8 +124,8 @@ function motirRefLinks(text: string): string[] {
     if (ch === '[') {
       open = i;
     } else if (ch === ']') {
-      if (open !== -1 && text.startsWith(MOTIR_REF_LINK_JOIN, i)) {
-        let end = i + MOTIR_REF_LINK_JOIN.length;
+      if (open !== -1 && text.startsWith(join, i)) {
+        let end = i + join.length;
         while (end < text.length && text[end] !== ')' && text[end] !== '\n') end += 1;
         if (text[end] === ')') links.push(text.slice(open, end + 1));
         open = -1;
@@ -139,28 +145,184 @@ export interface ProposedBodies {
   explanationMd?: string | null;
 }
 
+/** The two bodies a proposal link can sit in. */
+export type BodyLinkField = 'descriptionMd' | 'explanationMd';
+
+const BODY_LINK_FIELDS: readonly BodyLinkField[] = ['descriptionMd', 'explanationMd'];
+
+/** The two well-formed item links, as a warning names them when it can compute neither. */
+export const CANONICAL_ITEM_LINK_FORMS: readonly string[] = [
+  '[label](motir:<workItemId>)',
+  '[label](motir-ref:planItem:<planItemId>)',
+];
+
+const LINK_ID_RE = /^[A-Za-z0-9_-]+$/;
+
 /**
- * Refuse a proposal whose `descriptionMd` or `explanationMd` carries an
- * intra-plan item link approve cannot resolve. `undefined` / `null` bodies pass.
- *
- * @param bodies the proposal's bodies — an `add`'s (merged) `proposedFields`, or
- *               a `modify`'s `patch`
- * @param label  how the proposal is named in a refusal (`proposalLabel(...)`)
+ * One item link a proposal body carries that MAY open nothing once approved
+ * (MOTIR-10104): every `](motir-ref:` link that is not the canonical token, and
+ * every `[label](motir:<id>)` link — the latter is judged only once its id is
+ * known to name a plan item rather than a card.
  */
-export function validateProposedBodyRefs(bodies: ProposedBodies, label: string): void {
-  for (const field of ['descriptionMd', 'explanationMd'] as const) {
+export interface BodyLinkCandidate {
+  field: BodyLinkField;
+  /** The link as written, e.g. `[the host card](motir-ref:cmu8imhdz…)`. */
+  link: string;
+  label: string;
+  /** The id the link names, read past a stray `planItem:` prefix; `null` when it names none. */
+  id: string | null;
+  scheme: 'motir-ref' | 'motir';
+}
+
+/** `[label](<scheme>:<dest>)` → its label and destination. */
+function splitLink(link: string, join: string): { label: string; dest: string } {
+  const at = link.indexOf(join);
+  return { label: link.slice(1, at), dest: link.slice(at + join.length, -1) };
+}
+
+/** The id a malformed `motir-ref:` destination names — `planItem:` in any case stripped. */
+function motirRefId(dest: string): string | null {
+  const id = dest.trim().replace(/^planItem:/i, '');
+  return LINK_ID_RE.test(id) ? id : null;
+}
+
+/**
+ * Every item link in a proposal's bodies a write door warns about or must look
+ * up (MOTIR-10104), in field order then first-seen order, deduplicated per
+ * field. Links inside Markdown code are ignored, as everywhere in this module.
+ */
+export function findBodyLinkCandidates(bodies: ProposedBodies): BodyLinkCandidate[] {
+  const found: BodyLinkCandidate[] = [];
+  for (const field of BODY_LINK_FIELDS) {
     const text = bodies[field];
     if (typeof text !== 'string') continue;
-    const malformed = findMalformedIntraPlanRefs(text);
-    if (malformed.length === 0) continue;
-    throw new InvalidProposalError(
-      `${label}: \`${field}\` carries ${malformed.map((t) => `\`${t}\``).join(', ')}, ` +
-        `which approve cannot turn into an item link — it would ship as dead text. ` +
-        `A link to another card in this plan is \`[label](motir-ref:planItem:<planItemId>)\`, ` +
-        `with the \`planItem:\` prefix and the id \`add_plan_items\` returned; ` +
-        `a link to an existing card is \`[label](motir:<workItemId>)\`.`,
-    );
+    for (const link of findMalformedIntraPlanRefs(text)) {
+      const { label, dest } = splitLink(link, MOTIR_REF_LINK_JOIN);
+      found.push({ field, link, label, id: motirRefId(dest), scheme: 'motir-ref' });
+    }
+    const seen = new Set<string>();
+    for (const link of linksJoinedBy(withoutCode(text), MOTIR_LINK_JOIN)) {
+      const { label, dest } = splitLink(link, MOTIR_LINK_JOIN);
+      if (!LINK_ID_RE.test(dest) || seen.has(link)) continue;
+      seen.add(link);
+      found.push({ field, link, label, id: dest, scheme: 'motir' });
+    }
   }
+  return found;
+}
+
+/** What the server knows about the ids a proposal's links name. */
+export interface BodyLinkResolution {
+  /** The `add` proposals on THIS plan. */
+  thisPlanAddIds: ReadonlySet<string>;
+  /** An earlier plan's materialized `add` → the card it became (one the reader can see). */
+  becameCard: ReadonlyMap<string, string>;
+  /** Ids that name a card the reader can see. */
+  cardIds: ReadonlySet<string>;
+}
+
+/** One link a write KEPT that would ship dead, and how to fix it. */
+export interface BodyLinkWarning {
+  field: BodyLinkField;
+  /** The link as written. */
+  link: string;
+  /** Why approve would ship it as dead text. */
+  reason: string;
+  /** The link to write instead, when the server can compute it. */
+  correctedLink: string | null;
+  /** The two canonical forms — present only when no correction could be computed. */
+  canonicalForms?: string[];
+}
+
+/**
+ * Judge each candidate against what the server knows (MOTIR-10104). A link is
+ * WARNED, never refused: the write that carries it is kept, and the warning
+ * names the corrected token whenever the id names something — a proposal on
+ * this plan, an earlier plan's proposal that became a card, or a card itself.
+ * A `motir:` link to an id that is none of the plan items is an ordinary card
+ * link and is not this check's business.
+ */
+export function judgeBodyLinks(
+  candidates: readonly BodyLinkCandidate[],
+  known: BodyLinkResolution,
+): BodyLinkWarning[] {
+  const warnings: BodyLinkWarning[] = [];
+  for (const c of candidates) {
+    const warning = c.scheme === 'motir-ref' ? judgeMotirRef(c, known) : judgeMotir(c, known);
+    if (warning) warnings.push(warning);
+  }
+  return warnings;
+}
+
+function judgeMotirRef(c: BodyLinkCandidate, known: BodyLinkResolution): BodyLinkWarning {
+  const base = { field: c.field, link: c.link };
+  if (c.id !== null && known.thisPlanAddIds.has(c.id)) {
+    return {
+      ...base,
+      reason:
+        'it names a proposal on this plan without the `planItem:` prefix, so approve cannot ' +
+        'turn it into an item link',
+      correctedLink: `[${c.label}](motir-ref:planItem:${c.id})`,
+    };
+  }
+  const card = c.id === null ? undefined : known.becameCard.get(c.id);
+  if (card) {
+    return {
+      ...base,
+      reason:
+        'it names a proposal of an earlier, approved plan, which is now a card — a link to an ' +
+        'existing card names the card, not the proposal it came from',
+      correctedLink: `[${c.label}](motir:${card})`,
+    };
+  }
+  if (c.id !== null && known.cardIds.has(c.id)) {
+    return {
+      ...base,
+      reason: 'it names an existing card in the proposal scheme, which approve does not rewrite',
+      correctedLink: `[${c.label}](motir:${c.id})`,
+    };
+  }
+  return {
+    ...base,
+    reason:
+      c.id === null
+        ? 'its destination names no id, so approve cannot turn it into an item link'
+        : `no proposal on this plan, no earlier proposal and no card carries the id \`${c.id}\``,
+    correctedLink: null,
+    canonicalForms: [...CANONICAL_ITEM_LINK_FORMS],
+  };
+}
+
+function judgeMotir(c: BodyLinkCandidate, known: BodyLinkResolution): BodyLinkWarning | null {
+  if (c.id === null) return null;
+  if (known.thisPlanAddIds.has(c.id)) {
+    return {
+      field: c.field,
+      link: c.link,
+      reason:
+        'it names a proposal on this plan in the card scheme — no card carries that id, so it ' +
+        'opens nothing until approve',
+      correctedLink: `[${c.label}](motir-ref:planItem:${c.id})`,
+    };
+  }
+  const card = known.becameCard.get(c.id);
+  if (!card) return null;
+  return {
+    field: c.field,
+    link: c.link,
+    reason:
+      'it names a proposal of an earlier, approved plan rather than the card that proposal ' +
+      'became, so it opens nothing',
+    correctedLink: `[${c.label}](motir:${card})`,
+  };
+}
+
+/** One warning as a line a refusal or a tool result can print. */
+export function bodyLinkWarningLine(w: BodyLinkWarning): string {
+  const fix = w.correctedLink
+    ? `write \`${w.correctedLink}\``
+    : `write one of ${(w.canonicalForms ?? CANONICAL_ITEM_LINK_FORMS).map((f) => `\`${f}\``).join(' or ')}`;
+  return `\`${w.field}\` carries \`${w.link}\`: ${w.reason}; ${fix}`;
 }
 
 /**

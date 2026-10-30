@@ -8,6 +8,7 @@ import type {
   ProposalSectionsInput,
   ProposedFieldsInput,
   PlanWithItemsDto,
+  ProposalLinkWarningDto,
   ProposalInput,
   UpdateProposalInput,
   CorrectProposalInput,
@@ -1459,6 +1460,27 @@ function summarizeClose(plan: PlanWithItemsDto): string {
  * revision reaches the same status having just disproved that sentence, so the
  * arms split on WHICH act closed the gap rather than on the status alone.
  */
+/**
+ * The item links a write KEPT that would ship dead (MOTIR-10104), as the lines a
+ * caller reads under the summary — one per link, with the corrected link when the
+ * server computed one. Empty when the write left none, so a clean write reads as
+ * it always did.
+ */
+function linkWarningsText(warnings: readonly ProposalLinkWarningDto[] | undefined): string {
+  if (!warnings || warnings.length === 0) return '';
+  const lines = warnings.map(
+    (w) =>
+      `- ${w.proposal}, \`${w.field}\`: \`${w.link}\` — ${w.reason}. ` +
+      (w.correctedLink
+        ? `Write \`${w.correctedLink}\` instead.`
+        : `Write ${(w.canonicalForms ?? []).map((f) => `\`${f}\``).join(' or ')}.`),
+  );
+  return (
+    `\n\nWritten, with ${warnings.length} link(s) to fix — approve refuses the plan while a ` +
+    `malformed one remains:\n${lines.join('\n')}`
+  );
+}
+
 function summarizeAppend(plan: PlanWithItemsDto, planItemIds: string[], revision: boolean): string {
   const closing = (): string => {
     if (revision)
@@ -1767,8 +1789,12 @@ export async function runAddPlanItems(
   return toolOk(
     args.proposals.length === 0
       ? summarizeClose(plan)
-      : summarizeAppend(plan, planItemIds, args.revision === true),
-    derived(planAppendPayload, presentMcpPlanAppend(plan, planItemIds)),
+      : summarizeAppend(plan, planItemIds, args.revision === true) +
+          linkWarningsText(appended.warnings),
+    derived(
+      planAppendPayload,
+      presentMcpPlanAppend({ ...plan, warnings: appended.warnings }, planItemIds),
+    ),
   );
 }
 
@@ -1837,7 +1863,8 @@ export async function runUpdatePlanItem(
     : await plansService.deepenProposal(args.planId, args.planItemId, input, ctx);
 
   return toolOk(
-    summarizeDeepen(plan, args.planItemId, changed, args.revision === true),
+    summarizeDeepen(plan, args.planItemId, changed, args.revision === true) +
+      linkWarningsText(plan.warnings),
     derived(planPayload, presentMcpPlan(plan)),
   );
 }
@@ -1898,7 +1925,7 @@ export async function runUpdatePlanProposal(
   const plan = await plansService.correctProposal(args.planId, args.planItemId, resolved, ctx);
 
   return toolOk(
-    summarizeCorrection(plan, args.planItemId, changed),
+    summarizeCorrection(plan, args.planItemId, changed) + linkWarningsText(plan.warnings),
     derived(planPayload, presentMcpPlan(plan)),
   );
 }
