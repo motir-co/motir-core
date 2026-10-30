@@ -377,7 +377,9 @@ test('an apex domain is offered A and AAAA, and an un-pointed one fails with its
   await page.reload();
   r = row(page, APEX);
   const banner = r.locator('[data-failure="pointing_lost"]');
-  await expect(banner.getByText(copy.fail.pointing.replace('{host}', APEX))).toBeVisible();
+  await expect(
+    banner.getByText(copy.fail.pointing.replace('{host}', APEX), { exact: true }),
+  ).toBeVisible();
   await expect(banner.getByRole('cell', { name: A_RECORD })).toBeVisible();
   await expect(banner.getByRole('cell', { name: AAAA_RECORD })).toBeVisible();
   await expect(banner.getByRole('button', { name: copy.action.recheck })).toBeVisible();
