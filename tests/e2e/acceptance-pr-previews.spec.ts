@@ -60,7 +60,6 @@ import en from '@/messages/en.json';
 
 test.describe.configure({ mode: 'serial', timeout: 420_000 });
 
-const STORY = 'MOTIR-5766';
 const PASSWORD = 'Previews-e2e-Pass-7';
 const OWNER = 'preview-owner@motir.test';
 const CONTRACTOR = 'preview-contractor@motir.test';
@@ -317,7 +316,7 @@ test('a pull request’s preview, from building to running to shut down', async 
   beat,
   acceptanceStory,
 }) => {
-  acceptanceStory(STORY);
+  acceptanceStory('MOTIR-5766');
   const flyReplay: string[] = [];
   page.on('response', (response) => {
     if (response.headers()['fly-replay'] !== undefined) flyReplay.push(response.url());
