@@ -99,6 +99,22 @@ export const planTargetLockRepository = {
     });
   },
 
+  /** Every lease on a SET of work items, with the status each was parked FROM —
+   *  the plan review's read of a parked target's real status (bug MOTIR-10102),
+   *  which the card's own `planning` hides. */
+  async listParkPriorsByWorkItemIds(
+    workItemIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<
+    { workItemId: string; priorStatus: string; statusHeld: boolean; planId: string | null }[]
+  > {
+    if (workItemIds.length === 0) return [];
+    return tx.planTargetLock.findMany({
+      where: { workItemId: { in: [...workItemIds] } },
+      select: { workItemId: true, priorStatus: true, statusHeld: true, planId: true },
+    });
+  },
+
   async listPlanHeldByWorkItemIds(
     workItemIds: readonly string[],
     tx: Prisma.TransactionClient,

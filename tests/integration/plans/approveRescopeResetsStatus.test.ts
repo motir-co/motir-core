@@ -52,6 +52,17 @@ import { organizationIdOf } from '../../helpers/organizationOf';
 //     which is D7's second row and the whole point of the loop-risk rule.
 //   * the review diff used to emit a row only for a re-scope. It now emits one
 //     for any parked target, and names BOTH outcomes rather than predicting one.
+//
+// ── AND BUG MOTIR-10102 TURNED TWO OF THEM BACK (Yue, 2026-10-30) ───────────
+// A card that CLAIMS BUILT WORK (`implemented`, `in_review`, `approved`) is now
+// decided by the re-scope move (`lib/plans/rescopeStatus.ts`), parked or not:
+//   * a patch that changes only its type, size, priority, explanation, parent or
+//     edges gives it back the status it was parked FROM, not `todo`;
+//   * a re-scope sends it to `blocked` / `in_progress` / `todo` — `in_progress`
+//     while a run is working it — and the review names those three.
+// A card at `todo`, `blocked` or `in_progress` still rests at `todo` / `blocked`
+// exactly as D7 says. The conversation-plan half of the bug, and the anchor a
+// session parks, are pinned in `tests/planning/approveRescopeMovesStatus.test.ts`.
 
 beforeEach(async () => {
   await truncateAuthTables();
@@ -207,45 +218,64 @@ describe('approvePlan — every parked target comes back at Blocked or To Do', (
     },
   );
 
-  // ⚠️ INVERTED BY MOTIR-5646, and this is the case that shows WHY the trigger
-  // moved. Each of these patches used to leave the status alone, because
-  // `patchRescopes` asked *did the BODY change?* and none of them changes it.
-  // The question is now *was this card PARKED?* — and it was, by its own
-  // append — so every one of them rests the card. That is the point: a plan that
-  // only re-sizes or re-types a card still has to give it back, and under the
-  // old predicate it never did.
+  // ⚠️ INVERTED BY MOTIR-5646, AND BACK BY MOTIR-10102. MOTIR-5646 rested every
+  // parked target at `todo`, so a priority change sent a BUILT card back to be
+  // built again. A card that claims built work now gets back the status it was
+  // parked from when its patch does not change what it asks for.
   it.each<[string, PlanItemPatch]>([
     ['type-only', { type: 'design' }],
     ['estimateMinutes-only', { estimateMinutes: 90 }],
     ['storyPoints-only', { storyPoints: 5 }],
     ['priority-only', { priority: 'high' }],
-  ])('an `implemented` target rests at To Do after a %s patch too', async (_label, patch) => {
-    const fx = await makeWorkItemFixture();
-    const card = await seedCard(fx);
-    await setStatus(card, 'implemented');
+  ])(
+    'an `implemented` target comes back at Implemented after a %s patch',
+    async (_label, patch) => {
+      const fx = await makeWorkItemFixture();
+      const card = await seedCard(fx);
+      await setStatus(card, 'implemented');
 
-    await approveModify(fx, card, patch);
+      await approveModify(fx, card, patch);
 
-    expect((await row(card)).status).toBe('todo');
-  });
+      expect((await row(card)).status).toBe('implemented');
+      expect(await statusTrail(card)).toEqual([
+        { from: 'implemented', to: 'planning' },
+        { from: 'planning', to: 'implemented' },
+      ]);
+    },
+  );
 
   // D7's SECOND ROW: a target that gains a blocker rests at `blocked`, because
   // the resting status is read from the card's LIVE edges after materialize has
-  // wired them. This is the loop-risk rule doing its work — the one outcome the
-  // superseded comment at the planning edges was worried about.
-  it('a target that GAINS a blocker rests at Blocked, not To Do', async () => {
+  // wired them. Still true for a card that has not started; a BUILT card that
+  // only gains an edge keeps its status (MOTIR-10102), and one whose body changed
+  // as well lands at `blocked` through the re-scope move.
+  it('a `todo` target that GAINS a blocker rests at Blocked, not To Do', async () => {
     const fx = await makeWorkItemFixture();
     const card = await seedCard(fx);
     const blocker = await seedCard(fx, 'A blocker');
-    await setStatus(card, 'implemented');
 
     await approveModify(fx, card, { blockedByAdd: [blocker] });
 
     expect((await row(card)).status).toBe('blocked');
     expect(await statusTrail(card)).toEqual([
-      { from: 'implemented', to: 'planning' },
+      { from: 'todo', to: 'planning' },
       { from: 'planning', to: 'blocked' },
     ]);
+  });
+
+  it('an `implemented` target re-scoped WITH a new blocker lands at Blocked; with the edge alone it stays', async () => {
+    const fx = await makeWorkItemFixture();
+    const rescoped = await seedCard(fx, 'Re-scoped');
+    const edgeOnly = await seedCard(fx, 'Edge only');
+    const blocker = await seedCard(fx, 'A blocker');
+    await setStatus(rescoped, 'implemented');
+    await setStatus(edgeOnly, 'implemented');
+
+    await approveModify(fx, rescoped, { descriptionMd: 'New.', blockedByAdd: [blocker] });
+    await approveModify(fx, edgeOnly, { blockedByAdd: [blocker] });
+
+    expect((await row(rescoped)).status).toBe('blocked');
+    expect((await row(edgeOnly)).status).toBe('implemented');
   });
 
   it('a target whose blocker is DONE rests at To Do', async () => {
@@ -351,10 +381,9 @@ describe('the review diff shows the RETURN before approve', () => {
   //      between the read and the press. That is the review-shows-what-approve-does
   //      drift MOTIR-3868 and MOTIR-3070 were filed about, and naming both
   //      outcomes is what makes this row unable to drift at all.
-  it('emits "To Do or Blocked (returned when this plan is approved)" for a parked target', async () => {
+  it('emits "To Do or Blocked (returned when this plan is approved)" for a parked target that has not started', async () => {
     const fx = await makeWorkItemFixture();
     const card = await seedCard(fx);
-    await setStatus(card, 'implemented');
 
     const changes = await reviewChanges(fx, card, { descriptionMd: 'A different body.' });
 
@@ -367,6 +396,22 @@ describe('the review diff shows the RETURN before approve', () => {
     });
   });
 
+  // MOTIR-10102: a BUILT card whose body changes leaves its status for one of
+  // three — named, not predicted, for the same no-drift reason.
+  it('names the re-scope move for a parked `implemented` target whose body changed', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await seedCard(fx);
+    await setStatus(card, 'implemented');
+
+    const changes = await reviewChanges(fx, card, { descriptionMd: 'A different body.' });
+
+    expect(changes.find((c) => c.field === 'status')).toEqual({
+      field: 'status',
+      from: 'Planning',
+      to: 'To Do, Blocked, or In Progress (re-scoped while Implemented; decided when this plan is approved)',
+    });
+  });
+
   it.each<[string, PlanItemPatch]>([
     ['type', { type: 'design' }],
     ['estimateMinutes', { estimateMinutes: 90 }],
@@ -374,7 +419,7 @@ describe('the review diff shows the RETURN before approve', () => {
     ['priority', { priority: 'high' }],
     ['explanationMd', { explanationMd: 'A new why.' }],
   ])(
-    'emits the row for a %s-only patch too — the trigger is the PARK, not the patch',
+    'emits the row for a %s-only patch too — a parked BUILT card is given back at its own status',
     async (_label, patch) => {
       const fx = await makeWorkItemFixture();
       const card = await seedCard(fx);
@@ -383,7 +428,7 @@ describe('the review diff shows the RETURN before approve', () => {
       const changes = await reviewChanges(fx, card, patch);
 
       expect(changes.find((c) => c.field === 'status')).toMatchObject({
-        to: 'To Do or Blocked (returned when this plan is approved)',
+        to: 'Implemented (returned when this plan is approved)',
       });
     },
   );

@@ -278,10 +278,14 @@ describe('approve — an MCP plan with NO source job releases its own targets', 
         ),
       ).toMatchObject({ id: session.id });
 
-      // And approving it moves no status, because nothing was parked.
+      // ⚠️ INVERTED BY MOTIR-10102. This line used to pin that approving it moves
+      // no status, because nothing was parked — which was the bug: the plan
+      // rewrote the body of a card that claimed its old body was built, and the
+      // card went on claiming it. Nothing is parked still; the re-scope move
+      // (`lib/plans/rescopeStatus.ts`) takes it to `todo` anyway.
       await plansService.markPlanned(plan.id, fx.ctx);
       await plansService.approvePlan(plan.id, fx.ctx);
-      expect(await statusOf(card)).toBe('implemented');
+      expect(await statusOf(card)).toBe('todo');
     },
   );
 });

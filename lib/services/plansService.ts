@@ -143,6 +143,9 @@ import {
 import { patchRescopes } from '@/lib/plans/rescopeReset';
 import { committedPlanTargets } from '@/lib/plans/planTargets';
 import { restingStatusFor } from '@/lib/plans/restingStatus';
+import { modifyTargetStatusFor, priorStatusOf } from '@/lib/plans/rescopeStatus';
+import { dispatchRunCardRepository } from '@/lib/repositories/dispatchRunCardRepository';
+import { PLANNING_STATUS_KEY } from '@/lib/planChange/targetLock';
 import { planTargetLockRepository } from '@/lib/repositories/planTargetLockRepository';
 import { workItemTodoRepository } from '@/lib/repositories/workItemTodoRepository';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
@@ -3315,6 +3318,10 @@ async function materialize(
   const touchedWorkItemIds: string[] = createdAdds.map(({ created }) => created.id);
   /** The re-parents this pass performed (MOTIR-3859) — see {@link ReparentMove}. */
   const reparented: ReparentMove[] = [];
+  /** Every `modify` target and what its patch did — the re-scope move's input
+   *  (MOTIR-10102), recorded BEFORE the patch lands, since `patchRescopes`
+   *  compares the patch with the row it replaces. */
+  const modifyTargets = new Map<string, ModifyTargetFacts>();
 
   // modify + remove against existing targets (locked + re-read inside the tx).
   //
@@ -3332,7 +3339,7 @@ async function materialize(
   // `normalizeBodyRefs` are for; only the edge write is withheld.
   for (const item of items) {
     if (item.op === 'modify') {
-      const { reparent: moved } = await applyModify(
+      const { reparent: moved, rescoped } = await applyModify(
         item,
         ctx,
         resolveRef,
@@ -3344,6 +3351,10 @@ async function materialize(
         plan.id,
       );
       if (moved) reparented.push(moved);
+      modifyTargets.set(resolveRef(item.workItemId!), {
+        rescopes: rescoped,
+        markOnly: isMarkOnlyPatch((item.patch ?? {}) as object),
+      });
       // `applyModify` has already thrown `PlanItemTargetMissingError` on an unset
       // target, so this is non-null by the time we get here — asserted rather
       // than re-guarded, which would add a branch nothing can take.
@@ -3410,7 +3421,18 @@ async function materialize(
   // resting status is an answer ONLY the approve knows — a post-commit failure
   // would leave the sweep to restore `in_progress` on a card whose body just
   // changed, which is the state MOTIR-5359 was filed about.
-  const restingMoves = await restPlanTargets(plan, ctx, tx);
+  //
+  // ⚠️ AND A `modify` TARGET THAT CLAIMS BUILT WORK IS DECIDED BY THE RE-SCOPE
+  // MOVE, parked or not (bug MOTIR-10102): the plan-held ones here, and every
+  // other one — a conversation plan parks nothing, and its session holds only its
+  // anchors — in `settleUnparkedModifyTargets` straight after.
+  for (const parentRef of adds.map((a) => a.parentRef)) {
+    if (!parentRef || isTempRef(parentRef) || isFolderRef(parentRef)) continue;
+    const facts = modifyTargets.get(parentRef);
+    if (facts) facts.gainsChildren = true;
+  }
+  const restingMoves = await restPlanTargets(plan, ctx, tx, modifyTargets);
+  restingMoves.push(...(await settleUnparkedModifyTargets(plan, ctx, tx, modifyTargets)));
 
   return { touchedWorkItemIds, reparented, restingMoves };
 }
@@ -3434,6 +3456,7 @@ async function restPlanTargets(
   plan: Plan,
   ctx: ServiceContext,
   tx: Prisma.TransactionClient,
+  modifyTargets: ReadonlyMap<string, ModifyTargetFacts>,
 ): Promise<RestingMove[]> {
   const locks = await planTargetLockRepository.listByPlanId(plan.id, tx);
   if (locks.length === 0) return [];
@@ -3466,6 +3489,24 @@ async function restPlanTargets(
       ctx.workspaceId,
       tx,
     );
+
+    // A `modify` target that claims BUILT work is decided by the re-scope move
+    // instead (bug MOTIR-10102): it leaves for `blocked` / `in_progress` / `todo`
+    // when its body changed, and gets back the status it was parked from when it
+    // did not. Written AUTHORITATIVELY, like `releaseOne`'s restore: the approved
+    // plan is the decision, and `planning → implemented` is not an edge the
+    // default graph declares.
+    const facts = modifyTargets.get(item.id);
+    if (facts) {
+      facts.settled = true;
+      const toKey = await decideModifyTargetStatus(item, lock, facts, hasOpenBlocker, statuses, tx);
+      if (toKey !== null) {
+        await planTargetLockRepository.deleteById(lock.id, tx);
+        const move = await writePlanDecidedStatus(item, toKey, statuses, ctx, tx);
+        if (move) moves.push(move);
+        continue;
+      }
+    }
 
     const decision = restingStatusFor({
       archived: item.archivedAt !== null,
@@ -3519,6 +3560,139 @@ async function restPlanTargets(
       toStatusKey: to.key,
       revisionId,
     });
+  }
+  return moves;
+}
+
+/** What an approved `modify` did to its target, as the re-scope move reads it
+ *  (bug MOTIR-10102). `settled` is set once a pass has decided the target, so the
+ *  pass after it does not decide it twice. */
+interface ModifyTargetFacts {
+  rescopes: boolean;
+  markOnly: boolean;
+  gainsChildren?: boolean;
+  settled?: boolean;
+}
+
+/**
+ * The status the re-scope move gives one `modify` target, or `null` when the
+ * move is not its business (`modifyTargetStatusFor` answers `not_ours`). Reads
+ * the target's prior status through its lock, its category from the project's
+ * workflow, and a live run only when the answer can depend on one.
+ */
+async function decideModifyTargetStatus(
+  item: { id: string; status: string; archivedAt: Date | null; obsolescence: string | null },
+  lock: { priorStatus: string; statusHeld: boolean } | null,
+  facts: ModifyTargetFacts,
+  hasOpenBlocker: boolean,
+  statuses: ReadonlyArray<{ key: string; category: StatusCategoryDto }>,
+  tx: Prisma.TransactionClient,
+): Promise<string | null> {
+  // An archived row is claimed by nothing, and a marked card stays finished —
+  // the two cases `restAdoptedTarget` leaves where they are, for the same reasons.
+  if (item.archivedAt !== null || item.obsolescence != null) return null;
+  const priorStatus = priorStatusOf(item.status, lock);
+  const priorCategory = statuses.find((s) => s.key === priorStatus)?.category ?? null;
+  const decision = modifyTargetStatusFor({
+    priorStatus,
+    priorCategory,
+    rescopes: facts.rescopes,
+    markOnly: facts.markOnly,
+    gainsChildren: facts.gainsChildren === true,
+    hasOpenBlocker,
+    hasLiveRun:
+      facts.rescopes && !hasOpenBlocker
+        ? await dispatchRunCardRepository.hasWorkingLegForWorkItem(item.id, tx)
+        : false,
+  });
+  return decision.kind === 'not_ours' ? null : decision.toKey;
+}
+
+/**
+ * Write a status an approved plan decided, past the project's transition graph,
+ * with the revision that carries it — the write `restPlanTargets` makes, minus
+ * its legality read. Answers the move for the post-commit `transitioned` event,
+ * or `null` when there is nothing to write: the status is the card's already, or
+ * the workflow has no such status, which is never written.
+ */
+async function writePlanDecidedStatus(
+  item: { id: string; status: string },
+  toKey: string,
+  statuses: ReadonlyArray<{ key: string }>,
+  ctx: ServiceContext,
+  tx: Prisma.TransactionClient,
+): Promise<RestingMove | null> {
+  if (item.status === toKey || !statuses.some((s) => s.key === toKey)) return null;
+  await workItemRepository.update(item.id, { status: toKey }, tx);
+  const revisionId = await workItemRevisionsService.recordRevision(
+    {
+      workItemId: item.id,
+      changedById: ctx.userId,
+      changeKind: 'updated',
+      diff: { status: { from: item.status, to: toKey } },
+    },
+    tx,
+  );
+  return { workItemId: item.id, fromStatusKey: item.status, toStatusKey: toKey, revisionId };
+}
+
+/**
+ * THE RE-SCOPE MOVE FOR EVERY `modify` TARGET THIS PLAN DID NOT PARK (bug
+ * MOTIR-10102) — materialize's pass after `restPlanTargets`.
+ *
+ * ⚠️ THIS IS THE REPORTED BUG. A plan a planning CONVERSATION produces parks
+ * nothing (`addProposals`, `sessionHoldingThisPlan`), and its session holds only
+ * its anchors, so a `modify` of any other card was never parked, never rested and
+ * never moved: an `implemented` card whose body the plan rewrote went on claiming
+ * the old body was built. The same holds for a card no plan could park (a
+ * workflow with no edge into `planning`).
+ *
+ * TWO SHAPES, by whether something HOLDS the card at `planning` right now:
+ *
+ * - held (a session's lock, or another plan's, that moved it there) — the status
+ *   belongs to that hold, so the decision is written onto the lock as the status
+ *   to give back. The session's release after this approve, or the hold's own
+ *   decision later, restores it there — and the review read it from the lock too;
+ * - not held — the decision is written onto the card, authoritatively, as
+ *   `restPlanTargets` writes its own.
+ *
+ * Locks each card in work-item-id order, the one lock order every target path takes.
+ */
+async function settleUnparkedModifyTargets(
+  plan: Plan,
+  ctx: ServiceContext,
+  tx: Prisma.TransactionClient,
+  modifyTargets: ReadonlyMap<string, ModifyTargetFacts>,
+): Promise<RestingMove[]> {
+  const pending = [...modifyTargets.entries()]
+    .filter(([, facts]) => !facts.settled)
+    .map(([id]) => id)
+    .sort();
+  if (pending.length === 0) return [];
+  const statuses = await workflowsRepository.findStatuses(plan.projectId, ctx.workspaceId, tx);
+  const moves: RestingMove[] = [];
+  for (const workItemId of pending) {
+    const facts = modifyTargets.get(workItemId)!;
+    facts.settled = true;
+    await workItemRepository.lockById(workItemId, tx);
+    const item = await workItemRepository.findById(workItemId, tx);
+    if (!item) continue;
+    const lock = await planTargetLockRepository.findByWorkItemId(workItemId, tx);
+    const hasOpenBlocker = await planTargetLockService.hasOpenBlockerWithin(
+      item.id,
+      ctx.workspaceId,
+      tx,
+    );
+    const toKey = await decideModifyTargetStatus(item, lock, facts, hasOpenBlocker, statuses, tx);
+    if (toKey === null) continue;
+    if (lock && item.status === PLANNING_STATUS_KEY && lock.statusHeld) {
+      if (lock.priorStatus !== toKey) {
+        await planTargetLockRepository.update(lock.id, { priorStatus: toKey }, tx);
+      }
+      continue;
+    }
+    const move = await writePlanDecidedStatus(item, toKey, statuses, ctx, tx);
+    if (move) moves.push(move);
   }
   return moves;
 }
@@ -3640,7 +3814,7 @@ async function applyModify(
   // already has its row and the map is complete by the time we are called.
   planItemToWorkItem: ReadonlyMap<string, string>,
   planId: string,
-): Promise<{ reparent: ReparentMove | null }> {
+): Promise<{ reparent: ReparentMove | null; rescoped: boolean }> {
   if (!item.workItemId) throw new PlanItemTargetMissingError('(unset)');
   const locked = await workItemRepository.lockById(item.workItemId, tx);
   if (!locked) throw new PlanItemTargetMissingError(item.workItemId);
@@ -4003,20 +4177,14 @@ async function applyModify(
     }
   }
 
-  // ⚠️ THE RE-SCOPE RESET IS GONE FROM HERE (MOTIR-5646 supersedes MOTIR-5359).
-  // `resolveRescopeReset` used to run at this point and move a re-scoped
-  // in-progress-category card to the project's INITIAL status.
+  // ⚠️ THE STATUS IS NOT WRITTEN HERE. A re-scope's status move runs after
+  // every op has landed, as materialize's last pass: `restPlanTargets` for a
+  // target this plan parked and `settleUnparkedModifyTargets` for every other
+  // one (bug MOTIR-10102), both through `modifyTargetStatusFor`. It cannot run
+  // here, because it reads the card's open blockers, and the edges this very
+  // `modify` wires are written further down.
   //
-  // It is replaced rather than kept beside its successor, because the two would
-  // fight over the same column with different answers. Its question was *did
-  // this patch change the card's title, body or repository?* — narrower than the
-  // one the park poses (*was this card parked?*), and blind to the card's
-  // blockers, so it sent a card with an open prerequisite to `todo`. Every
-  // `modify` target is now parked by its own append, and `restPlanTargets`
-  // rests ALL of them from their live edges as materialize's last pass
-  // (AMENDMENT 16 D6, and D11's disposition for MOTIR-5359).
-  //
-  // ⚠️ ONE THING THAT RESET DID IS KEPT, and it is not about the status: a card
+  // ⚠️ THE BRANCH IS CLEARED HERE, with the patch, and that is not about the status: a card
   // whose body just changed must not go on unblocking its dependents on the OLD
   // body's branch. Readiness treats a blocker carrying a `sessionBranch` as
   // satisfied (`isOpenBlocker`), so the branch is cleared with the re-scope
@@ -4030,7 +4198,8 @@ async function applyModify(
   // the branch, like the status (never parked, so `restPlanTargets` never rests
   // it), is left exactly as it was. Asked through the SAME predicate the gate
   // admitted it by, so the two cannot disagree.
-  if (!isMarkOnlyPatch(patch) && patchRescopes(patch, current)) {
+  const rescoped = !isMarkOnlyPatch(patch) && patchRescopes(patch, current);
+  if (rescoped) {
     update.sessionBranch = null;
   }
 
@@ -4045,7 +4214,7 @@ async function applyModify(
   // mark done work nobody has described to them. Usually the append's park already
   // withdrew it; this catches a target the append could not park (no edge into
   // Planning, or one already sitting there). The next run to reach the card re-asks.
-  if (!isMarkOnlyPatch(patch) && patchRescopes(patch, current)) {
+  if (rescoped) {
     await manualWorkGateService.withdrawOnReplan(item.workItemId, tx);
   }
 
@@ -4070,16 +4239,18 @@ async function applyModify(
   // already carries and readiness already computes. The mover stays explicit:
   // whoever finds the missing prerequisite calls `transition_status` themselves.
   //
-  // (2) THE RE-SCOPE RESET IS THAT EXPLICIT MOVER (bug MOTIR-5359). A patch that
-  // changes WHAT the card asks for — its title, its description, the repository it
-  // ships in (`patchRescopes`) — on a card in the `in_progress` CATEGORY moves it
-  // back to the project's initial status, above. Rule (1)'s objection does not
-  // reach it: the fact being walked back is *"work matching this body is under way
-  // or built"*, and approving a new body is what made that fact false. A person
-  // approved the re-scope, and the review diff showed them the reset before they
-  // pressed the button (`planReviewService.buildChanges`). Left alone, an
-  // `implemented` card goes on claiming the OLD body is on the remote, and
-  // readiness, the board, the parent rollup and dispatch all read that claim.
+  // (2) THE RE-SCOPE MOVE IS THAT EXPLICIT MOVER (bug MOTIR-10102, restoring
+  // what MOTIR-5359 meant). A patch that changes WHAT the card asks for — its
+  // title, its description, the repository it ships in (`patchRescopes`) — on a
+  // card that claims its work is built (`implemented`, `in_review`, `approved`)
+  // moves it to `blocked`, `in_progress` or `todo` once materialize has wired
+  // every edge (`lib/plans/rescopeStatus.ts`). Rule (1)'s objection does not
+  // reach it: the fact being walked back is *"work matching this body is built"*,
+  // and approving a new body is what made that fact false. A person approved the
+  // re-scope, and the review diff showed them the move before they pressed the
+  // button (`planReviewService.buildChanges`, through the same predicate). Left
+  // alone, an `implemented` card goes on claiming the OLD body is on the remote,
+  // and readiness, the board, the parent rollup and dispatch all read that claim.
   const linkAdded: Array<{ toId: string; kind: string }> = [];
   const edgeReasons = readEdgeReasons(item.edgeReasons);
   for (const ref of patch.blockedByAdd ?? []) {
@@ -4255,8 +4426,9 @@ async function applyModify(
   // The STATUS is no longer one of them: `restPlanTargets` writes the resting
   // status for every parked target as materialize's last pass and returns its
   // own moves, so this function has no status change left to report
-  // (MOTIR-5646).
-  return { reparent };
+  // (MOTIR-5646). It reports whether the patch RE-SCOPED the card, which the
+  // re-scope move decides from (MOTIR-10102).
+  return { reparent, rescoped };
 }
 
 /**
