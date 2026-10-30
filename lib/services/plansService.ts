@@ -3612,17 +3612,21 @@ async function decideModifyTargetStatus(
  * Write a status an approved plan decided, past the project's transition graph,
  * with the revision that carries it — the write `restPlanTargets` makes, minus
  * its legality read. Answers the move for the post-commit `transitioned` event,
- * or `null` when there is nothing to write: the status is the card's already, or
- * the workflow has no such status, which is never written.
+ * or `null` when there is nothing to write: the status is the card's already, the
+ * workflow has no such status, or it is a done-category one (never written here).
  */
 async function writePlanDecidedStatus(
   item: { id: string; status: string },
   toKey: string,
-  statuses: ReadonlyArray<{ key: string }>,
+  statuses: ReadonlyArray<{ key: string; category: StatusCategoryDto }>,
   ctx: ServiceContext,
   tx: Prisma.TransactionClient,
 ): Promise<RestingMove | null> {
-  if (item.status === toKey || !statuses.some((s) => s.key === toKey)) return null;
+  // Never into the done category: the decision only names a card's own built
+  // status or `todo` / `blocked` / `in_progress`, and asserting it here is what
+  // lets this write skip `applyStatusTransition`'s `completedAt` stamp.
+  const to = statuses.find((s) => s.key === toKey);
+  if (item.status === toKey || !to || to.category === 'done') return null;
   await workItemRepository.update(item.id, { status: toKey }, tx);
   const revisionId = await workItemRevisionsService.recordRevision(
     {
