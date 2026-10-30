@@ -577,10 +577,13 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         // MOTIR-7861 — no repository set, so `repo_not_in_project`: a named,
         // non-error outcome answered before any host call.
         read_file: { projectKey: 'PROD', repo: 'motir-core', path: 'README.md' },
+        // MOTIR-10069 — no repository set, so `repo_not_in_project` before any host call.
+        list_changed_files: { projectKey: 'PROD', repo: 'motir-core', head: 'feat/x' },
         // MOTIR-7862 — no repository set, so `no_repositories`, decided in core with
         // no motir-ai call.
         code_explore: { projectKey: 'PROD', query: 'readFile' },
         code_search: { projectKey: 'PROD', query: 'readFile' },
+        code_grep: { projectKey: 'PROD', pattern: 'readFile' },
         skeleton: { projectKey: 'PROD' },
         // MOTIR-5409 — `list_folders` is a browse read that executes on the caller's own
         // project; the three writes are `work_item:edit`-gated, and a folder id that

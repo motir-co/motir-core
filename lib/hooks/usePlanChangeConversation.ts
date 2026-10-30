@@ -63,7 +63,6 @@ import {
 import { FRAME_DISPOSITIONS, isKnownFrameKind } from '@/lib/planning/planChangeFrames';
 import { unavailableCodeOf, whileStartingUp } from '@/lib/planning/submitStartingUp';
 import { reopenedPlanJobId } from '@/lib/planning/planRunPhase';
-import { isRequirementNotSaved } from '@/lib/planning/planOfferRow';
 import {
   streamAskJob,
   streamAugmentJob,
@@ -3560,20 +3559,6 @@ export function usePlanChangeConversation({
         if (err instanceof DOMException && err.name === 'AbortError') return;
         if (!mountedRef.current) return;
         const code = offerRefusalCodeOf(err);
-        if (isRequirementNotSaved(code)) {
-          // Not a refusal (MOTIR-9438): nothing started and the offer is pending again.
-          // Re-read the thread so the served `requirementSaveFailed` draws the line and
-          // Confirm stays.
-          try {
-            const read = await getPlanChangeSession(session.id);
-            if (mountedRef.current) {
-              setState((s) => (s.session?.id === read.id ? { ...s, session: read } : s));
-            }
-          } catch {
-            // The line waits for the next read; Confirm is still drawn.
-          }
-          return;
-        }
         setState((s) => ({ ...s, offerRefusal: { turnId, code } }));
       } finally {
         offerAnsweringRef.current = false;

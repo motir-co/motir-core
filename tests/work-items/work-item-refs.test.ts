@@ -301,6 +301,25 @@ describe('intra-plan item-link tokens (MOTIR-1418)', () => {
     expect(rewriteIntraPlanRefs(out, resolve).body).toBe(out);
   });
 
+  // The token BOTH planners hand a session beside every sibling proposal
+  // (MOTIR-10096) is `[<title>](motir-ref:planItem:<id>)`, with the title's
+  // brackets turned into parentheses. A copy of it must rewrite exactly.
+  it('rewrites the token a planner hands for a proposal, title label and all (MOTIR-10096)', () => {
+    const handed = '[Gate (beta) pairs (service layer): `assertLegal`](motir-ref:planItem:piA)';
+    const { body, unresolved } = rewriteIntraPlanRefs(`Hands off to ${handed}.`, resolve);
+    expect(body).toBe(
+      'Hands off to [Gate (beta) pairs (service layer): `assertLegal`](motir:wiA).',
+    );
+    expect(unresolved).toEqual([]);
+    expect(parseIntraPlanRefIds(handed)).toEqual(['piA']);
+  });
+
+  it('a label still carrying a bracket is NOT a token — why the planners hand none', () => {
+    const raw = '[Gate [beta] pairs](motir-ref:planItem:piA)';
+    expect(rewriteIntraPlanRefs(raw, resolve).body).toBe(raw);
+    expect(parseIntraPlanRefIds(raw)).toEqual([]);
+  });
+
   it('parseIntraPlanRefIds returns distinct planItem ids in first-seen order', () => {
     expect(
       parseIntraPlanRefIds(

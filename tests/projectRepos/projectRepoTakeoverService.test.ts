@@ -7,6 +7,7 @@ import { projectRepoTakeoverService } from '@/lib/services/projectRepoTakeoverSe
 import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { ciMinutesMeterService } from '@/lib/services/ciMinutesMeterService';
 import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
+import { githubInstallationRepository } from '@/lib/repositories/githubInstallationRepository';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import {
   GithubIdentityRequiredError,
@@ -105,6 +106,16 @@ function installGitHub(): void {
       calls.push({ url: u, method, body });
 
       if (u.includes('/access_tokens')) {
+        // GitHub mints only for an installation id IT issued. A token asked for
+        // under any other id — Motir's own `GithubInstallation.id` cuid above all,
+        // the MOTIR-10062 defect — is the 404 production answers, never a token.
+        const id = decodeURIComponent(
+          /\/app\/installations\/([^/]+)\/access_tokens/.exec(u)?.[1] ?? '',
+        );
+        const known = await adminDb.githubInstallation.findUnique({
+          where: { installationId: id },
+        });
+        if (!known) return json(404, { message: 'Not Found' });
         return json(200, {
           token: 'ghs_provisioning',
           expires_at: new Date(Date.now() + 3_600_000).toISOString(),
@@ -509,6 +520,49 @@ describe('the Actions re-enable', () => {
     await projectRepoTakeoverService.requestTakeover(rowId, NEW_OWNER, fx.ctx);
 
     expect(hostCallSequence()).toEqual(['actions', 'transfer']);
+  });
+
+  it('mints its token for GitHub\u2019s NUMERIC installation id, never Motir\u2019s cuid (MOTIR-10062)', async () => {
+    // The mirror row's `installationId` is the foreign key to
+    // `GithubInstallation.id` — a cuid GitHub has never heard of. The token must be
+    // minted for the installation's own `installationId`, the id GitHub issued.
+    const fx = await makeWorkItemFixture();
+    await connectIdentity(fx);
+    const { rowId } = await motirOwnedRow(fx, 'acme-web');
+    const cuid = (
+      await adminDb.githubInstallation.findUniqueOrThrow({
+        where: { installationId: INSTALLATION_ID },
+      })
+    ).id;
+
+    await projectRepoTakeoverService.requestTakeover(rowId, NEW_OWNER, fx.ctx);
+
+    const minted = calls.filter((c) => c.url.includes('/access_tokens')).map((c) => c.url);
+    expect(minted).toContain(
+      `https://api.github.com/app/installations/${INSTALLATION_ID}/access_tokens`,
+    );
+    expect(minted.some((u) => u.includes(cuid))).toBe(false);
+    expect(hostCallSequence()).toEqual(['actions', 'transfer']);
+  });
+
+  it('fails the takeover, calling nothing, when the installation is no longer on record', async () => {
+    // Nothing on GitHub can be addressed without the installation GitHub issued,
+    // so the row records `failed` with its reason and is never transferred.
+    const fx = await makeWorkItemFixture();
+    await connectIdentity(fx);
+    const { rowId } = await motirOwnedRow(fx, 'acme-web');
+    vi.spyOn(githubInstallationRepository, 'findHostInstallationIdsByIds').mockResolvedValue(
+      new Map(),
+    );
+
+    await expect(
+      projectRepoTakeoverService.requestTakeover(rowId, NEW_OWNER, fx.ctx),
+    ).rejects.toBeInstanceOf(RepoTransferRefusedError);
+
+    expect(hostCallSequence()).toEqual([]);
+    const row = await readRow(rowId, fx);
+    expect(row.takeover).toMatchObject({ state: 'failed' });
+    expect(row.takeover?.failureReason).toMatch(/installation/);
   });
 
   it('re-enables UNCONDITIONALLY — even for a repo Motir had PAUSED at exhaustion', async () => {

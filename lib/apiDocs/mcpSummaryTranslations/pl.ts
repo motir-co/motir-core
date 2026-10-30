@@ -106,6 +106,12 @@ export const pl: McpSummaryTranslations = {
     source:
       "Symbols matching a name in the hosted code graph — the hosted planner's own answer, paged.",
   },
+  code_grep: {
+    summary:
+      'Wiersze pasujące do tekstu lub wzorca w zindeksowanej treści plików — literały tekstowe, komentarze i pliki niebędące kodem, których wyszukiwanie symboli nie widzi — własna odpowiedź hostowanego planisty, stronicowana.',
+    source:
+      "Lines matching a text or pattern in the indexed file contents — string literals, comments and non-code files the symbol search cannot see — the hosted planner's own answer, paged.",
+  },
   complete_session: {
     summary:
       'Zamknij gałąź sesji po scaleniu jej PR: każdy zapisany na niej element przechodzi do Gotowe.',
@@ -250,9 +256,9 @@ export const pl: McpSummaryTranslations = {
   },
   get_work_item: {
     summary:
-      'Jeden element w całości — opis, status, element nadrzędny lub folder, elementy podrzędne, krawędzie zależności, werdykt gotowości, powiązane z nim błędy i ostatnie odrzucenie odesłane w jego sprawie.',
+      'Jeden element w całości — opis, status, element nadrzędny lub folder, elementy podrzędne, krawędzie zależności, werdykt gotowości, powiązane z nim błędy, ostatnie odrzucenie odesłane w jego sprawie i miejsce, w którym leży jego jeszcze niescalony kod.',
     source:
-      'One item in full — description, status, parent or folder, children, dependency edges, a readiness verdict, the errors linked to it, and the latest refusal sent back on it.',
+      'One item in full — description, status, parent or folder, children, dependency edges, a readiness verdict, the errors linked to it, the latest refusal sent back on it, and where its unmerged code is.',
   },
   get_work_item_activity: {
     summary:
@@ -370,6 +376,12 @@ export const pl: McpSummaryTranslations = {
       'Tekst jednego pliku lub bezpośrednie wpisy katalogu z repozytorium ze zbioru Projektu, w danym ref — z limitem i zakresem linii jak odczyt hostowanego planisty, każda nieobecność jako nazwany wynik.',
     source:
       "One file's text, or a directory's immediate entries, from a repository in the project's set, at a ref — capped and line-ranged like the hosted planner's read, every absence a named outcome.",
+  },
+  list_changed_files: {
+    summary:
+      'Ścieżki, które gałąź zmieniła w repozytorium ze zbioru Projektu, względem jego gałęzi domyślnej lub wskazanej bazy — z limitem jak lista hostowanego planisty, każda nieobecność jako nazwany wynik.',
+    source:
+      "The paths a branch changed in a repository in the project's set, against its default branch or a named base — bounded like the hosted planner's listing, every absence a named outcome.",
   },
   record_plan_revision_reason: {
     summary:

@@ -3,7 +3,8 @@ import baseConfig from './vitest.config';
 
 // STORY MOTIR-7858's `motir-core` COVERAGE FLOOR (MOTIR-7865) — the three MCP
 // code-read tools an agent planning over the MCP reads code through: `read_file`
-// (MOTIR-7861) and `code_explore` / `code_search` (MOTIR-7862).
+// (MOTIR-7861) and `code_explore` / `code_search` (MOTIR-7862), and `code_grep`
+// (MOTIR-10066).
 //
 // Same shape and reasoning as `vitest.coverage.in-flight-code.config.ts`:
 // PER-FILE, measured on this branch before being pinned, scoped to the specs that
@@ -33,6 +34,7 @@ export default defineConfig({
       'tests/mcp/code-read-door.test.ts',
       'tests/mcp/code-read-tool-tables.test.ts',
       'tests/mcp/read-file.test.ts',
+      'tests/mcp/list-changed-files.test.ts',
       'tests/mcp/code-graph-read.test.ts',
     ],
     coverage: {
@@ -41,6 +43,7 @@ export default defineConfig({
       all: false,
       include: [
         'lib/mcp/tools/readFile.ts',
+        'lib/mcp/tools/listChangedFiles.ts',
         'lib/mcp/tools/codeGraphRead.ts',
         'lib/services/codeGraphReadService.ts',
         'lib/services/repoFileReadService.ts',
@@ -60,6 +63,13 @@ export default defineConfig({
       thresholds: {
         perFile: true,
         'lib/mcp/tools/readFile.ts': { statements: 90, functions: 90, branches: 90, lines: 90 },
+        // MOTIR-10069 — the MCP's `list_changed_files`, beside `read_file`.
+        'lib/mcp/tools/listChangedFiles.ts': {
+          statements: 90,
+          functions: 90,
+          branches: 90,
+          lines: 90,
+        },
         'lib/mcp/tools/codeGraphRead.ts': {
           statements: 90,
           functions: 90,

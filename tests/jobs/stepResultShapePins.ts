@@ -614,6 +614,15 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     // sweep gives a plan whose revision lease lapsed back to `planned`.
     shape: '{ planIds: Array<string>; restored: number }',
   },
+  // MOTIR-10091 — the requirement page of a confirmed plan offer, written after the start.
+  'requirement-page-write': {
+    file: 'lib/jobs/definitions/planOfferRequirementPage.ts',
+    shape: 'null | { pageId: string; title: string }',
+  },
+  'requirement-page-record': {
+    file: 'lib/jobs/definitions/planOfferRequirementPage.ts',
+    shape: 'void',
+  },
   'release-expired-planning-locks': {
     file: 'lib/jobs/definitions/planTargetLockSweep.ts',
     // `plan_awaiting_review` added by MOTIR-5647: a lock held by a plan that has

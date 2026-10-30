@@ -8700,7 +8700,7 @@
       "clearEnough": "Duidelijk genoeg om zo te plannen.",
       "nothingSettled": "Er is niets vastgelegd, dus het verzoek wordt gepland zoals het er staat.",
       "requirementSaved": "Opgeslagen als <link>{title}</link> in Vereistendocumenten.",
-      "requirementNotSaved": "<lead>De vereiste kon niet worden opgeslagen.</lead> Er is niets gestart. Bevestigen is nog beschikbaar – probeer het opnieuw."
+      "requirementPageNotSaved": "<lead>De vereiste kon niet als pagina worden opgeslagen.</lead> De planning gebruikt hem toch."
     },
     "logBugOffer": {
       "label": "Aanbod om een bug vast te leggen",

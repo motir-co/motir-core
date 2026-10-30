@@ -49,10 +49,12 @@ export class RepoTransferError extends Error {
 }
 
 export interface TransferRepoInput {
-  /** GitHub's numeric installation id the repository CURRENTLY lives in — the
-   *  mirror row's `installationId`, which for a Motir-created repo is the
-   *  PROVISIONING installation. Read before the transfer, because afterwards this
-   *  installation no longer reaches the repository at all. */
+  /** GitHub's numeric installation id the repository CURRENTLY lives in — for a
+   *  Motir-created repo, the PROVISIONING installation. It is the installation's
+   *  own `GithubInstallation.installationId`, NOT the mirror row's
+   *  `installationId` (the foreign key to `GithubInstallation.id`, a cuid GitHub
+   *  never issued — MOTIR-10062). Read before the transfer, because afterwards
+   *  this installation no longer reaches the repository at all. */
   installationId: string;
   /** The owner the repository is being moved FROM (Motir's provisioning org). */
   owner: string;

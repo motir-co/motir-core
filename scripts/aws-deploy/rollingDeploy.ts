@@ -1,6 +1,6 @@
 /**
- * Steps 3 to 5 of the core deploy (MOTIR-9927): find the cluster's services that
- * run the core image, roll each onto a revision with only the image changed,
+ * Steps 2, 4 and 5 of the core deploy (MOTIR-9927): find the cluster's services
+ * that run the core image, roll each onto a revision with only the image changed,
  * wait for every PRIMARY deployment to complete, and on a failure or a timeout
  * put every rolled service back on the revision it ran before.
  *
@@ -8,9 +8,10 @@
  * breaker on (motir-infra's `FargateService`), so the old tasks serve until the
  * new ones pass the load balancer's health check, and keep serving on a rollback.
  */
+import type { TaskDefinition } from '@aws-sdk/client-ecs';
 import type { DeployAws } from './ports';
 import { POLL_INTERVAL_MS, type DeployLog } from './migrateRun';
-import { cloneWithImage, containersIn } from './taskDefinitions';
+import { breachContainers, cloneWithImage, containersIn } from './taskDefinitions';
 
 /** A core service and the revision it ran before this deploy. */
 export interface CoreService {
@@ -30,6 +31,10 @@ export interface RolledService {
 /**
  * The cluster's services with a container in `repository`. The cluster is
  * shared with services that run other images, which this leaves alone.
+ *
+ * Throws when a core service runs a breach revision (MOTIR-10093): the roll
+ * clones the revision each service runs, so it would make the breach the
+ * service's next release, run in a loop instead of the real service.
  */
 export async function findCoreServices(
   aws: DeployAws,
@@ -45,6 +50,7 @@ export async function findCoreServices(
     const definition = await aws.describeTaskDefinition(service.taskDefinition);
     const containers = containersIn(definition, repository);
     if (containers.length === 0) continue;
+    refuseBreachRevision(service.serviceName, definition);
     found.push({
       name: service.serviceName,
       previousTaskDefinition: service.taskDefinition,
@@ -52,6 +58,18 @@ export async function findCoreServices(
     });
   }
   return found;
+}
+
+/** Throws when `definition`, which `service` runs, sets the breach guard. */
+function refuseBreachRevision(service: string, definition: TaskDefinition): void {
+  const containers = breachContainers(definition);
+  if (containers.length === 0) return;
+  throw new Error(
+    `the service ${service} runs ${String(definition.family)}:${String(definition.revision)}, ` +
+      `whose ${containers.join(', ')} container sets MOTIR_BREACH_ENABLED: a breach run holds ` +
+      'it. Nothing was migrated, registered or rolled; point the service back at its own ' +
+      'revision once the breach ends, then deploy again',
+  );
 }
 
 /** Register `service`'s next revision with `image` on its core containers. */

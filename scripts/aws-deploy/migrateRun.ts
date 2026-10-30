@@ -1,5 +1,5 @@
 /**
- * Step 2 of the core deploy (MOTIR-9927): register the migrate task with the
+ * Step 3 of the core deploy (MOTIR-9927): register the migrate task with the
  * digest's image, run it once in the deploy target, wait for it to stop and read
  * its container's exit code. Only exit 0 passes. On any failure the last lines
  * of its log are printed, so CI shows why without anyone opening CloudWatch.

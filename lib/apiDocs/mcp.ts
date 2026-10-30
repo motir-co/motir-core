@@ -526,7 +526,7 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // the reason the last attempt was sent back (with its verdict) — the refusal the
     // next run is told to address, so the line names it.
     summary:
-      'One item in full — description, status, parent or folder, children, dependency edges, a readiness verdict, the errors linked to it, and the latest refusal sent back on it.',
+      'One item in full — description, status, parent or folder, children, dependency edges, a readiness verdict, the errors linked to it, the latest refusal sent back on it, and where its unmerged code is.',
     // Re-pinned for MOTIR-6580, summary UNCHANGED: the text block gains the
     // Supersedes / Superseded by link groups — two more edge groups, which the
     // summary's "dependency edges" already covers without enumerating groups.
@@ -541,7 +541,10 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // the read returns does not describe.
     // Re-pinned for MOTIR-9033, summary UNCHANGED: the opt-in `includeSections` adds a
     // parsed view of the body the read already returns — the body, not a new read.
-    descriptionFingerprint: '18bf3c3889bd',
+    // Re-pinned for MOTIR-10069, summary WIDENED: the payload declares `inFlightCode`
+    // and `mergedRepos`, where the item's unmerged code is (its own pull request or a
+    // parent's) — a new question the tool answers, so the line names it.
+    descriptionFingerprint: '5e2545bb6213',
   },
   get_design: {
     // Story MOTIR-5553 · MOTIR-5561.
@@ -623,6 +626,13 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
       "One file's text, or a directory's immediate entries, from a repository in the project's set, at a ref — capped and line-ranged like the hosted planner's read, every absence a named outcome.",
     descriptionFingerprint: '8c24af03ed4e',
   },
+  list_changed_files: {
+    // MOTIR-10069 — the hosted planner's `list_changed_files`, on the MCP.
+    summary:
+      "The paths a branch changed in a repository in the project's set, against its default branch or a named base — bounded like the hosted planner's listing, every absence a named outcome.",
+    // Pinned from the LIVE handshake, never hand-computed.
+    descriptionFingerprint: 'd2536eb87f90',
+  },
   code_explore: {
     summary:
       "The hosted code graph around a query — the hosted planner's own answer, paged, every absence a named state.",
@@ -632,6 +642,11 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     summary:
       "Symbols matching a name in the hosted code graph — the hosted planner's own answer, paged.",
     descriptionFingerprint: '0b634bf94bd4',
+  },
+  code_grep: {
+    summary:
+      "Lines matching a text or pattern in the indexed file contents — string literals, comments and non-code files the symbol search cannot see — the hosted planner's own answer, paged.",
+    descriptionFingerprint: '94eb063eb23b',
   },
   skeleton: {
     // Re-pinned for MOTIR-5410: the description now names the folder placement
@@ -876,7 +891,9 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // section finding — advisory channel only, outside the verdict.
     // Re-pinned for MOTIR-9938, summary UNCHANGED: the mislabelled-link advisory
     // now scans proposed explanations too — beside the verdict, never in it.
-    descriptionFingerprint: '6a2d9d6bf0f4',
+    // Re-pinned for MOTIR-10087, summary UNCHANGED: `advisories` widens to every
+    // shape family on the plan's proposals — still beside the verdict, never in it.
+    descriptionFingerprint: '5979fea073d6',
   },
   get_plan_status: {
     // Re-pinned for MOTIR-3064, summary UNCHANGED and deliberately so: the tool

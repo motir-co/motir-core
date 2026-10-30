@@ -8700,7 +8700,7 @@
       "clearEnough": "Abbastanza chiaro da pianificare così com’è.",
       "nothingSettled": "Non è stato stabilito nulla, quindi la richiesta viene pianificata così com’è.",
       "requirementSaved": "Salvato come <link>{title}</link> in Documenti dei requisiti.",
-      "requirementNotSaved": "<lead>Impossibile salvare il requisito.</lead> Non è stato avviato nulla. Conferma è ancora disponibile: riprova."
+      "requirementPageNotSaved": "<lead>Impossibile salvare il requisito come pagina.</lead> La pianificazione lo usa comunque."
     },
     "logBugOffer": {
       "label": "Proposta di registrare un bug",

@@ -8700,7 +8700,7 @@
       "clearEnough": "Klar genug, um es wie beschrieben zu planen.",
       "nothingSettled": "Es wurde nichts festgelegt, daher wird die Anfrage wie beschrieben geplant.",
       "requirementSaved": "Gespeichert als <link>{title}</link> in den Anforderungsdokumenten.",
-      "requirementNotSaved": "<lead>Die Anforderung konnte nicht gespeichert werden.</lead> Es wurde nichts gestartet. Bestätigen ist weiterhin verfügbar – versuchen Sie es noch einmal."
+      "requirementPageNotSaved": "<lead>Die Anforderung konnte nicht als Seite gespeichert werden.</lead> Die Planung verwendet sie trotzdem."
     },
     "logBugOffer": {
       "label": "Angebot, einen Bug zu erfassen",

@@ -13,8 +13,8 @@ import { EXEMPT_TOOLS } from '@/lib/mcp/payloads/exemptions';
 import { mcpToolArgs } from '../helpers/mcpToolArgs';
 
 // THE CODE-READ TOOL TABLES (Story MOTIR-7858 · Subtask MOTIR-7865) — every home
-// keyed by an MCP tool name carries all three code-read tools, with the value the
-// story decided. No DB.
+// keyed by an MCP tool name carries all four code-read tools (`code_grep` since
+// MOTIR-10066), with the value the story decided. No DB.
 //
 // ⚠️ THE HOME LIST IS A MEASUREMENT, not a memory. It is the output of
 //
@@ -38,7 +38,13 @@ import { mcpToolArgs } from '../helpers/mcpToolArgs';
 // asserted in `code-read-tool-docs.test.ts`, which imports nothing from `lib/` so
 // it can run in the database-free docs-guard lane on a docs-only pull request.
 
-const CODE_READ_TOOLS = ['read_file', 'code_explore', 'code_search'] as const;
+const CODE_READ_TOOLS = [
+  'read_file',
+  'list_changed_files',
+  'code_explore',
+  'code_search',
+  'code_grep',
+] as const;
 
 const catalogue = new Map(mcpToolRows().map((r) => [r.name as string, r]));
 const fixtureArgs = mcpToolArgs({

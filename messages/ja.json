@@ -8697,7 +8697,7 @@
       "clearEnough": "このまま計画できるほど明確です。",
       "nothingSettled": "何も決まらなかったので、依頼をそのまま計画します。",
       "requirementSaved": "要件ドキュメントに<link>{title}</link>として保存しました。",
-      "requirementNotSaved": "<lead>要件を保存できませんでした。</lead>何も開始されていません。確認は引き続き押せます。もう一度お試しください。"
+      "requirementPageNotSaved": "<lead>要件をページとして保存できませんでした。</lead>計画では引き続きこの要件を使用します。"
     },
     "logBugOffer": {
       "label": "バグ登録の提案",

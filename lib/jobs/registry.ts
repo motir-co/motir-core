@@ -83,6 +83,7 @@ import { pullRequestAutoMerge } from './definitions/pullRequestAutoMerge';
 import { agentReviewRequested } from './definitions/agentReviewRequested';
 import { designAutoRerun } from './definitions/designAutoRerun';
 import { gateResume } from './definitions/gateResume';
+import { planOfferRequirementPage } from './definitions/planOfferRequirementPage';
 import { pullRequestBaseMoved } from './definitions/pullRequestBaseMoved';
 import { pullRequestHeadMoved } from './definitions/pullRequestHeadMoved';
 import {
@@ -208,6 +209,8 @@ export const jobDefinitions = [
   designAutoRerun,
   // The automatic hosted resume after a held gate is approved (MOTIR-7710).
   gateResume,
+  // The confirmed plan offer's requirement page, saved after the start (MOTIR-10091).
+  planOfferRequirementPage,
   pullRequestBaseMoved,
   // The head-push re-read beside it (MOTIR-7063): a push onto a base already moved.
   pullRequestHeadMoved,
