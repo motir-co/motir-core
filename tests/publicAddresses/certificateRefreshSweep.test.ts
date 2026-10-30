@@ -21,12 +21,22 @@ const { createTestWorkspace } = await import('../fixtures');
 let workspaceId: string;
 /** What the stubbed port reports for every hostname this run. */
 let answer: { configured: boolean; issued: boolean } | Error = { configured: true, issued: false };
+/** What the stubbed resolver answers for `_motir-verify.<host>`: by default the
+ *  row's own token (see `seed`), i.e. ownership still proven. */
+let txt: (name: string) => string[] | Error = (name) => [
+  `motir-verify-${name.replace(/^_motir-verify\./, '')}`,
+];
+let txtReads = 0;
 
 beforeEach(async () => {
   await truncateAuthTables();
   vi.stubEnv('FLY_CERTS_TOKEN', 'test-token');
   vi.stubEnv('FLY_CERTS_APP', 'motir-marketing');
   answer = { configured: true, issued: false };
+  txt = (name) => [`motir-verify-${name.replace(/^_motir-verify\./, '')}`];
+  txtReads = 0;
+  vi.stubEnv('MOTIR_PUBLIC_ADDRESS_CNAME_TARGET', 'motir-edge.fly.dev');
+  vi.stubEnv('MOTIR_PUBLIC_ADDRESS_A_RECORDS', '66.241.125.1');
 
   const { workspace } = await createTestWorkspace({ name: 'Acme' });
   workspaceId = workspace.id;
@@ -49,6 +59,14 @@ beforeEach(async () => {
       return { hostname, ...answer, dnsRequirements: [], checkedAt: new Date() };
     },
     remove: async () => {},
+  });
+  vi.spyOn(providers, 'dnsResolver').mockReturnValue({
+    resolveTxt: async (name: string) => {
+      txtReads += 1;
+      const records = txt(name);
+      if (records instanceof Error) throw records;
+      return records;
+    },
   });
 });
 
@@ -129,6 +147,117 @@ describe('the transitions that matter', () => {
     const row = await adminDb.publicAddress.findUniqueOrThrow({ where: { id: a.id } });
     expect(row.status).toBe('issued');
     expect(row.lastCheckedAt!.getTime()).toBeGreaterThan(before!.getTime());
+  });
+});
+
+describe('a live domain RE-PROVES its owner’s side (MOTIR-9526)', () => {
+  it('a lost ownership TXT fails the row as txt_lost, naming the record and the token', async () => {
+    const a = await seed('live.acme.test', 'issued', { hoursAgo: 2 });
+    answer = { configured: true, issued: true };
+    txt = () => [];
+
+    const summary = await publicAddressCertificatesService.refreshDueAddresses();
+    expect(summary.changed).toBe(1);
+    const row = await adminDb.publicAddress.findUniqueOrThrow({ where: { id: a.id } });
+    expect(row.status).toBe('failed');
+    expect(row.failureKind).toBe('txt_lost');
+    expect(row.failureReason).toContain('_motir-verify.live.acme.test');
+    expect(row.failureReason).toContain('motir-verify-live.acme.test');
+  });
+
+  it('a CHANGED TXT is a miss too — only the row’s own token proves it', async () => {
+    const a = await seed('live.acme.test', 'issued', { hoursAgo: 2 });
+    answer = { configured: true, issued: true };
+    txt = () => ['motir-verify-someone-else'];
+    await publicAddressCertificatesService.refreshDueAddresses();
+    const row = await adminDb.publicAddress.findUniqueOrThrow({ where: { id: a.id } });
+    expect(row.failureKind).toBe('txt_lost');
+  });
+
+  it('lost POINTING fails a subdomain as pointing_lost naming its CNAME', async () => {
+    const a = await seed('live.acme.test', 'issued', { hoursAgo: 2 });
+    answer = { configured: false, issued: true };
+    await publicAddressCertificatesService.refreshDueAddresses();
+    const row = await adminDb.publicAddress.findUniqueOrThrow({ where: { id: a.id } });
+    expect(row.status).toBe('failed');
+    expect(row.failureKind).toBe('pointing_lost');
+    expect(row.failureReason).toContain('CNAME motir-edge.fly.dev');
+  });
+
+  it('…and an APEX as pointing_lost naming its A record', async () => {
+    const a = await seed('acme-roadmap.test', 'issued', { hoursAgo: 2 });
+    answer = { configured: false, issued: true };
+    await publicAddressCertificatesService.refreshDueAddresses();
+    const row = await adminDb.publicAddress.findUniqueOrThrow({ where: { id: a.id } });
+    expect(row.failureKind).toBe('pointing_lost');
+    expect(row.failureReason).toContain('A 66.241.125.1');
+    expect(row.failureReason).not.toContain('CNAME');
+  });
+
+  it('ISSUED → EXPIRED now carries certificate_lost', async () => {
+    const a = await seed('live.acme.test', 'issued', { hoursAgo: 2 });
+    answer = { configured: false, issued: false };
+    await publicAddressCertificatesService.refreshDueAddresses();
+    const row = await adminDb.publicAddress.findUniqueOrThrow({ where: { id: a.id } });
+    expect(row.status).toBe('expired');
+    expect(row.failureKind).toBe('certificate_lost');
+  });
+
+  it('RECOVERS: a txt_lost row whose TXT is back returns to issued, kind and reason cleared, issuedAt kept', async () => {
+    const a = await seed('live.acme.test', 'failed', { hoursAgo: 2 });
+    const issuedAt = new Date(Date.now() - 86_400_000);
+    await adminDb.publicAddress.update({
+      where: { id: a.id },
+      data: { failureKind: 'txt_lost', failureReason: 'gone', issuedAt },
+    });
+    answer = { configured: true, issued: true };
+
+    await publicAddressCertificatesService.refreshDueAddresses();
+    const row = await adminDb.publicAddress.findUniqueOrThrow({ where: { id: a.id } });
+    expect(row.status).toBe('issued');
+    expect(row.failureKind).toBeNull();
+    expect(row.failureReason).toBeNull();
+    expect(row.issuedAt?.toISOString()).toBe(issuedAt.toISOString());
+  });
+
+  it('a RESOLVER ERROR is not a miss: nothing moves, the failure is counted, the run goes on', async () => {
+    const flaky = await seed('flaky.acme.test', 'issued', { hoursAgo: 2 });
+    const other = await seed('pending.acme.test', 'pending_certificate');
+    answer = { configured: true, issued: true };
+    txt = (name) => (name.includes('flaky') ? new Error('SERVFAIL') : []);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const summary = await publicAddressCertificatesService.refreshDueAddresses();
+    expect(summary.failed).toBe(1);
+    const row = await adminDb.publicAddress.findUniqueOrThrow({ where: { id: flaky.id } });
+    expect(row.status).toBe('issued');
+    expect(row.failureKind).toBeNull();
+    expect(warn.mock.calls.some((c) => String(c[0]).includes('flaky.acme.test'))).toBe(true);
+    // The in-flight row is not re-proved, and is still processed.
+    expect(
+      (await adminDb.publicAddress.findUniqueOrThrow({ where: { id: other.id } })).status,
+    ).toBe('issued');
+  });
+
+  it('an issuance failure (a failed row with NO kind) is not re-proved', async () => {
+    await seed('broken.acme.test', 'failed', { hoursAgo: 2 });
+    answer = { configured: false, issued: false };
+    await publicAddressCertificatesService.refreshDueAddresses();
+    expect(txtReads).toBe(0);
+  });
+
+  it('updateStatus with a cleared reason clears the kind — the lifecycle Re-check needs no edit', async () => {
+    const a = await seed('live.acme.test', 'failed');
+    await adminDb.publicAddress.update({
+      where: { id: a.id },
+      data: { failureKind: 'pointing_lost', failureReason: 'gone' },
+    });
+    const { withSystemContext } = await import('@/lib/workspaces/context');
+    await withSystemContext((tx) =>
+      publicAddressRepository.updateStatus(a.id, { status: 'issued', failureReason: null }, tx),
+    );
+    const row = await adminDb.publicAddress.findUniqueOrThrow({ where: { id: a.id } });
+    expect(row.failureKind).toBeNull();
   });
 });
 

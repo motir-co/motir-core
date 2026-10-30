@@ -13718,6 +13718,18 @@ enum PublicAddressStatus {
   revoked
 }
 
+/// WHICH customer-side proof a live domain lost (MOTIR-9526) — what code and the
+/// pane branch on, beside the free-text `failureReason` they display. A `failed`
+/// row with no kind is an issuance failure written by the lifecycle's verify.
+enum PublicAddressFailureKind {
+  /// The `_motir-verify` TXT no longer carries the row's token.
+  txt_lost
+  /// Fly reports the customer's A/AAAA/CNAME no longer reaches the edge.
+  pointing_lost
+  /// The certificate is gone (the issued → expired transition).
+  certificate_lost
+}
+
 /// ONE address, of either shape (ADR §3, §4). A project has many; a workspace
 /// has many.
 ///
@@ -13756,26 +13768,28 @@ enum PublicAddressStatus {
 /// `workspace_id = app.workspace_id` comparison with no join — the pattern
 /// `project_membership`, `work_item` and `project_key_alias` all use.
 model PublicAddress {
-  id                String              @id @default(cuid())
-  workspaceId       String              @map("workspace_id")
+  id                String                    @id @default(cuid())
+  workspaceId       String                    @map("workspace_id")
   /// The application a customer domain serves (ADR MOTIR-9521 §1). NULL for a
   /// subdomain, and for a customer domain not bound to an application yet or
   /// whose application was removed — the domain is unbound, never deleted.
-  applicationId     String?             @map("application_id")
-  hostname          String              @unique
+  applicationId     String?                   @map("application_id")
+  hostname          String                    @unique
   kind              PublicAddressKind
   status            PublicAddressStatus
   /// The `_motir-verify.<host>` TXT value. Custom domains only — a subdomain of
   /// our own base needs no ownership proof.
-  verificationToken String?             @map("verification_token")
+  verificationToken String?                   @map("verification_token")
   /// When the platform was last asked about this address (MOTIR-4219). Also the
   /// job's sweep cursor, which is why it is half of an index.
-  lastCheckedAt     DateTime?           @map("last_checked_at")
-  issuedAt          DateTime?           @map("issued_at")
+  lastCheckedAt     DateTime?                 @map("last_checked_at")
+  issuedAt          DateTime?                 @map("issued_at")
   /// Always set when `status` is `failed` — see the enum's note.
-  failureReason     String?             @map("failure_reason")
-  createdAt         DateTime            @default(now()) @map("created_at")
-  updatedAt         DateTime            @updatedAt @map("updated_at")
+  failureReason     String?                   @map("failure_reason")
+  /// Which proof was lost; cleared whenever `failureReason` is (MOTIR-9526).
+  failureKind       PublicAddressFailureKind? @map("failure_kind")
+  createdAt         DateTime                  @default(now()) @map("created_at")
+  updatedAt         DateTime                  @updatedAt @map("updated_at")
 
   workspace   Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   application HostedApplication? @relation("HostedApplicationCustomDomains", fields: [applicationId], references: [id], onDelete: SetNull)

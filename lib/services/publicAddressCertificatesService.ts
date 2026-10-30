@@ -1,13 +1,36 @@
-import type { PublicAddress, PublicAddressStatus } from '@/generated/prisma/client';
+import type {
+  PublicAddress,
+  PublicAddressFailureKind,
+  PublicAddressStatus,
+} from '@/generated/prisma/client';
 
 import type { CertificateState } from '@/lib/publicAddresses/certificateProvider';
-import { certificateProvider, certificatesConfigured } from '@/lib/publicAddresses/providers';
+import { pointingRecordsFor } from '@/lib/publicAddresses/pointingRecords';
+import {
+  certificateProvider,
+  certificatesConfigured,
+  dnsResolver,
+} from '@/lib/publicAddresses/providers';
 import { publicAddressRepository } from '@/lib/repositories/publicAddressRepository';
 import { withSystemContext } from '@/lib/workspaces/context';
 
 // THE CERTIFICATE SWEEP — Story MOTIR-3878 · Subtask MOTIR-4219.
 // Reads the platform, writes what it said. Requests nothing: the lifecycle
 // (MOTIR-4216) is what asks for a certificate; this only carries the answer home.
+//
+// ── It also RE-PROVES the customer's side of a live domain (MOTIR-9526) ─────
+//
+// A certificate that still exists says nothing about whether its hostname's
+// owner can still prove it. So on an `issued` row (and on a row this sweep
+// failed for a lost proof, so it can recover) it re-reads the ownership TXT and
+// Fly's `configured` reading. A lost TXT or a lost pointing record drives the
+// row to `failed` with a KIND the pane branches on and a reason naming the
+// record to restore — and since the host contract serves only `issued` rows, a
+// domain whose owner can no longer prove it stops answering. That is the
+// intended direction of failure for a name Motir does not own.
+
+/** The label the ownership TXT lives at — the lifecycle's own. */
+const VERIFY_PREFIX = '_motir-verify';
 
 /** How many rows one status may contribute to a single run. */
 const PAGE_SIZE = 50;
@@ -103,9 +126,12 @@ export const publicAddressCertificatesService = {
       for (const address of due) {
         scanned += 1;
         try {
-          // OUTSIDE the transaction.
+          // OUTSIDE the transaction — both reads. A resolver ERROR throws into
+          // the catch below: an unreachable resolver is not evidence the TXT is
+          // gone, and treating it as such would take live sites down on a blip.
           const state = await provider.check(address.hostname);
-          const next = nextStatus(address, state);
+          const ownership = reprovesOwnership(address) ? await txtProven(address) : null;
+          const next = nextStatus(address, state, ownership);
           if (next === null) {
             // No transition, but the check HAPPENED — recording that is what
             // stops the row being re-checked every sweep for ever, and what
@@ -113,6 +139,7 @@ export const publicAddressCertificatesService = {
             await write(address, {
               status: address.status,
               failureReason: address.failureReason,
+              failureKind: address.failureKind,
               lastCheckedAt: state.checkedAt,
             });
             continue;
@@ -141,24 +168,59 @@ export const publicAddressCertificatesService = {
   },
 };
 
+/** Whether this row's ownership is re-proved on a sweep. */
+function reprovesOwnership(address: PublicAddress): boolean {
+  if (address.kind !== 'custom_domain') return false;
+  if (address.status === 'issued' || address.status === 'expired') return true;
+  // A failure THIS sweep wrote for a lost proof, so the row can recover. A
+  // `failed` with no kind is an issuance failure, the lifecycle's to retry.
+  return (
+    address.status === 'failed' &&
+    (address.failureKind === 'txt_lost' || address.failureKind === 'pointing_lost')
+  );
+}
+
+/** Whether the `_motir-verify` TXT still carries the row's token. Throws on a resolver error. */
+async function txtProven(address: PublicAddress): Promise<boolean> {
+  if (!address.verificationToken) return false;
+  const records = await dnsResolver().resolveTxt(`${VERIFY_PREFIX}.${address.hostname}`);
+  return records.includes(address.verificationToken);
+}
+
+type NextRow = {
+  status: PublicAddressStatus;
+  failureReason: string | null;
+  failureKind?: PublicAddressFailureKind | null;
+  lastCheckedAt: Date;
+  issuedAt?: Date;
+};
+
 /**
- * What the platform's answer means for this row, or `null` for no transition.
+ * What the platform's answer — and, on a live domain, the customer's proof —
+ * means for this row, or `null` for no transition.
+ *
+ * `ownership` is `null` when the row is not re-proved (an in-flight state), else
+ * whether the TXT still carries the token.
  *
  * Reads `issued` off the presence of a certificate rather than off a status
  * string, for the reason the adapter gives: `status` is a vocabulary nobody has
  * closed, and mapping an open string set is how a state machine acquires a
  * silent tenth value.
  */
-function nextStatus(
+export function nextStatus(
   address: PublicAddress,
   state: CertificateState,
-): {
-  status: PublicAddressStatus;
-  failureReason: string | null;
-  lastCheckedAt: Date;
-  issuedAt?: Date;
-} | null {
+  ownership: boolean | null,
+): NextRow | null {
   if (state.issued) {
+    // OWNERSHIP FIRST: it is the security property. A domain whose owner can no
+    // longer prove it must not keep serving, however healthy its certificate.
+    if (ownership === false) {
+      return failedFor(address, 'txt_lost', txtLostReason(address), state.checkedAt);
+    }
+    if (ownership === true && !state.configured) {
+      return failedFor(address, 'pointing_lost', pointingLostReason(address), state.checkedAt);
+    }
     if (address.status === 'issued') return null;
     return {
       status: 'issued',
@@ -178,27 +240,45 @@ function nextStatus(
     return {
       status: 'expired',
       failureReason: 'The certificate is no longer active. Check that the DNS records still exist.',
+      failureKind: 'certificate_lost',
       lastCheckedAt: state.checkedAt,
     };
   }
 
   // Still in flight and still not configured — the customer has not finished
-  // their DNS. Not a failure: it is the ordinary state on the way in.
-  if (!state.configured) return null;
-
-  // Pointed correctly but still no certificate: keep waiting. Fly validates
+  // their DNS. Not a failure: it is the ordinary state on the way in. Pointed
+  // correctly but still no certificate: keep waiting; Fly validates
   // asynchronously and a minute or two here is normal.
   return null;
 }
 
-function write(
+/** A failure of `kind`, or no transition when the row already reads exactly that. */
+function failedFor(
   address: PublicAddress,
-  data: {
-    status: PublicAddressStatus;
-    failureReason: string | null;
-    lastCheckedAt: Date;
-    issuedAt?: Date;
-  },
-) {
+  kind: PublicAddressFailureKind,
+  reason: string,
+  checkedAt: Date,
+): NextRow | null {
+  if (address.status === 'failed' && address.failureKind === kind) return null;
+  return { status: 'failed', failureReason: reason, failureKind: kind, lastCheckedAt: checkedAt };
+}
+
+function txtLostReason(address: PublicAddress): string {
+  return (
+    `The ownership record is gone. Add the TXT record ${VERIFY_PREFIX}.${address.hostname} ` +
+    `with the value ${address.verificationToken ?? ''} again.`
+  );
+}
+
+function pointingLostReason(address: PublicAddress): string {
+  const records = pointingRecordsFor(address.hostname);
+  if (records.length === 0) {
+    return `${address.hostname} no longer points at Motir. Restore its DNS record.`;
+  }
+  const wanted = records.map((r) => `${r.type} ${r.value}`).join(', ');
+  return `${address.hostname} no longer points at Motir. Restore its ${wanted} record.`;
+}
+
+function write(address: PublicAddress, data: NextRow) {
   return withSystemContext((tx) => publicAddressRepository.updateStatus(address.id, data, tx));
 }

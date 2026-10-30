@@ -54,6 +54,7 @@ function domain(over: Partial<PublicAddressDto> = {}): PublicAddressDto {
     lastCheckedAt: '2026-09-03T09:00:00.000Z',
     issuedAt: null,
     failureReason: null,
+    failureKind: null,
     ...over,
   };
 }

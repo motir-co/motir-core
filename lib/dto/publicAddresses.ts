@@ -158,4 +158,9 @@ export interface PublicAddressDto {
   readonly issuedAt: string | null;
   /** Always set when `status` is `failed` — a failure with no reason is not actionable. */
   readonly failureReason: string | null;
+  /**
+   * Which proof a live domain lost (MOTIR-9526); `null` on a `failed` row means
+   * the certificate was never issued.
+   */
+  readonly failureKind: 'txt_lost' | 'pointing_lost' | 'certificate_lost' | null;
 }

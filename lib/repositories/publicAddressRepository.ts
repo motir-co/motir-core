@@ -1,4 +1,9 @@
-import { Prisma, type PublicAddress, type PublicAddressStatus } from '@/generated/prisma/client';
+import {
+  Prisma,
+  type PublicAddress,
+  type PublicAddressFailureKind,
+  type PublicAddressStatus,
+} from '@/generated/prisma/client';
 
 import { db } from '@/lib/db';
 import { HostnameTakenError, isHostnameUniqueViolation } from '@/lib/publicAddresses/errors';
@@ -236,12 +241,16 @@ export const publicAddressRepository = {
     patch: {
       status: PublicAddressStatus;
       failureReason: string | null;
+      failureKind?: PublicAddressFailureKind | null;
       lastCheckedAt?: Date;
       issuedAt?: Date | null;
     },
     tx: Prisma.TransactionClient,
   ): Promise<PublicAddress> {
-    return tx.publicAddress.update({ where: { id: addressId }, data: patch });
+    // A cleared reason clears its KIND too (MOTIR-9526), so the lifecycle's
+    // Re-check — which knows nothing of kinds — cannot leave a stale one behind.
+    const data = patch.failureReason === null ? { ...patch, failureKind: null } : patch;
+    return tx.publicAddress.update({ where: { id: addressId }, data });
   },
 
   /**

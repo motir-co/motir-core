@@ -415,6 +415,7 @@ function toDto(row: {
   lastCheckedAt: Date | null;
   issuedAt: Date | null;
   failureReason: string | null;
+  failureKind: PublicAddressDto['failureKind'];
 }): PublicAddressDto {
   // ⚠️ TWO KINDS OF RECORD, AND THE POINTING ONE COMES FIRST (MOTIR-4278).
   //
@@ -455,5 +456,6 @@ function toDto(row: {
     lastCheckedAt: row.lastCheckedAt?.toISOString() ?? null,
     issuedAt: row.issuedAt?.toISOString() ?? null,
     failureReason: row.failureReason,
+    failureKind: row.failureKind,
   };
 }
