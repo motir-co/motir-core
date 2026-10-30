@@ -57,6 +57,8 @@ const EMAIL = 'address-acceptance@motir.test';
 const PASSWORD = 'Sup3rSecret!Pass';
 /** The pane under test — also the pathname its `router.refresh()` re-reads. */
 const PANE = '/settings/project/public-address';
+/** The workspace Custom domains room (MOTIR-9529). */
+const DOMAINS_PANE = '/settings/workspace/custom-domains';
 
 /**
  * ⚠️ READ BACK FROM THE CREATED PROJECT, NEVER THE STRING WE PASSED.
@@ -149,37 +151,34 @@ test('a project admin gives their public project an address of its own', async (
   });
 
   await chapter('Connecting a domain the customer owns', async () => {
-    await page.getByRole('button', { name: 'Add a domain' }).click();
+    // A customer domain is the WORKSPACE's (MOTIR-9529): the project room keeps
+    // no control for it, and the workspace Custom domains room is where it is
+    // added.
+    await page.goto(DOMAINS_PANE);
+    await page.getByRole('button', { name: 'Add domain' }).click();
     // The dialog is LABELLED 'Add a domain' and contains a field labelled
     // 'Domain', so a bare `getByLabel` matches both — scoped to the textbox.
     await page.getByRole('textbox', { name: 'Domain' }).fill('roadmap.acme.test');
-    // The pane is SERVER-RENDERED and repaints on `router.refresh()` — the
-    // domain's own status is the platform's to report, so `CustomDomainsSection`
-    // cannot patch the row in place (MOTIR-4399, disposition (c)). Arm the
-    // refresh BEFORE the click; the assertion's 5 s budget would otherwise have
-    // to cover the write AND the RSC round trip that follows it.
-    const domainAdded = pageRefresh(page, PANE);
-    await page.getByRole('button', { name: 'Add domain' }).click();
+    // The pane adds the row from the write's own answer, then re-reads; arm the
+    // refresh BEFORE the click so the wait covers the RSC round trip too.
+    const domainAdded = pageRefresh(page, DOMAINS_PANE);
+    await page.getByRole('dialog').getByRole('button', { name: 'Add domain' }).click();
     await domainAdded;
 
     await expect(page.getByText('roadmap.acme.test')).toBeVisible();
-    await expect(page.getByText('Not verified')).toBeVisible();
-    await beat();
-
-    // The ownership record, which is what the customer creates at their
-    // registrar. See the header for the pointing record that is NOT here.
-    await page.getByRole('button', { name: 'Show DNS records' }).click();
+    await expect(page.getByRole('main').getByText('Unverified')).toBeVisible();
+    // The ownership record is shown on an unverified row, without a click.
     await expect(page.getByRole('cell', { name: '_motir-verify.roadmap.acme.test' })).toBeVisible();
     await beat();
   });
 
   await chapter('Verifying it, and watching the certificate arrive', async () => {
     // The fake resolver answers whatever token the service just minted, so
-    // *Check again* walks the real add → verify → issue order — including the
+    // *Check now* walks the real add → verify → issue order — including the
     // rule that a certificate is never requested before the TXT verifies.
-    await page.getByRole('button', { name: 'Check again' }).click();
+    await page.getByRole('button', { name: 'Check now' }).click();
     // Waits on the ROW's own text, never on a timer.
-    await expect(page.getByText('Live')).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole('main').getByText('Issued')).toBeVisible({ timeout: 20_000 });
     await beat();
   });
 });

@@ -6,18 +6,15 @@ import { isCloud } from '@/lib/billing/availability';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { isTenantDomainConfigured } from '@/lib/publicAddresses/tenantDomain';
 import { publicSubdomainService } from '@/lib/services/publicSubdomainService';
-import { allSettledOrThrow } from '@/lib/async/allSettledOrThrow';
-import { customDomainService } from '@/lib/services/customDomainService';
 import { guardSettingsPage } from '../_guard';
 import { publicProjectPath, publicSiteOrigin } from '@/lib/publicProjects/urls';
 
 import { PublicAddressEcho } from './_components/PublicAddressEcho';
-import { CustomDomainsSection } from './_components/CustomDomainsSection';
 import { NO_PROJECT_PATH } from '@/lib/navigation/landing';
 
 // THE PUBLIC ADDRESS ROOM (Story MOTIR-3878 · MOTIR-4221) — where a project
-// echoes its workspace's address (MOTIR-9515) and, once MOTIR-4229 lands, a project connects a domain
-// the customer owns. Drawn by MOTIR-4211:
+// echoes its workspace's address (MOTIR-9515). Customer domains are the
+// workspace's and moved to `/settings/workspace/custom-domains` (MOTIR-9529). Drawn by MOTIR-4211:
 // `design/projects/public-address.mock.html` panels 0, 1, 2, 8, 9 +
 // `design/projects/design-notes.md` § *Public address*.
 //
@@ -48,8 +45,7 @@ import { NO_PROJECT_PATH } from '@/lib/navigation/landing';
 //
 // ADR §3 makes a subdomain a property of the WORKSPACE, and its control moved to
 // `/settings/workspace/public-address` (MOTIR-9514). This room keeps a read-only
-// echo, the same for every role, so it reads no workspace role at all; the
-// custom-domain half below is still this project's own.
+// echo, the same for every role, so it reads no workspace role at all.
 export default async function ProjectPublicAddressPage() {
   // Off-cloud (self-hosted GPL build): public addresses do not exist.
   if (!isCloud()) notFound();
@@ -95,16 +91,7 @@ export default async function ProjectPublicAddressPage() {
     );
   }
 
-  // `allSettledOrThrow`, never a bare `Promise.all`: each arm opens a
-  // transaction (MOTIR-3066).
-  const [subdomain, domains] = await allSettledOrThrow([
-    publicSubdomainService.getForWorkspace(ctx.workspaceId, ctx.userId),
-    customDomainService.listForProjectRoom({
-      workspaceId: ctx.workspaceId,
-      projectKey: ctx.project.identifier,
-      actorUserId: ctx.userId,
-    }),
-  ]);
+  const subdomain = await publicSubdomainService.getForWorkspace(ctx.workspaceId, ctx.userId);
 
   // `MOTIR_PUBLIC_SITE_URL` is server configuration, so the project's own
   // address is resolved here and shown as text (scheme stripped: read, not
@@ -118,14 +105,6 @@ export default async function ProjectPublicAddressPage() {
         subdomain={subdomain}
         projectAddress={projectUrl.replace(/^https?:\/\//, '')}
         projectUrl={projectUrl}
-      />
-      {/* A customer domain is the WORKSPACE's (MOTIR-9524): its writes assert
-          the workspace address gate, not this page's project permission, so
-          the service answers `canManage` on that axis. */}
-      <CustomDomainsSection
-        workspaceId={ctx.workspaceId}
-        canManage={domains.canManage}
-        addresses={domains.addresses}
       />
     </div>
   );

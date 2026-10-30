@@ -6,7 +6,7 @@
 // so a `zh` reader hitting a cap got English inside a translated UI. The error's
 // `entitlement` discriminator crosses the boundary instead, and the layer that
 // knows who is reading picks the words from the catalogue — the shape
-// `CustomDomainsSection` already had.
+// `CustomDomainsSection` (now `CustomDomainsPane`) already had.
 //
 // Directive-free on purpose: the server-action results, the HTTP bodies and the
 // client components all key on the same kind, and both sides import it from here.

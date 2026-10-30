@@ -441,7 +441,8 @@ export const PROJECT_SETTINGS_NAV: SettingsNavEntry[] = [
     // Story MOTIR-3878 · MOTIR-4221, drawn by MOTIR-4211
     // (`design/projects/public-address.mock.html` panels 0–2, 8, 9 ·
     // `design/projects/design-notes.md` § *Public address*). Where a workspace
-    // claims its subdomain and a project connects a domain the customer owns.
+    // echoes its workspace's subdomain (customer domains moved to workspace
+    // settings, MOTIR-9529).
     //
     // ⚠️ THE ORDER IS THE ASSET'S, NOT THE CARD'S, AND THAT IS A RUNG-2 READING
     // BEATING A RUNG-3 ONE. MOTIR-4221 says the row goes "between Members &
@@ -458,11 +459,12 @@ export const PROJECT_SETTINGS_NAV: SettingsNavEntry[] = [
     //
     // VERIFIED, and this key is the one thing the design asset deliberately did
     // NOT decide (its planning flag 1: "MOTIR-4221's to READ OFF its own service
-    // gate"). The room's writes are `customDomainService.{add,verify,remove}`,
-    // every one of which asserts
-    // `assertPermission(…, 'project:manage_access')`; its list asserts
-    // `project:browse`. So the key the room's WRITES assert is this one, read off
-    // the destination rather than inferred from the row's name.
+    // gate"). The room's writes were `customDomainService.{add,verify,remove}`,
+    // every one of which asserted
+    // `assertPermission(…, 'project:manage_access')`. Since MOTIR-9529 a customer
+    // domain is managed in WORKSPACE settings and this room is a read-only echo;
+    // the key stays the Access group's, which the project's access-mode writes
+    // (`projectMembersService`) assert.
     //
     // ⚠️ AND `project:browse` WOULD HAVE BEEN THE WRONG READING, though the
     // subdomain half of the room is readable by any workspace member. No settings

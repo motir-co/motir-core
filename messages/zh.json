@@ -2067,7 +2067,8 @@
         "workspace": "工作区",
         "security": "安全",
         "roles": "角色与权限",
-        "publicAddress": "公开地址"
+        "publicAddress": "公开地址",
+        "customDomains": "自定义域名"
       }
     },
     "name": {
@@ -2752,89 +2753,6 @@
       "unavailable": {
         "title": "尚未配置公开命名空间",
         "description": "此部署未设置租户基础域名，因此暂时无法认领子域名。请由运维人员设置 MOTIR_PUBLIC_TENANT_DOMAIN。"
-      },
-      "domains": {
-        "title": "你自己的域名",
-        "subtitle": "使用你拥有的域名来提供此项目。",
-        "add": "添加域名",
-        "empty": {
-          "title": "尚未连接域名",
-          "body": "添加类似 roadmap.acme.com 的域名，此项目将在其根路径提供访问。你需要创建两条 DNS 记录；证书由 Motir 签发。"
-        },
-        "state": {
-          "unverified": {
-            "label": "未验证",
-            "hint": "已添加，但尚未看到 _motir-verify TXT 记录，也尚未申请证书。"
-          },
-          "verifying": {
-            "label": "检查中…",
-            "hint": "正在查找 TXT 记录。DNS 生效可能需要几分钟。"
-          },
-          "pending_certificate": {
-            "label": "签发中…",
-            "hint": "所有权已验证，证书已申请，通常需要一两分钟。"
-          },
-          "issued": {
-            "label": "已生效",
-            "hint": "证书已签发，该域名正在提供此项目，并会自动续期。"
-          },
-          "failed": {
-            "label": "失败",
-            "hint": "证书签发失败。"
-          },
-          "expired": {
-            "label": "已过期",
-            "hint": "证书已过期且续期未成功——几乎总是因为 DNS 记录发生了更改。该域名当前无法访问。"
-          },
-          "revoked": {
-            "label": "已吊销",
-            "hint": "证书已被吊销。该域名当前无法访问，需要重新申请证书。"
-          },
-          "active": {
-            "label": "使用中",
-            "hint": "工作区子域名可解析并提供此项目。"
-          },
-          "alias": {
-            "label": "重定向",
-            "hint": "被重命名后的子域名。它会永久重定向到当前地址，并且永不释放。"
-          }
-        },
-        "action": {
-          "showDns": "查看 DNS 记录",
-          "checkAgain": "重新检查",
-          "requestAgain": "重新申请",
-          "remove": "移除",
-          "copy": "复制值",
-          "copied": "已复制"
-        },
-        "addModal": {
-          "title": "添加域名",
-          "label": "域名",
-          "helper": "此项目将在该域名的根路径提供访问。",
-          "recordsHeading": "请创建以下 {count, plural, other {#}} 条记录",
-          "type": "类型",
-          "name": "名称",
-          "value": "值",
-          "apexNote": "根域名会绑定到我们的 IP 地址。子域名则使用 CNAME，若这些地址将来变更也会自动跟随。",
-          "verify": "验证",
-          "later": "稍后再说",
-          "cancel": "取消",
-          "submit": "添加域名"
-        },
-        "removeModal": {
-          "title": "要移除 {hostname} 吗？",
-          "warningTitle": "正在使用该地址的访问者将会看到错误。",
-          "warningBody": "已分享出去的 {hostname} 链接将失效。此项目在其他地址上仍然保持公开。",
-          "cancel": "取消",
-          "confirm": "移除域名"
-        },
-        "upgrade": {
-          "title": "自定义域名属于付费方案。",
-          "body": "工作区子域名在所有方案中都包含，并会继续可用。升级后即可使用你自己的域名提供此项目。",
-          "cta": "查看方案"
-        },
-        "lastChecked": "上次检查：{when}",
-        "error": "操作未成功，请稍后重试。"
       }
     },
     "codeAccess": {
@@ -4421,6 +4339,7 @@
       },
       "rename": "重命名",
       "release": "释放",
+      "customDomainsLink": "改用你自己的域名 →",
       "lock": "你可以在 {date} 再次更改名称。重命名和释放各算一次更改，每 30 天一次。",
       "lockShort": "你可以在 {date} 再次更改名称。",
       "review": "检查",
@@ -4465,6 +4384,84 @@
         "change": "在工作区设置中更改 →",
         "claim": "为工作区认领名称 →"
       }
+    },
+    "customDomains": {
+      "title": "自定义域名",
+      "subtitle": "在你拥有的域名上提供此工作区的应用。",
+      "add": "添加域名",
+      "empty": {
+        "title": "还没有自定义域名",
+        "body": "添加一个域名，例如 shop.acme.com。你创建两条 DNS 记录，Motir 签发证书，该域名就会提供此工作区的应用。"
+      },
+      "cap": "已用 {used} / {max} 个域名",
+      "upsell": {
+        "title": "自定义域名包含在 Scaled 方案中。",
+        "body": "在所有方案中，你的应用都会继续在 {host} 上响应。升级后即可在你拥有的域名上提供它。",
+        "cta": "查看方案"
+      },
+      "dialog": {
+        "title": "添加域名",
+        "label": "域名",
+        "helper": "子域名（如 shop.acme.com）或根域名（如 acme.com）。它将提供此工作区的应用。",
+        "cancel": "取消"
+      },
+      "refuse": {
+        "tenantBase": "{host} 是 Motir 地址。你的工作区已在 {base} 下响应——请在“公开地址”中设置该名称。",
+        "siteOrigin": "{host} 属于 Motir。请添加你拥有的域名。",
+        "malformed": "只输入域名，例如 shop.acme.com——不要带 https:// 和路径。",
+        "taken": "{host} 已连接到另一个 Motir 工作区。如果它属于你，请先在那里移除。",
+        "cap": "你的方案包含 {max} 个自定义域名，且已全部使用。请移除一个，或查看方案。"
+      },
+      "status": {
+        "unverified": "未核实",
+        "pending": "处理中",
+        "issued": "已签发",
+        "failed": "失败"
+      },
+      "records": {
+        "heading": "{count, plural, other {在你的 DNS 服务商处创建以下 # 条记录，然后检查。}}",
+        "apexNote": "根域名不能使用 CNAME，因此它指向 Motir 的地址。该 IPv4 地址与其他 Motir 域名共享；如果它将来变化，我们会提前通知你。",
+        "type": "类型",
+        "name": "名称",
+        "value": "值"
+      },
+      "pending": "所有权已确认。正在签发证书——通常需要几分钟。此页面会自动更新。",
+      "app": {
+        "serves": "提供此工作区的应用。",
+        "none": "此工作区还没有部署应用——一旦部署，此域名就会提供它。"
+      },
+      "cert": "证书会自动续期。",
+      "fail": {
+        "txt": "我们无法再看到你的所有权记录",
+        "txtBody": "请在你的 DNS 服务商处恢复这条 TXT 记录：",
+        "pointing": "{host} 不再指向 Motir",
+        "pointingBody": "请将记录改回：",
+        "issuance": "无法签发证书",
+        "issuanceBody": "证书颁发机构的回复："
+      },
+      "action": {
+        "checkNow": "立即检查",
+        "recheck": "重新检查",
+        "retry": "重试",
+        "checking": "正在检查…",
+        "showDns": "显示 DNS 记录",
+        "hideDns": "隐藏 DNS 记录",
+        "copy": "复制",
+        "copied": "已复制",
+        "remove": "移除"
+      },
+      "remove": {
+        "title": "移除 {host}？",
+        "body": "它会立即停止提供你的应用。不会保留任何内容：你以后可以再次添加它，其他工作区在证明所有权后也可以添加它。你的 DNS 服务商处的记录需要你自行删除。",
+        "confirm": "移除域名",
+        "removing": "正在移除…",
+        "error": "域名未被移除。请稍后重试。",
+        "toast": "已移除 {host}",
+        "toastBody": "它不再提供你的应用。"
+      },
+      "readOnly": "只有工作区所有者或管理员可以添加或移除域名。",
+      "loadError": "无法加载域名。",
+      "error": "操作未成功。请稍后重试。"
     }
   },
   "boards": {

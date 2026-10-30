@@ -2067,7 +2067,8 @@
         "workspace": "Workspace",
         "security": "Security",
         "roles": "Roles & permissions",
-        "publicAddress": "Public address"
+        "publicAddress": "Public address",
+        "customDomains": "Custom domains"
       }
     },
     "name": {
@@ -2752,89 +2753,6 @@
       "unavailable": {
         "title": "No public namespace is configured",
         "description": "This deployment has no tenant base domain set, so a subdomain cannot be claimed yet. An operator sets MOTIR_PUBLIC_TENANT_DOMAIN."
-      },
-      "domains": {
-        "title": "Your own domain",
-        "subtitle": "Serve this project from a domain you own.",
-        "add": "Add a domain",
-        "empty": {
-          "title": "No domain connected",
-          "body": "Add a domain like roadmap.acme.com and this project will answer at its root. You will create two DNS records; Motir issues the certificate."
-        },
-        "state": {
-          "unverified": {
-            "label": "Not verified",
-            "hint": "Added, but the _motir-verify TXT record has not been seen yet. No certificate has been requested."
-          },
-          "verifying": {
-            "label": "Checking…",
-            "hint": "We are looking for the TXT record now. DNS can take a few minutes."
-          },
-          "pending_certificate": {
-            "label": "Issuing…",
-            "hint": "Ownership is proven and the certificate has been requested. This usually takes a minute or two."
-          },
-          "issued": {
-            "label": "Live",
-            "hint": "The certificate is issued and the domain serves this project. It renews on its own."
-          },
-          "failed": {
-            "label": "Failed",
-            "hint": "The certificate could not be issued."
-          },
-          "expired": {
-            "label": "Expired",
-            "hint": "The certificate lapsed and renewal did not succeed — almost always because the DNS record changed. The domain is not serving."
-          },
-          "revoked": {
-            "label": "Revoked",
-            "hint": "The certificate was withdrawn. The domain is not serving and a new certificate must be requested."
-          },
-          "active": {
-            "label": "Active",
-            "hint": "The workspace subdomain resolves and serves this project."
-          },
-          "alias": {
-            "label": "Redirects",
-            "hint": "A subdomain renamed away from. It redirects to the current one, permanently, and is never released."
-          }
-        },
-        "action": {
-          "showDns": "Show DNS records",
-          "checkAgain": "Check again",
-          "requestAgain": "Request again",
-          "remove": "Remove",
-          "copy": "Copy value",
-          "copied": "Copied"
-        },
-        "addModal": {
-          "title": "Add a domain",
-          "label": "Domain",
-          "helper": "The project will answer at the root of this domain.",
-          "recordsHeading": "{count, plural, one {Create this record} other {Create these # records}}",
-          "type": "Type",
-          "name": "Name",
-          "value": "Value",
-          "apexNote": "A root domain is pinned to our IP addresses. A subdomain uses a CNAME instead, which follows us if those addresses ever change.",
-          "verify": "Verify",
-          "later": "I’ll do this later",
-          "cancel": "Cancel",
-          "submit": "Add domain"
-        },
-        "removeModal": {
-          "title": "Remove {hostname}?",
-          "warningTitle": "Anyone using this address will get an error.",
-          "warningBody": "Links already shared to {hostname} will stop working. The project stays public at its other addresses.",
-          "cancel": "Cancel",
-          "confirm": "Remove domain"
-        },
-        "upgrade": {
-          "title": "Custom domains are on the paid plan.",
-          "body": "Your workspace subdomain is included on every plan and keeps working. Upgrade to serve this project from a domain you own.",
-          "cta": "See plans"
-        },
-        "lastChecked": "Last checked {when}",
-        "error": "That did not work. Try again in a moment."
       }
     },
     "codeAccess": {
@@ -4421,6 +4339,7 @@
       },
       "rename": "Rename",
       "release": "Release",
+      "customDomainsLink": "Use your own domain instead →",
       "lock": "You can change the name again on {date}. A rename and a release each count as one change, once every 30 days.",
       "lockShort": "You can change the name again on {date}.",
       "review": "Review",
@@ -4465,6 +4384,84 @@
         "change": "Change in workspace settings →",
         "claim": "Claim a name for the workspace →"
       }
+    },
+    "customDomains": {
+      "title": "Custom domains",
+      "subtitle": "Serve this workspace's application on a domain you own.",
+      "add": "Add domain",
+      "empty": {
+        "title": "No custom domains yet",
+        "body": "Add a domain like shop.acme.com. You create two DNS records, Motir issues the certificate, and the domain serves this workspace's application."
+      },
+      "cap": "{used} of {max} domains",
+      "upsell": {
+        "title": "Custom domains are included on the Scaled plan.",
+        "body": "Your application keeps answering at {host} on every plan. Upgrade to serve it on a domain you own.",
+        "cta": "See plans"
+      },
+      "dialog": {
+        "title": "Add a domain",
+        "label": "Domain",
+        "helper": "A subdomain like shop.acme.com or a root domain like acme.com. It will serve this workspace's application.",
+        "cancel": "Cancel"
+      },
+      "refuse": {
+        "tenantBase": "{host} is a Motir address. Your workspace already answers under {base} — set that name in Public address.",
+        "siteOrigin": "{host} belongs to Motir. Add a domain you own.",
+        "malformed": "Enter only the domain, like shop.acme.com — no https:// and no path.",
+        "taken": "{host} is already connected to another Motir workspace. If it is yours, remove it there first.",
+        "cap": "Your plan includes {max} custom domains and all {max} are in use. Remove one, or see plans."
+      },
+      "status": {
+        "unverified": "Unverified",
+        "pending": "Pending",
+        "issued": "Issued",
+        "failed": "Failed"
+      },
+      "records": {
+        "heading": "{count, plural, one {Create this record at your DNS provider, then check.} other {Create these # records at your DNS provider, then check.}}",
+        "apexNote": "A root domain cannot take a CNAME, so it points at Motir's addresses. The IPv4 address is shared with other Motir domains; if it ever changes we will tell you before it does.",
+        "type": "Type",
+        "name": "Name",
+        "value": "Value"
+      },
+      "pending": "Ownership confirmed. Issuing the certificate — this usually takes a few minutes. This page updates on its own.",
+      "app": {
+        "serves": "Serves this workspace's application.",
+        "none": "No application is deployed for this workspace yet — this domain will serve it as soon as one is."
+      },
+      "cert": "The certificate renews on its own.",
+      "fail": {
+        "txt": "We can no longer see your ownership record",
+        "txtBody": "Restore this TXT record at your DNS provider:",
+        "pointing": "{host} no longer points at Motir",
+        "pointingBody": "Set the record back to:",
+        "issuance": "The certificate could not be issued",
+        "issuanceBody": "The certificate authority said:"
+      },
+      "action": {
+        "checkNow": "Check now",
+        "recheck": "Re-check",
+        "retry": "Retry",
+        "checking": "Checking…",
+        "showDns": "Show DNS records",
+        "hideDns": "Hide DNS records",
+        "copy": "Copy",
+        "copied": "Copied",
+        "remove": "Remove"
+      },
+      "remove": {
+        "title": "Remove {host}?",
+        "body": "It stops serving your application at once. Nothing is reserved: you can add it again later, and another workspace can add it if it proves ownership. The DNS records at your provider are yours to delete.",
+        "confirm": "Remove domain",
+        "removing": "Removing…",
+        "error": "The domain was not removed. Try again in a moment.",
+        "toast": "{host} removed",
+        "toastBody": "It no longer serves your application."
+      },
+      "readOnly": "Only a workspace owner or admin can add or remove domains.",
+      "loadError": "The domains couldn’t be loaded.",
+      "error": "That did not work. Try again in a moment."
     }
   },
   "boards": {

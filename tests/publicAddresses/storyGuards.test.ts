@@ -216,7 +216,7 @@ describe('EVERY STATUS MAP IS TOTAL', () => {
     const maps: [string, string][] = [
       ['lib/services/publicAddressCertificatesService.ts', 'Record<PublicAddressStatus, boolean>'],
       [
-        'app/(authed)/settings/project/public-address/_components/CustomDomainsSection.tsx',
+        'app/(authed)/settings/workspace/custom-domains/_components/CustomDomainsPane.tsx',
         'Record<DomainStatus, StateRow>',
       ],
     ];

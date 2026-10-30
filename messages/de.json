@@ -2067,7 +2067,8 @@
         "workspace": "Arbeitsbereich",
         "security": "Sicherheit",
         "roles": "Rollen & Berechtigungen",
-        "publicAddress": "Öffentliche Adresse"
+        "publicAddress": "Öffentliche Adresse",
+        "customDomains": "Eigene Domains"
       }
     },
     "name": {
@@ -2752,89 +2753,6 @@
       "unavailable": {
         "title": "Kein öffentlicher Namensraum konfiguriert",
         "description": "Für diese Bereitstellung ist keine Mandanten-Basisdomain festgelegt, daher kann noch keine Subdomain beansprucht werden. Ein Betreiber legt MOTIR_PUBLIC_TENANT_DOMAIN fest."
-      },
-      "domains": {
-        "title": "Ihre eigene Domain",
-        "subtitle": "Stellen Sie dieses Projekt unter einer Domain bereit, die Ihnen gehört.",
-        "add": "Domain hinzufügen",
-        "empty": {
-          "title": "Keine Domain verbunden",
-          "body": "Fügen Sie eine Domain wie roadmap.acme.com hinzu, und dieses Projekt ist unter ihrem Stamm erreichbar. Sie erstellen zwei DNS-Einträge; Motir stellt das Zertifikat aus."
-        },
-        "state": {
-          "unverified": {
-            "label": "Nicht verifiziert",
-            "hint": "Hinzugefügt, aber der TXT-Eintrag _motir-verify wurde noch nicht gefunden. Es wurde noch kein Zertifikat angefordert."
-          },
-          "verifying": {
-            "label": "Wird geprüft…",
-            "hint": "Wir suchen gerade nach dem TXT-Eintrag. DNS kann einige Minuten dauern."
-          },
-          "pending_certificate": {
-            "label": "Wird ausgestellt…",
-            "hint": "Die Inhaberschaft ist nachgewiesen und das Zertifikat wurde angefordert. Das dauert in der Regel ein bis zwei Minuten."
-          },
-          "issued": {
-            "label": "Live",
-            "hint": "Das Zertifikat ist ausgestellt, und die Domain stellt dieses Projekt bereit. Es wird automatisch erneuert."
-          },
-          "failed": {
-            "label": "Fehlgeschlagen",
-            "hint": "Das Zertifikat konnte nicht ausgestellt werden."
-          },
-          "expired": {
-            "label": "Abgelaufen",
-            "hint": "Das Zertifikat ist abgelaufen und die Erneuerung ist fehlgeschlagen – fast immer, weil sich der DNS-Eintrag geändert hat. Die Domain ist nicht erreichbar."
-          },
-          "revoked": {
-            "label": "Widerrufen",
-            "hint": "Das Zertifikat wurde zurückgezogen. Die Domain ist nicht erreichbar, und ein neues Zertifikat muss angefordert werden."
-          },
-          "active": {
-            "label": "Aktiv",
-            "hint": "Die Subdomain des Arbeitsbereichs wird aufgelöst und stellt dieses Projekt bereit."
-          },
-          "alias": {
-            "label": "Weiterleitung",
-            "hint": "Eine Subdomain, die umbenannt wurde. Sie leitet dauerhaft auf die aktuelle weiter und wird nie freigegeben."
-          }
-        },
-        "action": {
-          "showDns": "DNS-Einträge anzeigen",
-          "checkAgain": "Erneut prüfen",
-          "requestAgain": "Erneut anfordern",
-          "remove": "Entfernen",
-          "copy": "Wert kopieren",
-          "copied": "Kopiert"
-        },
-        "addModal": {
-          "title": "Domain hinzufügen",
-          "label": "Domain",
-          "helper": "Das Projekt ist unter dem Stamm dieser Domain erreichbar.",
-          "recordsHeading": "{count, plural, one {Erstellen Sie diesen Eintrag} other {Erstellen Sie diese # Einträge}}",
-          "type": "Typ",
-          "name": "Name",
-          "value": "Wert",
-          "apexNote": "Eine Stammdomain wird fest auf unsere IP-Adressen gesetzt. Eine Subdomain verwendet stattdessen einen CNAME, der uns folgt, falls sich diese Adressen jemals ändern.",
-          "verify": "Verifizieren",
-          "later": "Das mache ich später",
-          "cancel": "Abbrechen",
-          "submit": "Domain hinzufügen"
-        },
-        "removeModal": {
-          "title": "{hostname} entfernen?",
-          "warningTitle": "Wer diese Adresse verwendet, erhält einen Fehler.",
-          "warningBody": "Bereits geteilte Links auf {hostname} funktionieren nicht mehr. Das Projekt bleibt unter seinen anderen Adressen öffentlich.",
-          "cancel": "Abbrechen",
-          "confirm": "Domain entfernen"
-        },
-        "upgrade": {
-          "title": "Eigene Domains sind im kostenpflichtigen Plan enthalten.",
-          "body": "Die Subdomain Ihres Arbeitsbereichs ist in jedem Plan enthalten und funktioniert weiterhin. Führen Sie ein Upgrade durch, um dieses Projekt unter einer eigenen Domain bereitzustellen.",
-          "cta": "Pläne ansehen"
-        },
-        "lastChecked": "Zuletzt geprüft {when}",
-        "error": "Das hat nicht funktioniert. Versuchen Sie es gleich noch einmal."
       }
     },
     "codeAccess": {
@@ -4421,6 +4339,7 @@
       },
       "rename": "Umbenennen",
       "release": "Freigeben",
+      "customDomainsLink": "Stattdessen eine eigene Domain verwenden →",
       "lock": "Sie können den Namen am {date} wieder ändern. Eine Umbenennung und eine Freigabe zählen jeweils als eine Änderung, einmal alle 30 Tage.",
       "lockShort": "Sie können den Namen am {date} wieder ändern.",
       "review": "Prüfen",
@@ -4465,6 +4384,84 @@
         "change": "In den Arbeitsbereich-Einstellungen ändern →",
         "claim": "Einen Namen für den Arbeitsbereich beanspruchen →"
       }
+    },
+    "customDomains": {
+      "title": "Eigene Domains",
+      "subtitle": "Stellen Sie die Anwendung dieses Arbeitsbereichs unter einer Domain bereit, die Ihnen gehört.",
+      "add": "Domain hinzufügen",
+      "empty": {
+        "title": "Noch keine eigenen Domains",
+        "body": "Fügen Sie eine Domain wie shop.acme.com hinzu. Sie legen zwei DNS-Einträge an, Motir stellt das Zertifikat aus, und die Domain liefert die Anwendung dieses Arbeitsbereichs aus."
+      },
+      "cap": "{used} von {max} Domains",
+      "upsell": {
+        "title": "Eigene Domains sind im Scaled-Plan enthalten.",
+        "body": "Ihre Anwendung bleibt in jedem Plan unter {host} erreichbar. Führen Sie ein Upgrade durch, um sie unter einer eigenen Domain bereitzustellen.",
+        "cta": "Pläne ansehen"
+      },
+      "dialog": {
+        "title": "Domain hinzufügen",
+        "label": "Domain",
+        "helper": "Eine Subdomain wie shop.acme.com oder eine Stammdomain wie acme.com. Sie liefert die Anwendung dieses Arbeitsbereichs aus.",
+        "cancel": "Abbrechen"
+      },
+      "refuse": {
+        "tenantBase": "{host} ist eine Motir-Adresse. Ihr Arbeitsbereich ist bereits unter {base} erreichbar – legen Sie diesen Namen unter „Öffentliche Adresse“ fest.",
+        "siteOrigin": "{host} gehört zu Motir. Fügen Sie eine Domain hinzu, die Ihnen gehört.",
+        "malformed": "Geben Sie nur die Domain ein, etwa shop.acme.com – ohne https:// und ohne Pfad.",
+        "taken": "{host} ist bereits mit einem anderen Motir-Arbeitsbereich verbunden. Wenn sie Ihnen gehört, entfernen Sie sie dort zuerst.",
+        "cap": "Ihr Plan umfasst {max} eigene Domains, und alle {max} sind belegt. Entfernen Sie eine oder sehen Sie sich die Pläne an."
+      },
+      "status": {
+        "unverified": "Nicht bestätigt",
+        "pending": "Ausstehend",
+        "issued": "Ausgestellt",
+        "failed": "Fehlgeschlagen"
+      },
+      "records": {
+        "heading": "{count, plural, one {Legen Sie diesen Eintrag bei Ihrem DNS-Anbieter an und prüfen Sie dann.} other {Legen Sie diese # Einträge bei Ihrem DNS-Anbieter an und prüfen Sie dann.}}",
+        "apexNote": "Eine Stammdomain kann keinen CNAME haben, daher zeigt sie auf die Adressen von Motir. Die IPv4-Adresse wird mit anderen Motir-Domains geteilt; falls sie sich je ändert, informieren wir Sie vorher.",
+        "type": "Typ",
+        "name": "Name",
+        "value": "Wert"
+      },
+      "pending": "Inhaberschaft bestätigt. Das Zertifikat wird ausgestellt – das dauert meist einige Minuten. Diese Seite aktualisiert sich selbst.",
+      "app": {
+        "serves": "Liefert die Anwendung dieses Arbeitsbereichs aus.",
+        "none": "Für diesen Arbeitsbereich ist noch keine Anwendung bereitgestellt – diese Domain liefert sie aus, sobald es eine gibt."
+      },
+      "cert": "Das Zertifikat erneuert sich selbst.",
+      "fail": {
+        "txt": "Wir sehen Ihren Inhaberschaftseintrag nicht mehr",
+        "txtBody": "Stellen Sie diesen TXT-Eintrag bei Ihrem DNS-Anbieter wieder her:",
+        "pointing": "{host} zeigt nicht mehr auf Motir",
+        "pointingBody": "Setzen Sie den Eintrag zurück auf:",
+        "issuance": "Das Zertifikat konnte nicht ausgestellt werden",
+        "issuanceBody": "Die Zertifizierungsstelle meldete:"
+      },
+      "action": {
+        "checkNow": "Jetzt prüfen",
+        "recheck": "Erneut prüfen",
+        "retry": "Wiederholen",
+        "checking": "Wird geprüft …",
+        "showDns": "DNS-Einträge anzeigen",
+        "hideDns": "DNS-Einträge ausblenden",
+        "copy": "Kopieren",
+        "copied": "Kopiert",
+        "remove": "Entfernen"
+      },
+      "remove": {
+        "title": "{host} entfernen?",
+        "body": "Sie liefert Ihre Anwendung sofort nicht mehr aus. Nichts wird reserviert: Sie können sie später erneut hinzufügen, und ein anderer Arbeitsbereich kann sie hinzufügen, wenn er die Inhaberschaft nachweist. Die DNS-Einträge bei Ihrem Anbieter löschen Sie selbst.",
+        "confirm": "Domain entfernen",
+        "removing": "Wird entfernt …",
+        "error": "Die Domain wurde nicht entfernt. Versuchen Sie es gleich noch einmal.",
+        "toast": "{host} entfernt",
+        "toastBody": "Sie liefert Ihre Anwendung nicht mehr aus."
+      },
+      "readOnly": "Nur Eigentümer oder Administratoren des Arbeitsbereichs können Domains hinzufügen oder entfernen.",
+      "loadError": "Die Domains konnten nicht geladen werden.",
+      "error": "Das hat nicht funktioniert. Versuchen Sie es gleich noch einmal."
     }
   },
   "boards": {

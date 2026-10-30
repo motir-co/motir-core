@@ -449,23 +449,27 @@ describe('the gates', () => {
     expect(await adminDb.publicAddress.findUnique({ where: { id: dto.id } })).not.toBeNull();
   });
 
-  it('the project room reads the domains and answers canManage on the WORKSPACE axis', async () => {
+  it('the pane reads the domains, canManage on the WORKSPACE axis, and the tier cap (MOTIR-9529)', async () => {
     await addDomain();
-    const owner = await customDomainService.listForProjectRoom({
+    const owner = await customDomainService.listForPane({
       workspaceId: ctx.workspaceId,
-      projectKey: 'ACME',
       actorUserId,
     });
     expect(owner.addresses.map((a) => a.hostname)).toEqual([HOST]);
     expect(owner.canManage).toBe(true);
-    // A project that is not this workspace's is not found, however it is spelled.
-    await expect(
-      customDomainService.listForProjectRoom({
-        workspaceId: ctx.workspaceId,
-        projectKey: 'NOPE',
-        actorUserId,
-      }),
-    ).rejects.toBeInstanceOf(AddressNotFoundError);
+    // The cap is the tier's own number (or null for none), never re-derived.
+    expect(owner.maxDomains === null || typeof owner.maxDomains === 'number').toBe(true);
+
+    const member = await createTestUser();
+    await adminDb.workspaceMembership.create({
+      data: { userId: member.id, workspaceId: ctx.workspaceId, workspaceRole: 'member' },
+    });
+    const read = await customDomainService.listForPane({
+      workspaceId: ctx.workspaceId,
+      actorUserId: member.id,
+    });
+    expect(read.addresses).toHaveLength(1);
+    expect(read.canManage).toBe(false);
   });
 
   it('answers a NON-MEMBER not-found, on read and write alike', async () => {

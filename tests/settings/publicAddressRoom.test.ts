@@ -26,7 +26,11 @@ const WS_BODY = 'app/(authed)/settings/workspace/public-address/_components/Publ
 const WS_REFUSAL = 'app/(authed)/settings/workspace/public-address/_components/refusal.ts';
 const WS_CONTROL =
   'app/(authed)/settings/workspace/public-address/_components/PublicAddressControl.tsx';
-const SLOT = 'app/(authed)/settings/project/public-address/_components/CustomDomainsSection.tsx';
+// Customer domains are the WORKSPACE's and moved to their own room (MOTIR-9529).
+const DOMAINS_PAGE = 'app/(authed)/settings/workspace/custom-domains/page.tsx';
+const DOMAINS_BODY =
+  'app/(authed)/settings/workspace/custom-domains/_components/CustomDomainsBody.tsx';
+const SLOT = 'app/(authed)/settings/workspace/custom-domains/_components/CustomDomainsPane.tsx';
 
 /** Source with comments stripped — a claim in prose is not a claim in code. */
 const code = (rel: string) =>
@@ -196,13 +200,18 @@ describe('the workspace control renders the design, and the refusals come from C
   });
 });
 
-describe('the custom-domain half (MOTIR-4229) landed in the slot part 1 left', () => {
-  it('is composed by the page, with its addresses read SERVER-side', () => {
-    // The slot was a typed stub for exactly one commit, which is what made part
-    // 2 an addition to one file rather than an edit to the page's body.
+describe('the custom-domain room (MOTIR-9529) — moved to workspace settings', () => {
+  it('is gone from the project room, which keeps no customer-domain control', () => {
     const src = code(PAGE);
-    expect(src).toContain('<CustomDomainsSection');
-    expect(src).toContain('customDomainService.list');
+    expect(src).not.toContain('CustomDomains');
+    expect(src).not.toContain('customDomainService');
+  });
+
+  it('is its own workspace page, cloud-only FIRST, with its reads SERVER-side', () => {
+    const page = code(DOMAINS_PAGE);
+    expect(page.indexOf('isCloud()')).toBeGreaterThan(-1);
+    expect(page.indexOf('isCloud()')).toBeLessThan(page.indexOf('getSession()'));
+    expect(code(DOMAINS_BODY)).toContain('customDomainService.listForPane');
   });
 
   it('the state map is TOTAL over the enum, subdomain values included', () => {
@@ -226,11 +235,11 @@ describe('the custom-domain half (MOTIR-4229) landed in the slot part 1 left', (
     }
   });
 
-  it('does not read a tier — the cap refusal is what raises the prompt', () => {
-    // `entitlementsService.assertCanAddCustomDomain` records that `free: 0`
-    // exists to make the refusal "the upgrade prompt's trigger instead of an
-    // empty state the pane special-cases". A tier read here would be the second
-    // copy of a billing rule that note exists to prevent.
+  it('does not read a tier itself — the cap arrives from the service, and the refusal still maps', () => {
+    // The pane shows the upsell and the `N of M` count before a click
+    // (MOTIR-9529), so the cap is READ — by `customDomainService.listForPane`
+    // through `entitlementsService.customDomainCap`, never re-derived here. A
+    // tier read in the component would be a second copy of the billing rule.
     const src = code(SLOT);
     expect(src).toContain("entitlement === 'custom_domains'");
     expect(src).not.toMatch(/maxCustomDomains|entitlementsFor|tierFor/);

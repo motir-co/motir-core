@@ -2067,7 +2067,8 @@
         "workspace": "Obszar roboczy",
         "security": "Zabezpieczenia",
         "roles": "Role i uprawnienia",
-        "publicAddress": "Adres publiczny"
+        "publicAddress": "Adres publiczny",
+        "customDomains": "Własne domeny"
       }
     },
     "name": {
@@ -2752,89 +2753,6 @@
       "unavailable": {
         "title": "Nie skonfigurowano publicznej przestrzeni nazw",
         "description": "To wdrożenie nie ma ustawionej domeny bazowej dzierżawców, więc nie można jeszcze zarezerwować subdomeny. Operator ustawia MOTIR_PUBLIC_TENANT_DOMAIN."
-      },
-      "domains": {
-        "title": "Własna domena",
-        "subtitle": "Udostępniaj ten projekt z domeny, która należy do Ciebie.",
-        "add": "Dodaj domenę",
-        "empty": {
-          "title": "Brak połączonej domeny",
-          "body": "Dodaj domenę, np. roadmap.acme.com, a ten projekt będzie dostępny w jej katalogu głównym. Utworzysz dwa rekordy DNS; Motir wystawi certyfikat."
-        },
-        "state": {
-          "unverified": {
-            "label": "Niezweryfikowana",
-            "hint": "Dodano, ale rekord TXT _motir-verify nie został jeszcze wykryty. Nie zażądano certyfikatu."
-          },
-          "verifying": {
-            "label": "Sprawdzanie…",
-            "hint": "Szukamy teraz rekordu TXT. Propagacja DNS może potrwać kilka minut."
-          },
-          "pending_certificate": {
-            "label": "Wystawianie…",
-            "hint": "Własność została potwierdzona i zażądano certyfikatu. Zwykle trwa to minutę lub dwie."
-          },
-          "issued": {
-            "label": "Aktywna",
-            "hint": "Certyfikat został wystawiony, a domena udostępnia ten projekt. Odnawia się automatycznie."
-          },
-          "failed": {
-            "label": "Niepowodzenie",
-            "hint": "Nie udało się wystawić certyfikatu."
-          },
-          "expired": {
-            "label": "Wygasła",
-            "hint": "Certyfikat wygasł, a odnowienie się nie powiodło — prawie zawsze dlatego, że zmienił się rekord DNS. Domena nie działa."
-          },
-          "revoked": {
-            "label": "Unieważniona",
-            "hint": "Certyfikat został wycofany. Domena nie działa i trzeba zażądać nowego certyfikatu."
-          },
-          "active": {
-            "label": "Aktywna",
-            "hint": "Subdomena obszaru roboczego jest rozwiązywana i udostępnia ten projekt."
-          },
-          "alias": {
-            "label": "Przekierowuje",
-            "hint": "Subdomena, której nazwę zmieniono. Trwale przekierowuje do obecnej i nigdy nie zostanie zwolniona."
-          }
-        },
-        "action": {
-          "showDns": "Pokaż rekordy DNS",
-          "checkAgain": "Sprawdź ponownie",
-          "requestAgain": "Zażądaj ponownie",
-          "remove": "Usuń",
-          "copy": "Kopiuj wartość",
-          "copied": "Skopiowano"
-        },
-        "addModal": {
-          "title": "Dodaj domenę",
-          "label": "Domena",
-          "helper": "Projekt będzie dostępny w katalogu głównym tej domeny.",
-          "recordsHeading": "{count, plural, one {Utwórz ten rekord} few {Utwórz te # rekordy} many {Utwórz tych # rekordów} other {Utwórz te # rekordu}}",
-          "type": "Typ",
-          "name": "Nazwa",
-          "value": "Wartość",
-          "apexNote": "Domena główna jest przypięta do naszych adresów IP. Subdomena używa zamiast tego rekordu CNAME, który podąża za nami, jeśli te adresy kiedykolwiek się zmienią.",
-          "verify": "Zweryfikuj",
-          "later": "Zrobię to później",
-          "cancel": "Anuluj",
-          "submit": "Dodaj domenę"
-        },
-        "removeModal": {
-          "title": "Usunąć {hostname}?",
-          "warningTitle": "Każdy, kto użyje tego adresu, zobaczy błąd.",
-          "warningBody": "Udostępnione już linki do {hostname} przestaną działać. Projekt pozostanie publiczny pod pozostałymi adresami.",
-          "cancel": "Anuluj",
-          "confirm": "Usuń domenę"
-        },
-        "upgrade": {
-          "title": "Domeny niestandardowe są dostępne w płatnym planie.",
-          "body": "Subdomena obszaru roboczego jest dostępna w każdym planie i nadal działa. Ulepsz plan, aby udostępniać ten projekt z własnej domeny.",
-          "cta": "Zobacz plany"
-        },
-        "lastChecked": "Ostatnio sprawdzono {when}",
-        "error": "To się nie udało. Spróbuj ponownie za chwilę."
       }
     },
     "codeAccess": {
@@ -4421,6 +4339,7 @@
       },
       "rename": "Zmień nazwę",
       "release": "Zwolnij",
+      "customDomainsLink": "Użyj zamiast tego własnej domeny →",
       "lock": "Nazwę można zmienić ponownie {date}. Zmiana nazwy i zwolnienie liczą się jako jedna zmiana, raz na 30 dni.",
       "lockShort": "Nazwę można zmienić ponownie {date}.",
       "review": "Sprawdź",
@@ -4465,6 +4384,84 @@
         "change": "Zmień w ustawieniach obszaru roboczego →",
         "claim": "Zajmij nazwę dla obszaru roboczego →"
       }
+    },
+    "customDomains": {
+      "title": "Własne domeny",
+      "subtitle": "Udostępniaj aplikację tego obszaru roboczego w domenie, która należy do Ciebie.",
+      "add": "Dodaj domenę",
+      "empty": {
+        "title": "Nie ma jeszcze własnych domen",
+        "body": "Dodaj domenę, np. shop.acme.com. Tworzysz dwa rekordy DNS, Motir wystawia certyfikat, a domena udostępnia aplikację tego obszaru roboczego."
+      },
+      "cap": "{used} z {max} domen",
+      "upsell": {
+        "title": "Własne domeny są dostępne w planie Scaled.",
+        "body": "W każdym planie aplikacja nadal odpowiada pod adresem {host}. Przejdź na wyższy plan, aby udostępniać ją we własnej domenie.",
+        "cta": "Zobacz plany"
+      },
+      "dialog": {
+        "title": "Dodaj domenę",
+        "label": "Domena",
+        "helper": "Subdomena, np. shop.acme.com, lub domena główna, np. acme.com. Będzie udostępniać aplikację tego obszaru roboczego.",
+        "cancel": "Anuluj"
+      },
+      "refuse": {
+        "tenantBase": "{host} to adres Motir. Twój obszar roboczy odpowiada już pod {base} — ustaw tę nazwę w sekcji Adres publiczny.",
+        "siteOrigin": "{host} należy do Motir. Dodaj domenę, która należy do Ciebie.",
+        "malformed": "Wpisz tylko domenę, np. shop.acme.com — bez https:// i bez ścieżki.",
+        "taken": "{host} jest już połączona z innym obszarem roboczym Motir. Jeśli należy do Ciebie, najpierw usuń ją tam.",
+        "cap": "Twój plan obejmuje {max} własnych domen i wszystkie {max} są w użyciu. Usuń jedną lub zobacz plany."
+      },
+      "status": {
+        "unverified": "Niepotwierdzona",
+        "pending": "Oczekuje",
+        "issued": "Wystawiony",
+        "failed": "Niepowodzenie"
+      },
+      "records": {
+        "heading": "{count, plural, one {Utwórz ten rekord u swojego dostawcy DNS, a potem sprawdź.} few {Utwórz te # rekordy u swojego dostawcy DNS, a potem sprawdź.} many {Utwórz te # rekordów u swojego dostawcy DNS, a potem sprawdź.} other {Utwórz te # rekordu u swojego dostawcy DNS, a potem sprawdź.}}",
+        "apexNote": "Domena główna nie może mieć rekordu CNAME, więc wskazuje adresy Motir. Adres IPv4 jest współdzielony z innymi domenami Motir; jeśli kiedyś się zmieni, uprzedzimy Cię wcześniej.",
+        "type": "Typ",
+        "name": "Nazwa",
+        "value": "Wartość"
+      },
+      "pending": "Własność potwierdzona. Trwa wystawianie certyfikatu — zwykle zajmuje to kilka minut. Ta strona odświeża się sama.",
+      "app": {
+        "serves": "Udostępnia aplikację tego obszaru roboczego.",
+        "none": "W tym obszarze roboczym nie wdrożono jeszcze żadnej aplikacji — ta domena udostępni ją, gdy tylko się pojawi."
+      },
+      "cert": "Certyfikat odnawia się automatycznie.",
+      "fail": {
+        "txt": "Nie widzimy już Twojego rekordu własności",
+        "txtBody": "Przywróć ten rekord TXT u swojego dostawcy DNS:",
+        "pointing": "{host} nie wskazuje już Motir",
+        "pointingBody": "Ustaw rekord z powrotem na:",
+        "issuance": "Nie udało się wystawić certyfikatu",
+        "issuanceBody": "Urząd certyfikacji odpowiedział:"
+      },
+      "action": {
+        "checkNow": "Sprawdź teraz",
+        "recheck": "Sprawdź ponownie",
+        "retry": "Ponów",
+        "checking": "Sprawdzanie…",
+        "showDns": "Pokaż rekordy DNS",
+        "hideDns": "Ukryj rekordy DNS",
+        "copy": "Kopiuj",
+        "copied": "Skopiowano",
+        "remove": "Usuń"
+      },
+      "remove": {
+        "title": "Usunąć {host}?",
+        "body": "Natychmiast przestanie udostępniać Twoją aplikację. Nic nie jest rezerwowane: możesz dodać ją ponownie później, a inny obszar roboczy może ją dodać, jeśli udowodni własność. Rekordy DNS u dostawcy usuwasz samodzielnie.",
+        "confirm": "Usuń domenę",
+        "removing": "Usuwanie…",
+        "error": "Domena nie została usunięta. Spróbuj ponownie za chwilę.",
+        "toast": "Usunięto {host}",
+        "toastBody": "Nie udostępnia już Twojej aplikacji."
+      },
+      "readOnly": "Tylko właściciel lub administrator obszaru roboczego może dodawać i usuwać domeny.",
+      "loadError": "Nie udało się wczytać domen.",
+      "error": "To się nie udało. Spróbuj ponownie za chwilę."
     }
   },
   "boards": {

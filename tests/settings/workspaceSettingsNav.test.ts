@@ -51,8 +51,9 @@ describe('workspaceSettingsNav — totality (route ↔ entry, mistake #29)', () 
     // No drift in either direction: a new page without an entry, or an entry
     // without a page, both fail.
     expect(registryRoutes).toEqual(fsRoutes);
-    // Seven since MOTIR-10043 deleted the tenant Job runs page with its row.
-    expect(fsRoutes).toHaveLength(7);
+    // Seven since MOTIR-10043 deleted the tenant Job runs page with its row;
+    // eight with Custom domains (MOTIR-9529).
+    expect(fsRoutes).toHaveLength(8);
   });
 });
 
@@ -62,10 +63,10 @@ describe('workspaceSettingsNav — the ONE filter axis, and it defaults closed',
       visibleWorkspaceSettingsNav(true, undefined, { publicProjectsAvailable: true }).map(
         (e) => e.id,
       ),
-    ).toEqual(['workspace', 'security', 'roles', 'public-address']);
+    ).toEqual(['workspace', 'security', 'roles', 'public-address', 'custom-domains']);
   });
 
-  it('drops the cloud-only Public address row off-cloud, and by default (MOTIR-9514)', () => {
+  it('drops the cloud-only address rows off-cloud, and by default (MOTIR-9514, MOTIR-9529)', () => {
     // Off-cloud the room 404s, so the row is ABSENT rather than a door onto it.
     const offCloud = visibleWorkspaceSettingsNav(true, undefined, {
       publicProjectsAvailable: false,

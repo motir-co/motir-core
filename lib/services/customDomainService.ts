@@ -26,9 +26,7 @@ import { publicSiteOrigin } from '@/lib/publicProjects/urls';
 import { entitlementsService } from '@/lib/services/entitlementsService';
 import { hostedApplicationRepository } from '@/lib/repositories/hostedApplicationRepository';
 import { publicAddressRepository } from '@/lib/repositories/publicAddressRepository';
-import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
-import { projectAccessService } from '@/lib/services/projectAccessService';
 import {
   assertAddressAdmin,
   assertAddressMember,
@@ -97,32 +95,33 @@ export const customDomainService = {
   },
 
   /**
-   * The project Public address room's read (its door is `project:manage_access`,
-   * MOTIR-4221): the workspace's domains, plus whether the viewer may WRITE them
-   * — a different axis, the workspace address gate (MOTIR-9524). Computed here
-   * so the page reads no role of its own (MOTIR-9515) and its controls cannot
-   * appear and then refuse.
+   * The workspace Custom domains pane's read (MOTIR-9529): the domains, whether
+   * the viewer may WRITE them (the workspace address gate every write asserts,
+   * so a control never appears and then refuses) and the tier's cap (`null` =
+   * none). Computed here so the page reads no role and no tier of its own.
    */
-  async listForProjectRoom(
-    input: WorkspaceScopedInput & { projectKey: string },
-  ): Promise<{ addresses: PublicAddressDto[]; canManage: boolean }> {
+  async listForPane(input: WorkspaceScopedInput): Promise<{
+    addresses: PublicAddressDto[];
+    canManage: boolean;
+    maxDomains: number | null;
+  }> {
     assertAvailable();
     const role = await assertAddressMember(input.workspaceId, input.actorUserId);
-    const scope = { userId: input.actorUserId, workspaceId: input.workspaceId };
-    return withWorkspaceContext(scope, async (tx) => {
-      const project = await projectRepository.findByIdentifier(
-        input.workspaceId,
-        input.projectKey,
-        tx,
-      );
-      if (!project) throw new AddressNotFoundError();
-      await projectAccessService.assertPermission(project.id, scope, 'project:manage_access', tx);
-      const rows = await publicAddressRepository.listCustomDomainsForWorkspaceInTx(
-        input.workspaceId,
-        tx,
-      );
-      return { addresses: rows.map(toDto), canManage: roleMayManageAddress(role) };
-    });
+    const { addresses, organizationId } = await withWorkspaceContext(
+      { userId: input.actorUserId, workspaceId: input.workspaceId },
+      async (tx) => ({
+        addresses: (
+          await publicAddressRepository.listCustomDomainsForWorkspaceInTx(input.workspaceId, tx)
+        ).map(toDto),
+        organizationId: await workspaceRepository.findOrganizationId(input.workspaceId, tx),
+      }),
+    );
+    // The tier read opens its own org binding, so it runs after the workspace
+    // transaction has closed rather than nested inside it.
+    const maxDomains = organizationId
+      ? await entitlementsService.customDomainCap(organizationId)
+      : null;
+    return { addresses, canManage: roleMayManageAddress(role), maxDomains };
   },
 
   /**

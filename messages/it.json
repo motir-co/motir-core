@@ -2067,7 +2067,8 @@
         "workspace": "Area di lavoro",
         "security": "Sicurezza",
         "roles": "Ruoli e permessi",
-        "publicAddress": "Indirizzo pubblico"
+        "publicAddress": "Indirizzo pubblico",
+        "customDomains": "Domini personalizzati"
       }
     },
     "name": {
@@ -2752,89 +2753,6 @@
       "unavailable": {
         "title": "Nessuno spazio dei nomi pubblico configurato",
         "description": "Questo deployment non ha un dominio base per i tenant, quindi non è ancora possibile richiedere un sottodominio. Un operatore deve impostare MOTIR_PUBLIC_TENANT_DOMAIN."
-      },
-      "domains": {
-        "title": "Il tuo dominio",
-        "subtitle": "Pubblica questo progetto da un dominio di tua proprietà.",
-        "add": "Aggiungi un dominio",
-        "empty": {
-          "title": "Nessun dominio collegato",
-          "body": "Aggiungi un dominio come roadmap.acme.com e questo progetto risponderà alla sua radice. Dovrai creare due record DNS; Motir emette il certificato."
-        },
-        "state": {
-          "unverified": {
-            "label": "Non verificato",
-            "hint": "Aggiunto, ma il record TXT _motir-verify non è ancora stato rilevato. Non è stato richiesto alcun certificato."
-          },
-          "verifying": {
-            "label": "Verifica…",
-            "hint": "Stiamo cercando il record TXT. Il DNS può richiedere qualche minuto."
-          },
-          "pending_certificate": {
-            "label": "Emissione…",
-            "hint": "La proprietà è verificata e il certificato è stato richiesto. Di solito ci vogliono uno o due minuti."
-          },
-          "issued": {
-            "label": "Online",
-            "hint": "Il certificato è stato emesso e il dominio pubblica questo progetto. Si rinnova automaticamente."
-          },
-          "failed": {
-            "label": "Non riuscito",
-            "hint": "Impossibile emettere il certificato."
-          },
-          "expired": {
-            "label": "Scaduto",
-            "hint": "Il certificato è scaduto e il rinnovo non è riuscito, quasi sempre perché il record DNS è cambiato. Il dominio non è attivo."
-          },
-          "revoked": {
-            "label": "Revocato",
-            "hint": "Il certificato è stato revocato. Il dominio non è attivo e occorre richiedere un nuovo certificato."
-          },
-          "active": {
-            "label": "Attivo",
-            "hint": "Il sottodominio dell’area di lavoro viene risolto e pubblica questo progetto."
-          },
-          "alias": {
-            "label": "Reindirizza",
-            "hint": "Un sottodominio rinominato. Reindirizza a quello attuale in modo permanente e non viene mai rilasciato."
-          }
-        },
-        "action": {
-          "showDns": "Mostra i record DNS",
-          "checkAgain": "Verifica di nuovo",
-          "requestAgain": "Richiedi di nuovo",
-          "remove": "Rimuovi",
-          "copy": "Copia valore",
-          "copied": "Copiato"
-        },
-        "addModal": {
-          "title": "Aggiungi un dominio",
-          "label": "Dominio",
-          "helper": "Il progetto risponderà alla radice di questo dominio.",
-          "recordsHeading": "{count, plural, one {Crea questo record} other {Crea questi # record}}",
-          "type": "Tipo",
-          "name": "Nome",
-          "value": "Valore",
-          "apexNote": "Un dominio radice è vincolato ai nostri indirizzi IP. Un sottodominio usa invece un CNAME, che ci segue se quegli indirizzi dovessero cambiare.",
-          "verify": "Verifica",
-          "later": "Lo farò più tardi",
-          "cancel": "Annulla",
-          "submit": "Aggiungi dominio"
-        },
-        "removeModal": {
-          "title": "Rimuovere {hostname}?",
-          "warningTitle": "Chi usa questo indirizzo riceverà un errore.",
-          "warningBody": "I link a {hostname} già condivisi smetteranno di funzionare. Il progetto resta pubblico ai suoi altri indirizzi.",
-          "cancel": "Annulla",
-          "confirm": "Rimuovi dominio"
-        },
-        "upgrade": {
-          "title": "I domini personalizzati sono inclusi nel piano a pagamento.",
-          "body": "Il sottodominio dell’area di lavoro è incluso in ogni piano e continua a funzionare. Esegui l’upgrade per pubblicare questo progetto da un dominio di tua proprietà.",
-          "cta": "Vedi i piani"
-        },
-        "lastChecked": "Ultima verifica {when}",
-        "error": "Operazione non riuscita. Riprova tra poco."
       }
     },
     "codeAccess": {
@@ -4421,6 +4339,7 @@
       },
       "rename": "Rinomina",
       "release": "Rilascia",
+      "customDomainsLink": "Usa invece un tuo dominio →",
       "lock": "Potrai cambiare di nuovo il nome il {date}. Una rinomina e un rilascio contano ciascuno come una modifica, una volta ogni 30 giorni.",
       "lockShort": "Potrai cambiare di nuovo il nome il {date}.",
       "review": "Controlla",
@@ -4465,6 +4384,84 @@
         "change": "Modifica nelle impostazioni dell’area di lavoro →",
         "claim": "Rivendica un nome per l’area di lavoro →"
       }
+    },
+    "customDomains": {
+      "title": "Domini personalizzati",
+      "subtitle": "Servi l’applicazione di questo spazio di lavoro su un dominio di tua proprietà.",
+      "add": "Aggiungi dominio",
+      "empty": {
+        "title": "Ancora nessun dominio personalizzato",
+        "body": "Aggiungi un dominio come shop.acme.com. Crei due record DNS, Motir emette il certificato e il dominio serve l’applicazione di questo spazio di lavoro."
+      },
+      "cap": "{used} di {max} domini",
+      "upsell": {
+        "title": "I domini personalizzati sono inclusi nel piano Scaled.",
+        "body": "La tua applicazione continua a rispondere su {host} con ogni piano. Passa a un piano superiore per servirla su un dominio di tua proprietà.",
+        "cta": "Vedi i piani"
+      },
+      "dialog": {
+        "title": "Aggiungi un dominio",
+        "label": "Dominio",
+        "helper": "Un sottodominio come shop.acme.com o un dominio radice come acme.com. Servirà l’applicazione di questo spazio di lavoro.",
+        "cancel": "Annulla"
+      },
+      "refuse": {
+        "tenantBase": "{host} è un indirizzo Motir. Il tuo spazio di lavoro risponde già sotto {base}: imposta quel nome in Indirizzo pubblico.",
+        "siteOrigin": "{host} appartiene a Motir. Aggiungi un dominio di tua proprietà.",
+        "malformed": "Inserisci solo il dominio, come shop.acme.com, senza https:// e senza percorso.",
+        "taken": "{host} è già collegato a un altro spazio di lavoro Motir. Se è tuo, rimuovilo prima da lì.",
+        "cap": "Il tuo piano include {max} domini personalizzati e sono tutti e {max} in uso. Rimuovine uno o consulta i piani."
+      },
+      "status": {
+        "unverified": "Non confermato",
+        "pending": "In attesa",
+        "issued": "Emesso",
+        "failed": "Non riuscito"
+      },
+      "records": {
+        "heading": "{count, plural, one {Crea questo record presso il tuo provider DNS, poi controlla.} other {Crea questi # record presso il tuo provider DNS, poi controlla.}}",
+        "apexNote": "Un dominio radice non può avere un CNAME, quindi punta agli indirizzi di Motir. L’indirizzo IPv4 è condiviso con altri domini Motir; se dovesse cambiare, ti avviseremo prima.",
+        "type": "Tipo",
+        "name": "Nome",
+        "value": "Valore"
+      },
+      "pending": "Proprietà confermata. Emissione del certificato in corso: di solito richiede pochi minuti. Questa pagina si aggiorna da sola.",
+      "app": {
+        "serves": "Serve l’applicazione di questo spazio di lavoro.",
+        "none": "Per questo spazio di lavoro non è ancora stata distribuita nessuna applicazione: questo dominio la servirà non appena ce ne sarà una."
+      },
+      "cert": "Il certificato si rinnova da solo.",
+      "fail": {
+        "txt": "Non vediamo più il tuo record di proprietà",
+        "txtBody": "Ripristina questo record TXT presso il tuo provider DNS:",
+        "pointing": "{host} non punta più a Motir",
+        "pointingBody": "Reimposta il record su:",
+        "issuance": "Non è stato possibile emettere il certificato",
+        "issuanceBody": "L’autorità di certificazione ha risposto:"
+      },
+      "action": {
+        "checkNow": "Controlla ora",
+        "recheck": "Ricontrolla",
+        "retry": "Riprova",
+        "checking": "Controllo in corso…",
+        "showDns": "Mostra i record DNS",
+        "hideDns": "Nascondi i record DNS",
+        "copy": "Copia",
+        "copied": "Copiato",
+        "remove": "Rimuovi"
+      },
+      "remove": {
+        "title": "Rimuovere {host}?",
+        "body": "Smette subito di servire la tua applicazione. Non viene riservato nulla: puoi aggiungerlo di nuovo in seguito e un altro spazio di lavoro può aggiungerlo se ne dimostra la proprietà. I record DNS presso il tuo provider li elimini tu.",
+        "confirm": "Rimuovi dominio",
+        "removing": "Rimozione in corso…",
+        "error": "Il dominio non è stato rimosso. Riprova tra un momento.",
+        "toast": "{host} rimosso",
+        "toastBody": "Non serve più la tua applicazione."
+      },
+      "readOnly": "Solo un proprietario o un amministratore dello spazio di lavoro può aggiungere o rimuovere domini.",
+      "loadError": "Impossibile caricare i domini.",
+      "error": "Non ha funzionato. Riprova tra un momento."
     }
   },
   "boards": {
