@@ -276,6 +276,23 @@ process.env['MOTIR_FAKE_AWS_STATE_PATH'] ??= path.resolve(
 process.env['MOTIR_FAKE_FLEET_SWITCH_PATH'] ??= path.resolve(
   'out/playwright-output-acceptance/.fake-fleet-switch.json',
 );
+// Story MOTIR-9797 · MOTIR-10040 — a PRODUCTION RELEASE. A merge's release is
+// a JOB, so the worker reads the hosting manifest, deploys and posts the GitHub
+// deployment; the rollback after it runs in the webServer; the spec holds a
+// deploy open to see it building. So the hosting fake's cross-process store is
+// one file all three share (the runner writes its hold sidecar), and the GitHub
+// seam is the worker's (`productionReleaseSeamEnv`), steered through a control
+// file the spec writes and read back through a journal.
+process.env['MOTIR_FAKE_HOSTING_STATE_PATH'] ??= path.resolve(
+  'out/playwright-output-acceptance/.fake-hosting.json',
+);
+process.env['MOTIR_PRODUCTION_RELEASE_CONTROL_PATH'] ??= path.resolve(
+  '/tmp/motir-acceptance-production-release-control.json',
+);
+process.env['MOTIR_PRODUCTION_RELEASE_JOURNAL_PATH'] ??= path.resolve(
+  '/tmp/motir-acceptance-production-release-journal.jsonl',
+);
+process.env['E2E_JOB_WORKER_PRODUCTION_RELEASE_SEAM'] ??= '1';
 // Story MOTIR-9539 · MOTIR-9617 — the CAPACITY FAKE: the gateway capacity API's
 // limits, lane usage and mode (live, counter store down, unreachable) in one file
 // (`lib/gateway/capacityFakeState.ts`). THREE processes read it on every call:
@@ -663,6 +680,8 @@ export default defineConfig({
         // The fake AWS (MOTIR-9429) — see its block above this config.
         MOTIR_FAKE_AWS_STATE_PATH: process.env['MOTIR_FAKE_AWS_STATE_PATH']!,
         MOTIR_FAKE_FLEET_SWITCH_PATH: process.env['MOTIR_FAKE_FLEET_SWITCH_PATH']!,
+        // A production release's hosting store (MOTIR-10040) — see its block above.
+        MOTIR_FAKE_HOSTING_STATE_PATH: process.env['MOTIR_FAKE_HOSTING_STATE_PATH']!,
         // The capacity fake (MOTIR-9617) — see its block above this config.
         MOTIR_E2E_FAKE_GATEWAY_CAPACITY: process.env['MOTIR_E2E_FAKE_GATEWAY_CAPACITY']!,
         MOTIR_E2E_FAKE_GATEWAY_CAPACITY_STATE_PATH:

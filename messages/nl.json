@@ -1954,6 +1954,7 @@
       "rules": "Regels",
       "repositories": "Repository's",
       "environment": "Omgeving",
+      "production": "Productie",
       "monitoring": "Monitoring",
       "approvals": "Goedkeuringen",
       "bugs": "Bugs"
@@ -4122,7 +4123,8 @@
         "translation": "Of de werkinhoud van dit project voor elke lezer wordt vertaald, wordt getoond aan mensen die de werkitems van het project kunnen lezen. Vraag het een projectbeheerder als je dit wilt zien.",
         "automation": "Projectautomatisering wordt beheerd door projectbeheerders. Vraag het een beheerder als je een regel wilt laten wijzigen.",
         "monitoring": "De koppeling met de foutmonitor van dit project wordt beheerd door personen die integraties kunnen beheren. Vraag het een projectbeheerder als Sentry moet worden gekoppeld of opnieuw gekoppeld.",
-        "environment": "De omgevingswaarden van een repository worden getoond aan mensen die dit project kunnen bekijken. Vraag het een projectbeheerder als je ze wilt zien."
+        "environment": "De omgevingswaarden van een repository worden getoond aan mensen die dit project kunnen bekijken. Vraag het een projectbeheerder als je ze wilt zien.",
+        "production": "De releases van een repository worden getoond aan mensen die dit project kunnen bekijken. Vraag het een projectbeheerder als je ze wilt zien."
       }
     },
     "organization": {
@@ -4289,6 +4291,99 @@
         "title": "Repository niet gevonden",
         "body": "Motir houdt geen omgeving bij voor deze repository. Kies een van de repository’s van het project die Motir host.",
         "back": "Terug naar Omgeving"
+      }
+    },
+    "production": {
+      "title": "Productie",
+      "lede": "Wat er live staat voor elke app van dit project, wat de laatste merges deden en hoe je een slechte release ongedaan maakt.",
+      "repositoryLabel": "Repository",
+      "role": {
+        "web": "Webapp",
+        "api": "API",
+        "mobile": "Mobiele app",
+        "shared": "Gedeelde code",
+        "infra": "Infrastructuur",
+        "other": "Overig"
+      },
+      "current": {
+        "eyebrow": "Draait in productie"
+      },
+      "state": {
+        "building": "Wordt gebouwd",
+        "live": "Live",
+        "failed": "Mislukt",
+        "replaced": "Vervangen",
+        "rolledBack": "Teruggedraaid"
+      },
+      "trigger": {
+        "mergeDefault": "Merge naar de standaardbranch",
+        "redeploy": "Opnieuw gedeployd · productie-instellingen gewijzigd",
+        "rollback": "Hersteld door terugdraaien · {name}",
+        "rollbackUnnamed": "Hersteld door terugdraaien",
+        "refUnnamed": "Deploy van {ref}"
+      },
+      "address": {
+        "newTab": "(opent in een nieuw tabblad)",
+        "copy": "Kopiëren",
+        "copied": "Gekopieerd",
+        "copyAria": "{address} kopiëren",
+        "none": "Nog geen adres — claim een motir.site-adres voor de werkruimte in <link>Openbaar adres</link>."
+      },
+      "rollback": {
+        "action": "Terugdraaien",
+        "helper": "Zet productie terug naar de release vóór deze.",
+        "unavailable": "Er is nog geen eerdere release om naar terug te gaan."
+      },
+      "history": {
+        "heading": "Releasegeschiedenis",
+        "more": "Meer releases tonen",
+        "moreError": "Kon niet meer releases laden. Probeer het opnieuw."
+      },
+      "failedNewer": "De nieuwste release is mislukt, dus er is niets veranderd aan wat draait. {commit} staat nog steeds live.",
+      "reason": {
+        "build": "De build is mislukt vóór de deploy.",
+        "migration": "De migratie is mislukt.",
+        "migrationExit": "De migratie is mislukt met exitcode {code}.",
+        "migrationTimedOut": "De migratie duurde te lang.",
+        "superseded": "Er liep al een andere release, dus deze is nooit gestart.",
+        "deploy": "De deploy is mislukt voordat er verkeer binnenkwam."
+      },
+      "dialog": {
+        "title": "{repository} terugdraaien?",
+        "leaving": "Verlaten",
+        "returning": "Terug naar",
+        "body": "Productie gaat terug naar de code en omgevingswaarden van die release op {address}. Het databaseschema wordt niet teruggedraaid: migraties die de nieuwere release uitvoerde, blijven toegepast.",
+        "bodyNoAddress": "Productie gaat terug naar de code en omgevingswaarden van die release. Het databaseschema wordt niet teruggedraaid: migraties die de nieuwere release uitvoerde, blijven toegepast.",
+        "confirm": "Terugdraaien",
+        "submitting": "Bezig met terugdraaien…",
+        "cancel": "Annuleren",
+        "error": "Het terugdraaien is niet voltooid. {commit} draait nog steeds in productie. Probeer het opnieuw.",
+        "retry": "Opnieuw proberen"
+      },
+      "refusal": {
+        "noPreviousRelease": "Er is geen eerdere release om naar terug te gaan.",
+        "releaseInProgress": "Er loopt een release. Draai terug zodra die klaar is.",
+        "conflict": "Productie is veranderd tijdens het terugdraaien. Sluit dit en controleer wat er nu live staat.",
+        "forbidden": "Alleen projectbeheerders kunnen terugdraaien.",
+        "notFound": "Deze repository is niet meer voor je beschikbaar."
+      },
+      "readOnly": {
+        "note": "Je kunt elke release zien. Alleen projectbeheerders kunnen terugdraaien."
+      },
+      "empty": {
+        "title": "Nog niets in productie",
+        "body": "Merge een pull request naar main en Motir bouwt hem en zet hem hier live, met zijn adres."
+      },
+      "loading": "Releases laden…",
+      "loadError": {
+        "title": "Kon de releases niet laden",
+        "body": "Productie wordt niet beïnvloed. Probeer het zo meteen opnieuw."
+      },
+      "retry": "Opnieuw proberen",
+      "notFound": {
+        "title": "Repository niet gevonden",
+        "body": "Motir draait productie alleen voor de repository’s die het host. Kies een van de repository’s van dit project.",
+        "back": "Terug naar Productie"
       }
     },
     "workspaceAddress": {

@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { Cloud, Globe, Megaphone, Variable } from 'lucide-react';
+import { Cloud, Globe, Megaphone, Rocket, Variable } from 'lucide-react';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
@@ -239,9 +239,10 @@ describe('projectSettingsNav registry — access matrix (rides the 6.4.3 policy)
       'translation',
     ]);
     // MOTIR-9966: and, in a project holding a repository Motir hosts, Environment
-    // (its view key is `project:browse` too).
+    // (its view key is `project:browse` too); MOTIR-10037: and Production (the same).
     expect(visibleSettingsNav(MEMBER, PROJECT_SETTINGS_NAV, SELF_HOSTED).map((e) => e.id)).toEqual([
       'environment',
+      'production',
       'translation',
     ]);
   });
@@ -302,13 +303,16 @@ describe('the Public page room (Story MOTIR-3875 · MOTIR-4243)', () => {
     // is `work_item:edit`) and nothing cloud-only.
     // MOTIR-8830: and Translation, whose view key is `project:browse`.
     // MOTIR-9966: and Environment, whose view key is `project:browse` too.
+    // MOTIR-10037: and Production, the same.
     expect(visibleSettingsNav(MEMBER, PROJECT_SETTINGS_NAV, ON_CLOUD).map((e) => e.id)).toEqual([
       'environment',
+      'production',
       'hosted-agent',
       'translation',
     ]);
     expect(visibleSettingsNav(VIEWER, PROJECT_SETTINGS_NAV, ON_CLOUD).map((e) => e.id)).toEqual([
       'environment',
+      'production',
       'translation',
     ]);
   });
@@ -472,6 +476,45 @@ describe('the Environment room (Story MOTIR-9795 · MOTIR-9966)', () => {
   });
 });
 
+describe('the Production room (Story MOTIR-9797 · MOTIR-10037)', () => {
+  const entry = PROJECT_SETTINGS_NAV.find((e) => e.id === 'production');
+  const WITH_REPO = { publicProjectsAvailable: false, motirRepositoriesPresent: true };
+  const NO_MOTIR_REPOSITORY = { publicProjectsAvailable: true, hostedRunsAvailable: true };
+
+  it('is registered per the design table, directly under Environment, with the Rocket glyph', () => {
+    expect(entry).toBeTruthy();
+    expect(entry!.group).toBe('general');
+    expect(entry!.href).toBe('/settings/project/production');
+    expect(entry!.labelKey).toBe('nav.production');
+    expect(entry!.icon).toBe(Rocket);
+    expect(entry!.permission).toBe('project:administer');
+    expect(entry!.viewPermission).toBe('project:browse');
+    expect(entry!.motirRepositoriesOnly).toBe(true);
+    const ids = PROJECT_SETTINGS_NAV.map((e) => e.id);
+    expect(ids.indexOf('production')).toBe(ids.indexOf('environment') + 1);
+  });
+
+  it('is ABSENT from a project holding no repository Motir hosts, whatever the actor holds', () => {
+    for (const held of [ADMIN, MEMBER, VIEWER]) {
+      expect(
+        visibleSettingsNav(held, PROJECT_SETTINGS_NAV, NO_MOTIR_REPOSITORY).map((e) => e.id),
+      ).not.toContain('production');
+    }
+    expect(visibleSettingsNav(ADMIN).map((e) => e.id)).not.toContain('production');
+  });
+
+  it('opens on the VIEW key: an admin, a member and a viewer all see it', () => {
+    for (const held of [ADMIN, MEMBER, VIEWER]) {
+      expect(visibleSettingsNav(held, PROJECT_SETTINGS_NAV, WITH_REPO).map((e) => e.id)).toContain(
+        'production',
+      );
+    }
+    expect(
+      visibleSettingsNav(NO_ACCESS, PROJECT_SETTINGS_NAV, WITH_REPO).map((e) => e.id),
+    ).not.toContain('production');
+  });
+});
+
 describe('projectSettingsNav registry — grouping', () => {
   it('groups in rail order, only non-empty groups, entries within their group', () => {
     const groups = groupSettingsNav(PROJECT_SETTINGS_NAV);
@@ -486,6 +529,9 @@ describe('projectSettingsNav registry — grouping', () => {
       // MOTIR-9966 — `environment` directly under `repositories`: a Motir
       // repository's values per environment (design/environment).
       'environment',
+      // MOTIR-10037 — `production` directly under `environment`: what is live for
+      // a Motir repository and Roll back (design/hosting).
+      'production',
       // MOTIR-5262 — `monitoring` directly under `repositories`: both hold a third
       // party's credential and the inventory bound to it (design/monitoring §6).
       'monitoring',
@@ -721,6 +767,13 @@ const KEY_EVIDENCE: Record<string, { permission: PermissionKey; source: string; 
     source: 'lib/services/environmentConfigService.ts',
     gate: 'assertPermission',
   },
+  // MOTIR-10037 — the Production room's WRITE: the rollback asserts
+  // `project:administer` (its READ asserts the view key, `project:browse`).
+  production: {
+    permission: 'project:administer',
+    source: 'lib/services/productionRollbackService.ts',
+    gate: "assertPermission(projectId, actor, 'project:administer')",
+  },
 };
 
 describe('every registry entry names the key its DESTINATION asserts (MOTIR-2468)', () => {
@@ -827,9 +880,11 @@ describe('what each actor is offered (MOTIR-2468)', () => {
     expect(visibleSettingsNav(VIEWER).map((e) => e.id)).toEqual(['translation']);
     expect(hasVisibleSettingsArea(VIEWER)).toBe(true);
     // A viewer may not start a hosted run, so it does not see the Hosted agent room;
-    // in a project holding a Motir repository it reads Environment (MOTIR-9966).
+    // in a project holding a Motir repository it reads Environment (MOTIR-9966)
+    // and Production (MOTIR-10037).
     expect(visibleSettingsNav(VIEWER, PROJECT_SETTINGS_NAV, ON_CLOUD).map((e) => e.id)).toEqual([
       'environment',
+      'production',
       'translation',
     ]);
   });
@@ -1085,6 +1140,10 @@ const VIEW_KEY_EVIDENCE: Record<string, { source: string; gate: string }> = {
     source: 'lib/services/environmentConfigService.ts',
     gate: 'assertPermission',
   },
+  production: {
+    source: 'lib/services/productionPanelService.ts',
+    gate: "permissions.has('project:browse')",
+  },
 };
 
 /** The repo-relative `page.tsx` a settings route renders from. */
@@ -1180,8 +1239,14 @@ describe('the VIEW key cannot drift from its destination (MOTIR-5193)', () => {
     // MOTIR-5278 had updated this to `['approvals']`. With that declaration reverted,
     // the drift test rules on the fixture alone again, as MOTIR-5193 shipped it.
     // MOTIR-6995 declares the first again: Hosted agent (`work_item:edit`).
-    // MOTIR-8830 adds Translation (`project:browse`), MOTIR-9966 Environment (the same).
-    expect(declaring.map((e) => e.id)).toEqual(['environment', 'hosted-agent', 'translation']);
+    // MOTIR-8830 adds Translation (`project:browse`), MOTIR-9966 Environment (the same),
+    // MOTIR-10037 Production (the same).
+    expect(declaring.map((e) => e.id)).toEqual([
+      'environment',
+      'production',
+      'hosted-agent',
+      'translation',
+    ]);
   });
 
   it('every declaring entry has an evidence row, and every evidence row a declaring entry', () => {

@@ -3,6 +3,7 @@ import {
   CustomerRepositoryRefusedError,
   NoPreviousReleaseError,
   ReleaseArtifactUnsupportedError,
+  ReleaseCommandUnsupportedError,
   ReleaseNotFoundError,
 } from '../../../hosting/errors';
 import { hostingAppNames, sameEnvironment } from '../../../hosting/names';
@@ -466,6 +467,12 @@ export function createAwsHostingDeployPort(deps: AwsHostingDeps): HostingDeployP
           state: description.state,
         },
       ];
+    },
+
+    // The AWS shapes' one-off task run is their adapter story's; until then a
+    // release that needs a migration fails by name (MOTIR-10030).
+    async runReleaseCommand() {
+      throw new ReleaseCommandUnsupportedError('aws');
     },
   };
 }

@@ -29,6 +29,8 @@
 // defineJob); the payload type therefore makes `workspaceId` optional.
 
 import type { DesignAutoRerunRequestedData } from '@/lib/services/designAutoRerunService';
+import type { MergeReleaseRequestedData } from '@/lib/services/productionMergeReleaseService';
+import type { ReleaseStatusRequestedData } from '@/lib/services/releaseDeploymentStatusService';
 import type { GateResumeRequestedData } from '@/lib/services/gateResumeRequest';
 import type { PlanOfferRequirementPageRequestedData } from '@/lib/services/requirementPageSaveService';
 import type { TransactionalEmail } from '@/lib/services/emailService';
@@ -771,6 +773,15 @@ export interface JobEventDataMap {
    *  `environmentConfigService` AFTER the change commits; carries no value. The
    *  deploying stories subscribe to it to redeploy that environment. */
   'environment.config.changed': EnvironmentConfigChangedData;
+  /** A Motir repository's `production-image` workflow run completed for a push
+   *  to its default branch, and production is switched on for it (Story
+   *  MOTIR-9797 · MOTIR-10031): release that commit, or record the failed
+   *  build. Emitted by the `workflow_run` webhook; carries no value. */
+  'hosting/merge-release.requested': MergeReleaseRequestedData;
+  /** A production release was created or changed state (Story MOTIR-9797 ·
+   *  MOTIR-10033): post its GitHub deployment status. Emitted by
+   *  `hostedApplicationService` after the change commits; ids only. */
+  'hosted-release.status': ReleaseStatusRequestedData;
   /** The monitor-issue reconciler's TICK (Story MOTIR-4929 · MOTIR-5581) — cron
    *  triggered and cross-tenant: it discovers every binding and fans out. */
   'system.monitor-issue-reconcile': SystemScheduledData;

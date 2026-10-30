@@ -293,7 +293,10 @@ export type DeploymentState = (typeof DEPLOYMENT_STATES)[number];
 
 /** A deployment-status webhook, normalized across providers — the PREVIEW a
  *  repository's own CI reported for a commit (Story MOTIR-4906 · MOTIR-5329).
- *  Motir only LISTENS: it creates no deployment and posts no status.
+ *  For a repository's own deploys Motir only LISTENS: it creates no deployment
+ *  and posts no status. The one exception is a PRODUCTION release of a Motir
+ *  repository (MOTIR-10033), whose deployment and statuses Motir posts — and
+ *  whose statuses come back through this same webhook.
  *
  *  `environmentUrl` is the APP the deployment serves (GitHub's
  *  `environment_url`), never the log link (`target_url`), and is not yet
@@ -392,6 +395,31 @@ export interface NormalizedWorkflowRunEvent {
   /** When the run completed — the period key (§4.5) AND the effective-date the
    *  runner rates resolve at (§3.3). */
   completedAt: Date;
+}
+
+/** A COMPLETED run of a repository's `production-image` workflow, normalized —
+ *  the signal a merge has been built (Story MOTIR-9797 · MOTIR-10031). DISTINCT
+ *  from {@link NormalizedWorkflowRunEvent}, the CI-minutes meter's, which keeps
+ *  its own tolerance: this one carries the facts a release decides on (the
+ *  triggering event, the branch, the commit built and how the run concluded),
+ *  and is trusted for the commit and the outcome only. */
+export interface NormalizedProductionImageRun {
+  providerRepoId: string;
+  repoOwner: string;
+  repoName: string;
+  /** The workflow's name (`production-image` for the run that releases). */
+  workflowName: string;
+  /** The event that triggered the run — `push`, `pull_request`, … */
+  event: string;
+  headBranch: string;
+  /** The commit the run built — the full sha. */
+  headSha: string;
+  /** `success`, `failure`, `timed_out`, `cancelled`, `skipped`, … */
+  conclusion: string;
+  /** The host's own workflow-run id (as a string — never do math on it). */
+  runId: string;
+  /** The run attempt; a re-run of the workflow increments it. */
+  runAttempt: number;
 }
 
 /** A QUEUED CI job, normalized across providers — consumed by the runner-fleet

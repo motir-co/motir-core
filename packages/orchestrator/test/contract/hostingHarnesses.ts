@@ -60,6 +60,9 @@ export interface HostingHarness {
   failNextDestroy(appRef: string, operation: 'destroy' | 'destroyApp'): void;
   /** What the provider was told to run in that app now. */
   runtimeOf(appRef: string): ProviderRuntime | null;
+  /** The next release command ends with `exitCode` (MOTIR-10030). Absent where
+   *  the target runs no release command and refuses it by name. */
+  commandExits?(exitCode: number): void;
 }
 
 export const START = Date.parse('2026-10-28T00:00:00.000Z');
@@ -77,6 +80,7 @@ export function fakeHarness(): HostingHarness {
     originCredential: 'origin_secret',
     advanceSeconds: (s) => fake.advanceSeconds(s),
     failNextDestroy: (_appRef, operation) => fake.failNext(operation),
+    commandExits: (exitCode) => fake.setReleaseCommandResult({ exitCode, timedOut: false }),
     runtimeOf(appRef) {
       const live = fake.app(appRef)?.live;
       return live
@@ -161,6 +165,9 @@ export function flyHarness(): HostingHarness {
         pending = false;
         return flyJson(503, { error: 'unavailable' });
       });
+    },
+    commandExits: (exitCode) => {
+      sim.exitCodes.push(exitCode);
     },
     runtimeOf(appRef) {
       const config = sim.apps.get(appRef)?.[0]?.config;

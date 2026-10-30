@@ -1954,6 +1954,7 @@
       "rules": "Rules",
       "repositories": "Repositories",
       "environment": "Environment",
+      "production": "Production",
       "monitoring": "Monitoring",
       "approvals": "Approvals",
       "bugs": "Bugs"
@@ -4122,7 +4123,8 @@
         "translation": "Whether this project's work content is translated for each reader is shown to people who can read the project's work items. Ask a project admin if you need to see it.",
         "automation": "Project automation is managed by project admins. Ask an admin if you need a rule changed.",
         "monitoring": "This project's error-monitor connection is managed by people who can manage integrations. Ask a project admin if Sentry needs connecting or reconnecting.",
-        "environment": "A repository's environment values are shown to people who can browse this project. Ask a project admin if you need to see them."
+        "environment": "A repository's environment values are shown to people who can browse this project. Ask a project admin if you need to see them.",
+        "production": "A repository's releases are shown to people who can browse this project. Ask a project admin if you need to see them."
       }
     },
     "organization": {
@@ -4289,6 +4291,99 @@
         "title": "Repository not found",
         "body": "Motir keeps no environment for this repository. Choose one of the project’s repositories that Motir hosts.",
         "back": "Back to Environment"
+      }
+    },
+    "production": {
+      "title": "Production",
+      "lede": "What is live for each of this project’s apps, what the last merges did, and how to undo a bad release.",
+      "repositoryLabel": "Repository",
+      "role": {
+        "web": "Web app",
+        "api": "API",
+        "mobile": "Mobile app",
+        "shared": "Shared code",
+        "infra": "Infrastructure",
+        "other": "Other"
+      },
+      "current": {
+        "eyebrow": "Serving production"
+      },
+      "state": {
+        "building": "Building",
+        "live": "Live",
+        "failed": "Failed",
+        "replaced": "Replaced",
+        "rolledBack": "Rolled back"
+      },
+      "trigger": {
+        "mergeDefault": "Merge into the default branch",
+        "redeploy": "Redeploy · production settings changed",
+        "rollback": "Restored by rollback · {name}",
+        "rollbackUnnamed": "Restored by rollback",
+        "refUnnamed": "Deploy of {ref}"
+      },
+      "address": {
+        "newTab": "(opens in a new tab)",
+        "copy": "Copy",
+        "copied": "Copied",
+        "copyAria": "Copy {address}",
+        "none": "No address yet — claim a motir.site address for the workspace in <link>Public address</link>."
+      },
+      "rollback": {
+        "action": "Roll back",
+        "helper": "Returns production to the release before this one.",
+        "unavailable": "There is no earlier release to return to yet."
+      },
+      "history": {
+        "heading": "Release history",
+        "more": "Show more releases",
+        "moreError": "Couldn’t load more releases. Try again."
+      },
+      "failedNewer": "The newest release failed, so nothing that is serving changed. {commit} is still live.",
+      "reason": {
+        "build": "The build failed before deploying.",
+        "migration": "The migration failed.",
+        "migrationExit": "The migration failed with exit code {code}.",
+        "migrationTimedOut": "The migration timed out.",
+        "superseded": "Another release was in progress, so this one never started.",
+        "deploy": "The deploy failed before taking traffic."
+      },
+      "dialog": {
+        "title": "Roll back {repository}?",
+        "leaving": "Leaving",
+        "returning": "Returning to",
+        "body": "Production goes back to that release’s code and environment values at {address}. The database schema is not reverted: migrations the newer release ran stay applied.",
+        "bodyNoAddress": "Production goes back to that release’s code and environment values. The database schema is not reverted: migrations the newer release ran stay applied.",
+        "confirm": "Roll back",
+        "submitting": "Rolling back…",
+        "cancel": "Cancel",
+        "error": "The rollback didn’t complete. {commit} is still serving production. Try again.",
+        "retry": "Try again"
+      },
+      "refusal": {
+        "noPreviousRelease": "There is no earlier release to return to.",
+        "releaseInProgress": "A release is in progress. Roll back once it has finished.",
+        "conflict": "Production changed while rolling back. Close this and check what is live now.",
+        "forbidden": "Only project administrators can roll back.",
+        "notFound": "This repository is no longer available to you."
+      },
+      "readOnly": {
+        "note": "You can see every release. Only project administrators can roll back."
+      },
+      "empty": {
+        "title": "Nothing in production yet",
+        "body": "Merge a pull request into main and Motir builds it and puts it live here, with its address."
+      },
+      "loading": "Loading releases…",
+      "loadError": {
+        "title": "Couldn’t load the releases",
+        "body": "Production is not affected. Try again in a moment."
+      },
+      "retry": "Try again",
+      "notFound": {
+        "title": "Repository not found",
+        "body": "Motir runs production only for the repositories it hosts. Choose one of this project’s repositories.",
+        "back": "Back to Production"
       }
     },
     "workspaceAddress": {

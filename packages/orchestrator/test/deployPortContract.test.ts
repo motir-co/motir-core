@@ -4,6 +4,7 @@ import {
   IdlePolicyUnsupportedError,
   NoPreviousReleaseError,
   OrchestratorApiError,
+  ReleaseCommandUnsupportedError,
   ReleaseShapeRequiredError,
   type DeployReleaseInput,
   type HostingEnvironment,
@@ -230,6 +231,43 @@ describe.each(ADAPTERS)('the hosting deploy port contract — %s', (_name, make)
     expect(await h.port.destroyApp({ appRef: prod })).toEqual([]);
   });
 });
+
+describe.each(ADAPTERS)(
+  'the hosting deploy port contract, release commands — %s',
+  (_name, make) => {
+    let h: HostingHarness;
+    beforeEach(() => {
+      h = make();
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it('runs a release command to its end and reports only its exit status, leaving the live release serving', async () => {
+      const app = await h.port.ensureApp({ repositoryId: R, environment: PRODUCTION });
+      const a = await h.port.deploy(release(h, app.appRef, PRODUCTION, 'A'));
+      const command = {
+        appRef: app.appRef,
+        artifact: { kind: 'image' as const, ...(h.image ?? IMAGE) },
+        command: 'node migrate.js deploy',
+        env: [{ name: 'DATABASE_URL', value: 'postgresql://u:p@db/app', secret: true }],
+        timeoutSeconds: 600,
+      };
+      if (!h.commandExits) {
+        await expect(h.port.runReleaseCommand(command)).rejects.toBeInstanceOf(
+          ReleaseCommandUnsupportedError,
+        );
+        return;
+      }
+      expect(await h.port.runReleaseCommand(command)).toEqual({ exitCode: 0, timedOut: false });
+      h.commandExits(3);
+      expect(await h.port.runReleaseCommand(command)).toEqual({ exitCode: 3, timedOut: false });
+      expect(await h.port.describe(a)).toMatchObject({ state: 'healthy', releaseId: a.releaseId });
+      expect(await h.port.listReleases({ appRef: app.appRef })).toHaveLength(1);
+    });
+  },
+);
 
 describe.each(AWS_ADAPTERS)('the hosting deploy port contract, AWS shapes — %s', (_name, make) => {
   let h: AwsHarness;

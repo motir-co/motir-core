@@ -10,8 +10,11 @@ import { describe, expect, it } from 'vitest';
 const REPO = resolve(__dirname, '..', '..');
 const CONFIG = 'vitest.coverage.deploy-port.config.ts';
 const config = readFileSync(join(REPO, CONFIG), 'utf8');
+// A glob escapes the brackets of a Next.js segment (`\\[key\\]`); the file has none.
 const globsIn = (block: RegExp) =>
-  [...(config.match(block)?.[1] ?? '').matchAll(/^\s*'([^']+\.tsx?)',?$/gm)].map((m) => m[1]!);
+  [...(config.match(block)?.[1] ?? '').matchAll(/^\s*'([^']+\.tsx?)',?$/gm)].map((m) =>
+    m[1]!.replace(/\\\\/g, ''),
+  );
 const measured = globsIn(/const MEASURED = \[([\s\S]*?)\n\];/);
 const shared = globsIn(/SHARED_NOT_FLOORED = \[([\s\S]*?)\n\];/);
 const included = globsIn(/include: \[([\s\S]*?)\n {4}\],/);

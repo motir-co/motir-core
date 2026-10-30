@@ -1,0 +1,36 @@
+{
+  "action": "completed",
+  "workflow_run": {
+    "id": 9182736450,
+    "name": "production-image",
+    "node_id": "WFR_kwLOAAAAAA",
+    "head_branch": "main",
+    "head_sha": "4f1c2b8e9a7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b",
+    "path": ".github/workflows/production-image.yml",
+    "run_number": 12,
+    "event": "push",
+    "status": "completed",
+    "conclusion": "success",
+    "workflow_id": 118833,
+    "run_attempt": 1,
+    "run_started_at": "2026-10-29T10:00:00Z",
+    "created_at": "2026-10-29T10:00:00Z",
+    "updated_at": "2026-10-29T10:06:41Z",
+    "html_url": "https://github.com/motir-projects/shop/actions/runs/9182736450"
+  },
+  "workflow": {
+    "id": 118833,
+    "name": "production-image",
+    "path": ".github/workflows/production-image.yml"
+  },
+  "repository": {
+    "id": 880011,
+    "name": "shop",
+    "full_name": "motir-projects/shop",
+    "private": true,
+    "owner": { "login": "motir-projects", "id": 1001, "type": "Organization" },
+    "default_branch": "main"
+  },
+  "organization": { "login": "motir-projects", "id": 1001 },
+  "installation": { "id": 556677 }
+}

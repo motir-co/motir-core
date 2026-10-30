@@ -637,3 +637,105 @@ describe('releaseStateOf', () => {
     expect(releaseStateOf(state, checks)).toBe(expected);
   });
 });
+
+describe('runReleaseCommand (MOTIR-10030)', () => {
+  const command = {
+    appRef: PROD,
+    artifact: { kind: 'image' as const, ref: 'registry.fly.io/mh-cmrepo1', digest: 'sha256:abc' },
+    command: 'node migrate/node_modules/prisma/build/index.js migrate deploy',
+    env: [{ name: 'DATABASE_URL', value: 'postgresql://u:p@db/app', secret: true }],
+    timeoutSeconds: 120,
+  };
+
+  beforeEach(() => {
+    apps.set(PROD, []);
+  });
+
+  it('runs one never-restarted Machine of the image with no service, reads its exit status and destroys it', async () => {
+    expect(await port().runReleaseCommand(command)).toEqual({ exitCode: 0, timedOut: false });
+
+    const create = calls.find((c) => c.method === 'POST' && c.path === `/apps/${PROD}/machines`)!;
+    const config = create.body!['config'] as Record<string, unknown>;
+    expect(config).toMatchObject({
+      image: 'registry.fly.io/mh-cmrepo1@sha256:abc',
+      init: { exec: ['node', 'migrate/node_modules/prisma/build/index.js', 'migrate', 'deploy'] },
+      env: { DATABASE_URL: 'postgresql://u:p@db/app' },
+      restart: { policy: 'no' },
+      metadata: { [HOSTING_RELEASE_METADATA.marker]: 'command' },
+    });
+    expect(config['services']).toBeUndefined();
+    expect(
+      calls.some((c) => c.method === 'GET' && /\/wait\?state=stopped&timeout=60$/.test(c.path)),
+    ).toBe(true);
+    expect(calls.at(-1)).toMatchObject({
+      method: 'DELETE',
+      path: `/apps/${PROD}/machines/m-1?force=true`,
+    });
+    expect(await port().listReleases({ appRef: PROD })).toEqual([]);
+  });
+
+  it('reports a non-zero exit', async () => {
+    overrides.push((c) => {
+      if (!c.path.includes('/wait')) return null;
+      const m = apps.get(PROD)![0]!;
+      m.state = 'stopped';
+      m.events.push({
+        type: 'exit',
+        status: 'stopped',
+        timestamp: clock,
+        request: { exit_event: { exit_code: 2 } },
+      });
+      return flyJson(200, { ok: true });
+    });
+    expect(await port().runReleaseCommand(command)).toEqual({ exitCode: 2, timedOut: false });
+  });
+
+  it('keeps waiting while Fly answers 408, then times out and destroys the Machine', async () => {
+    overrides.push((c) => {
+      if (!c.path.includes('/wait')) return null;
+      clock += 60_000;
+      return flyJson(408, { error: 'deadline_exceeded' });
+    });
+    expect(await port().runReleaseCommand(command)).toEqual({ exitCode: null, timedOut: true });
+    expect(calls.filter((c) => c.path.includes('/wait'))).toHaveLength(2);
+    expect(calls.at(-1)).toMatchObject({
+      method: 'DELETE',
+      path: `/apps/${PROD}/machines/m-1?force=true`,
+    });
+  });
+
+  it('throws the typed error for a refused create, and for a failed wait after destroying the Machine', async () => {
+    overrides.push((c) =>
+      c.method === 'POST' && c.path === `/apps/${PROD}/machines`
+        ? flyJson(422, { error: 'bad image' })
+        : null,
+    );
+    await expect(port().runReleaseCommand(command)).rejects.toMatchObject({ status: 422 });
+    overrides.length = 0;
+    overrides.push((c) =>
+      c.method === 'POST' && c.path === `/apps/${PROD}/machines`
+        ? flyJson(200, { odd: true })
+        : null,
+    );
+    await expect(port().runReleaseCommand(command)).rejects.toBeInstanceOf(OrchestratorApiError);
+    overrides.length = 0;
+    overrides.push((c) => (c.path.includes('/wait') ? flyJson(500, { error: 'boom' }) : null));
+    await expect(port().runReleaseCommand(command)).rejects.toMatchObject({ status: 500 });
+    expect(calls.at(-1)).toMatchObject({ method: 'DELETE' });
+  });
+
+  it('reports no exit status for a Machine gone before it is read', async () => {
+    overrides.push((c) =>
+      c.method === 'GET' && /\/machines\/m-1$/.test(c.path)
+        ? flyJson(404, { error: 'gone' })
+        : null,
+    );
+    expect(await port().runReleaseCommand(command)).toEqual({ exitCode: null, timedOut: false });
+  });
+
+  it('refuses a bundle artifact', async () => {
+    await expect(
+      port().runReleaseCommand({ ...command, artifact: { kind: 'bundle', ref: 'x' } }),
+    ).rejects.toBeInstanceOf(ReleaseArtifactUnsupportedError);
+  });
+});

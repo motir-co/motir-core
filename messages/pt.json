@@ -1954,6 +1954,7 @@
       "rules": "Regras",
       "repositories": "Repositórios",
       "environment": "Ambiente",
+      "production": "Produção",
       "monitoring": "Monitoramento",
       "approvals": "Aprovações",
       "bugs": "Bugs"
@@ -4122,7 +4123,8 @@
         "translation": "Se o conteúdo de trabalho deste projeto é traduzido para cada leitor aparece para quem pode ler os itens de trabalho do projeto. Peça a um administrador do projeto se precisar ver.",
         "automation": "A automação do projeto é gerenciada pelos administradores do projeto. Peça a um administrador se precisar alterar uma regra.",
         "monitoring": "A conexão deste projeto com o monitor de erros é gerenciada por quem pode gerenciar integrações. Peça a um administrador do projeto se o Sentry precisar ser conectado ou reconectado.",
-        "environment": "Os valores de ambiente de um repositório aparecem para quem pode navegar neste projeto. Peça a um administrador do projeto se precisar vê-los."
+        "environment": "Os valores de ambiente de um repositório aparecem para quem pode navegar neste projeto. Peça a um administrador do projeto se precisar vê-los.",
+        "production": "As versões de um repositório aparecem para quem pode navegar neste projeto. Peça a um administrador do projeto se precisar vê-las."
       }
     },
     "organization": {
@@ -4289,6 +4291,99 @@
         "title": "Repositório não encontrado",
         "body": "O Motir não mantém nenhum ambiente para este repositório. Escolha um dos repositórios do projeto que o Motir hospeda.",
         "back": "Voltar para Ambiente"
+      }
+    },
+    "production": {
+      "title": "Produção",
+      "lede": "O que está no ar para cada app deste projeto, o que os últimos merges fizeram e como desfazer uma versão ruim.",
+      "repositoryLabel": "Repositório",
+      "role": {
+        "web": "App web",
+        "api": "API",
+        "mobile": "App móvel",
+        "shared": "Código compartilhado",
+        "infra": "Infraestrutura",
+        "other": "Outro"
+      },
+      "current": {
+        "eyebrow": "Servindo a produção"
+      },
+      "state": {
+        "building": "Em build",
+        "live": "No ar",
+        "failed": "Falhou",
+        "replaced": "Substituída",
+        "rolledBack": "Revertida"
+      },
+      "trigger": {
+        "mergeDefault": "Merge na branch padrão",
+        "redeploy": "Novo deploy · configurações de produção alteradas",
+        "rollback": "Restaurada por reversão · {name}",
+        "rollbackUnnamed": "Restaurada por reversão",
+        "refUnnamed": "Deploy de {ref}"
+      },
+      "address": {
+        "newTab": "(abre em uma nova aba)",
+        "copy": "Copiar",
+        "copied": "Copiado",
+        "copyAria": "Copiar {address}",
+        "none": "Ainda sem endereço — reivindique um endereço motir.site para o espaço de trabalho em <link>Endereço público</link>."
+      },
+      "rollback": {
+        "action": "Reverter",
+        "helper": "Retorna a produção para a versão anterior a esta.",
+        "unavailable": "Ainda não há uma versão anterior para a qual voltar."
+      },
+      "history": {
+        "heading": "Histórico de versões",
+        "more": "Mostrar mais versões",
+        "moreError": "Não foi possível carregar mais versões. Tente novamente."
+      },
+      "failedNewer": "A versão mais recente falhou, então nada do que está no ar mudou. {commit} continua no ar.",
+      "reason": {
+        "build": "O build falhou antes do deploy.",
+        "migration": "A migração falhou.",
+        "migrationExit": "A migração falhou com o código de saída {code}.",
+        "migrationTimedOut": "A migração excedeu o tempo limite.",
+        "superseded": "Outra versão estava em andamento, então esta nunca começou.",
+        "deploy": "O deploy falhou antes de receber tráfego."
+      },
+      "dialog": {
+        "title": "Reverter {repository}?",
+        "leaving": "Saindo de",
+        "returning": "Voltando para",
+        "body": "A produção volta ao código e aos valores de ambiente daquela versão em {address}. O esquema do banco de dados não é revertido: as migrações que a versão mais recente executou continuam aplicadas.",
+        "bodyNoAddress": "A produção volta ao código e aos valores de ambiente daquela versão. O esquema do banco de dados não é revertido: as migrações que a versão mais recente executou continuam aplicadas.",
+        "confirm": "Reverter",
+        "submitting": "Revertendo…",
+        "cancel": "Cancelar",
+        "error": "A reversão não foi concluída. {commit} continua servindo a produção. Tente novamente.",
+        "retry": "Tentar novamente"
+      },
+      "refusal": {
+        "noPreviousRelease": "Não há uma versão anterior para a qual voltar.",
+        "releaseInProgress": "Há uma versão em andamento. Reverta quando ela terminar.",
+        "conflict": "A produção mudou durante a reversão. Feche isto e confira o que está no ar agora.",
+        "forbidden": "Somente administradores do projeto podem reverter.",
+        "notFound": "Este repositório não está mais disponível para você."
+      },
+      "readOnly": {
+        "note": "Você pode ver todas as versões. Somente administradores do projeto podem reverter."
+      },
+      "empty": {
+        "title": "Nada em produção ainda",
+        "body": "Faça merge de um pull request na main e o Motir faz o build e o coloca no ar aqui, com o endereço."
+      },
+      "loading": "Carregando versões…",
+      "loadError": {
+        "title": "Não foi possível carregar as versões",
+        "body": "A produção não foi afetada. Tente novamente em instantes."
+      },
+      "retry": "Tentar novamente",
+      "notFound": {
+        "title": "Repositório não encontrado",
+        "body": "O Motir executa a produção apenas para os repositórios que hospeda. Escolha um dos repositórios deste projeto.",
+        "back": "Voltar para Produção"
       }
     },
     "workspaceAddress": {

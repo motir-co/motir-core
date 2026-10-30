@@ -1954,6 +1954,7 @@
       "rules": "规则",
       "repositories": "代码仓库",
       "environment": "环境",
+      "production": "生产",
       "monitoring": "监控",
       "approvals": "审批",
       "bugs": "缺陷"
@@ -4122,7 +4123,8 @@
         "translation": "此项目工作内容是否为每位读者翻译，仅向可以查看项目工作项的人显示。如需查看，请联系项目管理员。",
         "automation": "项目自动化由项目管理员管理。如需修改规则，请联系管理员。",
         "monitoring": "本项目的错误监控连接由可管理集成的成员负责。如需连接或重新连接 Sentry，请联系项目管理员。",
-        "environment": "代码仓库的环境值仅向可以浏览此项目的人显示。如需查看，请联系项目管理员。"
+        "environment": "代码仓库的环境值仅向可以浏览此项目的人显示。如需查看，请联系项目管理员。",
+        "production": "代码仓库的发布仅向可以浏览此项目的人显示。如需查看，请联系项目管理员。"
       }
     },
     "organization": {
@@ -4289,6 +4291,99 @@
         "title": "未找到代码仓库",
         "body": "Motir 不为此代码仓库保存任何环境。请选择该项目中由 Motir 托管的代码仓库之一。",
         "back": "返回环境"
+      }
+    },
+    "production": {
+      "title": "生产",
+      "lede": "查看此项目每个应用当前上线的内容、最近几次合并做了什么，以及如何撤销出错的发布。",
+      "repositoryLabel": "代码仓库",
+      "role": {
+        "web": "Web 应用",
+        "api": "API",
+        "mobile": "移动应用",
+        "shared": "共享代码",
+        "infra": "基础设施",
+        "other": "其他"
+      },
+      "current": {
+        "eyebrow": "正在服务生产"
+      },
+      "state": {
+        "building": "构建中",
+        "live": "已上线",
+        "failed": "失败",
+        "replaced": "已替换",
+        "rolledBack": "已回滚"
+      },
+      "trigger": {
+        "mergeDefault": "合并到默认分支",
+        "redeploy": "重新部署 · 生产设置已更改",
+        "rollback": "由回滚恢复 · {name}",
+        "rollbackUnnamed": "由回滚恢复",
+        "refUnnamed": "部署 {ref}"
+      },
+      "address": {
+        "newTab": "（在新标签页中打开）",
+        "copy": "复制",
+        "copied": "已复制",
+        "copyAria": "复制 {address}",
+        "none": "暂无地址——请在<link>公开地址</link>中为工作区申领一个 motir.site 地址。"
+      },
+      "rollback": {
+        "action": "回滚",
+        "helper": "将生产恢复到此发布之前的发布。",
+        "unavailable": "目前还没有可以回退到的更早发布。"
+      },
+      "history": {
+        "heading": "发布历史",
+        "more": "显示更多发布",
+        "moreError": "无法加载更多发布。请重试。"
+      },
+      "failedNewer": "最新的发布失败了，因此正在服务的内容没有变化。{commit} 仍在线上。",
+      "reason": {
+        "build": "构建在部署前失败。",
+        "migration": "迁移失败。",
+        "migrationExit": "迁移失败，退出码为 {code}。",
+        "migrationTimedOut": "迁移超时。",
+        "superseded": "当时有另一个发布正在进行，因此此发布从未开始。",
+        "deploy": "部署在接收流量之前失败。"
+      },
+      "dialog": {
+        "title": "回滚 {repository}？",
+        "leaving": "离开",
+        "returning": "回到",
+        "body": "生产将在 {address} 回到该发布的代码和环境值。数据库结构不会还原：较新发布执行的迁移仍然保留。",
+        "bodyNoAddress": "生产将回到该发布的代码和环境值。数据库结构不会还原：较新发布执行的迁移仍然保留。",
+        "confirm": "回滚",
+        "submitting": "正在回滚…",
+        "cancel": "取消",
+        "error": "回滚未完成。{commit} 仍在服务生产。请重试。",
+        "retry": "重试"
+      },
+      "refusal": {
+        "noPreviousRelease": "没有可以回退到的更早发布。",
+        "releaseInProgress": "有发布正在进行。请在其完成后再回滚。",
+        "conflict": "回滚期间生产发生了变化。请关闭此窗口并查看当前上线的内容。",
+        "forbidden": "只有项目管理员可以回滚。",
+        "notFound": "此代码仓库已不再可用。"
+      },
+      "readOnly": {
+        "note": "你可以查看所有发布。只有项目管理员可以回滚。"
+      },
+      "empty": {
+        "title": "生产中尚无内容",
+        "body": "将拉取请求合并到 main 后，Motir 会构建它并在此上线，并附上其地址。"
+      },
+      "loading": "正在加载发布…",
+      "loadError": {
+        "title": "无法加载发布",
+        "body": "生产不受影响。请稍后重试。"
+      },
+      "retry": "重试",
+      "notFound": {
+        "title": "未找到代码仓库",
+        "body": "Motir 只为其托管的代码仓库运行生产。请选择此项目的代码仓库之一。",
+        "back": "返回生产"
       }
     },
     "workspaceAddress": {
