@@ -84,6 +84,10 @@ const PAGE_1 =
   '3 symbols (page 1 of 2):\n[1] readFile · function · src/hello.ts:1\n' +
   '— page 1 of 2 · next: cursor: "c-2"';
 const PAGE_2 = '3 symbols (page 2 of 2):\n[3] readFileAtRef · function · src/read.ts:9';
+// MOTIR-10122: the answer names the commit the graph was indexed at, after the
+// route's text — the seeded graph's indexed sha.
+const graphCommitLine = (repoRef: string): string =>
+  `\n\nGraph commit read: ${repoRef}@${'a'.repeat(40)}.`;
 
 const env = (name: string): string => {
   const value = process.env[name];
@@ -281,14 +285,14 @@ test('a planning agent lists the code-read tools and reads a file at the default
 });
 
 test('a planning agent pages code_explore through the graph-read route and reads an unindexed repo as a named state', async () => {
-  await test.step('page 1 comes back byte-equal to the route’s text', async () => {
+  await test.step('page 1 comes back byte-equal to the route’s text, then the commit it read', async () => {
     const { text, data } = await call(client, 'code_explore', {
       projectKey: s.projectKey,
       repo: 'core',
       query: 'readFile',
     });
     expect(data['state']).toBe('ok');
-    expect(text).toBe(PAGE_1);
+    expect(text).toBe(PAGE_1 + graphCommitLine(CORE_REF));
   });
 
   await test.step('its cursor reads page 2, byte-equal', async () => {
@@ -298,7 +302,7 @@ test('a planning agent pages code_explore through the graph-read route and reads
       query: 'readFile',
       cursor: 'c-2',
     });
-    expect(text).toBe(PAGE_2);
+    expect(text).toBe(PAGE_2 + graphCommitLine(CORE_REF));
 
     const reads = graphReads();
     expect(reads).toHaveLength(2);
