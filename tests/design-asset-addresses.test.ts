@@ -255,14 +255,8 @@ function sweep(): Finding[] {
 // it finds is its own card), and MOTIR-2340 then corrected the assets and
 // deleted the rows. A stale address belongs in a fix, never in this table.
 const KNOWN: { file: string; address: string; why: string }[] = [
-  // ── FORWARD-LOOKING (MOTIR-9522) — the workspace Custom domains room is
-  //  drawn before the pane card (MOTIR-9529) builds its page. This row deletes
-  //  itself, by failing the tightness arm below, when that page lands.
-  {
-    file: 'design/workspace-address/design-notes.md',
-    address: '/settings/workspace/custom-domains',
-    why: 'Forward-looking: the workspace Custom domains room is designed here before its page is built; the pane card adds `app/(authed)/settings/workspace/custom-domains/page.tsx` and removes this row.',
-  },
+  // ── ✅ RETIRED 2026-10-30 (MOTIR-9529) — the workspace Custom domains room's
+  //  forward-looking row stopped applying when its page landed, and was deleted.
   // ── ✅ RETIRED 2026-10-28 (MOTIR-9514) — the workspace address room's
   //  forward-looking row stopped applying when its page landed, and was deleted.
   // ── ✅ RETIRED 2026-09-11 (MOTIR-5170, under Bug MOTIR-4925) ──────────────
