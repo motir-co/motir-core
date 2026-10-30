@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { getGlobalDispatcher, setGlobalDispatcher, type Dispatcher } from 'undici';
 import { E2E_REFUSED_HOSTS, installSharedMockAgent } from '@/lib/test-mock-agent';
-import { githubMergeSeamEnv } from './e2e/_helpers/job-worker-process';
+import { githubMergeSeamEnv, productionReleaseSeamEnv } from './e2e/_helpers/job-worker-process';
 
 // Guard for Bug MOTIR-5837: EVERY process in the E2E lane fakes the GitHub
 // boundary, and none of them can reach the real api.github.com.
@@ -138,5 +138,41 @@ describe("the worker's merge seam travels WITH its credentials (MOTIR-5837)", ()
     const config = codeOf('playwright.acceptance.config.ts');
     expect(config).toMatch(/process\.env\['E2E_JOB_WORKER_GITHUB_MERGE_SEAM'\] \?\?= '1'/);
     expect(config).toMatch(/E2E_TEST_GITHUB_MERGE: '1'/);
+  });
+});
+
+describe("the worker's production-release seam travels with its store and key (MOTIR-10040)", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('mirrors nothing unless the lane opts in', () => {
+    vi.stubEnv('E2E_JOB_WORKER_PRODUCTION_RELEASE_SEAM', '');
+    expect(productionReleaseSeamEnv()).toEqual({});
+  });
+
+  it('mirrors the seam flag, the shared hosting store, its files, the fake and the sealing key', () => {
+    vi.stubEnv('E2E_JOB_WORKER_PRODUCTION_RELEASE_SEAM', '1');
+    vi.stubEnv('MOTIR_FAKE_HOSTING_STATE_PATH', '/tmp/hosting.json');
+    vi.stubEnv('MOTIR_PRODUCTION_RELEASE_CONTROL_PATH', '/tmp/release-control.json');
+    vi.stubEnv('MOTIR_PRODUCTION_RELEASE_JOURNAL_PATH', '');
+
+    const env = productionReleaseSeamEnv();
+
+    expect(env['E2E_TEST_PRODUCTION_RELEASE']).toBe('1');
+    expect(env['MOTIR_FLEET_ORCHESTRATOR']).toBe('fake');
+    // The webServer rolls back what this process deploys: ONE store for both.
+    expect(env['MOTIR_FAKE_HOSTING_STATE_PATH']).toBe('/tmp/hosting.json');
+    expect(env['MOTIR_PRODUCTION_RELEASE_CONTROL_PATH']).toBe('/tmp/release-control.json');
+    expect(env).not.toHaveProperty('MOTIR_PRODUCTION_RELEASE_JOURNAL_PATH');
+    expect(env['ENVIRONMENT_CONFIG_ENCRYPTION_KEY']).toMatch(/^[0-9a-f]{64}$/);
+    expect(env['GITHUB_FALLBACK_ORG']).toBeTruthy();
+    expect(env['GITHUB_STUDIO_APP_PRIVATE_KEY']).toContain('BEGIN PRIVATE KEY');
+  });
+
+  it('is switched on by the acceptance lane, whose webServer shares the store', () => {
+    const config = codeOf('playwright.acceptance.config.ts');
+    expect(config).toMatch(/process\.env\['E2E_JOB_WORKER_PRODUCTION_RELEASE_SEAM'\] \?\?= '1'/);
+    expect(config).toMatch(
+      /MOTIR_FAKE_HOSTING_STATE_PATH: process\.env\['MOTIR_FAKE_HOSTING_STATE_PATH'\]!/,
+    );
   });
 });

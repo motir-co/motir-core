@@ -63,7 +63,13 @@ export function getHostingDeployPort(
     const key = `${target}:${appPrefix ?? ''}`;
     let fake = hostingFakes.get(key);
     if (!fake) {
-      fake = createFakeHostingDeployPort({ target, ...(appPrefix ? { appPrefix } : {}) });
+      // The singleton takes the fake's opt-in cross-process store, which the E2E
+      // lane's web server and job worker share (MOTIR-10040); unset, in memory.
+      fake = createFakeHostingDeployPort({
+        target,
+        shareAcrossProcesses: true,
+        ...(appPrefix ? { appPrefix } : {}),
+      });
       hostingFakes.set(key, fake);
     }
     return fake;

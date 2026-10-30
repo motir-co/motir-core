@@ -3,6 +3,7 @@ import { generateKeyPairSync } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import {
+  E2E_ENVIRONMENT_CONFIG_ENCRYPTION_KEY,
   E2E_GITHUB_TOKEN_ENCRYPTION_KEY,
   E2E_PROVISIONING_ORG,
   E2E_STUDIO_APP_ID,
@@ -232,6 +233,50 @@ export function embeddingsSeamEnv(): Record<string, string> {
   };
 }
 
+/**
+ * A PRODUCTION RELEASE'S SEAMS, mirrored into the worker (Story MOTIR-9797 ·
+ * MOTIR-10040).
+ *
+ * A merge's release is the `hosting/merge-release.requested` JOB, so it runs
+ * HERE: it reads the hosting manifest from GitHub, creates and migrates the
+ * production database through the database port, deploys through the hosting
+ * port, and `hosted-release.status` posts the GitHub deployment. The rollback
+ * that follows runs in the webServer. So:
+ *
+ *   * the hosting fake's cross-process store (`MOTIR_FAKE_HOSTING_STATE_PATH`) —
+ *     the release this process makes live is the one the webServer rolls back,
+ *     and its hold sidecar is how the spec keeps a deploy open;
+ *   * the GitHub seam (`lib/test-production-release-mock.ts`) with its control
+ *     and journal, and the org + App it mints a token as — the token mint itself
+ *     is the merge seam's, which the lane mirrors here already;
+ *   * the environment-configuration key, which seals the production database's
+ *     connection string and is otherwise set on the webServer only.
+ *
+ * The database fake stays in this process's memory: only a release reaches it.
+ *
+ * Opt-in (`E2E_JOB_WORKER_PRODUCTION_RELEASE_SEAM=1`, set by
+ * `playwright.acceptance.config.ts`), because only that lane holds the store.
+ */
+export function productionReleaseSeamEnv(): Record<string, string> {
+  if (process.env['E2E_JOB_WORKER_PRODUCTION_RELEASE_SEAM'] !== '1') return {};
+  const mirrored = [
+    'MOTIR_FAKE_HOSTING_STATE_PATH',
+    'MOTIR_PRODUCTION_RELEASE_CONTROL_PATH',
+    'MOTIR_PRODUCTION_RELEASE_JOURNAL_PATH',
+  ] as const;
+  return {
+    E2E_TEST_PRODUCTION_RELEASE: '1',
+    MOTIR_FLEET_ORCHESTRATOR: 'fake',
+    ...Object.fromEntries(
+      mirrored.flatMap((name) => (process.env[name] ? [[name, process.env[name]!]] : [])),
+    ),
+    ENVIRONMENT_CONFIG_ENCRYPTION_KEY: E2E_ENVIRONMENT_CONFIG_ENCRYPTION_KEY,
+    GITHUB_FALLBACK_ORG: E2E_PROVISIONING_ORG,
+    GITHUB_STUDIO_APP_ID: E2E_STUDIO_APP_ID,
+    GITHUB_STUDIO_APP_PRIVATE_KEY: generateAppPrivateKey(),
+  };
+}
+
 /** A fresh RSA private key (PKCS#8 PEM) for an App JWT nothing will verify. */
 function generateAppPrivateKey(): string {
   const { privateKey } = generateKeyPairSync('rsa', {
@@ -415,6 +460,8 @@ export async function startJobWorker(): Promise<void> {
       // The hosted-run gateway/motir-ai/GitHub seams — see `hostedRunSeamEnv`.
       ...hostedRunSeamEnv(),
       ...embeddingsSeamEnv(),
+      // A production release's hosting store and GitHub — see `productionReleaseSeamEnv`.
+      ...productionReleaseSeamEnv(),
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -536,6 +583,7 @@ export async function startSpecJobWorker(routingFile: string): Promise<Date> {
       // The hosted-run gateway/motir-ai/GitHub seams — see `hostedRunSeamEnv`.
       ...hostedRunSeamEnv(),
       ...embeddingsSeamEnv(),
+      ...productionReleaseSeamEnv(),
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });

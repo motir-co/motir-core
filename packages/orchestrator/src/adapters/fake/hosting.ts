@@ -1,3 +1,5 @@
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { OrchestratorApiError } from '../../errors';
 import {
   CustomerRepositoryRefusedError,
@@ -119,6 +121,58 @@ export interface FakeHostingOptions {
   readonly start?: Date;
   /** Repository ids `ensureApp` refuses as customer repositories (D1). */
   readonly refuseRepositories?: readonly string[];
+  /** Whether the cross-process store seam applies (below). Only the composition
+   *  root's singleton takes it; a fake a test builds itself is in-memory only. */
+  readonly shareAcrossProcesses?: boolean;
+}
+
+// ⚠️ THE CROSS-PROCESS *HOSTING* STORE (Story MOTIR-9797 · MOTIR-10040) — the
+// seam `./index.ts` (MOTIR-3828) and `./persistent.ts` carry, for the same
+// reason: in the E2E lane a merge's release is DEPLOYED by the job worker and
+// ROLLED BACK by the web server, so the two processes must see one provider.
+// An in-memory map in each would answer the rollback "no live release" for an
+// application the other process just made live.
+//
+// OPT-IN and file-backed: absent the variable, or for a fake built without
+// `shareAcrossProcesses`, this is the in-memory fake every vitest suite drives.
+// Under it, every operation reads the file before it runs and writes it after.
+//
+// The HOLD sidecar (`<path>.hold.json`, `{ "held": ["deploy"] }`) is how a spec
+// in a THIRD process keeps a release open long enough to be seen building: a
+// held operation waits, before it reads anything, until the operation leaves
+// the list — and fails at the "provider" after `FAKE_HOSTING_HOLD_LIMIT_MS`, so
+// a hold nobody releases ends the release rather than the lane.
+export const FAKE_HOSTING_STATE_PATH_ENV = 'MOTIR_FAKE_HOSTING_STATE_PATH';
+/** How long a held operation waits before it fails. */
+export const FAKE_HOSTING_HOLD_LIMIT_MS = 120_000;
+const HOLD_POLL_MS = 100;
+
+interface PersistedHostedApp extends Omit<FakeHostedApp, 'transitions'> {
+  transitions: Array<{ at: string; running: boolean }>;
+}
+
+interface PersistedHostingStore {
+  clock: number;
+  sequence: number;
+  apps: PersistedHostedApp[];
+  shapes: FakeHostedRelease[];
+}
+
+function hostingStatePath(): string | null {
+  const raw = process.env[FAKE_HOSTING_STATE_PATH_ENV];
+  return raw !== undefined && raw !== '' ? raw : null;
+}
+
+/** The operations the hold sidecar names, or none. A torn read holds nothing. */
+function heldOperations(path: string): readonly string[] {
+  const hold = `${path}.hold.json`;
+  if (!existsSync(hold)) return [];
+  try {
+    const parsed = JSON.parse(readFileSync(hold, 'utf8')) as { held?: unknown };
+    return Array.isArray(parsed.held) ? parsed.held.filter((h) => typeof h === 'string') : [];
+  } catch {
+    return [];
+  }
 }
 
 /** The origin credential a forwarder sends to a release of that target and
@@ -158,6 +212,58 @@ export function createFakeHostingDeployPort(
   // reports usage in the unit of the release it names.
   const shapes = new Map<string, FakeHostedRelease>();
   let accountReady = true;
+  const sharedPath = (): string | null =>
+    options.shareAcrossProcesses ? hostingStatePath() : null;
+
+  /** Read the shared file over this process's state. A no-op when the seam is off. */
+  function loadShared(path: string): void {
+    if (!existsSync(path)) return;
+    let parsed: PersistedHostingStore;
+    try {
+      parsed = JSON.parse(readFileSync(path, 'utf8')) as PersistedHostingStore;
+    } catch {
+      // A half-written file is a torn read: keep what this process has, and the
+      // next write replaces it.
+      return;
+    }
+    clock = parsed.clock;
+    sequence = parsed.sequence;
+    apps.clear();
+    for (const app of parsed.apps) {
+      apps.set(app.appRef, {
+        ...app,
+        transitions: app.transitions.map((t) => ({ at: new Date(t.at), running: t.running })),
+      });
+    }
+    shapes.clear();
+    for (const made of parsed.shapes) shapes.set(made.releaseId, made);
+  }
+
+  /** Write this process's state to the shared file. */
+  function saveShared(path: string): void {
+    const out: PersistedHostingStore = {
+      clock,
+      sequence,
+      apps: [...apps.values()].map((app) => ({
+        ...app,
+        transitions: app.transitions.map((t) => ({ at: t.at.toISOString(), running: t.running })),
+      })),
+      shapes: [...shapes.values()],
+    };
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, JSON.stringify(out), 'utf8');
+  }
+
+  /** Wait while the hold sidecar names `operation`. */
+  async function awaitRelease(path: string, operation: FakeHostingOperation): Promise<void> {
+    const deadline = Date.now() + FAKE_HOSTING_HOLD_LIMIT_MS;
+    while (heldOperations(path).includes(operation)) {
+      if (Date.now() >= deadline) {
+        throw new OrchestratorApiError('fake', 504, `held ${operation} was never released`);
+      }
+      await new Promise((resolve) => setTimeout(resolve, HOLD_POLL_MS));
+    }
+  }
 
   function injectedFailure(operation: FakeFailableOperation): void {
     if (!failing.has(operation)) return;
@@ -455,7 +561,17 @@ export function createFakeHostingDeployPort(
         ...(typeof fields.command === 'string' ? { command: fields.command } : {}),
         ...(Array.isArray(fields.env) ? { envNames: fields.env.map((v) => v.name) } : {}),
       });
-      return (inner as (...args: unknown[]) => unknown)(input, ...rest);
+      const path = sharedPath();
+      if (!path) return (inner as (...args: unknown[]) => unknown)(input, ...rest);
+      return (async () => {
+        await awaitRelease(path, operation);
+        loadShared(path);
+        try {
+          return await (inner as (...args: unknown[]) => Promise<unknown>)(input, ...rest);
+        } finally {
+          saveShared(path);
+        }
+      })();
     };
   }
   return port;
