@@ -43,6 +43,7 @@ const { createTestWorkspace } = await import('../fixtures');
 const { hostedApplicationRepository } =
   await import('@/lib/repositories/hostedApplicationRepository');
 const { applicationAccessOf } = await import('@/lib/publicAddresses/applicationAccess');
+const { publicAddressRepository } = await import('@/lib/repositories/publicAddressRepository');
 
 // ⚠️ No column holds an application's access setting yet (MOTIR-9817 adds it),
 // so the repository reads it as `null` — members only. The application tests
@@ -167,6 +168,21 @@ describe('the APPLICATION outcome (ADR MOTIR-9521 §3)', () => {
       application: { id: app.id, slug: 'shop' },
       upstream: UPSTREAM,
     });
+    // Asked exactly once, about THIS application, and the origin is an origin.
+    expect(resolveApplicationTarget).toHaveBeenCalledTimes(1);
+    expect(resolveApplicationTarget.mock.calls[0]![0]).toMatchObject({ id: app.id });
+    const upstream = (r as { upstream: { origin: string } }).upstream;
+    expect(new URL(upstream.origin).origin).toBe(upstream.origin);
+  });
+
+  it('an application of ANOTHER workspace answers no_application, without asking the runtime', async () => {
+    const other = await seedTenant('other', 'OTHR', 'public');
+    const theirs = await seedApplication(other, { released: true });
+    await seedCustomDomain(host, 'shop.acme.test', 'issued', theirs.id);
+    await expect(
+      publicAddressesService.resolveHost('shop.acme.test', { credentialed: true }),
+    ).resolves.toEqual({ kind: 'no_application', workspace: { name: 'Acme' } });
+    expect(resolveApplicationTarget).not.toHaveBeenCalled();
   });
 
   it('an application with NO production release answers no_application', async () => {
@@ -175,6 +191,7 @@ describe('the APPLICATION outcome (ADR MOTIR-9521 §3)', () => {
     await expect(
       publicAddressesService.resolveHost('shop.acme.test', { credentialed: true }),
     ).resolves.toEqual({ kind: 'no_application', workspace: { name: 'Acme' } });
+    expect(resolveApplicationTarget).not.toHaveBeenCalled();
   });
 
   it('to the edge, a release the target no longer serves answers no_application', async () => {
@@ -209,6 +226,26 @@ describe('the APPLICATION outcome (ADR MOTIR-9521 §3)', () => {
       opensAt: 'shop--acme.motir.example',
     });
     expect(r).not.toHaveProperty('upstream');
+    // …and the anonymous read answers the same refusal.
+    await expect(publicAddressesService.resolveHost('shop.acme.test')).resolves.toEqual(r);
+    expect(resolveApplicationTarget).not.toHaveBeenCalled();
+  });
+
+  it('a MEMBERS-ONLY application with no production address answers opensAt: null', async () => {
+    storedAccess = 'members_only';
+    const app = await seedApplication(host, { released: true });
+    await adminDb.hostedApplication.update({
+      where: { id: app.id },
+      data: { productionAddress: null },
+    });
+    await seedCustomDomain(host, 'shop.acme.test', 'issued', app.id);
+    const r = await publicAddressesService.resolveHost('shop.acme.test', { credentialed: true });
+    expect(r).toEqual({
+      kind: 'members_only_application',
+      workspace: { name: 'Acme' },
+      application: { id: app.id, slug: 'shop' },
+      opensAt: null,
+    });
     expect(resolveApplicationTarget).not.toHaveBeenCalled();
   });
 
@@ -320,6 +357,8 @@ describe('everything else refuses IDENTICALLY', () => {
         publicAddressesService.resolveHost('pending.acme.test'),
         status,
       ).rejects.toBeInstanceOf(PublicHostNotFoundError);
+      // Invisible to the anonymous read arm, not merely refused by the service.
+      expect(await publicAddressRepository.findByHostname('pending.acme.test'), status).toBeNull();
     }
   });
 
@@ -379,6 +418,28 @@ describe('the route’s cache bound — a retired name answers for 30 seconds at
     expect(stranger.headers.get('Cache-Control')).toBe(HOST_CONTRACT_CACHE_CONTROL);
     expect(stranger.headers.get('Vary')).toBe('Authorization');
     expect(await stranger.json()).not.toHaveProperty('upstream');
+
+    // No Authorization at all: the anonymous shape, as JSON, with no upstream key.
+    const anonymous = await call('shop.acme.test');
+    expect(anonymous.headers.get('Cache-Control')).toBe('public, max-age=30');
+    expect(anonymous.headers.get('Vary')).toBe('Authorization');
+    expect(await anonymous.json()).toEqual({
+      kind: 'application',
+      workspace: { name: 'Acme' },
+      application: { id: app.id, slug: 'shop' },
+    });
+    expect(resolveApplicationTarget).toHaveBeenCalledTimes(1);
+  });
+
+  it('with MOTIR_EDGE_CONTRACT_TOKEN unset, even the edge’s bearer is read anonymously', async () => {
+    const app = await seedApplication(host, { released: true });
+    await seedCustomDomain(host, 'shop.acme.test', 'issued', app.id);
+    delete process.env['MOTIR_EDGE_CONTRACT_TOKEN'];
+    const res = await call('shop.acme.test', `Bearer ${EDGE_TOKEN}`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Cache-Control')).toBe('public, max-age=30');
+    expect(await res.json()).not.toHaveProperty('upstream');
+    expect(resolveApplicationTarget).not.toHaveBeenCalled();
   });
 
   it('a 404 is `no-store`, and a legacy alias gets the same 404 body as an unknown host', async () => {
@@ -393,7 +454,9 @@ describe('the route’s cache bound — a retired name answers for 30 seconds at
       expect(res.status).toBe(404);
       expect(res.headers.get('Cache-Control')).toBe(NOT_FOUND_CACHE_CONTROL);
     }
-    expect(await alias.json()).toEqual(await unknown.json());
+    const body = await alias.json();
+    expect(body).toEqual(await unknown.json());
+    expect(Object.keys(body)).toEqual(['code']);
   });
 });
 
