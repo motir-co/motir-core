@@ -489,6 +489,27 @@ describe('read_file — every other outcome is named, non-error and distinct', (
     expect(summary).toContain('"quarantined"');
   });
 
+  // MOTIR-10122 — every outcome that read AT a ref names the commit it resolved
+  // to when there is one, in the text and the payload, and stays as before when
+  // there is none (an unpinned read).
+  it.each([
+    { outcome: 'found', text: 'one\ntwo', bytes: 7 },
+    { outcome: 'found', text: 'a\u0000b', bytes: 3 },
+    { outcome: 'binary', bytes: 3 },
+    { outcome: 'directory', entries: [{ name: 'a.ts', type: 'file' }], truncated: false },
+    { outcome: 'not_found' },
+    { outcome: 'too_large', limitBytes: 10 },
+  ])('$outcome names the resolved commit, and only when there is one', (extra) => {
+    const base = { repoRef: 'acme/alpha', path: 'lib/a.ts', ref: 'main', ...extra } as never;
+    const sha = '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b';
+    const pinned = renderReadFile({ ...(base as object), commitSha: sha } as never);
+    expect(pinned.summary).toContain(`at main (commit ${sha})`);
+    expect(pinned.structured).toMatchObject({ commitSha: sha });
+    const plain = renderReadFile(base);
+    expect(plain.summary).not.toContain('(commit ');
+    expect(plain.structured).toMatchObject({ commitSha: null });
+  });
+
   // MOTIR-9868 — a listing the host cut at the cap says so, and tells the
   // reader an unlisted file is not thereby absent.
   it('a truncated directory listing ends in the TRUNCATED sentence', () => {
