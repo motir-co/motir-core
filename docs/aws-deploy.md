@@ -56,3 +56,11 @@ result line:
 On a failure the step log shows why (a migrate exit code or stop reason with
 the last 50 migrate log lines, or the services' rollout states) and that every
 service is back on its previous revision.
+
+The roll registers each service's next revision by copying the one it runs now,
+with only the image changed. So before it migrates or changes anything, the
+deploy refuses a service whose revision sets `MOTIR_BREACH_ENABLED` on a
+container (MOTIR-10093): that is a hand-registered breach revision, and copying
+it would make the breach the service's next release, run in a loop. The log
+names the service and the revision. Point the service back at its own revision
+once the breach ends, then re-run the workflow.

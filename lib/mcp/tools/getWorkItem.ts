@@ -6,14 +6,17 @@ import { monitorIssueService } from '@/lib/services/monitorIssueService';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { inFlightCodeService } from '@/lib/services/inFlightCodeService';
 import { projectedBodyOf, projectedWorkItem } from '@/lib/services/planProjectionService';
 import type { ProjectedDetailDto, ProjectedRowDto } from '@/lib/services/planProjectionService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { IssueDetailDto } from '@/lib/dto/workItems';
+import type { AiInFlightCodeFields } from '@/lib/dto/ai';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
 import { CHILD_EDGE_BLOCK_DESCRIPTION } from '../dependencyEdges';
 import { obsolescenceLines } from '../obsolescence';
+import { renderInFlightCode } from '../inFlightCode';
 import { derived } from '../payloads/define';
 import { getWorkItemPayload, presentMcpWorkItemChild } from '../payloads/workItems';
 import { isTempRef } from '@/lib/plans/refs';
@@ -103,6 +106,7 @@ function summarize(
   detail: IssueDetailDto,
   commentCount: number,
   folderPath: string[] | null,
+  inFlight: AiInFlightCodeFields,
   parsed?: ParsedBody,
 ): string {
   const it = detail.item;
@@ -141,6 +145,9 @@ function summarize(
       supersededByKeys: detail.supersededBy.map((l) => l.item.identifier),
     }),
   );
+  // Where the item's UNMERGED code lives (MOTIR-10069) — before the body, so a
+  // long description cannot push it out of a reader's view.
+  lines.push(...renderInFlightCode(inFlight));
   if (it.descriptionMd) {
     lines.push('', it.descriptionMd);
   }
@@ -262,6 +269,13 @@ export async function runGetWorkItem(
   // is the ordinary answer and means nothing is recorded, never that nothing has
   // landed. It rides the `catchall`-open envelope, so no payload schema widens.
   const deliveries = await workItemsService.listDeliverySet(detail.item.id, ctx);
+  // The IN-FLIGHT CODE (MOTIR-10069) — where the card's UNMERGED code lives, per
+  // repository: its own open pull request, else the NEAREST ANCESTOR's
+  // (`source: 'inherited'`, `fromKey`), plus `mergedRepos`. `deliveries` above is
+  // the card's OWN set only, so a child built onto its parent's pull request reads
+  // `deliveries: []` — which looks like "no code yet". This is the same read the
+  // hosted planner's `get_item` makes, so the two planners are handed one answer.
+  const inFlight = await inFlightCodeService.readForItem(detail.item.id, project.id, ctx);
   // The item's OWN folder placement (Story MOTIR-5310 · MOTIR-5413), DECLARED on
   // the payload as `folderId` + `folderPath` — the `/api/v1` detail's vocabulary.
   // The path is the one read the quick view and `/api/v1` share; an unfiled item
@@ -309,12 +323,14 @@ export async function runGetWorkItem(
       presentMcpWorkItemChild(child, edges[child.id], (id) => keyById.get(id)),
     ),
     deliveries,
+    inFlightCode: inFlight.inFlightCode,
+    mergedRepos: inFlight.mergedRepos,
     errors,
     latestRefusal,
     ...(parsed ? { parsedSections: parsed } : {}),
   };
   return toolOk(
-    summarize(detail, item.commentCount, folderPath, parsed),
+    summarize(detail, item.commentCount, folderPath, inFlight, parsed),
     derived(getWorkItemPayload, structured),
   );
 }
@@ -355,6 +371,16 @@ export function registerGetWorkItem(server: McpServer, resolveContext: McpContex
         'is `null` otherwise, including when a later approval answered it. It is the same ' +
         'refusal the dispatched prompt’s CHANGES REQUESTED section quotes: address that reason ' +
         'in the next attempt.' +
+        ' A committed item also carries `inFlightCode`: WHERE its UNMERGED code is, one entry per ' +
+        'repository — `{ repo, branch, headSha, prNumber, prUrl, draft, baseRef, source, fromKey? }` — ' +
+        'its own open pull request (`source: "own"`), else the NEAREST ANCESTOR’s ' +
+        '(`source: "inherited"`, `fromKey` the ancestor’s key: a child built onto its parent’s pull ' +
+        'request has no delivery of its own, and its code is on the parent’s branch). Pass `repo` ' +
+        'and `branch` to `list_changed_files` (as `repo` and `head`) and to `read_file` (as `repo` ' +
+        'and `ref`). `mergedRepos` names the repositories where its own delivery has already merged ' +
+        'to the default branch. Both are `[]` when nothing was delivered on the item or a parent; ' +
+        '`deliveries` stays the item’s OWN pull requests only, and is not a statement about its ' +
+        'code. The text block prints one `In-flight code:` line per entry.' +
         ' Each of the title, description and explanation has a recorded language in ' +
         '`item.languages` (`{ title, description, explanation }`); `null` means none was ' +
         'recorded — text written before content languages, and imported text.' +

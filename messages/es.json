@@ -8692,7 +8692,7 @@
       "clearEnough": "Lo bastante claro para planificarlo tal como está.",
       "nothingSettled": "No se decidió nada, así que la solicitud se planifica tal como está.",
       "requirementSaved": "Guardado como <link>{title}</link> en Documentos de requisitos.",
-      "requirementNotSaved": "<lead>No se pudo guardar el requisito.</lead> No se inició nada. Confirmar sigue disponible: inténtalo de nuevo."
+      "requirementPageNotSaved": "<lead>No se pudo guardar el requisito como página.</lead> La planificación lo sigue usando."
     },
     "logBugOffer": {
       "label": "Oferta para registrar un bug",

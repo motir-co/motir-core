@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  BREACH_GUARD_VARIABLE,
   READ_ONLY_FIELDS,
+  breachContainers,
   cloneWithImage,
   containersIn,
   ecrRepositoryName,
@@ -81,5 +83,23 @@ describe('containersIn', () => {
     expect(containersIn(described(), OTHER_REPO)).toEqual(['sidecar']);
     expect(containersIn({ containerDefinitions: [{ name: 'x' }] }, CORE_REPO)).toEqual([]);
     expect(containersIn({}, CORE_REPO)).toEqual([]);
+  });
+});
+
+describe('breachContainers', () => {
+  it('names the containers that set the breach guard, at any value', () => {
+    expect(breachContainers(described())).toEqual([]);
+    expect(breachContainers({})).toEqual([]);
+    const armed = described();
+    const [web, sidecar] = armed.containerDefinitions ?? [];
+    if (web) web.environment = [{ name: 'MONITORING_CLOUDWATCH_SERVICE', value: 'web' }];
+    expect(breachContainers(armed)).toEqual([]);
+    if (sidecar) sidecar.environment = [{ name: BREACH_GUARD_VARIABLE, value: 'false' }];
+    expect(breachContainers(armed)).toEqual(['sidecar']);
+    expect(
+      breachContainers({
+        containerDefinitions: [{ environment: [{ name: BREACH_GUARD_VARIABLE }] }],
+      }),
+    ).toEqual(['']);
   });
 });

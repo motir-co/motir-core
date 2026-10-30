@@ -232,9 +232,9 @@ export const zh: McpSummaryTranslations = {
   },
   get_work_item: {
     summary:
-      '完整读取一个工作项：描述、状态、父级或文件夹、子项、依赖边、就绪判定、与之关联的错误，以及最近一次针对它退回的拒绝。',
+      '完整读取一个工作项：描述、状态、父级或文件夹、子项、依赖边、就绪判定、与之关联的错误、最近一次针对它退回的拒绝，以及它尚未合并的代码所在的位置。',
     source:
-      'One item in full — description, status, parent or folder, children, dependency edges, a readiness verdict, the errors linked to it, and the latest refusal sent back on it.',
+      'One item in full — description, status, parent or folder, children, dependency edges, a readiness verdict, the errors linked to it, the latest refusal sent back on it, and where its unmerged code is.',
   },
   get_work_item_activity: {
     summary: '一个工作项的讨论与变更轨迹的一页：评论线程与历史记录交错排列。',
@@ -345,6 +345,12 @@ export const zh: McpSummaryTranslations = {
       '读取项目 repository 集合中某个仓库在指定 ref 下的一个文件的文本或一个目录的直接条目，与托管规划器的读取一样有长度上限并按行范围读取，每种缺失都是一个有名称的结果。',
     source:
       "One file's text, or a directory's immediate entries, from a repository in the project's set, at a ref — capped and line-ranged like the hosted planner's read, every absence a named outcome.",
+  },
+  list_changed_files: {
+    summary:
+      '列出项目 repository 集合中某个仓库里一个分支相对其默认分支或指定基准所改动的路径，与托管规划器的列表一样有上限，每种缺失都是一个有名称的结果。',
+    source:
+      "The paths a branch changed in a repository in the project's set, against its default branch or a named base — bounded like the hosted planner's listing, every absence a named outcome.",
   },
   record_plan_revision_reason: {
     summary:

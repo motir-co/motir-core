@@ -8689,7 +8689,7 @@
       "clearEnough": "Clear enough to plan as stated.",
       "nothingSettled": "Nothing was settled, so the request is planned as stated.",
       "requirementSaved": "Saved as <link>{title}</link> in Requirements Docs.",
-      "requirementNotSaved": "<lead>Couldn’t save the requirement.</lead> Nothing was started. Confirm is still here — try it again."
+      "requirementPageNotSaved": "<lead>Couldn’t save the requirement as a page.</lead> Planning still uses it."
     },
     "logBugOffer": {
       "label": "Offer to log a bug",

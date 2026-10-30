@@ -477,7 +477,7 @@ describe('the catalogue', () => {
 
 // THE COMPOSED REQUIREMENT's two rail lines (MOTIR-9438; design
 // `plan-offer--requirement.mock.html`). Both read the served offer alone.
-describe('the requirement page link and the cannot-save line', () => {
+describe('the requirement page link and the not-saved line', () => {
   const PAGE = { pageId: 'p1', title: 'Export the board' };
   const confirmed = (extra: Partial<PlanAnswerOfferDto> = {}) =>
     offer({
@@ -507,45 +507,54 @@ describe('the requirement page link and the cannot-save line', () => {
     expect(screen.queryByTestId('plan-offer-requirement-page')).toBeNull();
   });
 
-  it('a failed save draws the alert line and keeps both controls enabled', () => {
-    renderRail({
-      session: offered(offer({ targetKey: null, requirementSaveFailed: true })),
-    });
-    const line = screen.getByTestId('plan-offer-requirement-not-saved');
-    expect(line.getAttribute('role')).toBe('alert');
-    expect(line.textContent).toContain('Couldn’t save the requirement.');
-    expect(line.textContent).toContain('Confirm is still here');
+  // MOTIR-10091: the page is saved in the background after the start. A save that
+  // failed every attempt costs the link, never the run, so the confirmed line says so.
+  it('a confirmed offer whose page could not be saved says so in the link line’s place', () => {
+    renderRail({ session: offered(confirmed({ requirementPageFailed: true })) });
+    const line = screen.getByTestId('plan-offer-requirement-page-not-saved');
+    expect(screen.getByTestId('plan-offer-confirmed').contains(line)).toBe(true);
+    expect(line.getAttribute('role')).toBe('status');
+    expect(line.textContent).toBe(
+      'Couldn’t save the requirement as a page. Planning still uses it.',
+    );
+    expect(screen.queryByTestId('plan-offer-requirement-page')).toBeNull();
+    expect(screen.queryByTestId('plan-offer-confirm')).toBeNull();
     expect(screen.queryByTestId('plan-offer-cannot-start')).toBeNull();
-    const confirm = screen.getByTestId('plan-offer-confirm') as HTMLButtonElement;
-    expect(confirm.disabled).toBe(false);
-    expect((screen.getByTestId('plan-offer-decline') as HTMLButtonElement).disabled).toBe(false);
-    fireEvent.click(confirm);
-    expect(onConfirmPlanOffer).toHaveBeenCalledWith('t1');
   });
 
-  it('draws no cannot-save line on a plain pending one', () => {
-    renderRail({ session: offered(offer({ targetKey: null })) });
-    expect(screen.queryByTestId('plan-offer-requirement-not-saved')).toBeNull();
+  it('a saved page wins over a failed mark', () => {
+    renderRail({
+      session: offered(confirmed({ requirementPage: PAGE, requirementPageFailed: true })),
+    });
+    expect(screen.queryByTestId('plan-offer-requirement-page')).not.toBeNull();
+    expect(screen.queryByTestId('plan-offer-requirement-page-not-saved')).toBeNull();
+  });
+
+  it('draws neither line while the page is still being saved, nor on a pending offer', () => {
+    renderRail({ session: offered(confirmed()) });
+    expect(screen.queryByTestId('plan-offer-requirement-page-not-saved')).toBeNull();
+    cleanup();
+    renderRail({ session: offered(offer({ targetKey: null, requirementPageFailed: true })) });
+    expect(screen.queryByTestId('plan-offer-requirement-page-not-saved')).toBeNull();
+    expect((screen.getByTestId('plan-offer-confirm') as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('draws no not-saved line on a bug offer', () => {
+    renderRail({ session: offered(confirmed({ kind: 'log_bug', requirementPageFailed: true })) });
+    expect(screen.queryByTestId('plan-offer-requirement-page-not-saved')).toBeNull();
   });
 
   // MOTIR-9878: a targeted offer carries the requirement too, so its saved page and its
   // failed save are drawn exactly as on a no-target offer.
-  it('draws the link line and the cannot-save line on a targeted offer too', () => {
+  it('draws the link line and the not-saved line on a targeted offer too', () => {
     renderRail({
       session: offered(confirmed({ targetKey: 'ACME-40', requirementPage: PAGE })),
     });
     expect(screen.queryByTestId('plan-offer-requirement-page')).not.toBeNull();
     cleanup();
-    renderRail({ session: offered(offer({ requirementSaveFailed: true })) });
-    expect(screen.queryByTestId('plan-offer-requirement-not-saved')).not.toBeNull();
-  });
-
-  it('a real refusal still replaces both buttons, even beside a failed save', () => {
-    renderRail(
-      { session: offered(offer({ targetKey: null, requirementSaveFailed: true })) },
-      { refusal: { turnId: 't1', code: 'MOTIR_AI_OUT_OF_CREDITS' } },
-    );
-    expect(screen.getByTestId('plan-offer-cannot-start')).toBeTruthy();
-    expect(screen.queryByTestId('plan-offer-confirm')).toBeNull();
+    renderRail({
+      session: offered(confirmed({ targetKey: 'ACME-40', requirementPageFailed: true })),
+    });
+    expect(screen.queryByTestId('plan-offer-requirement-page-not-saved')).not.toBeNull();
   });
 });

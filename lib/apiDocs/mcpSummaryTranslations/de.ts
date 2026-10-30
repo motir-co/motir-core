@@ -259,9 +259,9 @@ export const de: McpSummaryTranslations = {
   },
   get_work_item: {
     summary:
-      'Ein Element vollständig – Beschreibung, Status, übergeordnetes Element oder Ordner, untergeordnete Elemente, Abhängigkeitskanten, ein Bereitschaftsurteil, die damit verknüpften Fehler und die letzte dazu zurückgesendete Ablehnung.',
+      'Ein Element vollständig – Beschreibung, Status, übergeordnetes Element oder Ordner, untergeordnete Elemente, Abhängigkeitskanten, ein Bereitschaftsurteil, die damit verknüpften Fehler, die letzte dazu zurückgesendete Ablehnung und wo sein noch nicht gemergter Code liegt.',
     source:
-      'One item in full — description, status, parent or folder, children, dependency edges, a readiness verdict, the errors linked to it, and the latest refusal sent back on it.',
+      'One item in full — description, status, parent or folder, children, dependency edges, a readiness verdict, the errors linked to it, the latest refusal sent back on it, and where its unmerged code is.',
   },
   get_work_item_activity: {
     summary:
@@ -382,6 +382,12 @@ export const de: McpSummaryTranslations = {
       'Der Text einer Datei oder die direkten Einträge eines Verzeichnisses aus einem Repository in der Repository-Menge des Projekts bei einem ref – begrenzt und zeilenweise wie der Abruf des gehosteten Planers, jede Abwesenheit ein benanntes Ergebnis.',
     source:
       "One file's text, or a directory's immediate entries, from a repository in the project's set, at a ref — capped and line-ranged like the hosted planner's read, every absence a named outcome.",
+  },
+  list_changed_files: {
+    summary:
+      'Die Pfade, die ein Branch in einem Repository der Repository-Menge des Projekts geändert hat, gegenüber seinem Standard-Branch oder einer benannten Basis – begrenzt wie die Auflistung des gehosteten Planers, jede Abwesenheit ein benanntes Ergebnis.',
+    source:
+      "The paths a branch changed in a repository in the project's set, against its default branch or a named base — bounded like the hosted planner's listing, every absence a named outcome.",
   },
   record_plan_revision_reason: {
     summary:

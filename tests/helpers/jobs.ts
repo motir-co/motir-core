@@ -172,6 +172,12 @@ export interface JobTestEngineOptions {
    * It is how the supervisor suites drive the RESUME path without a worker.
    */
   steps?: Array<{ id: string; handler: () => unknown }>;
+  /**
+   * The ZERO-INDEXED attempt the handler is told it is on (default 0). A job whose
+   * FINAL attempt does something before it throws — records a terminal failure where
+   * a person looks — is driven to that attempt with this.
+   */
+  attempt?: number;
 }
 
 /**
@@ -227,7 +233,7 @@ export class JobTestEngine {
       },
       step: { run, sleep },
       runId: `test-run-${def.id}`,
-      attempt: 0,
+      attempt: overrides?.attempt ?? this.opts.attempt ?? 0,
     } as unknown as JobTestEngineContext;
     const data = (ctx.event.data ?? {}) as {
       workspaceId?: string | null;

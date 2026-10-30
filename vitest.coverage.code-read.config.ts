@@ -35,6 +35,7 @@ export default defineConfig({
       'tests/mcp/code-read-door.test.ts',
       'tests/mcp/code-read-tool-tables.test.ts',
       'tests/mcp/read-file.test.ts',
+      'tests/mcp/list-changed-files.test.ts',
       'tests/mcp/code-graph-read.test.ts',
       'tests/services/codeGraphReadDriftService.test.ts',
     ],
@@ -44,6 +45,7 @@ export default defineConfig({
       all: false,
       include: [
         'lib/mcp/tools/readFile.ts',
+        'lib/mcp/tools/listChangedFiles.ts',
         'lib/mcp/tools/codeGraphRead.ts',
         'lib/services/codeGraphReadService.ts',
         'lib/services/codeGraphReadDriftService.ts',
@@ -64,6 +66,13 @@ export default defineConfig({
       thresholds: {
         perFile: true,
         'lib/mcp/tools/readFile.ts': { statements: 90, functions: 90, branches: 90, lines: 90 },
+        // MOTIR-10069 — the MCP's `list_changed_files`, beside `read_file`.
+        'lib/mcp/tools/listChangedFiles.ts': {
+          statements: 90,
+          functions: 90,
+          branches: 90,
+          lines: 90,
+        },
         'lib/mcp/tools/codeGraphRead.ts': {
           statements: 90,
           functions: 90,

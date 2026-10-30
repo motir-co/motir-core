@@ -62,3 +62,17 @@ export function containersIn(taskDefinition: TaskDefinition, repository: string)
     .filter((c) => c.image !== undefined && imageRepository(c.image) === repository)
     .map((c) => c.name ?? '');
 }
+
+/**
+ * The environment variable that arms the breach command (`breach/breach.mjs`,
+ * docs/monitoring/aws-alarms.md). No revision a service runs in the normal
+ * course sets it; only a hand-registered breach revision does (MOTIR-10093).
+ */
+export const BREACH_GUARD_VARIABLE = 'MOTIR_BREACH_ENABLED';
+
+/** The containers of `taskDefinition` whose environment sets the breach guard, at any value. */
+export function breachContainers(taskDefinition: TaskDefinition): string[] {
+  return (taskDefinition.containerDefinitions ?? [])
+    .filter((c) => c.environment?.some((v) => v.name === BREACH_GUARD_VARIABLE))
+    .map((c) => c.name ?? '');
+}

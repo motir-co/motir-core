@@ -141,8 +141,8 @@ function toAnswerOfferDto(value: unknown): PlanAnswerOfferDto | null {
   // read is dropped; the offer itself still reads.
   const plan = v.kind === 'plan';
   const requirement = plan ? narrowSharpenedRequirement(v.requirement) : undefined;
-  // The saved page and the failed-save flag (MOTIR-9436) ride the same offers, each
-  // dropped alone when it does not read.
+  // The saved page (MOTIR-9436) and the failed background save (MOTIR-10091) ride the
+  // same offers, each dropped alone when it does not read.
   const requirementPage = plan ? toRequirementPageRef(v.requirementPage) : undefined;
   return {
     kind: v.kind as AnswerOfferKindDto,
@@ -150,7 +150,7 @@ function toAnswerOfferDto(value: unknown): PlanAnswerOfferDto | null {
     ...(fields as { [K in keyof typeof fields]: string | null }),
     ...(requirement ? { requirement } : {}),
     ...(requirementPage ? { requirementPage } : {}),
-    ...(plan && v.requirementSaveFailed === true ? { requirementSaveFailed: true as const } : {}),
+    ...(plan && v.requirementPageFailed === true ? { requirementPageFailed: true as const } : {}),
     ...(bug ? { bug } : {}),
   };
 }

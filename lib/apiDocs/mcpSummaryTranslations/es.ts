@@ -257,9 +257,9 @@ export const es: McpSummaryTranslations = {
   },
   get_work_item: {
     summary:
-      'Un elemento completo: descripción, estado, padre o Carpeta, hijos, aristas de dependencia, un veredicto de disponibilidad, los Errores vinculados a él y la última denegación que se le devolvió.',
+      'Un elemento completo: descripción, estado, padre o Carpeta, hijos, aristas de dependencia, un veredicto de disponibilidad, los Errores vinculados a él, la última denegación que se le devolvió y dónde está su código aún sin fusionar.',
     source:
-      'One item in full — description, status, parent or folder, children, dependency edges, a readiness verdict, the errors linked to it, and the latest refusal sent back on it.',
+      'One item in full — description, status, parent or folder, children, dependency edges, a readiness verdict, the errors linked to it, the latest refusal sent back on it, and where its unmerged code is.',
   },
   get_work_item_activity: {
     summary:
@@ -380,6 +380,12 @@ export const es: McpSummaryTranslations = {
       'El texto de un archivo, o las entradas inmediatas de un directorio, de un repositorio del conjunto del Proyecto, en una ref: con límite y por rangos de líneas como la lectura del planificador alojado, con cada ausencia como un resultado con nombre.',
     source:
       "One file's text, or a directory's immediate entries, from a repository in the project's set, at a ref — capped and line-ranged like the hosted planner's read, every absence a named outcome.",
+  },
+  list_changed_files: {
+    summary:
+      'Las rutas que una rama cambió en un repositorio del conjunto del Proyecto, frente a su rama predeterminada o una base indicada: con límite como el listado del planificador alojado, con cada ausencia como un resultado con nombre.',
+    source:
+      "The paths a branch changed in a repository in the project's set, against its default branch or a named base — bounded like the hosted planner's listing, every absence a named outcome.",
   },
   record_plan_revision_reason: {
     summary:

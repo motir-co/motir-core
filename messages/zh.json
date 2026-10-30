@@ -8683,7 +8683,7 @@
       "clearEnough": "已足够清楚，可以按原样规划。",
       "nothingSettled": "没有确定任何内容，所以会按请求原样规划。",
       "requirementSaved": "已保存为需求文档中的<link>{title}</link>。",
-      "requirementNotSaved": "<lead>无法保存需求。</lead>尚未开始规划。确认按钮仍可使用，请重试。"
+      "requirementPageNotSaved": "<lead>无法将需求保存为页面。</lead>规划仍会使用该需求。"
     },
     "logBugOffer": {
       "label": "提议记录缺陷",

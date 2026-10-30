@@ -1,20 +1,23 @@
 // Acceptance E2E — A plan offer with no target shows the requirement it will plan, in
 // the left pane, before Confirm; Confirm saves it as a page and plans from it (Story
 // MOTIR-9430 · MOTIR-9441; design `design/ai-chat/plan-offer--requirement.mock.html`).
+// Since MOTIR-10091 the page is saved by a background job AFTER the run starts, so every
+// page assertion polls Postgres for the job's write, and the rail reads the page link
+// from the offer once the overlay is reopened.
 // The receipt a person watches to accept the story, walking its Verification recipe:
 //
 //   THE RECORDED WALK (one test, seven chapters). A request with no target is answered
 //   with a plan offer, and the left pane shows the six-part requirement; a correction
 //   typed in the conversation replaces it; Escape and a reopen show it again; Decline
 //   leaves no folder, page or plan behind; asking again and typing yes starts planning
-//   with ONE plan job that carries the requirement and the page, and no carried
-//   answers, and the rail links the page; the link opens the page with its six
+//   with ONE plan job that carries the requirement and its confirmation, and no carried
+//   answers, the page is saved, and the rail links it; the link opens the page with its six
 //   headings and its provenance line, in ONE root folder "Requirements Docs" created
 //   by the Motir system account; and "plan this" on a card still starts at once.
 //
 //   THE REST (unrecorded). An offer with no requirement shows the notice; a targeted
-//   offer carrying a requirement shows it and plans from its page (MOTIR-9878); a save that
-//   fails starts nothing and Confirm is still there; Confirm twice, and Confirm then a
+//   offer carrying a requirement shows it and plans from it (MOTIR-9878); a page that
+//   cannot be saved still plans, and the rail says so; Confirm twice, and Confirm then a
 //   typed yes, plan once; Grill me on shows no settled list over the pane; zh.
 //
 // ── THE BOUNDARY ────────────────────────────────────────────────────────────
@@ -99,6 +102,11 @@ const plansOf = (sessionId: string) => adminDb.plan.count({ where: { sessionId }
 const foldersOf = (projectId: string) =>
   adminDb.folder.findMany({ where: { projectId, name: FOLDER_NAME } });
 const pagesOf = (projectId: string) => adminDb.page.findMany({ where: { projectId } });
+/** The pages once the background save has written `count` of them (MOTIR-10091). */
+async function savedPages(projectId: string, count = 1) {
+  await expect.poll(async () => (await pagesOf(projectId)).length, { timeout: 30_000 }).toBe(count);
+  return pagesOf(projectId);
+}
 
 async function openConversation(userId: string) {
   return adminDb.planChangeSession.findFirstOrThrow({
@@ -302,17 +310,20 @@ test('A no-target plan offer shows its requirement before Confirm, saves it as a
       queueAsk(offering('Exports are still not built.', CORRECTED));
       await ask(page, 'actually, plan it after all');
       await expect(pane(page)).toContainText(CORRECTED.outcome!);
+      const offerTurn = await latestAnswerRow(conversationId);
       queueAsk(await agreeTo(conversationId));
       expect((await ask(page, 'yes, plan it')).outcome).toBe('redirected');
       await expect.poll(() => planEntries().length).toBe(1);
       const sent = planEntries()[0]!;
       expect(sent.requirement).toEqual(CORRECTED);
       expect(sent.hasCarriedAnswers).toBe(false);
-      const pages = await pagesOf(seed.projectId);
-      expect(pages).toHaveLength(1);
-      expect(sent.requirementPage?.pageId).toBe(pages[0]!.id);
+      expect(sent.requirementConfirmed).toEqual({ conversationId, offerTurnId: offerTurn.id });
+      const pages = await savedPages(seed.projectId);
       expect(await plansOf(conversationId)).toBe(1);
       await expect(byId(page, 'plan-offer-confirmed')).toBeVisible();
+      // The page was saved after the start: a reopen reads it from the offer.
+      await closeOverlay(page);
+      await openProjectThread(page);
       const link = byId(page, 'plan-offer-requirement-page').getByRole('link');
       await expect(link).toHaveAttribute('href', `/pages/${pages[0]!.id}`);
       await beat();
@@ -411,45 +422,54 @@ test('a targeted offer carrying a requirement shows it, saves one page, and plan
   await confirmButton(page).click();
   expect((await confirmed).status()).toBe(200);
   await expect.poll(() => planEntries().length).toBe(1);
-  const pages = await pagesOf(seed.projectId);
-  expect(pages).toHaveLength(1);
+  const pages = await savedPages(seed.projectId);
   expect(await foldersOf(seed.projectId)).toHaveLength(1);
   const sent = planEntries()[0]!;
   expect(sent.requirement).toEqual(REQUIREMENT);
-  expect(sent.requirementPage?.pageId).toBe(pages[0]!.id);
+  expect(sent.requirementConfirmed?.offerTurnId).toBeTruthy();
   // A targeted confirm hands the overlay to the card's own planning session, so the
   // saved-page line is not on screen here: the offer that drew it records the page.
-  const offerRows = await adminDb.planChangeTurn.findMany({
-    where: { answerOffer: { path: ['requirementPage', 'pageId'], equals: pages[0]!.id } },
-  });
-  expect(offerRows).toHaveLength(1);
+  await expect
+    .poll(() =>
+      adminDb.planChangeTurn.count({
+        where: { answerOffer: { path: ['requirementPage', 'pageId'], equals: pages[0]!.id } },
+      }),
+    )
+    .toBe(1);
 });
 
-test('a save that fails starts nothing, keeps Confirm, and succeeds once the account is back', async ({
+test('a page that cannot be saved still plans, and the rail says the page was not saved', async ({
   page,
 }) => {
-  // The Motir system account is not provisioned, so the page cannot be written.
+  // The Motir system account is not provisioned, so the page cannot be written — the
+  // background save fails every attempt (MOTIR-10091). The run starts regardless.
   await page.goto('/dashboard');
   await openProjectThread(page);
   queueAsk(offering('Exports are not built yet.', REQUIREMENT));
   await ask(page, 'plan a CSV export for the board');
-  const refused = posted(page, CONFIRM);
+  const sessionId = (await openConversation(seed.ctx.userId)).id;
+  const offerTurnId = (await latestAnswerRow(sessionId)).id;
+  const confirmed = posted(page, CONFIRM);
   await confirmButton(page).click();
-  const res = await refused;
-  expect(res.status()).not.toBe(200);
-  await expect(byId(page, 'plan-offer-requirement-not-saved')).toBeVisible();
-  await expect(confirmButton(page)).toBeVisible();
-  await expect(pane(page)).toContainText(REQUIREMENT.outcome!);
-  expect(planEntries()).toHaveLength(0);
-  expect(await pagesOf(seed.projectId)).toHaveLength(0);
-
-  await provisionSystemAccount();
-  const retried = posted(page, CONFIRM);
-  await confirmButton(page).click();
-  expect((await retried).status()).toBe(200);
+  expect((await confirmed).status()).toBe(200);
   await expect.poll(() => planEntries().length).toBe(1);
-  expect(await pagesOf(seed.projectId)).toHaveLength(1);
-  await expect(byId(page, 'plan-offer-requirement-page')).toBeVisible();
+  await expect(byId(page, 'plan-offer-confirmed')).toBeVisible();
+  await expect
+    .poll(
+      async () => {
+        const row = await adminDb.planChangeTurn.findUniqueOrThrow({ where: { id: offerTurnId } });
+        return (row.answerOffer as { requirementPageFailed?: boolean }).requirementPageFailed;
+      },
+      { timeout: 60_000 },
+    )
+    .toBe(true);
+  expect(await pagesOf(seed.projectId)).toHaveLength(0);
+  expect(planEntries()).toHaveLength(1);
+  await closeOverlay(page);
+  await openProjectThread(page);
+  await expect(byId(page, 'plan-offer-requirement-page-not-saved')).toBeVisible();
+  await expect(byId(page, 'plan-offer-requirement-page')).toHaveCount(0);
+  await expect(confirmButton(page)).toHaveCount(0);
 });
 
 test('Confirm pressed twice plans once, and one page is saved', async ({ page }) => {
@@ -466,7 +486,7 @@ test('Confirm pressed twice plans once, and one page is saved', async ({ page })
   await expect.poll(() => planEntries().length).toBe(1);
   await expect(byId(page, 'plan-offer-confirmed')).toBeVisible();
   expect(planEntries()).toHaveLength(1);
-  expect(await pagesOf(seed.projectId)).toHaveLength(1);
+  await savedPages(seed.projectId);
   expect(await foldersOf(seed.projectId)).toHaveLength(1);
 });
 
@@ -495,7 +515,7 @@ test('a typed yes after Confirm does not plan or save a second time', async ({ p
   });
   await ask(page, 'yes, go ahead');
   expect(planEntries()).toHaveLength(1);
-  expect(await pagesOf(seed.projectId)).toHaveLength(1);
+  await savedPages(seed.projectId);
   expect(await plansOf(sessionId)).toBe(1);
 });
 
