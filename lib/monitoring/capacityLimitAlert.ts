@@ -1,5 +1,8 @@
 import * as Sentry from '@sentry/nextjs';
-import type { CapacityLimitOverShareError } from '@/lib/capacity/errors';
+import type {
+  CapacityLimitOverShareError,
+  GatewaySaturationOverShareError,
+} from '@/lib/capacity/errors';
 
 /**
  * Tell the platform admins a provider model's limit is at or over the alert share
@@ -25,6 +28,26 @@ export function alertCapacityLimitOverShare(error: CapacityLimitOverShareError):
           error.sharePercent === null ? 'limit_zero' : String(Math.round(error.sharePercent)),
       },
       fingerprint: ['capacity-limit-share', error.provider, error.model, error.unit],
+    });
+  } catch {
+    // Swallowed on purpose — see the header.
+  }
+}
+
+/**
+ * Tell the platform admins the gateway reached its saturation share (MOTIR-9675,
+ * design D6). One fingerprint for the series, so a gateway that stays over is one
+ * issue; the evaluation calls this only on `newlyRaised: true`. Never throws.
+ */
+export function alertGatewaySaturationOverShare(error: GatewaySaturationOverShareError): void {
+  try {
+    Sentry.captureException(error, {
+      level: 'warning',
+      tags: {
+        capacity_series: 'gateway_saturation',
+        capacity_share: String(Math.round(error.sharePercent)),
+      },
+      fingerprint: ['capacity-gateway-saturation'],
     });
   } catch {
     // Swallowed on purpose — see the header.

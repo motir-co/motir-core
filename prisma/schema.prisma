@@ -15630,10 +15630,12 @@ model CapacityAlertSetting {
 /// under `app.platform_staff`.
 model CapacityRaisedAlert {
   id                String   @id @default(cuid())
-  /// `claude` | `qwen` | `deepseek` (`lib/capacity/alertKeys.ts`), held by a CHECK.
+  /// `claude` | `qwen` | `deepseek` (`lib/capacity/alertKeys.ts`), or `gateway` for
+  /// the one gateway-saturation key (MOTIR-9675), held by a CHECK.
   provider          String
   model             String
-  /// One of the gateway contract's six limit units, held by a CHECK.
+  /// One of the gateway contract's six limit units, or `saturation` on the
+  /// gateway-saturation key, held by a CHECK.
   limitUnit         String   @map("limit_unit")
   raisedAt          DateTime @default(now()) @map("raised_at")
   /// BigInt: a `tpd` usage or limit can pass 2^31.

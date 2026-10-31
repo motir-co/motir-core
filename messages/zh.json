@@ -12736,7 +12736,8 @@
       "alerts": {
         "title": "{count, plural, other {# 项限额已超过告警比例}}",
         "line": "{provider} · {model} · {limit} — {share} %",
-        "since": "自 UTC {time} 起告警"
+        "since": "自 UTC {time} 起告警",
+        "saturationLine": "motir-gateway · 连接数 — 已达已创建机器数 × 硬上限的 {share} %"
       },
       "alertShare": {
         "title": "告警比例",
@@ -12839,6 +12840,16 @@
         "unreachable": "网关没有响应，没有保存任何内容，请重试。",
         "notPermitted": "你的角色无法编辑限额，因此没有保存任何内容。",
         "failed": "限额未能保存，没有任何更改，请重试。"
+      },
+      "saturation": {
+        "title": "网关饱和度",
+        "hsub": "motir-gateway 在用连接数与已创建机器数 × 单机硬上限之比。达到 {percent} % 时告警。",
+        "connections": "在用连接数",
+        "machines": "已创建机器数",
+        "hardLimit": "单机硬上限",
+        "share": "{capacity} 的 {value} %",
+        "notConfigured": "这些数字尚未接入数据来源，因此该行不可用，也不会据此触发或解除告警。",
+        "readFailed": "这些数字读取失败。在读取成功之前，不会触发或解除告警。"
       }
     },
     "jobs": {
