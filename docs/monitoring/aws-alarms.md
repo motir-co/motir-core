@@ -61,6 +61,13 @@ The targets these numbers implement:
     task's boot stalls its loop for 2–2.5 s while Next loads its routes, and
     publishing that minute fired the alarm on every deploy (MOTIR-10141). A
     task's first line therefore comes about two minutes after it starts.
+    A module graph that first loads on a live request blocks the loop in
+    whichever minute it lands, so the web task's readiness check
+    (`/api/health/ready`, the target group's health check) warms both of Next's
+    server runtimes before the task takes traffic: it loads the webhook route's
+    graph in the route-handler runtime (MOTIR-8231) and renders
+    `/health/warm-up` over loopback, which loads the pages graph and its editor
+    in the page runtime (MOTIR-10142).
   - `LoopBlockMaxMs` and `LoopBlockCount`, for each 60 s in which a block of
     1 s or more ended (`lib/monitoring/watchdogMetrics.ts`).
   - `CpuStealMs`, the CPU time stolen from the task in each 60 s, only where
