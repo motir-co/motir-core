@@ -15,21 +15,29 @@ import type { CommentsPageDTO } from '@/lib/dto/comments';
 import type { PlanStatusDto } from '@/lib/dto/plans';
 
 /**
- * A `human` DECISION's confirmation, as the planner reads it (Story MOTIR-5871 ·
- * MOTIR-5958; ADR `approval-gates.md` §1's MOTIR-5952 amendment, points 9–10) — so a
- * pass can order an epic's decisions by when they were confirmed and see which were
- * overturned. ADDITIVE: null on every item that is not a `decision` + `human` work
- * item, and a consumer that ignores it is unaffected.
+ * A DECISION's deciding gate, as the planner reads it (Story MOTIR-5871 · MOTIR-5958;
+ * ADR `approval-gates.md` §1's MOTIR-5952 amendment, points 9–10; widened to the
+ * planner's own decisions by Bug MOTIR-10146) — so a pass can order an epic's
+ * decisions by when they were decided and see which were overturned, and why.
+ * ADDITIVE: null on every item that is not a `decision` work item, and a consumer
+ * that ignores a field is unaffected — so the two repositories deploy in either order.
  *
- * - `state` — `confirmed` (the gate was approved) · `overturned` · `awaiting` ·
- *   `none` (no live gate: a body that does not parse, or a question withdrawn).
+ * - `kind` — the gate that decides it: `decision_confirmation` for a `human` decision
+ *   (a person confirms what the planner wrote), `decision_approval` for a
+ *   `coding_agent` one (the planner's own record, published as a page and approved).
+ * - `state` — `confirmed` (the gate was approved) · `overturned` · `awaiting` (asked,
+ *   or sent back for a new version) · `none` (no live gate: a body that does not
+ *   parse, a page not yet published, or a question withdrawn).
  * - `decidedAt` — ISO, the deciding gate's; null unless confirmed or overturned.
  * - `replanOwed` — the overturned decision's `## Supersedes` keys; null otherwise.
+ * - `noteMd` — the reason the person wrote when they overturned it; null otherwise.
  */
 export interface AiDecisionBlock {
+  kind: 'decision_confirmation' | 'decision_approval';
   state: 'awaiting' | 'confirmed' | 'overturned' | 'none';
   decidedAt: string | null;
   replanOwed: string[] | null;
+  noteMd: string | null;
 }
 
 // One node of the plan-tree breadth projection: the cheap fields the planner
@@ -56,7 +64,7 @@ export interface PlanTreeSkeletonItem {
   // so a story under a filed epic reads `folderId: null` and its placement is
   // derivable from its ancestors' keys. Populated by ONE batched lookup per read.
   folderId: string | null;
-  // A `human` decision's confirmation (MOTIR-5958) — null on every other item.
+  // A decision's deciding gate (MOTIR-5958, MOTIR-10146) — null on every other item.
   // Populated by ONE batched read per response, never N+1.
   decision: AiDecisionBlock | null;
   // The OBSOLESCENCE mark (Story MOTIR-6574 · MOTIR-6582) — `outdated` ·
@@ -172,7 +180,7 @@ export interface AiInFlightCodeFields {
 }
 
 export interface GetItemResponse {
-  // `decision` — a `human` decision's confirmation (MOTIR-5958), null otherwise.
+  // `decision` — a decision's deciding gate (MOTIR-5958, MOTIR-10146), null otherwise.
   // `inFlightCode` / `mergedRepos` — the card's unmerged code (MOTIR-6618).
   item: AiWorkItemDto & { decision: AiDecisionBlock | null } & AiInFlightCodeFields;
   comments?: CommentsPageDTO;

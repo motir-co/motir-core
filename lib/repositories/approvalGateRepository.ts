@@ -12,6 +12,7 @@ import { dbRead } from '@/lib/db';
 import { sqlStateOf } from '@/lib/prisma/sqlstate';
 import type { ChosenOption } from '@/lib/approvalGates/choiceOptions';
 import type { ConfirmedRecord } from '@/lib/approvalGates/decisionConfirmationRecord';
+import type { DecisionGateKind } from '@/lib/approvalGates/decisionRecord';
 import {
   ApprovalGateAlreadyAwaitingError,
   ApprovalGateDecidedImmutableError,
@@ -205,43 +206,60 @@ export const approvalGateRepository = {
    * Served by `approval_gate_work_item_id_idx`.
    */
   /**
-   * A `human` DECISION's latest confirm question, for every such work item in a set
-   * (Story MOTIR-5871 · MOTIR-5958) — the AI boundary's skeleton and item reads carry
-   * it so the planner can date and order an epic's decisions.
+   * A DECISION's latest deciding gate, for every decision work item in a set
+   * (Story MOTIR-5871 · MOTIR-5958; widened by Bug MOTIR-10146) — the AI boundary's
+   * skeleton and item reads carry it so the planner can date and order an epic's
+   * decisions, whoever recorded them.
+   *
+   * The gate that decides a decision depends on who holds it, exactly as the item
+   * page's gate set reads it: a `human` decision is confirmed at its
+   * `decision_confirmation` gate, a `coding_agent` one (the planner's own record,
+   * published as a page) is approved at its `decision_approval` gate. Each row
+   * names the kind it was read from, so the caller never re-derives it.
    *
    * ⚠️ ONE STATEMENT, however many decisions the set holds: the work items are
-   * filtered to `type = decision` + `executor = human` HERE, since the skeleton rows
-   * carry neither field, and each is joined LATERALLY to its latest
-   * `decision_confirmation` gate — the live question first, else the most recent. A
-   * decision with no gate at all (a defective body) is a row with a null state. The
-   * body rides along because an overturn's owed re-plan is derived from it.
+   * filtered to `type = decision` HERE, since the skeleton rows carry neither
+   * `type` nor `executor`, and each is joined LATERALLY to its latest gate of its
+   * own kind — the live question first, else the most recent. A decision with no
+   * gate at all (a defective body, a page not yet published) is a row with a null
+   * state. The body rides along because an overturn's owed re-plan is derived from
+   * it, and the gate's note because an overturn's reason is the person's own words.
    */
-  async findDecisionConfirmationsByWorkItemIds(
+  async findDecisionGatesByWorkItemIds(
     workItemIds: string[],
     tx: Prisma.TransactionClient,
   ): Promise<
     Array<{
       workItemId: string;
       descriptionMd: string | null;
+      kind: DecisionGateKind;
       state: ApprovalGateState | null;
       decidedAt: Date | null;
+      noteMd: string | null;
     }>
   > {
     if (workItemIds.length === 0) return [];
     return tx.$queryRaw`
       SELECT wi."id" AS "workItemId", wi."descriptionMd" AS "descriptionMd",
-             g."state" AS "state", g."decided_at" AS "decidedAt"
+             d."kind" AS "kind", g."state" AS "state", g."decided_at" AS "decidedAt",
+             g."note_md" AS "noteMd"
       FROM "work_item" wi
+      CROSS JOIN LATERAL (
+        SELECT CASE wi."executor"::text
+                 WHEN 'human' THEN 'decision_confirmation'
+                 ELSE 'decision_approval'
+               END AS "kind"
+      ) d
       LEFT JOIN LATERAL (
-        SELECT ag."state", ag."decided_at"
+        SELECT ag."state", ag."decided_at", ag."note_md"
         FROM "approval_gate" ag
-        WHERE ag."work_item_id" = wi."id" AND ag."kind" = 'decision_confirmation'
+        WHERE ag."work_item_id" = wi."id" AND ag."kind"::text = d."kind"
         ORDER BY (ag."state" = 'awaiting') DESC, ag."created_at" DESC
         LIMIT 1
       ) g ON TRUE
       WHERE wi."id" = ANY(${workItemIds}::text[])
         AND wi."type"::text = 'decision'
-        AND wi."executor"::text = 'human'`;
+        AND wi."executor"::text IN ('human', 'coding_agent')`;
   },
 
   /**

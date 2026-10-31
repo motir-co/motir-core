@@ -257,35 +257,60 @@ export function replanOwedOf(
 }
 
 /**
- * A `human` decision's confirmation as the AI boundary carries it (MOTIR-5958) — from
- * its latest `decision_confirmation` gate, or none. `approved` reads `confirmed`;
- * `superseded` (a withdrawn question) and no gate at all read `none`. `decidedAt` is
- * set only on a decision somebody made, and the owed re-plan only on an overturn.
+ * The gate that DECIDES a decision work item, by who holds it: a `human` decision is
+ * confirmed at `decision_confirmation`, a `coding_agent` one (the planner's own
+ * record, published as a page) is approved at `decision_approval`.
+ */
+export type DecisionGateKind = 'decision_confirmation' | 'decision_approval';
+
+/**
+ * A decision as the AI boundary carries it (MOTIR-5958; widened to the planner's own
+ * decisions by MOTIR-10146) — from its latest deciding gate, or none. `approved`
+ * reads `confirmed`; `changes_requested` (a `decision_approval` sent back, still owed
+ * a new version) reads `awaiting`; `superseded` (a withdrawn question) and no gate at
+ * all read `none`. `decidedAt` is set only on a decision somebody made; the owed
+ * re-plan and the person's note only on an overturn, which only a
+ * `decision_confirmation` can be.
  */
 export function aiDecisionBlockOf(row: {
   descriptionMd: string | null;
+  kind: DecisionGateKind;
   state: string | null;
   decidedAt: Date | null;
+  noteMd: string | null;
 }): {
+  kind: DecisionGateKind;
   state: 'awaiting' | 'confirmed' | 'overturned' | 'none';
   decidedAt: string | null;
   replanOwed: string[] | null;
+  noteMd: string | null;
 } {
-  const state =
-    row.state === 'approved'
-      ? 'confirmed'
-      : row.state === 'overturned' || row.state === 'awaiting'
-        ? row.state
-        : 'none';
+  const state = aiDecisionStateOf(row.state);
   const decided = state === 'confirmed' || state === 'overturned';
+  const overturned = state === 'overturned';
   return {
+    kind: row.kind,
     state,
     decidedAt: decided && row.decidedAt ? row.decidedAt.toISOString() : null,
-    replanOwed:
-      state === 'overturned'
-        ? (replanOwedOf({ kind: 'decision_confirmation', state }, row.descriptionMd)?.keys ?? [])
-        : null,
+    replanOwed: overturned
+      ? (replanOwedOf({ kind: row.kind, state }, row.descriptionMd)?.keys ?? [])
+      : null,
+    noteMd: overturned ? (row.noteMd ?? null) : null,
   };
+}
+
+function aiDecisionStateOf(state: string | null): 'awaiting' | 'confirmed' | 'overturned' | 'none' {
+  switch (state) {
+    case 'approved':
+      return 'confirmed';
+    case 'overturned':
+    case 'awaiting':
+      return state;
+    case 'changes_requested':
+      return 'awaiting';
+    default:
+      return 'none';
+  }
 }
 
 /** The row-scale summary of a decision's body (MOTIR-5954) — null when it does not parse. */
