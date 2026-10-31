@@ -57,7 +57,10 @@ The targets these numbers implement:
   `Motir/Core`, with one dimension, `Service` (`web`, `worker` or `relay`):
   - `EventLoopDelayMaxMs` and `EventLoopDelayP99Ms`, every 60 s
     (`lib/monitoring/cloudwatchMetrics.ts`). The event-loop-block alarm reads
-    the max.
+    the max. The first 60 s after a process starts is not published: a web
+    task's boot stalls its loop for 2–2.5 s while Next loads its routes, and
+    publishing that minute fired the alarm on every deploy (MOTIR-10141). A
+    task's first line therefore comes about two minutes after it starts.
   - `LoopBlockMaxMs` and `LoopBlockCount`, for each 60 s in which a block of
     1 s or more ended (`lib/monitoring/watchdogMetrics.ts`).
   - `CpuStealMs`, the CPU time stolen from the task in each 60 s, only where
@@ -179,7 +182,9 @@ This starts the same two publishers the services run, then blocks the event
 loop for `--block-ms` (100–20000) about every 5 s, with at least 1 s idle
 between blocks so the publishers' timers run. Use a block above the 2000 ms
 threshold. The task publishes `EventLoopDelayMaxMs` and `LoopBlockMaxMs` under
-the `Service` its override sets. Steal is not breached here: the host, not the
+the `Service` its override sets. Its first minute of delay is not published (the
+boot rule above), so the first breaching datapoint covers the second minute and
+the alarm goes to ALARM about three minutes after the task starts. Steal is not breached here: the host, not the
 task, causes it.
 
 ### What to expect, and how to read it

@@ -1,4 +1,5 @@
 import { registerGitProvider } from '../registry';
+import { FULL_COMMIT_SHA } from '../commitSha';
 import {
   createAppJwt,
   GithubAppNotConfiguredError,
@@ -49,6 +50,7 @@ import type {
   NormalizedProductionImageRun,
   NormalizedWorkflowRunEvent,
   RepoFileReadResult,
+  RefResolution,
   CommitComparison,
   ChangedFile,
   ChangedFileStatus,
@@ -1142,6 +1144,54 @@ export const githubProvider: GitProvider = {
       text: classified.text,
       bytes: blob.byteLength,
     };
+  },
+
+  async resolveRef(
+    installationId: string,
+    owner: string,
+    name: string,
+    ref: string,
+  ): Promise<RefResolution> {
+    const role = githubAppRoleForRepo({ owner }, await motirOwnedOrgLogins());
+    const { token } = await mintInstallationToken(installationId, role);
+    const url = `${GITHUB_API}/repos/${owner}/${name}/commits/${encodeURIComponent(ref)}`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REPO_FILE_READ_TIMEOUT_MS);
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: 'GET',
+        headers: {
+          authorization: `Bearer ${token}`,
+          // The SHA media type: the body is the commit id alone, not the commit.
+          accept: 'application/vnd.github.sha',
+          'user-agent': 'motir',
+        },
+        signal: controller.signal,
+      });
+    } catch (err) {
+      return {
+        outcome: 'unreachable',
+        ref,
+        failure: controller.signal.aborted ? 'timeout' : 'unreachable',
+        detail: controller.signal.aborted
+          ? `no response within ${REPO_FILE_READ_TIMEOUT_MS}ms`
+          : err instanceof Error
+            ? err.message
+            : 'unknown',
+      };
+    } finally {
+      clearTimeout(timer);
+    }
+    // 422 is GitHub's answer for a ref that is not a valid commit-ish at all.
+    if (res.status === 404 || res.status === 422) return { outcome: 'ref_not_found', ref };
+    if (res.status === 401 || res.status === 403) return { outcome: 'unauthorized', ref };
+    if (!res.ok) throw new RepoFileReadError('github', res.status, await describeBody(res));
+    const sha = (await res.text()).trim().toLowerCase();
+    if (!FULL_COMMIT_SHA.test(sha)) {
+      throw new RepoFileReadError('github', res.status, 'the commit lookup returned no sha');
+    }
+    return { outcome: 'resolved', ref, sha };
   },
 
   async fetchInstallation(installationId: string): Promise<NormalizedInstallation> {

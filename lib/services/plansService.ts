@@ -42,6 +42,12 @@ import {
 import { planRevisionRepository } from '@/lib/repositories/planRevisionRepository';
 import { planStepRepository } from '@/lib/repositories/planStepRepository';
 import { planNarrationRepository } from '@/lib/repositories/planNarrationRepository';
+import { planCodeReadRepository } from '@/lib/repositories/planCodeReadRepository';
+import {
+  PLAN_CODE_READ_PAGE_MAX,
+  PlanCodeReadRefusal,
+  parsePlanCodeReads,
+} from '@/lib/plans/planCodeRead';
 import { PLAN_NARRATION_BATCH_MAX, cleanNarrationSentence } from '@/lib/plans/planNarration';
 import { PLAN_STALLED_AFTER_MS } from '@/lib/plans/planProgress';
 import { projectRepository } from '@/lib/repositories/projectRepository';
@@ -246,6 +252,8 @@ import type {
   WorkItemApprovedShapeVerdictDto,
   WorkItemApprovedShapeVerdictPageDto,
   PlanNarrationDto,
+  PlanCodeReadDto,
+  PlanCodeReadPageDto,
   PlanStepDto,
   PlanStepKindDto,
   PlanStepProviderWaitDto,
@@ -260,6 +268,8 @@ import {
   toPlanDto,
   toPlanItemDto,
   toPlanNarrationDto,
+  toPlanCodeReadDto,
+  toPlanNarrationSessionDto,
   toPlanStepDto,
   toPlanWithItemsDto,
   toWorkItemPlanHistoryEntryDto,
@@ -5550,6 +5560,7 @@ export type ReportPlanStepResult =
   | { kind: 'step'; step: PlanStepDto }
   | { kind: 'end' }
   | { kind: 'narration'; narration: PlanNarrationDto[] }
+  | { kind: 'codeReads'; codeReads: PlanCodeReadDto[] }
   | { kind: 'providerRetry'; providerWait: PlanStepProviderWaitDto | null };
 
 /** The most retries one provider wait may name (MOTIR-9619) — `attempt` and
@@ -7926,6 +7937,88 @@ export const plansService = {
   },
 
   /**
+   * Append a session's CODE READS (MOTIR-10122): each read it made — the tool,
+   * what it asked, the commits it was read at and how much came back, never the
+   * code — in call order, to the plan's kept log. The whole call is refused,
+   * nothing written, when the batch is empty or over the cap, any read is
+   * malformed (`parsePlanCodeReads` names the field), or the plan is not
+   * `generating`. Accepted reads take the next consecutive per-plan `seq` values
+   * under the plan row lock and stamp the plan's activity.
+   *
+   * ⚠️ NO STEP IS REQUIRED, unlike narration. `plan.py`'s PART 1 conversation
+   * reads code before the plan exists and never reports a step; its reads are
+   * posted under its own session key once the plan does. A read is evidence of
+   * what a session saw, not a signal on the overlay, so it needs no step to hang on.
+   */
+  async recordPlanCodeReads(
+    planId: string,
+    input: { sessionKey: string; codeReads: unknown },
+    ctx: ServiceContext,
+  ): Promise<PlanCodeReadDto[]> {
+    const sessionKey = assertSessionKey(input.sessionKey);
+    let reads;
+    try {
+      reads = parsePlanCodeReads(input.codeReads);
+    } catch (err) {
+      if (err instanceof PlanCodeReadRefusal) throw new InvalidPlanStepError(err.message);
+      throw err;
+    }
+    return withGeneratingPlanStep(planId, ctx, async (_plan, tx, now) => {
+      const base = await planCodeReadRepository.maxSeq(planId, tx);
+      const rows = await planCodeReadRepository.createMany(
+        reads.map((read, i) => ({
+          ...read,
+          commits: read.commits as unknown as Prisma.InputJsonValue,
+          planId,
+          sessionKey,
+          seq: base + i + 1,
+          createdAt: now,
+        })),
+        tx,
+      );
+      return rows.map(toPlanCodeReadDto);
+    });
+  },
+
+  /**
+   * One page of a plan's CODE READS (MOTIR-10122), ascending `seq`, after
+   * `afterSeq` — optionally one session's — with the step words of every session
+   * on the page. Reader-gated exactly as `get_plan` (`admitPlanReader`: an unknown
+   * or unreadable plan is not-found), and readable on a plan in ANY status — the
+   * log is evidence about how a decided plan was written.
+   */
+  async listPlanCodeReads(
+    planId: string,
+    opts: { sessionKey?: string | null; afterSeq?: number; limit?: number },
+    ctx: ServiceContext,
+  ): Promise<PlanCodeReadPageDto> {
+    await plansService.admitPlanReader(planId, ctx);
+    const limit = Math.min(
+      Math.max(1, opts.limit ?? PLAN_CODE_READ_PAGE_MAX),
+      PLAN_CODE_READ_PAGE_MAX,
+    );
+    const filter = {
+      afterSeq: Math.max(0, opts.afterSeq ?? 0),
+      sessionKey: opts.sessionKey ?? null,
+      limit,
+    };
+    // A READ: the service binding, not the write transaction (planTrailCompleteness).
+    return withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
+      const rows = await planCodeReadRepository.listAfterSeq(planId, filter, tx);
+      const keys = new Set(rows.map((r) => r.sessionKey));
+      const sessions = (await planNarrationRepository.listSessionsByPlan(planId, tx)).filter((s) =>
+        keys.has(s.sessionKey),
+      );
+      return {
+        planId,
+        reads: rows.map(toPlanCodeReadDto),
+        sessions: sessions.map(toPlanNarrationSessionDto),
+        nextAfterSeq: rows.length === limit ? rows[rows.length - 1]!.seq : null,
+      };
+    });
+  },
+
+  /**
    * Record — or clear — a session's provider-retry WAIT (Story MOTIR-9540 ·
    * MOTIR-9619). A `waiting` report is checked (integers in
    * `1..PLAN_PROVIDER_RETRY_ATTEMPTS_MAX`, `attempt ≤ maxAttempts`, a `retryAt`
@@ -8027,19 +8120,35 @@ export const plansService = {
       narration?: string[];
       /** The session's provider-retry wait (MOTIR-9619) — the third exclusive form. */
       providerRetry?: PlanProviderRetryInput;
+      /** The session's code reads (MOTIR-10122) — the fourth exclusive form. */
+      codeReads?: unknown[];
     },
     ctx: ServiceContext,
   ): Promise<ReportPlanStepResult> {
-    // EXACTLY ONE of `step` / `narration` / `providerRetry` (MOTIR-8062 ·
-    // MOTIR-9619): a step report re-stamps `startedAt`, so keeping them apart is
-    // what lets a narration or a wait never touch the step.
-    const forms = [input.step, input.narration, input.providerRetry].filter(
+    // EXACTLY ONE of `step` / `narration` / `providerRetry` / `codeReads`
+    // (MOTIR-8062 · MOTIR-9619 · MOTIR-10122): a step report re-stamps
+    // `startedAt`, so keeping them apart is what lets the others never touch the step.
+    const forms = [input.step, input.narration, input.providerRetry, input.codeReads].filter(
       (form) => form !== undefined,
     ).length;
     if (forms !== 1) {
       throw new InvalidPlanStepError(
-        'Send exactly one of `step`, `narration` or `providerRetry` — nothing was recorded.',
+        'Send exactly one of `step`, `narration`, `providerRetry` or `codeReads` — nothing was ' +
+          'recorded.',
       );
+    }
+    if (input.codeReads !== undefined) {
+      if (input.targetRef !== null) {
+        throw new InvalidPlanStepError(
+          'A `codeReads` call names no target — send it with none; nothing was recorded.',
+        );
+      }
+      const codeReads = await plansService.recordPlanCodeReads(
+        planId,
+        { sessionKey: input.sessionKey, codeReads: input.codeReads },
+        ctx,
+      );
+      return { kind: 'codeReads', codeReads };
     }
     if (input.providerRetry !== undefined) {
       if (input.targetRef !== null) {

@@ -1713,6 +1713,36 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  get_plan_code_reads: {
+    type: 'object',
+    properties: {
+      planId: {
+        type: 'string',
+        minLength: 1,
+        description: 'The plan id `create_plan` returned (or the id shown on the plan in Motir).',
+      },
+      sessionKey: {
+        type: 'string',
+        minLength: 1,
+        description: 'OPTIONAL — only this session’s reads (the key `report_plan_step` carried).',
+      },
+      afterSeq: {
+        type: 'integer',
+        minimum: 0,
+        description:
+          'OPTIONAL — the next page: pass the previous page’s `nextAfterSeq`. Omit for the first.',
+      },
+      limit: {
+        type: 'integer',
+        minimum: 1,
+        maximum: 500,
+        description: 'OPTIONAL — reads per page, at most 500 (the default).',
+      },
+    },
+    required: ['planId'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   get_plan_status: {
     type: 'object',
     properties: {
@@ -2825,13 +2855,74 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         type: 'string',
         enum: ['settle', 'lay', 'author', 'end'],
         description:
-          'The step the session is starting: `settle` (settling the brief — never a target), `lay` (laying the children of `target`, or the project’s top level with no target), `author` (writing `target`, or an item not on the plan yet with no target), or `end` (the session finished — clears its step; never a target). A step report also records the words a person reads at the head of that session’s narration. Send exactly one of `step` or `narration`.',
+          'The step the session is starting: `settle` (settling the brief — never a target), `lay` (laying the children of `target`, or the project’s top level with no target), `author` (writing `target`, or an item not on the plan yet with no target), or `end` (the session finished — clears its step; never a target). A step report also records the words a person reads at the head of that session’s narration. Send exactly one of `step`, `narration` or `codeReads`.',
       },
       narration: {
         type: 'array',
         items: { type: 'string' },
         description:
           'Instead of `step`: one or more plain-language sentences saying what the session is doing and why, appended in order to the plan’s kept narration under `sessionKey` (at most 20 per call; whitespace is collapsed and a sentence longer than 240 characters is cut with an ellipsis). Refused with PLAN_STEP_INVALID when sent with `step` or `target`, when a sentence is empty, or when the session has not reported `settle`, `lay` or `author` yet. Nothing is recorded on a refusal.',
+      },
+      codeReads: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            tool: {
+              type: 'string',
+              description:
+                'The tool: `read_file` · `code_explore` · `code_search` · `code_grep`, or a local one (`Read` · `Grep` · `Glob` · `git show` · `git grep` · `git log`).',
+            },
+            repo: { type: 'string', description: '`owner/name`, or the local checkout’s name.' },
+            path: {
+              type: 'string',
+              description: 'A read’s path, or a search’s path prefix / glob.',
+            },
+            startLine: { type: 'integer', minimum: 1 },
+            endLine: { type: 'integer', minimum: 1 },
+            askedRef: {
+              type: 'string',
+              description:
+                'The ref the call ASKED for (`main`) — a label, not what it was read at.',
+            },
+            query: { type: 'string', description: 'A search’s query or pattern.' },
+            commits: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  repo: { type: 'string' },
+                  sha: {
+                    type: 'string',
+                    description: 'The RESOLVED commit id, 7–64 hex — never a branch name.',
+                  },
+                  dirty: {
+                    type: 'boolean',
+                    description: 'A local checkout with uncommitted changes.',
+                  },
+                },
+                required: ['sha'],
+                additionalProperties: false,
+              },
+              description:
+                'Every commit the read was made at: the resolved ref of a file read, the graph’s commit for a code-graph read, the checkout HEAD for a local read. Empty only when nothing resolved.',
+            },
+            outcome: {
+              type: 'string',
+              description: 'The result’s outcome code: `found`, `ok`, `not_found`, `too_large`, …',
+            },
+            lines: { type: 'integer', minimum: 0, description: 'Lines a read returned.' },
+            hits: { type: 'integer', minimum: 0, description: 'Matches a search returned.' },
+            detail: {
+              type: 'string',
+              description: 'A short refusal or failure detail — never content.',
+            },
+          },
+          required: ['tool', 'outcome'],
+          additionalProperties: false,
+        },
+        description:
+          'Instead of `step`: the session’s CODE READS, in the order it made them, appended to the plan’s kept read log under `sessionKey` (at most 50 per call). Records what was asked, the commit it was read at and how much came back — never the code. Needs no step: a session may post its reads before or after it holds one. Refused with PLAN_STEP_INVALID when sent with `step` or `target`, or when a read is malformed (a `sha` that is not hex is refused). Nothing is recorded on a refusal. Read them back with `get_plan_code_reads`.',
       },
       target: {
         type: 'string',
@@ -4439,6 +4530,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   get_page: 'Get page',
   get_plan: 'Read plan proposals',
   get_plan_authoring_state: 'Read which proposals are authored',
+  get_plan_code_reads: 'Read what each planning session read',
   get_plan_status: 'Plan status',
   get_project_state: 'Get project state',
   get_section_sets: 'Get section sets',
@@ -4744,6 +4836,11 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
   get_plan: { title: 'Read plan proposals', readOnlyHint: true, openWorldHint: false },
   get_plan_authoring_state: {
     title: 'Read which proposals are authored',
+    readOnlyHint: true,
+    openWorldHint: false,
+  },
+  get_plan_code_reads: {
+    title: 'Read what each planning session read',
     readOnlyHint: true,
     openWorldHint: false,
   },

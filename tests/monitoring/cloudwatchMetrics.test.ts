@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // MOTIR-9881 — event-loop delay as CloudWatch embedded-metric lines: nothing at
 // all when the namespace is unset, one EMF line a minute when it is set, one
 // publisher per process, and a call from each of the three entrypoints.
+// MOTIR-10141 — the first interval (the boot window) is reset, never published.
 
 const perfHooks = vi.hoisted(() => ({ created: 0 }));
 
@@ -66,6 +67,12 @@ async function realTick(ms = 30): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** The first tick: it resets the histogram and publishes nothing. */
+function passBootInterval(): void {
+  vi.advanceTimersByTime(EMF_INTERVAL_MS);
+  expect(written).toEqual([]);
+}
+
 function parsedLines(): Record<string, unknown>[] {
   return written.map((line) => JSON.parse(line) as Record<string, unknown>);
 }
@@ -87,6 +94,7 @@ describe('with the namespace set', () => {
   it('writes exactly one EMF line per interval, in the documented shape', async () => {
     const publisher = startEventLoopDelayPublisher(SET);
     expect(publisher).not.toBeNull();
+    passBootInterval();
     await realTick();
     vi.advanceTimersByTime(EMF_INTERVAL_MS);
 
@@ -111,8 +119,30 @@ describe('with the namespace set', () => {
     expect(typeof line!['EventLoopDelayP99Ms']).toBe('number');
   });
 
+  it('never publishes a block in the boot interval, and publishes one after it', async () => {
+    startEventLoopDelayPublisher(SET);
+    await realTick();
+    busyWait(300);
+    await realTick();
+    passBootInterval();
+
+    await realTick();
+    await realTick();
+    vi.advanceTimersByTime(EMF_INTERVAL_MS);
+
+    await realTick();
+    busyWait(300);
+    await realTick();
+    vi.advanceTimersByTime(EMF_INTERVAL_MS);
+
+    const [quiet, blocked] = parsedLines();
+    expect(quiet!['EventLoopDelayMaxMs']).toBeLessThan(250);
+    expect(blocked!['EventLoopDelayMaxMs']).toBeGreaterThanOrEqual(250);
+  });
+
   it('reports a block in the next line and resets after each emit', async () => {
     startEventLoopDelayPublisher(SET);
+    passBootInterval();
     await realTick();
     busyWait(300);
     await realTick();
@@ -129,6 +159,7 @@ describe('with the namespace set', () => {
 
   it('skips an interval in which the histogram took no sample', () => {
     startEventLoopDelayPublisher(SET);
+    passBootInterval();
     // No real turn of the loop: the histogram has nothing to report.
     vi.advanceTimersByTime(EMF_INTERVAL_MS);
     expect(written).toEqual([]);
@@ -137,6 +168,7 @@ describe('with the namespace set', () => {
   it('publishes as `unknown` with one warning when the service is blank', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     startEventLoopDelayPublisher({ ...SET, MONITORING_CLOUDWATCH_SERVICE: ' ' });
+    passBootInterval();
     for (let i = 0; i < 3; i += 1) {
       await realTick();
       vi.advanceTimersByTime(EMF_INTERVAL_MS);
@@ -151,6 +183,7 @@ describe('with the namespace set', () => {
     expect(second).toBe(first);
     expect(perfHooks.created).toBe(1);
     expect(vi.getTimerCount()).toBe(1);
+    passBootInterval();
     await realTick();
     vi.advanceTimersByTime(EMF_INTERVAL_MS);
     expect(written).toHaveLength(1);

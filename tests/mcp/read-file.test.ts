@@ -47,6 +47,11 @@ const { privateKey } = generateKeyPairSync('rsa', {
 
 type Reply = (url: string) => Response | Promise<Response>;
 let reply: Reply = () => new Response('', { status: 500 });
+// The ref is resolved to its commit first (MOTIR-10122), then the file is read AT
+// that commit — so a contents call names `HEAD_SHA`, never the branch.
+const HEAD_SHA = 'c0ffee'.padEnd(40, '0');
+const headReply: Reply = () => new Response(HEAD_SHA, { status: 200 });
+let resolveReply: Reply = headReply;
 const hostCalls: string[] = [];
 
 function stubHost(): void {
@@ -62,7 +67,7 @@ function stubHost(): void {
       );
     }
     hostCalls.push(url);
-    return reply(url);
+    return url.includes('/commits/') ? resolveReply(url) : reply(url);
   });
 }
 
@@ -140,6 +145,7 @@ beforeEach(async () => {
   vi.stubEnv('GITHUB_APP_PRIVATE_KEY', privateKey);
   hostCalls.length = 0;
   reply = () => new Response('export const x = 1;\n', { status: 200 });
+  resolveReply = headReply;
   stubHost();
   fx = await makeWorkItemFixture();
   await seedRepoSet(fx);
@@ -218,20 +224,25 @@ describe('read_file — the read', () => {
       lines: null,
       truncated: false,
     });
+    expect(out['commitSha']).toBe(HEAD_SHA);
+    expect(summaryOf(await callTool(fx.ctx, args()))).toContain(`at main (commit ${HEAD_SHA})`);
+    hostCalls.length = 0;
+    await callTool(fx.ctx, args());
     expect(hostCalls).toEqual([
-      'https://api.github.com/repos/acme/alpha/contents/lib/x.ts?ref=main',
+      'https://api.github.com/repos/acme/alpha/commits/main',
+      `https://api.github.com/repos/acme/alpha/contents/lib/x.ts?ref=${HEAD_SHA}`,
     ]);
 
     // The other repo's default branch is ITS row's, not a global `main`.
     hostCalls.length = 0;
     expect(outcomeOf(await callTool(fx.ctx, args({ repo: 'beta' })))['ref']).toBe('trunk');
-    expect(hostCalls[0]).toContain('ref=trunk');
+    expect(hostCalls[0]).toContain('/commits/trunk');
   });
 
   it('reads at an explicit ref, and resolves owner/name case-insensitively', async () => {
     const out = outcomeOf(await callTool(fx.ctx, args({ repo: 'ACME/Alpha', ref: 'feat/x' })));
     expect(out).toMatchObject({ outcome: 'found', repoRef: 'acme/alpha', ref: 'feat/x' });
-    expect(hostCalls[0]).toContain('ref=feat%2Fx');
+    expect(hostCalls[0]).toContain('/commits/feat%2Fx');
   });
 
   it('startLine / endLine return that inclusive range, clamped, headed lines a-b of N', async () => {
@@ -310,6 +321,7 @@ describe('read_file — the read', () => {
         repoRef: 'acme/alpha',
         path: 'lib/x.ts',
         ref: 'main',
+        commitSha: HEAD_SHA,
         limitBytes: REPO_FILE_MAX_BYTES,
         totalLines: big.length,
       });
@@ -328,6 +340,7 @@ describe('read_file — the read', () => {
       repoRef: 'acme/alpha',
       path: 'assets/logo.png',
       ref: 'main',
+      commitSha: HEAD_SHA,
       bytes: expect.any(Number),
     });
     expect(summaryOf(res)).not.toContain('PK');
@@ -353,6 +366,7 @@ describe('read_file — the read', () => {
       repoRef: 'acme/alpha',
       path: '.github/workflows',
       ref: 'main',
+      commitSha: HEAD_SHA,
       entries: [
         { name: 'release.yml', type: 'file' },
         { name: 'shared', type: 'dir' },
@@ -405,6 +419,26 @@ describe('read_file — the read', () => {
   });
 });
 
+describe('read_file — the ref is resolved to a commit BEFORE the read (MOTIR-10122)', () => {
+  it('a ref the host cannot resolve never reaches the read, and names why', async () => {
+    resolveReply = () => new Response('{}', { status: 403 });
+    expect(outcomeOf(await callTool(fx.ctx, args()))).toEqual({
+      outcome: 'unauthorized',
+      repoRef: 'acme/alpha',
+      path: 'lib/x.ts',
+      ref: 'main',
+    });
+    resolveReply = () => {
+      throw new TypeError('fetch failed');
+    };
+    expect(outcomeOf(await callTool(fx.ctx, args()))).toMatchObject({
+      outcome: 'unreachable',
+      failure: 'unreachable',
+    });
+    expect(hostCalls.some((u) => u.includes('/contents/'))).toBe(false);
+  });
+});
+
 describe('read_file — every other outcome is named, non-error and distinct', () => {
   async function outcomeFor(
     setup: () => void,
@@ -426,19 +460,23 @@ describe('read_file — every other outcome is named, non-error and distinct', (
       repoRef: 'acme/alpha',
       path: 'lib/x.ts',
       ref: 'main',
+      commitSha: HEAD_SHA,
     });
     seen.set('not_found', notFound.summary);
 
     const refNotFound = await outcomeFor(
       () => {
-        reply = () =>
-          new Response(JSON.stringify({ message: 'No commit found for the ref nope' }), {
-            status: 404,
+        hostCalls.length = 0;
+        resolveReply = () =>
+          new Response(JSON.stringify({ message: 'No commit found for SHA: nope' }), {
+            status: 422,
           });
       },
       { ref: 'nope' },
     );
     expect(refNotFound.outcome).toMatchObject({ outcome: 'ref_not_found', ref: 'nope' });
+    expect(hostCalls.some((u) => u.includes('/contents/'))).toBe(false);
+    resolveReply = headReply;
     seen.set('ref_not_found', refNotFound.summary);
 
     const tooLarge = await outcomeFor(() => {
@@ -509,6 +547,27 @@ describe('read_file — every other outcome is named, non-error and distinct', (
     } as never);
     expect(structured).toEqual({ outcome: 'quarantined', repoRef: 'acme/alpha' });
     expect(summary).toContain('"quarantined"');
+  });
+
+  // MOTIR-10122 — every outcome that read AT a ref names the commit it resolved
+  // to when there is one, in the text and the payload, and stays as before when
+  // there is none (an unpinned read).
+  it.each([
+    { outcome: 'found', text: 'one\ntwo', bytes: 7 },
+    { outcome: 'found', text: 'a\u0000b', bytes: 3 },
+    { outcome: 'binary', bytes: 3 },
+    { outcome: 'directory', entries: [{ name: 'a.ts', type: 'file' }], truncated: false },
+    { outcome: 'not_found' },
+    { outcome: 'too_large', limitBytes: 10 },
+  ])('$outcome names the resolved commit, and only when there is one', (extra) => {
+    const base = { repoRef: 'acme/alpha', path: 'lib/a.ts', ref: 'main', ...extra } as never;
+    const sha = '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b';
+    const pinned = renderReadFile({ ...(base as object), commitSha: sha } as never);
+    expect(pinned.summary).toContain(`at main (commit ${sha})`);
+    expect(pinned.structured).toMatchObject({ commitSha: sha });
+    const plain = renderReadFile(base);
+    expect(plain.summary).not.toContain('(commit ');
+    expect(plain.structured).toMatchObject({ commitSha: null });
   });
 
   // MOTIR-9868 — a listing the host cut at the cap says so, and tells the

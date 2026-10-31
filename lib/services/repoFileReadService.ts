@@ -4,6 +4,7 @@ import { resolveOrganizationId } from '@/lib/github/resolveOrganizationId';
 import { getGitProvider, REPO_FILE_MAX_BYTES } from '@/lib/git';
 import { UnknownGitProviderError } from '@/lib/git/registry';
 import type { GitProviderId, RepoFileReadResult } from '@/lib/git/types';
+import { normalizeRepoFilePath } from '@/lib/git/fileRead';
 import { projectsService } from '@/lib/services/projectsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { resolveCodeContextState } from '@/lib/services/codeContextService';
@@ -55,6 +56,8 @@ export interface RepoFileReadContext {
  *  text, so a file over the whole-file limit is served (MOTIR-10143). */
 export interface RepoFileReadOptions {
   ranged?: boolean;
+  /** Resolve the ref to its commit and read AT it (MOTIR-10122) — see `readFile`. */
+  pinCommit?: boolean;
 }
 
 /**
@@ -84,7 +87,15 @@ export function applyWholeFileLimit(
 /** The service's result: the provider's own outcomes, plus the two this layer
  *  decides — the repo is not connected here, and the provider is unusable. */
 export type RepoFileServiceResult =
-  | RepoFileReadResult
+  | (RepoFileReadResult & {
+      /**
+       * The FULL commit id the ref resolved to, and the commit the read was made
+       * at (MOTIR-10122) — present on every outcome whose ref resolved, absent
+       * where it did not (no such ref, a refused credential, a host that did not
+       * answer, a path refused before any request).
+       */
+      commitSha?: string;
+    })
   | { outcome: 'repo_not_connected'; repoRef: string }
   | { outcome: 'provider_unavailable'; repoRef: string; detail: string };
 
@@ -137,6 +148,19 @@ export function splitRepoRef(repoRef: string): { owner: string; name: string } |
   return { owner, name };
 }
 
+/**
+ * The mint failed (an App not configured on this deploy, a revoked connection),
+ * or the host answered a status no arm names. Both are "we could not ask", which
+ * is a different fact from any answer.
+ */
+function unavailable(repoRef: string, err: unknown): RepoFileServiceResult {
+  return {
+    outcome: 'provider_unavailable',
+    repoRef,
+    detail: err instanceof Error ? err.message : 'unknown',
+  };
+}
+
 export const repoFileReadService = {
   /**
    * Read one file's text from a connected repository, at `ref` or at the
@@ -149,6 +173,11 @@ export const repoFileReadService = {
    *
    * A file over the whole-file limit is served only to a `ranged` read
    * ({@link applyWholeFileLimit}).
+   *
+   * `pinCommit` (MOTIR-10122) is the PLANNER's read — the MCP `read_file` and the
+   * hosted planner's internal route: the ref is resolved to its commit first and
+   * the file read AT it, and the answer carries `commitSha`. One host call more,
+   * so the other consumers (a decision page, a path advisory) keep the plain read.
    */
   async readFile(
     ctx: RepoFileReadContext,
@@ -191,24 +220,60 @@ export const repoFileReadService = {
 
     // The STORED canonical coordinates, never the caller's ref — casing on
     // GitHub is the host's, and the caller's spelling is model-supplied.
+    const asked = ref?.trim() || connected.defaultBranch;
+    const { installationId } = connected.installation;
+    if (!options.pinCommit) {
+      try {
+        const read = await provider.readFileAtRef(
+          installationId,
+          connected.owner,
+          connected.name,
+          path,
+          asked,
+        );
+        return applyWholeFileLimit(read, options);
+      } catch (err) {
+        return unavailable(repoRef, err);
+      }
+    }
+
+    // The path guard runs before ANY host call, the resolve included, so a
+    // refused path costs nothing — the provider runs it again for its own sake.
+    const guarded = normalizeRepoFilePath(path);
+    if (!guarded.ok) return { outcome: 'invalid_path', path, reason: guarded.reason };
     try {
-      const read = await provider.readFileAtRef(
-        connected.installation.installationId,
+      // ⚠️ RESOLVE FIRST, THEN READ AT THE SHA (MOTIR-10122). A planning
+      // session's reads are recorded with the commit they were made at, so a
+      // check can open the code the session saw. Reading at the branch and
+      // resolving it separately could cite a commit the read never saw when the
+      // branch moves between the two calls; reading AT the resolved sha cannot.
+      const resolved = await provider.resolveRef(
+        installationId,
         connected.owner,
         connected.name,
-        path,
-        ref?.trim() || connected.defaultBranch,
+        asked,
       );
-      return applyWholeFileLimit(read, options);
+      if (resolved.outcome === 'unreachable') {
+        const { failure, detail } = resolved;
+        return { outcome: 'unreachable', path: guarded.path, ref: asked, failure, detail };
+      }
+      if (resolved.outcome !== 'resolved') {
+        return { outcome: resolved.outcome, path: guarded.path, ref: asked };
+      }
+      const read = await provider.readFileAtRef(
+        installationId,
+        connected.owner,
+        connected.name,
+        guarded.path,
+        resolved.sha,
+      );
+      // The answer names the ref the caller ASKED for; the sha rides beside it.
+      const limited = applyWholeFileLimit(read, options);
+      return limited.outcome === 'invalid_path'
+        ? limited
+        : { ...limited, ref: asked, commitSha: resolved.sha };
     } catch (err) {
-      // The mint failed (an App not configured on this deploy, a revoked
-      // connection), or the host answered a status no arm names. Both are
-      // "we could not ask", which is a different fact from any answer.
-      return {
-        outcome: 'provider_unavailable',
-        repoRef,
-        detail: err instanceof Error ? err.message : 'unknown',
-      };
+      return unavailable(repoRef, err);
     }
   },
 
@@ -248,7 +313,7 @@ export const repoFileReadService = {
       repoRef,
       path,
       ref,
-      options,
+      { ...options, pinCommit: true },
     );
     return { ...result, repoRef };
   },

@@ -575,6 +575,21 @@ export type RepoFileReadResult =
     };
 
 /**
+ * WHICH COMMIT a ref names right now (MOTIR-10122) — what a recorded code read
+ * cites, so a check opens the exact code a planning session saw rather than
+ * whatever the branch holds by then.
+ *
+ * ⚠️ A RESULT UNION, for {@link RepoFileReadResult}'s reason: "that ref names no
+ * commit" is an answer about the ref, and "the host did not answer" is a failure
+ * to ask. `sha` is the full, lower-cased object id the host resolved.
+ */
+export type RefResolution =
+  | { outcome: 'resolved'; ref: string; sha: string }
+  | { outcome: 'ref_not_found'; ref: string }
+  | { outcome: 'unauthorized'; ref: string }
+  | { outcome: 'unreachable'; ref: string; failure: RepoFileReadTransportFailure; detail: string };
+
+/**
  * The answer to "how far is HEAD ahead of the indexed commit?" (MOTIR-4644).
  *
  * ⚠️ `null` IS A FIRST-CLASS ANSWER AND ALWAYS WILL BE — it is not an error

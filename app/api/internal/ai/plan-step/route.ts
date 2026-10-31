@@ -47,6 +47,13 @@ import {
 // session's step, and it answers `{ planId, providerWait }` (`null` once
 // cleared). Exactly one of `step` / `narration` / `providerRetry` is sent.
 //
+// CODE READS (MOTIR-10122): the body may carry `codeReads` INSTEAD — an array of
+// the session's code reads, each `{ tool, repo?, path?, startLine?, endLine?,
+// askedRef?, query?, commits: [{ repo?, sha, dirty? }], outcome, lines?, hits?,
+// detail? }`, never file content. Shape and caps are the store's
+// (`plansService.recordPlanCodeReads`, `lib/plans/planCodeRead.ts`), refused 422;
+// it names no `target` and needs no step. Answers `{ planId, codeReads }`.
+//
 // The signal is ADVISORY, so every refusal is a stable `{ code, error }` and
 // never a 500: the walk matches the code and carries on.
 //
@@ -124,10 +131,20 @@ export async function POST(req: Request): Promise<Response> {
   if (typeof sessionKey !== 'string') {
     return fail(INVALID, '`sessionKey` is required and must be a string.', 400);
   }
-  const { narration, providerRetry } = b;
-  const forms = [step, narration, providerRetry].filter((form) => form !== undefined).length;
+  const { narration, providerRetry, codeReads } = b;
+  const forms = [step, narration, providerRetry, codeReads].filter(
+    (form) => form !== undefined,
+  ).length;
   if (forms !== 1) {
-    return fail(INVALID, 'Send exactly one of `step`, `narration` or `providerRetry`.', 400);
+    return fail(
+      INVALID,
+      'Send exactly one of `step`, `narration`, `providerRetry` or `codeReads`.',
+      400,
+    );
+  }
+  if (codeReads !== undefined) {
+    if (!Array.isArray(codeReads)) return fail(INVALID, '`codeReads` must be an array.', 400);
+    if (target != null) return fail(INVALID, 'A `codeReads` call names no `target`.', 400);
   }
   if (step !== undefined && !isStep(step)) {
     return fail(INVALID, `\`step\` must be one of: ${STEPS.join(', ')}.`, 400);
@@ -164,6 +181,7 @@ export async function POST(req: Request): Promise<Response> {
         ...(providerRetry !== undefined
           ? { providerRetry: providerRetry as PlanProviderRetryInput }
           : {}),
+        ...(codeReads !== undefined ? { codeReads: codeReads as unknown[] } : {}),
       },
       auth,
     );

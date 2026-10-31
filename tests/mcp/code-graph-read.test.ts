@@ -232,7 +232,7 @@ describe('code_explore / code_search — the read', () => {
       projectKey: fx.projectIdentifier,
       query: 'readFile',
     });
-    expect(dtoOf(res)).toEqual({ state: 'ok', text: PAGED });
+    expect(dtoOf(res)).toEqual({ state: 'ok', text: PAGED, commits: [] });
     expect(summaryOf(res)).toBe(PAGED);
 
     expect(aiCalls).toHaveLength(1);
@@ -256,7 +256,7 @@ describe('code_explore / code_search — the read', () => {
       limit: 5,
       cursor: 'moooon-B-V/motir-core::c1',
     });
-    expect(dtoOf(res)).toEqual({ state: 'ok', text: 'page 2 of 2' });
+    expect(dtoOf(res)).toEqual({ state: 'ok', text: 'page 2 of 2', commits: [] });
     expect(aiCalls[0]!.body).toMatchObject({
       tool: 'code_search',
       args: { query: 'readFile', limit: 5, cursor: 'moooon-B-V/motir-core::c1' },
@@ -438,7 +438,7 @@ describe('code_grep — the file-contents search (MOTIR-10066)', () => {
       repo: 'motir-core',
       limit: 20,
     });
-    expect(dtoOf(res)).toEqual({ state: 'ok', text: GREP });
+    expect(dtoOf(res)).toEqual({ state: 'ok', text: GREP, commits: [] });
     expect(summaryOf(res)).toBe(GREP);
     // AC4: the answer names the indexed commit and the skipped files under its path.
     expect(summaryOf(res)).toContain('at commit 3f2a9c1');
@@ -630,8 +630,18 @@ describe('the DRIFT a read carries when the graph trails the default branch (MOT
       projectKey: fx.projectIdentifier,
       query: 'chooseInTx',
     });
-    expect(dtoOf(res)).toEqual({ state: 'ok', text: 'No symbols found.' });
-    expect(summaryOf(res)).toBe('No symbols found.');
+    // The commit each repository's graph was read at (MOTIR-10122), full sha, in set order.
+    expect(dtoOf(res)).toEqual({
+      state: 'ok',
+      text: 'No symbols found.',
+      commits: [
+        { repoRef: `${OWNER}/motir-ai`, indexedSha: HEAD },
+        { repoRef: `${OWNER}/motir-core`, indexedSha: HEAD },
+      ],
+    });
+    expect(summaryOf(res)).toBe(
+      `No symbols found.\n\nGraph commits read: ${OWNER}/motir-ai@${HEAD}, ${OWNER}/motir-core@${HEAD}.`,
+    );
     expect(compare).not.toHaveBeenCalled();
   });
 
@@ -646,7 +656,14 @@ describe('the DRIFT a read carries when the graph trails the default branch (MOT
       projectKey: fx.projectIdentifier,
       query: 'q',
     });
-    expect(dtoOf(res)).toEqual({ state: 'ok', text: 'x' });
+    expect(dtoOf(res)).toEqual({
+      state: 'ok',
+      text: 'x',
+      commits: [
+        { repoRef: `${OWNER}/motir-ai`, indexedSha: INDEXED },
+        { repoRef: `${OWNER}/motir-core`, indexedSha: INDEXED },
+      ],
+    });
     expect(compare).not.toHaveBeenCalled();
   });
 
@@ -742,7 +759,7 @@ describe('the DRIFT a read carries when the graph trails the default branch (MOT
       projectKey: fx.projectIdentifier,
       query: 'q',
     });
-    expect(dtoOf(res)).toEqual({ state: 'ok', text: 'x' });
+    expect(dtoOf(res)).toEqual({ state: 'ok', text: 'x', commits: expect.any(Array) });
   });
 
   it('the paths come from ONE compare per commit pair — a second read is answered from the cache', async () => {

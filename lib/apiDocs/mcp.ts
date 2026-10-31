@@ -624,7 +624,9 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   read_file: {
     summary:
       "One file's text, or a directory's immediate entries, from a repository in the project's set, at a ref — capped and line-ranged like the hosted planner's read, every absence a named outcome.",
-    descriptionFingerprint: '8c24af03ed4e',
+    // Re-pinned for MOTIR-10143: the description now says a file over 1 MB is read only by
+    // range. The summary was re-read and still says what the tool does.
+    descriptionFingerprint: 'a3b5e1fed782',
   },
   list_changed_files: {
     // MOTIR-10069 — the hosted planner's `list_changed_files`, on the MCP.
@@ -863,6 +865,13 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // now exempts `type: test` beside `type: design` — advisory channel only.
     descriptionFingerprint: '2601f9f3a510',
   },
+  get_plan_code_reads: {
+    // MOTIR-10122: what each planner session read, at which commit — the evidence a check of a
+    // plan attributes a defect from.
+    summary:
+      'Read the code reads each planner session of a plan made — file and range or query, the commit it was read at, and what came back — in call order.',
+    descriptionFingerprint: 'b9865a0cd819',
+  },
   get_plan_authoring_state: {
     // MOTIR-9821: the live read an author session makes before it wires an edge onto a sibling.
     // SUMMARY REWRITTEN for MOTIR-10001: it now answers committed cards too, `not_in_walk` among them.
@@ -1065,7 +1074,9 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
       'Report the step a planner session is on (settle, lay, author), narrate it, or end it — an advisory progress signal on a generating plan.',
     // Regenerated from a live `tools/list` handshake, never from the source.
     // Re-pinned for MOTIR-8062: the `narration` arm joins the description.
-    descriptionFingerprint: '8a4719704960',
+    // Re-pinned for MOTIR-10122, summary UNCHANGED: the `codeReads` arm joins the input schema
+    // and the step's exclusive-forms sentence.
+    descriptionFingerprint: '4d3e24448453',
   },
   hold_plan_revision: {
     // What a reader picks this one on: it is the only plan door that re-opens a

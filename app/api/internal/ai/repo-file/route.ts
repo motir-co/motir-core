@@ -70,8 +70,10 @@ export async function GET(req: Request): Promise<Response> {
   }
 
   const ranged = params.has('startLine') || params.has('endLine');
+  // The planner's read: pinned to the commit the ref resolves to (MOTIR-10122).
   const result = await repoFileReadService.readFile(auth.ctx, repoRef, path, ref ?? undefined, {
     ranged,
+    pinCommit: true,
   });
   return NextResponse.json({ result });
 }

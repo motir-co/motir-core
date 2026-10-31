@@ -57,6 +57,10 @@ const aiCalls: AiCall[] = [];
 const hostCalls: string[] = [];
 let aiReply: () => Response | Promise<Response>;
 let hostReply: (url: string) => Response | Promise<Response>;
+// A ref is resolved to its commit before the read (MOTIR-10122); the read is AT it.
+const HEAD_SHA = 'beef'.padEnd(40, '1');
+const headReply = () => new Response(HEAD_SHA, { status: 200 });
+let resolveReply: (url: string) => Response | Promise<Response> = headReply;
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -78,7 +82,7 @@ function stubFetch(): void {
       });
     }
     hostCalls.push(url);
-    return hostReply(url);
+    return url.includes('/commits/') ? resolveReply(url) : hostReply(url);
   });
 }
 
@@ -158,6 +162,7 @@ beforeEach(async () => {
   hostCalls.length = 0;
   aiReply = () => json({ state: 'ok', text: 'unset' });
   hostReply = () => new Response('export const x = 1;\n', { status: 200 });
+  resolveReply = headReply;
   vi.stubEnv('MOTIR_AI_URL', AI_URL);
   vi.stubEnv('MOTIR_AI_SERVICE_TOKEN', SERVICE_TOKEN);
   vi.stubEnv('GITHUB_APP_ID', '999');
@@ -224,17 +229,20 @@ describe('read_file — every outcome through the door', () => {
       outcome: 'found',
       repoRef: `${OWNER}/motir-ai`,
       ref: 'trunk',
+      commitSha: HEAD_SHA,
       bytes: 20,
     });
-    expect(hostCalls[0]).toBe(
-      `https://api.github.com/repos/${OWNER}/motir-ai/contents/lib/x.ts?ref=trunk`,
-    );
+    expect(hostCalls).toEqual([
+      `https://api.github.com/repos/${OWNER}/motir-ai/commits/trunk`,
+      `https://api.github.com/repos/${OWNER}/motir-ai/contents/lib/x.ts?ref=${HEAD_SHA}`,
+    ]);
 
     hostCalls.length = 0;
     const atRef = structured(await call('read_file', readArgs({ ref: 'feat/y' })));
-    expect(atRef).toMatchObject({ outcome: 'found', ref: 'feat/y' });
+    expect(atRef).toMatchObject({ outcome: 'found', ref: 'feat/y', commitSha: HEAD_SHA });
     expect(hostCalls).toEqual([
-      `https://api.github.com/repos/${OWNER}/motir-core/contents/lib/x.ts?ref=feat%2Fy`,
+      `https://api.github.com/repos/${OWNER}/motir-core/commits/feat%2Fy`,
+      `https://api.github.com/repos/${OWNER}/motir-core/contents/lib/x.ts?ref=${HEAD_SHA}`,
     ]);
   });
 
@@ -244,8 +252,9 @@ describe('read_file — every outcome through the door', () => {
         `${OWNER}/motir-core`,
       );
     }
-    expect(new Set(hostCalls).size).toBe(1);
-    expect(hostCalls).toHaveLength(3);
+    // One resolve and one read per call, the same two URLs each time.
+    expect(new Set(hostCalls).size).toBe(2);
+    expect(hostCalls).toHaveLength(6);
   });
 
   it('a whitespace-only repo matches nothing — repo_not_in_project, zero host calls', async () => {
@@ -297,8 +306,9 @@ describe('read_file — every outcome through the door', () => {
     hostReply = () => json({ message: 'Not Found' }, 404);
     await record('not_found');
 
-    hostReply = () => json({ message: 'No commit found for the ref gone' }, 404);
+    resolveReply = () => json({ message: 'No commit found for SHA: gone' }, 422);
     await record('ref_not_found', { ref: 'gone' });
+    resolveReply = headReply;
 
     hostReply = () => json({ errors: [{ code: 'too_large' }] }, 403);
     expect(await record('too_large')).toMatchObject({ limitBytes: REPO_FILE_FETCH_MAX_BYTES });
@@ -348,7 +358,7 @@ describe('code_explore / code_search — every state through the door', () => {
   it('ok is byte-equal to the route’s text, and its cursor reaches the route for page 2', async () => {
     aiReply = () => json({ state: 'ok', text: PAGE_1 });
     const first = await call('code_explore', graphArgs());
-    expect(structured(first)).toEqual({ state: 'ok', text: PAGE_1 });
+    expect(structured(first)).toEqual({ state: 'ok', text: PAGE_1, commits: [] });
     expect(textOf(first)).toBe(PAGE_1);
 
     const cursor = /cursor: "([^"]+)"/.exec(textOf(first))![1];

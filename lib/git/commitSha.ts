@@ -37,6 +37,9 @@
 /** A git object id: SHA-1 (40) or SHA-256 (64), abbreviated to no fewer than 7. */
 export const COMMIT_SHA_PATTERN = /^[0-9a-f]{7,64}$/;
 
+/** A FULL object id — SHA-1 (40) or SHA-256 (64) — what a host resolves a ref to (MOTIR-10122). */
+export const FULL_COMMIT_SHA = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
+
 /**
  * Why a commit id was refused. Rendered to the caller verbatim by whichever
  * domain error carries it, so it says what to fix rather than that something

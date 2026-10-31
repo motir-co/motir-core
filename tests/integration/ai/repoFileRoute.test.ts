@@ -59,6 +59,8 @@ function req(path: string, opts: { bearer?: string; token?: string }): Request {
   return new Request(`http://core${path}`, { headers });
 }
 
+const HEAD_SHA = 'fade'.padEnd(40, '2');
+
 function stubGithub(fileReply: () => Response): void {
   const { privateKey } = generateKeyPairSync('rsa', {
     modulusLength: 2048,
@@ -79,6 +81,8 @@ function stubGithub(fileReply: () => Response): void {
           { status: 200, headers: { 'content-type': 'application/json' } },
         );
       }
+      // The ref resolves to its commit first (MOTIR-10122); the read is at it.
+      if (String(url).includes('/commits/')) return new Response(HEAD_SHA, { status: 200 });
       if (String(url).includes('/contents/')) return fileReply();
       return new Response('nf', { status: 404 });
     }),
@@ -178,6 +182,7 @@ describe('GET /api/internal/ai/repo-file — the connected repo', () => {
         outcome: 'found',
         path: 'lib/x.ts',
         ref: 'main',
+        commitSha: HEAD_SHA,
         text: FILE_TEXT,
         bytes: FILE_TEXT.length,
       },
@@ -193,7 +198,7 @@ describe('GET /api/internal/ai/repo-file — the connected repo', () => {
         token,
       }),
     );
-    expect(await res.json()).toMatchObject({ result: { ref: 'feat/x' } });
+    expect(await res.json()).toMatchObject({ result: { ref: 'feat/x', commitSha: HEAD_SHA } });
   });
 
   // MOTIR-10143 — a file over the 1 MB whole-file limit: refused whole with its
@@ -213,6 +218,7 @@ describe('GET /api/internal/ai/repo-file — the connected repo', () => {
         outcome: 'too_large',
         path: 'big.ts',
         ref: 'main',
+        commitSha: HEAD_SHA,
         limitBytes: 1024 * 1024,
         totalLines: 2,
       },
@@ -243,7 +249,7 @@ describe('GET /api/internal/ai/repo-file — the connected repo', () => {
     );
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
-      result: { outcome: 'not_found', path: 'nope.ts', ref: 'main' },
+      result: { outcome: 'not_found', path: 'nope.ts', ref: 'main', commitSha: HEAD_SHA },
     });
   });
 
@@ -261,7 +267,13 @@ describe('GET /api/internal/ai/repo-file — the connected repo', () => {
     );
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
-      result: { outcome: 'binary', path: 'app/apple-icon.png', ref: 'main', bytes: png.length },
+      result: {
+        outcome: 'binary',
+        path: 'app/apple-icon.png',
+        ref: 'main',
+        commitSha: HEAD_SHA,
+        bytes: png.length,
+      },
     });
   });
 
