@@ -24,6 +24,7 @@ import {
   awsCapacityReason,
   classifyAwsLaunchError,
 } from './capacityErrors';
+import { AWS_INDEX_IAM_ROLE } from './management';
 import { AWS_SHARD_TAG_KEY } from './network';
 import { buildContainerUserData, buildRunnerUserData, encodeUserData } from './userData';
 import { buildIndexUserData, consoleExitCode, consoleShowsPullFailure } from './indexUserData';
@@ -277,6 +278,8 @@ interface LaunchPayload {
   readonly shutdownBehavior?: 'terminate' | 'stop';
   /** Tag the network interface too (an index VM's attribution tags). */
   readonly tagNetworkInterface?: boolean;
+  /** The instance profile the VM boots with; omitted means none. */
+  readonly instanceProfileName?: string;
 }
 
 /**
@@ -322,6 +325,8 @@ const LAUNCH_PAYLOADS: Record<
       imageId: indexerAmiId,
       shutdownBehavior: 'stop',
       tagNetworkInterface: true,
+      // Its one AWS permission: pulling the indexer image from ECR (MOTIR-10123).
+      instanceProfileName: AWS_INDEX_IAM_ROLE,
     };
   },
   agent_instance: () => notOnAws('agent_instance'),
@@ -384,7 +389,14 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
    */
   async function launchInSubnet(
     spec: ContainerSpec,
-    { userData, tags, imageId, shutdownBehavior, tagNetworkInterface }: LaunchPayload,
+    {
+      userData,
+      tags,
+      imageId,
+      shutdownBehavior,
+      tagNetworkInterface,
+      instanceProfileName,
+    }: LaunchPayload,
     { subnetId, zone }: { subnetId: string; zone: string },
     securityGroupId: string,
   ): Promise<Ec2Instance> {
@@ -399,8 +411,9 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
           securityGroupIds: [securityGroupId],
           userData,
           // IMDSv2 only, one hop: a container on the VM cannot reach the
-          // metadata service, which holds the user-data and so the JIT config.
-          // No IamInstanceProfile and no KeyName are ever sent.
+          // metadata service, which holds the user-data and so the JIT config —
+          // and, on an index VM, its role's credentials. No KeyName is ever
+          // sent, and an instance profile only on an index VM's launch.
           metadataOptions: {
             httpTokens: 'required',
             httpPutResponseHopLimit: 1,
@@ -420,6 +433,7 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
               : [],
           tags,
           ...(tagNetworkInterface ? { tagNetworkInterface: true } : {}),
+          ...(instanceProfileName ? { iamInstanceProfileName: instanceProfileName } : {}),
         });
       } catch (err) {
         const retryable = err instanceof Ec2ApiError && err.retryable && !awsCapacityReason(err);

@@ -109,6 +109,12 @@ export const AWS_EC2_VCPU_QUOTA_CODE = 'L-1216C47A';
 export const AWS_RUNNER_IAM_ROLE = 'motir-fleet-runner';
 export const AWS_RUNNER_IAM_POLICY = 'motir-fleet-runner-ec2';
 
+/** The role, and the instance profile of the same name, every index VM boots
+ *  with (MOTIR-10123): it may pull the indexer image from Motir's ECR, and
+ *  nothing else. The pool-account definition (motir-infra) builds both; the
+ *  runner role may pass it to EC2 (`PassIndexRole`). */
+export const AWS_INDEX_IAM_ROLE = 'motir-fleet-index';
+
 /** The role an enterprise tenant's deploys run as, in its own account, trusted
  *  only by the management role (MOTIR-9941); its inline policy shares the name. */
 export const AWS_TENANT_DEPLOY_ROLE = 'motir-tenant-deploy';
@@ -1238,6 +1244,15 @@ export function awsRunnerPolicyDocument(input: {
         Condition: {
           StringEquals: { [`aws:ResourceTag/${AWS_SHARD_TAG_KEY}`]: input.shardTag },
         },
+      },
+      {
+        // An index VM boots with the index role's profile, so it can pull its
+        // image from ECR (MOTIR-10123). Only to EC2, and only that role.
+        Sid: 'PassIndexRole',
+        Effect: 'Allow',
+        Action: 'iam:PassRole',
+        Resource: `arn:aws:iam::*:role/${AWS_INDEX_IAM_ROLE}`,
+        Condition: { StringEquals: { 'iam:PassedToService': 'ec2.amazonaws.com' } },
       },
       ...(input.reapUntagged
         ? [

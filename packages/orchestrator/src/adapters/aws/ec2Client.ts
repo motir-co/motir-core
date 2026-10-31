@@ -211,6 +211,9 @@ export interface Ec2RunInstanceInput {
   /** Also write `tags` on the launch's network interface (an index VM's, so cost
    *  tooling sees every billed resource — MOTIR-9450). A runner's launch omits it. */
   readonly tagNetworkInterface?: boolean;
+  /** The instance profile the VM boots with, by name — an index VM's only
+   *  (MOTIR-10123), so it can pull its image from ECR. A runner's launch omits it. */
+  readonly iamInstanceProfileName?: string;
 }
 
 export interface Ec2DescribeInstancesInput {
@@ -488,6 +491,9 @@ function instanceCalls(send: Send): InstanceCalls {
             HttpEndpoint: input.metadataOptions.httpEndpoint,
           },
           InstanceInitiatedShutdownBehavior: input.instanceInitiatedShutdownBehavior,
+          ...(input.iamInstanceProfileName
+            ? { IamInstanceProfile: { Name: input.iamInstanceProfileName } }
+            : {}),
           ...(input.blockDeviceMappings.length > 0
             ? {
                 BlockDeviceMappings: input.blockDeviceMappings.map((m) => ({
