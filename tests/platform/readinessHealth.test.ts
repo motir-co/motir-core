@@ -1,6 +1,6 @@
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type * as Db from '@/lib/db';
 import type * as ReadyRoute from '@/app/api/health/ready/route';
 import type * as Readiness from '@/lib/services/readinessService';
@@ -21,7 +21,21 @@ import type * as Readiness from '@/lib/services/readinessService';
  * which is what a newly booted machine evaluates: a new client, a new pool with
  * nothing open, and a readiness flag that has never been set. The same shape as
  * `tests/monitoring/transactionStall.moduleInstances.test.ts`.
+ *
+ * ⚠️ THE POLLS MEASURE READINESS, NOT TRANSFORM TIME (Bug MOTIR-10152). The
+ * warm-up's first step is `import('@/lib/services/githubWebhookService')`, the
+ * webhook route's whole service graph. The first test to evaluate it used to pay
+ * for TRANSFORMING that graph inside its 15 s poll — about 14 s of it on its own,
+ * and past 15 s once other test files shared the CPU, so it failed with
+ * `expected 503 to be 200` on unchanged code. `vi.resetModules()` empties the
+ * module REGISTRY, not the transform cache, so `beforeAll` below imports the same
+ * graph once, under the hook's own budget: each fresh process still EVALUATES
+ * everything anew — a new client, a new pool, a readiness flag never set — and
+ * the poll is left measuring the warm-up rather than the compiler.
  */
+
+/** The cold transform of the graphs `freshProcess()` and the warm-up import. */
+const TRANSFORM_BUDGET_MS = 120_000;
 
 interface FreshProcess {
   route: typeof ReadyRoute;
@@ -109,6 +123,13 @@ afterEach(async () => {
     }),
   );
 });
+
+beforeAll(async () => {
+  // Transform-only warm-up of the modules a fresh process loads (see the header):
+  // nothing here is read by a test, and every test re-evaluates them from scratch.
+  await import('@/lib/services/githubWebhookService');
+  await import('@/app/api/health/ready/route');
+}, TRANSFORM_BUDGET_MS);
 
 describe('GET /api/health/ready', () => {
   it('answers 503 on a fresh process, and 200 only once the pool holds the warm-up connections open', async () => {
