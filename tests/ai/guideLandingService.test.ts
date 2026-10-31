@@ -10,7 +10,7 @@ import { planChangeSessionsService } from '@/lib/services/planChangeSessionsServ
 import { manualWorkGateService } from '@/lib/services/manualWorkGateService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { GUIDE_BUGS_PER_CONVERSATION } from '@/lib/ai/guideWorkItem';
-import { GuideBugCapExceededError } from '@/lib/planChange/errors';
+import { GuideBugCapExceededError, PlanChangeSessionNotFoundError } from '@/lib/planChange/errors';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import {
   createTestWorkItem,
@@ -470,6 +470,18 @@ describe('needs_replan offer — the stored, resolved offer (MOTIR-8689)', () =>
     expect(reread.turns.at(-1)?.guide?.replanOffer?.targetKey).toBe(story.identifier);
   });
 
+  it('naming the guided card ITSELF, in any case, stands as asked on that card (MOTIR-10154)', async () => {
+    const { card } = await chain();
+    const opened = await open(card.identifier);
+    const settled = await settleWith(opened, [offer(card.identifier.toLowerCase())]);
+    expect(outcomesOf(settled)).toEqual([['needs_replan', 'landed']]);
+    expect(settled.record?.replanOffer).toMatchObject({
+      requestedTargetKey: card.identifier.toLowerCase(),
+      targetKey: card.identifier,
+      targetResolution: 'as_asked',
+    });
+  });
+
   it('no named target plans on the guided card', async () => {
     const { card } = await chain();
     const settled = await settleWith(await open(card.identifier), [offer(null)]);
@@ -705,6 +717,39 @@ describe('close', () => {
     expect(gate).toMatchObject({ state: 'approved', decidedById: fx.ownerId });
   });
 
+  it('a manual-work gate the person may NOT decide skips the close with the reason, and decides nothing (MOTIR-10154)', async () => {
+    // The decide door's own refusal: a workspace member holds `work_item:edit`
+    // (so the turn lands) but is neither the card's assignee nor holds
+    // `approval:decide_any` (§2), so Mark done is not theirs to press.
+    const card = await manualCard();
+    await adminDb.workItem.update({ where: { id: card.id }, data: { assigneeId: fx.ownerId } });
+    const [r1] = await addRows(card.id, ['Only step']);
+    await workItemTodosService.setTodoDone(r1!, true, fx.ctx);
+    await withWorkspaceContext(fx.ctx, (tx) =>
+      manualWorkGateService.raise(card.id, { createdById: fx.ownerId }, fx.workspaceId, tx),
+    );
+    const member = await createTestUser();
+    await workspacesService.addMember({ userId: member.id, workspaceId: fx.workspaceId });
+    session.current = { user: { id: member.id, email: member.email, name: 'Member' } };
+    activeCtx.current = { ...activeCtx.current!, userId: member.id };
+
+    const opened = await open(card.identifier);
+    const settled = await settleWith(opened, [{ type: 'close' }], 'All done, closing it.');
+    expect(settled.record!.outcomes).toEqual([
+      {
+        type: 'close',
+        outcome: 'skipped',
+        reason: 'the work waiting on this card could not be marked done — mark it on the card',
+      },
+    ]);
+    const gate = await adminDb.approvalGate.findFirstOrThrow({
+      where: { workItemId: card.id, kind: 'manual_work' },
+    });
+    expect(gate).toMatchObject({ state: 'awaiting', decidedById: null });
+    expect((await workItemsService.getWorkItem(card.id, fx.ctx)).status).not.toBe('done');
+    expect(await adminDb.comment.count({ where: { workItemId: card.id } })).toBe(0);
+  });
+
   it('lands nothing while a row is unticked', async () => {
     const card = await manualCard();
     await addRows(card.id, ['Not yet']);
@@ -787,6 +832,90 @@ describe('replay and failure', () => {
       guideSettle(post('/api/ai/guide/settle', body)),
     ]);
     expect(await adminDb.comment.count({ where: { workItemId: card.id } })).toBe(1);
+  });
+
+  // THE CONCURRENT LOSER'S TWO PATHS, EACH PINNED ON ITS OWN (MOTIR-10154). In the
+  // test above, the second settle either reads the first one's reply (the replay
+  // path) or passes that check first and loses the landing claim — which one
+  // depends on timing, so a branch only it reached flipped the coverage lane's
+  // number between runs. The replay path is pinned by "settling the same job
+  // twice"; this pins the lost claim, deterministically.
+  it('a landing that LOSES the claim to an earlier one lands nothing and reads silent', async () => {
+    const card = await manualCard();
+    await addRows(card.id, ['One']);
+    const opened = await open(card.identifier);
+    const turn = opened.session.turns.find((t) => t.role === 'user' && t.jobId === opened.jobId)!;
+    const input = {
+      jobId: opened.jobId,
+      turn,
+      result: {
+        messageMd: 'm',
+        actions: [{ type: 'cannot_do', reason: 'Stuck' } as never],
+        dropped: [],
+      },
+    };
+    const first = await guideLandingService.land(input, opened.session, activeCtx.current!);
+    expect(first.outcome).toBe('guided');
+    // The thread as the loser read it — before the winner appended its reply.
+    const second = await guideLandingService.land(input, opened.session, activeCtx.current!);
+    expect(second.outcome).toBe('silent');
+    expect(await adminDb.comment.count({ where: { workItemId: card.id } })).toBe(1);
+    const reread = await planChangeSessionsService.getById(activeCtx.current!, opened.session.id);
+    expect(reread.turns.filter((t) => t.role === 'assistant')).toHaveLength(1);
+  });
+
+  it.each(['queued', 'running'])(
+    'a job still %s lands nothing and reads silent — and lands once it succeeds',
+    async (status) => {
+      const card = await manualCard();
+      const [r1] = await addRows(card.id, ['One']);
+      const opened = await open(card.identifier);
+      getJobMock.mockResolvedValue({ status, result: null, error: null });
+      const res = await guideSettle(
+        post('/api/ai/guide/settle', { jobId: opened.jobId, sessionId: opened.session.id }),
+      );
+      const pending = (await res.json()) as Settled;
+      expect(pending.outcome).toBe('silent');
+      expect(pending.session.turns.filter((t) => t.role === 'assistant')).toHaveLength(0);
+      expect((await rows(card.id))[0]!.done).toBe(false);
+
+      // Nothing was decided: the same job lands when it settles.
+      const settled = await settleWith(opened, [{ type: 'tick', rowId: r1 }]);
+      expect(outcomesOf(settled)).toEqual([['tick', 'landed']]);
+      expect((await rows(card.id))[0]!.done).toBe(true);
+    },
+  );
+
+  it('replaying a job whose stored reply no longer reads as a guide record is silent and lands nothing again', async () => {
+    const card = await manualCard();
+    await addRows(card.id, ['One']);
+    const opened = await open(card.identifier);
+    const first = await settleWith(opened, [{ type: 'cannot_do', reason: 'Stuck' }]);
+    const reply = first.session.turns.find((t) => t.role === 'assistant')!;
+    await adminDb.planChangeTurn.update({
+      where: { id: reply.id },
+      data: { guideTurn: { unreadable: true } },
+    });
+    const replay = await settleWith(opened, [{ type: 'cannot_do', reason: 'Stuck' }]);
+    expect(replay.outcome).toBe('silent');
+    expect(replay.record).toBeUndefined();
+    expect(await adminDb.comment.count({ where: { workItemId: card.id } })).toBe(1);
+  });
+
+  it('a conversation with no target card is refused as not found, and claims nothing', async () => {
+    const card = await manualCard();
+    const opened = await open(card.identifier);
+    const turn = opened.session.turns.find((t) => t.role === 'user' && t.jobId === opened.jobId)!;
+    await expect(
+      guideLandingService.land(
+        { jobId: opened.jobId, turn, result: { messageMd: 'm', actions: [], dropped: [] } },
+        { ...opened.session, targetKeys: [] },
+        activeCtx.current!,
+      ),
+    ).rejects.toBeInstanceOf(PlanChangeSessionNotFoundError);
+    // The turn was not claimed, so the real settle still lands it.
+    const settled = await settleWith(opened, [{ type: 'cannot_do', reason: 'Stuck' }]);
+    expect(outcomesOf(settled)).toEqual([['cannot_do', 'landed']]);
   });
 
   it('a failed job lands no action and appends no reply', async () => {
