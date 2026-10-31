@@ -26,13 +26,13 @@ import {
 // relabelling, re-pricing or inventing them. Nothing here asks the engine anything.
 //
 // The only stubbed boundary is the global `fetch`, answered with the record's own
-// bytes: the shipped browser helper and the render both execute. The record predates
-// the two ranges (MOTIR-9223 · MOTIR-9224): it was asked ONE `itemsPerMonth` range,
-// which the engine reads as planned = run, and it echoes neither. The tab types that
-// range into the planned field (the run field follows), and the stub adds the echo the
-// app's server fills from what it sent (`motirAiClient.estimateCalculator`). Every expected
-// value is derived — from the record, or from BILLING_CATALOG by the record's
-// plan key — never typed.
+// bytes: the shipped browser helper and the render both execute. The record is in the
+// engine's current request shape (MOTIR-9224 · MOTIR-9832 · MOTIR-10156): two ranges,
+// two categories and their shares of the run. The tab is driven to exactly that input
+// through its own controls, and the request it sends must BE the recorded request —
+// the same record motir-marketing's /price parity test feeds its page, byte for byte.
+// Every expected value is derived — from the record, or from BILLING_CATALOG by the
+// record's plan key — never typed.
 
 type Answer = typeof PINNED_ESTIMATE_ANSWER;
 const m = enMessages.billing.calculator;
@@ -128,15 +128,20 @@ function Tab({ initial }: { initial: BillingCadence }) {
   );
 }
 
-/** Drive the tab to an input through its own controls and ask. */
-async function ask(
-  input: {
-    itemsPerMonth: { low: number; high: number };
-    categories: readonly string[];
-    cadence: BillingCadence;
-  },
-  startCadence: BillingCadence = input.cadence,
-) {
+type Input = typeof PINNED_CALCULATOR_REQUEST;
+
+function typeRange(testId: string, range: { low: number; high: number }) {
+  const field = screen.getByTestId(testId);
+  fireEvent.change(within(field).getByLabelText(m.inputs.lowLabel), {
+    target: { value: String(range.low) },
+  });
+  fireEvent.change(within(field).getByLabelText(m.inputs.highLabel), {
+    target: { value: String(range.high) },
+  });
+}
+
+/** Drive the tab to an input through its own controls — ranges, categories, shares — and ask. */
+async function ask(input: Input, startCadence: BillingCadence = input.cadence) {
   render(<Tab initial={startCadence} />);
   await screen.findByRole('button', { name: new RegExp(`^${labelOf(input.categories[0]!)}`) });
   if (startCadence !== input.cadence) {
@@ -144,15 +149,18 @@ async function ask(
       screen.getByRole('button', { name: input.cadence === 'annual' ? 'Annual' : 'Monthly' }),
     );
   }
-  const planned = screen.getByTestId('calculator-planned');
-  fireEvent.change(within(planned).getByLabelText(m.inputs.lowLabel), {
-    target: { value: String(input.itemsPerMonth.low) },
-  });
-  fireEvent.change(within(planned).getByLabelText(m.inputs.highLabel), {
-    target: { value: String(input.itemsPerMonth.high) },
-  });
+  // Planned first: the run range follows it until it is edited, then is set itself.
+  typeRange('calculator-planned', input.plannedPerMonth);
+  typeRange('calculator-run', input.runPerMonth);
   for (const key of input.categories) {
     fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${labelOf(key)}`) }));
+  }
+  // Every share but the last is dragged to its value; the last takes the remainder.
+  const sliders = screen.getByTestId('calculator-shares');
+  for (const key of input.categories.slice(0, -1)) {
+    fireEvent.change(within(sliders).getByLabelText(labelOf(key)), {
+      target: { value: String(input.shares[key]) },
+    });
   }
   fireEvent.click(screen.getByRole('button', { name: m.inputs.submit }));
   return screen.findByTestId('calculator-result');
@@ -191,21 +199,28 @@ afterAll(() => {
 describe('the Calculator tab against the pinned vector', () => {
   const pinned = PINNED_CALCULATOR_REQUEST;
 
-  it('sends the pinned input — its range as both ranges, each category once, cadence — and no lane or model', async () => {
+  it('sends the pinned input — exactly the recorded request, shares included, and no lane or model', async () => {
     stubEngine();
     await ask(pinned);
     const post = requests.find((r) => r.url.endsWith('/calculator/estimate'));
     const body = need(post, 'a captured estimate request').body as Record<string, unknown>;
-    const range = { low: pinned.itemsPerMonth.low, high: pinned.itemsPerMonth.high };
-    expect(body.plannedPerMonth).toEqual(range);
-    expect(body.runPerMonth).toEqual(range);
+    // The tab's server forwards exactly these keys to the engine (`estimateCalculator`),
+    // so the browser body IS the engine request the record was taken with.
+    expect(body).toStrictEqual({ ...pinned });
     expect(body).not.toHaveProperty('itemsPerMonth');
-    expect([...(body.categories as string[])].sort()).toEqual([...pinned.categories].sort());
-    expect(new Set(body.categories as string[]).size).toBe(pinned.categories.length);
-    expect(body.cadence).toBe(pinned.cadence);
     for (const retired of ['planning', 'running', 'modelIds']) {
       expect(body).not.toHaveProperty(retired);
     }
+  });
+
+  it('renders the two ranges the answer echoes', async () => {
+    stubEngine();
+    const result = await ask(pinned);
+    const { plannedPerMonth: p, runPerMonth: r } = PINNED_ESTIMATE_ANSWER;
+    const priced = within(result).getByTestId('calculator-priced');
+    expect(numerals(textOf(priced))).toEqual(
+      expect.arrayContaining([p.low, p.high, r.low, r.high]),
+    );
   });
 
   it('renders the credit range’s low end and high end', async () => {
