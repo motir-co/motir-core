@@ -116,17 +116,29 @@ export const CHANGED_FILES_MAX = 300;
 export const MERGE_CHANGE_REQUEST_TIMEOUT_MS = 10_000;
 
 /**
- * The largest file this capability will hand back, in bytes.
+ * The largest file a WHOLE-file read hands back, in bytes — the limit
+ * `repoFileReadService.readFile` applies to a read that names no line range.
  *
- * ⚠️ IT IS THE HOST'S LIMIT, NOT OURS, AND THAT IS WHY IT IS 1 MiB. GitHub's
- * contents endpoint refuses a blob over 1 MB outright, so anything larger is
- * not a policy we could relax by editing this line — it is a fact about the
- * upstream. Naming it here (rather than only catching GitHub's 403) lets GitLab,
- * which has no such refusal, answer the SAME way for the same file, so a session
- * does not learn a different truth about a repository depending on where it is
- * hosted.
+ * ⚠️ IT IS A LIMIT ON WHAT A CALLER IS HANDED, NOT ON WHAT CAN BE READ
+ * (MOTIR-10143). It used to sit in the providers, on the belief that GitHub's
+ * contents endpoint refuses a blob over 1 MB — which is true of its JSON
+ * envelope and not of the RAW media type the read asks for (served up to
+ * {@link REPO_FILE_FETCH_MAX_BYTES}). So a ten-line range of a 1.1 MB file was
+ * refused for a reason the host never gave, and a planner could not read the
+ * file at all. A RANGED read is served past it; an unranged one is still
+ * refused `too_large`, now carrying the file's line count so the caller can ask
+ * for a range.
  */
 export const REPO_FILE_MAX_BYTES = 1024 * 1024;
+
+/**
+ * The largest blob a provider fetches at all, in bytes — GitHub's own limit for
+ * the raw media type of the contents endpoint (100 MB; the JSON envelope stops at
+ * 1 MB). Over it GitHub answers 403 `too_large`, and GitLab, which has no such
+ * refusal, is held to the same number so a session learns the same fact about
+ * the same file wherever it is hosted.
+ */
+export const REPO_FILE_FETCH_MAX_BYTES = 100 * 1024 * 1024;
 
 export interface GitProvider {
   /** The provider discriminator — matches the stored rows' `provider` column. */
@@ -238,7 +250,7 @@ export interface GitProvider {
    * consumer requires is missing, and every attempt dead-letters saying nothing.
    *
    * ⚠️ IT RETURNS ITS FAILURES. Every ordinary answer — no such path, no such
-   * ref, a file over {@link REPO_FILE_MAX_BYTES}, a credential the host
+   * ref, a file over {@link REPO_FILE_FETCH_MAX_BYTES}, a credential the host
    * refused, a path the guard rejected, a host that did not answer — is a
    * NAMED member of {@link RepoFileReadResult}, because the consumer is a model
    * deciding what it now knows and "this project has no code" must never be

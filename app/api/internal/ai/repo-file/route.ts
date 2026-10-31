@@ -4,9 +4,15 @@ import { mapJobRequestError } from '@/lib/ai/jobAuthResponse';
 import { repoFileReadService } from '@/lib/services/repoFileReadService';
 
 // GET /api/internal/ai/repo-file?repoRef=owner/name&path=lib/foo.ts[&ref=main]
+//   [&startLine=N][&endLine=M]
 // (Story MOTIR-4585 · MOTIR-4586) — the ai→core read-back a planning session's
 // `read_file` tool is built on. Same §4a+§4b service-to-service auth and
 // own-workspace scoping as every other read-back route.
+//
+// `startLine` / `endLine` (MOTIR-10143) say the caller will read a LINE RANGE,
+// which serves a file over the 1 MB whole-file limit. The WHOLE text is still
+// returned — the caller slices it, as motir-ai's `sliceLines` already does — so
+// a caller that sends no range is answered exactly as before.
 //
 // ⚠️ IT ANSWERS 200 WITH A NAMED OUTCOME, NOT 404 WITH AN ERROR. The consumer
 // is a MODEL: "that path is not in this repository" is an ANSWER it should
@@ -63,6 +69,9 @@ export async function GET(req: Request): Promise<Response> {
     );
   }
 
-  const result = await repoFileReadService.readFile(auth.ctx, repoRef, path, ref ?? undefined);
+  const ranged = params.has('startLine') || params.has('endLine');
+  const result = await repoFileReadService.readFile(auth.ctx, repoRef, path, ref ?? undefined, {
+    ranged,
+  });
   return NextResponse.json({ result });
 }

@@ -1,7 +1,7 @@
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { resolveOrganizationId } from '@/lib/github/resolveOrganizationId';
-import { getGitProvider } from '@/lib/git';
+import { getGitProvider, REPO_FILE_MAX_BYTES } from '@/lib/git';
 import { UnknownGitProviderError } from '@/lib/git/registry';
 import type { GitProviderId, RepoFileReadResult } from '@/lib/git/types';
 import { projectsService } from '@/lib/services/projectsService';
@@ -49,6 +49,36 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 export interface RepoFileReadContext {
   userId: string;
   workspaceId: string;
+}
+
+/** How a read will be consumed. `ranged` — the caller reads a LINE RANGE of the
+ *  text, so a file over the whole-file limit is served (MOTIR-10143). */
+export interface RepoFileReadOptions {
+  ranged?: boolean;
+}
+
+/**
+ * The WHOLE-file limit (MOTIR-10143): a found text file over
+ * `REPO_FILE_MAX_BYTES`, read with no line range, is answered `too_large` with
+ * its line count — the number a caller needs to ask for a range instead. A
+ * ranged read, and every other outcome, passes through unchanged.
+ */
+export function applyWholeFileLimit(
+  result: RepoFileReadResult,
+  options: RepoFileReadOptions,
+): RepoFileReadResult {
+  if (result.outcome !== 'found' || options.ranged || result.bytes <= REPO_FILE_MAX_BYTES) {
+    return result;
+  }
+  return {
+    outcome: 'too_large',
+    path: result.path,
+    ref: result.ref,
+    limitBytes: REPO_FILE_MAX_BYTES,
+    // Counted the way `sliceLines` numbers them, so the range a caller asks for
+    // from this number is the range the read will honour.
+    totalLines: result.text.split('\n').length,
+  };
 }
 
 /** The service's result: the provider's own outcomes, plus the two this layer
@@ -116,12 +146,16 @@ export const repoFileReadService = {
    * it is a mirrored column, it is what every other consumer already reads, and
    * asking the host for it would double the latency of the common case to learn
    * something we wrote down at connect time.
+   *
+   * A file over the whole-file limit is served only to a `ranged` read
+   * ({@link applyWholeFileLimit}).
    */
   async readFile(
     ctx: RepoFileReadContext,
     repoRef: string,
     path: string,
     ref?: string,
+    options: RepoFileReadOptions = {},
   ): Promise<RepoFileServiceResult> {
     const coords = splitRepoRef(repoRef);
     if (!coords) return { outcome: 'repo_not_connected', repoRef };
@@ -158,13 +192,14 @@ export const repoFileReadService = {
     // The STORED canonical coordinates, never the caller's ref — casing on
     // GitHub is the host's, and the caller's spelling is model-supplied.
     try {
-      return await provider.readFileAtRef(
+      const read = await provider.readFileAtRef(
         connected.installation.installationId,
         connected.owner,
         connected.name,
         path,
         ref?.trim() || connected.defaultBranch,
       );
+      return applyWholeFileLimit(read, options);
     } catch (err) {
       // The mint failed (an App not configured on this deploy, a revoked
       // connection), or the host answered a status no arm names. Both are
@@ -199,6 +234,7 @@ export const repoFileReadService = {
     path: string,
     ref: string | undefined,
     ctx: ServiceContext,
+    options: RepoFileReadOptions = {},
   ): Promise<ProjectFileReadResult> {
     const project = await projectsService.getByKey(projectKey, ctx);
     await projectAccessService.assertPermission(project.id, ctx, 'ai:plan');
@@ -212,6 +248,7 @@ export const repoFileReadService = {
       repoRef,
       path,
       ref,
+      options,
     );
     return { ...result, repoRef };
   },

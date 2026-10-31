@@ -560,7 +560,10 @@ export type RepoFileReadResult =
   | { outcome: 'binary'; path: string; ref: string; bytes: number }
   | { outcome: 'not_found'; path: string; ref: string }
   | { outcome: 'ref_not_found'; path: string; ref: string }
-  | { outcome: 'too_large'; path: string; ref: string; limitBytes: number }
+  /** Over `limitBytes`. `totalLines` is set when the file WAS fetched and the
+   *  limit refused only a whole-file read (MOTIR-10143): the caller can read it
+   *  by line range. Absent when the blob was over what a provider fetches. */
+  | { outcome: 'too_large'; path: string; ref: string; limitBytes: number; totalLines?: number }
   | { outcome: 'unauthorized'; path: string; ref: string }
   | { outcome: 'invalid_path'; path: string; reason: string }
   | {

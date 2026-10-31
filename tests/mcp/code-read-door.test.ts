@@ -8,7 +8,7 @@ import { buildMcpServer } from '@/lib/mcp/registry';
 import { PERMISSION_NOT_GRANTED_CODE } from '@/lib/mcp/permissionGate';
 import { READ_FILE_CONTENT_CAP } from '@/lib/mcp/tools/readFile';
 import { summarizeCodeGraphRead } from '@/lib/mcp/tools/codeGraphRead';
-import { REPO_FILE_MAX_BYTES } from '@/lib/git';
+import { REPO_FILE_FETCH_MAX_BYTES } from '@/lib/git';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { repoFileReadService } from '@/lib/services/repoFileReadService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
@@ -301,7 +301,7 @@ describe('read_file — every outcome through the door', () => {
     await record('ref_not_found', { ref: 'gone' });
 
     hostReply = () => json({ errors: [{ code: 'too_large' }] }, 403);
-    expect(await record('too_large')).toMatchObject({ limitBytes: REPO_FILE_MAX_BYTES });
+    expect(await record('too_large')).toMatchObject({ limitBytes: REPO_FILE_FETCH_MAX_BYTES });
 
     hostReply = () => json({ message: 'Bad credentials' }, 401);
     await record('unauthorized');
