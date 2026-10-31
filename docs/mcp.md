@@ -5670,6 +5670,11 @@ bare ellipsis: _the first 24000 of N characters; the file continues; re-read wit
 startLine / endLine_. The cap, the marker and the range semantics are copied from
 the planner's tool, so both planners read the same evidence in the same shape.
 
+**A file over 1 MB is read by range (MOTIR-10143).** A read with `startLine` or
+`endLine` is served for any text file up to the host's raw limit (100 MB), and
+returns the range under the same cap. Read whole, a file over 1 MB answers
+`too_large` with `totalLines`, so the next call can ask for a range.
+
 **Output** — `structuredContent.outcome` names what happened, and every outcome is
 a **non-error** result with its own summary sentence:
 
@@ -5679,7 +5684,7 @@ a **non-error** result with its own summary sentence:
 | `directory`            | The path is a directory: its immediate entries (`name`, `type` file/dir/symlink/submodule), sorted by name, at most 1,000. | `repoRef`, `path`, `ref`, `entries`, `truncated`                |
 | `not_found`            | The ref resolved and the path is not there. A fact about the PATH, not the repository.                                     | `repoRef`, `path`, `ref`                                        |
 | `ref_not_found`        | The ref does not exist. Says nothing about the path.                                                                       | `repoRef`, `path`, `ref`                                        |
-| `too_large`            | The file exists and is over what the host serves inline.                                                                   | `repoRef`, `path`, `ref`, `limitBytes`                          |
+| `too_large`            | The file exists and was read whole over 1 MB (`totalLines` set — read it by range), or is over the host's 100 MB.          | `repoRef`, `path`, `ref`, `limitBytes`, `totalLines`            |
 | `binary`               | The file exists and holds a NUL character, so no text is returned.                                                         | `repoRef`, `path`, `ref`, `bytes`                               |
 | `unauthorized`         | The host refused the stored credential. The file's existence is unknown.                                                   | `repoRef`, `path`, `ref`                                        |
 | `invalid_path`         | The path was refused before any request.                                                                                   | `repoRef`, `path`, `reason`                                     |

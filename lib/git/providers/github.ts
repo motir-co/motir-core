@@ -12,7 +12,7 @@ import { mergeCommitFacts } from '@/lib/hosting/mergeCommit';
 import {
   CHANGED_FILES_MAX,
   CHANGED_FILES_TIMEOUT_MS,
-  REPO_FILE_MAX_BYTES,
+  REPO_FILE_FETCH_MAX_BYTES,
   COMMIT_COMPARE_TIMEOUT_MS,
   MERGE_CHANGE_REQUEST_TIMEOUT_MS,
   REPO_FILE_READ_TIMEOUT_MS,
@@ -1079,20 +1079,31 @@ export const githubProvider: GitProvider = {
         ? { outcome: 'ref_not_found', path: guarded.path, ref }
         : { outcome: 'not_found', path: guarded.path, ref };
     }
-    // 403 covers BOTH a refused credential and a blob over the inline limit;
-    // 401 is only the credential. GitHub says which in the body, and the two
-    // have opposite meanings for a caller: one is "ask a smaller question",
-    // the other is "this connection is broken".
+    // 403 covers BOTH a refused credential and a blob over what the raw media
+    // type serves (100 MB); 401 is only the credential. GitHub says which in the
+    // body, and the two have opposite meanings for a caller: one is "this file
+    // cannot be read here", the other is "this connection is broken".
     if (res.status === 403 || res.status === 401) {
       const body = await res.text().catch(() => '');
-      return /too_large|larger than 1 ?MB|over the (file )?size limit/i.test(body)
-        ? { outcome: 'too_large', path: guarded.path, ref, limitBytes: REPO_FILE_MAX_BYTES }
+      return /too_large|larger than \d+ ?MB|over the (file )?size limit/i.test(body)
+        ? { outcome: 'too_large', path: guarded.path, ref, limitBytes: REPO_FILE_FETCH_MAX_BYTES }
         : { outcome: 'unauthorized', path: guarded.path, ref };
     }
     if (!res.ok) {
       throw new RepoFileReadError('github', res.status, await describeBody(res));
     }
 
+    // A declared size over what is fetched is refused before the body is
+    // buffered — up to 100 MB is now read, so the buffer is no longer small.
+    const declared = Number(res.headers.get('content-length'));
+    if (Number.isFinite(declared) && declared > REPO_FILE_FETCH_MAX_BYTES) {
+      return {
+        outcome: 'too_large',
+        path: guarded.path,
+        ref,
+        limitBytes: REPO_FILE_FETCH_MAX_BYTES,
+      };
+    }
     // The BYTES, never `res.text()` — a lenient decode turns a binary blob into
     // `found` and inflates its size (`classifyRepoBlob`, MOTIR-7873).
     const blob = new Uint8Array(await res.arrayBuffer());
@@ -1111,9 +1122,16 @@ export const githubProvider: GitProvider = {
     // The size arm the host did not take. A repo whose blob
     // limit differs, a future endpoint change: whatever the reason, a caller
     // must never receive more than the named bound WITHOUT being told, so the
-    // check is ours as well as GitHub's — on the blob's REAL length.
-    if (blob.byteLength > REPO_FILE_MAX_BYTES) {
-      return { outcome: 'too_large', path: guarded.path, ref, limitBytes: REPO_FILE_MAX_BYTES };
+    // check is ours as well as GitHub's — on the blob's REAL length. The 1 MB
+    // WHOLE-file limit is not this one: it is the service's, and a ranged read
+    // is served past it (MOTIR-10143).
+    if (blob.byteLength > REPO_FILE_FETCH_MAX_BYTES) {
+      return {
+        outcome: 'too_large',
+        path: guarded.path,
+        ref,
+        limitBytes: REPO_FILE_FETCH_MAX_BYTES,
+      };
     }
     const classified = classifyRepoBlob(blob);
     if (classified.kind === 'binary') {

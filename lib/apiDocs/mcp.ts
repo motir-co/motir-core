@@ -624,7 +624,9 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   read_file: {
     summary:
       "One file's text, or a directory's immediate entries, from a repository in the project's set, at a ref — capped and line-ranged like the hosted planner's read, every absence a named outcome.",
-    descriptionFingerprint: '8c24af03ed4e',
+    // Re-pinned for MOTIR-10143: the description now says a file over 1 MB is read only by
+    // range. The summary was re-read and still says what the tool does.
+    descriptionFingerprint: 'a3b5e1fed782',
   },
   list_changed_files: {
     // MOTIR-10069 — the hosted planner's `list_changed_files`, on the MCP.

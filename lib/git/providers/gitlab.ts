@@ -6,7 +6,7 @@ import {
   CHANGED_FILES_MAX,
   CHANGED_FILES_TIMEOUT_MS,
   COMMIT_COMPARE_TIMEOUT_MS,
-  REPO_FILE_MAX_BYTES,
+  REPO_FILE_FETCH_MAX_BYTES,
   REPO_FILE_READ_TIMEOUT_MS,
   type GitProvider,
 } from '../provider';
@@ -555,22 +555,33 @@ export const gitlabProvider: GitProvider = {
       throw new RepoFileReadError('gitlab', res.status, await describeBody(res));
     }
 
-    // ⚠️ GITLAB HAS NO INLINE SIZE REFUSAL, SO THE CAP HAS TO BE OURS. GitHub
-    // answers 403 above 1 MB; GitLab streams whatever is there. Without this
-    // arm the SAME file would be a named `too_large` on one host and a
-    // multi-megabyte string on the other — the exact per-host divergence the
+    // ⚠️ GITLAB HAS NO SIZE REFUSAL, SO THE CAP HAS TO BE OURS. GitHub's raw
+    // read answers 403 above 100 MB; GitLab streams whatever is there. Without
+    // this arm the SAME file would be a named `too_large` on one host and a
+    // string of any size on the other — the exact per-host divergence the
     // shared limit in `provider.ts` exists to prevent. Checking
     // `content-length` first is what keeps a large body from being buffered at
     // all; the check on the read blob catches a chunked response that declared none.
+    // The 1 MB WHOLE-file limit is the service's, not this (MOTIR-10143).
     const declared = Number(res.headers.get('content-length'));
-    if (Number.isFinite(declared) && declared > REPO_FILE_MAX_BYTES) {
-      return { outcome: 'too_large', path: guarded.path, ref, limitBytes: REPO_FILE_MAX_BYTES };
+    if (Number.isFinite(declared) && declared > REPO_FILE_FETCH_MAX_BYTES) {
+      return {
+        outcome: 'too_large',
+        path: guarded.path,
+        ref,
+        limitBytes: REPO_FILE_FETCH_MAX_BYTES,
+      };
     }
     // The BYTES, never `res.text()` — a lenient decode turns a binary blob into
     // `found` and inflates its size (`classifyRepoBlob`, MOTIR-7873).
     const blob = new Uint8Array(await res.arrayBuffer());
-    if (blob.byteLength > REPO_FILE_MAX_BYTES) {
-      return { outcome: 'too_large', path: guarded.path, ref, limitBytes: REPO_FILE_MAX_BYTES };
+    if (blob.byteLength > REPO_FILE_FETCH_MAX_BYTES) {
+      return {
+        outcome: 'too_large',
+        path: guarded.path,
+        ref,
+        limitBytes: REPO_FILE_FETCH_MAX_BYTES,
+      };
     }
     const classified = classifyRepoBlob(blob);
     if (classified.kind === 'binary') {

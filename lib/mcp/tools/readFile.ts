@@ -238,7 +238,13 @@ export function renderReadFile(
       };
     case 'too_large':
       return {
-        summary: `"${result.path}" in ${repoRef} at ${atRef(result.ref, result.commitSha)} is larger than the host will serve inline (${result.limitBytes} bytes). The file EXISTS and was not read. Use the code graph to ask a structural question about it instead.`,
+        // With a line count the file was fetched and only a WHOLE-file read was
+        // refused (MOTIR-10143), so the sentence names the range parameters;
+        // without one it is over what the host serves at all.
+        summary:
+          result.totalLines !== undefined
+            ? `"${result.path}" in ${repoRef} at ${atRef(result.ref, result.commitSha)} is over the ${result.limitBytes} bytes a whole-file read returns, so it was not returned whole. The file EXISTS and has ${result.totalLines} lines: read it in parts with startLine / endLine (1-based, inclusive), e.g. startLine: 1, endLine: 400.`
+            : `"${result.path}" in ${repoRef} at ${atRef(result.ref, result.commitSha)} is larger than the host will serve inline (${result.limitBytes} bytes). The file EXISTS and was not read. Use the code graph to ask a structural question about it instead.`,
         structured: {
           outcome: result.outcome,
           repoRef,
@@ -246,6 +252,7 @@ export function renderReadFile(
           ref: result.ref,
           commitSha: result.commitSha ?? null,
           limitBytes: result.limitBytes,
+          totalLines: result.totalLines ?? null,
         },
       };
     case 'unauthorized':
@@ -301,12 +308,16 @@ export async function runReadFile(
   ctx: ServiceContext,
 ): Promise<CallToolResult> {
   try {
+    // A RANGED read is served past the whole-file limit (MOTIR-10143): the
+    // slice below is what is returned, still under the character cap.
+    const ranged = args.startLine !== undefined || args.endLine !== undefined;
     const result = await repoFileReadService.readProjectFile(
       args.projectKey.trim().toUpperCase(),
       args.repo,
       args.path,
       args.ref,
       ctx,
+      { ranged },
     );
     const { summary, structured } = renderReadFile(result, {
       ...(args.startLine !== undefined ? { startLine: args.startLine } : {}),
@@ -332,7 +343,8 @@ export function registerReadFile(server: McpServer, resolveContext: McpContextRe
         '`code_search` on its name did not. `repo` is the ' +
         'bare name or `owner/name` of a repository in the project’s set. Ask for a line RANGE ' +
         '(`startLine` / `endLine`, 1-based, inclusive) when you know where to look: output is capped ' +
-        'at 24,000 characters and a cut read ends with a sentence saying so. Every result names its ' +
+        'at 24,000 characters and a cut read ends with a sentence saying so. A file over 1 MB is ' +
+        'read ONLY by range — read whole, it answers `too_large` with its line count. Every result names its ' +
         '`outcome` — `found`, `directory` (with `entries` and `truncated`), `not_found` (the path is ' +
         'absent at a ref that exists), `ref_not_found`, ' +
         '`too_large`, `binary`, `unauthorized`, `invalid_path`, `unreachable` (a failure to ask, not ' +
