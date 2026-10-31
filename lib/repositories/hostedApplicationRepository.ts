@@ -51,6 +51,41 @@ export const hostedApplicationRepository = {
     });
   },
 
+  /**
+   * What the host contract reads of the application a customer domain names
+   * (ADR MOTIR-9521 §3) — run under the system context, since the contract is
+   * anonymous and the domain row already proved which workspace it is.
+   */
+  async findForHostContract(
+    id: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{
+    id: string;
+    workspaceId: string;
+    slug: string;
+    target: HostingTarget;
+    productionAppName: string | null;
+    currentReleaseId: string | null;
+    productionAddress: string | null;
+    /** Who may open it. No column holds it yet (MOTIR-9817 adds it), so it reads
+     *  `null`, which `applicationAccessOf` treats as members only. */
+    access: string | null;
+  } | null> {
+    const row = await tx.hostedApplication.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        workspaceId: true,
+        slug: true,
+        target: true,
+        productionAppName: true,
+        currentReleaseId: true,
+        productionAddress: true,
+      },
+    });
+    return row ? { ...row, access: null } : null;
+  },
+
   async findByProjectRepository(
     projectRepositoryId: string,
     tx: Prisma.TransactionClient,
@@ -71,6 +106,24 @@ export const hostedApplicationRepository = {
       include: WITH_RELEASES,
       omit: WITHOUT_SECRET,
     });
+  },
+
+  /**
+   * The workspace's applications as the Custom domains pane's picker names them
+   * (MOTIR-9529): the id it sends, the owning project's name it shows and the
+   * slug beside it, by name then slug. An application carries no name of its
+   * own, so its project's is the one a member recognises.
+   */
+  async listForDomainPicker(
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ id: string; name: string; slug: string }[]> {
+    const rows = await tx.hostedApplication.findMany({
+      where: { workspaceId },
+      select: { id: true, slug: true, project: { select: { name: true } } },
+      orderBy: [{ project: { name: 'asc' } }, { slug: 'asc' }],
+    });
+    return rows.map((r) => ({ id: r.id, name: r.project.name, slug: r.slug }));
   },
 
   /** Every slug the workspace's applications hold — what a new slug must avoid. */

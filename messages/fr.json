@@ -2067,7 +2067,8 @@
         "workspace": "Espace de travail",
         "security": "Sécurité",
         "roles": "Rôles et permissions",
-        "publicAddress": "Adresse publique"
+        "publicAddress": "Adresse publique",
+        "customDomains": "Domaines personnalisés"
       }
     },
     "name": {
@@ -2752,95 +2753,6 @@
       "unavailable": {
         "title": "Aucun espace de noms public n’est configuré",
         "description": "Ce déploiement n’a pas de domaine de base de locataire défini : aucun sous-domaine ne peut donc encore être réservé. Un opérateur doit définir MOTIR_PUBLIC_TENANT_DOMAIN."
-      },
-      "domains": {
-        "title": "Votre propre domaine",
-        "subtitle": "Servez ce projet depuis un domaine qui vous appartient.",
-        "add": "Ajouter un domaine",
-        "empty": {
-          "title": "Aucun domaine connecté",
-          "body": "Ajoutez un domaine comme roadmap.acme.com et ce projet répondra à sa racine. Vous créerez deux enregistrements DNS ; Motir émet le certificat."
-        },
-        "state": {
-          "unverified": {
-            "label": "Non vérifié",
-            "hint": "Ajouté, mais l’enregistrement TXT _motir-verify n’a pas encore été détecté. Aucun certificat n’a été sollicité."
-          },
-          "verifying": {
-            "label": "Vérification…",
-            "hint": "Nous recherchons actuellement l’enregistrement TXT. La propagation DNS peut prendre quelques minutes."
-          },
-          "pending_certificate": {
-            "label": "Émission…",
-            "hint": "La propriété est prouvée et le certificat a été sollicité. Cela prend généralement une minute ou deux."
-          },
-          "issued": {
-            "label": "En ligne",
-            "hint": "Le certificat est émis et le domaine sert ce projet. Il se renouvelle automatiquement."
-          },
-          "failed": {
-            "label": "Échec",
-            "hint": "Le certificat n’a pas pu être émis."
-          },
-          "expired": {
-            "label": "Expiré",
-            "hint": "Le certificat a expiré et le renouvellement a échoué, presque toujours parce que l’enregistrement DNS a changé. Le domaine ne sert plus le projet."
-          },
-          "revoked": {
-            "label": "Révoqué",
-            "hint": "Le certificat a été retiré. Le domaine ne sert plus le projet et un nouveau certificat doit être sollicité."
-          },
-          "active": {
-            "label": "Actif",
-            "hint": "Le sous-domaine de l’espace de travail est résolu et sert ce projet."
-          },
-          "alias": {
-            "label": "Redirige",
-            "hint": "Un ancien sous-domaine, renommé depuis. Il redirige vers l’actuel de façon permanente et n’est jamais libéré."
-          }
-        },
-        "action": {
-          "showDns": "Afficher les enregistrements DNS",
-          "checkAgain": "Vérifier de nouveau",
-          "requestAgain": "Relancer la requête",
-          "makePrimary": "Définir comme principal",
-          "remove": "Supprimer",
-          "copy": "Copier la valeur",
-          "copied": "Copiée"
-        },
-        "primary": {
-          "badge": "Principal",
-          "consequence": "Toutes les autres adresses redirigent ici.",
-          "disabledReason": "Un domaine peut devenir principal une fois son certificat en ligne"
-        },
-        "addModal": {
-          "title": "Ajouter un domaine",
-          "label": "Domaine",
-          "helper": "Le projet répondra à la racine de ce domaine.",
-          "recordsHeading": "{count, plural, one {Créez cet enregistrement} other {Créez ces # enregistrements}}",
-          "type": "Type",
-          "name": "Nom",
-          "value": "Valeur",
-          "apexNote": "Un domaine racine est lié à nos adresses IP. Un sous-domaine utilise plutôt un CNAME, qui nous suit si ces adresses changent un jour.",
-          "verify": "Vérifier",
-          "later": "Je le ferai plus tard",
-          "cancel": "Annuler",
-          "submit": "Ajouter le domaine"
-        },
-        "removeModal": {
-          "title": "Supprimer {hostname} ?",
-          "warningTitle": "Toute personne utilisant cette adresse obtiendra une erreur.",
-          "warningBody": "Les liens déjà partagés vers {hostname} cesseront de fonctionner. Le projet reste public à ses autres adresses.",
-          "cancel": "Annuler",
-          "confirm": "Supprimer le domaine"
-        },
-        "upgrade": {
-          "title": "Les domaines personnalisés font partie du forfait payant.",
-          "body": "Le sous-domaine de votre espace de travail est inclus dans tous les forfaits et continue de fonctionner. Passez à l’offre supérieure pour servir ce projet depuis un domaine qui vous appartient.",
-          "cta": "Voir les forfaits"
-        },
-        "lastChecked": "Dernière vérification {when}",
-        "error": "L’opération a échoué. Réessayez dans un instant."
       }
     },
     "codeAccess": {
@@ -4429,6 +4341,7 @@
       },
       "rename": "Renommer",
       "release": "Libérer",
+      "customDomainsLink": "Utiliser plutôt votre propre domaine →",
       "lock": "Vous pourrez changer de nom à nouveau le {date}. Un renommage et une libération comptent chacun pour un changement, une fois tous les 30 jours.",
       "lockShort": "Vous pourrez changer de nom à nouveau le {date}.",
       "review": "Vérifier",
@@ -4473,6 +4386,100 @@
         "change": "Modifier dans les paramètres de l’espace de travail →",
         "claim": "Revendiquer un nom pour l’espace de travail →"
       }
+    },
+    "customDomains": {
+      "title": "Domaines personnalisés",
+      "subtitle": "Servez l’application de cet espace de travail sur un domaine qui vous appartient.",
+      "add": "Ajouter un domaine",
+      "empty": {
+        "title": "Aucun domaine personnalisé pour l’instant",
+        "body": "Ajoutez un domaine comme shop.acme.com. Vous créez deux enregistrements DNS, Motir émet le certificat, et le domaine sert l’application de cet espace de travail."
+      },
+      "cap": "{used} domaines sur {max}",
+      "upsell": {
+        "title": "Les domaines personnalisés sont inclus dans l’offre Scaled.",
+        "body": "Votre application continue de répondre sur {host} avec toutes les offres. Passez à une offre supérieure pour la servir sur un domaine qui vous appartient.",
+        "cta": "Voir les offres"
+      },
+      "dialog": {
+        "title": "Ajouter un domaine",
+        "label": "Domaine",
+        "helper": "Un sous-domaine comme shop.acme.com ou un domaine racine comme acme.com.",
+        "cancel": "Annuler",
+        "appLabel": "Application",
+        "appHelper": "L’application que ce domaine servira. Vous pourrez la changer plus tard sur la ligne du domaine.",
+        "appChoose": "Choisir une application",
+        "appNone": "Pas encore d’application",
+        "noApps": "Cet espace de travail n’a encore aucune application hébergée. Le domaine est ajouté sans en nommer, et vous pourrez choisir son application sur sa ligne dès qu’il en existe une."
+      },
+      "refuse": {
+        "tenantBase": "{host} est une adresse Motir. Votre espace de travail répond déjà sous {base} : définissez ce nom dans Adresse publique.",
+        "siteOrigin": "{host} appartient à Motir. Ajoutez un domaine qui vous appartient.",
+        "malformed": "Saisissez uniquement le domaine, comme shop.acme.com, sans https:// ni chemin.",
+        "taken": "{host} est déjà connecté à un autre espace de travail Motir. S’il vous appartient, retirez-le d’abord de celui-ci.",
+        "cap": "Votre offre comprend {max} domaines personnalisés et les {max} sont utilisés. Retirez-en un ou consultez les offres."
+      },
+      "status": {
+        "unverified": "Non confirmé",
+        "pending": "En attente",
+        "issued": "Émis",
+        "failed": "Échec"
+      },
+      "records": {
+        "heading": "{count, plural, one {Créez cet enregistrement chez votre fournisseur DNS, puis lancez le contrôle.} other {Créez ces # enregistrements chez votre fournisseur DNS, puis lancez le contrôle.}}",
+        "apexNote": "Un domaine racine ne peut pas recevoir de CNAME : il pointe donc vers les adresses propres de Motir, que motir-edge réserve aux domaines clients. Si elles changent un jour, nous vous préviendrons avant.",
+        "type": "Type",
+        "name": "Nom",
+        "value": "Valeur"
+      },
+      "pending": "Propriété confirmée. Émission du certificat en cours : cela prend généralement quelques minutes. Cette page se met à jour toute seule.",
+      "app": {
+        "serves": "Sert <b>{app}</b> <code>{slug}</code>.",
+        "none": "Ce domaine ne nomme aucune application, il ne sert donc encore rien.",
+        "gone": "L’application que nommait ce domaine n’est plus disponible, il ne sert donc rien.",
+        "change": "Changer d’application",
+        "choose": "Choisir l’application",
+        "controlLabel": "{action} pour {host}",
+        "title": "Application de {host}",
+        "save": "Enregistrer",
+        "saving": "Enregistrement…",
+        "confirm": "{host} sert {app} dès que vous enregistrez. Son certificat, les enregistrements DNS chez votre fournisseur et son statut restent inchangés.",
+        "confirmNone": "{host} cesse de servir {previous} dès que vous enregistrez, et ne sert rien tant que vous n’avez pas choisi d’application. Son certificat, les enregistrements DNS chez votre fournisseur et son statut restent inchangés.",
+        "error": "L’application n’a pas été changée. Réessayez dans un instant."
+      },
+      "cert": "Le certificat se renouvelle tout seul.",
+      "certUntil": "Le certificat se renouvelle tout seul · valide jusqu’au {date}",
+      "fail": {
+        "txt": "Nous ne voyons plus votre enregistrement de propriété",
+        "txtBody": "Rétablissez cet enregistrement TXT chez votre fournisseur DNS :",
+        "pointing": "{host} ne pointe plus vers Motir",
+        "pointingBody": "Remettez l’enregistrement sur :",
+        "issuance": "Le certificat n’a pas pu être émis",
+        "issuanceBody": "L’autorité de certification a répondu :"
+      },
+      "action": {
+        "checkNow": "Contrôler maintenant",
+        "recheck": "Contrôler à nouveau",
+        "retry": "Réessayer",
+        "checking": "Contrôle en cours…",
+        "showDns": "Afficher les enregistrements DNS",
+        "hideDns": "Masquer les enregistrements DNS",
+        "copy": "Copier",
+        "copied": "Copié",
+        "remove": "Retirer"
+      },
+      "remove": {
+        "title": "Retirer {host} ?",
+        "body": "Il cesse immédiatement de servir votre application. Rien n’est réservé : vous pourrez l’ajouter à nouveau plus tard, et un autre espace de travail pourra l’ajouter s’il en prouve la propriété. Les enregistrements DNS chez votre fournisseur sont à supprimer par vous.",
+        "confirm": "Retirer le domaine",
+        "removing": "Retrait en cours…",
+        "error": "Le domaine n’a pas été retiré. Réessayez dans un instant.",
+        "toast": "{host} retiré",
+        "toastBody": "Il ne sert plus votre application."
+      },
+      "readOnly": "Seul un propriétaire ou un administrateur de l’espace de travail peut ajouter ou retirer des domaines.",
+      "loadError": "Les domaines n’ont pas pu être chargés.",
+      "error": "Cela n’a pas fonctionné. Réessayez dans un instant."
     }
   },
   "boards": {

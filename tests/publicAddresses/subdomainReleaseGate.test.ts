@@ -185,31 +185,23 @@ describe('the release, driven through DELETE', () => {
     expect(await reservedHashes()).toEqual([]);
   });
 
-  it('leaves a CUSTOM DOMAIN untouched — still issued, and still the promoted primary', async () => {
+  it('leaves a CUSTOM DOMAIN untouched — still there, and still issued', async () => {
     await claimAndRename('acme');
     const custom = await adminDb.publicAddress.create({
       data: {
         workspaceId: fx.workspaceId,
-        projectId: fx.projectId,
         kind: 'custom_domain',
         hostname: 'roadmap.acme.example',
         status: 'issued',
       },
-    });
-    await adminDb.project.update({
-      where: { id: fx.projectId },
-      data: { primaryAddressId: custom.id },
     });
 
     expect((await DELETE(req('DELETE'), params(fx.workspaceId))).status).toBe(200);
 
     const rows = await addressRows();
     expect(rows.map((r) => r.kind)).toEqual(['custom_domain']);
+    expect(rows[0]?.id).toBe(custom.id);
     expect(rows[0]?.status).toBe('issued');
-    expect(
-      (await adminDb.project.findUnique({ where: { id: fx.projectId } }))?.primaryAddressId,
-      'a promoted custom domain stays the canonical — release changes nothing for it',
-    ).toBe(custom.id);
     expect(
       await adminDb.publicHostnameReservation.count({
         where: { hostnameHash: hostnameReservationHash('roadmap.acme.example') },

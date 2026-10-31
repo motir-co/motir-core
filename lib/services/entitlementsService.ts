@@ -236,6 +236,18 @@ export const entitlementsService = {
     }
   },
 
+  /**
+   * How many customer domains the org's tier allows — `null` when there is no
+   * cap (an unlimited tier, or a build without cloud billing, where
+   * {@link assertCanAddCustomDomain} never refuses). A READ for the Custom
+   * domains pane (MOTIR-9529), so it can show the upsell and the `N of M` count
+   * before a click. Advice only: the add still runs the locked assert.
+   */
+  async customDomainCap(organizationId: string): Promise<number | null> {
+    if (!isCloudBilling()) return null;
+    return entitlementsFor(await tierForOrg(organizationId)).maxCustomDomains;
+  },
+
   /** §4.4 — block the create of a workspace past the org's workspace cap. */
   async assertWithinWorkspaceCap(
     organizationId: string,

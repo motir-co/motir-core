@@ -1,0 +1,1717 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · Workspace settings › Custom domains</title>
+    <!--
+      DESIGN ASSET (HTML mockup) — WORKSPACE SETTINGS › CUSTOM DOMAINS.
+
+      A NEW surface beside the workspace's Public address room
+      (`workspace-address.mock.html`, cited and never edited). A customer domain
+      is a WORKSPACE asset that serves the workspace's hosted application; there
+      is no primary address, no redirect between a customer's domains and no
+      reservation when one is removed (the customer-domain decision, published
+      on the parent story's decision page, and
+      `docs/decisions/public-tenant-addresses.md` §5, §6, §9).
+
+      ── WHAT IT IS BUILT FROM ────────────────────────────────────────────────
+      * The token block and every component class below are copied unchanged
+        from `workspace-address.mock.html` (itself the shipped Tier-0 + Tier-3
+        + shape tokens). No hue is invented; the only additions are named in
+        the "Added by this asset" block at the end of the style.
+      * The markup composes ONLY shipped primitives — Card, Input, Button,
+        Pill, CopyButton, Modal, Toast, Skeleton, the callout and the settings
+        rail — in that file's grammar.
+
+      ── ONE SCENARIO ────────────────────────────────────────────────────────
+      The Acme workspace; its hosted application is `shop`, live at
+      `shop--acme.motir.site`. Today is 30 October 2026. `motir.site` reads as
+      `<base>` (MOTIR_PUBLIC_TENANT_DOMAIN); the apex A / AAAA values and the
+      CNAME target are configuration (MOTIR_PUBLIC_ADDRESS_*).
+
+      ── PANELS (a multi-panel board — inspect EVERY panel) ───────────────────
+        0   the ACCESS PATH — the rail row under Public address, and the
+            "Use your own domain instead" link on the address pane
+        1   empty, entitled
+        2   empty, NOT entitled — the tier upsell
+        3   at the cap — Add disabled, the count as text
+        4   loading
+        5   the Add-domain dialog — empty, and each of its five refusals
+        6   unverified — a SUBDOMAIN (TXT + CNAME) and an APEX (TXT + A + AAAA)
+        7   pending — ownership proven, certificate on its way
+        8   issued — serving the application · issued, no application yet
+        9   the three failures — ownership record lost · pointing record lost ·
+            certificate issuance failed
+        10  re-check in progress
+        11  remove — the confirm, removing, and a failed remove
+        12  read-only — a member who cannot manage domains
+
+      ── INK ─────────────────────────────────────────────────────────────────
+      Secondary copy is `--el-text-secondary` throughout. `--el-text-muted` and
+      `--el-text-faint` carry no text. Danger text takes
+      `--el-danger-on-surface`; `--el-danger-text` appears only on the danger
+      Button's fill. A failure's hue sits in the callout's border and tint; its
+      words stay on `--el-text-strong`.
+    -->
+    <style>
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fbf0c4;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        /* Shape tokens — the [data-display-style] swap layer (default values) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 16px;
+        --radius-control: 6px;
+        --radius-badge: 9999px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.06);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px rgba(15, 15, 15, 0.18);
+        --spacing-card-padding: 24px;
+        --spacing-input-x: 12px;
+        --spacing-input-y: 8px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-input: 40px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-strong: var(--color-stone);
+        --el-link: var(--color-link);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-highlight: var(--color-accent);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        /* The ink for danger TEXT on a page (theme.css's own derivation).
+           --el-danger-text is the ink for a danger FILL and is legal only on
+           an element carrying bg-(--el-danger); this mock uses it only on
+           the danger Button's fill. */
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --focus-ring-color: var(--color-primary);
+      }
+      /* ── The Tier-3 block, RE-EMITTED for any nested [data-theme] scope ──
+         Panel 9b puts data-theme="dark" on a DIV, not on <html>. Tier-0
+         --color-* flips there, but the Tier-3 --el-* above are declared on
+         :root and keep resolving against the OUTER palette — so the dark panel
+         paints the LIGHT page background while every hue around it goes dark.
+         MEASURED by tests/design-dark-parity.test.ts, which caught exactly that
+         on this asset. Re-declaring them on [data-theme] makes each nested
+         scope recompute them against its OWN Tier-0 values.
+         ⚠️ PLACED BEFORE the [data-theme='dark'] block, never after: both are
+         one attribute selector, so equal specificity and the later one wins
+         (MOTIR-3712, design/settings/two-factor.mock.html). ── */
+      [data-theme] {
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-strong: var(--color-stone);
+        --el-link: var(--color-link);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-highlight: var(--color-accent);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #332d12;
+        --color-link: #58a6ff;
+        --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+        --shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.6);
+      }
+      /* ── Board chrome ──────────────────────────────────────────────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        line-height: 1.5;
+      }
+      .board {
+        padding: 32px;
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+      .boardTitle {
+        font-size: 22px;
+        font-weight: 600;
+        margin: 0 0 4px;
+        color: var(--el-text);
+      }
+      .boardSub {
+        color: var(--el-text-secondary);
+        margin: 0 0 28px;
+        max-width: 78ch;
+      }
+      .panel {
+        margin: 0 0 34px;
+      }
+      .panelLabel {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+        margin: 0 0 8px;
+      }
+      .panelNote {
+        color: var(--el-text-secondary);
+        margin: 0 0 12px;
+        max-width: 88ch;
+      }
+      .stage {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 20px;
+        box-shadow: var(--shadow-subtle);
+      }
+      .stage.tight {
+        padding: 0;
+        overflow: hidden;
+      }
+      .row2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        align-items: start;
+      }
+      .row2n {
+        display: grid;
+        grid-template-columns: 1.15fr 0.85fr;
+        gap: 20px;
+        align-items: start;
+      }
+
+      /* ── Card (components/ui/Card) ─────────────────────────────────── */
+      .card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle);
+      }
+      .cardHead {
+        padding: 16px var(--spacing-card-padding) 12px;
+        border-bottom: 1px solid var(--el-border);
+      }
+      .cardTitle {
+        font-size: 15px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .cardSub {
+        color: var(--el-text-secondary);
+        margin: 4px 0 0;
+        font-size: 13px;
+      }
+      .cardBody {
+        padding: var(--spacing-card-padding);
+      }
+      .cardBody.tightY {
+        padding-top: 16px;
+        padding-bottom: 16px;
+      }
+
+      /* ── Button (components/ui/Button) ─────────────────────────────── */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        height: var(--height-btn-sm);
+        padding: 0 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font: inherit;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        border-color: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-danger {
+        background: var(--el-danger);
+        border-color: var(--el-danger);
+        color: var(--el-danger-text);
+      }
+      .btn-ghost {
+        background: transparent;
+        border-color: transparent;
+        color: var(--el-text-secondary);
+      }
+      .btn[disabled],
+      .btn.is-disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .btn-icon {
+        width: var(--height-btn-sm);
+        padding: 0;
+      }
+
+      /* ── Input (components/ui/Input) ───────────────────────────────── */
+      .field {
+        display: block;
+      }
+      .label {
+        display: block;
+        font-size: 13px;
+        font-weight: 500;
+        margin: 0 0 6px;
+        color: var(--el-text);
+      }
+      .input {
+        display: flex;
+        align-items: center;
+        height: var(--height-input);
+        padding: 0 var(--spacing-input-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font: inherit;
+      }
+      .input.mono {
+        font-family: var(--font-mono);
+        font-size: 13px;
+      }
+      .input.is-error {
+        border-color: var(--el-danger);
+      }
+      .input .ph {
+        color: var(--el-text-secondary);
+      }
+      .inputGroup {
+        display: flex;
+        align-items: stretch;
+      }
+      .inputGroup .input {
+        border-top-right-radius: 0;
+        border-bottom-right-radius: 0;
+        flex: 1;
+        min-width: 0;
+      }
+      .suffix {
+        display: flex;
+        align-items: center;
+        padding: 0 var(--spacing-input-x);
+        border: 1px solid var(--el-border);
+        border-left: 0;
+        border-radius: 0 var(--radius-input) var(--radius-input) 0;
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        font-family: var(--font-mono);
+        font-size: 13px;
+        white-space: nowrap;
+      }
+      .helper {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        margin: 6px 0 0;
+      }
+      .helper .prev {
+        font-family: var(--font-mono);
+        color: var(--el-text);
+      }
+      .helperError {
+        font-size: 12px;
+        color: var(--el-danger-on-surface);
+        margin: 6px 0 0;
+        font-weight: 500;
+      }
+
+      /* ── Pill (components/ui/Pill) — tint bg + --el-text-strong ────── */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text-strong);
+        background: var(--el-muted);
+        white-space: nowrap;
+      }
+      .pill-ok {
+        background: var(--el-tint-mint);
+      }
+      .pill-info {
+        background: var(--el-tint-sky);
+      }
+      .pill-wait {
+        background: var(--el-tint-yellow);
+      }
+      .pill-bad {
+        background: var(--el-tint-rose);
+      }
+      .pill-alias {
+        background: var(--el-tint-lavender);
+      }
+      .pill-neutral {
+        background: var(--el-muted);
+      }
+      .dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 9999px;
+        background: currentColor;
+        flex: none;
+      }
+
+      /* ── Address row ───────────────────────────────────────────────── */
+      .addr {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        background: var(--el-surface-soft);
+        min-height: var(--height-control);
+      }
+      .addr .host {
+        font-family: var(--font-mono);
+        font-size: 13px;
+        color: var(--el-text);
+        min-width: 0;
+        overflow-wrap: anywhere;
+      }
+      .addr .grow {
+        flex: 1;
+        min-width: 0;
+      }
+      .mono {
+        font-family: var(--font-mono);
+      }
+
+      /* ── DNS instruction table ─────────────────────────────────────── */
+      .dns {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      .dns th {
+        text-align: left;
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+        font-weight: 600;
+        padding: 0 10px 6px 0;
+      }
+      .dns td {
+        padding: 8px 10px 8px 0;
+        border-top: 1px solid var(--el-border);
+        vertical-align: top;
+        color: var(--el-text);
+      }
+      .dns td.v {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        overflow-wrap: anywhere;
+      }
+      .dns td.act {
+        width: 1%;
+        white-space: nowrap;
+      }
+
+      /* ── State table (panel 5) ─────────────────────────────────────── */
+      .states {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      .states th {
+        text-align: left;
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+        font-weight: 600;
+        padding: 0 12px 8px 0;
+      }
+      .states td {
+        padding: 10px 12px 10px 0;
+        border-top: 1px solid var(--el-border);
+        vertical-align: top;
+        color: var(--el-text);
+      }
+      .states td.mean {
+        color: var(--el-text-secondary);
+      }
+      .states td.act {
+        white-space: nowrap;
+      }
+
+      /* ── Radio card (primary picker) ───────────────────────────────── */
+      .radio {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        padding: 12px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        background: var(--el-page-bg);
+      }
+      .radio + .radio {
+        margin-top: 8px;
+      }
+      .radio.is-on {
+        border-color: var(--el-accent);
+        background: var(--el-tint-lavender);
+      }
+      .radio.is-off {
+        opacity: 0.55;
+      }
+      .ring {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        margin-top: 2px;
+        border-radius: 9999px;
+        border: 1.5px solid var(--el-border-strong);
+        background: var(--el-page-bg);
+      }
+      .radio.is-on .ring {
+        border-color: var(--el-accent);
+        box-shadow: inset 0 0 0 4px var(--el-accent);
+      }
+      .radio .rtitle {
+        font-family: var(--font-mono);
+        font-size: 13px;
+        color: var(--el-text);
+        overflow-wrap: anywhere;
+      }
+      .radio .rsub {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        margin-top: 2px;
+      }
+
+      /* ── Rail (settings-area.mock.html grammar — COMPOSED, not redrawn) ── */
+      .rail {
+        width: 232px;
+        flex: none;
+        border-right: 1px solid var(--el-border);
+        padding: 12px 8px;
+        background: var(--el-page-bg);
+      }
+      .railGroup + .railGroup {
+        margin-top: 14px;
+      }
+      .railGroupLabel {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+        padding: 0 10px 6px;
+      }
+      .railRow {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        color: var(--el-text);
+        font-size: 13px;
+      }
+      .railRow.is-active {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        font-weight: 500;
+      }
+      .railRow.is-new {
+        outline: 2px solid var(--el-highlight);
+        outline-offset: 1px;
+      }
+      .glyph {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        color: var(--el-text-secondary);
+      }
+      .railRow.is-active .glyph {
+        color: var(--el-text-strong);
+      }
+
+      /* ── Shell (composed by citation) ──────────────────────────────── */
+      .shell {
+        display: flex;
+        min-height: 320px;
+        background: var(--el-page-bg);
+      }
+      .shellMain {
+        flex: 1;
+        min-width: 0;
+        padding: 20px 24px;
+        background: var(--el-surface-soft);
+      }
+      .crumb {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        margin: 0 0 12px;
+      }
+      .h1 {
+        font-size: 18px;
+        font-weight: 600;
+        margin: 0 0 4px;
+        color: var(--el-text);
+      }
+      .col {
+        max-width: 672px;
+      }
+
+      /* ── Modal (components/ui/Modal) ───────────────────────────────── */
+      .scrim {
+        background: var(--el-surface);
+        border-radius: var(--radius-card);
+        padding: 24px;
+        display: flex;
+        justify-content: center;
+      }
+      .modal {
+        width: 440px;
+        max-width: 100%;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-modal);
+        box-shadow: var(--shadow-modal);
+        padding: 20px;
+      }
+      .modalTitle {
+        font-size: 15px;
+        font-weight: 600;
+        margin: 0 0 8px;
+        color: var(--el-text);
+      }
+      .modalBody {
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        margin: 0 0 16px;
+      }
+      .modalFoot {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+
+      /* ── Callout / EmptyState ──────────────────────────────────────── */
+      .empty {
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-control);
+        padding: 22px;
+        text-align: center;
+        background: var(--el-surface-soft);
+      }
+      .empty .etitle {
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0 0 4px;
+      }
+      .empty .esub {
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        margin: 0 0 14px;
+      }
+      .callout {
+        border: 1px solid var(--el-border);
+        border-left: 3px solid var(--el-accent);
+        border-radius: var(--radius-control);
+        background: var(--el-tint-lavender);
+        padding: 12px 14px;
+        font-size: 13px;
+        color: var(--el-text-strong);
+      }
+      .callout.warn {
+        border-left-color: var(--el-warning);
+        background: var(--el-tint-yellow);
+      }
+      .callout.danger {
+        border-left-color: var(--el-danger);
+        background: var(--el-tint-rose);
+      }
+      .callout .ctitle {
+        font-weight: 600;
+        display: block;
+        margin-bottom: 3px;
+      }
+
+      /* ── Tooltip ───────────────────────────────────────────────────── */
+      .tip {
+        display: inline-block;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        font-size: 12px;
+        padding: 5px 9px;
+        border-radius: var(--radius-control);
+        box-shadow: var(--shadow-elevated);
+      }
+
+      /* ── Misc ──────────────────────────────────────────────────────── */
+      .stack > * + * {
+        margin-top: 12px;
+      }
+      .stack-sm > * + * {
+        margin-top: 8px;
+      }
+      .flex {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .between {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .grow {
+        flex: 1;
+        min-width: 0;
+      }
+      .sec {
+        color: var(--el-text-secondary);
+      }
+      .sec13 {
+        color: var(--el-text-secondary);
+        font-size: 13px;
+      }
+      .sec12 {
+        color: var(--el-text-secondary);
+        font-size: 12px;
+      }
+      .strong {
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+      .danger {
+        color: var(--el-danger-on-surface);
+      }
+      .cite {
+        font-size: 11px;
+        color: var(--el-text-secondary);
+        border-top: 1px dashed var(--el-border);
+        margin-top: 10px;
+        padding-top: 8px;
+      }
+      .cite code {
+        font-family: var(--font-mono);
+      }
+      .halo {
+        outline: 2px solid var(--el-highlight);
+        outline-offset: 2px;
+        border-radius: var(--radius-control);
+      }
+      .num {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 18px;
+        height: 18px;
+        border-radius: 9999px;
+        background: var(--el-highlight);
+        color: var(--el-text-inverted);
+        font-size: 11px;
+        font-weight: 700;
+        flex: none;
+      }
+      .phone {
+        width: 390px;
+        height: 844px;
+        overflow: hidden;
+        border: 1px solid var(--el-border-strong);
+        border-radius: 22px;
+        background: var(--el-page-bg);
+        padding: 14px;
+      }
+      .darkStage {
+        background: var(--el-page-bg);
+        border-radius: var(--radius-card);
+        padding: 20px;
+      }
+      /* ── Added by this asset ───────────────────────────────────────── */
+      /* Toast (components/ui/Toast) — the shipped success / danger grammar:
+         the hue in the border and the glyph, the words on --el-text. Copied
+         from workspace-address.mock.html's own additions. */
+      .toast {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        width: 360px;
+        max-width: 100%;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-left: 3px solid var(--el-success);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 12px 14px;
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .toast .tglyph {
+        color: var(--el-success);
+        font-weight: 700;
+      }
+      .toast .ttitle {
+        font-weight: 600;
+        display: block;
+      }
+      .toast .tbody {
+        color: var(--el-text-secondary);
+        display: block;
+        margin-top: 2px;
+      }
+      /* The skeleton grammar of components/ui/PageSkeleton.tsx */
+      .skel {
+        height: 14px;
+        border-radius: var(--radius-control);
+        background: var(--el-muted);
+      }
+      .skel.tall {
+        height: var(--height-control);
+      }
+      .linkText {
+        color: var(--el-link);
+        font-size: 13px;
+        text-decoration: none;
+      }
+      .spin {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border-radius: 9999px;
+        border: 2px solid currentColor;
+        border-right-color: transparent;
+        flex: none;
+      }
+      /* The Domains list row: the address row's grammar, with a second line
+         for the Application line and the expiry, and the records under it. */
+      .domain {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        background: var(--el-surface-soft);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+      }
+      .domain + .domain {
+        margin-top: 8px;
+      }
+      .domain .top {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-height: var(--height-control);
+      }
+      .domain .host {
+        font-family: var(--font-mono);
+        font-size: 13px;
+        color: var(--el-text);
+        overflow-wrap: anywhere;
+      }
+      .domain a.host {
+        color: var(--el-link);
+        text-decoration: none;
+      }
+      .domain .meta {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        margin: 2px 0 6px;
+      }
+      .domain .appLine {
+        font-size: 13px;
+        color: var(--el-text);
+        margin: 4px 0 6px;
+      }
+      .domain .acts {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 8px;
+      }
+      /* The DNS records panel: a small table on the page surface so its
+         secondary copy keeps its contrast (it sits inside the row, on white). */
+      .records {
+        margin-top: 8px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        background: var(--el-page-bg);
+        padding: 10px 12px;
+      }
+      .records table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      .records th {
+        text-align: left;
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        padding: 0 8px 6px 0;
+      }
+      .records td {
+        padding: 6px 8px 6px 0;
+        border-top: 1px solid var(--el-border);
+        vertical-align: top;
+        color: var(--el-text);
+      }
+      .records td.v {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        overflow-wrap: anywhere;
+      }
+      .records td.act {
+        text-align: right;
+        white-space: nowrap;
+      }
+      .records .rnote {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        margin: 8px 0 0;
+      }
+      .copy {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        height: 24px;
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font: inherit;
+        font-size: 12px;
+      }
+      /* The count beside a disabled Add — text, never only a tooltip. */
+      .capLine {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        margin: 6px 0 0;
+        text-align: right;
+      }
+      .capLine strong {
+        color: var(--el-text-strong);
+      }
+      .row3 {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+        align-items: start;
+      }
+      /* The failure banner's expected value, on the callout's own tint. */
+      .expect {
+        display: block;
+        margin: 6px 0 8px;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-strong);
+        overflow-wrap: anywhere;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="board">
+      <h1 class="boardTitle">Workspace settings › Custom domains</h1>
+      <p class="boardSub">
+        Where a workspace owner or admin connects a domain they own so that it serves the
+        workspace's hosted application. A domain belongs to the workspace; there is no primary
+        address and no redirect between a customer's domains, and removing one reserves nothing.
+        Scenario: the Acme workspace, whose application <code class="mono">shop</code> is live at
+        <code class="mono">shop--acme.motir.site</code>. Today is 30 October 2026 in every panel.
+      </p>
+
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <section class="panel">
+        <p class="panelLabel">Panel 0 — the access path · the rail row and the address-pane link</p>
+        <p class="panelNote">
+          <strong>① A new row in the workspace rail</strong>, in the Access group directly under
+          Public address, labelled <em>Custom domains</em>.
+          <strong>② The Public address pane</strong> gains one line under its address row:
+          <em>Use your own domain instead</em>, a link to the same room. The rail, the shell and the
+          address pane are the shipped ones, composed by citation.
+        </p>
+        <div class="row2n">
+          <div class="stage tight">
+            <div class="shell">
+              <nav class="rail" aria-label="Workspace settings">
+                <div class="railGroup">
+                  <div class="railGroupLabel">General</div>
+                  <div class="railRow">
+                    <span class="glyph" aria-hidden="true">▤</span> Workspace
+                  </div>
+                </div>
+                <div class="railGroup">
+                  <div class="railGroupLabel">Access</div>
+                  <div class="railRow">
+                    <span class="glyph" aria-hidden="true">▤</span> Security
+                  </div>
+                  <div class="railRow"><span class="glyph" aria-hidden="true">▤</span> Roles</div>
+                  <div class="railRow">
+                    <span class="glyph" aria-hidden="true">▤</span> Public address
+                  </div>
+                  <div class="railRow is-active is-new">
+                    <span class="num">1</span>
+                    <span class="glyph" aria-hidden="true">▤</span> Custom domains
+                  </div>
+                </div>
+                <div class="railGroup">
+                  <div class="railGroupLabel">Operations</div>
+                  <div class="railRow"><span class="glyph" aria-hidden="true">▤</span> Jobs</div>
+                </div>
+              </nav>
+              <div class="shellMain">
+                <p class="crumb">Settings › Workspace › Custom domains</p>
+                <h2 class="h1">Custom domains</h2>
+                <p class="sec13" style="margin: 0 0 14px">
+                  Serve this workspace's application on a domain you own.
+                </p>
+              </div>
+            </div>
+          </div>
+          <div class="stage">
+            <p class="panelLabel" style="margin-top: 0">
+              ② the Public address pane, one line added
+            </p>
+            <div class="card">
+              <div class="cardBody tightY">
+                <div class="addr">
+                  <span class="host grow">acme.motir.site</span>
+                  <span class="pill pill-ok"
+                    ><span class="dot" aria-hidden="true"></span> Live</span
+                  >
+                </div>
+                <p class="sec12 halo" style="margin: 10px 0 0; padding: 2px 4px">
+                  <span class="num">2</span>
+                  <a class="linkText">Use your own domain instead →</a>
+                </p>
+              </div>
+            </div>
+            <p class="cite">
+              Both go to <code>/settings/workspace/custom-domains</code>. The rail row is gated as
+              the Public address row is: shown to every member, editable by a workspace owner or
+              admin (panel 12).
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <section class="panel">
+        <p class="panelLabel">Panel 1 — empty, entitled</p>
+        <p class="panelNote">
+          The Domains list states what a custom domain does and offers one action. No records are
+          shown until a domain exists.
+        </p>
+        <div class="stage">
+          <div class="card col">
+            <div class="cardHead">
+              <p class="cardTitle">Custom domains</p>
+              <p class="cardSub">Serve this workspace's application on a domain you own.</p>
+            </div>
+            <div class="cardBody">
+              <div class="empty">
+                <p class="etitle">No custom domains yet</p>
+                <p class="esub">
+                  Add a domain like shop.acme.com. You create two DNS records, Motir issues the
+                  certificate, and the domain serves this workspace's application.
+                </p>
+                <button class="btn btn-primary">Add domain</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <section class="panel">
+        <p class="panelLabel">Panel 2 — empty, not entitled · the Tier upsell</p>
+        <p class="panelNote">
+          On a plan without <code>custom_domains</code> the Tier upsell replaces the Add button. It
+          names the plan that includes custom domains and says what keeps working.
+        </p>
+        <div class="stage">
+          <div class="card col">
+            <div class="cardHead">
+              <p class="cardTitle">Custom domains</p>
+              <p class="cardSub">Serve this workspace's application on a domain you own.</p>
+            </div>
+            <div class="cardBody stack">
+              <div class="callout">
+                <span class="ctitle">Custom domains are included on the Scaled plan.</span>
+                Your application keeps answering at shop--acme.motir.site on every plan. Upgrade to
+                serve it on a domain you own.
+                <div style="margin-top: 10px">
+                  <button class="btn btn-primary">See plans</button>
+                </div>
+              </div>
+              <div class="empty">
+                <p class="etitle">No custom domains yet</p>
+                <p class="esub" style="margin: 0">Domains you add will be listed here.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <section class="panel">
+        <p class="panelLabel">Panel 3 — at the cap</p>
+        <p class="panelNote">
+          The plan's <code>maxCustomDomains</code> is reached. Add is disabled and the count is
+          stated as text beside it, with the way up.
+        </p>
+        <div class="stage">
+          <div class="card col">
+            <div class="cardHead between">
+              <div>
+                <p class="cardTitle">Custom domains</p>
+                <p class="cardSub">Serve this workspace's application on a domain you own.</p>
+              </div>
+              <div>
+                <button class="btn btn-primary" disabled aria-describedby="cap">Add domain</button>
+                <p class="capLine" id="cap">
+                  <strong>5 of 5 domains</strong> · <a class="linkText">See plans</a>
+                </p>
+              </div>
+            </div>
+            <div class="cardBody">
+              <div class="domain">
+                <div class="top">
+                  <a class="host grow">shop.acme.com</a>
+                  <span class="pill pill-ok"
+                    ><span class="dot" aria-hidden="true"></span> Issued</span
+                  >
+                </div>
+              </div>
+              <div class="domain">
+                <div class="top">
+                  <a class="host grow">acme.com</a>
+                  <span class="pill pill-ok"
+                    ><span class="dot" aria-hidden="true"></span> Issued</span
+                  >
+                </div>
+              </div>
+              <div class="domain">
+                <div class="top">
+                  <span class="host grow">… three more rows</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <section class="panel">
+        <p class="panelLabel">Panel 4 — loading</p>
+        <p class="panelNote">
+          Skeleton rows while the list is fetched. Add stays enabled: adding does not depend on the
+          list.
+        </p>
+        <div class="stage">
+          <div class="card col">
+            <div class="cardHead between">
+              <div>
+                <p class="cardTitle">Custom domains</p>
+                <p class="cardSub">Serve this workspace's application on a domain you own.</p>
+              </div>
+              <button class="btn btn-primary">Add domain</button>
+            </div>
+            <div class="cardBody stack-sm" aria-busy="true">
+              <div class="skel tall"></div>
+              <div class="skel tall"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <section class="panel">
+        <p class="panelLabel">Panel 5 — the Add-domain dialog · empty, and its five refusals</p>
+        <p class="panelNote">
+          One host field with an example. Submit is disabled while the field is empty. Each refusal
+          is inline under the field, in its own words — the two Motir-owned cases are told apart
+          because the customer's next step differs. Focus is trapped in the dialog and returns to
+          Add domain on close.
+        </p>
+        <div class="row2">
+          <div class="scrim">
+            <div class="modal" role="dialog" aria-labelledby="addT">
+              <p class="modalTitle" id="addT">Add a domain</p>
+              <label class="field">
+                <span class="label">Domain</span>
+                <span class="input mono"><span class="ph">shop.acme.com</span></span>
+              </label>
+              <p class="helper sec12" style="margin: 6px 0 16px">
+                A subdomain like shop.acme.com or a root domain like acme.com. It will serve this
+                workspace's application.
+              </p>
+              <div class="modalFoot">
+                <button class="btn btn-ghost">Cancel</button>
+                <button class="btn btn-primary" disabled>Add domain</button>
+              </div>
+            </div>
+          </div>
+          <div class="stage stack">
+            <div>
+              <p class="panelLabel" style="margin: 0 0 6px">Under the Motir tenant base</p>
+              <span class="input mono is-error">shop.acme.motir.site</span>
+              <p class="helperError" role="alert">
+                shop.acme.motir.site is a Motir address. Your workspace already answers under
+                motir.site — set that name in Public address.
+              </p>
+            </div>
+            <div>
+              <p class="panelLabel" style="margin: 0 0 6px">Under the Motir site</p>
+              <span class="input mono is-error">acme.motir.co</span>
+              <p class="helperError" role="alert">
+                acme.motir.co belongs to Motir. Add a domain you own.
+              </p>
+            </div>
+            <div>
+              <p class="panelLabel" style="margin: 0 0 6px">Not a hostname</p>
+              <span class="input mono is-error">https://shop.acme.com/</span>
+              <p class="helperError" role="alert">
+                Enter only the domain, like shop.acme.com — no https:// and no path.
+              </p>
+            </div>
+            <div>
+              <p class="panelLabel" style="margin: 0 0 6px">Added by another workspace</p>
+              <span class="input mono is-error">shop.acme.com</span>
+              <p class="helperError" role="alert">
+                shop.acme.com is already connected to another Motir workspace. If it is yours,
+                remove it there first.
+              </p>
+            </div>
+            <div>
+              <p class="panelLabel" style="margin: 0 0 6px">The plan's cap</p>
+              <span class="input mono is-error">blog.acme.com</span>
+              <p class="helperError" role="alert">
+                Your plan includes 5 custom domains and all 5 are in use. Remove one, or
+                <a class="linkText">see plans</a>.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <section class="panel">
+        <p class="panelLabel">Panel 6 — unverified · a subdomain and an apex</p>
+        <p class="panelNote">
+          The DNS records panel opens on its own for an unverified domain. The ownership TXT comes
+          with the pointing record, which differs by shape: a subdomain takes a CNAME, a root domain
+          takes A and AAAA. A root under a multi-label public suffix (acme.co.uk) is a root and is
+          never offered a CNAME. The A value is a shared Fly IPv4 and is labelled so.
+        </p>
+        <div class="row2">
+          <div class="stage">
+            <div class="domain">
+              <div class="top">
+                <span class="host grow">shop.acme.com</span>
+                <span class="pill pill-wait"
+                  ><span class="dot" aria-hidden="true"></span> Unverified</span
+                >
+              </div>
+              <p class="meta">Create these 2 records at your DNS provider, then check.</p>
+              <div class="records">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Type</th>
+                      <th>Name</th>
+                      <th>Value</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>CNAME</td>
+                      <td class="v">shop</td>
+                      <td class="v">motir-edge.fly.dev</td>
+                      <td class="act"><button class="copy">Copy</button></td>
+                    </tr>
+                    <tr>
+                      <td>TXT</td>
+                      <td class="v">_motir-verify.shop</td>
+                      <td class="v">motir-verify-Q2x…9fA</td>
+                      <td class="act">
+                        <button class="copy" aria-label="Copied">✓ Copied</button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="acts">
+                <button class="btn btn-primary">Check now</button>
+                <button class="btn btn-ghost">Remove</button>
+              </div>
+            </div>
+          </div>
+          <div class="stage">
+            <div class="domain">
+              <div class="top">
+                <span class="host grow">acme.com</span>
+                <span class="pill pill-wait"
+                  ><span class="dot" aria-hidden="true"></span> Unverified</span
+                >
+              </div>
+              <p class="meta">Create these 3 records at your DNS provider, then check.</p>
+              <div class="records">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Type</th>
+                      <th>Name</th>
+                      <th>Value</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>A</td>
+                      <td class="v">@</td>
+                      <td class="v">66.241.125.217</td>
+                      <td class="act"><button class="copy">Copy</button></td>
+                    </tr>
+                    <tr>
+                      <td>AAAA</td>
+                      <td class="v">@</td>
+                      <td class="v">2a09:8280:1::17d:93fd:0</td>
+                      <td class="act"><button class="copy">Copy</button></td>
+                    </tr>
+                    <tr>
+                      <td>TXT</td>
+                      <td class="v">_motir-verify</td>
+                      <td class="v">motir-verify-k7P…2cB</td>
+                      <td class="act"><button class="copy">Copy</button></td>
+                    </tr>
+                  </tbody>
+                </table>
+                <p class="rnote">
+                  A root domain cannot take a CNAME, so it points at Motir's addresses. The IPv4
+                  address is shared with other Motir domains; if it ever changes we will tell you
+                  before it does.
+                </p>
+              </div>
+              <div class="acts">
+                <button class="btn btn-primary">Check now</button>
+                <button class="btn btn-ghost">Remove</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <section class="panel">
+        <p class="panelLabel">Panel 7 — pending</p>
+        <p class="panelNote">
+          Ownership is proven and the certificate is being issued. The pointing record stays visible
+          (it is the one that makes the domain work); the ownership TXT is no longer listed. The
+          pane re-reads on its own; nothing blocks.
+        </p>
+        <div class="stage">
+          <div class="domain">
+            <div class="top">
+              <span class="host grow">shop.acme.com</span>
+              <span class="pill pill-info"
+                ><span class="dot" aria-hidden="true"></span> Pending</span
+              >
+            </div>
+            <p class="meta">
+              Ownership confirmed. Issuing the certificate — this usually takes a few minutes. This
+              page updates on its own.
+            </p>
+            <div class="records">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Type</th>
+                    <th>Name</th>
+                    <th>Value</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>CNAME</td>
+                    <td class="v">shop</td>
+                    <td class="v">motir-edge.fly.dev</td>
+                    <td class="act"><button class="copy">Copy</button></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="acts"><button class="btn btn-ghost">Remove</button></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <section class="panel">
+        <p class="panelLabel">
+          Panel 8 — issued · serving the application, and with no application yet
+        </p>
+        <p class="panelNote">
+          The host becomes a link. The Application line says what the domain serves; the
+          certificate's renewal date is stated; the records fold behind <em>Show DNS records</em>.
+          With no application deployed the line says so plainly — no error styling, because nothing
+          is wrong.
+        </p>
+        <div class="row2">
+          <div class="stage">
+            <div class="domain">
+              <div class="top">
+                <a class="host grow">shop.acme.com ↗</a>
+                <span class="pill pill-ok"
+                  ><span class="dot" aria-hidden="true"></span> Issued</span
+                >
+              </div>
+              <p class="appLine">Serves <strong>shop</strong>, this workspace's application.</p>
+              <p class="meta">Certificate renews on its own · valid until 28 January 2027</p>
+              <div class="acts">
+                <button class="btn btn-ghost">Show DNS records</button>
+                <button class="btn btn-ghost">Remove</button>
+              </div>
+            </div>
+          </div>
+          <div class="stage">
+            <div class="domain">
+              <div class="top">
+                <a class="host grow">acme.com ↗</a>
+                <span class="pill pill-ok"
+                  ><span class="dot" aria-hidden="true"></span> Issued</span
+                >
+              </div>
+              <p class="appLine">
+                No application is deployed for this workspace yet — this domain will serve it as
+                soon as one is.
+              </p>
+              <p class="meta">Certificate renews on its own · valid until 28 January 2027</p>
+              <div class="acts">
+                <button class="btn btn-ghost">Show DNS records</button>
+                <button class="btn btn-ghost">Remove</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <section class="panel">
+        <p class="panelLabel">Panel 9 — the three failures, each with the record and one action</p>
+        <p class="panelNote">
+          The Failure banner says what happened, shows the exact record or value to restore, and
+          offers one action. Its hue is in the callout's border and tint; the words stay on the
+          strong ink. It is announced (<code>role="alert"</code>) only when the status changes to a
+          failure, not on every load. The domain does not serve while failed.
+        </p>
+        <div class="row3">
+          <div class="stage">
+            <div class="domain">
+              <div class="top">
+                <span class="host grow">shop.acme.com</span>
+                <span class="pill pill-bad"
+                  ><span class="dot" aria-hidden="true"></span> Failed</span
+                >
+              </div>
+              <div class="callout danger" role="alert" style="margin-top: 6px">
+                <span class="ctitle">We can no longer see your ownership record</span>
+                Restore this TXT record at your DNS provider:
+                <span class="expect">_motir-verify.shop.acme.com<br />motir-verify-Q2x…9fA</span>
+                <button class="btn">Re-check</button>
+              </div>
+            </div>
+          </div>
+          <div class="stage">
+            <div class="domain">
+              <div class="top">
+                <span class="host grow">acme.com</span>
+                <span class="pill pill-bad"
+                  ><span class="dot" aria-hidden="true"></span> Failed</span
+                >
+              </div>
+              <div class="callout danger" role="alert" style="margin-top: 6px">
+                <span class="ctitle">acme.com no longer points at Motir</span>
+                The A record now answers 203.0.113.9. Set it back to:
+                <span class="expect">A @ 66.241.125.217<br />AAAA @ 2a09:8280:1::17d:93fd:0</span>
+                <button class="btn">Re-check</button>
+              </div>
+            </div>
+          </div>
+          <div class="stage">
+            <div class="domain">
+              <div class="top">
+                <span class="host grow">blog.acme.com</span>
+                <span class="pill pill-bad"
+                  ><span class="dot" aria-hidden="true"></span> Failed</span
+                >
+              </div>
+              <div class="callout danger" role="alert" style="margin-top: 6px">
+                <span class="ctitle">The certificate could not be issued</span>
+                The certificate authority said:
+                <span class="expect">CAA record for acme.com does not allow letsencrypt.org</span>
+                <div class="flex">
+                  <button class="btn">Retry</button>
+                  <button class="btn btn-ghost">Remove</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="cite">
+          A subdomain's pointing failure names its CNAME the same way: "The CNAME record now answers
+          other-host.example. Set it back to: CNAME shop motir-edge.fly.dev". The three failure
+          kinds — ownership record lost, pointing record lost, issuance failed — are the reasons the
+          status job reports; the third carries the platform's reason text verbatim.
+        </p>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <section class="panel">
+        <p class="panelLabel">Panel 10 — re-check in progress</p>
+        <p class="panelNote">
+          The banner's action shows its loading state and is disabled. The result arrives as the
+          row's status changing (to Pending or Issued, or the banner updating), never as a toast
+          alone.
+        </p>
+        <div class="stage">
+          <div class="domain">
+            <div class="top">
+              <span class="host grow">shop.acme.com</span>
+              <span class="pill pill-bad"><span class="dot" aria-hidden="true"></span> Failed</span>
+            </div>
+            <div class="callout danger" style="margin-top: 6px">
+              <span class="ctitle">We can no longer see your ownership record</span>
+              Restore this TXT record at your DNS provider:
+              <span class="expect">_motir-verify.shop.acme.com<br />motir-verify-Q2x…9fA</span>
+              <button class="btn" disabled aria-busy="true">
+                <span class="spin" aria-hidden="true"></span> Checking…
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <section class="panel">
+        <p class="panelLabel">Panel 11 — remove · the confirm, removing, and a failed remove</p>
+        <p class="panelNote">
+          The Remove confirm says the domain stops answering at once, that nothing is reserved, and
+          that the DNS records are the customer's to delete. On success the row leaves the list and
+          a toast confirms. On failure the confirm stays open with the error and a Retry; the row is
+          unchanged.
+        </p>
+        <div class="row3">
+          <div class="scrim">
+            <div class="modal" role="dialog" aria-labelledby="rmT">
+              <p class="modalTitle" id="rmT">Remove shop.acme.com?</p>
+              <p class="modalBody">
+                It stops serving your application at once. Nothing is reserved: you can add it again
+                later, and another workspace can add it if it proves ownership. The DNS records at
+                your provider are yours to delete.
+              </p>
+              <div class="modalFoot">
+                <button class="btn btn-ghost">Cancel</button>
+                <button class="btn btn-danger">Remove domain</button>
+              </div>
+            </div>
+          </div>
+          <div class="scrim">
+            <div class="modal" role="dialog" aria-labelledby="rmT2">
+              <p class="modalTitle" id="rmT2">Remove shop.acme.com?</p>
+              <p class="modalBody">
+                It stops serving your application at once. Nothing is reserved: you can add it again
+                later, and another workspace can add it if it proves ownership. The DNS records at
+                your provider are yours to delete.
+              </p>
+              <div class="modalFoot">
+                <button class="btn btn-ghost" disabled>Cancel</button>
+                <button class="btn btn-danger" disabled aria-busy="true">
+                  <span class="spin" aria-hidden="true"></span> Removing…
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="scrim">
+            <div class="modal" role="dialog" aria-labelledby="rmT3">
+              <p class="modalTitle" id="rmT3">Remove shop.acme.com?</p>
+              <p class="modalBody">
+                It stops serving your application at once. Nothing is reserved: you can add it again
+                later, and another workspace can add it if it proves ownership. The DNS records at
+                your provider are yours to delete.
+              </p>
+              <p class="helperError" role="alert" style="margin: 0 0 12px">
+                The domain was not removed. Try again in a moment.
+              </p>
+              <div class="modalFoot">
+                <button class="btn btn-ghost">Cancel</button>
+                <button class="btn btn-danger">Retry</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top: 16px">
+          <div class="toast" role="status">
+            <span class="tglyph" aria-hidden="true">✓</span>
+            <span>
+              <span class="ttitle">shop.acme.com removed</span>
+              <span class="tbody">It no longer serves your application.</span>
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <section class="panel">
+        <p class="panelLabel">Panel 12 — read-only · a member who cannot manage domains</p>
+        <p class="panelNote">
+          Every member can see the list. Add, Check now, Re-check, Retry and Remove are absent, not
+          disabled, and one line names who can change it — the gate the Public address pane has.
+        </p>
+        <div class="stage">
+          <div class="card col">
+            <div class="cardHead">
+              <p class="cardTitle">Custom domains</p>
+              <p class="cardSub">Serve this workspace's application on a domain you own.</p>
+            </div>
+            <div class="cardBody">
+              <div class="domain">
+                <div class="top">
+                  <a class="host grow">shop.acme.com ↗</a>
+                  <span class="pill pill-ok"
+                    ><span class="dot" aria-hidden="true"></span> Issued</span
+                  >
+                </div>
+                <p class="appLine">Serves <strong>shop</strong>, this workspace's application.</p>
+              </div>
+              <p class="sec12" style="margin: 12px 0 0">
+                Only a workspace owner or admin can add or remove domains.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>

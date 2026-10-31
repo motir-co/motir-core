@@ -174,6 +174,39 @@ describe('the mapping', () => {
     expect(live.issued).toBe(true);
   });
 
+  it('maps the Fly-issued certificate’s expires_at onto expiresAt (MOTIR-9526)', async () => {
+    mockFetch(() =>
+      jsonResponse(200, {
+        hostname: HOST,
+        configured: true,
+        certificates: [
+          { source: 'custom', status: 'active', expires_at: '2039-01-15T10:30:00Z' },
+          { source: 'fly', status: 'active', expires_at: '2027-01-28T12:00:00Z' },
+        ],
+      }),
+    );
+    const state = await flyCertificateProvider.check(HOST);
+    // The one this adapter asked for wins over a later customer-uploaded date.
+    expect(state.expiresAt?.toISOString()).toBe('2027-01-28T12:00:00.000Z');
+  });
+
+  it('a reading with no (or an unparseable) date maps to null rather than throwing', async () => {
+    mockFetch(() =>
+      jsonResponse(200, { hostname: HOST, configured: true, certificates: [{ id: 'c1' }] }),
+    );
+    expect((await flyCertificateProvider.check(HOST)).expiresAt).toBeNull();
+    mockFetch(() =>
+      jsonResponse(200, {
+        hostname: HOST,
+        configured: true,
+        certificates: [{ source: 'fly', expires_at: 'not a date' }],
+      }),
+    );
+    expect((await flyCertificateProvider.check(HOST)).expiresAt).toBeNull();
+    mockFetch(() => jsonResponse(200, { hostname: HOST, configured: true }));
+    expect((await flyCertificateProvider.check(HOST)).expiresAt).toBeNull();
+  });
+
   it("maps Fly's dns_requirements onto the records a customer must create", async () => {
     mockFetch(() =>
       jsonResponse(200, {

@@ -1,16 +1,19 @@
 import { randomBytes } from 'node:crypto';
 
-import type { Prisma } from '@/generated/prisma/client';
-
 import { isCloud } from '@/lib/billing/availability';
-import type { DnsInstructionDto, PublicAddressDto } from '@/lib/dto/publicAddresses';
+import type {
+  DnsInstructionDto,
+  DomainApplicationDto,
+  PublicAddressDto,
+} from '@/lib/dto/publicAddresses';
 import {
   CertificateProviderRefusedError,
   CertificateProviderUnavailableError,
 } from '@/lib/publicAddresses/certificateProvider';
+import type { Prisma } from '@/generated/prisma/client';
 import {
   AddressNotFoundError,
-  AddressNotIssuedError,
+  ApplicationNotFoundError,
   InvalidHostnameError,
   NotACustomerDomainError,
   PublicAddressesUnavailableError,
@@ -25,15 +28,28 @@ import {
 import { isTenantDomainConfigured, tenantBaseDomain } from '@/lib/publicAddresses/tenantDomain';
 import { publicSiteOrigin } from '@/lib/publicProjects/urls';
 import { entitlementsService } from '@/lib/services/entitlementsService';
-import { projectAccessService } from '@/lib/services/projectAccessService';
+import { hostedApplicationRepository } from '@/lib/repositories/hostedApplicationRepository';
 import { publicAddressRepository } from '@/lib/repositories/publicAddressRepository';
-import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
+import {
+  assertAddressAdmin,
+  assertAddressMember,
+  roleMayManageAddress,
+} from '@/lib/services/publicSubdomainService';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 
 // THE CUSTOMER-DOMAIN LIFECYCLE — Story MOTIR-3878 · Subtask MOTIR-4216.
-// add → verify → issue → make primary → remove. The state machine is the ADR's
-// §5 (which records prove ownership) and §7 (exactly one primary).
+// add → verify → issue → remove. The state machine is the ADR's §5 (which
+// records prove ownership).
+//
+// ── A customer domain is a WORKSPACE asset (ADR MOTIR-9521 §1) ─────────────
+//
+// It names at most one application, never a project, and there is no primary:
+// the product's single link is the application's production address, else its
+// earliest-issued domain. So it is managed by exactly the people who manage the
+// workspace's subdomain: any member may list, and every write is gated by the
+// subdomain service's own `assertAddressAdmin` (a workspace manager, or the org
+// Owner / an org Admin) — one gate, imported rather than copied.
 //
 // ── ⚠️ EVERY SIDE EFFECT SITS OUTSIDE ITS TRANSACTION ─────────────────────
 //
@@ -55,77 +71,102 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 /** The label the ownership TXT lives at. */
 const VERIFY_PREFIX = '_motir-verify';
 
-export interface DomainScopedInput {
-  addressId: string;
+export interface WorkspaceScopedInput {
+  /** The workspace the route names. */
+  workspaceId: string;
   actorUserId: string;
-  ctx: { workspaceId: string };
 }
 
-export interface ProjectScopedInput {
-  /** The project KEY ("PROD"), as the route receives it. */
-  key: string;
-  actorUserId: string;
-  ctx: { workspaceId: string };
+export interface DomainScopedInput extends WorkspaceScopedInput {
+  addressId: string;
 }
 
 export const customDomainService = {
-  /** Every address on the project, as the pane renders them. */
-  async list(input: ProjectScopedInput): Promise<PublicAddressDto[]> {
+  /** Every customer domain of the workspace, as the pane renders them. */
+  async list(input: WorkspaceScopedInput): Promise<PublicAddressDto[]> {
     assertAvailable();
+    await assertAddressMember(input.workspaceId, input.actorUserId);
     return withWorkspaceContext(
-      { userId: input.actorUserId, workspaceId: input.ctx.workspaceId },
+      { userId: input.actorUserId, workspaceId: input.workspaceId },
       async (tx) => {
-        const project = await resolveProject(input, tx);
-        await projectAccessService.assertPermission(
-          project.id,
-          { userId: input.actorUserId, workspaceId: input.ctx.workspaceId },
-          'project:browse',
+        const rows = await publicAddressRepository.listCustomDomainsForWorkspaceInTx(
+          input.workspaceId,
           tx,
         );
-        const rows = await publicAddressRepository.listForProjectInTx(project.id, tx);
-        return rows.map((row) => toDto(row, project.primaryAddressId));
+        return rows.map(toDto);
       },
     );
   },
 
   /**
-   * Connect a customer domain. One transaction: the cap assert (which locks the
-   * org row) and the create, so the count cannot be raced.
+   * The workspace Custom domains pane's read (MOTIR-9529): the domains, whether
+   * the viewer may WRITE them (the workspace address gate every write asserts,
+   * so a control never appears and then refuses) and the tier's cap (`null` =
+   * none). Computed here so the page reads no role and no tier of its own. With
+   * them the workspace's applications, which the picker offers and the
+   * Application line names — read in the same transaction, so a failed read is
+   * the pane's load error and never a picker of its own that failed.
    */
-  async add(input: ProjectScopedInput & { hostname: string }): Promise<PublicAddressDto> {
+  async listForPane(input: WorkspaceScopedInput): Promise<{
+    addresses: PublicAddressDto[];
+    applications: DomainApplicationDto[];
+    canManage: boolean;
+    maxDomains: number | null;
+  }> {
     assertAvailable();
+    const role = await assertAddressMember(input.workspaceId, input.actorUserId);
+    const { addresses, applications, organizationId } = await withWorkspaceContext(
+      { userId: input.actorUserId, workspaceId: input.workspaceId },
+      async (tx) => ({
+        addresses: (
+          await publicAddressRepository.listCustomDomainsForWorkspaceInTx(input.workspaceId, tx)
+        ).map(toDto),
+        applications: await hostedApplicationRepository.listForDomainPicker(input.workspaceId, tx),
+        organizationId: await workspaceRepository.findOrganizationId(input.workspaceId, tx),
+      }),
+    );
+    // The tier read opens its own org binding, so it runs after the workspace
+    // transaction has closed rather than nested inside it.
+    const maxDomains = organizationId
+      ? await entitlementsService.customDomainCap(organizationId)
+      : null;
+    return { addresses, applications, canManage: roleMayManageAddress(role), maxDomains };
+  },
+
+  /**
+   * Connect a customer domain, optionally naming the application it serves
+   * (`null` or absent = unbound, MOTIR-9790 §3). One transaction: the cap assert
+   * (which locks the org row) and the create, so the count cannot be raced.
+   */
+  async add(
+    input: WorkspaceScopedInput & { hostname: string; applicationId?: string | null },
+  ): Promise<PublicAddressDto> {
+    assertAvailable();
+    await assertAddressAdmin(input.workspaceId, input.actorUserId);
     const hostname = normaliseCustomHostname(input.hostname);
 
     return withWorkspaceContext(
-      { userId: input.actorUserId, workspaceId: input.ctx.workspaceId },
+      { userId: input.actorUserId, workspaceId: input.workspaceId },
       async (tx) => {
-        const project = await resolveProject(input, tx);
-        await projectAccessService.assertPermission(
-          project.id,
-          { userId: input.actorUserId, workspaceId: input.ctx.workspaceId },
-          'project:manage_access',
-          tx,
-        );
         // ⚠️ INSIDE this transaction, which is the cap's own contract: it locks
         // the org row and counts under the lock, and a lock released before the
         // write it guards is not a lock.
-        const organizationId = await workspaceRepository.findOrganizationId(
-          input.ctx.workspaceId,
-          tx,
-        );
+        const organizationId = await workspaceRepository.findOrganizationId(input.workspaceId, tx);
         if (organizationId) {
           await entitlementsService.assertCanAddCustomDomain(organizationId, tx);
         }
+        const applicationId = input.applicationId ?? null;
+        if (applicationId) await assertWorkspaceApplication(applicationId, input.workspaceId, tx);
         const row = await publicAddressRepository.createCustomDomain(
           {
-            workspaceId: input.ctx.workspaceId,
-            projectId: project.id,
+            workspaceId: input.workspaceId,
+            applicationId,
             hostname,
             verificationToken: mintToken(),
           },
           tx,
         );
-        const dto = toDto(row, project.primaryAddressId);
+        const dto = toDto(row);
         // ⚠️ THE FAKE RESOLVER IS SEEDED HERE, AND ONLY HERE (MOTIR-4225).
         // `providers.ts` says the lane "seeds it through `seedFakeTxt` as the
         // address is created, so the verify step reads back the token the
@@ -148,6 +189,29 @@ export const customDomainService = {
   },
 
   /**
+   * Re-point a domain at another of the workspace's applications, or unbind it
+   * with `null` (ADR MOTIR-9521 §1). Status is untouched: ownership and the
+   * certificate are the hostname's, not the application's.
+   */
+  async bind(
+    input: DomainScopedInput & { applicationId: string | null },
+  ): Promise<PublicAddressDto> {
+    assertAvailable();
+    await this.loadForWrite(input);
+    return withWorkspaceContext(
+      { userId: input.actorUserId, workspaceId: input.workspaceId },
+      async (tx) => {
+        if (input.applicationId) {
+          await assertWorkspaceApplication(input.applicationId, input.workspaceId, tx);
+        }
+        return toDto(
+          await publicAddressRepository.setApplication(input.addressId, input.applicationId, tx),
+        );
+      },
+    );
+  },
+
+  /**
    * Prove ownership, then ask the platform for a certificate.
    *
    * THREE writes, each short and each AFTER the call it records — never around
@@ -156,7 +220,7 @@ export const customDomainService = {
    */
   async verify(input: DomainScopedInput): Promise<PublicAddressDto> {
     assertAvailable();
-    const { address, project } = await this.loadForWrite(input);
+    const { address } = await this.loadForWrite(input);
     const name = `${VERIFY_PREFIX}.${address.hostname}`;
 
     // ── outside any transaction ──
@@ -175,19 +239,19 @@ export const customDomainService = {
           : `No ${VERIFY_PREFIX} TXT record found at ${name}. DNS changes can take a few minutes.`,
         lastCheckedAt: new Date(),
       });
-      return toDto(row, project.primaryAddressId);
+      return toDto(row);
     }
 
     try {
       const provider = await certificateProvider();
-      const state = await provider.request(address.hostname);
+      const state = await requestOrAdopt(provider, address.hostname);
       const row = await this.patch(input, {
         status: state.issued ? 'issued' : 'pending_certificate',
         failureReason: null,
         lastCheckedAt: state.checkedAt,
         ...(state.issued ? { issuedAt: new Date() } : {}),
       });
-      return toDto(row, project.primaryAddressId);
+      return toDto(row);
     } catch (err) {
       if (err instanceof CertificateProviderUnavailableError) {
         // The platform is down. NOT the customer's problem and not a state
@@ -203,41 +267,8 @@ export const customDomainService = {
         failureReason: reason,
         lastCheckedAt: new Date(),
       });
-      return toDto(row, project.primaryAddressId);
+      return toDto(row);
     }
-  },
-
-  /** Make an ISSUED address the project's canonical one (ADR §7). */
-  async makePrimary(input: DomainScopedInput): Promise<PublicAddressDto> {
-    assertAvailable();
-    const { address, project } = await this.loadForWrite(input);
-    // Only a live address may be canonical: pointing every other address at one
-    // that does not serve would 301 every reader into a TLS error.
-    if (address.status !== 'issued') throw new AddressNotIssuedError(address.status);
-
-    await withWorkspaceContext(
-      { userId: input.actorUserId, workspaceId: input.ctx.workspaceId },
-      (tx) => publicAddressRepository.setPrimary(project.id, address.id, tx),
-    );
-    return toDto(address, address.id);
-  },
-
-  /** Back to the ADR §7 default rule. */
-  async clearPrimary(input: ProjectScopedInput): Promise<void> {
-    assertAvailable();
-    await withWorkspaceContext(
-      { userId: input.actorUserId, workspaceId: input.ctx.workspaceId },
-      async (tx) => {
-        const project = await resolveProject(input, tx);
-        await projectAccessService.assertPermission(
-          project.id,
-          { userId: input.actorUserId, workspaceId: input.ctx.workspaceId },
-          'project:manage_access',
-          tx,
-        );
-        await publicAddressRepository.setPrimary(project.id, null, tx);
-      },
-    );
   },
 
   /**
@@ -250,13 +281,18 @@ export const customDomainService = {
    * points at us, and Fly stops renewing a certificate whose hostname stops
    * validating. Failing the customer's request over that would be reporting a
    * cleanup problem as a user error.
+   *
+   * NO RESERVATION (the customer-domain decision): the name was never Motir's
+   * to hold, so no `public_hostname_reservation` row is written and the host is
+   * addable again at once — by this workspace or any other that proves it with
+   * a fresh TXT.
    */
   async remove(input: DomainScopedInput): Promise<void> {
     assertAvailable();
     const { address } = await this.loadForWrite(input);
 
     await withWorkspaceContext(
-      { userId: input.actorUserId, workspaceId: input.ctx.workspaceId },
+      { userId: input.actorUserId, workspaceId: input.workspaceId },
       (tx) => publicAddressRepository.remove(address.id, tx),
     );
 
@@ -274,22 +310,21 @@ export const customDomainService = {
 
   // ── internals, exposed on the object so tests can spy the ordering ──────
 
-  /** Load the address + its project, asserting the manage permission. */
+  /** Load the customer domain, asserting the actor manages the workspace's addresses. */
   async loadForWrite(input: DomainScopedInput) {
+    await assertAddressAdmin(input.workspaceId, input.actorUserId);
     return withWorkspaceContext(
-      { userId: input.actorUserId, workspaceId: input.ctx.workspaceId },
+      { userId: input.actorUserId, workspaceId: input.workspaceId },
       async (tx) => {
         const address = await publicAddressRepository.findByIdInTx(input.addressId, tx);
-        if (!address || !address.projectId) throw new AddressNotFoundError();
-        const project = await projectRepository.findById(address.projectId, tx);
-        if (!project) throw new AddressNotFoundError();
-        await projectAccessService.assertPermission(
-          project.id,
-          { userId: input.actorUserId, workspaceId: input.ctx.workspaceId },
-          'project:manage_access',
-          tx,
-        );
-        return { address, project };
+        if (
+          !address ||
+          address.kind !== 'custom_domain' ||
+          address.workspaceId !== input.workspaceId
+        ) {
+          throw new AddressNotFoundError();
+        }
+        return { address };
       },
     );
   },
@@ -300,7 +335,7 @@ export const customDomainService = {
     data: Parameters<typeof publicAddressRepository.updateStatus>[1],
   ) {
     return withWorkspaceContext(
-      { userId: input.actorUserId, workspaceId: input.ctx.workspaceId },
+      { userId: input.actorUserId, workspaceId: input.workspaceId },
       (tx) => publicAddressRepository.updateStatus(input.addressId, data, tx),
     );
   },
@@ -308,14 +343,42 @@ export const customDomainService = {
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
-function assertAvailable(): void {
-  if (!isCloud()) throw new PublicAddressesUnavailableError();
+/**
+ * Request the certificate, or ADOPT one the edge already holds for this
+ * hostname (ADR MOTIR-9521 §6). A certificate is per hostname, not per owner,
+ * so one left behind by a failed withdrawal belongs to whoever proves the name
+ * next: a refusal is re-read with `check`, and a hostname the edge answers for
+ * counts as requested. A refusal with nothing behind it stays a refusal.
+ */
+async function requestOrAdopt(
+  provider: Awaited<ReturnType<typeof certificateProvider>>,
+  hostname: string,
+) {
+  try {
+    return await provider.request(hostname);
+  } catch (err) {
+    if (!(err instanceof CertificateProviderRefusedError)) throw err;
+    // `check` answers only for a hostname the edge holds; an unknown one throws.
+    const existing = await provider.check(hostname).catch(() => null);
+    if (existing) return existing;
+    throw err;
+  }
 }
 
-async function resolveProject(input: ProjectScopedInput, tx: Prisma.TransactionClient) {
-  const project = await projectRepository.findByIdentifier(input.ctx.workspaceId, input.key, tx);
-  if (!project) throw new AddressNotFoundError();
-  return project;
+/** Only an application of the SAME workspace can be named (ADR MOTIR-9521 §1). */
+async function assertWorkspaceApplication(
+  applicationId: string,
+  workspaceId: string,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  const application = await hostedApplicationRepository.findById(applicationId, tx);
+  if (!application || application.workspaceId !== workspaceId) {
+    throw new ApplicationNotFoundError();
+  }
+}
+
+function assertAvailable(): void {
+  if (!isCloud()) throw new PublicAddressesUnavailableError();
 }
 
 /** 32 bytes of randomness, base64url — long enough that guessing is not a path. */
@@ -339,26 +402,30 @@ export function normaliseCustomHostname(raw: string): string {
   }
   if (isTenantDomainConfigured()) {
     const base = tenantBaseDomain();
-    if (host === base || host.endsWith(`.${base}`)) throw new NotACustomerDomainError(host);
+    if (host === base || host.endsWith(`.${base}`)) {
+      throw new NotACustomerDomainError(host, 'tenant_base');
+    }
   }
   const site = new URL(publicSiteOrigin()).hostname;
-  if (host === site || host.endsWith(`.${site}`)) throw new NotACustomerDomainError(host);
+  if (host === site || host.endsWith(`.${site}`)) {
+    throw new NotACustomerDomainError(host, 'site_origin');
+  }
   return host;
 }
 
-function toDto(
-  row: {
-    id: string;
-    kind: string;
-    hostname: string;
-    status: string;
-    verificationToken: string | null;
-    lastCheckedAt: Date | null;
-    issuedAt: Date | null;
-    failureReason: string | null;
-  },
-  primaryAddressId: string | null,
-): PublicAddressDto {
+function toDto(row: {
+  id: string;
+  applicationId: string | null;
+  kind: string;
+  hostname: string;
+  status: string;
+  verificationToken: string | null;
+  lastCheckedAt: Date | null;
+  issuedAt: Date | null;
+  failureReason: string | null;
+  failureKind: PublicAddressDto['failureKind'];
+  certificateExpiresAt: Date | null;
+}): PublicAddressDto {
   // ⚠️ TWO KINDS OF RECORD, AND THE POINTING ONE COMES FIRST (MOTIR-4278).
   //
   // The record that POINTS the hostname at us — a `CNAME` for a subdomain,
@@ -392,11 +459,13 @@ function toDto(
     kind: row.kind as PublicAddressDto['kind'],
     hostname: row.hostname,
     status: row.status as PublicAddressDto['status'],
-    isPrimary: primaryAddressId === row.id,
+    applicationId: row.applicationId,
     verification,
     dns,
     lastCheckedAt: row.lastCheckedAt?.toISOString() ?? null,
     issuedAt: row.issuedAt?.toISOString() ?? null,
     failureReason: row.failureReason,
+    failureKind: row.failureKind,
+    certificateExpiresAt: row.certificateExpiresAt?.toISOString() ?? null,
   };
 }

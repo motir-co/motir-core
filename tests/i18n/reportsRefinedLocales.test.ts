@@ -49,8 +49,17 @@ function git(...args: string[]): string | null {
 // tenant ledger's own word) — the same words, not untranslated ones.
 const JOBS_STATUS = ['platformAdmin.jobs.status.label', 'platformAdmin.jobs.columns.status'];
 
+// The Custom domains pane (MOTIR-9529) labels a DNS record's columns and its
+// field the way those languages spell them too: German « Domain », « Name »;
+// French and Dutch « Type ».
+const DNS_TYPE = 'settings.customDomains.records.type';
 const SAME_WORD: Record<string, string[]> = {
-  fr: ['reports.workload.tableTotal', 'platformAdmin.jobs.pageLabel'], // « Total », « Page {page} »
+  fr: [
+    'reports.workload.tableTotal', // « Total »
+    'platformAdmin.jobs.pageLabel', // « Page {page} »
+    DNS_TYPE,
+    'settings.customDomains.dialog.appLabel', // « Application »
+  ],
   es: ['reports.workload.tableTotal', 'reports.cvr.seriesLabel'], // « Total », « Series »
   pt: [
     'reports.workload.tableTotal', // « Total »
@@ -58,8 +67,12 @@ const SAME_WORD: Record<string, string[]> = {
     'platformAdmin.jobs.title',
     ...JOBS_STATUS,
   ],
-  de: JOBS_STATUS,
-  nl: JOBS_STATUS,
+  de: [
+    ...JOBS_STATUS,
+    'settings.customDomains.dialog.label',
+    'settings.customDomains.records.name',
+  ],
+  nl: [...JOBS_STATUS, DNS_TYPE],
   pl: JOBS_STATUS,
 };
 

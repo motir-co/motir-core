@@ -13,15 +13,21 @@ const { customDomainService, normaliseCustomHostname } =
   await import('@/lib/services/customDomainService');
 const providers = await import('@/lib/publicAddresses/providers');
 const {
-  AddressNotIssuedError,
+  AddressNotFoundError,
+  ApplicationNotFoundError,
   InvalidHostnameError,
   NotACustomerDomainError,
   PublicAddressesUnavailableError,
+  SubdomainForbiddenError,
+  WorkspaceNotVisibleError,
 } = await import('@/lib/publicAddresses/errors');
-const { CertificateProviderRefusedError, CertificateProviderUnavailableError } =
-  await import('@/lib/publicAddresses/certificateProvider');
+const {
+  CertificateHostnameUnknownError,
+  CertificateProviderRefusedError,
+  CertificateProviderUnavailableError,
+} = await import('@/lib/publicAddresses/certificateProvider');
 const { EntitlementExceededError } = await import('@/lib/billing/errors');
-const { createTestWorkspace } = await import('../fixtures');
+const { createTestUser, createTestWorkspace } = await import('../fixtures');
 
 const BASE = 'motir.example';
 const HOST = 'roadmap.acme.test';
@@ -42,6 +48,8 @@ let txtRecords: string[] = [];
 let onRequest: () => Promise<{ issued: boolean }> = async () => ({ issued: false });
 /** Every side effect, in order — the ordering assertions read this. */
 let trace: string[] = [];
+/** Hostnames the stubbed edge already holds a certificate for. */
+let held: string[] = [];
 
 beforeEach(async () => {
   await truncateAuthTables();
@@ -56,6 +64,7 @@ beforeEach(async () => {
   process.env['MOTIR_PUBLIC_ADDRESS_A_RECORDS'] = A_RECORD;
   process.env['MOTIR_PUBLIC_ADDRESS_AAAA_RECORDS'] = AAAA_RECORD;
   trace = [];
+  held = [];
   txtRecords = [];
   onRequest = async () => ({ issued: false });
 
@@ -84,15 +93,28 @@ beforeEach(async () => {
     request: async (hostname: string) => {
       trace.push('cert.request');
       const { issued } = await onRequest();
-      return { hostname, configured: true, issued, dnsRequirements: [], checkedAt: new Date() };
+      return {
+        hostname,
+        configured: true,
+        issued,
+        dnsRequirements: [],
+        checkedAt: new Date(),
+        expiresAt: null,
+      };
     },
-    check: async (hostname: string) => ({
-      hostname,
-      configured: true,
-      issued: false,
-      dnsRequirements: [],
-      checkedAt: new Date(),
-    }),
+    check: async (hostname: string) => {
+      trace.push('cert.check');
+      // Like Fly: a hostname the edge does not hold is unknown, not "not issued".
+      if (!held.includes(hostname)) throw new CertificateHostnameUnknownError(hostname);
+      return {
+        hostname,
+        configured: true,
+        issued: true,
+        dnsRequirements: [],
+        checkedAt: new Date(),
+        expiresAt: null,
+      };
+    },
     remove: async () => {
       trace.push('cert.remove');
     },
@@ -130,8 +152,19 @@ describe('normaliseCustomHostname — refuses OUR addresses with their own error
     // Not "taken": the customer already HAS this address, and the wildcard
     // already serves it. A certificate request for it would collide with the
     // wildcard or sit pending for ever.
-    for (const ours of [BASE, `acme.${BASE}`, 'motir.co', 'www.motir.co']) {
+    for (const [ours, reason] of [
+      [BASE, 'tenant_base'],
+      [`acme.${BASE}`, 'tenant_base'],
+      ['motir.co', 'site_origin'],
+      ['www.motir.co', 'site_origin'],
+    ] as const) {
       expect(() => normaliseCustomHostname(ours), ours).toThrow(NotACustomerDomainError);
+      try {
+        normaliseCustomHostname(ours);
+      } catch (err) {
+        // The pane says a different sentence for each (MOTIR-9524).
+        expect((err as InstanceType<typeof NotACustomerDomainError>).reason, ours).toBe(reason);
+      }
     }
   });
 });
@@ -139,7 +172,7 @@ describe('normaliseCustomHostname — refuses OUR addresses with their own error
 describe('add', () => {
   it('creates an UNVERIFIED row carrying its ownership TXT', async () => {
     const dto = await addDomain();
-    expect(dto).toMatchObject({ hostname: HOST, status: 'unverified', isPrimary: false });
+    expect(dto).toMatchObject({ hostname: HOST, status: 'unverified', applicationId: null });
     expect(dto.verification?.name).toBe(`_motir-verify.${HOST}`);
     expect(dto.verification?.value).toMatch(/^motir-verify-/);
     // ⚠️ BOTH RECORDS, AND THE POINTING ONE FIRST (MOTIR-4278). This assertion
@@ -193,7 +226,7 @@ describe('add', () => {
     // upgrades the org to the paid tier — going through the helper would have
     // tested the paid path while claiming to test the cap.
     const err = await customDomainService
-      .add({ key: 'ACME', hostname: 'capped.acme.test', actorUserId, ctx })
+      .add({ workspaceId: ctx.workspaceId, hostname: 'capped.acme.test', actorUserId })
       .catch((e: unknown) => e);
     expect(err).toBeInstanceOf(EntitlementExceededError);
     expect((err as InstanceType<typeof EntitlementExceededError>).entitlement).toBe(
@@ -211,7 +244,11 @@ describe('verify — the side effects happen OUTSIDE any transaction, in order',
     txtRecords = [dto.verification!.value];
     onRequest = async () => ({ issued: false });
 
-    const after = await customDomainService.verify({ addressId: dto.id, actorUserId, ctx });
+    const after = await customDomainService.verify({
+      workspaceId: ctx.workspaceId,
+      addressId: dto.id,
+      actorUserId,
+    });
 
     expect(trace).toEqual(['dns', 'cert.request']);
     expect(after.status).toBe('pending_certificate');
@@ -223,7 +260,11 @@ describe('verify — the side effects happen OUTSIDE any transaction, in order',
     txtRecords = [dto.verification!.value];
     onRequest = async () => ({ issued: true });
 
-    const after = await customDomainService.verify({ addressId: dto.id, actorUserId, ctx });
+    const after = await customDomainService.verify({
+      workspaceId: ctx.workspaceId,
+      addressId: dto.id,
+      actorUserId,
+    });
     expect(after.status).toBe('issued');
     expect(after.issuedAt).not.toBeNull();
     // The ownership record stops being shown once it is no longer owed.
@@ -242,7 +283,11 @@ describe('verify — the side effects happen OUTSIDE any transaction, in order',
     const dto = await addDomain();
     txtRecords = [];
 
-    const after = await customDomainService.verify({ addressId: dto.id, actorUserId, ctx });
+    const after = await customDomainService.verify({
+      workspaceId: ctx.workspaceId,
+      addressId: dto.id,
+      actorUserId,
+    });
     expect(after.status).toBe('unverified');
     expect(after.failureReason).toContain('No _motir-verify TXT record');
     // And no certificate was requested for an unproven hostname — the ADR §5
@@ -253,7 +298,11 @@ describe('verify — the side effects happen OUTSIDE any transaction, in order',
   it('a WRONG value is reported differently from a missing one', async () => {
     const dto = await addDomain();
     txtRecords = ['motir-verify-somebody-elses'];
-    const after = await customDomainService.verify({ addressId: dto.id, actorUserId, ctx });
+    const after = await customDomainService.verify({
+      workspaceId: ctx.workspaceId,
+      addressId: dto.id,
+      actorUserId,
+    });
     expect(after.status).toBe('unverified');
     expect(after.failureReason).toContain('not the expected value');
     expect(trace).toEqual(['dns']);
@@ -265,7 +314,11 @@ describe('verify — the side effects happen OUTSIDE any transaction, in order',
     onRequest = async () => {
       throw new CertificateProviderRefusedError(422, 'hostname is not pointed at this app');
     };
-    const after = await customDomainService.verify({ addressId: dto.id, actorUserId, ctx });
+    const after = await customDomainService.verify({
+      workspaceId: ctx.workspaceId,
+      addressId: dto.id,
+      actorUserId,
+    });
     expect(after.status).toBe('failed');
     expect(after.failureReason).toBe('hostname is not pointed at this app');
   });
@@ -280,7 +333,7 @@ describe('verify — the side effects happen OUTSIDE any transaction, in order',
       throw new CertificateProviderUnavailableError('503 upstream');
     };
     await expect(
-      customDomainService.verify({ addressId: dto.id, actorUserId, ctx }),
+      customDomainService.verify({ workspaceId: ctx.workspaceId, addressId: dto.id, actorUserId }),
     ).rejects.toBeInstanceOf(CertificateProviderUnavailableError);
 
     const row = await adminDb.publicAddress.findUniqueOrThrow({ where: { id: dto.id } });
@@ -288,51 +341,49 @@ describe('verify — the side effects happen OUTSIDE any transaction, in order',
   });
 });
 
-describe('makePrimary', () => {
-  it('succeeds only for an ISSUED address', async () => {
-    const dto = await addDomain();
-    await expect(
-      customDomainService.makePrimary({ addressId: dto.id, actorUserId, ctx }),
-    ).rejects.toBeInstanceOf(AddressNotIssuedError);
-
-    await adminDb.publicAddress.update({ where: { id: dto.id }, data: { status: 'issued' } });
-    const after = await customDomainService.makePrimary({ addressId: dto.id, actorUserId, ctx });
-    expect(after.isPrimary).toBe(true);
-    const project = await adminDb.project.findUniqueOrThrow({ where: { id: projectId } });
-    expect(project.primaryAddressId).toBe(dto.id);
-  });
-
-  it('clearPrimary returns the project to the default rule', async () => {
-    const dto = await addDomain();
-    await adminDb.publicAddress.update({ where: { id: dto.id }, data: { status: 'issued' } });
-    await customDomainService.makePrimary({ addressId: dto.id, actorUserId, ctx });
-    await customDomainService.clearPrimary({ key: 'ACME', actorUserId, ctx });
-    const project = await adminDb.project.findUniqueOrThrow({ where: { id: projectId } });
-    expect(project.primaryAddressId).toBeNull();
-  });
-});
-
 describe('remove', () => {
   it('deletes the row, THEN withdraws the certificate', async () => {
     const dto = await addDomain();
     trace = [];
-    await customDomainService.remove({ addressId: dto.id, actorUserId, ctx });
+    await customDomainService.remove({
+      workspaceId: ctx.workspaceId,
+      addressId: dto.id,
+      actorUserId,
+    });
 
     expect(await adminDb.publicAddress.findUnique({ where: { id: dto.id } })).toBeNull();
     expect(trace).toEqual(['cert.remove']);
+    // ADR MOTIR-9521: the customer owns their hostname, so its removal holds
+    // nothing back from them — no reservation is written.
+    expect(await adminDb.publicHostnameReservation.count()).toBe(0);
   });
 
-  it('leaves the project standing when the removed address was its PRIMARY', async () => {
-    // The FK's SET NULL. A cascade here would make "remove this domain" delete
-    // the project it served.
+  it("a domain is the WORKSPACE's — removing it touches no project", async () => {
+    // ADR MOTIR-9521 §1: the row carries no project, so there is nothing for a
+    // delete to cascade into or fall back from.
     const dto = await addDomain();
-    await adminDb.publicAddress.update({ where: { id: dto.id }, data: { status: 'issued' } });
-    await customDomainService.makePrimary({ addressId: dto.id, actorUserId, ctx });
-    await customDomainService.remove({ addressId: dto.id, actorUserId, ctx });
+    await customDomainService.remove({
+      workspaceId: ctx.workspaceId,
+      addressId: dto.id,
+      actorUserId,
+    });
+    expect(await adminDb.project.findUnique({ where: { id: projectId } })).not.toBeNull();
+  });
 
-    const project = await adminDb.project.findUnique({ where: { id: projectId } });
-    expect(project).not.toBeNull();
-    expect(project?.primaryAddressId).toBeNull();
+  it('refuses an id that is not a customer domain of this workspace', async () => {
+    // A workspace subdomain shares the table; the lifecycle must not reach it.
+    const sub = await adminDb.publicAddress.create({
+      data: {
+        workspaceId: ctx.workspaceId,
+        hostname: `acme.${BASE}`,
+        kind: 'workspace_subdomain',
+        status: 'active',
+      },
+    });
+    await expect(
+      customDomainService.remove({ workspaceId: ctx.workspaceId, addressId: sub.id, actorUserId }),
+    ).rejects.toBeInstanceOf(AddressNotFoundError);
+    expect(await adminDb.publicAddress.findUnique({ where: { id: sub.id } })).not.toBeNull();
   });
 
   it('still succeeds when the platform withdrawal FAILS', async () => {
@@ -355,7 +406,7 @@ describe('remove', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     await expect(
-      customDomainService.remove({ addressId: dto.id, actorUserId, ctx }),
+      customDomainService.remove({ workspaceId: ctx.workspaceId, addressId: dto.id, actorUserId }),
     ).resolves.toBeUndefined();
     expect(await adminDb.publicAddress.findUnique({ where: { id: dto.id } })).toBeNull();
     // Logged with the hostname, so the leftover is findable.
@@ -367,23 +418,223 @@ describe('the gates', () => {
   it('is ABSENT off-cloud, on every operation', async () => {
     delete process.env['MOTIR_CLOUD'];
     await expect(
-      customDomainService.list({ key: 'ACME', actorUserId, ctx }),
+      customDomainService.list({ workspaceId: ctx.workspaceId, actorUserId }),
     ).rejects.toBeInstanceOf(PublicAddressesUnavailableError);
     await expect(
-      customDomainService.add({ key: 'ACME', hostname: HOST, actorUserId, ctx }),
+      customDomainService.add({ workspaceId: ctx.workspaceId, hostname: HOST, actorUserId }),
     ).rejects.toBeInstanceOf(PublicAddressesUnavailableError);
   });
 
-  it('lists what it created, with isPrimary derived', async () => {
+  it("lists the WORKSPACE's customer domains, unbound until re-pointed", async () => {
     const dto = await addDomain();
-    const rows = await customDomainService.list({ key: 'ACME', actorUserId, ctx });
-    expect(rows.map((r) => r.hostname)).toEqual([HOST]);
-    expect(rows[0]!.isPrimary).toBe(false);
-    expect(rows[0]!.id).toBe(dto.id);
+    // The domain is the workspace's, not a project's (ADR MOTIR-9521 §1), so
+    // the list is keyed by the workspace alone.
+    const listed = await customDomainService.list({ workspaceId: ctx.workspaceId, actorUserId });
+    expect(listed.map((r) => r.id)).toEqual([dto.id]);
+    expect(listed[0]!.applicationId).toBeNull();
+  });
+
+  it('lets a MEMBER read, and refuses them every write (MOTIR-9524)', async () => {
+    // The workspace ADDRESS gate — the same one the subdomain uses: any member
+    // reads, an owner, admin or manager writes.
+    const dto = await addDomain();
+    const member = await createTestUser();
+    await adminDb.workspaceMembership.create({
+      data: { userId: member.id, workspaceId: ctx.workspaceId, workspaceRole: 'member' },
+    });
+    const scope = { workspaceId: ctx.workspaceId, actorUserId: member.id };
+
+    await expect(customDomainService.list(scope)).resolves.toHaveLength(1);
+    await expect(
+      customDomainService.add({ ...scope, hostname: 'other.acme.test' }),
+    ).rejects.toBeInstanceOf(SubdomainForbiddenError);
+    await expect(
+      customDomainService.verify({ ...scope, addressId: dto.id }),
+    ).rejects.toBeInstanceOf(SubdomainForbiddenError);
+    await expect(
+      customDomainService.remove({ ...scope, addressId: dto.id }),
+    ).rejects.toBeInstanceOf(SubdomainForbiddenError);
+    expect(await adminDb.publicAddress.findUnique({ where: { id: dto.id } })).not.toBeNull();
+  });
+
+  it('the pane reads the domains, canManage on the WORKSPACE axis, and the tier cap (MOTIR-9529)', async () => {
+    await addDomain();
+    const owner = await customDomainService.listForPane({
+      workspaceId: ctx.workspaceId,
+      actorUserId,
+    });
+    expect(owner.addresses.map((a) => a.hostname)).toEqual([HOST]);
+    expect(owner.canManage).toBe(true);
+    // The cap is the tier's own number (or null for none), never re-derived.
+    expect(owner.maxDomains === null || typeof owner.maxDomains === 'number').toBe(true);
+
+    const member = await createTestUser();
+    await adminDb.workspaceMembership.create({
+      data: { userId: member.id, workspaceId: ctx.workspaceId, workspaceRole: 'member' },
+    });
+    const read = await customDomainService.listForPane({
+      workspaceId: ctx.workspaceId,
+      actorUserId: member.id,
+    });
+    expect(read.addresses).toHaveLength(1);
+    expect(read.canManage).toBe(false);
+  });
+
+  it('answers a NON-MEMBER not-found, on read and write alike', async () => {
+    const stranger = await createTestUser();
+    const scope = { workspaceId: ctx.workspaceId, actorUserId: stranger.id };
+    await expect(customDomainService.list(scope)).rejects.toBeInstanceOf(WorkspaceNotVisibleError);
+    await expect(customDomainService.add({ ...scope, hostname: HOST })).rejects.toBeInstanceOf(
+      WorkspaceNotVisibleError,
+    );
   });
 });
 
-async function addDomain(hostname = HOST) {
+describe('the application a domain names (ADR MOTIR-9521 §1)', () => {
+  it('names one of the workspace’s applications at add, and re-points or unbinds later', async () => {
+    const first = await seedApplication(ctx.workspaceId, projectId, 'shop');
+    const second = await seedApplication(ctx.workspaceId, projectId, 'blog');
+    const dto = await addDomain(HOST, first);
+    expect(dto.applicationId).toBe(first);
+
+    const repointed = await customDomainService.bind({
+      workspaceId: ctx.workspaceId,
+      addressId: dto.id,
+      actorUserId,
+      applicationId: second,
+    });
+    expect(repointed.applicationId).toBe(second);
+    // Ownership and the certificate are the hostname's: a re-point keeps the status.
+    expect(repointed.status).toBe(dto.status);
+
+    const unbound = await customDomainService.bind({
+      workspaceId: ctx.workspaceId,
+      addressId: dto.id,
+      actorUserId,
+      applicationId: null,
+    });
+    expect(unbound.applicationId).toBeNull();
+  });
+
+  it('refuses another workspace’s application, on add and on re-point alike', async () => {
+    const other = await createTestWorkspace({ name: 'Other' });
+    const otherProject = await adminDb.project.create({
+      data: {
+        workspaceId: other.workspace.id,
+        name: 'Other',
+        slug: 'other',
+        identifier: 'OTHR',
+        ...projectAccessData('public'),
+      },
+    });
+    const foreign = await seedApplication(other.workspace.id, otherProject.id, 'theirs');
+
+    await expect(addDomain(HOST, foreign)).rejects.toBeInstanceOf(ApplicationNotFoundError);
+    expect(await adminDb.publicAddress.count({ where: { hostname: HOST } })).toBe(0);
+
+    const dto = await addDomain(HOST);
+    await expect(
+      customDomainService.bind({
+        workspaceId: ctx.workspaceId,
+        addressId: dto.id,
+        actorUserId,
+        applicationId: foreign,
+      }),
+    ).rejects.toBeInstanceOf(ApplicationNotFoundError);
+  });
+
+  it('the pane reads the workspace’s applications by name and slug, and never another’s (MOTIR-9529)', async () => {
+    const blog = await seedApplication(ctx.workspaceId, projectId, 'blog');
+    const shop = await seedApplication(ctx.workspaceId, projectId, 'shop');
+    const other = await createTestWorkspace({ name: 'Elsewhere' });
+    const otherProject = await adminDb.project.create({
+      data: {
+        workspaceId: other.workspace.id,
+        name: 'Elsewhere',
+        slug: 'elsewhere',
+        identifier: 'ELSW',
+        ...projectAccessData('public'),
+      },
+    });
+    await seedApplication(other.workspace.id, otherProject.id, 'theirs');
+
+    const pane = await customDomainService.listForPane({
+      workspaceId: ctx.workspaceId,
+      actorUserId,
+    });
+    // An application has no name of its own: the picker shows its project's.
+    expect(pane.applications).toEqual([
+      { id: blog, name: 'Acme', slug: 'blog' },
+      { id: shop, name: 'Acme', slug: 'shop' },
+    ]);
+  });
+});
+
+describe('a certificate left behind is the next owner’s (ADR MOTIR-9521 §6)', () => {
+  it('a refused request for a hostname the edge already holds counts as requested', async () => {
+    const dto = await addDomain();
+    txtRecords = [dto.verification!.value];
+    held = [HOST];
+    onRequest = async () => {
+      throw new CertificateProviderRefusedError(422, 'hostname already exists');
+    };
+    const after = await customDomainService.verify({
+      workspaceId: ctx.workspaceId,
+      addressId: dto.id,
+      actorUserId,
+    });
+    expect(after.status).toBe('issued');
+    expect(trace).toEqual(['dns', 'cert.request', 'cert.check']);
+  });
+
+  it('a removed name can be added again at once, by another workspace', async () => {
+    const dto = await addDomain();
+    await customDomainService.remove({
+      workspaceId: ctx.workspaceId,
+      addressId: dto.id,
+      actorUserId,
+    });
+
+    const other = await createTestWorkspace({ name: 'Second' });
+    await adminDb.organization.update({
+      where: { id: other.workspace.organizationId },
+      data: {
+        scaledTrackerSubscription: {
+          status: 'active',
+          priceId: 'price_test',
+          quantity: 1,
+        } as never,
+      },
+    });
+    const again = await customDomainService.add({
+      workspaceId: other.workspace.id,
+      hostname: HOST,
+      actorUserId: other.owner.id,
+    });
+    expect(again.status).toBe('unverified');
+    // A FRESH token: the previous owner's TXT proves nothing for the new one.
+    expect(again.verification!.value).not.toBe(dto.verification!.value);
+  });
+});
+
+async function seedApplication(workspaceId: string, onProject: string, slug: string) {
+  const repo = await adminDb.projectRepo.create({
+    data: {
+      workspaceId,
+      projectId: onProject,
+      role: 'web',
+      name: slug,
+      position: 'a0',
+      seedSource: 'initialised',
+    },
+  });
+  const app = await adminDb.hostedApplication.create({
+    data: { workspaceId, projectId: onProject, projectRepositoryId: repo.id, target: 'fly', slug },
+  });
+  return app.id;
+}
+
+async function addDomain(hostname = HOST, applicationId?: string) {
   // Paid tier, so the cap is not the thing under test unless a case says so.
   await adminDb.organization.update({
     where: { id: organizationId },
@@ -395,5 +646,10 @@ async function addDomain(hostname = HOST) {
       } as never,
     },
   });
-  return customDomainService.add({ key: 'ACME', hostname, actorUserId, ctx });
+  return customDomainService.add({
+    workspaceId: ctx.workspaceId,
+    hostname,
+    actorUserId,
+    applicationId,
+  });
 }

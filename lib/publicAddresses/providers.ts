@@ -77,11 +77,35 @@ const fakeCertificateProvider: CertificateProvider = {
 function state(hostname: string): CertificateState {
   return {
     hostname,
-    configured: true,
+    configured: !fakeUnpointed.has(hostname.toLowerCase()),
     issued: true,
     dnsRequirements: [],
     checkedAt: new Date(),
+    // The fake has no certificate to read a date from, and inventing one is
+    // exactly what the port forbids.
+    expiresAt: null,
   };
+}
+
+/**
+ * Hostnames the fake provider reports as no longer pointed at Motir
+ * (`configured: false`, still `issued`) — the reading the sweep turns into
+ * `pointing_lost` (MOTIR-9526).
+ *
+ * ⚠️ THE ONE FAILURE THE FAKE CAN BE TOLD, AND WHY IT EARNED A CHANNEL. The
+ * happy-path rule above still holds for issuance; this is not an issuance
+ * failure but the customer's record going away, and the acceptance walk
+ * (MOTIR-9533) has to show the pane's banner for it from a browser. The spec
+ * lives in another process, so it flips this through the lane-only
+ * `/api/_test/public-addresses/fakes` door — gated like every `_test` door, and
+ * inert anyway outside the fakes.
+ */
+const fakeUnpointed = new Set<string>();
+
+export function setFakePointing(hostname: string, pointed: boolean): void {
+  const name = hostname.toLowerCase();
+  if (pointed) fakeUnpointed.delete(name);
+  else fakeUnpointed.add(name);
 }
 
 /**
@@ -99,6 +123,7 @@ export function seedFakeTxt(name: string, values: string[]): void {
 
 export function resetFakeTxt(): void {
   fakeTxt.clear();
+  fakeUnpointed.clear();
 }
 
 const fakeDnsResolver: DnsResolver = {

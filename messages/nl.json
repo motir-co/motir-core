@@ -2067,7 +2067,8 @@
         "workspace": "Werkruimte",
         "security": "Beveiliging",
         "roles": "Rollen en rechten",
-        "publicAddress": "Openbaar adres"
+        "publicAddress": "Openbaar adres",
+        "customDomains": "Eigen domeinen"
       }
     },
     "name": {
@@ -2752,95 +2753,6 @@
       "unavailable": {
         "title": "Er is geen openbare namespace geconfigureerd",
         "description": "Voor deze installatie is geen basisdomein voor tenants ingesteld, dus er kan nog geen subdomein worden geclaimd. Een beheerder stelt MOTIR_PUBLIC_TENANT_DOMAIN in."
-      },
-      "domains": {
-        "title": "Je eigen domein",
-        "subtitle": "Dit project aanbieden vanaf een domein dat je bezit.",
-        "add": "Een domein toevoegen",
-        "empty": {
-          "title": "Geen domein gekoppeld",
-          "body": "Voeg een domein toe, zoals roadmap.acme.com, en dit project is bereikbaar op de root ervan. Je maakt twee DNS-records aan; Motir geeft het certificaat uit."
-        },
-        "state": {
-          "unverified": {
-            "label": "Niet geverifieerd",
-            "hint": "Toegevoegd, maar het TXT-record _motir-verify is nog niet gezien. Er is nog geen certificaat aangevraagd."
-          },
-          "verifying": {
-            "label": "Controleren…",
-            "hint": "We zoeken nu naar het TXT-record. DNS kan een paar minuten duren."
-          },
-          "pending_certificate": {
-            "label": "Uitgeven…",
-            "hint": "Het eigendom is bewezen en het certificaat is aangevraagd. Dit duurt meestal een minuut of twee."
-          },
-          "issued": {
-            "label": "Live",
-            "hint": "Het certificaat is uitgegeven en het domein biedt dit project aan. Het wordt automatisch verlengd."
-          },
-          "failed": {
-            "label": "Mislukt",
-            "hint": "Het certificaat kon niet worden uitgegeven."
-          },
-          "expired": {
-            "label": "Verlopen",
-            "hint": "Het certificaat is verlopen en de verlenging is mislukt — bijna altijd omdat het DNS-record is gewijzigd. Het domein is niet bereikbaar."
-          },
-          "revoked": {
-            "label": "Ingetrokken",
-            "hint": "Het certificaat is ingetrokken. Het domein is niet bereikbaar en er moet een nieuw certificaat worden aangevraagd."
-          },
-          "active": {
-            "label": "Actief",
-            "hint": "Het subdomein van de werkruimte wordt omgezet en biedt dit project aan."
-          },
-          "alias": {
-            "label": "Verwijst door",
-            "hint": "Een subdomein dat is hernoemd. Het verwijst permanent door naar het huidige en wordt nooit vrijgegeven."
-          }
-        },
-        "action": {
-          "showDns": "DNS-records tonen",
-          "checkAgain": "Opnieuw controleren",
-          "requestAgain": "Opnieuw aanvragen",
-          "makePrimary": "Primair maken",
-          "remove": "Verwijderen",
-          "copy": "Waarde kopiëren",
-          "copied": "Gekopieerd"
-        },
-        "primary": {
-          "badge": "Primair",
-          "consequence": "Elk ander adres verwijst hierheen door.",
-          "disabledReason": "Een domein kan primair worden zodra het certificaat live is"
-        },
-        "addModal": {
-          "title": "Een domein toevoegen",
-          "label": "Domein",
-          "helper": "Het project is bereikbaar op de root van dit domein.",
-          "recordsHeading": "{count, plural, one {Maak dit record aan} other {Maak deze # records aan}}",
-          "type": "Type",
-          "name": "Naam",
-          "value": "Waarde",
-          "apexNote": "Een rootdomein wordt vastgezet op onze IP-adressen. Een subdomein gebruikt in plaats daarvan een CNAME, die ons volgt als die adressen ooit veranderen.",
-          "verify": "Verifiëren",
-          "later": "Ik doe dit later",
-          "cancel": "Annuleren",
-          "submit": "Domein toevoegen"
-        },
-        "removeModal": {
-          "title": "{hostname} verwijderen?",
-          "warningTitle": "Iedereen die dit adres gebruikt, krijgt een foutmelding.",
-          "warningBody": "Links naar {hostname} die al zijn gedeeld, werken niet meer. Het project blijft openbaar op zijn andere adressen.",
-          "cancel": "Annuleren",
-          "confirm": "Domein verwijderen"
-        },
-        "upgrade": {
-          "title": "Eigen domeinen zijn onderdeel van het betaalde abonnement.",
-          "body": "Het subdomein van je werkruimte zit in elk abonnement en blijft werken. Upgrade om dit project aan te bieden vanaf een domein dat je bezit.",
-          "cta": "Abonnementen bekijken"
-        },
-        "lastChecked": "Laatst gecontroleerd {when}",
-        "error": "Dat is niet gelukt. Probeer het zo opnieuw."
       }
     },
     "codeAccess": {
@@ -4429,6 +4341,7 @@
       },
       "rename": "Hernoemen",
       "release": "Vrijgeven",
+      "customDomainsLink": "Gebruik in plaats daarvan je eigen domein →",
       "lock": "Je kunt de naam op {date} weer wijzigen. Een hernoeming en een vrijgave tellen elk als één wijziging, eens per 30 dagen.",
       "lockShort": "Je kunt de naam op {date} weer wijzigen.",
       "review": "Controleren",
@@ -4473,6 +4386,100 @@
         "change": "Wijzigen in de werkruimte-instellingen →",
         "claim": "Een naam claimen voor de werkruimte →"
       }
+    },
+    "customDomains": {
+      "title": "Eigen domeinen",
+      "subtitle": "Bied de applicatie van deze werkruimte aan op een domein dat van jou is.",
+      "add": "Domein toevoegen",
+      "empty": {
+        "title": "Nog geen eigen domeinen",
+        "body": "Voeg een domein toe zoals shop.acme.com. Je maakt twee DNS-records aan, Motir geeft het certificaat uit en het domein biedt de applicatie van deze werkruimte aan."
+      },
+      "cap": "{used} van {max} domeinen",
+      "upsell": {
+        "title": "Eigen domeinen zijn inbegrepen bij het Scaled-abonnement.",
+        "body": "Je applicatie blijft bij elk abonnement bereikbaar op {host}. Upgrade om haar aan te bieden op een domein dat van jou is.",
+        "cta": "Abonnementen bekijken"
+      },
+      "dialog": {
+        "title": "Een domein toevoegen",
+        "label": "Domein",
+        "helper": "Een subdomein zoals shop.acme.com of een hoofddomein zoals acme.com.",
+        "cancel": "Annuleren",
+        "appLabel": "Applicatie",
+        "appHelper": "De applicatie die dit domein aanbiedt. Je kunt hem later wijzigen in de rij van het domein.",
+        "appChoose": "Kies een applicatie",
+        "appNone": "Nog geen applicatie",
+        "noApps": "Deze werkruimte heeft nog geen gehoste applicatie. Het domein wordt toegevoegd zonder er een te noemen, en je kunt de applicatie in de rij kiezen zodra er een is."
+      },
+      "refuse": {
+        "tenantBase": "{host} is een Motir-adres. Je werkruimte is al bereikbaar onder {base} — stel die naam in bij Openbaar adres.",
+        "siteOrigin": "{host} is van Motir. Voeg een domein toe dat van jou is.",
+        "malformed": "Voer alleen het domein in, zoals shop.acme.com — zonder https:// en zonder pad.",
+        "taken": "{host} is al gekoppeld aan een andere Motir-werkruimte. Is het van jou, verwijder het daar dan eerst.",
+        "cap": "Je abonnement bevat {max} eigen domeinen en alle {max} zijn in gebruik. Verwijder er een of bekijk de abonnementen."
+      },
+      "status": {
+        "unverified": "Niet bevestigd",
+        "pending": "In afwachting",
+        "issued": "Uitgegeven",
+        "failed": "Mislukt"
+      },
+      "records": {
+        "heading": "{count, plural, one {Maak dit record aan bij je DNS-provider en controleer daarna.} other {Maak deze # records aan bij je DNS-provider en controleer daarna.}}",
+        "apexNote": "Een hoofddomein kan geen CNAME hebben, dus het wijst naar Motirs eigen adressen, die motir-edge voor klantdomeinen vasthoudt. Als ze ooit veranderen, laten we het je vooraf weten.",
+        "type": "Type",
+        "name": "Naam",
+        "value": "Waarde"
+      },
+      "pending": "Eigendom bevestigd. Het certificaat wordt uitgegeven — dit duurt meestal een paar minuten. Deze pagina werkt zichzelf bij.",
+      "app": {
+        "serves": "Biedt <b>{app}</b> <code>{slug}</code> aan.",
+        "none": "Dit domein noemt geen applicatie, dus het biedt nog niets aan.",
+        "gone": "De applicatie die dit domein noemde is niet meer beschikbaar, dus het biedt niets aan.",
+        "change": "Applicatie wijzigen",
+        "choose": "Applicatie kiezen",
+        "controlLabel": "{action} voor {host}",
+        "title": "Applicatie voor {host}",
+        "save": "Opslaan",
+        "saving": "Opslaan…",
+        "confirm": "{host} biedt {app} aan zodra je opslaat. Het certificaat, de DNS-records bij je provider en de status blijven zoals ze zijn.",
+        "confirmNone": "{host} stopt met het aanbieden van {previous} zodra je opslaat, en biedt niets aan tot je een applicatie kiest. Het certificaat, de DNS-records bij je provider en de status blijven zoals ze zijn.",
+        "error": "De applicatie is niet gewijzigd. Probeer het zo opnieuw."
+      },
+      "cert": "Het certificaat wordt automatisch vernieuwd.",
+      "certUntil": "Het certificaat wordt automatisch vernieuwd · geldig tot {date}",
+      "fail": {
+        "txt": "We zien je eigendomsrecord niet meer",
+        "txtBody": "Herstel dit TXT-record bij je DNS-provider:",
+        "pointing": "{host} wijst niet meer naar Motir",
+        "pointingBody": "Zet het record terug op:",
+        "issuance": "Het certificaat kon niet worden uitgegeven",
+        "issuanceBody": "De certificeringsinstantie meldde:"
+      },
+      "action": {
+        "checkNow": "Nu controleren",
+        "recheck": "Opnieuw controleren",
+        "retry": "Opnieuw proberen",
+        "checking": "Bezig met controleren…",
+        "showDns": "DNS-records tonen",
+        "hideDns": "DNS-records verbergen",
+        "copy": "Kopiëren",
+        "copied": "Gekopieerd",
+        "remove": "Verwijderen"
+      },
+      "remove": {
+        "title": "{host} verwijderen?",
+        "body": "Het biedt je applicatie direct niet meer aan. Er wordt niets gereserveerd: je kunt het later opnieuw toevoegen, en een andere werkruimte kan het toevoegen als die het eigendom aantoont. De DNS-records bij je provider verwijder je zelf.",
+        "confirm": "Domein verwijderen",
+        "removing": "Bezig met verwijderen…",
+        "error": "Het domein is niet verwijderd. Probeer het zo meteen opnieuw.",
+        "toast": "{host} verwijderd",
+        "toastBody": "Het biedt je applicatie niet meer aan."
+      },
+      "readOnly": "Alleen een eigenaar of beheerder van de werkruimte kan domeinen toevoegen of verwijderen.",
+      "loadError": "De domeinen konden niet worden geladen.",
+      "error": "Dat is niet gelukt. Probeer het zo meteen opnieuw."
     }
   },
   "boards": {

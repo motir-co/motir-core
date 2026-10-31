@@ -4,7 +4,7 @@ import { EntitlementExceededError } from '@/lib/billing/errors';
 import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import {
   AddressNotFoundError,
-  AddressNotIssuedError,
+  ApplicationNotFoundError,
   InvalidHostnameError,
   NotACustomerDomainError,
 } from '@/lib/publicAddresses/errors';
@@ -137,22 +137,24 @@ export function mapCustomDomainError(err: unknown): NextResponse | null {
       { status: 403 },
     );
   }
-  if (err instanceof AddressNotFoundError) {
+  if (err instanceof AddressNotFoundError || err instanceof ApplicationNotFoundError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
   }
-  if (err instanceof InvalidHostnameError || err instanceof NotACustomerDomainError) {
+  if (err instanceof NotACustomerDomainError) {
+    // 422, with WHICH Motir namespace it is, so the pane can tell the tenant
+    // base from the site origin.
+    return NextResponse.json(
+      { code: err.code, error: err.message, hostname: err.hostname, reason: err.reason },
+      { status: 422 },
+    );
+  }
+  if (err instanceof InvalidHostnameError) {
     // 422 — well-formed request, refused by a domain rule. The two carry
     // different codes so the pane can say *you already have this address*
     // rather than *that is not a hostname*.
     return NextResponse.json(
       { code: err.code, error: err.message, hostname: err.hostname },
       { status: 422 },
-    );
-  }
-  if (err instanceof AddressNotIssuedError) {
-    return NextResponse.json(
-      { code: err.code, error: err.message, status: err.status },
-      { status: 409 },
     );
   }
   if (err instanceof EntitlementExceededError) {
