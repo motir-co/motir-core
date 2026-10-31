@@ -1199,6 +1199,19 @@ direction` — so _"why does this card delete story 6's tests?"_ follows one
 > prompt (MOTIR-5959) and the planner (MOTIR-5955 · MOTIR-5957); the gate itself
 > enforces nothing about code.
 >
+> **AMENDMENT (Bug MOTIR-10146, 2026-10-31): the AI boundary's `decision` block reads
+> BOTH deciding gates.** The block MOTIR-5958 put on `plan-tree`, `get-subtree` and
+> `get-item` was read from `decision_confirmation` alone, on `human` decisions alone,
+> so the hosted planner could not date — or even see as decided — a decision the
+> planner recorded itself (`coding_agent`, approved at its `decision_approval` gate),
+> while plan.py could through `get_approval_gate`. The batched read
+> (`approvalGateRepository.findDecisionGatesByWorkItemIds`) now joins each decision
+> to its latest gate of the kind its executor is decided at, and the block carries
+> that `kind` plus, on an overturn, the person's `noteMd` — the reason this point's
+> reader needs to explain why a direction was dropped. A `decision_approval` sent
+> back (`changes_requested`) reads `awaiting`: it is owed a new version, not settled.
+> Both fields are additive, so the two repositories deploy in either order.
+>
 > #### 11 — where the work item HANGS: a fact about placement the gate does NOT enforce
 >
 > A `task` under the epic whose work it governs — the nearest not-`done`

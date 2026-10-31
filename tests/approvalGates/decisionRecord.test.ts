@@ -209,47 +209,93 @@ describe('the keys and the row summary', () => {
   });
 });
 
-describe('the AI boundary block (MOTIR-5958)', () => {
+describe('the AI boundary block (MOTIR-5958, MOTIR-10146)', () => {
   const at = new Date('2026-09-21T10:00:00.000Z');
+  const human = { descriptionMd: COMPLETE, kind: 'decision_confirmation' as const, noteMd: null };
+  const agent = { descriptionMd: COMPLETE, kind: 'decision_approval' as const, noteMd: null };
+
   it('maps each latest-gate state, dating only a decision somebody made', () => {
-    expect(
-      aiDecisionBlockOf({ descriptionMd: COMPLETE, state: 'approved', decidedAt: at }),
-    ).toEqual({
+    expect(aiDecisionBlockOf({ ...human, state: 'approved', decidedAt: at })).toEqual({
+      kind: 'decision_confirmation',
       state: 'confirmed',
       decidedAt: '2026-09-21T10:00:00.000Z',
       replanOwed: null,
+      noteMd: null,
     });
     expect(
-      aiDecisionBlockOf({ descriptionMd: COMPLETE, state: 'overturned', decidedAt: at }),
+      aiDecisionBlockOf({
+        ...human,
+        state: 'overturned',
+        decidedAt: at,
+        noteMd: 'Not what we agreed.',
+      }),
     ).toEqual({
+      kind: 'decision_confirmation',
       state: 'overturned',
       decidedAt: '2026-09-21T10:00:00.000Z',
       replanOwed: ['MOTIR-6', 'MOTIR-7'],
+      noteMd: 'Not what we agreed.',
     });
-    expect(
-      aiDecisionBlockOf({ descriptionMd: COMPLETE, state: 'awaiting', decidedAt: null }),
-    ).toEqual({
+    expect(aiDecisionBlockOf({ ...human, state: 'awaiting', decidedAt: null })).toEqual({
+      kind: 'decision_confirmation',
       state: 'awaiting',
       decidedAt: null,
       replanOwed: null,
+      noteMd: null,
+    });
+  });
+
+  it('a planner-recorded decision approved at decision_approval reads confirmed, dated', () => {
+    expect(
+      aiDecisionBlockOf({ ...agent, state: 'approved', decidedAt: at, noteMd: 'Looks right.' }),
+    ).toEqual({
+      kind: 'decision_approval',
+      state: 'confirmed',
+      decidedAt: '2026-09-21T10:00:00.000Z',
+      replanOwed: null,
+      noteMd: null,
+    });
+  });
+
+  it('a decision_approval sent back reads awaiting, undated and without its note', () => {
+    expect(
+      aiDecisionBlockOf({ ...agent, state: 'changes_requested', decidedAt: at, noteMd: 'Redo' }),
+    ).toEqual({
+      kind: 'decision_approval',
+      state: 'awaiting',
+      decidedAt: null,
+      replanOwed: null,
+      noteMd: null,
     });
   });
 
   it('a withdrawn question, or no gate at all, reads none; a missing decidedAt stays null', () => {
     for (const state of ['superseded', null]) {
-      expect(aiDecisionBlockOf({ descriptionMd: COMPLETE, state, decidedAt: at })).toEqual({
+      expect(aiDecisionBlockOf({ ...human, state, decidedAt: at })).toEqual({
+        kind: 'decision_confirmation',
         state: 'none',
         decidedAt: null,
         replanOwed: null,
+        noteMd: null,
       });
     }
-    expect(aiDecisionBlockOf({ descriptionMd: null, state: 'approved', decidedAt: null })).toEqual({
+    expect(
+      aiDecisionBlockOf({ ...human, descriptionMd: null, state: 'approved', decidedAt: null }),
+    ).toEqual({
+      kind: 'decision_confirmation',
       state: 'confirmed',
       decidedAt: null,
       replanOwed: null,
+      noteMd: null,
     });
-    expect(
-      aiDecisionBlockOf({ descriptionMd: null, state: 'overturned', decidedAt: at }).replanOwed,
-    ).toEqual([]);
+    const bare = aiDecisionBlockOf({
+      ...human,
+      descriptionMd: null,
+      state: 'overturned',
+      decidedAt: at,
+    });
+    expect(bare.replanOwed).toEqual([]);
+    // An overturn whose note is somehow missing reads null, never undefined.
+    expect(bare.noteMd).toBeNull();
   });
 });
