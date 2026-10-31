@@ -395,6 +395,18 @@ describe('createEc2Api — the instance calls (MOTIR-9276)', () => {
     expect(sent[0]!.input).not.toHaveProperty('BlockDeviceMappings');
   });
 
+  it('sends an instance profile by name only when the launch names one (MOTIR-10123)', async () => {
+    const { sent, factory } = stub({
+      RunInstancesCommand: { Instances: [{ InstanceId: 'i-1', State: { Name: 'pending' } }] },
+    });
+    await createEc2Api(CONFIG, factory).runInstances({
+      ...LAUNCH,
+      iamInstanceProfileName: 'motir-fleet-index',
+    });
+    expect(sent[0]!.input).toMatchObject({ IamInstanceProfile: { Name: 'motir-fleet-index' } });
+    expect(sent[0]!.input).not.toHaveProperty('IamInstanceProfile.Arn');
+  });
+
   it('describes instances across reservations, passing ids, filters and paging through', async () => {
     const { sent, factory } = stub({
       DescribeInstancesCommand: {
