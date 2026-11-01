@@ -1,5 +1,5 @@
 import { withWorkspaceContext } from '@/lib/workspaces/context';
-import { deriveCodeGraphIndexState } from '@/lib/codeGraph/indexState';
+import { deriveCodeGraphIndexState, hasBuiltGraph } from '@/lib/codeGraph/indexState';
 import { resolveDriftCount } from '@/lib/codeGraph/driftCount';
 import { deriveRefreshFailing } from '@/lib/codeGraph/refreshReason';
 import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
@@ -28,13 +28,12 @@ import type { CodeContextDTO, CodeContextRepoDTO } from '@/lib/dto/codeContext';
 // THIS PROJECT work on?"* — a different question over the same facts, and the
 // reason both exist. Read it for the shape; do not duplicate its body.
 
-/** The three reads this service needs, assembled in one workspace-bound transaction. */
+/** The reads this service needs, assembled in one workspace-bound transaction. */
 async function readFacts(
   projectId: string,
   ctx: AccessActorContext,
 ): Promise<{
   rows: Awaited<ReturnType<typeof projectRepoRepository.listByProject>>;
-  indexedRefs: Set<string>;
   runningRunIds: Set<string>;
   /** Runs that reached a TERMINAL failure — the refresh nobody is coming back to. */
   terminalRunIds: Set<string>;
@@ -53,13 +52,6 @@ async function readFacts(
       where: { projectId, implementationSource: { not: null } },
       select: { id: true },
     });
-
-    // WHICH refs have ever been indexed successfully. The ledger is the only
-    // place that knows: a succeeded `system.code-graph-index` run writes its
-    // `output.repoRef`.
-    const indexedRefs = new Set(
-      await jobRunRepository.listSucceededCodeGraphIndexRepoRefs(ctx.workspaceId, tx),
-    );
 
     // ⚠️ WHICH claimed runs are ACTUALLY still running — resolved against the
     // LEDGER, never against the column alone. `GithubRepo.indexingRunId` is a
@@ -88,7 +80,6 @@ async function readFacts(
 
     return {
       rows,
-      indexedRefs,
       runningRunIds: new Set(running.map((r) => r.id)),
       terminalRunIds,
       hasImplementedWork: implemented !== null,
@@ -110,7 +101,7 @@ export async function resolveCodeContextState(
   projectId: string,
   ctx: AccessActorContext,
 ): Promise<CodeContextDTO> {
-  const { rows, indexedRefs, runningRunIds, terminalRunIds, hasImplementedWork } = await readFacts(
+  const { rows, runningRunIds, terminalRunIds, hasImplementedWork } = await readFacts(
     projectId,
     ctx,
   );
@@ -126,8 +117,11 @@ export async function resolveCodeContextState(
       {
         repoRef,
         provider: repo.provider,
+        // ⚠️ WHETHER A GRAPH EXISTS IS READ OFF THE SAME ROW AS `indexedAt` BELOW
+        // (Bug MOTIR-10171). Read from the ledger instead, a succeeded run whose
+        // settle never stamped the row answered `indexed` with `indexedAt: null`.
         indexState: deriveCodeGraphIndexState({
-          hasSucceededIndex: indexedRefs.has(repoRef),
+          hasSucceededIndex: hasBuiltGraph(repo),
           defaultBranchHeadSha: repo.defaultBranchHeadSha,
           indexedHeadSha: repo.indexedHeadSha,
           hasRunningIndex: repo.indexingRunId !== null && runningRunIds.has(repo.indexingRunId),

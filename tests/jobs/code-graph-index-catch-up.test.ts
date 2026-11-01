@@ -114,6 +114,8 @@ async function seedOrg(slug: string, repoNames: string[]) {
   return { ...seeded, organizationId };
 }
 
+const INDEXED_AT = new Date('2026-10-01T09:00:00Z');
+
 async function setRepo(
   name: string,
   data: {
@@ -128,7 +130,14 @@ async function setRepo(
       ...(data.paused !== undefined
         ? { indexPausedReason: data.paused, indexPausedAt: data.paused ? new Date() : null }
         : {}),
-      ...(data.indexedHeadSha !== undefined ? { indexedHeadSha: data.indexedHeadSha } : {}),
+      // A graph built at a known head stamps both columns together, as
+      // `markIndexSettled` does; a null sha here means "never indexed".
+      ...(data.indexedHeadSha !== undefined
+        ? {
+            indexedHeadSha: data.indexedHeadSha,
+            indexedAt: data.indexedHeadSha === null ? null : INDEXED_AT,
+          }
+        : {}),
       ...(data.defaultBranchHeadSha !== undefined
         ? { defaultBranchHeadSha: data.defaultBranchHeadSha }
         : {}),
@@ -146,20 +155,46 @@ async function pauseOf(name: string) {
 
 describe('the drift rule', () => {
   it('refreshes a moved head, clears a current graph, first-indexes a never-indexed repo, and never guesses on an unknown head', () => {
-    expect(catchUpActionFor({ indexedHeadSha: GRAPH_SHA, defaultBranchHeadSha: MOVED_SHA })).toBe(
-      'refresh_enqueued',
-    );
-    expect(catchUpActionFor({ indexedHeadSha: GRAPH_SHA, defaultBranchHeadSha: GRAPH_SHA })).toBe(
-      'pause_cleared',
-    );
-    expect(catchUpActionFor({ indexedHeadSha: null, defaultBranchHeadSha: MOVED_SHA })).toBe(
-      'index_enqueued',
-    );
-    expect(catchUpActionFor({ indexedHeadSha: GRAPH_SHA, defaultBranchHeadSha: null })).toBe(
+    const built = { indexedAt: INDEXED_AT };
+    expect(
+      catchUpActionFor({ ...built, indexedHeadSha: GRAPH_SHA, defaultBranchHeadSha: MOVED_SHA }),
+    ).toBe('refresh_enqueued');
+    expect(
+      catchUpActionFor({ ...built, indexedHeadSha: GRAPH_SHA, defaultBranchHeadSha: GRAPH_SHA }),
+    ).toBe('pause_cleared');
+    expect(
+      catchUpActionFor({ indexedAt: null, indexedHeadSha: null, defaultBranchHeadSha: MOVED_SHA }),
+    ).toBe('index_enqueued');
+    expect(
+      catchUpActionFor({ ...built, indexedHeadSha: GRAPH_SHA, defaultBranchHeadSha: null }),
+    ).toBe('head_unknown');
+  });
+
+  it('⚠️ reads whether a graph exists off `indexedAt`, the fact every surface reads (MOTIR-10171)', () => {
+    // A graph built before any push recorded a head: `indexedAt` stamped, no sha.
+    // It EXISTS, so it is not first-indexed again — and with a head now known,
+    // nothing says it matches, so it is refreshed rather than cleared.
+    expect(
+      catchUpActionFor({ ...built(), indexedHeadSha: null, defaultBranchHeadSha: MOVED_SHA }),
+    ).toBe('refresh_enqueued');
+    // …and with no head either, nothing can be said: the pause waits for a push.
+    expect(catchUpActionFor({ ...built(), indexedHeadSha: null, defaultBranchHeadSha: null })).toBe(
       'head_unknown',
     );
+    // A sha with no `indexedAt` is not a graph: the row never recorded a success.
+    expect(
+      catchUpActionFor({
+        indexedAt: null,
+        indexedHeadSha: GRAPH_SHA,
+        defaultBranchHeadSha: GRAPH_SHA,
+      }),
+    ).toBe('index_enqueued');
   });
 });
+
+function built() {
+  return { indexedAt: INDEXED_AT };
+}
 
 describe('a TOP-UP resumes indexing within one sweep — only where the head moved (AC 1)', () => {
   it('refreshes the moved repository and FAILS if the unchanged one is refreshed', async () => {

@@ -12,11 +12,9 @@ import { assertOrgAdmin, assertOrgMember } from '@/lib/services/organizationAcce
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { codeGraphOffboardingService } from '@/lib/services/codeGraphOffboardingService';
 import { projectRepository } from '@/lib/repositories/projectRepository';
-import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
-import { deriveCodeGraphIndexState } from '@/lib/codeGraph/indexState';
+import { deriveCodeGraphIndexState, hasBuiltGraph } from '@/lib/codeGraph/indexState';
 import { motirOwnedOrgLogins } from '@/lib/ciMetering/ownedOrgs';
 import { isMotirHostedOwner } from '@/lib/git/hostOwnership';
-import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { toProjectRepoDto } from '@/lib/mappers/projectRepoMappers';
 import { toOrgRepoOptionDto, toUsingProjectDto } from '@/lib/mappers/organizationRepoMappers';
@@ -355,14 +353,13 @@ export const organizationRepoService = {
    * definition of "stale", and the whole point of that module is that the
    * organisation inventory and the `Code` page cannot disagree about the word.
    *
-   * Two of the three facts are columns on the repo row. The third — is a
+   * Whether a graph exists and the two shas are columns on the repo row
+   * (`hasBuiltGraph` reads `indexed_at`, Bug MOTIR-10171). The last fact — is a
    * `running` index run still running — is resolved against the LEDGER rather
    * than off the column, because `indexing_run_id` is a pointer and a crashed run
-   * would otherwise leave a row reading `Indexing…` for ever.
-   *
-   * The ledger is workspace-keyed and this is an organisation, so the refs are
-   * gathered per workspace under system context — the same read
-   * `codeGraphOffboardingService` performs on the same table for the same reason.
+   * would otherwise leave a row reading `Indexing…` for ever. That read is
+   * organisation-wide under system context, as `codeGraphOffboardingService`
+   * reads the same table.
    */
   async listInventory(ctx: ServiceContext): Promise<OrgRepoInventoryRowDto[]> {
     const usage = await organizationRepoService.listRepositoryUsage(ctx);
@@ -373,17 +370,7 @@ export const organizationRepoService = {
       (tx) => resolveOrganizationId(ctx.workspaceId, tx),
     );
 
-    const { indexedRefs, runningRunIds } = await withSystemContext(async (tx) => {
-      const workspaces = await workspaceRepository.listByOrganization(organizationId, tx);
-      const refs = new Set<string>();
-      for (const workspace of workspaces) {
-        for (const ref of await jobRunRepository.listSucceededCodeGraphIndexRepoRefs(
-          workspace.id,
-          tx,
-        )) {
-          refs.add(ref);
-        }
-      }
+    const { runningRunIds } = await withSystemContext(async (tx) => {
       // WHICH claimed runs are actually still running. One read for the whole
       // inventory rather than one per row, and it is what makes a crashed run
       // self-healing: an `abandoned` row is simply not in this set.
@@ -391,7 +378,7 @@ export const organizationRepoService = {
         where: { functionId: 'system.code-graph-index', status: 'running' },
         select: { id: true },
       });
-      return { indexedRefs: refs, runningRunIds: new Set(running.map((r) => r.id)) };
+      return { runningRunIds: new Set(running.map((r) => r.id)) };
     });
 
     const repos = await withWorkspaceContext(
@@ -419,7 +406,8 @@ export const organizationRepoService = {
       const repo = byId.get(row.githubRepoId);
       if (!repo) return [];
       const indexState: OrgRepoIndexStateDto = deriveCodeGraphIndexState({
-        hasSucceededIndex: indexedRefs.has(row.repoRef),
+        // The row, like every other fact here (Bug MOTIR-10171) — never the ledger.
+        hasSucceededIndex: hasBuiltGraph(repo),
         defaultBranchHeadSha: repo.defaultBranchHeadSha,
         indexedHeadSha: repo.indexedHeadSha,
         hasRunningIndex: repo.indexingRunId !== null && runningRunIds.has(repo.indexingRunId),

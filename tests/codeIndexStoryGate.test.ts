@@ -110,6 +110,13 @@ async function seedSucceededIndex() {
       output: { repoRef: 'moooon/web' },
     },
   });
+  // …and the settle's stamp on the repository row, which is what every index
+  // state reads (`hasBuiltGraph`, Bug MOTIR-10171): a real success writes both.
+  const [owner, name] = 'moooon/web'.split('/');
+  await adminDb.githubRepo.updateMany({
+    where: { owner, name, indexedAt: null },
+    data: { indexedAt: new Date() },
+  });
 }
 
 const CTX = () => ({ userId: fx.ownerId, workspaceId: fx.workspaceId });

@@ -22,7 +22,7 @@
 
 /** What Motir knows about a repository's code graph. */
 export type CodeGraphIndexState =
-  /** No succeeded index run has ever carried this repository's ref. */
+  /** No graph has been built for this repository (`github_repo.indexed_at` is null). */
   | 'never'
   /** An index run is in flight FOR THIS REPOSITORY, right now. */
   | 'indexing'
@@ -33,7 +33,10 @@ export type CodeGraphIndexState =
 
 /** The facts the derivation reads — all of them motir-core's own columns. */
 export interface CodeGraphIndexFacts {
-  /** True when a succeeded `system.code-graph-index` run carries this repo's ref. */
+  /**
+   * True when a code graph has been built for this repository — read from the
+   * repository ROW through {@link hasBuiltGraph}, never from the job ledger.
+   */
   hasSucceededIndex: boolean;
   /** `github_repo.default_branch_head_sha` — what the push webhook last saw. */
   defaultBranchHeadSha: string | null;
@@ -48,6 +51,27 @@ export interface CodeGraphIndexFacts {
    * after would be worse than one that never read it at all.
    */
   hasRunningIndex: boolean;
+}
+
+/**
+ * HAS A GRAPH BEEN BUILT? — the one source of `hasSucceededIndex` (Bug MOTIR-10171).
+ *
+ * ⚠️ THE ROW, NOT THE LEDGER. Every surface that derives a state also serves the
+ * row's `indexedAt` beside it ("indexed <when>"). When the state came from the
+ * `output.repoRef` of a succeeded `job_run` and the time came from
+ * `github_repo.indexed_at`, the two could disagree: `get_code_health` answered
+ * `indexed` with `indexedAt: null` for a repository whose index succeeded before
+ * anybody had pushed to it, because the settle stamped the row only when it knew
+ * the head. The settle now stamps `indexed_at` on EVERY successful index
+ * (`githubRepoRepository.markIndexSettled`), so the column alone answers the
+ * question and a state of `indexed` or `stale` always comes with its time.
+ *
+ * `indexedAt`, not `indexedHeadSha`: the sha is the head observed when the run
+ * STARTED and is null when no push had recorded one, so it cannot say whether a
+ * graph exists — only, when known, what it was built from.
+ */
+export function hasBuiltGraph(repo: { indexedAt: Date | null }): boolean {
+  return repo.indexedAt !== null;
 }
 
 /**
