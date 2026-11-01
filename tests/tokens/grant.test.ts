@@ -340,6 +340,9 @@ describe('expandStoredGrant — reading a row written before this story', () => 
       // MOTIR-7411 — `create_page` / `update_page` make `page:edit` grantable; a
       // stale `write` row may never start rewriting a project's documents.
       'page:edit',
+      // MOTIR-10183 — `update_coding_convention` makes `ai:configure` grantable;
+      // no legacy scope ever conferred it, so a stale row never gains it.
+      'ai:configure',
     ];
     expect(GRANTABLE_PERMISSIONS).toContain('page:view');
     expect(GRANTABLE_PERMISSIONS).toContain('page:edit');

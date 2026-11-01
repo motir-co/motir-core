@@ -246,11 +246,14 @@ describe('get_code_health — registered, permissioned, documented (criteria 1, 
     expect(isBillableTool(GET_CODE_HEALTH_TOOL_NAME)).toBe(false);
   });
 
-  it('widens no grant: ai:plan was already grantable and in the CLI grant; ai:configure stays ungrantable', () => {
+  it('widens no grant: ai:plan was already grantable and in the CLI grant, and the CLI grant holds no ai:configure', () => {
     expect(GRANTABLE_PERMISSIONS).toContain('ai:plan');
     expect(CLI_TOKEN_GRANT).toContain('ai:plan');
-    expect(UNGRANTABLE_PERMISSIONS).toContain('ai:configure');
-    expect(GRANTABLE_PERMISSIONS).not.toContain('ai:configure');
+    // `ai:configure` became grantable with the convention WRITE (MOTIR-10183,
+    // AMENDMENT 5) — never through this read, and never for a `motir run` token.
+    expect(TOOL_PERMISSIONS[GET_CODE_HEALTH_TOOL_NAME]).not.toBe('ai:configure');
+    expect(CLI_TOKEN_GRANT).not.toContain('ai:configure');
+    expect(UNGRANTABLE_PERMISSIONS).not.toContain('ai:configure');
   });
 
   it('the design build script carries it (docs/mcp.md and the ADR amendment are held by mcp-doc-guards)', () => {

@@ -403,6 +403,16 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // (AMENDMENT 3 to §4), and `CLI_TOKEN_GRANT` holds the key, so every `motir run`
   // token reaches it without the grant widening.
   get_coding_convention: 'ai:plan',
+  // ── ai:configure — the convention WRITE (MOTIR-10183) ─────────────────────
+  // `aiConventionService.saveConventionByKey` → `saveConvention` asserts
+  // `ai:configure` by name — the key the /code editor's save checks, which the
+  // admin role holds — so the door asks the service's question. It is the FIRST
+  // tool to assert `ai:configure`, which therefore becomes GRANTABLE
+  // (`docs/decisions/member-facing-permissions.md` AMENDMENT 5): a token reaches
+  // the write only when its grant carries the key AND its owner's role holds it.
+  // `CLI_TOKEN_GRANT` is deliberately NOT widened — a `motir run` agent edits no
+  // repository's house rules, and no planner session lists this tool.
+  update_coding_convention: 'ai:configure',
   // MOTIR-7861 — a file's text from a project repository at a ref. The hosted
   // planner's `read_file` already shows exactly this to every `ai:plan` holder;
   // the same AMENDMENT 3 to §4 names it as a second instance.

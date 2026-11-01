@@ -3562,6 +3562,37 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  update_coding_convention: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The project key the sprint belongs to — the prefix chosen for that project at creation (e.g. "ACME"), not a reserved value.',
+      },
+      repo: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The repository whose convention to write — one in this project’s set, by its bare name ("motir-core") or as `owner/name`, case-insensitively, as `get_coding_convention` takes it.',
+      },
+      contentMd: {
+        type: 'string',
+        description:
+          'The WHOLE convention document as Markdown — it replaces the current text as a new version; the older versions stay in the history. Not blank, at most 65536 characters.',
+      },
+      baseVersion: {
+        type: 'integer',
+        minimum: 0,
+        description:
+          'The `version` your edit is based on — what `get_coding_convention` returned (0 when the repository has no convention yet). If a newer version was saved since, nothing is written and the answer carries the version that won.',
+      },
+    },
+    required: ['projectKey', 'repo', 'contentMd', 'baseVersion'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   update_folder: {
     type: 'object',
     properties: {
@@ -4639,6 +4670,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   unarchive_work_item: 'Unarchive work item',
   unlink_pull_request: 'Unlink pull request',
   unlink_work_items: 'Unlink work items',
+  update_coding_convention: 'Update coding convention',
   update_folder: 'Update folder',
   update_page: 'Update page',
   update_plan: "Correct a plan's own title and summary",
@@ -5162,6 +5194,13 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
     readOnlyHint: false,
     destructiveHint: true,
     idempotentHint: true,
+    openWorldHint: false,
+  },
+  update_coding_convention: {
+    title: 'Update coding convention',
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
     openWorldHint: false,
   },
   update_folder: {

@@ -530,6 +530,18 @@ export const TOOL_ANNOTATIONS: Record<McpToolName, McpToolAnnotations> = {
   get_code_health: { readOnlyHint: true, openWorldHint: false },
   // R: getCodingConvention.ts → aiConventionService.getPlanningConvention (motir-ai's convention store over the boundary + one user-name read).
   get_coding_convention: { readOnlyHint: true, openWorldHint: false },
+  // ⚠️ `update_coding_convention` REPLACES the text in force and is still
+  // `destructiveHint: false`, on the reasoning `update_page` records: every save is a
+  // NEW version and the replaced one stays in the convention's history, so the write
+  // is additive and reversible. A replay at the same `baseVersion` is refused
+  // CONVENTION_VERSION_CONFLICT, so it is not idempotent.
+  // W: updateCodingConvention.ts → aiConventionService.saveConventionByKey → saveConvention (motir-ai PUT /v1/convention over the private boundary — Motir's own world)
+  update_coding_convention: {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
   // R: readFile.ts → repoFileReadService.readProjectFile → GitProvider.readFileAtRef (the THIRD-PARTY git host — open world, unlike get_code_health)
   read_file: { readOnlyHint: true, openWorldHint: true },
   // R: listChangedFiles.ts → repoChangesService.listProjectChangedFiles → GitProvider.listChangedFiles (the THIRD-PARTY git host — open world, as read_file)

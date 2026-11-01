@@ -134,6 +134,12 @@ three plan-session tools, all of which spend the workspace's AI credits. Under
 the old vocabulary they travelled with _edit work items_ because nothing
 narrower existed; an agent wired only to file work items can now be denied them.
 
+**Editing a repository's coding convention is `ai:configure`** — the admin key
+the Code page's editor checks. Only `update_coding_convention` asserts it, and a
+token reaches that tool only when its grant carries the key **and** its owner is
+an admin of the project. Tokens minted before the key became grantable
+(MOTIR-10183) do not carry it.
+
 ## Authorization
 
 Besides a personal access token, an MCP client can connect with **OAuth 2.1** —
@@ -329,7 +335,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **109 tools**.
+`initialize` handshake and registers **110 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -5947,6 +5953,52 @@ beside a person's edited text; the text returned is still the one in force.
 **Permission: `ai:plan`, at the door and in the service** — as `get_code_health`
 and `read_file`, on the same argument (`docs/decisions/member-facing-permissions.md`
 AMENDMENT 3). Every `motir run` token holds it. **Read-only**, closed-world.
+
+#### `update_coding_convention`
+
+**Write one repository's coding convention** — the same save the Code page's
+editor makes, for an admin working with an agent who has approved an edit to a
+repository's house rules (MOTIR-10183). It is a thin adapter over
+`aiConventionService.saveConvention`, the editor's own method, so every rule of
+that save holds here unchanged: `contentMd` is the **whole** document and becomes
+a **new version**, `edited` by the person behind the token, and every earlier
+version stays in the history the editor shows.
+
+**Input**
+
+| Field         | Type    | Required | Notes                                                                                                          |
+| ------------- | ------- | -------- | -------------------------------------------------------------------------------------------------------------- |
+| `projectKey`  | string  | yes      | Project key, e.g. `"ACME"`.                                                                                    |
+| `repo`        | string  | yes      | A repository in the project's set — bare name or `owner/name`, case-insensitively, as `get_coding_convention`. |
+| `contentMd`   | string  | yes      | The whole convention, as Markdown. Not blank, at most 65,536 characters (the editor's limit).                  |
+| `baseVersion` | integer | yes      | The `version` the edit is based on — what `get_coding_convention` returned; `0` for a repository with none.    |
+
+**Output.** `structuredContent.state` is one of these:
+
+| `state`               | Meaning                                                                                          | Extra fields                                                                                   |
+| --------------------- | ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| `saved`               | The new version was written; the fields are the version as `get_coding_convention` now reads it. | `repoRef`, `version`, `authorKind`, `editedByName`, `editedByUserId`, `updatedAt`, `contentMd` |
+| `repo_not_in_project` | `repo` matches no repository in the set. Nothing was written; motir-ai is not called.            | `repo`, `repoSet`                                                                              |
+
+**Refusals** — each an `isError` result, and nothing is written:
+
+| Code                          | When                                                                                                                                                                         |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PERMISSION_NOT_GRANTED`      | The token's grant does not carry `ai:configure`.                                                                                                                             |
+| `PERMISSION_DENIED`           | The token's owner does not hold `ai:configure` in the project (a member or viewer).                                                                                          |
+| `CONVENTION_BLANK`            | `contentMd` is empty or whitespace — the editor's 422.                                                                                                                       |
+| `CONVENTION_TOO_LONG`         | `contentMd` is over 65,536 characters — the editor's 422.                                                                                                                    |
+| `CONVENTION_VERSION_CONFLICT` | A newer version was saved since `baseVersion` — the editor's 409. `structuredContent` carries `latestVersion` and `latest` (the version that won, with its text and author). |
+
+**Permission: `ai:configure`, at the door and in the service** — the key the
+editor's save checks, which the admin role holds. It is the first tool to assert
+that key, which is what makes it grantable to a token
+(`docs/decisions/member-facing-permissions.md` AMENDMENT 5). A token minted before
+it became grantable does not carry it; mint a new one to use this tool. It is
+**not** in the CLI's device grant, so a `motir run` agent cannot write a
+convention, and no planning session is given the tool. A write, **additive** (the
+replaced text stays a version) and not idempotent (a replay at the same
+`baseVersion` is a conflict); closed-world.
 
 #### `skeleton`
 

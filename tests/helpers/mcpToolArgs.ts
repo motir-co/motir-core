@@ -45,6 +45,14 @@ export function mcpToolArgs(t: McpToolTargets): Record<McpToolName, Record<strin
     // MOTIR-9083 — project-keyed: a non-member reads tenant A's key as not-found
     // before the repo is resolved or the boundary is asked.
     get_coding_convention: { projectKey: t.projectKey, repo: 'motir-core' },
+    // MOTIR-10183 — the convention write, project-keyed the same way: a non-member
+    // reads tenant A's key as not-found before the gate, the repo or the boundary.
+    update_coding_convention: {
+      projectKey: t.projectKey,
+      repo: 'motir-core',
+      contentMd: '# House rules',
+      baseVersion: 0,
+    },
     // MOTIR-7861 — project-keyed, so a non-member reads tenant A's key as
     // not-found before the repo is resolved or any host is asked.
     read_file: { projectKey: t.projectKey, repo: 'motir-core', path: 'README.md' },

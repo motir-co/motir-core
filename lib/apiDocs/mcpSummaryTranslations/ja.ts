@@ -492,6 +492,12 @@ export const ja: McpSummaryTranslations = {
     summary: 'エッジを削除します。作成時に使ったのと同じ関係を指定します。',
     source: 'Remove an edge, given the same relationship used to create it.',
   },
+  update_coding_convention: {
+    summary:
+      '1つのリポジトリのコーディング規約を書き込む。あなたが編集した新しいバージョンになり、その後により新しいバージョンが保存されていれば拒否される。管理者のみ。',
+    source:
+      "Write one repository's coding convention — a new version edited by you, refused when a newer one was saved since. Admins only.",
+  },
   update_folder: {
     summary:
       'フォルダーの名前を変更する、または移動して並べ替えます。1回の呼び出しでどちらか一方のみで、両方はできません。',

@@ -496,6 +496,12 @@ export const pt: McpSummaryTranslations = {
     summary: 'Remova uma aresta, dada a mesma relação usada para criá-la.',
     source: 'Remove an edge, given the same relationship used to create it.',
   },
+  update_coding_convention: {
+    summary:
+      'Escrever a convenção de código de um repositório: uma nova versão editada por si, recusada se entretanto tiver sido guardada uma mais recente. Apenas administradores.',
+    source:
+      "Write one repository's coding convention — a new version edited by you, refused when a newer one was saved since. Admins only.",
+  },
   update_folder: {
     summary:
       'Renomeie uma Pasta, ou mova-a e reordene-a — uma coisa ou outra por chamada, nunca ambas.',
