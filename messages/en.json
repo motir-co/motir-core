@@ -140,6 +140,29 @@
       "notClaimed": "We lost track of that code. Enter it again to carry on.",
       "network": "We couldn’t reach Motir. Check your connection and try again.",
       "unexpected": "Something went wrong on our side. Try again, or run motir login for a fresh code."
+    },
+    "update": {
+      "heading": "Update this terminal’s permissions?",
+      "subhead": "Check the token and the changes before you approve.",
+      "updating": "Updating",
+      "tokenSub": "Token <chip>{prefix}…</chip> · same secret, nothing to copy",
+      "askedAgo": "Code <chip>{code}</chip> · asked {ago}",
+      "workspaceSub": "The token’s workspace. It doesn’t change.",
+      "expiresValue": "In {days} days",
+      "expiresSub": "Unchanged by this update.",
+      "changes": "Changes",
+      "unchanged": "{count, plural, one {# other permission stays as it is.} other {# other permissions stay as they are.}}",
+      "warning": "Approve only if you just ran <cmd>motir auth refresh</cmd> on {hostname} yourself. If someone sent you this code, <strong>deny it</strong>: approving gives that token the changes above.",
+      "actions": "Approve or deny this update",
+      "approve": "Approve update",
+      "deny": "Deny",
+      "approvedHeading": "Permissions updated",
+      "approvedSubhead": "Nothing more to do here.",
+      "approvedBody": "Go back to your terminal — <cmd>motir auth refresh</cmd> has finished. <strong>{label}</strong> now has the CLI’s current permissions and keeps its token.",
+      "deniedBody": "Nothing changed. <strong>{label}</strong> keeps the permissions it had, and the terminal keeps its token.",
+      "deniedRetry": "Denied it by mistake? Run <cmd>motir auth refresh</cmd> again for a fresh code — this one can’t be reused.",
+      "expiredBody": "<chip>{code}</chip> is no longer valid, and nothing was changed. Run <cmd>motir auth refresh</cmd> again to get a new code.",
+      "expiredNote": "Your terminal has already stopped waiting — it reports that the code expired."
     }
   },
   "markdownEditor": {

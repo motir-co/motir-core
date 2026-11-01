@@ -1253,20 +1253,29 @@ model DeviceCode {
   /// picker). Written at approval, BEFORE the status flip, so a poll that
   /// observes `approved` always has a workspace to mint into. Cascade: deleting
   /// the workspace drops grants that would mint into it.
-  workspaceId String? @map("workspace_id")
+  workspaceId   String? @map("workspace_id")
   /// The hostname the CLI reported at `POST /api/cli/device/start`. Display-only
   /// (the approval screen's "what is connecting", and the token's `CLI · <host>`
   /// label) — never interpreted, never trusted.
-  hostname    String?
+  hostname      String?
+  /// The CLI token this grant UPDATES (`motir auth refresh`, MOTIR-10189), or
+  /// null for an ordinary `motir login` grant. Written at start, from the bearer
+  /// secret the terminal presented — so it is proof of possession, never a
+  /// value the request names. Approval sets that token's grant to
+  /// `CLI_TOKEN_GRANT` instead of minting. Cascade: revoking the token drops
+  /// the grant that would have updated it.
+  updateTokenId String? @map("update_token_id")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  user      User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  updateToken ApiToken?  @relation("DeviceCodeUpdateToken", fields: [updateTokenId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([workspaceId])
+  @@index([updateTokenId])
   @@map("device_code")
 }
 
@@ -7299,6 +7308,8 @@ model ApiToken {
   oauthAccessTokens  OauthAccessToken[]
   oauthRefreshTokens OauthRefreshToken[]
   oauthConsents      OauthConsent[]
+  /// In-flight `motir auth refresh` grants that would update this token (MOTIR-10189).
+  updateGrants       DeviceCode[]        @relation("DeviceCodeUpdateToken")
 
   // The settings-surface read: a user's tokens in a workspace, newest first.
   @@index([userId])

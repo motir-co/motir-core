@@ -7,6 +7,8 @@ import {
   DeviceGrantForbiddenError,
   DeviceGrantNotClaimedError,
   DeviceGrantNotPendingError,
+  DeviceGrantWorkspaceRequiredError,
+  DeviceUpdateRefusedError,
   InvalidDeviceGrantError,
 } from '@/lib/cliDevice/errors';
 import { NotAMemberError } from '@/lib/workspaces/errors';
@@ -53,9 +55,17 @@ export async function POST(req: Request): Promise<Response> {
       { status: 400 },
     );
   }
-  if (typeof workspaceId !== 'string' || workspaceId.length === 0) {
+  // Optional since MOTIR-10189: a `motir auth refresh` grant updates a token that
+  // already has its workspace, so its approval names none. A login without one is
+  // refused by the service (400 below), which is the only layer that knows which
+  // flow the code belongs to.
+  if (
+    workspaceId !== undefined &&
+    workspaceId !== null &&
+    (typeof workspaceId !== 'string' || workspaceId.length === 0)
+  ) {
     return NextResponse.json(
-      { code: 'BAD_REQUEST', error: 'A workspaceId is required.' },
+      { code: 'BAD_REQUEST', error: 'workspaceId must be a non-empty string.' },
       { status: 400 },
     );
   }
@@ -63,7 +73,7 @@ export async function POST(req: Request): Promise<Response> {
   try {
     await cliDeviceService.approve({
       userCode,
-      workspaceId,
+      workspaceId: typeof workspaceId === 'string' ? workspaceId : null,
       actorUserId: session.user.id,
       // Better-Auth's approve endpoint reads the session from the request itself, so
       // the cookies have to be forwarded — `getSession()` above gates the route, but
@@ -97,6 +107,14 @@ export async function POST(req: Request): Promise<Response> {
     // NOT_PENDING is the already-approved / already-denied screen.
     if (err instanceof DeviceGrantNotClaimedError || err instanceof DeviceGrantNotPendingError) {
       return NextResponse.json({ code: err.code }, { status: 409 });
+    }
+    if (err instanceof DeviceGrantWorkspaceRequiredError) {
+      return NextResponse.json({ code: err.code, error: err.message }, { status: 400 });
+    }
+    // A refresh whose token could not be updated (gone, not the approver's, or a
+    // staff session). The grant has been denied, so the terminal stops waiting.
+    if (err instanceof DeviceUpdateRefusedError) {
+      return NextResponse.json({ code: err.code }, { status: 422 });
     }
     throw err;
   }

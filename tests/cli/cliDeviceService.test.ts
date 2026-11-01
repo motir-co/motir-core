@@ -39,6 +39,7 @@ const { createTestWorkspace } = await import('../fixtures/workspaceFixtures');
 const { TEST_PASSWORD } = await import('../fixtures/userFixtures');
 const { truncateAuthTables } = await import('../helpers/db');
 const { adminDb } = await import('../helpers/adminDb');
+const { asMinted } = await import('../helpers/devicePoll');
 
 // Service-layer tests for the `motir login` device-authorization flow (Story
 // MOTIR-1863 · Subtask MOTIR-1865, implementing docs/decisions/cli-login.md).
@@ -127,7 +128,7 @@ async function claim(userCode: string, headers: Headers): Promise<void> {
 }
 
 async function poll(deviceCode: string) {
-  return cliDeviceService.poll({ deviceCode, clientId: CLI_CLIENT_ID });
+  return asMinted(await cliDeviceService.poll({ deviceCode, clientId: CLI_CLIENT_ID }));
 }
 
 /** Clear the per-grant throttle so a test can poll twice in a row on purpose. The
@@ -717,9 +718,12 @@ describe('describe — claim + what is connecting', () => {
       'hostname',
       'permissions',
       'status',
+      'update',
       'userCode',
     ]);
     expect(JSON.stringify(described)).not.toContain(grant.device_code);
+    // `update` (MOTIR-10189) names a token only for a refresh, and never its secret.
+    expect(described.update).toBeNull();
   });
 
   it('accepts a dash-grouped, lowercase code as the same grant', async () => {

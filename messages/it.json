@@ -140,6 +140,29 @@
       "notClaimed": "Abbiamo perso traccia di quel codice. Inseriscilo di nuovo per proseguire.",
       "network": "Impossibile raggiungere Motir. Controlla la connessione e riprova.",
       "unexpected": "Si è verificato un errore da parte nostra. Riprova, oppure esegui motir login per ottenere un nuovo codice."
+    },
+    "update": {
+      "heading": "Aggiornare i permessi di questo terminale?",
+      "subhead": "Controlla il token e le modifiche prima di approvare.",
+      "updating": "Aggiornamento",
+      "tokenSub": "Token <chip>{prefix}…</chip> · stesso segreto, niente da copiare",
+      "askedAgo": "Codice <chip>{code}</chip> · richiesto {ago}",
+      "workspaceSub": "L’area di lavoro del token. Non cambia.",
+      "expiresValue": "Tra {days} giorni",
+      "expiresSub": "Invariata con questo aggiornamento.",
+      "changes": "Modifiche",
+      "unchanged": "{count, plural, one {# altro permesso resta com’è.} other {# altri permessi restano come sono.}}",
+      "warning": "Approva solo se hai appena eseguito tu <cmd>motir auth refresh</cmd> su {hostname}. Se qualcuno ti ha inviato questo codice, <strong>negalo</strong>: approvando applichi a quel token le modifiche sopra.",
+      "actions": "Approva o nega questo aggiornamento",
+      "approve": "Approva aggiornamento",
+      "deny": "Nega",
+      "approvedHeading": "Permessi aggiornati",
+      "approvedSubhead": "Non c’è altro da fare qui.",
+      "approvedBody": "Torna al terminale: <cmd>motir auth refresh</cmd> è terminato. <strong>{label}</strong> ha ora i permessi attuali della CLI e mantiene il suo token.",
+      "deniedBody": "Non è cambiato nulla. <strong>{label}</strong> mantiene i permessi che aveva e il terminale mantiene il suo token.",
+      "deniedRetry": "Negato per errore? Esegui di nuovo <cmd>motir auth refresh</cmd> per un nuovo codice: questo non può essere riutilizzato.",
+      "expiredBody": "<chip>{code}</chip> non è più valido e non è stato modificato nulla. Esegui di nuovo <cmd>motir auth refresh</cmd> per ottenere un nuovo codice.",
+      "expiredNote": "Il terminale ha già smesso di attendere: segnala che il codice è scaduto."
     }
   },
   "markdownEditor": {

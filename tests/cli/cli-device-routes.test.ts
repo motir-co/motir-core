@@ -281,11 +281,14 @@ describe('POST /api/cli/device/approve', () => {
     expect(res.status).toBe(401);
   });
 
-  it('400 on a missing userCode or workspaceId', async () => {
+  it('400 on a missing userCode; a missing workspaceId is the service’s call', async () => {
     const { owner, workspace } = await createTestWorkspace();
     signInAs(owner);
     expect((await APPROVE(jsonReq('approve', { workspaceId: workspace.id }))).status).toBe(400);
-    expect((await APPROVE(jsonReq('approve', { userCode: 'ABCDEFGH' }))).status).toBe(400);
+    // Optional on the wire since MOTIR-10189 (a refresh names none): an unknown code
+    // without one is the unknown code's 404, and a LOGIN grant without one is a 400
+    // (`cliDeviceRefresh.test.ts`).
+    expect((await APPROVE(jsonReq('approve', { userCode: 'ABCDEFGH' }))).status).toBe(404);
   });
 
   it('403 for a workspace the approver is not a member of', async () => {
@@ -362,6 +365,7 @@ describe('GET /api/cli/device/grant — the approval screen’s read', () => {
       'hostname',
       'permissions',
       'status',
+      'update',
       'userCode',
     ]);
     expect(body['status']).toBe('pending');

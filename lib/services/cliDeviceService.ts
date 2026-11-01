@@ -6,8 +6,12 @@ import { deviceCodeRepository } from '@/lib/repositories/deviceCodeRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { apiTokensService } from '@/lib/services/apiTokensService';
+import { apiTokenRepository } from '@/lib/repositories/apiTokenRepository';
+import { toApiTokenDto } from '@/lib/mappers/apiTokenMappers';
+import { ApiTokenNotFoundError, InvalidTokenBindingError } from '@/lib/apiTokens/errors';
+import { ImpersonationCredentialRefusedError } from '@/lib/platform/errors';
 import { workspacesService } from '@/lib/services/workspacesService';
-import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { withUserContext, withWorkspaceContext } from '@/lib/workspaces/context';
 import { CLI_TOKEN_GRANT } from '@/lib/mcp/toolPermissions';
 // The device flow's RFC 8628 `scope` wire parameter, which is a PROTOCOL field
 // the CLI and server agree on — not our capability vocabulary. MOTIR-2572
@@ -29,6 +33,9 @@ import {
   DeviceGrantPendingError,
   DeviceGrantSlowDownError,
   DeviceGrantUnboundError,
+  DeviceGrantWorkspaceRequiredError,
+  DeviceUpdateNotCliTokenError,
+  DeviceUpdateRefusedError,
   InvalidDeviceGrantError,
 } from '@/lib/cliDevice/errors';
 import { NotAMemberError } from '@/lib/workspaces/errors';
@@ -36,13 +43,17 @@ import {
   toDeviceGrantDescriptionDTO,
   toDeviceGrantStartDTO,
   toDeviceGrantTokenDTO,
+  toDeviceGrantUpdatedDTO,
 } from '@/lib/mappers/cliDeviceMappers';
 import type { IssuedDeviceCode } from '@/lib/mappers/cliDeviceMappers';
 import type {
   DeviceGrantDescriptionDTO,
   DeviceGrantStartDTO,
   DeviceGrantTokenDTO,
+  DeviceGrantUpdatedDTO,
+  CliTokenStatusDTO,
 } from '@/lib/dto/cliDevice';
+import type { PermissionKey } from '@/lib/permissions/catalog';
 
 // The `motir login` device-authorization flow (Story MOTIR-1863 · Subtask
 // MOTIR-1865), implementing `docs/decisions/cli-login.md`. Three acts, two clients:
@@ -98,6 +109,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  */
 type PollOutcome =
   | { kind: 'granted'; userId: string; workspaceId: string; hostname: string | null }
+  | { kind: 'updated'; userId: string; tokenId: string }
   | { kind: 'invalid' }
   | { kind: 'slow_down' }
   | { kind: 'expired' }
@@ -135,7 +147,15 @@ export const cliDeviceService = {
    * No row lock here: the device code has not left the server yet, so no concurrent
    * writer can have it.
    */
-  async start(input: { hostname?: string | null }): Promise<DeviceGrantStartDTO> {
+  async start(input: {
+    hostname?: string | null;
+    /** `motir auth refresh` (MOTIR-10189): the bearer secret the terminal holds.
+     * Present ⇒ this grant UPDATES that token instead of minting one. The secret
+     * is the proof of possession — the token is resolved FROM it, never named. */
+    updateToken?: string | null;
+  }): Promise<DeviceGrantStartDTO> {
+    const updateTokenId = input.updateToken ? await resolveUpdateToken(input.updateToken) : null;
+
     const issued = (await auth.api.deviceCode({
       body: { client_id: CLI_CLIENT_ID, scope: CLI_TOKEN_SCOPES.join(' ') },
     })) as IssuedDeviceCode;
@@ -146,6 +166,7 @@ export const cliDeviceService = {
       // repository disagree about the table, which is a wiring bug, not a race.
       if (!row) throw new InvalidDeviceGrantError('The issued device code was not persisted.');
       await deviceCodeRepository.setHostname(row.id, normalizeHostname(input.hostname), tx);
+      if (updateTokenId) await deviceCodeRepository.setUpdateToken(row.id, updateTokenId, tx);
     });
 
     return toDeviceGrantStartDTO(issued);
@@ -205,6 +226,17 @@ export const cliDeviceService = {
     // they are shown to the session that owns the grant and to no one else.
     if (row.userId !== input.actorUserId) throw new DeviceGrantForbiddenError();
 
+    // An UPDATE grant names the token it would change — read as the approver, so
+    // RLS hides a token that is not theirs. A refresh code someone else's terminal
+    // opened is therefore never described to this session: the facts on the screen
+    // are the phishing defence, and a stranger's token label is not one of them.
+    if (row.updateTokenId) {
+      const token = await withUserContext(input.actorUserId, (tx) =>
+        apiTokenRepository.findByIdForUser(row.updateTokenId as string, input.actorUserId, tx),
+      );
+      if (!token) throw new DeviceGrantForbiddenError();
+      return toDeviceGrantDescriptionDTO(row, toApiTokenDto(token));
+    }
     return toDeviceGrantDescriptionDTO(row);
   },
 
@@ -229,32 +261,43 @@ export const cliDeviceService = {
    */
   async approve(input: {
     userCode: string;
-    workspaceId: string;
+    /** The workspace a NEW credential binds to. Null only for an UPDATE grant,
+     * whose token already has one. */
+    workspaceId: string | null;
     actorUserId: string;
     headers: Headers;
   }): Promise<void> {
-    // A `motir login` credential minted as the customer inside a staff "View as"
-    // session would outlive it (MOTIR-749) — refused before anything is claimed.
-    await assertNoStaffSessionCookie();
-    // The token BINDS to this workspace, so the approver must be a member of it.
-    // `apiTokensService.create` re-asserts this at mint time — the check here is what
-    // makes the refusal visible on the approval screen (403) instead of surfacing as
-    // a failed poll minutes later.
-    await workspacesService.assertMembership(input.actorUserId, input.workspaceId);
-
     const userCode = normalizeUserCode(input.userCode);
-    await db.$transaction(async (tx) => {
-      await deviceCodeRepository.lockByUserCode(userCode, tx);
-      const row = await deviceCodeRepository.findByUserCode(userCode, tx);
-      if (!row) throw new InvalidDeviceGrantError('Invalid user code');
-      if (row.expiresAt.getTime() <= Date.now()) throw new DeviceGrantExpiredError();
-      if (row.status !== 'pending') throw new DeviceGrantNotPendingError();
-      // `userId` is stamped by the plugin's `GET /device?user_code=…`, which the page
-      // calls on mount while signed in. Unclaimed means the client skipped that step.
-      if (!row.userId) throw new DeviceGrantNotClaimedError();
-      if (row.userId !== input.actorUserId) throw new DeviceGrantForbiddenError();
-      await deviceCodeRepository.setWorkspaceBinding(row.id, input.workspaceId, tx);
+    const workspaceId = input.workspaceId;
+
+    // The page sends a workspace only for a LOGIN (a refresh's token already has
+    // one), so the login's two pre-checks run exactly when it names one, before
+    // anything is claimed — the order they always had.
+    if (workspaceId) {
+      // A `motir login` credential minted as the customer inside a staff "View as"
+      // session would outlive it (MOTIR-749) — refused before anything is claimed.
+      await assertNoStaffSessionCookie();
+      // The token BINDS to this workspace, so the approver must be a member of it.
+      // `apiTokensService.create` re-asserts this at mint time — the check here is
+      // what makes the refusal visible on the approval screen (403) instead of
+      // surfacing as a failed poll minutes later.
+      await workspacesService.assertMembership(input.actorUserId, workspaceId);
+    }
+
+    // ONE locked read decides the flow. An unknown code — or a refresh whose token
+    // was deleted since, which the FK cascade takes the grant with — is the 404
+    // here, never "pick a workspace" for a flow that has none.
+    const updateTokenId = await db.$transaction(async (tx) => {
+      const row = await lockPendingClaimedRow(userCode, input.actorUserId, tx);
+      if (row.updateTokenId) return row.updateTokenId;
+      if (!workspaceId) throw new DeviceGrantWorkspaceRequiredError();
+      await deviceCodeRepository.setWorkspaceBinding(row.id, workspaceId, tx);
+      return null;
     });
+    if (updateTokenId) {
+      await approveUpdate({ ...input, userCode, updateTokenId });
+      return;
+    }
 
     try {
       // The CANONICAL code, not the raw input — so the plugin's own lookup resolves
@@ -263,6 +306,24 @@ export const cliDeviceService = {
     } catch (err) {
       throw translateApproveError(err);
     }
+  },
+
+  /**
+   * What `motir auth status` asks of its stored token (MOTIR-10189,
+   * `GET /api/cli/token`): is it a CLI sign-in, and which keys of today's
+   * `CLI_TOKEN_GRANT` does it lack? Answered from the presented secret, so it says
+   * nothing a holder of the token could not already learn from `GET /api/v1/me`;
+   * it adds only the comparison against the CLI's current set, which the CLI
+   * package cannot import.
+   */
+  async tokenStatus(secret: string): Promise<CliTokenStatusDTO> {
+    const verified = await apiTokensService.verify(secret);
+    const cliSignIn = isCliSignIn(verified);
+    const held = new Set<PermissionKey>(verified.grant);
+    return {
+      cliSignIn,
+      missing: cliSignIn ? CLI_TOKEN_GRANT.filter((key) => !held.has(key)) : [],
+    };
   },
 
   /**
@@ -276,7 +337,10 @@ export const cliDeviceService = {
    * throttle is checked BEFORE the clock is stamped: a throttled poll must not push
    * the window forward, or a hot-looping client could never recover.
    */
-  async poll(input: { deviceCode: string; clientId: string }): Promise<DeviceGrantTokenDTO> {
+  async poll(input: {
+    deviceCode: string;
+    clientId: string;
+  }): Promise<DeviceGrantTokenDTO | DeviceGrantUpdatedDTO> {
     // A `client_id` that is not the CLI's cannot be honoured — the pinned identifier
     // is what keeps an unrelated caller from driving grants on this deployment.
     if (input.clientId !== CLI_CLIENT_ID) {
@@ -312,6 +376,12 @@ export const cliDeviceService = {
         return { kind: 'denied' };
       }
       if (row.status !== 'approved') return { kind: 'pending' };
+      // An approved UPDATE: approval already changed the token, so the poll only
+      // has to consume the grant and say so. Nothing is minted.
+      if (row.updateTokenId && row.userId) {
+        await deviceCodeRepository.deleteById(row.id, tx);
+        return { kind: 'updated', userId: row.userId, tokenId: row.updateTokenId };
+      }
       // An approved row without both bindings cannot be honoured. Unreachable via
       // `approve` (which writes the workspace before the flip, under this same lock).
       if (!row.userId || !row.workspaceId) return { kind: 'unbound' };
@@ -343,9 +413,112 @@ export const cliDeviceService = {
         throw new DeviceGrantUnboundError();
       case 'granted':
         return mintForGrant(outcome);
+      case 'updated':
+        return describeUpdated(outcome);
     }
   },
 };
+
+/** A device credential — what `motir login` mints: bound to no project and to no
+ * run. Only its grant is the product's to set (`CLI_TOKEN_GRANT`). */
+function isCliSignIn(token: { projectId: string | null; dispatchRunId: string | null }): boolean {
+  return token.projectId === null && token.dispatchRunId === null;
+}
+
+/**
+ * Resolve the bearer secret `motir auth refresh` presented to the token it names.
+ * An unknown, revoked or expired secret propagates as the api-token error the
+ * start route maps to 401 — the CLI's cue to say "run `motir login`". A token that
+ * is not a CLI sign-in is refused here, before any grant exists.
+ */
+async function resolveUpdateToken(secret: string): Promise<string> {
+  const verified = await apiTokensService.verify(secret);
+  if (!isCliSignIn(verified)) throw new DeviceUpdateNotCliTokenError();
+  return verified.tokenId;
+}
+
+/**
+ * Lock the grant by user code and assert it is approvable by this actor: present,
+ * unexpired, pending, and claimed by them. Shared by both approvals, so a refresh
+ * cannot be approved in a state a login could not.
+ */
+async function lockPendingClaimedRow(
+  userCode: string,
+  actorUserId: string,
+  tx: Parameters<Parameters<typeof db.$transaction>[0]>[0],
+) {
+  await deviceCodeRepository.lockByUserCode(userCode, tx);
+  const row = await deviceCodeRepository.findByUserCode(userCode, tx);
+  if (!row) throw new InvalidDeviceGrantError('Invalid user code');
+  if (row.expiresAt.getTime() <= Date.now()) throw new DeviceGrantExpiredError();
+  if (row.status !== 'pending') throw new DeviceGrantNotPendingError();
+  // `userId` is stamped by the plugin's `GET /device?user_code=…`, which the page
+  // calls on mount while signed in. Unclaimed means the client skipped that step.
+  if (!row.userId) throw new DeviceGrantNotClaimedError();
+  if (row.userId !== actorUserId) throw new DeviceGrantForbiddenError();
+  return row;
+}
+
+/**
+ * Approve a `motir auth refresh` grant (MOTIR-10189): set the token's grant to
+ * `CLI_TOKEN_GRANT` through `apiTokensService.updatePermissions` — so the owner
+ * check, the binding check and the staff "View as" refusal are that method's own —
+ * and only then flip the grant to approved, which the terminal's poll observes.
+ *
+ * Unlike a login, the change happens HERE rather than at the poll: there is no
+ * secret to hand over, so nothing has to wait for the terminal, and the staff
+ * refusal can only be judged on the approver's own request (the poll carries no
+ * browser cookie).
+ *
+ * A refusal DENIES the grant, so the terminal stops waiting and says the token is
+ * unchanged instead of sitting on a code that can no longer succeed.
+ */
+async function approveUpdate(input: {
+  userCode: string;
+  updateTokenId: string;
+  actorUserId: string;
+  headers: Headers;
+}): Promise<void> {
+  // The grant was locked and checked (pending, unexpired, claimed by this actor) by
+  // `approve`'s own transaction a moment ago; the plugin re-checks at the flip.
+  try {
+    await apiTokensService.updatePermissions(input.actorUserId, input.updateTokenId, {
+      fixedGrant: CLI_TOKEN_GRANT,
+    });
+  } catch (err) {
+    const refused =
+      err instanceof ApiTokenNotFoundError ||
+      err instanceof InvalidTokenBindingError ||
+      err instanceof ImpersonationCredentialRefusedError;
+    if (!refused) throw err;
+    await auth.api
+      .deviceDeny({ body: { userCode: input.userCode }, headers: input.headers })
+      .catch(() => undefined);
+    throw new DeviceUpdateRefusedError((err as Error).message);
+  }
+
+  try {
+    await auth.api.deviceApprove({ body: { userCode: input.userCode }, headers: input.headers });
+  } catch (err) {
+    throw translateApproveError(err);
+  }
+}
+
+/** The answer to an approved UPDATE's poll: the token as it now stands, for the
+ * CLI's one-line confirmation. Nothing secret — the terminal already holds it. */
+async function describeUpdated(grant: {
+  userId: string;
+  tokenId: string;
+}): Promise<DeviceGrantUpdatedDTO> {
+  const token = await withUserContext(grant.userId, (tx) =>
+    apiTokenRepository.findByIdForUser(grant.tokenId, grant.userId, tx),
+  );
+  const user = await userRepository.findById(grant.userId);
+  // Revoked between the approval and this poll: the update landed on a token that
+  // no longer exists, which is the same "run `motir login`" answer as any gone token.
+  if (!token || !user) throw new InvalidDeviceGrantError('The updated token no longer exists.');
+  return toDeviceGrantUpdatedDTO({ dto: toApiTokenDto(token), user });
+}
 
 /**
  * Mint the CLI credential for a CLAIMED grant. Runs after the claim transaction has

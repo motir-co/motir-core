@@ -140,6 +140,29 @@
       "notClaimed": "Perdemos o rastro desse código. Digite-o de novo para continuar.",
       "network": "Não foi possível acessar o Motir. Verifique sua conexão e tente novamente.",
       "unexpected": "Algo deu errado do nosso lado. Tente novamente ou execute motir login para obter um código novo."
+    },
+    "update": {
+      "heading": "Atualizar as permissões deste terminal?",
+      "subhead": "Confira o token e as mudanças antes de aprovar.",
+      "updating": "Atualizando",
+      "tokenSub": "Token <chip>{prefix}…</chip> · mesmo segredo, nada para copiar",
+      "askedAgo": "Código <chip>{code}</chip> · solicitado {ago}",
+      "workspaceSub": "O espaço de trabalho do token. Ele não muda.",
+      "expiresValue": "Em {days} dias",
+      "expiresSub": "Não muda com esta atualização.",
+      "changes": "Mudanças",
+      "unchanged": "{count, plural, one {# outra permissão continua como está.} other {# outras permissões continuam como estão.}}",
+      "warning": "Aprove somente se você mesmo acabou de executar <cmd>motir auth refresh</cmd> em {hostname}. Se alguém enviou este código para você, <strong>negue</strong>: aprovar aplica a esse token as mudanças acima.",
+      "actions": "Aprovar ou negar esta atualização",
+      "approve": "Aprovar atualização",
+      "deny": "Negar",
+      "approvedHeading": "Permissões atualizadas",
+      "approvedSubhead": "Não há mais nada a fazer aqui.",
+      "approvedBody": "Volte para o terminal — <cmd>motir auth refresh</cmd> terminou. <strong>{label}</strong> agora tem as permissões atuais da CLI e mantém o token.",
+      "deniedBody": "Nada mudou. <strong>{label}</strong> mantém as permissões que tinha, e o terminal mantém o token.",
+      "deniedRetry": "Negou por engano? Execute <cmd>motir auth refresh</cmd> de novo para obter um código novo — este não pode ser reutilizado.",
+      "expiredBody": "<chip>{code}</chip> não é mais válido, e nada foi alterado. Execute <cmd>motir auth refresh</cmd> de novo para obter um código novo.",
+      "expiredNote": "Seu terminal já parou de esperar — ele informa que o código expirou."
     }
   },
   "markdownEditor": {

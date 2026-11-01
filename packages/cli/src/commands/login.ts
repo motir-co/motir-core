@@ -11,7 +11,9 @@ import {
   pollDeviceGrant,
   startDeviceGrant,
   type DeviceCredential,
+  type DeviceFlow,
   type DeviceGrant,
+  type DeviceUpdate,
 } from '../deviceAuth.js';
 
 // `motir login` — tier 2 of the three credential tiers, and the verb a person
@@ -109,7 +111,7 @@ export function groupUserCode(code: string): string {
  * All of it goes to stderr (output.ts) — stdout stays a clean payload channel, so
  * `motir login` inside a pipeline never corrupts what is being piped.
  */
-function printGrant(grant: DeviceGrant): void {
+export function printGrant(grant: DeviceGrant): void {
   info('');
   info(`  Your code:  ${groupUserCode(grant.user_code)}`);
   info(`  Open:       ${grant.verification_uri}`);
@@ -148,11 +150,24 @@ function storeCredential(serverUrl: string, credential: DeviceCredential): void 
  * wins the race and carries the better message; this budget is the backstop for a
  * server that never says so.
  */
-async function awaitApproval(input: {
+export async function awaitApproval(input: {
   serverUrl: string;
   grant: DeviceGrant;
   sleep: (ms: number) => Promise<void>;
-}): Promise<DeviceCredential> {
+}): Promise<DeviceCredential>;
+export async function awaitApproval(input: {
+  serverUrl: string;
+  grant: DeviceGrant;
+  sleep: (ms: number) => Promise<void>;
+  flow: 'refresh';
+}): Promise<DeviceUpdate>;
+export async function awaitApproval(input: {
+  serverUrl: string;
+  grant: DeviceGrant;
+  sleep: (ms: number) => Promise<void>;
+  flow?: DeviceFlow;
+}): Promise<DeviceCredential | DeviceUpdate> {
+  const refresh = input.flow === 'refresh';
   let intervalMs = Math.max(input.grant.interval, MIN_POLL_SECONDS) * 1_000;
   const budgetMs = Math.max(input.grant.expires_in, MIN_BUDGET_SECONDS) * 1_000;
   let waitedMs = 0;
@@ -164,13 +179,27 @@ async function awaitApproval(input: {
     const result = await pollDeviceGrant({
       serverUrl: input.serverUrl,
       deviceCode: input.grant.device_code,
+      flow: input.flow ?? 'login',
     });
+    // Each flow accepts only its own success. A refresh's poll already refuses a
+    // minted token, so the one mismatch left is a login answered with an update.
     if (result.state === 'granted') return result.credential;
-    // Back off and keep going — `slow_down` is a throttle, never a reason to
-    // abort (RFC 8628 §3.5). `pending` and `retry` just wait another interval.
+    if (result.state === 'updated') {
+      if (!refresh) {
+        throw new CliError(`${input.serverUrl} approved the login but returned no token.`, {
+          hint: 'Run `motir login` again to start a fresh grant.',
+        });
+      }
+      return result.update;
+    }
     if (result.state === 'slow_down') intervalMs += SLOW_DOWN_STEP_MS;
 
     if (waitedMs >= budgetMs) {
+      if (refresh) {
+        throw new CliError('Timed out waiting for approval.', {
+          hint: 'Nothing was changed. Run `motir auth refresh` again when you are ready to approve it.',
+        });
+      }
       throw new CliError('Timed out waiting for approval.', {
         hint: 'Nothing was written. Run `motir login` again when you are ready to approve it.',
       });

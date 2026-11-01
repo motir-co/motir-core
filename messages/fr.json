@@ -140,6 +140,29 @@
       "notClaimed": "Nous avons perdu la trace de ce code. Saisissez-le de nouveau pour continuer.",
       "network": "Impossible de joindre Motir. Vérifiez votre connexion et réessayez.",
       "unexpected": "Une erreur s’est produite de notre côté. Réessayez, ou exécutez motir login pour obtenir un nouveau code."
+    },
+    "update": {
+      "heading": "Mettre à jour les autorisations de ce terminal ?",
+      "subhead": "Vérifiez le jeton et les modifications avant d’approuver.",
+      "updating": "Mise à jour",
+      "tokenSub": "Jeton <chip>{prefix}…</chip> · même secret, rien à copier",
+      "askedAgo": "Code <chip>{code}</chip> · demandé {ago}",
+      "workspaceSub": "L’espace de travail du jeton. Il ne change pas.",
+      "expiresValue": "Dans {days} jours",
+      "expiresSub": "Inchangé par cette mise à jour.",
+      "changes": "Modifications",
+      "unchanged": "{count, plural, one {# autre autorisation reste inchangée.} other {# autres autorisations restent inchangées.}}",
+      "warning": "N’approuvez que si vous venez d’exécuter <cmd>motir auth refresh</cmd> vous-même sur {hostname}. Si quelqu’un vous a envoyé ce code, <strong>refusez-le</strong> : l’approuver applique à ce jeton les modifications ci-dessus.",
+      "actions": "Approuver ou refuser cette mise à jour",
+      "approve": "Approuver la mise à jour",
+      "deny": "Refuser",
+      "approvedHeading": "Autorisations mises à jour",
+      "approvedSubhead": "Vous n’avez plus rien à faire ici.",
+      "approvedBody": "Revenez à votre terminal : <cmd>motir auth refresh</cmd> est terminé. <strong>{label}</strong> dispose maintenant des autorisations actuelles de la CLI et conserve son jeton.",
+      "deniedBody": "Rien n’a changé. <strong>{label}</strong> conserve ses autorisations, et le terminal conserve son jeton.",
+      "deniedRetry": "Refusé par erreur ? Exécutez de nouveau <cmd>motir auth refresh</cmd> pour obtenir un nouveau code : celui-ci ne peut pas être réutilisé.",
+      "expiredBody": "<chip>{code}</chip> n’est plus valide et rien n’a été modifié. Exécutez de nouveau <cmd>motir auth refresh</cmd> pour obtenir un nouveau code.",
+      "expiredNote": "Votre terminal a déjà cessé d’attendre : il indique que le code a expiré."
     }
   },
   "markdownEditor": {

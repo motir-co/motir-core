@@ -140,6 +140,29 @@
       "notClaimed": "We zijn die code kwijtgeraakt. Voer hem opnieuw in om verder te gaan.",
       "network": "We konden Motir niet bereiken. Controleer je verbinding en probeer het opnieuw.",
       "unexpected": "Er ging aan onze kant iets mis. Probeer het opnieuw of voer motir login uit voor een nieuwe code."
+    },
+    "update": {
+      "heading": "De rechten van deze terminal bijwerken?",
+      "subhead": "Controleer het token en de wijzigingen voordat je goedkeurt.",
+      "updating": "Wordt bijgewerkt",
+      "tokenSub": "Token <chip>{prefix}…</chip> · zelfde secret, niets te kopiëren",
+      "askedAgo": "Code <chip>{code}</chip> · gevraagd {ago}",
+      "workspaceSub": "De werkruimte van het token. Die verandert niet.",
+      "expiresValue": "Over {days} dagen",
+      "expiresSub": "Blijft gelijk bij deze update.",
+      "changes": "Wijzigingen",
+      "unchanged": "{count, plural, one {# ander recht blijft zoals het is.} other {# andere rechten blijven zoals ze zijn.}}",
+      "warning": "Keur alleen goed als je zojuist zelf <cmd>motir auth refresh</cmd> hebt uitgevoerd op {hostname}. Heeft iemand je deze code gestuurd, <strong>weiger hem dan</strong>: goedkeuren geeft dat token de wijzigingen hierboven.",
+      "actions": "Deze update goedkeuren of weigeren",
+      "approve": "Update goedkeuren",
+      "deny": "Weigeren",
+      "approvedHeading": "Rechten bijgewerkt",
+      "approvedSubhead": "Je hoeft hier verder niets te doen.",
+      "approvedBody": "Ga terug naar je terminal — <cmd>motir auth refresh</cmd> is klaar. <strong>{label}</strong> heeft nu de huidige rechten van de CLI en houdt zijn token.",
+      "deniedBody": "Er is niets veranderd. <strong>{label}</strong> houdt de rechten die het had, en de terminal houdt zijn token.",
+      "deniedRetry": "Per ongeluk geweigerd? Voer <cmd>motir auth refresh</cmd> opnieuw uit voor een nieuwe code — deze kan niet opnieuw worden gebruikt.",
+      "expiredBody": "<chip>{code}</chip> is niet meer geldig en er is niets veranderd. Voer <cmd>motir auth refresh</cmd> opnieuw uit om een nieuwe code te krijgen.",
+      "expiredNote": "Je terminal wacht al niet meer — die meldt dat de code is verlopen."
     }
   },
   "markdownEditor": {

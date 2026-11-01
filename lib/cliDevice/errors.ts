@@ -134,3 +134,41 @@ export class DeviceGrantNotPendingError extends Error {
     this.name = 'DeviceGrantNotPendingError';
   }
 }
+
+/**
+ * `motir auth refresh` presented a credential that is not a CLI sign-in
+ * (MOTIR-10189): a hand-minted token bound to a project, or a run token. Only the
+ * device credential's grant is the product's to set — a bound token's grant is a
+ * person's choice and is edited on Settings → Account → API tokens. 422.
+ */
+export class DeviceUpdateNotCliTokenError extends Error {
+  readonly code = 'DEVICE_UPDATE_NOT_CLI_TOKEN' as const;
+  constructor() {
+    super('Only a CLI sign-in can be refreshed; edit this token’s permissions in Settings.');
+    this.name = 'DeviceUpdateNotCliTokenError';
+  }
+}
+
+/**
+ * Approving an UPDATE grant could not update the token (MOTIR-10189) — it is gone,
+ * no longer the approver's, or the approval came from inside a staff "View as"
+ * session. The grant is DENIED when this is raised, so the terminal's next poll
+ * hears `access_denied` and says the token is unchanged. 422.
+ */
+export class DeviceUpdateRefusedError extends Error {
+  readonly code = 'DEVICE_UPDATE_REFUSED' as const;
+  constructor(readonly reason: string) {
+    super(`The token could not be updated: ${reason}`);
+    this.name = 'DeviceUpdateRefusedError';
+  }
+}
+
+/** A `motir login` approval names no workspace to bind the new credential to. Only
+ * an UPDATE grant may omit it — the token it updates already has one. 400. */
+export class DeviceGrantWorkspaceRequiredError extends Error {
+  readonly code = 'DEVICE_GRANT_WORKSPACE_REQUIRED' as const;
+  constructor() {
+    super('A workspaceId is required to approve a new CLI sign-in.');
+    this.name = 'DeviceGrantWorkspaceRequiredError';
+  }
+}

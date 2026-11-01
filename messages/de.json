@@ -140,6 +140,29 @@
       "notClaimed": "Wir haben diesen Code aus den Augen verloren. Geben Sie ihn erneut ein, um fortzufahren.",
       "network": "Motir ist nicht erreichbar. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
       "unexpected": "Bei uns ist ein Fehler aufgetreten. Versuchen Sie es erneut, oder führen Sie motir login aus, um einen neuen Code zu erhalten."
+    },
+    "update": {
+      "heading": "Berechtigungen dieses Terminals aktualisieren?",
+      "subhead": "Prüfen Sie das Token und die Änderungen, bevor Sie genehmigen.",
+      "updating": "Wird aktualisiert",
+      "tokenSub": "Token <chip>{prefix}…</chip> · gleiches Secret, nichts zu kopieren",
+      "askedAgo": "Code <chip>{code}</chip> · angefordert {ago}",
+      "workspaceSub": "Der Arbeitsbereich des Tokens. Er ändert sich nicht.",
+      "expiresValue": "In {days} Tagen",
+      "expiresSub": "Bleibt bei dieser Aktualisierung unverändert.",
+      "changes": "Änderungen",
+      "unchanged": "{count, plural, one {# weitere Berechtigung bleibt unverändert.} other {# weitere Berechtigungen bleiben unverändert.}}",
+      "warning": "Genehmigen Sie nur, wenn Sie gerade selbst <cmd>motir auth refresh</cmd> auf {hostname} ausgeführt haben. Wenn Ihnen jemand diesen Code geschickt hat, <strong>lehnen Sie ab</strong>: Eine Genehmigung gibt diesem Token die oben genannten Änderungen.",
+      "actions": "Diese Aktualisierung genehmigen oder ablehnen",
+      "approve": "Aktualisierung genehmigen",
+      "deny": "Ablehnen",
+      "approvedHeading": "Berechtigungen aktualisiert",
+      "approvedSubhead": "Hier ist nichts weiter zu tun.",
+      "approvedBody": "Kehren Sie zu Ihrem Terminal zurück – <cmd>motir auth refresh</cmd> ist abgeschlossen. <strong>{label}</strong> hat jetzt die aktuellen Berechtigungen der CLI und behält sein Token.",
+      "deniedBody": "Es wurde nichts geändert. <strong>{label}</strong> behält seine bisherigen Berechtigungen, und das Terminal behält sein Token.",
+      "deniedRetry": "Versehentlich abgelehnt? Führen Sie <cmd>motir auth refresh</cmd> erneut aus, um einen neuen Code zu erhalten – dieser kann nicht wiederverwendet werden.",
+      "expiredBody": "<chip>{code}</chip> ist nicht mehr gültig, und es wurde nichts geändert. Führen Sie <cmd>motir auth refresh</cmd> erneut aus, um einen neuen Code zu erhalten.",
+      "expiredNote": "Ihr Terminal wartet bereits nicht mehr – es meldet, dass der Code abgelaufen ist."
     }
   },
   "markdownEditor": {

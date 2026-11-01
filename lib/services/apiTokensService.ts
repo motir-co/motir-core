@@ -359,7 +359,11 @@ export const apiTokensService = {
     );
     // A RUN token (MOTIR-688) is the run's, not the person's — it is never listed
     // and it is not theirs to widen.
-    if (!existing || existing.dispatchRunId !== null) throw new ApiTokenNotFoundError(tokenId);
+    // A row carrying `revokedAt` (stamped by the pre-delete revoke, see `verify`) is
+    // as dead as a deleted one, and the list never shows it: not-found too.
+    if (!existing || existing.dispatchRunId !== null || existing.revokedAt !== null) {
+      throw new ApiTokenNotFoundError(tokenId);
+    }
 
     let permissions: PermissionKey[];
     if (input.fixedGrant !== undefined) {

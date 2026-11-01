@@ -140,6 +140,29 @@
       "notClaimed": "Hemos perdido el rastro de ese código. Vuelve a introducirlo para continuar.",
       "network": "No pudimos conectar con Motir. Comprueba tu conexión y vuelve a intentarlo.",
       "unexpected": "Algo ha fallado por nuestra parte. Vuelve a intentarlo o ejecuta motir login para obtener un código nuevo."
+    },
+    "update": {
+      "heading": "¿Actualizar los permisos de este terminal?",
+      "subhead": "Revisa el token y los cambios antes de aprobar.",
+      "updating": "Actualizando",
+      "tokenSub": "Token <chip>{prefix}…</chip> · el mismo secreto, nada que copiar",
+      "askedAgo": "Código <chip>{code}</chip> · solicitado {ago}",
+      "workspaceSub": "El espacio de trabajo del token. No cambia.",
+      "expiresValue": "En {days} días",
+      "expiresSub": "No cambia con esta actualización.",
+      "changes": "Cambios",
+      "unchanged": "{count, plural, one {# permiso más se queda como está.} other {# permisos más se quedan como están.}}",
+      "warning": "Aprueba solo si acabas de ejecutar tú mismo <cmd>motir auth refresh</cmd> en {hostname}. Si alguien te ha enviado este código, <strong>deniégalo</strong>: aprobarlo da a ese token los cambios anteriores.",
+      "actions": "Aprobar o denegar esta actualización",
+      "approve": "Aprobar actualización",
+      "deny": "Denegar",
+      "approvedHeading": "Permisos actualizados",
+      "approvedSubhead": "No tienes que hacer nada más aquí.",
+      "approvedBody": "Vuelve a tu terminal: <cmd>motir auth refresh</cmd> ha terminado. <strong>{label}</strong> tiene ahora los permisos actuales de la CLI y conserva su token.",
+      "deniedBody": "No ha cambiado nada. <strong>{label}</strong> conserva los permisos que tenía y el terminal conserva su token.",
+      "deniedRetry": "¿Lo has denegado por error? Vuelve a ejecutar <cmd>motir auth refresh</cmd> para obtener un código nuevo: este no se puede reutilizar.",
+      "expiredBody": "<chip>{code}</chip> ya no es válido y no se ha cambiado nada. Vuelve a ejecutar <cmd>motir auth refresh</cmd> para obtener un código nuevo.",
+      "expiredNote": "Tu terminal ya ha dejado de esperar: indica que el código ha caducado."
     }
   },
   "markdownEditor": {

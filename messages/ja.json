@@ -140,6 +140,29 @@
       "notClaimed": "コードを確認できなくなりました。続行するにはもう一度入力してください。",
       "network": "Motir に接続できませんでした。接続を確認して、もう一度お試しください。",
       "unexpected": "こちらで問題が発生しました。もう一度お試しいただくか、motir login を実行して新しいコードを取得してください。"
+    },
+    "update": {
+      "heading": "このターミナルの権限を更新しますか？",
+      "subhead": "承認する前に、トークンと変更内容を確認してください。",
+      "updating": "更新対象",
+      "tokenSub": "トークン <chip>{prefix}…</chip> · シークレットは同じで、コピーは不要です",
+      "askedAgo": "コード <chip>{code}</chip> · {ago}に要求",
+      "workspaceSub": "トークンのワークスペースです。変更されません。",
+      "expiresValue": "{days} 日後",
+      "expiresSub": "この更新では変わりません。",
+      "changes": "変更内容",
+      "unchanged": "{count, plural, other {ほかの # 件の権限はそのままです。}}",
+      "warning": "{hostname} で自分で <cmd>motir auth refresh</cmd> を実行した直後の場合にのみ承認してください。誰かからこのコードが送られてきた場合は、<strong>拒否してください</strong>。承認すると、そのトークンに上記の変更が適用されます。",
+      "actions": "この更新を承認または拒否",
+      "approve": "更新を承認",
+      "deny": "拒否",
+      "approvedHeading": "権限を更新しました",
+      "approvedSubhead": "ここでの操作はこれで完了です。",
+      "approvedBody": "ターミナルに戻ってください。<cmd>motir auth refresh</cmd> は完了しています。<strong>{label}</strong> には CLI の現在の権限が付与され、トークンはそのまま使えます。",
+      "deniedBody": "何も変更されていません。<strong>{label}</strong> の権限は以前のままで、ターミナルのトークンもそのままです。",
+      "deniedRetry": "誤って拒否しましたか？ <cmd>motir auth refresh</cmd> をもう一度実行して新しいコードを取得してください。このコードは再利用できません。",
+      "expiredBody": "<chip>{code}</chip> は無効になっており、何も変更されていません。<cmd>motir auth refresh</cmd> をもう一度実行して新しいコードを取得してください。",
+      "expiredNote": "ターミナルはすでに待機を終了し、コードの有効期限切れを報告しています。"
     }
   },
   "markdownEditor": {

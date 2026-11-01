@@ -98,6 +98,7 @@ motir logout       [--server <url>]                   # forget the local credent
 
 motir auth login   [--server <url>] [--token <pat>]   # validate + store a PAT
 motir auth status  [--server <url>]                   # server, token prefix, owning user
+motir auth refresh [--server <url>] [--no-browser]    # give a `motir login` token current perms
 motir auth logout  [--server <url>]                   # forget the stored token
 
 motir link [--server <url>] [--workspace <slug>] [--project <key>] [--repo <name>]
