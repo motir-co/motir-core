@@ -226,7 +226,7 @@ describe('update_coding_convention — registered, permissioned, documented (AC 
     expect(tool!.title).toBe('Update coding convention');
     expect(tool!.annotations).toMatchObject({
       readOnlyHint: false,
-      destructiveHint: false,
+      destructiveHint: true,
       idempotentHint: false,
       openWorldHint: false,
     });

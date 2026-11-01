@@ -530,15 +530,18 @@ export const TOOL_ANNOTATIONS: Record<McpToolName, McpToolAnnotations> = {
   get_code_health: { readOnlyHint: true, openWorldHint: false },
   // R: getCodingConvention.ts → aiConventionService.getPlanningConvention (motir-ai's convention store over the boundary + one user-name read).
   get_coding_convention: { readOnlyHint: true, openWorldHint: false },
-  // ⚠️ `update_coding_convention` REPLACES the text in force and is still
-  // `destructiveHint: false`, on the reasoning `update_page` records: every save is a
-  // NEW version and the replaced one stays in the convention's history, so the write
-  // is additive and reversible. A replay at the same `baseVersion` is refused
+  // `update_coding_convention` REPLACES the text every agent in the repository
+  // builds against, so it is `destructiveHint: true`, as the `update_` verb rule in
+  // tests/mcp/tool-annotations.test.ts holds every update to be. `update_page` is
+  // that rule's one exception, and this tool is deliberately not a second one:
+  // the older versions do stay in the history, but the hint is what makes an MCP
+  // client ask a person first, and a convention edit is meant to be a
+  // person-approved one. A replay at the same `baseVersion` is refused
   // CONVENTION_VERSION_CONFLICT, so it is not idempotent.
   // W: updateCodingConvention.ts → aiConventionService.saveConventionByKey → saveConvention (motir-ai PUT /v1/convention over the private boundary — Motir's own world)
   update_coding_convention: {
     readOnlyHint: false,
-    destructiveHint: false,
+    destructiveHint: true,
     idempotentHint: false,
     openWorldHint: false,
   },
