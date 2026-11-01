@@ -490,6 +490,12 @@ export const ko: McpSummaryTranslations = {
     summary: '엣지를 만들 때 사용한 것과 같은 관계를 지정하여 엣지를 제거합니다.',
     source: 'Remove an edge, given the same relationship used to create it.',
   },
+  update_coding_convention: {
+    summary:
+      '저장소 하나의 코딩 규칙을 작성 — 사용자가 편집한 새 버전이 되며, 그 사이 더 새로운 버전이 저장되었으면 거부됨. 관리자 전용.',
+    source:
+      "Write one repository's coding convention — a new version edited by you, refused when a newer one was saved since. Admins only.",
+  },
   update_folder: {
     summary:
       '폴더 이름을 바꾸거나 이동 및 순서 변경을 합니다 — 한 번의 호출에서 둘 중 하나만 가능하며 동시에는 안 됩니다.',

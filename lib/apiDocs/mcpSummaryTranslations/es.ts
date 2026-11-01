@@ -500,6 +500,12 @@ export const es: McpSummaryTranslations = {
     summary: 'Elimina una arista, dada la misma relación usada para crearla.',
     source: 'Remove an edge, given the same relationship used to create it.',
   },
+  update_coding_convention: {
+    summary:
+      'Escribir la convención de código de un repositorio: una nueva versión editada por usted, rechazada si desde entonces se guardó una más reciente. Solo administradores.',
+    source:
+      "Write one repository's coding convention — a new version edited by you, refused when a newer one was saved since. Admins only.",
+  },
   update_folder: {
     summary:
       'Renombra una Carpeta, o muévela y reordénala: una cosa o la otra por llamada, nunca ambas.',
