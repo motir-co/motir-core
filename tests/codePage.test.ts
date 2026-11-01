@@ -94,7 +94,7 @@ async function linkIntoProject(
   await adminDb.projectRepo.update({ where: { id: row.id }, data: { githubRepoId } });
 }
 
-/** A succeeded index in the ledger — what makes any state but `never` reachable. */
+/** A succeeded index — the ledger row and the row's `indexedAt` stamp, what makes any state but `never` reachable. */
 async function seedSucceededIndex(repoRef: string) {
   await adminDb.jobRun.create({
     data: {
@@ -107,6 +107,13 @@ async function seedSucceededIndex(repoRef: string) {
       status: 'succeeded',
       output: { repoRef },
     },
+  });
+  // …and the settle's stamp on the repository row, which is what every index
+  // state reads (`hasBuiltGraph`, Bug MOTIR-10171): a real success writes both.
+  const [owner, name] = repoRef.split('/');
+  await adminDb.githubRepo.updateMany({
+    where: { owner, name, indexedAt: null },
+    data: { indexedAt: new Date() },
   });
 }
 

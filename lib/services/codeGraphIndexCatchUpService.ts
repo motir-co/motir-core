@@ -1,5 +1,5 @@
 import { checkIndexAllowance } from '@/lib/ai/motirAiClient';
-import { deriveCodeGraphIndexState } from '@/lib/codeGraph/indexState';
+import { deriveCodeGraphIndexState, hasBuiltGraph } from '@/lib/codeGraph/indexState';
 import {
   isIndexHardStop,
   isPoolFullPause,
@@ -121,16 +121,22 @@ const defaultDeps: IndexCatchUpDeps = {
  *
  * ⚠️ WHETHER THE GRAPH IS BEHIND IS `deriveCodeGraphIndexState`'s ANSWER, NOT A
  * SECOND ONE (`tests/codeGraph/indexState.test.ts` holds the tree to one
- * derivation). This only hands it the row's facts. `hasSucceededIndex` is read
- * from `indexedHeadSha`, which is stamped only by a succeeded run; a repository
- * indexed before that column existed reads `never` here and is given one more
- * first index — over-indexing once, never leaving a graph behind.
+ * derivation). This only hands it the row's facts. `hasSucceededIndex` is
+ * `hasBuiltGraph` — the row's `indexedAt`, the same fact every other caller hands
+ * over (Bug MOTIR-10171).
+ *
+ * ⚠️ A GRAPH BUILT AT AN UNKNOWN HEAD IS REFRESHED, NEVER CLEARED. A success that
+ * started before any push recorded a head stamps `indexedAt` and no sha. The
+ * derivation reads that as `indexed` (nothing says it is behind), but a pause is
+ * exactly the window in which pushes went unindexed, so once a head IS known
+ * nothing says the graph matches it either. It is owed a refresh — over-indexing
+ * once, never leaving a graph behind.
  */
 export function catchUpActionFor(
-  repo: Pick<IndexCatchUpCandidate, 'indexedHeadSha' | 'defaultBranchHeadSha'>,
+  repo: Pick<IndexCatchUpCandidate, 'indexedAt' | 'indexedHeadSha' | 'defaultBranchHeadSha'>,
 ): 'refresh_enqueued' | 'index_enqueued' | 'pause_cleared' | 'head_unknown' {
   const state = deriveCodeGraphIndexState({
-    hasSucceededIndex: repo.indexedHeadSha !== null,
+    hasSucceededIndex: hasBuiltGraph(repo),
     defaultBranchHeadSha: repo.defaultBranchHeadSha,
     indexedHeadSha: repo.indexedHeadSha,
     // A paused repository has nothing in flight: the pause released its claim.
@@ -140,7 +146,8 @@ export function catchUpActionFor(
   if (state === 'indexed') {
     // `indexed` with no recorded head means NOTHING says it is behind — the
     // derivation's own reading of a null head — which is not the same as current.
-    return repo.defaultBranchHeadSha === null ? 'head_unknown' : 'pause_cleared';
+    if (repo.defaultBranchHeadSha === null) return 'head_unknown';
+    return repo.indexedHeadSha === null ? 'refresh_enqueued' : 'pause_cleared';
   }
   return 'refresh_enqueued';
 }

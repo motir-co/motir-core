@@ -429,6 +429,9 @@ describe('the two reads the SURFACES depend on', () => {
         output: { indexed: true, repoRef, projectsIndexed: 1 },
       },
     });
+    // …and the settle's stamp on the repository row, the fact the state is read
+    // from (`hasBuiltGraph`, Bug MOTIR-10171).
+    await adminDb.githubRepo.update({ where: { id: repoId }, data: { indexedAt: new Date() } });
 
     const after = await organizationRepoService.listInventory(fx.ctx);
     const row = after.find((r) => r.repo.id === repoId);

@@ -93,9 +93,13 @@ async function linkIntoProject(projectId: string, githubRepoId: string, name: st
   return row.id;
 }
 
-/** A succeeded index run carrying a repo's ref — the ledger fact `hasSucceededIndex` reads. */
-function seedSucceededIndex(repoRef: string) {
-  return adminDb.jobRun.create({
+/**
+ * A succeeded index run carrying a repo's ref, the ledger row a real index writes.
+ * `stampIndexed: false` writes the ledger row ALONE — the half a settle that never
+ * stamped the repository left behind (Bug MOTIR-10171).
+ */
+async function seedSucceededIndex(repoRef: string, opts: { stampIndexed?: boolean } = {}) {
+  await adminDb.jobRun.create({
     data: {
       workspaceId: fx.workspaceId,
       functionId: 'system.code-graph-index',
@@ -106,6 +110,14 @@ function seedSucceededIndex(repoRef: string) {
       status: 'succeeded',
       output: { repoRef },
     },
+  });
+  if (opts.stampIndexed === false) return;
+  // …and the settle's stamp on the repository row, which is what every index
+  // state reads (`hasBuiltGraph`, Bug MOTIR-10171): a real success writes both.
+  const [owner, name] = repoRef.split('/');
+  await adminDb.githubRepo.updateMany({
+    where: { owner, name, indexedAt: null },
+    data: { indexedAt: new Date() },
   });
 }
 
@@ -175,6 +187,55 @@ describe('the project code-context read', () => {
     );
     expect(byRef.get('moooon/moved')!.indexState).toBe('stale');
     expect(byRef.get('moooon/unknown')!.indexState).toBe('indexed');
+  });
+
+  it('⚠️ a succeeded run naming the repository while its row was never stamped reads `never` (MOTIR-10171)', async () => {
+    // The disagreement `get_code_health` served: the state read the LEDGER (a
+    // succeeded run's `output.repoRef`) while `indexedAt` read the ROW, so a
+    // settle that never stamped the row answered `indexed` with `indexedAt: null`.
+    // Both now come off the row, so the two cannot contradict each other.
+    const repo = await seedRepo('repo-a', { defaultBranchHeadSha: null, indexedHeadSha: null });
+    await linkIntoProject(fx.projectId, repo.id, 'repo-a');
+    await seedSucceededIndex('moooon/repo-a', { stampIndexed: false });
+
+    const [row] = (await resolveCodeContextState(fx.projectId, fx.ctx)).repos;
+    expect(row).toMatchObject({ indexState: 'never', indexedAt: null });
+
+    // …and the stamp a successful settle writes is what moves it — with its time.
+    await adminDb.githubRepo.update({
+      where: { id: repo.id },
+      data: { indexedAt: new Date('2026-10-31T09:11:00Z') },
+    });
+    const [after] = (await resolveCodeContextState(fx.projectId, fx.ctx)).repos;
+    expect(after).toMatchObject({
+      indexState: 'indexed',
+      indexedAt: new Date('2026-10-31T09:11:00Z'),
+    });
+  });
+
+  it('never answers `indexed` or `stale` with `indexedAt: null`, across every row shape (MOTIR-10171)', async () => {
+    const shas = [null, 'aaa', 'bbb'] as const;
+    let n = 0;
+    for (const indexedAt of [null, new Date('2026-10-01T00:00:00Z')])
+      for (const indexedHeadSha of shas)
+        for (const defaultBranchHeadSha of shas)
+          for (const ledger of [false, true]) {
+            const name = `shape-${n++}`;
+            const repo = await seedRepo(name, { indexedAt, indexedHeadSha, defaultBranchHeadSha });
+            await linkIntoProject(fx.projectId, repo.id, name);
+            if (ledger) await seedSucceededIndex(`moooon/${name}`, { stampIndexed: false });
+          }
+
+    const { repos } = await resolveCodeContextState(fx.projectId, fx.ctx);
+    expect(repos).toHaveLength(n);
+    for (const repo of repos) {
+      if (repo.indexState === 'indexed' || repo.indexState === 'stale') {
+        expect(repo.indexedAt, repo.repoRef).not.toBeNull();
+      } else {
+        expect(repo.indexState, repo.repoRef).toBe('never');
+        expect(repo.indexedAt, repo.repoRef).toBeNull();
+      }
+    }
   });
 
   it('⚠️ a CRASHED run’s stale `indexingRunId` does NOT report `indexing`', async () => {

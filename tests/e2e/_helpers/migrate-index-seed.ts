@@ -31,6 +31,8 @@ import { db } from '@/lib/db';
 import { adminDb } from '@/tests/helpers/adminDb';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { repoRefOf } from '@/lib/github/indexEnqueue';
+import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
+import { withSystemContext } from '@/lib/workspaces/context';
 
 /** The index lane's OWN synthetic installation — deliberately not the shared
  *  `E2E_INSTALLATION_ID`, so this spec's repo set can never be perturbed by (or
@@ -127,7 +129,11 @@ export async function recordIndexRunning(workspaceId: string): Promise<string> {
 
 /**
  * A repo's container exited 0: the run succeeds and claims the repo with ONE
- * `output.repoRef`. This is the only thing that turns a row `indexed`.
+ * `output.repoRef`, and the settle stamps the repository row — the two writes a
+ * real success makes. The wizard reads the ledger row; every code-graph index
+ * state (`Code` page, organisation Git list, `get_code_health`) reads the row's
+ * `indexedAt` (`hasBuiltGraph`, Bug MOTIR-10171), so the seed writes both through
+ * the product's own settle.
  */
 export async function recordIndexSucceeded(
   workspaceId: string,
@@ -145,16 +151,23 @@ export async function recordIndexSucceeded(
         output: { indexed: true, repoRef, projectsIndexed: 1 },
       },
     });
-    return;
+  } else {
+    await db.jobRun.create({
+      data: {
+        ...ledgerRow(workspaceId, 'succeeded'),
+        finishedAt,
+        durationMs: 4200,
+        output: { indexed: true, repoRef, projectsIndexed: 1 },
+      },
+    });
   }
-  await db.jobRun.create({
-    data: {
-      ...ledgerRow(workspaceId, 'succeeded'),
-      finishedAt,
-      durationMs: 4200,
-      output: { indexed: true, repoRef, projectsIndexed: 1 },
-    },
+  const { organizationId } = await adminDb.workspace.findUniqueOrThrow({
+    where: { id: workspaceId },
+    select: { organizationId: true },
   });
+  await withSystemContext((tx) =>
+    githubRepoRepository.markIndexSettled(repoRef, organizationId, { indexedAt: finishedAt }, tx),
+  );
 }
 
 /**

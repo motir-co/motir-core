@@ -16,7 +16,8 @@
 // ⚠️ ONE DEVIATION FROM THE CARD, RECORDED RATHER THAN HIDDEN. The card says
 // recovery goes through `recordIndexSucceeded`, "which runs the shipped settle
 // path and its clear". It does not: that helper writes a succeeded LEDGER row and
-// nothing else (`_helpers/migrate-index-seed.ts`). So recovery here makes BOTH
+// the settle's `markIndexSettled` stamp (MOTIR-10171), but never the refusal
+// clear (`_helpers/migrate-index-seed.ts`). So recovery here makes BOTH
 // writes an indexed run makes — the ledger row through that helper, and the
 // repository settle + refusal clear through the SHIPPED repository methods
 // `indexFleetSteps.settleIndexingRepo` calls (`markIndexSettled`,

@@ -107,6 +107,13 @@ async function seedSucceededIndex(repoRef: string) {
       output: { repoRef },
     },
   });
+  // …and the settle's stamp on the repository row, which is what every index
+  // state reads (`hasBuiltGraph`, Bug MOTIR-10171): a real success writes both.
+  const [owner, name] = repoRef.split('/');
+  await adminDb.githubRepo.updateMany({
+    where: { owner, name, indexedAt: null },
+    data: { indexedAt: new Date() },
+  });
 }
 
 // MOTIR-4653 — `resolveProjectCodeContext` reads the PROJECT's configured set, so the
