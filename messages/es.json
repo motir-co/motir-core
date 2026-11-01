@@ -3978,6 +3978,40 @@
       "expiresNever": "Nunca",
       "lastUsedNever": "Nunca",
       "revokeAria": "Revocar el token {label}",
+      "editAria": "Editar los permisos de {label}",
+      "edit": {
+        "title": "Editar permisos",
+        "description": "Cambia lo que puede hacer este token. El token en sí no cambia.",
+        "facts": {
+          "label": "Nombre",
+          "token": "Token",
+          "boundTo": "Vinculado a",
+          "expires": "Caduca"
+        },
+        "factsLocked": "Estos datos se mantienen. Para cambiarlos, crea un token nuevo.",
+        "sameSecret": "El mismo token, el mismo secreto. Los agentes que ya lo usan reciben los nuevos permisos en su próxima llamada: no hay nada que volver a copiar.",
+        "changes": {
+          "label": "Cambios",
+          "adding": "Se añade",
+          "removing": "Se quita",
+          "none": "Aún no hay cambios. Activa o desactiva un permiso para cambiarlo."
+        },
+        "emptyError": "Mantén al menos un permiso. Para que este token deje de funcionar, revócalo.",
+        "refused": "No puedes conceder <strong>{permission}</strong> en {project}, así que no se ha cambiado nada. Está desactivado abajo: vuelve a guardar sin él.",
+        "gone": {
+          "title": "Este token ya no existe",
+          "body": "Se revocó en otro lugar, así que no hay nada que cambiar. Cierra esto y desaparecerá de la lista.",
+          "close": "Cerrar"
+        },
+        "save": "Guardar permisos",
+        "cancel": "Cancelar",
+        "errorTitle": "No se pudieron actualizar los permisos",
+        "errorGeneric": "Algo salió mal. No se ha cambiado nada; vuelve a intentarlo.",
+        "staffUnavailable": "No puedes editar los permisos de un token en una sesión de personal.",
+        "cliUnavailable": "Un inicio de sesión de la CLI tiene los permisos propios de la CLI. Ejecuta motir auth refresh en ese terminal para actualizarlo.",
+        "updatedTitle": "Permisos actualizados",
+        "updatedBody": "«{label}» conserva su secreto. Los agentes aplican el cambio en su próxima llamada."
+      },
       "expiry": {
         "d30": "30 días",
         "d90": "90 días",

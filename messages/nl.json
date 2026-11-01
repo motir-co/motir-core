@@ -3978,6 +3978,40 @@
       "expiresNever": "Nooit",
       "lastUsedNever": "Nooit",
       "revokeAria": "Token {label} intrekken",
+      "editAria": "Rechten voor {label} bewerken",
+      "edit": {
+        "title": "Rechten bewerken",
+        "description": "Wijzig wat dit token mag doen. Het token zelf blijft hetzelfde.",
+        "facts": {
+          "label": "Label",
+          "token": "Token",
+          "boundTo": "Gekoppeld aan",
+          "expires": "Verloopt"
+        },
+        "factsLocked": "Deze blijven zoals ze zijn. Maak een nieuw token aan om ze te wijzigen.",
+        "sameSecret": "Hetzelfde token, hetzelfde geheim. Agents die het al gebruiken krijgen de nieuwe rechten bij hun volgende aanroep — er hoeft niets opnieuw gekopieerd te worden.",
+        "changes": {
+          "label": "Wijzigingen",
+          "adding": "Erbij",
+          "removing": "Eraf",
+          "none": "Nog geen wijzigingen. Zet een recht aan of uit om het te wijzigen."
+        },
+        "emptyError": "Houd minstens één recht over. Trek dit token in als je het wilt laten stoppen.",
+        "refused": "Je kunt <strong>{permission}</strong> niet toekennen in {project}, dus er is niets gewijzigd. Het staat hieronder uit — sla opnieuw op zonder dit recht.",
+        "gone": {
+          "title": "Dit token bestaat niet meer",
+          "body": "Het is ergens anders ingetrokken, dus er valt niets te wijzigen. Sluit dit venster en het verdwijnt uit de lijst.",
+          "close": "Sluiten"
+        },
+        "save": "Rechten opslaan",
+        "cancel": "Annuleren",
+        "errorTitle": "Kan de rechten niet bijwerken",
+        "errorGeneric": "Er is iets misgegaan. Er is niets gewijzigd — probeer het opnieuw.",
+        "staffUnavailable": "In een staff-sessie kun je de rechten van een token niet bewerken.",
+        "cliUnavailable": "Een CLI-aanmelding heeft de eigen rechten van de CLI. Voer motir auth refresh uit in die terminal om ze bij te werken.",
+        "updatedTitle": "Rechten bijgewerkt",
+        "updatedBody": "„{label}” behoudt zijn geheim. Agents nemen de wijziging over bij hun volgende aanroep."
+      },
       "expiry": {
         "d30": "30 dagen",
         "d90": "90 dagen",

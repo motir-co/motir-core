@@ -3978,6 +3978,40 @@
       "expiresNever": "Nie",
       "lastUsedNever": "Nie",
       "revokeAria": "Token {label} widerrufen",
+      "editAria": "Berechtigungen für {label} bearbeiten",
+      "edit": {
+        "title": "Berechtigungen bearbeiten",
+        "description": "Ändern Sie, was dieses Token darf. Das Token selbst bleibt dasselbe.",
+        "facts": {
+          "label": "Bezeichnung",
+          "token": "Token",
+          "boundTo": "Gebunden an",
+          "expires": "Läuft ab"
+        },
+        "factsLocked": "Diese Angaben bleiben, wie sie sind. Um sie zu ändern, erstellen Sie ein neues Token.",
+        "sameSecret": "Dasselbe Token, dasselbe Secret. Agents, die es bereits nutzen, erhalten die neuen Berechtigungen beim nächsten Aufruf – es muss nichts erneut kopiert werden.",
+        "changes": {
+          "label": "Änderungen",
+          "adding": "Hinzu",
+          "removing": "Entfernt",
+          "none": "Noch keine Änderungen. Schalten Sie eine Berechtigung ein oder aus, um sie zu ändern."
+        },
+        "emptyError": "Behalten Sie mindestens eine Berechtigung. Um dieses Token stillzulegen, widerrufen Sie es stattdessen.",
+        "refused": "Sie können <strong>{permission}</strong> in {project} nicht vergeben, daher wurde nichts geändert. Die Berechtigung ist unten ausgeschaltet – speichern Sie erneut ohne sie.",
+        "gone": {
+          "title": "Dieses Token existiert nicht mehr",
+          "body": "Es wurde an anderer Stelle widerrufen, daher gibt es nichts zu ändern. Schließen Sie dieses Fenster, dann verschwindet es aus der Liste.",
+          "close": "Schließen"
+        },
+        "save": "Berechtigungen speichern",
+        "cancel": "Abbrechen",
+        "errorTitle": "Berechtigungen konnten nicht aktualisiert werden",
+        "errorGeneric": "Etwas ist schiefgelaufen. Es wurde nichts geändert – bitte versuchen Sie es erneut.",
+        "staffUnavailable": "In einer Staff-Sitzung können Sie die Berechtigungen eines Tokens nicht bearbeiten.",
+        "cliUnavailable": "Eine CLI-Anmeldung hat die eigenen Berechtigungen der CLI. Führen Sie motir auth refresh in diesem Terminal aus, um sie zu aktualisieren.",
+        "updatedTitle": "Berechtigungen aktualisiert",
+        "updatedBody": "„{label}“ behält sein Secret. Agents übernehmen die Änderung beim nächsten Aufruf."
+      },
       "expiry": {
         "d30": "30 Tage",
         "d90": "90 Tage",

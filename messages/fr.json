@@ -3978,6 +3978,40 @@
       "expiresNever": "Jamais",
       "lastUsedNever": "Jamais",
       "revokeAria": "Révoquer le jeton {label}",
+      "editAria": "Modifier les permissions de {label}",
+      "edit": {
+        "title": "Modifier les permissions",
+        "description": "Changez ce que ce jeton peut faire. Le jeton lui-même reste le même.",
+        "facts": {
+          "label": "Libellé",
+          "token": "Jeton",
+          "boundTo": "Lié à",
+          "expires": "Expiration"
+        },
+        "factsLocked": "Ces informations restent inchangées. Pour les modifier, créez un nouveau jeton.",
+        "sameSecret": "Même jeton, même secret. Les agents qui l’utilisent déjà reçoivent les nouvelles permissions à leur prochain appel — il n’y a rien à recopier.",
+        "changes": {
+          "label": "Modifications",
+          "adding": "Ajout",
+          "removing": "Retrait",
+          "none": "Aucune modification pour l’instant. Activez ou désactivez une permission pour la modifier."
+        },
+        "emptyError": "Gardez au moins une permission. Pour que ce jeton cesse de fonctionner, révoquez-le plutôt.",
+        "refused": "Vous ne pouvez pas accorder <strong>{permission}</strong> dans {project} : rien n’a donc été modifié. Elle est désactivée ci-dessous — enregistrez à nouveau sans elle.",
+        "gone": {
+          "title": "Ce jeton n’existe plus",
+          "body": "Il a été révoqué ailleurs : il n’y a donc rien à modifier. Fermez cette fenêtre et il disparaîtra de la liste.",
+          "close": "Fermer"
+        },
+        "save": "Enregistrer les permissions",
+        "cancel": "Annuler",
+        "errorTitle": "Impossible de mettre à jour les permissions",
+        "errorGeneric": "Un problème est survenu. Rien n’a été modifié — veuillez réessayer.",
+        "staffUnavailable": "Vous ne pouvez pas modifier les permissions d’un jeton dans une session staff.",
+        "cliUnavailable": "Une connexion CLI a les permissions propres à la CLI. Exécutez motir auth refresh dans ce terminal pour la mettre à jour.",
+        "updatedTitle": "Permissions mises à jour",
+        "updatedBody": "« {label} » conserve son secret. Les agents appliquent la modification à leur prochain appel."
+      },
       "expiry": {
         "d30": "30 jours",
         "d90": "90 jours",

@@ -62,3 +62,44 @@ export async function revokeToken(tokenId: string): Promise<void> {
   const res = await fetch(`${BASE}/${encodeURIComponent(tokenId)}`, { method: 'DELETE' });
   if (!res.ok) throw new ApiError(await readErrorCode(res));
 }
+
+/** The update was refused because the owner cannot grant these permissions in
+ * the token's project (MOTIR-10188) — a 403 that NAMES them, so the edit modal
+ * can lock exactly those rows and say which one it was. */
+export class TokenPermissionsRefusedError extends ApiError {
+  constructor(readonly permissions: string[]) {
+    super('API_TOKEN_INVALID_PERMISSION');
+    this.name = 'TokenPermissionsRefusedError';
+  }
+}
+
+/**
+ * Replace a token's permissions (MOTIR-10188). The token keeps its secret,
+ * label, binding and expiry; the answer is the updated row, which the caller
+ * swaps into its own list state. A refused permission throws
+ * {@link TokenPermissionsRefusedError}; every other refusal an {@link ApiError}
+ * with the route's code (`API_TOKEN_NOT_FOUND`, `IMPERSONATION_CREDENTIAL_REFUSED`, …).
+ */
+export async function updateTokenPermissions(
+  tokenId: string,
+  permissions: PermissionKey[],
+): Promise<ApiTokenDto> {
+  const res = await fetch(`${BASE}/${encodeURIComponent(tokenId)}`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ permissions }),
+  });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as {
+      code?: string;
+      permissions?: unknown;
+    };
+    if (data.code === 'API_TOKEN_INVALID_PERMISSION' && Array.isArray(data.permissions)) {
+      throw new TokenPermissionsRefusedError(
+        data.permissions.filter((p): p is string => typeof p === 'string'),
+      );
+    }
+    throw new ApiError(data.code ?? 'UNKNOWN');
+  }
+  return ((await res.json()) as { token: ApiTokenDto }).token;
+}

@@ -3978,6 +3978,40 @@
       "expiresNever": "Nigdy",
       "lastUsedNever": "Nigdy",
       "revokeAria": "Unieważnij token {label}",
+      "editAria": "Edytuj uprawnienia tokenu {label}",
+      "edit": {
+        "title": "Edytuj uprawnienia",
+        "description": "Zmień, co może robić ten token. Sam token pozostaje ten sam.",
+        "facts": {
+          "label": "Etykieta",
+          "token": "Token",
+          "boundTo": "Powiązany z",
+          "expires": "Wygasa"
+        },
+        "factsLocked": "Te dane pozostają bez zmian. Aby je zmienić, utwórz nowy token.",
+        "sameSecret": "Ten sam token, ten sam sekret. Agenci, którzy już go używają, otrzymają nowe uprawnienia przy następnym wywołaniu — nie trzeba niczego kopiować ponownie.",
+        "changes": {
+          "label": "Zmiany",
+          "adding": "Dodawane",
+          "removing": "Usuwane",
+          "none": "Brak zmian. Włącz lub wyłącz uprawnienie, aby je zmienić."
+        },
+        "emptyError": "Zostaw co najmniej jedno uprawnienie. Aby ten token przestał działać, unieważnij go.",
+        "refused": "Nie możesz nadać uprawnienia <strong>{permission}</strong> w {project}, więc nic nie zostało zmienione. Jest wyłączone poniżej — zapisz ponownie bez niego.",
+        "gone": {
+          "title": "Ten token już nie istnieje",
+          "body": "Został unieważniony w innym miejscu, więc nie ma czego zmieniać. Zamknij to okno, a token zniknie z listy.",
+          "close": "Zamknij"
+        },
+        "save": "Zapisz uprawnienia",
+        "cancel": "Anuluj",
+        "errorTitle": "Nie udało się zaktualizować uprawnień",
+        "errorGeneric": "Coś poszło nie tak. Nic nie zostało zmienione — spróbuj ponownie.",
+        "staffUnavailable": "W sesji personelu nie możesz edytować uprawnień tokenu.",
+        "cliUnavailable": "Logowanie z CLI ma własne uprawnienia CLI. Aby je zaktualizować, uruchom motir auth refresh w tym terminalu.",
+        "updatedTitle": "Uprawnienia zaktualizowane",
+        "updatedBody": "„{label}” zachowuje swój sekret. Agenci zastosują zmianę przy następnym wywołaniu."
+      },
       "expiry": {
         "d30": "30 dni",
         "d90": "90 dni",

@@ -170,6 +170,20 @@ export const apiTokenRepository = {
     return tx.apiToken.create({ data: input, include: SCOPE_INCLUDE });
   },
 
+  /** Replace a token's GRANT and nothing else (MOTIR-10188) — the `scopes`
+   * column only, so the hash, prefix, label, binding and expiry stay exactly as
+   * they were minted. The service has already proven ownership and validated the
+   * grant; this leaf writes what it is handed. Returns the row with its scope
+   * include so the service maps the same DTO the list renders. Required `tx`:
+   * `api_token_owner_or_system` reads `app.user_id`. */
+  async updateScopes(
+    tokenId: string,
+    scopes: string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<ApiTokenWithScope> {
+    return tx.apiToken.update({ where: { id: tokenId }, data: { scopes }, include: SCOPE_INCLUDE });
+  },
+
   /** Revoke: DELETE the row (MOTIR-3546). Also the OAuth connection's revoke
    * (MOTIR-6983), whose access tokens, refresh tokens and consent cascade with it.
    * Revocation used to stamp `revokedAt`

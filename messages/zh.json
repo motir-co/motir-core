@@ -3978,6 +3978,40 @@
       "expiresNever": "永不",
       "lastUsedNever": "从未",
       "revokeAria": "吊销令牌 {label}",
+      "editAria": "编辑 {label} 的权限",
+      "edit": {
+        "title": "编辑权限",
+        "description": "更改此令牌可以执行的操作。令牌本身保持不变。",
+        "facts": {
+          "label": "名称",
+          "token": "令牌",
+          "boundTo": "绑定到",
+          "expires": "过期时间"
+        },
+        "factsLocked": "这些信息保持不变。如需更改，请创建新令牌。",
+        "sameSecret": "令牌和密钥都不变。已在使用它的智能体会在下一次调用时获得新权限，无需重新复制。",
+        "changes": {
+          "label": "更改",
+          "adding": "新增",
+          "removing": "移除",
+          "none": "尚无更改。打开或关闭某项权限即可更改。"
+        },
+        "emptyError": "请至少保留一项权限。如果想让此令牌停止工作，请改为吊销它。",
+        "refused": "你无法在 {project} 中授予<strong>{permission}</strong>，因此未做任何更改。该权限已在下方关闭，请在不包含它的情况下重新保存。",
+        "gone": {
+          "title": "此令牌已不存在",
+          "body": "它已在其他地方被吊销，因此没有可更改的内容。关闭后它会从列表中移除。",
+          "close": "关闭"
+        },
+        "save": "保存权限",
+        "cancel": "取消",
+        "errorTitle": "无法更新权限",
+        "errorGeneric": "出错了。未做任何更改，请重试。",
+        "staffUnavailable": "在员工会话中无法编辑令牌的权限。",
+        "cliUnavailable": "CLI 登录拥有 CLI 自身的权限。请在该终端中运行 motir auth refresh 以更新它。",
+        "updatedTitle": "权限已更新",
+        "updatedBody": "“{label}”保留其密钥。智能体会在下一次调用时应用此更改。"
+      },
       "expiry": {
         "d30": "30 天",
         "d90": "90 天",

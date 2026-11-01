@@ -3978,6 +3978,40 @@
       "expiresNever": "Mai",
       "lastUsedNever": "Mai",
       "revokeAria": "Revoca il token {label}",
+      "editAria": "Modifica i permessi di {label}",
+      "edit": {
+        "title": "Modifica permessi",
+        "description": "Cambia ciò che questo token può fare. Il token resta lo stesso.",
+        "facts": {
+          "label": "Etichetta",
+          "token": "Token",
+          "boundTo": "Vincolato a",
+          "expires": "Scadenza"
+        },
+        "factsLocked": "Questi dati restano invariati. Per cambiarli, crea un nuovo token.",
+        "sameSecret": "Stesso token, stesso segreto. Gli agenti che lo usano già ricevono i nuovi permessi alla prossima chiamata: non c’è nulla da copiare di nuovo.",
+        "changes": {
+          "label": "Modifiche",
+          "adding": "Aggiunti",
+          "removing": "Rimossi",
+          "none": "Ancora nessuna modifica. Attiva o disattiva un permesso per cambiarlo."
+        },
+        "emptyError": "Mantieni almeno un permesso. Per far smettere di funzionare questo token, revocalo.",
+        "refused": "Non puoi concedere <strong>{permission}</strong> in {project}, quindi non è stato cambiato nulla. È disattivato qui sotto: salva di nuovo senza.",
+        "gone": {
+          "title": "Questo token non esiste più",
+          "body": "È stato revocato altrove, quindi non c’è nulla da cambiare. Chiudi questa finestra e sparirà dall’elenco.",
+          "close": "Chiudi"
+        },
+        "save": "Salva permessi",
+        "cancel": "Annulla",
+        "errorTitle": "Impossibile aggiornare i permessi",
+        "errorGeneric": "Qualcosa è andato storto. Non è stato cambiato nulla: riprova.",
+        "staffUnavailable": "Non puoi modificare i permessi di un token in una sessione staff.",
+        "cliUnavailable": "Un accesso dalla CLI ha i permessi propri della CLI. Esegui motir auth refresh in quel terminale per aggiornarlo.",
+        "updatedTitle": "Permessi aggiornati",
+        "updatedBody": "«{label}» mantiene il suo segreto. Gli agenti applicano la modifica alla prossima chiamata."
+      },
       "expiry": {
         "d30": "30 giorni",
         "d90": "90 giorni",

@@ -95,6 +95,25 @@ export interface CreateApiTokenInput {
   fixedGrant?: readonly PermissionKey[];
 }
 
+/**
+ * What `updatePermissions` replaces a token's grant with (MOTIR-10188). The
+ * same two shapes `create` knows, minus everything that is fixed at mint:
+ *
+ *   * `{ permissions }` — a CHOSEN grant, for a token BOUND to a project. Each
+ *     key is validated against what the owner can confer there NOW, exactly as
+ *     `create` validates it.
+ *   * `{ fixedGrant }` — the device credential's product-chosen set, for a
+ *     token bound to NO project. Only `motir auth refresh`'s approval sends it
+ *     (MOTIR-10189), with `CLI_TOKEN_GRANT`.
+ *
+ * Which one is legal is decided by the TOKEN's binding, not by the caller: a
+ * chosen grant on a device credential (or a fixed one on a bound token) is the
+ * same {@link InvalidTokenBindingError} the create path raises.
+ */
+export type UpdateApiTokenPermissionsInput =
+  | { permissions: string[]; fixedGrant?: never }
+  | { fixedGrant: readonly PermissionKey[]; permissions?: never };
+
 function normalizeLabel(label: string): string {
   const trimmed = label.trim();
   if (trimmed.length === 0 || trimmed.length > MAX_LABEL_LENGTH) {
@@ -299,6 +318,89 @@ export const apiTokensService = {
     return grantableFor(
       await projectAccessService.getPermissions(projectId, { userId, workspaceId }),
     );
+  },
+
+  /**
+   * Replace the GRANT of one of the caller's own tokens (MOTIR-10188) — the
+   * permissions change, the credential does not. The hash (so the secret every
+   * agent already holds), the prefix, the label, the workspace and project
+   * binding and the expiry are left exactly as minted, so nothing has to be
+   * copied again: `verify` reads the grant per call, and the next call made
+   * with the token is answered under the new one.
+   *
+   * The checks are `create`'s, in `create`'s order, so the two doors cannot
+   * drift:
+   *   1. never inside a staff "View as" session (MOTIR-749) — widening a
+   *      credential's authority is minting authority as the customer;
+   *   2. the token must be one of the caller's own — a missing id, another
+   *      user's id (null under RLS), an OAuth connection or a dispatch-run
+   *      token all read as {@link ApiTokenNotFoundError} (404-not-403);
+   *   3. the grant's SHAPE must match the token's binding (see
+   *      {@link UpdateApiTokenPermissionsInput});
+   *   4. a chosen grant is validated against what the owner can confer in the
+   *      bound project TODAY (`grantableFor` over `getPermissions`, then
+   *      `resolveGrant`) — a key they can no longer grant is refused with
+   *      {@link InvalidTokenGrantError} and nothing is written.
+   *
+   * The new grant is stored with the same marker `create` writes
+   * (`GRANT_OFFERED_ROOM_VIEW_KEYS_MARKER`), because it was chosen from an offer
+   * that held the room view keys and must be read exactly as stored.
+   */
+  async updatePermissions(
+    userId: string,
+    tokenId: string,
+    input: UpdateApiTokenPermissionsInput,
+  ): Promise<ApiTokenDto> {
+    await assertNoStaffSessionCookie();
+    // Ownership first, in its own read: the validation below calls services that
+    // open their own contexts, so it cannot run inside the write transaction.
+    const existing = await withUserContext(userId, (tx) =>
+      apiTokenRepository.findByIdForUser(tokenId, userId, tx),
+    );
+    // A RUN token (MOTIR-688) is the run's, not the person's — it is never listed
+    // and it is not theirs to widen.
+    if (!existing || existing.dispatchRunId !== null) throw new ApiTokenNotFoundError(tokenId);
+
+    let permissions: PermissionKey[];
+    if (input.fixedGrant !== undefined) {
+      if (existing.projectId !== null) {
+        throw new InvalidTokenBindingError(
+          'A fixed grant chooses nothing, so it binds to no project — this token is bound to one.',
+        );
+      }
+      permissions = resolveGrant({ label: existing.label, fixedGrant: input.fixedGrant }, []);
+    } else {
+      if (existing.projectId === null) {
+        throw new InvalidTokenBindingError(
+          'This token is a device credential with the CLI’s fixed grant — run `motir auth refresh` to update it.',
+        );
+      }
+      // The token BINDS to its workspace; an owner who has left it confers nothing
+      // there, and the create path refuses the same way.
+      await workspacesService.assertMembership(userId, existing.workspaceId);
+      const conferrable = await apiTokensService.listGrantablePermissions(
+        userId,
+        existing.workspaceId,
+        existing.projectId,
+      );
+      permissions = resolveGrant(
+        { label: existing.label, projectId: existing.projectId, permissions: input.permissions },
+        conferrable,
+      );
+    }
+
+    const row = await withUserContext(userId, async (tx) => {
+      // Re-probed inside the write: a revoke that committed since the read above
+      // leaves nothing to update, and that is the same not-found, never a P2025.
+      const live = await apiTokenRepository.findByIdForUser(tokenId, userId, tx);
+      if (!live) throw new ApiTokenNotFoundError(tokenId);
+      return apiTokenRepository.updateScopes(
+        tokenId,
+        [...permissions, GRANT_OFFERED_ROOM_VIEW_KEYS_MARKER],
+        tx,
+      );
+    });
+    return toApiTokenDto(row);
   },
 
   /**

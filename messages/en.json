@@ -3978,6 +3978,40 @@
       "expiresNever": "Never",
       "lastUsedNever": "Never",
       "revokeAria": "Revoke token {label}",
+      "editAria": "Edit permissions for {label}",
+      "edit": {
+        "title": "Edit permissions",
+        "description": "Change what this token can do. The token itself stays the same.",
+        "facts": {
+          "label": "Label",
+          "token": "Token",
+          "boundTo": "Bound to",
+          "expires": "Expires"
+        },
+        "factsLocked": "These stay as they are. To change them, create a new token.",
+        "sameSecret": "Same token, same secret. Agents already using it pick up the new permissions on their next call — there is nothing to copy again.",
+        "changes": {
+          "label": "Changes",
+          "adding": "Adding",
+          "removing": "Removing",
+          "none": "No changes yet. Switch a permission on or off to change it."
+        },
+        "emptyError": "Keep at least one permission. To stop this token working, revoke it instead.",
+        "refused": "You can't grant <strong>{permission}</strong> in {project}, so nothing was changed. It is switched off below — save again without it.",
+        "gone": {
+          "title": "This token no longer exists",
+          "body": "It was revoked somewhere else, so there is nothing to change. Close this and it leaves the list.",
+          "close": "Close"
+        },
+        "save": "Save permissions",
+        "cancel": "Cancel",
+        "errorTitle": "Couldn't update permissions",
+        "errorGeneric": "Something went wrong. Nothing was changed — please try again.",
+        "staffUnavailable": "You can't edit a token's permissions in a staff session.",
+        "cliUnavailable": "A CLI sign-in has the CLI’s own permissions. Run motir auth refresh in that terminal to update it.",
+        "updatedTitle": "Permissions updated",
+        "updatedBody": "“{label}” keeps its secret. Agents pick up the change on their next call."
+      },
       "expiry": {
         "d30": "30 days",
         "d90": "90 days",

@@ -3978,6 +3978,40 @@
       "expiresNever": "없음",
       "lastUsedNever": "없음",
       "revokeAria": "토큰 {label} 취소",
+      "editAria": "{label} 권한 편집",
+      "edit": {
+        "title": "권한 편집",
+        "description": "이 토큰으로 할 수 있는 일을 변경합니다. 토큰 자체는 그대로입니다.",
+        "facts": {
+          "label": "레이블",
+          "token": "토큰",
+          "boundTo": "연결 대상",
+          "expires": "만료"
+        },
+        "factsLocked": "이 항목은 그대로 유지됩니다. 변경하려면 새 토큰을 만드세요.",
+        "sameSecret": "같은 토큰, 같은 시크릿입니다. 이미 사용 중인 에이전트는 다음 호출부터 새 권한을 받습니다. 다시 복사할 것은 없습니다.",
+        "changes": {
+          "label": "변경 사항",
+          "adding": "추가",
+          "removing": "제거",
+          "none": "아직 변경 사항이 없습니다. 권한을 켜거나 꺼서 변경하세요."
+        },
+        "emptyError": "권한을 하나 이상 유지하세요. 이 토큰을 사용하지 않게 하려면 대신 취소하세요.",
+        "refused": "{project}에서 <strong>{permission}</strong> 권한을 부여할 수 없어 아무것도 변경되지 않았습니다. 아래에서 꺼져 있으니 이 권한 없이 다시 저장하세요.",
+        "gone": {
+          "title": "이 토큰은 더 이상 존재하지 않습니다",
+          "body": "다른 곳에서 취소되어 변경할 것이 없습니다. 닫으면 목록에서 사라집니다.",
+          "close": "닫기"
+        },
+        "save": "권한 저장",
+        "cancel": "취소",
+        "errorTitle": "권한을 업데이트하지 못했습니다",
+        "errorGeneric": "문제가 발생했습니다. 아무것도 변경되지 않았습니다. 다시 시도해 주세요.",
+        "staffUnavailable": "스태프 세션에서는 토큰의 권한을 편집할 수 없습니다.",
+        "cliUnavailable": "CLI 로그인에는 CLI 고유의 권한이 있습니다. 업데이트하려면 해당 터미널에서 motir auth refresh를 실행하세요.",
+        "updatedTitle": "권한이 업데이트됨",
+        "updatedBody": "“{label}”의 시크릿은 그대로입니다. 에이전트는 다음 호출부터 변경 사항을 적용합니다."
+      },
       "expiry": {
         "d30": "30일",
         "d90": "90일",
