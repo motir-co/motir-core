@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { asMinted } from '../helpers/devicePoll';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { User } from '@/generated/prisma/client';
@@ -159,7 +160,7 @@ async function loginAsDevice(fx: WorkItemFixture, hostname = 'workbox'): Promise
     deviceCode: grant.device_code,
     clientId: CLI_CLIENT_ID,
   });
-  return granted.access_token;
+  return asMinted(granted).access_token;
 }
 
 // ── the consumer side: the REAL /api/mcp route ──────────────────────────────
@@ -335,12 +336,14 @@ describe('architecture guards — asserted against the migrated database, not th
     expect(defs).toContain('(device_code)');
     expect(defs).toContain('(user_code)');
 
-    // Both FKs CASCADE: deleting a user or a workspace drops grants that would
-    // mint into them (short-lived auth substrate, not audit).
+    // Every FK CASCADEs: deleting a user or a workspace drops grants that would
+    // mint into them (short-lived auth substrate, not audit), and deleting a token
+    // — which is what a revoke does — drops the `motir auth refresh` grant that
+    // would have updated it (MOTIR-10189's `update_token_id`).
     const fks = await adminDb.$queryRaw<{ conname: string; confdeltype: string }[]>`
       SELECT conname, confdeltype::text AS confdeltype FROM pg_constraint
        WHERE conrelid = 'public.device_code'::regclass AND contype = 'f'`;
-    expect(fks).toHaveLength(2);
+    expect(fks).toHaveLength(3);
     for (const fk of fks) expect(fk.confdeltype, `${fk.conname} must ON DELETE CASCADE`).toBe('c');
   });
 

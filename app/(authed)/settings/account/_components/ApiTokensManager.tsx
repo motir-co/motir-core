@@ -2,19 +2,21 @@
 
 import { Fragment, useEffect, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import { ChevronDown, KeyRound, Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, KeyRound, Pencil, Plus, Trash2 } from 'lucide-react';
 import type { Locale } from '@/lib/i18n/locales';
 import { formatDate } from '@/lib/utils/datetime';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Tooltip } from '@/components/ui/Tooltip';
 import { CreateTokenModal } from './CreateTokenModal';
 import { RevokeTokenDialog } from './RevokeTokenDialog';
+import { EditTokenPermissionsModal } from './EditTokenPermissionsModal';
 import type { ApiTokenDto } from './apiTokensClient';
 import type { TokenScopeOrgDTO } from '@/lib/dto/apiTokens';
 import { grantedPermissionMeta, grantsDelete, summarizeGrant } from './permissionMeta';
-import { permissionSlug } from '@/lib/permissions/catalog';
+import { permissionSlug, type PermissionKey } from '@/lib/permissions/catalog';
 
 // The Tokens pane's CLIENT ISLAND (Story 7.8 · Subtask 7.8.3) — design
 // `account-settings.mock.html` Panels 3 + 7. It owns the token-list state
@@ -52,6 +54,7 @@ export function ApiTokensManager({
   scopeOrgs,
   activeWorkspaceId,
   activeProjectId,
+  staffSession = false,
 }: {
   initialTokens: ApiTokenDto[];
   /** The org → workspace tree the create modal scopes a token within (bug 7.21). */
@@ -60,6 +63,9 @@ export function ApiTokensManager({
   activeWorkspaceId: string | null;
   /** The project the reader is in — the create modal's default binding. */
   activeProjectId: string | null;
+  /** The reader is in a staff "View as" session (MOTIR-749): editing a token's
+   * permissions is refused there, so the edit control renders disabled. */
+  staffSession?: boolean;
 }) {
   const t = useTranslations('settings.apiTokens');
   // The permission LABELS come from the shipped `permissions.*` catalogue copy —
@@ -76,6 +82,22 @@ export function ApiTokensManager({
   const [tokens, setTokens] = useState<ApiTokenDto[]>(initialTokens);
   const [createOpen, setCreateOpen] = useState(false);
   const [revokeTarget, setRevokeTarget] = useState<ApiTokenDto | null>(null);
+  const [editTarget, setEditTarget] = useState<ApiTokenDto | null>(null);
+
+  // What the owner may grant in a token's BOUND project — the same `grantable`
+  // offer the create modal reads, so the edit modal can never show a switch the
+  // update would refuse. A project no longer in the tree (the owner lost access)
+  // offers nothing, and the update would answer not-found.
+  function conferrableFor(token: ApiTokenDto): PermissionKey[] {
+    const projectId = token.project?.id;
+    for (const org of scopeOrgs) {
+      for (const ws of org.workspaces) {
+        const project = ws.projects.find((p) => p.id === projectId);
+        if (project) return project.grantable;
+      }
+    }
+    return [];
+  }
 
   // `now` is established AFTER mount so the relative "expires in N days" math is
   // hydration-safe: SSR and the first client render both see `now === null` and
@@ -108,6 +130,14 @@ export function ApiTokensManager({
   function handleRevoked(revokedId: string) {
     setTokens((prev) => prev.filter((tk) => tk.id !== revokedId));
     setRevokeTarget(null);
+  }
+  // An update keeps the token, so the island REPLACES the row in place from the
+  // route's answer — the same page-state-after-mutation contract as create.
+  function handleUpdated(updated: ApiTokenDto) {
+    setTokens((prev) => prev.map((tk) => (tk.id === updated.id ? updated : tk)));
+  }
+  function handleGone(goneId: string) {
+    setTokens((prev) => prev.filter((tk) => tk.id !== goneId));
   }
 
   // Newest first — the order the service returns. There is no second group to
@@ -266,14 +296,30 @@ export function ApiTokensManager({
                               the state it described (MOTIR-3546) — spending the
                               Actions cell on a badge is what left a dead row
                               with no way to remove it. */}
-                          <button
-                            type="button"
-                            aria-label={t('revokeAria', { label: token.label })}
-                            onClick={() => setRevokeTarget(token)}
-                            className="inline-flex size-(--height-control) items-center justify-center rounded-(--radius-control) text-(--el-text-muted) hover:bg-(--el-surface) hover:text-(--el-danger) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
-                          >
-                            <Trash2 className="size-4" aria-hidden />
-                          </button>
+                          <span className="inline-flex items-center gap-1">
+                            <EditPermissionsButton
+                              label={token.label}
+                              // A CLI sign-in (the device-credential shape, no
+                              // project) has the CLI's fixed grant; only
+                              // `motir auth refresh` changes it (MOTIR-10189).
+                              unavailable={
+                                staffSession
+                                  ? t('edit.staffUnavailable')
+                                  : token.project === null
+                                    ? t('edit.cliUnavailable')
+                                    : null
+                              }
+                              onEdit={() => setEditTarget(token)}
+                            />
+                            <button
+                              type="button"
+                              aria-label={t('revokeAria', { label: token.label })}
+                              onClick={() => setRevokeTarget(token)}
+                              className="inline-flex size-(--height-control) items-center justify-center rounded-(--radius-control) text-(--el-text-muted) hover:bg-(--el-surface) hover:text-(--el-danger) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                            >
+                              <Trash2 className="size-4" aria-hidden />
+                            </button>
+                          </span>
                         </td>
                       </tr>
                       {expanded ? (
@@ -325,6 +371,16 @@ export function ApiTokensManager({
         activeWorkspaceId={activeWorkspaceId}
         activeProjectId={activeProjectId}
       />
+      {editTarget ? (
+        <EditTokenPermissionsModal
+          key={editTarget.id}
+          token={editTarget}
+          conferrable={conferrableFor(editTarget)}
+          onClose={() => setEditTarget(null)}
+          onUpdated={handleUpdated}
+          onGone={handleGone}
+        />
+      ) : null}
       {revokeTarget ? (
         <RevokeTokenDialog
           token={revokeTarget}
@@ -333,6 +389,40 @@ export function ApiTokensManager({
         />
       ) : null}
     </div>
+  );
+}
+
+/**
+ * The row's Edit permissions control (MOTIR-10188), BEFORE Revoke: the reversible
+ * action reads first and the destructive one keeps the trailing edge. When the
+ * edit is unavailable (a staff session, a CLI sign-in) it stays in place,
+ * `aria-disabled` and inert, and its tooltip says why — a removed control would
+ * leave the reader no way to learn the route that does exist.
+ */
+function EditPermissionsButton({
+  label,
+  unavailable,
+  onEdit,
+}: {
+  label: string;
+  /** Why the edit is unavailable, or null when it is available. */
+  unavailable: string | null;
+  onEdit: () => void;
+}) {
+  const t = useTranslations('settings.apiTokens');
+  const aria = t('editAria', { label });
+  return (
+    <Tooltip content={unavailable ?? aria}>
+      <button
+        type="button"
+        aria-label={aria}
+        aria-disabled={unavailable ? true : undefined}
+        onClick={unavailable ? undefined : onEdit}
+        className={`inline-flex size-(--height-control) items-center justify-center rounded-(--radius-control) text-(--el-text-muted) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none ${unavailable ? 'cursor-not-allowed opacity-50' : 'hover:bg-(--el-surface) hover:text-(--el-text)'}`}
+      >
+        <Pencil className="size-4" aria-hidden />
+      </button>
+    </Tooltip>
   );
 }
 

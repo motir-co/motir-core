@@ -1552,6 +1552,8 @@ export default defineConfig({
         'app/api/cli/device/token/route.ts',
         'app/api/cli/device/approve/route.ts',
         'app/api/cli/device/grant/route.ts',
+        // `motir auth status`'s refresh hint (MOTIR-10189).
+        'app/api/cli/token/route.ts',
         'app/**/device/_components/DeviceApproval.tsx',
         'app/**/settings/account/_components/ConnectCliPanel.tsx',
         // Story MOTIR-1775 · MOTIR-1896 — the CI-minutes METER (the measurement
@@ -7211,6 +7213,7 @@ export default defineConfig({
         'lib/cliDevice/userCode.ts': { branches: 90, functions: 90, lines: 90 },
         'app/api/cli/device/approve/route.ts': { branches: 90, functions: 90, lines: 90 },
         'app/api/cli/device/grant/route.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/api/cli/token/route.ts': { branches: 90, functions: 90, lines: 90 },
         'app/**/settings/account/_components/ConnectCliPanel.tsx': {
           branches: 90,
           functions: 90,

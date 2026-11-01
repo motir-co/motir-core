@@ -3753,3 +3753,159 @@ refresh, which takes the row away.
 on the white toast; no `--el-text-faint` carries text; no danger ink is painted on a page surface —
 danger lives in the rose pill tint with `--el-text-strong`. Board chrome (panel labels and notes) is
 `--el-text-secondary`.
+
+## Edit an existing token's permissions — `account-settings--edit-token-permissions.mock.html` (MOTIR-10187)
+
+**Asset:** `design/settings/account-settings--edit-token-permissions.mock.html` — a DELTA (MOTIR-10187,
+task MOTIR-10185). It amends three drawings and edits none of them:
+
+- `design/settings/account-settings.mock.html` § **Panel 3** (the tokens card and its table) — one new
+  row action, and § **Panel 4** (the create modal) — whose grammar the new edit modal reuses.
+- `design/settings/token-scopes.mock.html` and `permission-columns.mock.html` — the permission picker,
+  reused read-only and unchanged.
+- `design/cli-connect/cli-connect.mock.html` Panels 3–7 (the `/device` confirm screen and its terminal
+  states) — an update mode for `motir auth refresh` (MOTIR-10189).
+
+**Design system — read first.** Files read: `package.json` (depends on `@motir/design-system`
+`workspace:*`, version `0.19.0` in `packages/design-system/package.json`) and `app/globals.css`
+(imports `@motir/design-system/theme.css`). **Verdict: ON MOTIR DESIGN.** Built with `renderMock` from
+`@motir/design-system/mock` at the project's axes (`warm-editorial` · `motir` · `motir`, the root
+layout's defaults), board width `full`. The panels render the REAL shipped parts — the package's
+`Card`, `Button`, `Pill`, `Switch` and `ErrorState`, and the app's own `PermissionPicker`,
+`SettingsCallout` and `AuthShell` / `CodeChip` — through `react-dom/server` with the shipped `en`
+catalogue. The page-local markup that has no exported component (the token table row,
+`CreateTokenModal`'s `ReadonlyField`, `DeviceApproval`'s `DetailColumn` / `DetailBlock` / `Callout`,
+the `Modal` and `Toast` content drawn in place without their portals) is copied class for class from
+those files. Fonts fall back to the stacks `theme.css` declares.
+
+**Parts the package lacks:** one, product-local — **`PermissionChangeSummary`** (the _Adding /
+Removing_ block). It is two lines of the token row's existing scope-detail chips with a `+` / `−`
+glyph, used by the edit modal and by `/device` in update mode, so it belongs beside
+`permissionMeta.tsx` in `app/(authed)/settings/account/_components/`, not in the package.
+
+### What changes, in one paragraph
+
+Every row of the tokens table gets **Edit permissions** (a pencil icon button) to the left of Revoke.
+It opens a modal that reads like the create modal: the token's label, prefix, binding and expiry as
+read-only fields, a note that the secret stays the same, the SAME `PermissionPicker` opened on the
+token's current grant, and a live **Changes** block listing what is being added and removed. Save
+sends the new list to `PATCH /api/me/api-tokens/[tokenId]` (MOTIR-10188); the row then shows the new
+grant exactly as it shows one after create. A CLI sign-in is not edited here: its row's pencil is
+disabled and points to `motir auth refresh`, whose browser approval is `/device` in update mode.
+
+### Panels
+
+| #   | Panel                     | What it shows                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| --- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Access path               | The shipped Tokens pane (header, card, table). Each row's Actions cell holds Edit, then Revoke. The first row is hovered and shows the tooltip _Edit permissions for {label}_. The CLI row's pencil is disabled.                                                                                                                                                                                                                                     |
+| 2   | Edit modal, unchanged     | Opened on the token's current grant. The four read-only fields, the same-secret callout, the picker, the Changes block reading _No changes yet…_, and **Save permissions** disabled.                                                                                                                                                                                                                                                                 |
+| 3   | Changes before saving     | Two permissions switched on and one off. Changes lists _Adding: Read pages, Edit pages_ and _Removing: Change the lesson library_. Save is enabled.                                                                                                                                                                                                                                                                                                  |
+| 4   | Saving                    | Save shows `Button`'s `loading` spinner; the picker's switches and Cancel are disabled.                                                                                                                                                                                                                                                                                                                                                              |
+| 5   | Saved                     | The modal has closed. The row shows the new summary pill and, disclosed, the new scope chips. A success toast: _Permissions updated_ / _"{label}" keeps its secret. Agents pick up the change on their next call._                                                                                                                                                                                                                                   |
+| 6   | Refused                   | The owner lost a permission the new list still holds (here _Manage sprints_). A danger banner at the top of the body names it and says nothing was changed. The picker re-reads the offer, so that row is now locked (_You do not have this in this project._) and switched off, and Changes lists it under Removing. The rest of the choice is kept.                                                                                                |
+| 7   | Revoked elsewhere         | `PATCH` answered not-found. The modal body is the package's `ErrorState` (_This token no longer exists_ / _It was revoked somewhere else, so there is nothing to change. Close this and it leaves the list._), no retry, and one **Close**, which removes the row.                                                                                                                                                                                   |
+| 8   | Staff "View as" session   | Every row's pencil is disabled; the tooltip says _You can't edit a token's permissions in a staff session._ Revoke and the rest of the pane are unchanged by this card.                                                                                                                                                                                                                                                                              |
+| 9   | A CLI sign-in row         | The pencil is disabled with the tooltip _A CLI sign-in has the CLI's own permissions. Run motir auth refresh in that terminal to update it._                                                                                                                                                                                                                                                                                                         |
+| 10  | `/device`, update mode    | `motir auth refresh`'s approval. Headline _Update this terminal's permissions?_. Left column: You · **Updating** (the token's label, its prefix chip, _same secret, nothing to copy_, and the code with _asked {ago}_) · Workspace (fixed, no picker) · Expires (_Unchanged by this update_). Right column: **Changes** (the summary, compact) and _{n} other permissions stay as they are._ Then the warning callout and Deny / **Approve update**. |
+| 11  | `/device` update approved | Success callout: _motir auth refresh has finished. {label} now has the CLI's current permissions and keeps its token._ The Changes block repeats what was applied; **View tokens** as on login.                                                                                                                                                                                                                                                      |
+| 12  | `/device` update declined | Danger callout: _Nothing changed. {label} keeps the permissions it had, and the terminal keeps its token._ Retry line names `motir auth refresh`.                                                                                                                                                                                                                                                                                                    |
+| 13  | `/device` code expired    | As on login, with the update's copy: _{code} is no longer valid, and nothing was changed. Run motir auth refresh again to get a new code._                                                                                                                                                                                                                                                                                                           |
+
+The `/device` code-entry screen and the unknown-code screen are unchanged and not drawn: update mode
+starts at the confirm step, after the same entry.
+
+### Behaviour the code cards build to
+
+- **Entry point.** `aria-label` _Edit permissions for {label}_. It sits BEFORE Revoke in the cell: the
+  reversible action is nearer the reader and the destructive one keeps the trailing edge it has today.
+  Same `size-(--height-control)` icon-button recipe as Revoke; hover goes to `--el-text`, not to danger.
+- **The modal is one phase.** There is no shown-once phase: nothing secret is returned. Title _Edit
+  permissions_, description _Change what this token can do. The token itself stays the same._, width
+  `max-w-[42rem]` as the create modal.
+- **Read-only facts.** Label · Token (the prefix, mono) · Bound to (_{workspace} · {project}_) ·
+  Expires, as `CreateTokenModal`'s `ReadonlyField` in a two-column grid, with the line _These stay as
+  they are. To change them, create a new token._ None of them is a control.
+- **The secret.** A `SettingsCallout` (info tone, `KeyRound` glyph): _Same token, same secret. Agents
+  already using it pick up the new permissions on their next call — there is nothing to copy again._
+- **The picker** is `PermissionPicker` unchanged, `granted` = the token's current grant, `conferrable`
+  = what the owner may grant in the token's BOUND project (the same `grantable` list `listScopeOptions`
+  already returns for the create modal). A key the token holds but the owner can no longer grant shows
+  locked and off when the modal opens, and is listed under Removing, so the owner sees the cut before
+  saving rather than after a refusal.
+- **Changes** is pinned between the scrolling body and the footer, so it stays on screen beside Save.
+  It updates as switches change. Empty: _No changes yet. Switch a permission on or off to change it._
+  **Save permissions** is disabled while there is no change.
+- **At least one permission.** With every switch off, the create modal's empty-scope alert shows with
+  this card's copy, _Keep at least one permission. To stop this token working, revoke it instead._, and
+  Save is disabled.
+- **Refusals** (all leave the token unchanged):
+  - not grantable (422, the key named) → Panel 6, modal stays open;
+  - not found (404 — revoked, deleted, or not the caller's) → Panel 7;
+  - staff session (403 `IMPERSONATION_CREDENTIAL_REFUSED`) → error toast _Couldn't update permissions_
+    / _You can't edit a token's permissions in a staff session._ — the server's answer if the disabled
+    control is ever bypassed;
+  - anything else → error toast _Couldn't update permissions_ / _Something went wrong. Nothing was
+    changed — please try again._, modal stays open with the choice kept.
+- **After save** the island replaces the row from the route's response (the page-state-after-mutation
+  contract, as create and revoke already do — no `router.refresh()`), closes the modal and toasts.
+- **CLI sign-ins** (the device-credential shape, `project: null`) are not editable on this page. Their
+  grant is `CLI_TOKEN_GRANT` by definition, and the only route to change it is `motir auth refresh`,
+  which keeps the token on exactly that grant.
+- **Staff session.** The page passes whether the reader is in a staff session (the `(authed)` layout
+  already reads `session.impersonation`); the pencils render disabled with the tooltip.
+- **`/device` update mode** is the same island and the same flow (entry → confirm → approved / denied
+  / expired). The grant read tells it the flow is an update and names the token; the confirm screen
+  swaps three blocks (Updating for Connecting, a fixed Workspace for the picker, Changes for _It can_)
+  and its copy. The diff is computed against `CLI_TOKEN_GRANT`. Fold budget: the Changes list is
+  shorter than the ten-row _It can_ list it replaces, so the screen fits the 1366×648 budget
+  `cli-connect.spec.ts` asserts with room to spare.
+
+### Copy (en) — new keys
+
+`settings.apiTokens`: `editAria` · `edit.title` · `edit.description` · `edit.facts.{label,token,boundTo,expires}`
+· `edit.factsLocked` · `edit.sameSecret` · `edit.changes.{label,adding,removing,none}` · `edit.emptyError`
+· `edit.refused` (rich: `{permission}`, `{project}`, `<strong>`) · `edit.gone.{title,body,close}` ·
+`edit.save` · `edit.cancel` · `edit.errorTitle` · `edit.errorGeneric` · `edit.staffUnavailable` ·
+`edit.cliUnavailable` · `edit.updatedTitle` · `edit.updatedBody`.
+
+`device.update`: `heading` · `subhead` · `updating` · `tokenSub` · `askedAgo` · `workspaceSub` ·
+`expiresValue` · `expiresSub` · `changes` · `unchanged` · `warning` · `actions` · `approve` · `deny` ·
+`approvedHeading` · `approvedSubhead` · `approvedBody` · `deniedBody` · `deniedRetry` · `expiredBody` ·
+`expiredNote`. The English strings are the ones rendered in the mock. The other ten catalogues are the
+code cards' to fill.
+
+### Token roles
+
+| Element                             | Colour                                                                                            | Shape                                                        |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| Edit icon button                    | `--el-text-muted` → hover `--el-text` on `--el-surface`; disabled at 50% opacity                  | `--radius-control`, `size-(--height-control)`                |
+| Tooltip                             | `--el-tooltip-bg` / `--el-tooltip-text`                                                           | `--radius-control`, `--spacing-tooltip-x/y`                  |
+| Modal                               | `--el-page-bg`, border `--el-border`, title `--el-text`, description `--el-text-subtitle`         | `--radius-modal`, `--spacing-card-padding`, `--shadow-modal` |
+| Read-only fields                    | `--el-muted` fill, `--el-border`, value `--el-text-secondary`; label `--el-text`                  | `--radius-input`, `--height-input`, `--spacing-input-x`      |
+| Same-secret callout                 | `--el-tint-sky`, glyph `--el-info`, text `--el-text-strong`                                       | `--radius-card`, `--spacing-card-padding-12`                 |
+| Changes block                       | `--el-surface-soft`, `--el-border-soft`; labels `--el-text-secondary`                             | `--radius-card`, `--spacing-control-x/y`                     |
+| Adding chip · Removing chip         | `--el-tint-mint` · `--el-tint-rose`, text and glyph `--el-text-strong`                            | `--radius-badge`, `--spacing-chip-x/y`                       |
+| Refused banner                      | `--el-danger-surface` / `--el-danger-surface-text`                                                | `--radius-card`, `--spacing-card-padding-12/8`               |
+| Toasts                              | `--el-page-bg` + border `--el-success` / `--el-danger`, title `--el-text`, body `--el-text-muted` | `--radius-card`, `--shadow-elevated`                         |
+| `/device` blocks, callouts, buttons | as `DeviceApproval` ships them                                                                    | as shipped                                                   |
+
+**AA, checked against the table in CLAUDE.md:** text on a tint is `--el-text-strong` or the tint's
+own surface ink; `--el-text-muted` appears only on the white modal, the white auth card and the white
+toast (helper lines, the factsLocked line, `/device`'s block labels — all as the shipped screens
+already use it); `--el-text-faint` appears only on the picker's LOCKED rows, which are `aria-disabled`
+(the shipped picker's own treatment); no danger ink is painted on a page surface. Board chrome (panel
+labels and notes) is `--el-text-secondary`. The add/remove meaning is carried by the line label and
+the `+` / `−` glyph as well as the tint, never by colour alone.
+
+### Decisions this asset makes
+
+- **Changes inline, not a second confirm step.** The diff updates live and sits beside Save, so the
+  reader sees what will change at the moment they decide, with no extra click. A review step would
+  repeat the same list one screen later.
+- **Revoked elsewhere is a modal state, not a silent close.** Closing on a 404 would make the edit
+  look lost. The state explains it and the row leaves the list on Close.
+- **A CLI sign-in is not editable on the page.** Its grant is fixed to `CLI_TOKEN_GRANT` (MOTIR-10185's
+  scope boundary); `motir auth refresh` is the one route, and the tooltip says so.
+- **Owner-lost permissions show before saving.** Opening the picker with the bound project's current
+  offer locks a held-but-ungrantable key up front; Panel 6 is the race where the offer changed after
+  the modal opened.

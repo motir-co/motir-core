@@ -102,4 +102,49 @@ export interface DeviceGrantDescriptionDTO {
   /** The client that opened the grant (`motir-cli`). Pinned server-side at start, so
    * it is a display fact, not an input. */
   clientId: string | null;
+  /**
+   * Set when this grant UPDATES an existing CLI token (`motir auth refresh`,
+   * MOTIR-10189) instead of minting one; null for `motir login`. The screen names
+   * the token and shows what approving changes — `permissions` is what it holds
+   * NOW, and the diff is computed against the field above (`CLI_TOKEN_GRANT`).
+   * Never the secret; the prefix is the same display hint the tokens list shows.
+   */
+  update: DeviceGrantUpdateTargetDTO | null;
+}
+
+/** The token an UPDATE grant would change, as the `/device` confirm screen names it. */
+export interface DeviceGrantUpdateTargetDTO {
+  label: string;
+  tokenPrefix: string;
+  workspaceName: string;
+  /** ISO string, or null for a token that never expires. Unchanged by the update. */
+  expiresAt: string | null;
+  /** The token's grant as it stands before approval. */
+  permissions: PermissionKey[];
+}
+
+/**
+ * An approved UPDATE's poll (`motir auth refresh`, MOTIR-10189). There is no
+ * `access_token`: the terminal keeps the secret it already holds, and that is the
+ * point of the flow. `updated` is the discriminator the CLI branches on.
+ */
+export interface DeviceGrantUpdatedDTO {
+  updated: true;
+  /** The token's label, e.g. `CLI · yue-mbp`. */
+  label: string;
+  /** The grant now held, space-separated — `CLI_TOKEN_GRANT`. */
+  scope: string;
+  user: { id: string; name: string; email: string };
+  workspace: { id: string; name: string };
+}
+
+/** What `GET /api/cli/token` answers about the presented token (MOTIR-10189) —
+ * the input to `motir auth status`'s refresh hint. */
+export interface CliTokenStatusDTO {
+  /** A `motir login` device credential (no project, no run). Only these can be
+   * refreshed; a hand-minted token's grant is edited in Settings. */
+  cliSignIn: boolean;
+  /** The keys of today's `CLI_TOKEN_GRANT` this token lacks — always empty when
+   * `cliSignIn` is false. */
+  missing: PermissionKey[];
 }

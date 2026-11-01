@@ -54,7 +54,8 @@ export interface AuthenticateApiTokenOptions {
   acceptsRunToken?: boolean;
 }
 
-function bearerFromHeader(header: string | null): string | undefined {
+/** The secret out of an `Authorization: Bearer …` header, or undefined. */
+export function bearerFromHeader(header: string | null): string | undefined {
   if (!header) return undefined;
   const [scheme, ...rest] = header.trim().split(/\s+/);
   if (scheme?.toLowerCase() !== 'bearer') return undefined;

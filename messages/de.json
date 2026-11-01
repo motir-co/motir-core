@@ -140,6 +140,29 @@
       "notClaimed": "Wir haben diesen Code aus den Augen verloren. Geben Sie ihn erneut ein, um fortzufahren.",
       "network": "Motir ist nicht erreichbar. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
       "unexpected": "Bei uns ist ein Fehler aufgetreten. Versuchen Sie es erneut, oder führen Sie motir login aus, um einen neuen Code zu erhalten."
+    },
+    "update": {
+      "heading": "Berechtigungen dieses Terminals aktualisieren?",
+      "subhead": "Prüfen Sie das Token und die Änderungen, bevor Sie genehmigen.",
+      "updating": "Wird aktualisiert",
+      "tokenSub": "Token <chip>{prefix}…</chip> · gleiches Secret, nichts zu kopieren",
+      "askedAgo": "Code <chip>{code}</chip> · angefordert {ago}",
+      "workspaceSub": "Der Arbeitsbereich des Tokens. Er ändert sich nicht.",
+      "expiresValue": "In {days} Tagen",
+      "expiresSub": "Bleibt bei dieser Aktualisierung unverändert.",
+      "changes": "Änderungen",
+      "unchanged": "{count, plural, one {# weitere Berechtigung bleibt unverändert.} other {# weitere Berechtigungen bleiben unverändert.}}",
+      "warning": "Genehmigen Sie nur, wenn Sie gerade selbst <cmd>motir auth refresh</cmd> auf {hostname} ausgeführt haben. Wenn Ihnen jemand diesen Code geschickt hat, <strong>lehnen Sie ab</strong>: Eine Genehmigung gibt diesem Token die oben genannten Änderungen.",
+      "actions": "Diese Aktualisierung genehmigen oder ablehnen",
+      "approve": "Aktualisierung genehmigen",
+      "deny": "Ablehnen",
+      "approvedHeading": "Berechtigungen aktualisiert",
+      "approvedSubhead": "Hier ist nichts weiter zu tun.",
+      "approvedBody": "Kehren Sie zu Ihrem Terminal zurück – <cmd>motir auth refresh</cmd> ist abgeschlossen. <strong>{label}</strong> hat jetzt die aktuellen Berechtigungen der CLI und behält sein Token.",
+      "deniedBody": "Es wurde nichts geändert. <strong>{label}</strong> behält seine bisherigen Berechtigungen, und das Terminal behält sein Token.",
+      "deniedRetry": "Versehentlich abgelehnt? Führen Sie <cmd>motir auth refresh</cmd> erneut aus, um einen neuen Code zu erhalten – dieser kann nicht wiederverwendet werden.",
+      "expiredBody": "<chip>{code}</chip> ist nicht mehr gültig, und es wurde nichts geändert. Führen Sie <cmd>motir auth refresh</cmd> erneut aus, um einen neuen Code zu erhalten.",
+      "expiredNote": "Ihr Terminal wartet bereits nicht mehr – es meldet, dass der Code abgelaufen ist."
     }
   },
   "markdownEditor": {
@@ -3978,6 +4001,40 @@
       "expiresNever": "Nie",
       "lastUsedNever": "Nie",
       "revokeAria": "Token {label} widerrufen",
+      "editAria": "Berechtigungen für {label} bearbeiten",
+      "edit": {
+        "title": "Berechtigungen bearbeiten",
+        "description": "Ändern Sie, was dieses Token darf. Das Token selbst bleibt dasselbe.",
+        "facts": {
+          "label": "Bezeichnung",
+          "token": "Token",
+          "boundTo": "Gebunden an",
+          "expires": "Läuft ab"
+        },
+        "factsLocked": "Diese Angaben bleiben, wie sie sind. Um sie zu ändern, erstellen Sie ein neues Token.",
+        "sameSecret": "Dasselbe Token, dasselbe Secret. Agents, die es bereits nutzen, erhalten die neuen Berechtigungen beim nächsten Aufruf – es muss nichts erneut kopiert werden.",
+        "changes": {
+          "label": "Änderungen",
+          "adding": "Hinzu",
+          "removing": "Entfernt",
+          "none": "Noch keine Änderungen. Schalten Sie eine Berechtigung ein oder aus, um sie zu ändern."
+        },
+        "emptyError": "Behalten Sie mindestens eine Berechtigung. Um dieses Token stillzulegen, widerrufen Sie es stattdessen.",
+        "refused": "Sie können <strong>{permission}</strong> in {project} nicht vergeben, daher wurde nichts geändert. Die Berechtigung ist unten ausgeschaltet – speichern Sie erneut ohne sie.",
+        "gone": {
+          "title": "Dieses Token existiert nicht mehr",
+          "body": "Es wurde an anderer Stelle widerrufen, daher gibt es nichts zu ändern. Schließen Sie dieses Fenster, dann verschwindet es aus der Liste.",
+          "close": "Schließen"
+        },
+        "save": "Berechtigungen speichern",
+        "cancel": "Abbrechen",
+        "errorTitle": "Berechtigungen konnten nicht aktualisiert werden",
+        "errorGeneric": "Etwas ist schiefgelaufen. Es wurde nichts geändert – bitte versuchen Sie es erneut.",
+        "staffUnavailable": "In einer Staff-Sitzung können Sie die Berechtigungen eines Tokens nicht bearbeiten.",
+        "cliUnavailable": "Eine CLI-Anmeldung hat die eigenen Berechtigungen der CLI. Führen Sie motir auth refresh in diesem Terminal aus, um sie zu aktualisieren.",
+        "updatedTitle": "Berechtigungen aktualisiert",
+        "updatedBody": "„{label}“ behält sein Secret. Agents übernehmen die Änderung beim nächsten Aufruf."
+      },
       "expiry": {
         "d30": "30 Tage",
         "d90": "90 Tage",
