@@ -189,7 +189,10 @@ export function summarizeLessonSearch(result: LessonSearchResult): string {
     ].filter((x): x is string => x !== null);
     // The axis tag is what lets a caller see WHY a row came back and re-narrow.
     const tag = axes.length > 0 ? ` [${axes.join(' · ')}]` : ' [unconstrained]';
-    return `${i + 1}. ${l.title}${tag} (${l.scope})\n   ${l.body}\n   → ${l.howToApply}`;
+    // The id rides the PROSE as well as the payload (MOTIR-10191): it is what
+    // `reinforce_lesson` takes, and a driver that sees only a result's text — a
+    // `claude -p` stream — records the ids a session was shown from it.
+    return `${i + 1}. ${l.title}${tag} (${l.scope}) · id ${l.id}\n   ${l.body}\n   → ${l.howToApply}`;
   });
   return [
     `${result.lessons.length} recorded lesson(s), nearest first. Each is a mistake made before; APPLY it.`,

@@ -674,6 +674,7 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         validate_plan: { planId: plan.id },
         get_plan_authoring_state: { planId: plan.id },
         get_plan_code_reads: { planId: plan.id },
+        get_plan_lesson_log: { planId: plan.id },
         create_work_item: { projectKey: 'PROD', kind: 'task', title: 'scoped create' },
         expand_item: { key: item1 },
         update_work_item: { key: item1, title: 'scoped edit' },

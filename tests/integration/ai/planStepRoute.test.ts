@@ -478,6 +478,79 @@ describe('the gaps arm (MOTIR-10176)', () => {
   });
 });
 
+describe('the lessonCalls arm (MOTIR-10191)', () => {
+  const search = {
+    kind: 'search',
+    query: 'wiring a cross-repository edge the wrong way',
+    filters: { kinds: ['story'], phases: ['lay'] },
+    lessonIds: ['cstr77ecwfcozfr3frq8l7pxl'],
+    outcome: 'matched',
+  };
+
+  it('records the calls with no step needed, and an empty report as a recorded session', async () => {
+    const fx = await makeFixture();
+    const jobId = 'job_lessons_happy';
+    const { planId } = await generatingPlan(fx, jobId);
+
+    const res = await report(fx, jobId, {
+      sessionKey: 'ai:job:1',
+      lessonCalls: [search, { kind: 'injected', lessonIds: ['clx1'], outcome: 'injected' }],
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      planId: string;
+      lessonCalls: { seq: number; kind: string }[];
+    };
+    expect(body.planId).toBe(planId);
+    expect(body.lessonCalls.map((c) => [c.seq, c.kind])).toEqual([
+      [1, 'search'],
+      [2, 'injected'],
+    ]);
+    const empty = await report(fx, jobId, { sessionKey: 'ai:job:2', lessonCalls: [] });
+    expect(empty.status).toBe(200);
+    expect(await empty.json()).toEqual({ planId, lessonCalls: [] });
+    const markers = await adminDb.planLessonSession.findMany({
+      where: { planId },
+      orderBy: { firstReportAt: 'asc' },
+    });
+    expect(markers.map((m) => m.sessionKey)).toEqual(['ai:job:1', 'ai:job:2']);
+  });
+
+  it('400 on a malformed body, 422 on a call the store refuses, writing nothing', async () => {
+    const fx = await makeFixture();
+    const jobId = 'job_lessons_refused';
+    const { planId } = await generatingPlan(fx, jobId);
+
+    for (const extra of [
+      { lessonCalls: 'not an array' },
+      { lessonCalls: [search], codeReads: [] },
+      { lessonCalls: [search], target: 'planItem:x' },
+    ]) {
+      const res = await report(fx, jobId, { sessionKey: 's', ...extra });
+      expect(res.status, JSON.stringify(extra)).toBe(400);
+    }
+    for (const lessonCalls of [
+      [{ ...search, kind: 'browse' }],
+      [{ ...search, body: 'the lesson text' }],
+    ]) {
+      const res = await report(fx, jobId, { sessionKey: 's', lessonCalls });
+      expect(res.status, JSON.stringify(lessonCalls)).toBe(422);
+      expect(((await res.json()) as { code: string }).code).toBe('PLAN_STEP_INVALID');
+    }
+    expect(await adminDb.planLessonCall.count({ where: { planId } })).toBe(0);
+    expect(await adminDb.planLessonSession.count({ where: { planId } })).toBe(0);
+  });
+
+  it('409 once the plan is not generating', async () => {
+    const fx = await makeFixture();
+    const jobId = 'job_lessons_409';
+    const { planId } = await generatingPlan(fx, jobId);
+    await plansService.markPlanned(planId, fx.ctx);
+    const res = await report(fx, jobId, { sessionKey: 's', lessonCalls: [] });
+    expect(res.status).toBe(409);
+  });
+});
+
 describe('the provider-retry arm (Story MOTIR-9540 · MOTIR-9619)', () => {
   type WaitBody = {
     planId: string;

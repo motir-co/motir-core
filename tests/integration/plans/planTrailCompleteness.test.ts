@@ -265,10 +265,22 @@ describe('no plan mutation escapes the trail', () => {
       expect(reaches(name, bodies).has('maxSeq'), `${name} no longer records gaps`).toBe(true);
     }
 
+    // ⚠️ NOR IS WHICH LESSONS A SESSION SAW (MOTIR-10191). `recordPlanLessonCalls` takes the
+    // same lock and appends to `plan_lesson_call` the searches, reinforcements and injected ids
+    // of a session — evidence about how the plan was written, exactly as a code read is.
+    const NOT_A_PLAN_CHANGE_LESSON_CALLS = new Set(['recordPlanLessonCalls']);
+    for (const name of NOT_A_PLAN_CHANGE_LESSON_CALLS) {
+      expect(mutations, `${name} is no longer a derived mutation`).toContain(name);
+      expect(reaches(name, bodies).has('maxSeq'), `${name} no longer appends lesson calls`).toBe(
+        true,
+      );
+    }
+
     const untracked = mutations.filter(
       (name) =>
         !NOT_A_PLAN_CHANGE.has(name) &&
         !NOT_A_PLAN_CHANGE_CODE_READS.has(name) &&
+        !NOT_A_PLAN_CHANGE_LESSON_CALLS.has(name) &&
         !NOT_A_PLAN_CHANGE_GAPS.has(name) &&
         !NOT_A_PLAN_CHANGE_NARRATION.has(name) &&
         !NOT_A_PLAN_CHANGE_WAIT.has(name) &&

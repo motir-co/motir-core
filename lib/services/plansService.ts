@@ -43,6 +43,12 @@ import { planRevisionRepository } from '@/lib/repositories/planRevisionRepositor
 import { planStepRepository } from '@/lib/repositories/planStepRepository';
 import { planNarrationRepository } from '@/lib/repositories/planNarrationRepository';
 import { planCodeReadRepository } from '@/lib/repositories/planCodeReadRepository';
+import { planLessonCallRepository } from '@/lib/repositories/planLessonCallRepository';
+import {
+  PLAN_LESSON_CALL_PAGE_MAX,
+  PlanLessonCallRefusal,
+  parsePlanLessonCalls,
+} from '@/lib/plans/planLessonCall';
 import { planRaisedGapRepository } from '@/lib/repositories/planRaisedGapRepository';
 import { PlanGapRefusal, parsePlanGapEntries } from '@/lib/plans/planRaisedGap';
 import {
@@ -256,6 +262,8 @@ import type {
   PlanNarrationDto,
   PlanCodeReadDto,
   PlanCodeReadPageDto,
+  PlanLessonCallDto,
+  PlanLessonLogPageDto,
   PlanGapsRecordedDto,
   PlanRaisedGapDto,
   PlanStepDto,
@@ -273,6 +281,7 @@ import {
   toPlanItemDto,
   toPlanNarrationDto,
   toPlanCodeReadDto,
+  toPlanLessonCallDto,
   toPlanRaisedGapDto,
   toPlanNarrationSessionDto,
   toPlanStepDto,
@@ -5566,6 +5575,7 @@ export type ReportPlanStepResult =
   | { kind: 'end' }
   | { kind: 'narration'; narration: PlanNarrationDto[] }
   | { kind: 'codeReads'; codeReads: PlanCodeReadDto[] }
+  | { kind: 'lessonCalls'; lessonCalls: PlanLessonCallDto[] }
   | { kind: 'gaps'; gaps: PlanGapsRecordedDto }
   | { kind: 'providerRetry'; providerWait: PlanStepProviderWaitDto | null };
 
@@ -8139,6 +8149,113 @@ export const plansService = {
   },
 
   /**
+   * Append a session's LESSON CALLS (MOTIR-10191): each `search_lessons` with its
+   * query, filters and the ids it returned in rank order, each `reinforce_lesson`
+   * / `add_lesson` with its lesson, occurrence ref and outcome, and a hosted
+   * session's `injected` ids — ids only, in call order — and mark the session's
+   * lesson log RECORDED. An EMPTY batch is a report too: it marks the session
+   * recorded with no call, so a reader can tell "never searched" from "not
+   * recorded". The whole call is refused, nothing written, when the batch is over
+   * the cap, any call is malformed (`parsePlanLessonCalls` names the field), or the
+   * plan is not `generating`. Accepted calls take the next consecutive per-plan
+   * `seq` values under the plan row lock, as code reads do.
+   *
+   * ⚠️ NO STEP IS REQUIRED, for `recordPlanCodeReads`'s reason: plan.py's PART 1
+   * conversation searches before the plan exists and never reports a step.
+   */
+  async recordPlanLessonCalls(
+    planId: string,
+    input: { sessionKey: string; lessonCalls: unknown },
+    ctx: ServiceContext,
+  ): Promise<PlanLessonCallDto[]> {
+    const sessionKey = assertSessionKey(input.sessionKey);
+    let calls;
+    try {
+      calls = parsePlanLessonCalls(input.lessonCalls);
+    } catch (err) {
+      if (err instanceof PlanLessonCallRefusal) throw new InvalidPlanStepError(err.message);
+      throw err;
+    }
+    return withGeneratingPlanStep(planId, ctx, async (_plan, tx, now) => {
+      await planLessonCallRepository.upsertSession(planId, sessionKey, now, tx);
+      if (calls.length === 0) return [];
+      const base = await planLessonCallRepository.maxSeq(planId, tx);
+      const rows = await planLessonCallRepository.createMany(
+        calls.map((call, i) => ({
+          ...call,
+          filters: call.filters as unknown as Prisma.InputJsonValue,
+          lessonIds: call.lessonIds,
+          planId,
+          sessionKey,
+          seq: base + i + 1,
+          createdAt: now,
+        })),
+        tx,
+      );
+      return rows.map(toPlanLessonCallDto);
+    });
+  },
+
+  /**
+   * One page of a plan's LESSON LOG (MOTIR-10191): calls in ascending `seq` after
+   * `afterSeq` — optionally one session's — with EVERY recorded session (its call
+   * count and step words, a session with none included) and the sessions that
+   * reported a step but were never recorded. Reader-gated exactly as `get_plan`
+   * and readable on a plan in ANY status, like the code reads.
+   */
+  async listPlanLessonLog(
+    planId: string,
+    opts: { sessionKey?: string | null; afterSeq?: number; limit?: number },
+    ctx: ServiceContext,
+  ): Promise<PlanLessonLogPageDto> {
+    await plansService.admitPlanReader(planId, ctx);
+    const limit = Math.min(
+      Math.max(1, opts.limit ?? PLAN_LESSON_CALL_PAGE_MAX),
+      PLAN_LESSON_CALL_PAGE_MAX,
+    );
+    const sessionKey = opts.sessionKey ?? null;
+    const filter = { afterSeq: Math.max(0, opts.afterSeq ?? 0), sessionKey, limit };
+    // A READ: the service binding, not the write transaction (planTrailCompleteness).
+    return withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
+      const rows = await planLessonCallRepository.listAfterSeq(planId, filter, tx);
+      const recorded = await planLessonCallRepository.listSessions(planId, sessionKey, tx);
+      const counts = new Map(
+        (await planLessonCallRepository.countBySession(planId, tx)).map((c) => [
+          c.sessionKey,
+          c.calls,
+        ]),
+      );
+      const steps = new Map(
+        (await planNarrationRepository.listSessionsByPlan(planId, tx)).map((s) => [
+          s.sessionKey,
+          s,
+        ]),
+      );
+      const recordedKeys = new Set(recorded.map((r) => r.sessionKey));
+      const unrecorded = [...steps.values()].filter(
+        (s) =>
+          !recordedKeys.has(s.sessionKey) && (sessionKey === null || s.sessionKey === sessionKey),
+      );
+      return {
+        planId,
+        calls: rows.map(toPlanLessonCallDto),
+        sessions: recorded.map((r) => {
+          const step = steps.get(r.sessionKey);
+          return {
+            sessionKey: r.sessionKey,
+            calls: counts.get(r.sessionKey) ?? 0,
+            firstReportAt: r.firstReportAt.toISOString(),
+            lastReportAt: r.lastReportAt.toISOString(),
+            step: step ? toPlanNarrationSessionDto(step) : null,
+          };
+        }),
+        unrecordedSessions: unrecorded.map(toPlanNarrationSessionDto),
+        nextAfterSeq: rows.length === limit ? rows[rows.length - 1]!.seq : null,
+      };
+    });
+  },
+
+  /**
    * Record — or clear — a session's provider-retry WAIT (Story MOTIR-9540 ·
    * MOTIR-9619). A `waiting` report is checked (integers in
    * `1..PLAN_PROVIDER_RETRY_ATTEMPTS_MAX`, `attempt ≤ maxAttempts`, a `retryAt`
@@ -8244,24 +8361,41 @@ export const plansService = {
       codeReads?: unknown[];
       /** The gaps raised and amended (MOTIR-10176) — the fifth exclusive form. */
       gaps?: unknown[];
+      /** The session's lesson calls (MOTIR-10191) — the sixth exclusive form. */
+      lessonCalls?: unknown[];
     },
     ctx: ServiceContext,
   ): Promise<ReportPlanStepResult> {
-    // EXACTLY ONE of `step` / `narration` / `providerRetry` / `codeReads` / `gaps`
-    // (MOTIR-8062 · MOTIR-9619 · MOTIR-10122 · MOTIR-10176): a step report re-stamps
-    // `startedAt`, so keeping them apart is what lets the others never touch the step.
+    // EXACTLY ONE of `step` / `narration` / `providerRetry` / `codeReads` / `gaps` /
+    // `lessonCalls` (MOTIR-8062 · MOTIR-9619 · MOTIR-10122 · MOTIR-10176 · MOTIR-10191):
+    // a step report re-stamps `startedAt`, so keeping them apart is what lets the
+    // others never touch the step.
     const forms = [
       input.step,
       input.narration,
       input.providerRetry,
       input.codeReads,
       input.gaps,
+      input.lessonCalls,
     ].filter((form) => form !== undefined).length;
     if (forms !== 1) {
       throw new InvalidPlanStepError(
-        'Send exactly one of `step`, `narration`, `providerRetry`, `codeReads` or `gaps` — ' +
-          'nothing was recorded.',
+        'Send exactly one of `step`, `narration`, `providerRetry`, `codeReads`, `gaps` or ' +
+          '`lessonCalls` — nothing was recorded.',
       );
+    }
+    if (input.lessonCalls !== undefined) {
+      if (input.targetRef !== null) {
+        throw new InvalidPlanStepError(
+          'A `lessonCalls` call names no target — send it with none; nothing was recorded.',
+        );
+      }
+      const lessonCalls = await plansService.recordPlanLessonCalls(
+        planId,
+        { sessionKey: input.sessionKey, lessonCalls: input.lessonCalls },
+        ctx,
+      );
+      return { kind: 'lessonCalls', lessonCalls };
     }
     if (input.gaps !== undefined) {
       if (input.targetRef !== null) {

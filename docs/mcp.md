@@ -329,7 +329,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **109 tools**.
+`initialize` handshake and registers **110 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -5059,6 +5059,40 @@ report_plan_step({ planId, sessionKey: "author-6", gaps: [
 // → { planId, sessionKey: "author-6", gaps: { raised: ["run-2:gap-1"], alreadyRaised: [], amended: [] } }
 ```
 
+**Record the session's lesson calls (MOTIR-10191).** Send `lessonCalls` (instead of
+`step`, and with no `target`) with the lesson calls the session made, in the order it
+made them — at most 50 per call. Each is `{ kind, query?, filters?, lessonIds?,
+lessonId?, occurrenceRef?, outcome, counted?, detail? }`, **ids only, never a lesson's
+text** (a call carrying `title`, `body`, `why`, `howToApply`, `text` or `content` is
+refused, and every string is capped):
+
+| `kind`      | What it records                                                                                     | Fields                                                                  |
+| ----------- | --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `search`    | a `search_lessons` call                                                                             | `query`, `filters`, `lessonIds` in RANK order                           |
+| `reinforce` | a `reinforce_lesson` call                                                                           | `lessonId`, `occurrenceRef`, `counted`                                  |
+| `add`       | an `add_lesson` call                                                                                | `lessonId` (when created), `occurrenceRef` (its `sourceRef`), `counted` |
+| `injected`  | the lessons the hosted planner composed into the session's prompt in code — shown, but not searched | `lessonIds` in render order                                             |
+
+`filters` is `{ kinds?, types?, phases?, subject?, limit? }`, each axis absent when the
+search left it open. `outcome` is the call's own code — `matched`, `nothing-matched`,
+`unavailable`, `counted`, `already_counted`, `added`, `injected`, `error`, …
+
+**An EMPTY array is a report too.** It marks the session's lesson log RECORDED with no
+call, so `get_plan_lesson_log` can say "this session made no lesson call" rather than
+"this session was not recorded" — send it once for a session that made none. Like code
+reads, a lesson call needs NO step; read them back with
+[`get_plan_lesson_log`](#get_plan_lesson_log--which-lessons-each-planning-session-saw).
+
+```jsonc
+report_plan_step({ planId, sessionKey: "lay-2", lessonCalls: [
+  { kind: "search", query: "wiring a dependency edge across two repositories the wrong way",
+    filters: { kinds: ["story"], phases: ["lay"] },
+    lessonIds: ["cstr77ecwfcozfr3frq8l7pxl", "clx0…"], outcome: "matched" },
+  { kind: "reinforce", lessonId: "cstr77ecwfcozfr3frq8l7pxl", occurrenceRef: "plan:cmv…#lay-2",
+    outcome: "counted", counted: true } ] })
+// → { planId, sessionKey: "lay-2", lessonCalls: [{ seq: 4, kind: "search" }, { seq: 5, kind: "reinforce" }] }
+```
+
 Requires **`ai:view_plan`**, the key every plan-authoring write names. A `motir run`
 credential (`CLI_TOKEN_GRANT`) does not carry it and cannot reach this tool: a run
 executing one work item has no business reporting progress on a plan.
@@ -5072,7 +5106,10 @@ or over-long batch, a blank sentence, or a session that holds no step; for
 a read with no `tool` or `outcome`, a `sha` that is not hex, or a read carrying
 `text` / `content`; for `gaps`, another arm or a `target` alongside it, an empty or
 over-long batch, an entry with no `id`, a `raise` with no `what`, an unknown `op`, or
-an `amend` naming an id the plan does not hold.
+an `amend` naming an id the plan does not hold; for `lessonCalls`, another arm or a
+`target` alongside it, an over-long batch, an unknown `kind`, a call with no `outcome`,
+a `search` / `injected` naming a `lessonId` or a `reinforce` / `add` naming
+`lessonIds`, a malformed lesson id, or a call carrying a lesson's text.
 
 ##### `hold_plan_revision` — hold a plan still while you revise it
 
@@ -5254,6 +5291,39 @@ never reported a step — plan.py's conversation — has none). Page with
 `afterSeq: nextAfterSeq` until it is `null`. `project:browse`, through the same
 reader gate as `get_plan`, on a plan in any status; read-only. Errors:
 `PLAN_NOT_FOUND` for an unknown or other-tenant plan.
+
+##### `get_plan_lesson_log` — which lessons each planning session saw
+
+The lesson calls a plan's planner sessions recorded through `report_plan_step`'s
+`lessonCalls`, in call order (a plan-wide `seq`), for BOTH planners: every
+`search_lessons` with its query, filters and the ids it returned in rank order, every
+`reinforce_lesson` / `add_lesson`, and the hosted planner's `injected` ids. Ids only. A
+check of the plan reads it beside `get_plan_code_reads` to tell three defects apart
+when a card was written against a recorded lesson: the session never searched (a
+skipped step), it searched and the lesson was not among the ids returned (a retrieval
+gap), or the lesson WAS returned or injected and the card went against it (the model).
+
+```jsonc
+get_plan_lesson_log({ planId, sessionKey?: "lay-2", afterSeq?: 0, limit?: 500 })
+// → { planId,
+//     calls: [{ seq: 4, sessionKey: "lay-2", kind: "search", query: "…",
+//               filters: { kinds: ["story"], phases: ["lay"] },
+//               lessonIds: ["cstr77ecwfcozfr3frq8l7pxl"], lessonId: null, occurrenceRef: null,
+//               outcome: "matched", counted: null, detail: null, createdAt: "…" }],
+//     sessions: [{ sessionKey: "lay-2", calls: 1, firstReportAt: "…", lastReportAt: "…",
+//                  step: { sessionKey: "lay-2", stepKind: "lay", targetRef: "MOTIR-9796", … } },
+//                { sessionKey: "author-3", calls: 0, …, step: { … } }],
+//     unrecordedSessions: [{ sessionKey: "author-4", stepKind: "author", … }],
+//     nextAfterSeq: null }
+```
+
+`sessions` is EVERY session whose lesson log was recorded, on every page: `calls: 0`
+is the explicit empty list — that session made no lesson call. `unrecordedSessions`
+are sessions that reported a step but never reported a lesson log (a planner older
+than MOTIR-10191, or a recording that failed), which is NOT evidence that they never
+searched. Page with `afterSeq: nextAfterSeq` until it is `null`. `project:browse`,
+through the same reader gate as `get_plan`, on a plan in any status; read-only.
+Errors: `PLAN_NOT_FOUND` for an unknown or other-tenant plan.
 
 ##### `get_plan_authoring_state` — WHICH SIBLINGS have not started (MOTIR-9821)
 

@@ -151,6 +151,7 @@ import {
   registerGetPlanAuthoringState,
 } from './tools/getPlanAuthoringState';
 import { GET_PLAN_CODE_READS_TOOL_NAME, registerGetPlanCodeReads } from './tools/getPlanCodeReads';
+import { GET_PLAN_LESSON_LOG_TOOL_NAME, registerGetPlanLessonLog } from './tools/getPlanLessonLog';
 import { CREATE_SPRINT_TOOL_NAME, registerCreateSprint } from './tools/createSprint';
 import { UPDATE_SPRINT_TOOL_NAME, registerUpdateSprint } from './tools/updateSprint';
 import { DELETE_SPRINT_TOOL_NAME, registerDeleteSprint } from './tools/deleteSprint';
@@ -297,6 +298,7 @@ export const MCP_TOOL_NAMES = [
   VALIDATE_PLAN_TOOL_NAME,
   GET_PLAN_AUTHORING_STATE_TOOL_NAME,
   GET_PLAN_CODE_READS_TOOL_NAME,
+  GET_PLAN_LESSON_LOG_TOOL_NAME,
   CREATE_SPRINT_TOOL_NAME,
   UPDATE_SPRINT_TOOL_NAME,
   DELETE_SPRINT_TOOL_NAME,
@@ -591,6 +593,9 @@ export function registerMcpTools(
   // What each planner session read, at which commit (MOTIR-10122) — the evidence
   // a check of a plan attributes a defect from.
   registerGetPlanCodeReads(target, resolveContext);
+  // Which lessons each planner session searched for, was shown and reinforced
+  // (MOTIR-10191) — read beside the code reads by a check of a plan.
+  registerGetPlanLessonLog(target, resolveContext);
   registerCreateSprint(target, resolveContext);
   registerUpdateSprint(target, resolveContext);
   registerDeleteSprint(target, resolveContext);

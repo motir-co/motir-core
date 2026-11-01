@@ -202,6 +202,15 @@ describe('the three outcomes reach the caller', () => {
     }
   });
 
+  it('names each row’s id in the prose, in rank order (MOTIR-10191)', () => {
+    const out = summarizeLessonSearch({
+      outcome: 'matched',
+      lessons: [lesson({ id: 'les_b' }), lesson({ id: 'les_a' })] as never,
+    });
+    const ids = [...out.matchAll(/^\d+\. .* · id (\S+)$/gm)].map((m) => m[1]);
+    expect(ids).toEqual(['les_b', 'les_a']);
+  });
+
   it('renders an unconstrained lesson as such, so a caller can see WHY it came back', () => {
     const out = summarizeLessonSearch({
       outcome: 'matched',

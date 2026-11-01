@@ -63,6 +63,14 @@ import {
 // Answers `{ planId, gaps: { raised, alreadyRaised, amended } }`. A resumed walk reads
 // them back on `GET /api/internal/ai/plan-proposals` as `raisedGaps`.
 //
+// LESSON CALLS (MOTIR-10191): the body may carry `lessonCalls` INSTEAD — an array
+// (possibly EMPTY, which marks the session recorded with no call) of the session's
+// lesson calls, each `{ kind: 'search' | 'reinforce' | 'add' | 'injected', query?,
+// filters?, lessonIds?, lessonId?, occurrenceRef?, outcome, counted?, detail? }`,
+// ids only, never a lesson's text. Shape and caps are the store's
+// (`plansService.recordPlanLessonCalls`, `lib/plans/planLessonCall.ts`), refused
+// 422; it names no `target` and needs no step. Answers `{ planId, lessonCalls }`.
+//
 // The signal is ADVISORY, so every refusal is a stable `{ code, error }` and
 // never a 500: the walk matches the code and carries on.
 //
@@ -140,20 +148,25 @@ export async function POST(req: Request): Promise<Response> {
   if (typeof sessionKey !== 'string') {
     return fail(INVALID, '`sessionKey` is required and must be a string.', 400);
   }
-  const { narration, providerRetry, codeReads, gaps } = b;
-  const forms = [step, narration, providerRetry, codeReads, gaps].filter(
+  const { narration, providerRetry, codeReads, gaps, lessonCalls } = b;
+  const forms = [step, narration, providerRetry, codeReads, gaps, lessonCalls].filter(
     (form) => form !== undefined,
   ).length;
   if (forms !== 1) {
     return fail(
       INVALID,
-      'Send exactly one of `step`, `narration`, `providerRetry`, `codeReads` or `gaps`.',
+      'Send exactly one of `step`, `narration`, `providerRetry`, `codeReads`, `gaps` or ' +
+        '`lessonCalls`.',
       400,
     );
   }
   if (gaps !== undefined) {
     if (!Array.isArray(gaps)) return fail(INVALID, '`gaps` must be an array.', 400);
     if (target != null) return fail(INVALID, 'A `gaps` call names no `target`.', 400);
+  }
+  if (lessonCalls !== undefined) {
+    if (!Array.isArray(lessonCalls)) return fail(INVALID, '`lessonCalls` must be an array.', 400);
+    if (target != null) return fail(INVALID, 'A `lessonCalls` call names no `target`.', 400);
   }
   if (codeReads !== undefined) {
     if (!Array.isArray(codeReads)) return fail(INVALID, '`codeReads` must be an array.', 400);
@@ -196,6 +209,7 @@ export async function POST(req: Request): Promise<Response> {
           : {}),
         ...(codeReads !== undefined ? { codeReads: codeReads as unknown[] } : {}),
         ...(gaps !== undefined ? { gaps: gaps as unknown[] } : {}),
+        ...(lessonCalls !== undefined ? { lessonCalls: lessonCalls as unknown[] } : {}),
       },
       auth,
     );

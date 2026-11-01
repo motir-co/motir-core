@@ -872,6 +872,13 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
       'Read the code reads each planner session of a plan made — file and range or query, the commit it was read at, and what came back — in call order.',
     descriptionFingerprint: 'b9865a0cd819',
   },
+  get_plan_lesson_log: {
+    // MOTIR-10191: which lessons each planner session searched for, was shown and reinforced —
+    // read beside the code reads, so a check can tell "never searched" from "shown and ignored".
+    summary:
+      'Read which lessons each planner session of a plan searched for, was shown, injected with and reinforced — ids only, in call order.',
+    descriptionFingerprint: 'bc1b35016694',
+  },
   get_plan_authoring_state: {
     // MOTIR-9821: the live read an author session makes before it wires an edge onto a sibling.
     // SUMMARY REWRITTEN for MOTIR-10001: it now answers committed cards too, `not_in_walk` among them.
@@ -1079,7 +1086,9 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // and the step's exclusive-forms sentence.
     // Re-pinned for MOTIR-10176, summary UNCHANGED: the `gaps` arm joins the input schema,
     // the exclusive-forms sentence and the description.
-    descriptionFingerprint: '45abd7558f10',
+    // Re-pinned for MOTIR-10191, summary UNCHANGED: the `lessonCalls` arm joins the input
+    // schema, the exclusive-forms sentence and the description.
+    descriptionFingerprint: '98ee023887b8',
   },
   hold_plan_revision: {
     // What a reader picks this one on: it is the only plan door that re-opens a

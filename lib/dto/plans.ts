@@ -915,6 +915,64 @@ export interface PlanCodeReadPageDto {
 }
 
 /**
+ * One LESSON CALL a planner session made (MOTIR-10191) — ids only, never a
+ * lesson's text. `kind` says what it was: a `search` (its `query`, `filters` and
+ * the `lessonIds` it returned in RANK order), a `reinforce` / `add` (its
+ * `lessonId`, `occurrenceRef` and whether it `counted`), or an `injected` set —
+ * the ids the hosted planner composed into the session's prompt in code, in the
+ * order they were rendered. `seq` is the plan-wide call order.
+ */
+export interface PlanLessonCallDto {
+  seq: number;
+  sessionKey: string;
+  kind: 'search' | 'reinforce' | 'add' | 'injected';
+  query: string | null;
+  filters: {
+    kinds?: string[];
+    types?: string[];
+    phases?: string[];
+    subject?: string;
+    limit?: number;
+  };
+  lessonIds: string[];
+  lessonId: string | null;
+  occurrenceRef: string | null;
+  outcome: string;
+  counted: boolean | null;
+  detail: string | null;
+  createdAt: string;
+}
+
+/**
+ * A session whose lesson log WAS recorded (MOTIR-10191). `calls: 0` is the
+ * explicit empty list — the session made no lesson call — and is not the same as
+ * a session missing from the log, which was not recorded. `step` is the session's
+ * step words when it reported a step (plan.py's conversation never does).
+ */
+export interface PlanLessonLogSessionDto {
+  sessionKey: string;
+  calls: number;
+  firstReportAt: string;
+  lastReportAt: string;
+  step: PlanNarrationSessionDto | null;
+}
+
+/**
+ * One page of a plan's lesson log (MOTIR-10191): `calls` in ascending `seq`;
+ * `sessions`, every session whose log was recorded (on every page, so a session
+ * with no call is never paged away); `unrecordedSessions`, the sessions that
+ * reported a step but whose lesson log was never recorded; and the cursor for the
+ * next page of calls (`null` on the last).
+ */
+export interface PlanLessonLogPageDto {
+  planId: string;
+  calls: PlanLessonCallDto[];
+  sessions: PlanLessonLogSessionDto[];
+  unrecordedSessions: PlanNarrationSessionDto[];
+  nextAfterSeq: number | null;
+}
+
+/**
  * One planner session's STEP WORDS on a plan (MOTIR-8062): the step it last
  * reported and the target's title as it read then — kept after the session ends,
  * so the chat panel can head that session's group with its real step. Both

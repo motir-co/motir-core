@@ -151,6 +151,9 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // The CODE-READ log (MOTIR-10122) — the same reader gate as `get_plan`
   // (`plansService.admitPlanReader`), and a pure read, so `project:browse`.
   get_plan_code_reads: 'project:browse',
+  // The LESSON LOG (MOTIR-10191) — the same reader gate as `get_plan`
+  // (`plansService.admitPlanReader`), and a pure read, so `project:browse`.
+  get_plan_lesson_log: 'project:browse',
   // ⚠️ THE PLAN READS' ROW IS A FLOOR, NOT THE WHOLE ANSWER (Story MOTIR-6179 ·
   // MOTIR-6330). `get_plan`, `get_plan_status` and `validate_plan` stay
   // `project:browse` here, because every reader may read their OWN plans. Whether
