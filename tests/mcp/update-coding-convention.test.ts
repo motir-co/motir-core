@@ -1,6 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
@@ -23,7 +20,8 @@ import type { RawConvention, RawConventionSurface } from '@/lib/ai/motirAiClient
 // stale-version conflict with what won, the blank and too-long refusals the editor
 // gets (3); the person behind the token as the version's author, in the editor's
 // history (4); `get_coding_convention` reading the new text right after (5); and
-// every declaration home (6).
+// every declaration home (6) — its documentation half is
+// `tests/mcp/update-coding-convention-docs.test.ts`, which the docs-guard lane runs.
 
 const getConventionMock = vi.fn<(q: Record<string, unknown>) => Promise<RawConventionSurface>>();
 const putConventionMock = vi.fn<(i: Record<string, unknown>) => Promise<RawConvention>>();
@@ -70,8 +68,6 @@ import type { PermissionKey } from '@/lib/permissions/catalog';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { WorkItemFixture } from '../fixtures/workItemFixtures';
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const read = (path: string) => readFileSync(join(ROOT, path), 'utf8');
 const text = (r: CallToolResult) => JSON.stringify(r.content);
 
 const REPO_A = 'acme/alpha';
@@ -255,27 +251,6 @@ describe('update_coding_convention — registered, permissioned, documented (AC 
     // The tool is what makes the key grantable — and a `motir run` token never holds it.
     expect(GRANTABLE_PERMISSIONS).toContain('ai:configure');
     expect(CLI_TOKEN_GRANT).not.toContain('ai:configure');
-  });
-
-  it('is documented in docs/mcp.md, the design build script and the ADR amendment', () => {
-    const doc = read('docs/mcp.md');
-    const start = doc.indexOf('#### `update_coding_convention`');
-    expect(start).toBeGreaterThan(doc.indexOf('#### `get_coding_convention`'));
-    const section = doc.slice(start, doc.indexOf('\n#### ', start + 1));
-    for (const word of [
-      '`ai:configure`',
-      '`CONVENTION_BLANK`',
-      '`CONVENTION_TOO_LONG`',
-      '`CONVENTION_VERSION_CONFLICT`',
-      '`baseVersion`',
-    ]) {
-      expect(section).toContain(word);
-    }
-    expect(read('design/mcp-server/build.py')).toContain(
-      `"${UPDATE_CODING_CONVENTION_TOOL_NAME}":`,
-    );
-    const adr = read('docs/decisions/member-facing-permissions.md');
-    expect(adr).toMatch(/## AMENDMENT 5[^\n]*`ai:configure`[^\n]*grantable[^\n]*MOTIR-10183/);
   });
 });
 
