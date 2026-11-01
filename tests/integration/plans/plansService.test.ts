@@ -450,6 +450,66 @@ describe('plansService.approvePlan — materialize per op', () => {
     ).not.toBeNull();
   });
 
+  // Bug MOTIR-10193 — the ordinary scheme with the token's `planItem:` prefix
+  // carried over was neither warned at write nor rewritten at approve.
+  it('warns a sibling linked as `motir:planItem:<id>` at write and rewrites it at approve (MOTIR-10193)', async () => {
+    const fx = await makeWorkItemFixture();
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Tree' }, fx.ctx);
+    const afterB = await plansService.addProposals(
+      plan.id,
+      [{ op: 'add', proposedFields: { title: 'Sibling B', kind: 'task' } }],
+      fx.ctx,
+    );
+    const bPlanItemId = afterB.items[0]!.id;
+    const written = await plansService.addProposals(
+      plan.id,
+      [
+        {
+          op: 'add',
+          proposedFields: {
+            title: 'Card A',
+            kind: 'task',
+            descriptionMd: `Depends on [Sibling B](motir:planItem:${bPlanItemId}); [gone](motir:planItem:pi_gone).`,
+            explanationMd: `Unblocks [Sibling B](motir:planItem:${bPlanItemId}).`,
+          },
+        },
+      ],
+      fx.ctx,
+    );
+    // The write is KEPT, and each link is warned — the sibling with the canonical token.
+    expect(written.warnings).toEqual([
+      expect.objectContaining({
+        field: 'descriptionMd',
+        link: `[Sibling B](motir:planItem:${bPlanItemId})`,
+        correctedLink: `[Sibling B](motir-ref:planItem:${bPlanItemId})`,
+      }),
+      expect.objectContaining({
+        field: 'descriptionMd',
+        link: '[gone](motir:planItem:pi_gone)',
+        correctedLink: null,
+      }),
+      expect.objectContaining({
+        field: 'explanationMd',
+        correctedLink: `[Sibling B](motir-ref:planItem:${bPlanItemId})`,
+      }),
+    ]);
+    await plansService.markPlanned(plan.id, fx.ctx);
+    await plansService.approvePlan(plan.id, fx.ctx);
+
+    const a = await adminDb.workItem.findFirstOrThrow({ where: { title: 'Card A' } });
+    const b = await adminDb.workItem.findFirstOrThrow({ where: { title: 'Sibling B' } });
+    // The sibling link is rewritten; the one naming no proposal is left verbatim.
+    expect(a.descriptionMd).toBe(
+      `Depends on [Sibling B](motir:${b.id}); [gone](motir:planItem:pi_gone).`,
+    );
+    expect(a.explanationMd).toBe(`Unblocks [Sibling B](motir:${b.id}).`);
+    expect(
+      await adminDb.workItemLink.findFirst({
+        where: { fromId: a.id, toId: b.id, kind: 'relates_to' },
+      }),
+    ).not.toBeNull();
+  });
+
   it('leaves a DANGLING intra-plan ref inert when materialized (no crash, no edge)', async () => {
     const fx = await makeWorkItemFixture();
     // The append now refuses a dangling body link (bug MOTIR-9175), so the row is
