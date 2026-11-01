@@ -254,10 +254,22 @@ describe('no plan mutation escapes the trail', () => {
       );
     }
 
+    // ⚠️ NOR IS A GAP A SESSION RAISED (MOTIR-10176). `recordPlanGaps` takes the same lock and
+    // writes `plan_raised_gap` — what an author session found that no card covers, and whether
+    // its level's amend has been handed it. It is the walk's own working record, so a resumed
+    // walk can hand the amend what the dead attempt raised; what the amend then ADDS or EDITS
+    // reaches the trail through its own proposal writes.
+    const NOT_A_PLAN_CHANGE_GAPS = new Set(['recordPlanGaps']);
+    for (const name of NOT_A_PLAN_CHANGE_GAPS) {
+      expect(mutations, `${name} is no longer a derived mutation`).toContain(name);
+      expect(reaches(name, bodies).has('maxSeq'), `${name} no longer records gaps`).toBe(true);
+    }
+
     const untracked = mutations.filter(
       (name) =>
         !NOT_A_PLAN_CHANGE.has(name) &&
         !NOT_A_PLAN_CHANGE_CODE_READS.has(name) &&
+        !NOT_A_PLAN_CHANGE_GAPS.has(name) &&
         !NOT_A_PLAN_CHANGE_NARRATION.has(name) &&
         !NOT_A_PLAN_CHANGE_WAIT.has(name) &&
         !reaches(name, bodies).has('recordRevision') &&

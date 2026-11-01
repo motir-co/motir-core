@@ -7,6 +7,7 @@ import type {
   PlanItem,
   PlanNarration,
   PlanCodeRead,
+  PlanRaisedGap,
   PlanNarrationSession,
   PlanStep,
 } from '@/generated/prisma/client';
@@ -18,6 +19,7 @@ import type {
   PlanItemProposedFields,
   PlanNarrationDto,
   PlanCodeReadDto,
+  PlanRaisedGapDto,
   PlanNarrationSessionDto,
   PlanStepDto,
   PlanWithItemsDto,
@@ -150,6 +152,26 @@ export function toPlanCodeReadDto(row: PlanCodeRead): PlanCodeReadDto {
     hits: row.hits,
     detail: row.detail,
     createdAt: row.createdAt.toISOString(),
+  };
+}
+
+/** One stored gap as it crosses the boundary (MOTIR-10176). */
+export function toPlanRaisedGapDto(row: PlanRaisedGap): PlanRaisedGapDto {
+  return {
+    id: row.gapId,
+    seq: row.seq,
+    sessionKey: row.sessionKey,
+    level: row.level,
+    raisedBy: row.raisedBy,
+    what: row.what,
+    decision: row.decision,
+    after: row.after,
+    before: row.before,
+    note: row.note,
+    amended: row.amendedAt !== null,
+    amendedAt: row.amendedAt?.toISOString() ?? null,
+    answer: row.amendedAt !== null ? { refs: [...row.answerRefs], open: row.answerOpen } : null,
+    raisedAt: row.createdAt.toISOString(),
   };
 }
 

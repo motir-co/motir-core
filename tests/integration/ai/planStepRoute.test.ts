@@ -413,6 +413,71 @@ describe('the code-reads arm (MOTIR-10122)', () => {
   });
 });
 
+describe('the gaps arm (MOTIR-10176)', () => {
+  const gap = {
+    op: 'raise',
+    id: 'gap-1',
+    level: 'planItem:story',
+    raisedBy: 'planItem:adapter',
+    what: 'Nothing creates the Lambda execution role.',
+    decision: 'Which account owns it — the infra owner decides.',
+  };
+
+  it('records a raise and its amend with no step needed, answering what it stored', async () => {
+    const fx = await makeFixture();
+    const jobId = 'job_gaps_happy';
+    const { planId } = await generatingPlan(fx, jobId);
+
+    const res = await report(fx, jobId, { sessionKey: 'ai:job:1', gaps: [gap] });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      planId,
+      gaps: { raised: ['gap-1'], alreadyRaised: [], amended: [] },
+    });
+    const amend = await report(fx, jobId, {
+      sessionKey: 'ai:job:2',
+      gaps: [{ op: 'amend', id: 'gap-1', refs: ['planItem:role'] }],
+    });
+    expect(amend.status).toBe(200);
+    const row = await adminDb.planRaisedGap.findFirstOrThrow({ where: { planId } });
+    expect([row.gapId, row.amendedAt !== null, row.answerRefs]).toEqual([
+      'gap-1',
+      true,
+      ['planItem:role'],
+    ]);
+  });
+
+  it('400 on a malformed body, 422 on an entry the store refuses, writing nothing', async () => {
+    const fx = await makeFixture();
+    const jobId = 'job_gaps_refused';
+    const { planId } = await generatingPlan(fx, jobId);
+
+    for (const extra of [
+      { gaps: 'not an array' },
+      { gaps: [gap], narration: ['Both.'] },
+      { gaps: [gap], target: 'planItem:x' },
+    ]) {
+      const res = await report(fx, jobId, { sessionKey: 's', ...extra });
+      expect(res.status, JSON.stringify(extra)).toBe(400);
+    }
+    for (const gaps of [[], [{ ...gap, what: '' }], [{ op: 'amend', id: 'unknown' }]]) {
+      const res = await report(fx, jobId, { sessionKey: 's', gaps });
+      expect(res.status, JSON.stringify(gaps)).toBe(422);
+      expect(((await res.json()) as { code: string }).code).toBe('PLAN_STEP_INVALID');
+    }
+    expect(await adminDb.planRaisedGap.count({ where: { planId } })).toBe(0);
+  });
+
+  it('409 once the plan is not generating', async () => {
+    const fx = await makeFixture();
+    const jobId = 'job_gaps_409';
+    const { planId } = await generatingPlan(fx, jobId);
+    await plansService.markPlanned(planId, fx.ctx);
+    const res = await report(fx, jobId, { sessionKey: 's', gaps: [gap] });
+    expect(res.status).toBe(409);
+  });
+});
+
 describe('the provider-retry arm (Story MOTIR-9540 · MOTIR-9619)', () => {
   type WaitBody = {
     planId: string;

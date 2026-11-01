@@ -26,6 +26,7 @@ import {
 } from '@/lib/dto/plans';
 import { PLAN_NARRATION_BATCH_MAX, PLAN_NARRATION_SENTENCE_MAX } from '@/lib/plans/planNarration';
 import { PLAN_CODE_READ_BATCH_MAX } from '@/lib/plans/planCodeRead';
+import { PLAN_GAP_BATCH_MAX } from '@/lib/plans/planRaisedGap';
 import {
   TODO_COMMAND_MAX_LENGTH,
   TODO_NOTES_MAX_LENGTH,
@@ -1290,7 +1291,7 @@ const reportPlanStepInputSchema = {
         '`author` (writing `target`, or an item not on the plan yet with no target), or `end` ' +
         '(the session finished — clears its step; never a target). A step report also records ' +
         'the words a person reads at the head of that session’s narration. Send exactly one ' +
-        'of `step`, `narration` or `codeReads`.',
+        'of `step`, `narration`, `codeReads` or `gaps`.',
     ),
   narration: z
     .array(z.string())
@@ -1357,6 +1358,65 @@ const reportPlanStepInputSchema = {
         'malformed (a `sha` that is not hex is refused). Nothing is recorded on a refusal. ' +
         'Read them back with `get_plan_code_reads`.',
     ),
+  gaps: z
+    .array(
+      z.object({
+        op: z
+          .enum(['raise', 'amend'])
+          .describe(
+            '`raise`: an author session found work no card covers — declare it NOW, before ' +
+              'the next session opens. `amend`: the level’s amend session was handed the gap.',
+          ),
+        id: z
+          .string()
+          .describe(
+            'YOUR id for the gap, unique on the plan — the `amend` names it. A second ' +
+              '`raise` of the same id is a repeated report and is kept as it was.',
+          ),
+        level: z
+          .string()
+          .optional()
+          .describe('`raise`: the level the gap is about — the raising card’s parent ref.'),
+        raisedBy: z
+          .string()
+          .optional()
+          .describe('`raise`: the card whose author session raised it.'),
+        what: z
+          .string()
+          .optional()
+          .describe('`raise`: the uncovered work, in the session’s words.'),
+        decision: z
+          .string()
+          .optional()
+          .describe('`raise`: the open decision it turns on, and who decides it.'),
+        after: z.string().optional().describe('`raise`: the sibling it falls after.'),
+        before: z.string().optional().describe('`raise`: the sibling it falls before.'),
+        note: z.string().optional(),
+        amended: z
+          .boolean()
+          .optional()
+          .describe(
+            '`raise`: true when the level’s amend has ALREADY run, so no amend will answer it.',
+          ),
+        refs: z
+          .array(z.string())
+          .optional()
+          .describe('`amend`: the cards the amend named for THIS gap; omit when it named none.'),
+        open: z
+          .string()
+          .optional()
+          .describe('`amend`: the part of the gap those refs leave uncovered.'),
+      }),
+    )
+    .optional()
+    .describe(
+      'Instead of `step`: the GAPS your author sessions raised and the ones a level’s amend ' +
+        `was handed (at most ${PLAN_GAP_BATCH_MAX} per call), kept ON THE PLAN so a walk that ` +
+        'dies and is resumed can hand the amend what the dead attempt raised. `get_plan` reads ' +
+        'them back as `raisedGaps`, each with `amended`. Needs no step. Refused with ' +
+        'PLAN_STEP_INVALID when sent with `step` or `target`, when an entry is malformed, or ' +
+        'when an `amend` names an id the plan does not hold. Nothing is recorded on a refusal.',
+    ),
   target: z
     .string()
     .trim()
@@ -1377,6 +1437,7 @@ interface ReportPlanStepArgs {
   target?: string;
   narration?: string[];
   codeReads?: unknown[];
+  gaps?: unknown[];
 }
 
 interface UpdatePlanProposalArgs extends UpdatePlanItemArgs {
@@ -2183,9 +2244,24 @@ export async function runReportPlanStep(
       ...(args.step !== undefined ? { step: args.step } : {}),
       ...(args.narration !== undefined ? { narration: args.narration } : {}),
       ...(args.codeReads !== undefined ? { codeReads: args.codeReads } : {}),
+      ...(args.gaps !== undefined ? { gaps: args.gaps } : {}),
     },
     ctx,
   );
+  if (result.kind === 'gaps') {
+    const { raised, alreadyRaised, amended } = result.gaps;
+    const payload = exempt(REPORT_PLAN_STEP_TOOL_NAME, {
+      planId: args.planId,
+      sessionKey: args.sessionKey,
+      gaps: result.gaps,
+    });
+    const parts = [
+      `raised ${raised.length} gap${raised.length === 1 ? '' : 's'}`,
+      ...(alreadyRaised.length > 0 ? [`${alreadyRaised.length} already on the plan`] : []),
+      `stamped ${amended.length} as handed to the amend`,
+    ];
+    return toolOk(`On plan ${args.planId}: ${parts.join(', ')}.`, payload);
+  }
   if (result.kind === 'codeReads') {
     const n = result.codeReads.length;
     const payload = exempt(REPORT_PLAN_STEP_TOOL_NAME, {
@@ -2651,6 +2727,9 @@ export function registerAuthorPlan(server: McpServer, resolveContext: McpContext
         'Send `codeReads` (instead of `step`) with the session’s code reads — what it asked, the ' +
         'commit it read at, what came back, never the code — so a check of the plan can see what ' +
         'each card was written from; they are kept and read back with `get_plan_code_reads`. ' +
+        'Send `gaps` (instead of `step`) the moment an author session raises a gap, and again ' +
+        'once its level’s amend is handed it: a gap lives on the plan, not in your walk, so a ' +
+        'resumed walk reads the unamended ones back from `get_plan`’s `raisedGaps`. ' +
         'IT IS ADVISORY: every refusal ' +
         'comes back as a code and a sentence, and a refused report should NOT stop you ' +
         'planning — carry on with the plan. It changes nothing about the plan’s proposals. ' +

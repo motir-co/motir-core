@@ -513,6 +513,8 @@ export async function runGetPlan(
   const marks = await resolveMarks(plan, ctx);
   // The authoring agent's own record (MOTIR-9978) — on THIS payload, never on the plan DTO.
   const plannerRecord = await plansService.getPlannerRecord(args.planId, ctx);
+  // The gaps its author sessions raised (MOTIR-10176) — a resumed walk's amend input.
+  const raisedGaps = await plansService.listPlanRaisedGaps(args.planId, ctx);
   // The sections view (MOTIR-9033): every `add`'s proposed body parsed with the
   // kind the plan doors default an unsaid kind to. `modify` / `remove` carry a
   // patch on a card whose kind and type may sit outside it, so they are not parsed.
@@ -539,6 +541,7 @@ export async function runGetPlan(
     derived(planPayload, {
       ...presentMcpPlan(plan, folders),
       plannerRecord,
+      raisedGaps,
       ...(sections ? { parsedSections: Object.fromEntries(sections) } : {}),
     }),
   );
@@ -574,6 +577,9 @@ export function registerGetPlan(server: McpServer, resolveContext: McpContextRes
         'IMPORTANT: these are PROPOSALS, NOT work items. Nothing here exists in the tree: ' +
         'approving the plan in Motir is the only path from a proposal to a work item, and an ' +
         "`add`'s `workItemId` stays null until then. Do not report proposed items as created. " +
+        '`structuredContent.raisedGaps` lists the gaps the plan’s author sessions raised, in ' +
+        'raise order, each with `amended` (its level’s amend was handed it) and the amend’s ' +
+        '`answer` — a resumed walk hands the unamended ones to that amend. ' +
         'A pure read.' +
         PARSED_SECTIONS_DESCRIPTION.replace(
           'to also receive `parsedSections` — the body parsed',

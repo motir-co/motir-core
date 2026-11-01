@@ -874,6 +874,39 @@ export interface PlanCodeReadDto {
  * words of every session that appears on it — so a reader can tell which card a
  * session was writing — and the cursor for the next page (`null` on the last).
  */
+/**
+ * One GAP a planner's author session raised (MOTIR-10176): the uncovered work, the
+ * decision it turns on, and whether its level's amend has been handed it. `amended`
+ * false is a gap no amend has seen yet — what a resumed walk hands its level's
+ * amend. Refs (`level`, `raisedBy`, `answer.refs`) are the planner's own spelling.
+ */
+export interface PlanRaisedGapDto {
+  /** The planner's own id for the gap — what its `amend` entry names. */
+  id: string;
+  seq: number;
+  sessionKey: string;
+  level: string | null;
+  raisedBy: string | null;
+  what: string;
+  decision: string | null;
+  after: string | null;
+  before: string | null;
+  note: string | null;
+  amended: boolean;
+  amendedAt: string | null;
+  /** What the amend answered it with; null until it was handed one. */
+  answer: { refs: string[]; open: string | null } | null;
+  raisedAt: string;
+}
+
+/** What a `gaps` call recorded (MOTIR-10176): the ids it raised and the ids it stamped. */
+export interface PlanGapsRecordedDto {
+  raised: string[];
+  /** Raises of an id the plan already held — a repeated report, kept as it was. */
+  alreadyRaised: string[];
+  amended: string[];
+}
+
 export interface PlanCodeReadPageDto {
   planId: string;
   reads: PlanCodeReadDto[];

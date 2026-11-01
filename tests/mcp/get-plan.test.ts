@@ -130,13 +130,17 @@ describe('get_plan — the transport contract', () => {
     // every DTO key arrives unchanged, and the only keys added are those two.
     // AND ONE MORE (MOTIR-9978): the payload carries the authoring agent's own
     // `plannerRecord`, kept off the plan DTO — `null` on this plan, which has none.
+    // AND ONE MORE (MOTIR-10176): the payload carries the plan's `raisedGaps`, the
+    // gaps its author sessions declared, kept off the plan DTO — empty on this plan.
     const fromService = await plansService.getPlan(plan.id, fx.ctx);
     const expected = JSON.parse(JSON.stringify(fromService)) as {
       items: Record<string, unknown>[];
       plannerRecord?: unknown;
+      raisedGaps?: unknown[];
     };
     expected.items = expected.items.map((item) => ({ ...item, folderId: null, folderPath: null }));
     expected.plannerRecord = null;
+    expected.raisedGaps = [];
     expect(struct(res)).toEqual(expected);
     await client.close();
   });
