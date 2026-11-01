@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { PlanLessonCall } from '@prisma/client';
+import type { PlanLessonCall } from '@/generated/prisma/client';
 import { toPlanLessonCallDto } from '@/lib/mappers/planMappers';
 
 // MOTIR-10191 — the lesson-call mapper reads two JSON columns. The store only ever writes
