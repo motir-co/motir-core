@@ -33,6 +33,13 @@ import { afterEach } from 'vitest';
  * server, awaiting a drain) therefore happens first, and only work that
  * survives the file's own cleanup is reported.
  *
+ * A BACKEND THAT IS SETTLING IS NOT A LEAK (MOTIR-10161). The client has a
+ * refused statement's error a moment before its backend finishes the abort and
+ * reads `idle`, so the probe re-reads for a short, bounded grace
+ * (`settledInFlightBackends`, `inFlightWork.ts`) and reports only what is
+ * still working when it ends. A clean test pays nothing: its first read is
+ * empty.
+ *
  * WHAT TO DO WHEN IT FIRES: find the promise the named query belongs to and
  * AWAIT it (or settle it — `Promise.allSettled` rather than a `Promise.all`
  * that rejects while its siblings are still running, which was the shape all
@@ -54,21 +61,6 @@ afterEach(async () => {
   const { settleServerWork } = await import('./serverWork');
   await settleServerWork();
 
-  const { inFlightBackends, describeInFlight } = await import('./inFlightWork');
-  let leftover;
-  try {
-    leftover = await inFlightBackends();
-  } catch {
-    // A file that opened a client but points it at no reachable database (a
-    // test of the connection-failure path itself) has nothing to ask. That is
-    // not a finding; a leak needs a database to leak onto.
-    return;
-  }
-  if (leftover.length === 0) return;
-  throw new Error(
-    `This test ended with ${leftover.length} backend(s) of its own still working on the ` +
-      `database. Await (or settle) the work that started them — a leftover like this is ` +
-      `what deadlocks the NEXT test's reset (MOTIR-6278, tests/helpers/inFlightProbe.ts):\n` +
-      describeInFlight(leftover),
-  );
+  const { assertNothingInFlight } = await import('./inFlightWork');
+  await assertNothingInFlight();
 });
