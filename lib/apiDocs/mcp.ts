@@ -956,7 +956,8 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
       'A plan with the proposals it bundles: what the planner actually proposed, not just how much — including a proposed obsolescence mark (current → proposed, with its note), its supersedes edges named by key, and the steps a change replaces with how many were ticked.',
     // Re-pinned for MOTIR-9033, summary UNCHANGED: the opt-in `includeSections` parses
     // each `add`'s body into sections on request; the summary describes what is bundled.
-    descriptionFingerprint: '00accdd86bbd',
+    // Re-pinned for MOTIR-10176, summary UNCHANGED: the description names `raisedGaps`.
+    descriptionFingerprint: '8651b90a8d88',
   },
   get_approved_shape_verdict: {
     // The line has to carry the one thing a reader choosing between this and
@@ -1076,7 +1077,9 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Re-pinned for MOTIR-8062: the `narration` arm joins the description.
     // Re-pinned for MOTIR-10122, summary UNCHANGED: the `codeReads` arm joins the input schema
     // and the step's exclusive-forms sentence.
-    descriptionFingerprint: '4d3e24448453',
+    // Re-pinned for MOTIR-10176, summary UNCHANGED: the `gaps` arm joins the input schema,
+    // the exclusive-forms sentence and the description.
+    descriptionFingerprint: '45abd7558f10',
   },
   hold_plan_revision: {
     // What a reader picks this one on: it is the only plan door that re-opens a

@@ -43,6 +43,8 @@ import { planRevisionRepository } from '@/lib/repositories/planRevisionRepositor
 import { planStepRepository } from '@/lib/repositories/planStepRepository';
 import { planNarrationRepository } from '@/lib/repositories/planNarrationRepository';
 import { planCodeReadRepository } from '@/lib/repositories/planCodeReadRepository';
+import { planRaisedGapRepository } from '@/lib/repositories/planRaisedGapRepository';
+import { PlanGapRefusal, parsePlanGapEntries } from '@/lib/plans/planRaisedGap';
 import {
   PLAN_CODE_READ_PAGE_MAX,
   PlanCodeReadRefusal,
@@ -254,6 +256,8 @@ import type {
   PlanNarrationDto,
   PlanCodeReadDto,
   PlanCodeReadPageDto,
+  PlanGapsRecordedDto,
+  PlanRaisedGapDto,
   PlanStepDto,
   PlanStepKindDto,
   PlanStepProviderWaitDto,
@@ -269,6 +273,7 @@ import {
   toPlanItemDto,
   toPlanNarrationDto,
   toPlanCodeReadDto,
+  toPlanRaisedGapDto,
   toPlanNarrationSessionDto,
   toPlanStepDto,
   toPlanWithItemsDto,
@@ -5561,6 +5566,7 @@ export type ReportPlanStepResult =
   | { kind: 'end' }
   | { kind: 'narration'; narration: PlanNarrationDto[] }
   | { kind: 'codeReads'; codeReads: PlanCodeReadDto[] }
+  | { kind: 'gaps'; gaps: PlanGapsRecordedDto }
   | { kind: 'providerRetry'; providerWait: PlanStepProviderWaitDto | null };
 
 /** The most retries one provider wait may name (MOTIR-9619) — `attempt` and
@@ -7981,6 +7987,120 @@ export const plansService = {
   },
 
   /**
+   * Record the GAPS a planner's author sessions raised, and stamp the ones its
+   * level's amend was handed (MOTIR-10176). A `raise` entry declares a gap ON THE
+   * PLAN the moment it is raised — before the next session opens — so a walk that
+   * dies and is resumed can hand its level's amend what the dead attempt raised; an
+   * `amend` entry stamps a gap the amend was handed, with the refs it named for it.
+   *
+   * The whole call is refused, nothing written, when the batch is empty or over the
+   * cap, any entry is malformed (`parsePlanGapEntries` names the field), an `amend`
+   * names an id the plan does not hold, or the plan is not `generating`. A `raise`
+   * of an id the plan already holds is a repeated report: kept as it was, and named
+   * in `alreadyRaised`. New gaps take the next consecutive per-plan `seq` values
+   * under the plan row lock, in the call's order.
+   *
+   * ⚠️ NO STEP IS REQUIRED, as for code reads: a gap is the walk's working record,
+   * not a signal on the overlay, and it must land even when the step was refused.
+   */
+  async recordPlanGaps(
+    planId: string,
+    input: { sessionKey: string; gaps: unknown },
+    ctx: ServiceContext,
+  ): Promise<PlanGapsRecordedDto> {
+    const sessionKey = assertSessionKey(input.sessionKey);
+    let entries;
+    try {
+      entries = parsePlanGapEntries(input.gaps);
+    } catch (err) {
+      if (err instanceof PlanGapRefusal) throw new InvalidPlanStepError(err.message);
+      throw err;
+    }
+    return withGeneratingPlanStep(planId, ctx, async (_plan, tx, now) => {
+      const ids = [...new Set(entries.map((e) => e.id))];
+      const held = new Map(
+        (await planRaisedGapRepository.findByGapIds(planId, ids, tx)).map((r) => [r.gapId, r]),
+      );
+      const raised: string[] = [];
+      const alreadyRaised: string[] = [];
+      const fresh = new Set<string>();
+      let seq = await planRaisedGapRepository.maxSeq(planId, tx);
+      const rows = [];
+      for (const e of entries) {
+        if (e.op !== 'raise') continue;
+        if (held.has(e.id) || fresh.has(e.id)) {
+          alreadyRaised.push(e.id);
+          continue;
+        }
+        fresh.add(e.id);
+        raised.push(e.id);
+        seq += 1;
+        rows.push({
+          planId,
+          gapId: e.id,
+          sessionKey,
+          seq,
+          level: e.level,
+          raisedBy: e.raisedBy,
+          what: e.what,
+          decision: e.decision,
+          after: e.after,
+          before: e.before,
+          note: e.note,
+          amendedAt: e.amended ? now : null,
+          createdAt: now,
+        });
+      }
+      const amends = entries.filter((e) => e.op === 'amend');
+      const unknown = amends.filter((e) => !held.has(e.id) && !fresh.has(e.id)).map((e) => e.id);
+      if (unknown.length > 0) {
+        throw new InvalidPlanStepError(
+          `An \`amend\` names ${unknown.length === 1 ? 'a gap' : 'gaps'} this plan does not hold ` +
+            `(${[...new Set(unknown)].join(', ')}) — raise a gap before its amend; nothing was ` +
+            'recorded.',
+        );
+      }
+      await planRaisedGapRepository.createMany(rows, tx);
+      const amended: string[] = [];
+      if (amends.length > 0) {
+        const byId = new Map(
+          (
+            await planRaisedGapRepository.findByGapIds(
+              planId,
+              amends.map((e) => e.id),
+              tx,
+            )
+          ).map((r) => [r.gapId, r]),
+        );
+        for (const e of amends) {
+          await planRaisedGapRepository.markAmended(
+            byId.get(e.id)!.id,
+            { amendedAt: now, answerRefs: e.refs, answerOpen: e.open },
+            tx,
+          );
+          if (!amended.includes(e.id)) amended.push(e.id);
+        }
+      }
+      return { raised, alreadyRaised, amended };
+    });
+  },
+
+  /**
+   * Every GAP a plan's author sessions raised (MOTIR-10176), in raise order, each
+   * with whether its level's amend has been handed it. Reader-gated exactly as
+   * `get_plan` (`admitPlanReader`: an unknown or unreadable plan is not-found), and
+   * readable on a plan in ANY status. A resumed walk hands its amend the ones whose
+   * `amended` is false; a briefing lists every one an amend left open.
+   */
+  async listPlanRaisedGaps(planId: string, ctx: ServiceContext): Promise<PlanRaisedGapDto[]> {
+    await plansService.admitPlanReader(planId, ctx);
+    // A READ: the service binding, not the write transaction (planTrailCompleteness).
+    return withWorkspaceServiceContext(ctx.workspaceId, async (tx) =>
+      (await planRaisedGapRepository.listByPlan(planId, tx)).map(toPlanRaisedGapDto),
+    );
+  },
+
+  /**
    * One page of a plan's CODE READS (MOTIR-10122), ascending `seq`, after
    * `afterSeq` — optionally one session's — with the step words of every session
    * on the page. Reader-gated exactly as `get_plan` (`admitPlanReader`: an unknown
@@ -8122,20 +8242,39 @@ export const plansService = {
       providerRetry?: PlanProviderRetryInput;
       /** The session's code reads (MOTIR-10122) — the fourth exclusive form. */
       codeReads?: unknown[];
+      /** The gaps raised and amended (MOTIR-10176) — the fifth exclusive form. */
+      gaps?: unknown[];
     },
     ctx: ServiceContext,
   ): Promise<ReportPlanStepResult> {
-    // EXACTLY ONE of `step` / `narration` / `providerRetry` / `codeReads`
-    // (MOTIR-8062 · MOTIR-9619 · MOTIR-10122): a step report re-stamps
+    // EXACTLY ONE of `step` / `narration` / `providerRetry` / `codeReads` / `gaps`
+    // (MOTIR-8062 · MOTIR-9619 · MOTIR-10122 · MOTIR-10176): a step report re-stamps
     // `startedAt`, so keeping them apart is what lets the others never touch the step.
-    const forms = [input.step, input.narration, input.providerRetry, input.codeReads].filter(
-      (form) => form !== undefined,
-    ).length;
+    const forms = [
+      input.step,
+      input.narration,
+      input.providerRetry,
+      input.codeReads,
+      input.gaps,
+    ].filter((form) => form !== undefined).length;
     if (forms !== 1) {
       throw new InvalidPlanStepError(
-        'Send exactly one of `step`, `narration`, `providerRetry` or `codeReads` — nothing was ' +
-          'recorded.',
+        'Send exactly one of `step`, `narration`, `providerRetry`, `codeReads` or `gaps` — ' +
+          'nothing was recorded.',
       );
+    }
+    if (input.gaps !== undefined) {
+      if (input.targetRef !== null) {
+        throw new InvalidPlanStepError(
+          'A `gaps` call names no target — send it with none; nothing was recorded.',
+        );
+      }
+      const gaps = await plansService.recordPlanGaps(
+        planId,
+        { sessionKey: input.sessionKey, gaps: input.gaps },
+        ctx,
+      );
+      return { kind: 'gaps', gaps };
     }
     if (input.codeReads !== undefined) {
       if (input.targetRef !== null) {

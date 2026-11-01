@@ -7610,6 +7610,10 @@ model Plan {
   /// which commit, and how much came back; never the contents. Append-only and
   /// kept as long as the narration.
   codeReads         PlanCodeRead[]
+  /// Every GAP a planner's author session raised on this plan (MOTIR-10176) — kept
+  /// on the plan rather than in the walk's memory, so a resumed walk hands its
+  /// level's amend the gaps the dead attempt raised.
+  raisedGaps        PlanRaisedGap[]
   /// The targets this plan has PARKED at `planning` while it is open
   /// (MOTIR-5645). Cascade-deleted with the plan, so a deleted plan holds
   /// nothing — the restore is the release path's job, not the FK's.
@@ -7963,6 +7967,52 @@ model PlanCodeRead {
   @@unique([planId, seq])
   @@index([planId, sessionKey])
   @@map("plan_code_read")
+}
+
+/// One GAP a planner's author session raised (MOTIR-10176): work it found that no
+/// card covers, the open decision it turns on, and whether the level's ONE amend
+/// session has been handed it. Written through the step doors' `gaps` arm the
+/// moment it is raised, so it is on the plan before the next session opens; a
+/// walk that dies and resumes reads the unamended ones back and hands them to the
+/// amend, and the briefing reads the same rows. The planner names each gap
+/// (`gapId`), because the raise and the amend are two calls that may come from two
+/// jobs. Refs are stored in the planner's own spelling and are not resolved here.
+model PlanRaisedGap {
+  id         String    @id @default(cuid())
+  planId     String    @map("plan_id")
+  /// The planner's id for the gap, unique on the plan — what its `amend` names.
+  gapId      String    @map("gap_id")
+  /// The raising session's opaque key, the value `plan_step` and narration carry.
+  sessionKey String    @map("session_key")
+  /// Per-plan raise order, gapless from 1, taken under the plan row lock.
+  seq        Int
+  /// The level the gap is about — the raising card's parent ref; NULL for the
+  /// project's own top level.
+  level      String?
+  /// The card whose author session raised it.
+  raisedBy   String?   @map("raised_by")
+  /// The uncovered work, in the session's own words.
+  what       String
+  /// The open decision it turns on, and who decides it.
+  decision   String?
+  /// Where it sits — refs of the siblings it falls between, as the session named them.
+  after      String?
+  before     String?
+  note       String?
+  /// When the level's amend was handed this gap (or, raised after the amend, when it
+  /// was raised). NULL while no amend has seen it — the gaps a resume hands on.
+  amendedAt  DateTime? @map("amended_at")
+  /// The refs the amend named for THIS gap; empty when it answered nothing.
+  answerRefs String[]  @default([]) @map("answer_refs")
+  /// The part of the gap those refs leave uncovered.
+  answerOpen String?   @map("answer_open")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  plan Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, gapId])
+  @@unique([planId, seq])
+  @@map("plan_raised_gap")
 }
 
 /// One planner session's STEP WORDS on a plan (MOTIR-8062): the step kind, its

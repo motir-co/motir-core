@@ -4051,6 +4051,15 @@ superseded by +ACME-9` — the old mark read from the target's live row, each re
   by its key.
 - **`supersedesRefs`** (`add`) — the older cards the new card replaces; rendered
   as `· supersedes ACME-3, ACME-4`. `[]` on every other op.
+
+Beside `items[]`, **`raisedGaps[]`** (MOTIR-10176) lists every gap the plan's author
+sessions raised through `report_plan_step`'s `gaps` arm, in raise order: `id` (the
+planner's own), `seq`, `sessionKey`, `level`, `raisedBy`, `what`, `decision`,
+`after`, `before`, `note`, `amended` (its level's amend was handed it), `amendedAt`,
+`answer` (`{ refs, open }` once amended, else `null`) and `raisedAt`. A resumed walk
+hands the ones with `amended: false` to their level's amend; a briefing lists every
+one an amend left open.
+
 - **`workItemId`** — the target of a `modify` / `remove`; **`null` for an
   un-materialized `add`**.
 - **`decisionReason`** — on a `declined` plan, WHY it ended: `reviewed` (a
@@ -5029,6 +5038,27 @@ report_plan_step({ planId, sessionKey: "author-3", codeReads: [
 // → { planId, sessionKey: "author-3", codeReads: [{ seq: 12, tool: "read_file" }] }
 ```
 
+**Record the gaps your author sessions raise (MOTIR-10176).** Send `gaps` (instead of
+`step`, and with no `target`) the moment an author session raises a gap — before the
+next session opens — and again once that level's amend is handed it. At most 50
+entries per call, each either `{ op: "raise", id, level?, raisedBy?, what, decision?,
+after?, before?, note?, amended? }` or `{ op: "amend", id, refs?, open? }`. `id` is
+YOUR id for the gap, unique on the plan; a second `raise` of an id the plan already
+holds is a repeated report and is kept as it was (`alreadyRaised`). `amended: true` on
+a raise says the level's amend has already run, so no amend will answer it. An
+`amend` stamps the gap with the refs the amend named for it and the part they leave
+`open`, and is refused when the plan does not hold its id. A gap lives on the plan,
+not in your walk: a walk that dies and is resumed reads them back from `get_plan`'s
+`raisedGaps` and hands the unamended ones to that level's amend. Needs no step.
+
+```jsonc
+report_plan_step({ planId, sessionKey: "author-6", gaps: [
+  { op: "raise", id: "run-2:gap-1", level: "planItem:story", raisedBy: "planItem:adapter",
+    what: "Nothing creates the Lambda execution role.",
+    decision: "Which account owns it — the infra owner decides." } ] })
+// → { planId, sessionKey: "author-6", gaps: { raised: ["run-2:gap-1"], alreadyRaised: [], amended: [] } }
+```
+
 Requires **`ai:view_plan`**, the key every plan-authoring write names. A `motir run`
 credential (`CLI_TOKEN_GRANT`) does not carry it and cannot reach this tool: a run
 executing one work item has no business reporting progress on a plan.
@@ -5040,7 +5070,9 @@ and, for `narration`, both or neither of `step` / `narration`, a `target`, an em
 or over-long batch, a blank sentence, or a session that holds no step; for
 `codeReads`, another arm or a `target` alongside it, an empty or over-long batch,
 a read with no `tool` or `outcome`, a `sha` that is not hex, or a read carrying
-`text` / `content`.
+`text` / `content`; for `gaps`, another arm or a `target` alongside it, an empty or
+over-long batch, an entry with no `id`, a `raise` with no `what`, an unknown `op`, or
+an `amend` naming an id the plan does not hold.
 
 ##### `hold_plan_revision` — hold a plan still while you revise it
 

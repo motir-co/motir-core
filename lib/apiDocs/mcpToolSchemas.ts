@@ -2855,7 +2855,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         type: 'string',
         enum: ['settle', 'lay', 'author', 'end'],
         description:
-          'The step the session is starting: `settle` (settling the brief — never a target), `lay` (laying the children of `target`, or the project’s top level with no target), `author` (writing `target`, or an item not on the plan yet with no target), or `end` (the session finished — clears its step; never a target). A step report also records the words a person reads at the head of that session’s narration. Send exactly one of `step`, `narration` or `codeReads`.',
+          'The step the session is starting: `settle` (settling the brief — never a target), `lay` (laying the children of `target`, or the project’s top level with no target), `author` (writing `target`, or an item not on the plan yet with no target), or `end` (the session finished — clears its step; never a target). A step report also records the words a person reads at the head of that session’s narration. Send exactly one of `step`, `narration`, `codeReads` or `gaps`.',
       },
       narration: {
         type: 'array',
@@ -2923,6 +2923,63 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         },
         description:
           'Instead of `step`: the session’s CODE READS, in the order it made them, appended to the plan’s kept read log under `sessionKey` (at most 50 per call). Records what was asked, the commit it was read at and how much came back — never the code. Needs no step: a session may post its reads before or after it holds one. Refused with PLAN_STEP_INVALID when sent with `step` or `target`, or when a read is malformed (a `sha` that is not hex is refused). Nothing is recorded on a refusal. Read them back with `get_plan_code_reads`.',
+      },
+      gaps: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            op: {
+              type: 'string',
+              enum: ['raise', 'amend'],
+              description:
+                '`raise`: an author session found work no card covers — declare it NOW, before the next session opens. `amend`: the level’s amend session was handed the gap.',
+            },
+            id: {
+              type: 'string',
+              description:
+                'YOUR id for the gap, unique on the plan — the `amend` names it. A second `raise` of the same id is a repeated report and is kept as it was.',
+            },
+            level: {
+              type: 'string',
+              description: '`raise`: the level the gap is about — the raising card’s parent ref.',
+            },
+            raisedBy: {
+              type: 'string',
+              description: '`raise`: the card whose author session raised it.',
+            },
+            what: {
+              type: 'string',
+              description: '`raise`: the uncovered work, in the session’s words.',
+            },
+            decision: {
+              type: 'string',
+              description: '`raise`: the open decision it turns on, and who decides it.',
+            },
+            after: { type: 'string', description: '`raise`: the sibling it falls after.' },
+            before: { type: 'string', description: '`raise`: the sibling it falls before.' },
+            note: { type: 'string' },
+            amended: {
+              type: 'boolean',
+              description:
+                '`raise`: true when the level’s amend has ALREADY run, so no amend will answer it.',
+            },
+            refs: {
+              type: 'array',
+              items: { type: 'string' },
+              description:
+                '`amend`: the cards the amend named for THIS gap; omit when it named none.',
+            },
+            open: {
+              type: 'string',
+              description: '`amend`: the part of the gap those refs leave uncovered.',
+            },
+          },
+          required: ['op', 'id'],
+          additionalProperties: false,
+        },
+        description:
+          'Instead of `step`: the GAPS your author sessions raised and the ones a level’s amend was handed (at most 50 per call), kept ON THE PLAN so a walk that dies and is resumed can hand the amend what the dead attempt raised. `get_plan` reads them back as `raisedGaps`, each with `amended`. Needs no step. Refused with PLAN_STEP_INVALID when sent with `step` or `target`, when an entry is malformed, or when an `amend` names an id the plan does not hold. Nothing is recorded on a refusal.',
       },
       target: {
         type: 'string',
