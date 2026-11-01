@@ -273,13 +273,17 @@ export function parseIntraPlanRefIds(text: string): string[] {
 }
 
 /**
- * A link a plan body may use to name a SIBLING `add`, in either spelling:
- * the canonical `[label](motir-ref:planItem:<id>)`, or the ordinary
- * `[label](motir:<id>)` written with the sibling's planItem id (MOTIR-9993).
- * Group 1 = the label; group 2 = the scheme (`motir-ref:planItem:` or `motir:`);
- * group 3 = the id. The label class excludes `[` as `INTRA_PLAN_REF_TOKEN_RE`'s does.
+ * A link a plan body may use to name a SIBLING `add`, in any of three spellings:
+ * the canonical `[label](motir-ref:planItem:<id>)`, the ordinary
+ * `[label](motir:<id>)` written with the sibling's planItem id (MOTIR-9993), or
+ * that ordinary link with the token's `planItem:` prefix carried over,
+ * `[label](motir:planItem:<id>)`, the prefix in any case (MOTIR-10193).
+ * Group 1 = the label; group 2 = the scheme (`motir-ref:planItem:`, `motir:` or
+ * `motir:planItem:`); group 3 = the id. The label class excludes `[` as
+ * `INTRA_PLAN_REF_TOKEN_RE`'s does.
  */
-const PLAN_BODY_ITEM_LINK_RE = /\[([^\]\[]*)\]\((motir-ref:planItem:|motir:)([A-Za-z0-9_-]+)\)/g;
+const PLAN_BODY_ITEM_LINK_RE =
+  /\[([^\]\[]*)\]\((motir-ref:planItem:|motir:(?:[Pp][Ll][Aa][Nn][Ii][Tt][Ee][Mm]:)?)([A-Za-z0-9_-]+)\)/g;
 
 /** The rewritten body + the temp-ref ids that did NOT resolve (left inert). */
 export interface IntraPlanRewriteResult {
@@ -302,7 +306,10 @@ export interface IntraPlanRewriteResult {
  * it against the plan's projection, so it reads as valid until approve, where it
  * would otherwise point at an id no work item holds. Any other `motir:<id>` — an
  * existing work item, or an id that is neither — is untouched and never reported,
- * and so are bare keys. Pure string work — no Prisma, no IO. One pass, so a
+ * and so are bare keys. A `[label](motir:planItem:<id>)` link (MOTIR-10193) names
+ * a proposal by its prefix, so it is rewritten when its id resolves and, like a
+ * dangling canonical token, left verbatim and reported when it does not: no
+ * card carries a `planItem:` id, so it can never be an ordinary item link. Pure string work — no Prisma, no IO. One pass, so a
  * rewritten link is never looked up a second time; idempotent, and a body with no
  * intra-plan link returns unchanged.
  */
@@ -316,8 +323,9 @@ export function rewriteIntraPlanRefs(
     (match, label: string, scheme: string, planItemId: string) => {
       const id = resolve.get(planItemId);
       if (!id) {
-        // A dangling temp-ref is left inert and reported; a `motir:` link that
-        // names no proposal is an ordinary item link and is left alone.
+        // A dangling temp-ref is left inert and reported, in either scheme its
+        // `planItem:` prefix rides; a bare `motir:` link that names no proposal
+        // is an ordinary item link and is left alone.
         if (scheme !== 'motir:') unresolved.push(planItemId);
         return match;
       }

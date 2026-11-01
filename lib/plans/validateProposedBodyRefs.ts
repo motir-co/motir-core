@@ -173,6 +173,12 @@ export interface BodyLinkCandidate {
   /** The id the link names, read past a stray `planItem:` prefix; `null` when it names none. */
   id: string | null;
   scheme: 'motir-ref' | 'motir';
+  /**
+   * Set on a `motir:` link whose destination carried a `planItem:` prefix
+   * (MOTIR-10193). No card carries such an id, so the link opens nothing even
+   * when the id is a card's, and it is always warned.
+   */
+  planItemPrefixed?: true;
 }
 
 /** `[label](<scheme>:<dest>)` → its label and destination. */
@@ -181,9 +187,11 @@ function splitLink(link: string, join: string): { label: string; dest: string } 
   return { label: link.slice(1, at), dest: link.slice(at + join.length, -1) };
 }
 
+const PLAN_ITEM_PREFIX_RE = /^planItem:/i;
+
 /** The id a malformed `motir-ref:` destination names — `planItem:` in any case stripped. */
 function motirRefId(dest: string): string | null {
-  const id = dest.trim().replace(/^planItem:/i, '');
+  const id = dest.trim().replace(PLAN_ITEM_PREFIX_RE, '');
   return LINK_ID_RE.test(id) ? id : null;
 }
 
@@ -204,9 +212,19 @@ export function findBodyLinkCandidates(bodies: ProposedBodies): BodyLinkCandidat
     const seen = new Set<string>();
     for (const link of linksJoinedBy(withoutCode(text), MOTIR_LINK_JOIN)) {
       const { label, dest } = splitLink(link, MOTIR_LINK_JOIN);
-      if (!LINK_ID_RE.test(dest) || seen.has(link)) continue;
+      // Read past a `planItem:` prefix as `motirRefId` does (MOTIR-10193).
+      const prefixed = PLAN_ITEM_PREFIX_RE.test(dest);
+      const id = prefixed ? dest.replace(PLAN_ITEM_PREFIX_RE, '') : dest;
+      if (!LINK_ID_RE.test(id) || seen.has(link)) continue;
       seen.add(link);
-      found.push({ field, link, label, id: dest, scheme: 'motir' });
+      found.push({
+        field,
+        link,
+        label,
+        id,
+        scheme: 'motir',
+        ...(prefixed ? { planItemPrefixed: true as const } : {}),
+      });
     }
   }
   return found;
@@ -305,9 +323,11 @@ function judgeMotir(c: BodyLinkCandidate, known: BodyLinkResolution): BodyLinkWa
     return {
       field: c.field,
       link: c.link,
-      reason:
-        'it names a proposal on this plan in the card scheme — no card carries that id, so it ' +
-        'opens nothing until approve',
+      reason: c.planItemPrefixed
+        ? 'it names a proposal on this plan with the `planItem:` prefix in the card scheme, ' +
+          'which neither opens a card nor is the proposal token'
+        : 'it names a proposal on this plan in the card scheme — no card carries that id, so it ' +
+          'opens nothing until approve',
       correctedLink: `[${c.label}](motir-ref:planItem:${c.id})`,
     };
   }
@@ -322,7 +342,15 @@ function judgeMotir(c: BodyLinkCandidate, known: BodyLinkResolution): BodyLinkWa
       correctedLink: `[${c.label}](motir:${card})`,
     };
   }
-  if (known.cardIds.has(c.id)) return null;
+  if (known.cardIds.has(c.id)) {
+    if (!c.planItemPrefixed) return null;
+    return {
+      field: c.field,
+      link: c.link,
+      reason: 'it names an existing card behind a `planItem:` prefix, so it opens nothing',
+      correctedLink: `[${c.label}](motir:${c.id})`,
+    };
+  }
   return deadCardLinkWarning(c, known);
 }
 
