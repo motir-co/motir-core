@@ -1,5 +1,4 @@
 import { afterAll, describe, expect, it } from 'vitest';
-import { db } from '@/lib/db';
 import { adminDb } from './adminDb';
 import {
   IN_FLIGHT_SETTLE_GRACE_MS,
@@ -27,7 +26,6 @@ import {
 // backend that stops inside the grace and one that is genuinely still working.
 
 afterAll(async () => {
-  await db.$disconnect();
   await adminDb.$disconnect();
 });
 
@@ -135,7 +133,10 @@ describe('on the real database', () => {
   it('does not report a backend that stops working inside the grace', async () => {
     const marker = 'motir_10161_settles';
     // A Prisma query is lazy until something subscribes to it: `.then` starts it.
-    const work = db
+    // The admin client's pool runs it on a backend of its own, so the probe's read
+    // (on another of its connections) still sees it, and the raw statement stays
+    // off the app singleton (`tests/rls/test-singleton-statement-guard.test.ts`).
+    const work = adminDb
       .$queryRawUnsafe(`SELECT pg_sleep(0.1)::text, '${marker}'`)
       .then(() => undefined);
     try {
@@ -151,7 +152,7 @@ describe('on the real database', () => {
 
   it('STILL fails the probe on a genuinely leaked backend', async () => {
     const marker = 'motir_10161_leaks';
-    const leak = db
+    const leak = adminDb
       .$queryRawUnsafe(`SELECT pg_sleep(30)::text, '${marker}'`)
       .catch(() => undefined);
     try {
