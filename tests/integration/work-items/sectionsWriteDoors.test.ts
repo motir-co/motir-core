@@ -109,7 +109,7 @@ describe('createWorkItem with sections', () => {
     expect(await count()).toBe(0);
   });
 
-  it('refuses a decision task without options, naming options', async () => {
+  it('refuses a decision task sent as an open question, naming its writing brief', async () => {
     const fx = await makeWorkItemFixture();
     const err = await workItemsService
       .createWorkItem(
@@ -118,13 +118,25 @@ describe('createWorkItem with sections', () => {
           kind: 'task',
           title: 'Decide',
           type: 'decision',
-          sections: { ...LEAF, question: 'Which one?', recommendation: 'The first.' },
+          sections: {
+            ...LEAF,
+            question: 'Which one?',
+            options: [{ label: 'The first', cost: 'none', forecloses: 'the second' }],
+            recommendation: 'The first.',
+          },
         },
         fx.ctx,
       )
       .catch((e: unknown) => e);
     expect(err).toBeInstanceOf(InvalidSectionsError);
-    expect((err as InvalidSectionsError).missing).toContain('options');
+    expect((err as InvalidSectionsError).missing).toEqual([
+      'decisionBrief',
+      'alternatives',
+      'whatChanged',
+      'consumers',
+      'supersedes',
+      'resultingDirection',
+    ]);
     expect(await count()).toBe(0);
   });
 
@@ -192,7 +204,7 @@ describe('updateWorkItem with sections', () => {
       )
       .catch((e: unknown) => e);
     expect(err).toBeInstanceOf(InvalidSectionsError);
-    expect((err as InvalidSectionsError).missing).toContain('options');
+    expect((err as InvalidSectionsError).missing).toContain('decisionBrief');
     const row = await adminDb.workItem.findUniqueOrThrow({ where: { id: created.id } });
     expect(row.type).toBe('code');
     expect(row.descriptionMd).toBe(before);

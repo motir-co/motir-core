@@ -86,28 +86,42 @@ describe('sectionFindingFor (MOTIR-9032)', () => {
     ).toBeNull();
   });
 
-  // MOTIR-9211: the planner-recorded decision's brief (`type-decision.md`) used to
-  // land in `otherSections` and make every such card `incomplete`.
+  // MOTIR-9211: the decision's brief (`type-decision.md`) used to land in
+  // `otherSections` and make every such card `incomplete`; MOTIR-10206 made it the
+  // required shape, with `Alternatives considered` and `Consumed by` beside it.
   it.each(['task', 'subtask'] as const)(
-    'is silent for a %s decision body carrying the planner-recorded brief',
+    'is silent for a %s decision body carrying the writing brief by hand',
     (kind) => {
       const {
         decisionBrief: _d,
+        alternatives: _a,
         whatChanged: _w,
+        consumers: _c,
         supersedes: _s,
         resultingDirection: _r,
-        ...researched
+        question: _q,
+        options: _o,
+        recommendation: _rec,
+        ...core
       } = fixture(kind, 'decision');
       // Hand-written after the refs, where the brief stood as `otherSections`.
-      const body = `${renderSections(kind, 'decision', researched)}
+      const body = `${renderSections(kind, 'decision', core)}
 ## Decision
 
 No intent classifier.
+
+## Alternatives considered
+
+- An intent classifier — it guesses a WHAT the person never said
 
 ## What changed
 
 **Change:** workflow
 It said X; it says Y.
+
+## Consumed by
+
+- MOTIR-3 builds it
 
 ## Supersedes
 
@@ -123,13 +137,15 @@ The whole direction.
     },
   );
 
-  it('still reports a researched decision body missing its required sections', () => {
+  it('reports a decision body with neither the brief nor the legacy shape missing the brief', () => {
     const {
       question: _q,
       options: _o,
       recommendation: _r,
       decisionBrief: _d,
+      alternatives: _a,
       whatChanged: _w,
+      consumers: _c,
       supersedes: _s,
       resultingDirection: _rd,
       ...rest
@@ -141,8 +157,32 @@ The whole direction.
       descriptionMd: renderSections('task', 'decision', rest),
     });
     expect(f?.state).toBe('incomplete');
-    expect(f?.missing).toEqual(['question', 'options', 'recommendation']);
+    expect(f?.missing).toEqual([
+      'decisionBrief',
+      'alternatives',
+      'whatChanged',
+      'consumers',
+      'supersedes',
+      'resultingDirection',
+    ]);
     expect(f?.otherHeadings).toEqual([]);
+  });
+
+  it('is silent for a committed decision in the old open-question shape (MOTIR-10206)', () => {
+    const {
+      decisionBrief: _d,
+      alternatives: _a,
+      whatChanged: _w,
+      consumers: _c,
+      supersedes: _s,
+      resultingDirection: _rd,
+      ...legacy
+    } = fixture('task', 'decision');
+    const body = renderSections('task', 'decision', legacy);
+    expect(body).toContain('## Recommendation');
+    expect(
+      sectionFindingFor({ item: 'MOTIR-8', kind: 'task', type: 'decision', descriptionMd: body }),
+    ).toBeNull();
   });
 
   it('is silent for a complete decision card carrying an undefined heading', () => {

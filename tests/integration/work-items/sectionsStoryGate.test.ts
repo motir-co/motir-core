@@ -553,13 +553,13 @@ describe('seam 5 — one missing or unknown section is refused with the same nam
     });
   });
 
-  it('a decision task missing options names options on every door', async () => {
-    const { options: _omitted, ...withoutOptions } = gateSections('task', 'decision');
+  it('a decision task missing its alternatives names alternatives on every door', async () => {
+    const { alternatives: _omitted, ...withoutAlternatives } = gateSections('task', 'decision');
     await refusedEverywhere({
       kind: 'task',
       type: 'decision',
-      sections: withoutOptions,
-      needle: 'options',
+      sections: withoutAlternatives,
+      needle: 'alternatives',
     });
   });
 

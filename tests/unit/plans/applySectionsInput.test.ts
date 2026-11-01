@@ -86,11 +86,40 @@ describe('an add (no stored body)', () => {
     );
   });
 
-  it('names options when a decision card has none', () => {
+  // MOTIR-10206: a decision is the write-up of a decision made in planning, so a NEW one in
+  // the old open-question shape is refused, naming the writing brief it lacks.
+  it('names the writing brief when a new decision card is sent as an open question', () => {
     const message = refusal(() =>
-      apply({ ...base, question: 'Q?', recommendation: 'A' }, { type: 'decision' }),
+      apply(
+        {
+          ...base,
+          question: 'Q?',
+          options: [{ label: 'A', cost: 'c', forecloses: 'f' }],
+          recommendation: 'A',
+        },
+        { type: 'decision' },
+      ),
     );
-    expect(message).toContain('missing required section(s): options');
+    expect(message).toContain(
+      'missing required section(s): decisionBrief, alternatives, whatChanged, consumers, supersedes, resultingDirection',
+    );
+  });
+
+  it('accepts a new decision card carrying the writing brief', () => {
+    const body = apply(
+      {
+        ...base,
+        decisionBrief: 'No intent classifier.',
+        alternatives: ['A classifier — it guesses a WHAT nobody said'],
+        whatChanged: '**Change:** workflow\nIt said X; it says Y.',
+        consumers: ['MOTIR-3 builds it'],
+        supersedes: 'MOTIR-1',
+        resultingDirection: 'The whole direction.',
+      },
+      { type: 'decision' },
+    );
+    expect(body).toContain('## Alternatives considered');
+    expect(body).toContain('## Consumed by');
   });
 
   it('refuses a section the cell does not define, by name, never dropping it', () => {
@@ -178,7 +207,24 @@ describe('a sparse edit over the stored body', () => {
   it('judges the MERGED cell: a re-typed card needs the sections its new type requires', () => {
     expect(
       refusal(() => apply({ framing: 'Still framed.' }, { currentBody: stored, type: 'decision' })),
-    ).toContain('missing required section(s): question, options, recommendation');
+    ).toContain(
+      'missing required section(s): decisionBrief, alternatives, whatChanged, consumers, supersedes, resultingDirection',
+    );
+  });
+
+  it('keeps a STORED decision in the old open-question shape editable (MOTIR-10206)', () => {
+    const legacy = renderSections('task', 'decision', {
+      ...base,
+      question: 'Q?',
+      options: [{ label: 'A', cost: 'c', forecloses: 'f' }],
+      recommendation: 'A',
+    });
+    const next = apply(
+      { acceptanceCriteria: ['It renders.', 'It refuses by name.', 'A third.'] },
+      { currentBody: legacy, type: 'decision' },
+    );
+    expect(next).toContain('- A third.');
+    expect(next).toContain('## Recommendation');
   });
 
   it('keeps every line of a hand-written body that has no headings, in framing', () => {

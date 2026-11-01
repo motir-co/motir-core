@@ -150,7 +150,9 @@ export function resolveSectionsInput(args: ApplySectionsArgs): SectionsOutcome {
     else merged[key] = value;
   }
 
-  const check = checkSections(issueKind, sectionType, merged);
+  // An EDIT of a stored body keeps its legacy shape legal; a new card (no body)
+  // is held to the current required set (MOTIR-10206).
+  const check = checkSections(issueKind, sectionType, merged, { acceptLegacy: hasBody });
   const problems: string[] = [];
   if (check.missing.length > 0) {
     problems.push(`missing required section(s): ${check.missing.join(', ')}`);

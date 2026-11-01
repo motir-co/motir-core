@@ -16,7 +16,10 @@ describe('sectionSchemaService.describe', () => {
     expect(sets).toHaveLength(1);
     expect(sets[0]).toMatchObject({ kind: 'task', type: 'decision' });
     expect(sets[0]!.sections.filter((s) => s.required).map((s) => s.name)).toEqual(
-      expect.arrayContaining(['question', 'options', 'recommendation', 'framing']),
+      expect.arrayContaining(['decisionBrief', 'alternatives', 'consumers', 'framing']),
+    );
+    expect(sets[0]!.sections.filter((s) => s.required).map((s) => s.name)).not.toContain(
+      'question',
     );
   });
 

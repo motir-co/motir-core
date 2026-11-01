@@ -16,7 +16,14 @@ const TYPES: SectionType[] = [null, ...WORK_ITEM_TYPES];
 const CORE = ['framing', 'scopeBoundary', 'acceptanceCriteria', 'contextRefs'];
 
 const EXTRA_REQUIRED: Record<string, string[]> = {
-  decision: ['question', 'options', 'recommendation'],
+  decision: [
+    'decisionBrief',
+    'alternatives',
+    'whatChanged',
+    'consumers',
+    'supersedes',
+    'resultingDirection',
+  ],
   design: ['states'],
   test: ['cases', 'tier'],
   copy: ['strings'],
@@ -118,13 +125,16 @@ describe('checkSections', () => {
     );
   });
 
-  it('names options when a decision task has none', () => {
+  it('names alternatives when a decision task has none', () => {
     const result = checkSections('task', 'decision', {
       ...base,
-      question: 'q',
-      recommendation: 'r',
+      decisionBrief: 'd',
+      whatChanged: 'w',
+      consumers: ['c'],
+      supersedes: 's',
+      resultingDirection: 'r',
     });
-    expect(result.missing).toEqual(['options']);
+    expect(result.missing).toEqual(['alternatives']);
   });
 
   it('reports an unknown key', () => {
@@ -211,19 +221,44 @@ describe('describeSectionSets', () => {
   });
 });
 
-describe('the planner-recorded decision brief (MOTIR-9211)', () => {
+describe('a decision is the write-up of a decision made in planning (MOTIR-9211, MOTIR-10206)', () => {
   const BRIEF = [
     ['decisionBrief', 'Decision'],
+    ['alternatives', 'Alternatives considered'],
     ['whatChanged', 'What changed'],
+    ['consumers', 'Consumed by'],
     ['supersedes', 'Supersedes'],
     ['resultingDirection', 'Resulting direction'],
   ] as const;
+  const LEGACY = ['question', 'options', 'recommendation'] as const;
+  const base = {
+    framing: 'f',
+    scopeBoundary: 'b',
+    acceptanceCriteria: ['a'],
+    contextRefs: [{ ref: 'x', why: 'y' }],
+  };
+  const brief = {
+    decisionBrief: 'd',
+    alternatives: ['a — not chosen because b'],
+    whatChanged: 'w',
+    consumers: ['MOTIR-1'],
+    supersedes: 's',
+    resultingDirection: 'r',
+  };
+  const legacy = {
+    question: 'q',
+    options: [{ label: 'a', cost: 'c', forecloses: 'f' }],
+    recommendation: 'r',
+  };
 
   it.each(['task', 'subtask', 'bug'] as const)(
-    'the %s decision cell serves the four brief sections as optional',
+    'the %s decision cell serves the six brief sections as REQUIRED and the open-question trio as optional',
     (kind) => {
       const cell = describeSectionSets().sets.find((s) => s.kind === kind && s.type === 'decision');
       for (const [name] of BRIEF) {
+        expect(cell?.sections).toContainEqual({ name, required: true });
+      }
+      for (const name of LEGACY) {
         expect(cell?.sections).toContainEqual({ name, required: false });
       }
     },
@@ -236,9 +271,69 @@ describe('the planner-recorded decision brief (MOTIR-9211)', () => {
     expect(order).toEqual([...order].sort((a, b) => a - b));
   });
 
+  it('a decision written as the brief alone is complete', () => {
+    const result = checkSections('task', 'decision', { ...base, ...brief });
+    expect(result).toEqual({ missing: [], unknown: [], invalid: [] });
+  });
+
+  it('a NEW decision in the old open-question shape is refused, naming the brief it lacks', () => {
+    const result = checkSections('task', 'decision', { ...base, ...legacy });
+    expect(result.missing).toEqual(BRIEF.map(([name]) => name));
+  });
+
+  it.each(['task', 'subtask', 'bug'] as const)(
+    'a STORED %s decision in the old open-question shape still reads complete',
+    (kind) => {
+      const value = { ...base, ...legacy, ...(kind === 'bug' ? { reproduction: 'x' } : {}) };
+      expect(checkSections(kind, 'decision', value, { acceptLegacy: true }).missing).toEqual([]);
+    },
+  );
+
+  it('the legacy shape counts only when every one of its sections is there', () => {
+    const { options: _o, ...partial } = legacy;
+    const result = checkSections(
+      'task',
+      'decision',
+      { ...base, ...partial },
+      { acceptLegacy: true },
+    );
+    expect(result.missing).toEqual(BRIEF.map(([name]) => name));
+  });
+
+  it('the legacy shape never waives the leaf core', () => {
+    const { scopeBoundary: _s, ...noBoundary } = base;
+    const result = checkSections(
+      'task',
+      'decision',
+      { ...noBoundary, ...legacy },
+      {
+        acceptLegacy: true,
+      },
+    );
+    expect(result.missing).toEqual(['scopeBoundary']);
+  });
+
+  it('only the decision type carries a legacy shape', () => {
+    for (const kind of ISSUE_TYPES) {
+      for (const type of TYPES) {
+        const set = sectionSetFor(kind, type);
+        const expected = type === 'decision' && kind !== 'epic' && kind !== 'story' ? LEGACY : [];
+        expect(set.legacy).toEqual([...expected]);
+      }
+    }
+  });
+
+  it('acceptLegacy changes nothing for a type with no legacy shape', () => {
+    const value = { ...base, states: [] };
+    expect(checkSections('task', 'design', value, { acceptLegacy: true })).toEqual(
+      checkSections('task', 'design', value),
+    );
+  });
+
   it('is not offered to a cell of another type', () => {
     expect(sectionSetFor('task', 'choice').sections).not.toContain('decisionBrief');
     expect(sectionSetFor('task', 'code').sections).not.toContain('supersedes');
+    expect(sectionSetFor('task', 'code').sections).not.toContain('alternatives');
   });
 });
 
@@ -272,6 +367,8 @@ function validValue(name: string): unknown {
     case 'acceptanceCriteria':
     case 'states':
     case 'assumptions':
+    case 'alternatives':
+    case 'consumers':
       return ['x'];
     case 'contextRefs':
       return [{ ref: 'x', why: 'y' }];
