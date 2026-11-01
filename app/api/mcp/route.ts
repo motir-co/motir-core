@@ -1,7 +1,12 @@
+import * as Sentry from '@sentry/nextjs';
 import { createMcpHandler, withMcpAuth } from 'mcp-handler';
 import { MCP_SERVER_INFO, registerMcpTools } from '@/lib/mcp/registry';
 import { contextFromAuthInfo, contextFromExtra, grantFromExtra } from '@/lib/mcp/context';
-import { verifyMcpToken } from '@/lib/mcp/auth';
+import {
+  MCP_AUTH_RETRY_AFTER_SECONDS,
+  McpAuthUnavailableError,
+  verifyMcpToken,
+} from '@/lib/mcp/auth';
 import { answerClientAbort } from '@/lib/mcp/clientAbort';
 import { answerMalformedBody } from '@/lib/mcp/malformedBody';
 import { enforceMcpRateLimit } from '@/lib/rateLimit/mcpGuard';
@@ -117,22 +122,32 @@ async function limitedHandler(req: Request): Promise<Response> {
 const innerHandler = answerClientAbort(limitedHandler);
 
 /**
- * A SUSPENDED organization's credential (MOTIR-748) is refused with the
- * dedicated 403 `ORGANIZATION_SUSPENDED`, not the 401 `withMcpAuth` turns every
- * verify throw into: a 401 would send an MCP client into a re-authentication
- * loop for a credential that is valid. The verifier still THROWS the typed error
- * (both arms reach it — the PAT through `apiTokensService.verify`, an OAuth
- * connection through the workspace access gate); this wrapper catches it, lets
- * `withMcpAuth` see a refusal, and answers 403 in place of its 401.
+ * `withMcpAuth` answers EVERY throw out of the verifier with the 401
+ * `invalid_token` an unknown token gets (mcp-handler 1.1.0 catches it and only
+ * `console.error`s it). So no throw may reach it: this wrapper catches each one,
+ * lets `withMcpAuth` see a refusal, and then answers what the throw MEANT.
+ *
+ *   · A SUSPENDED organization's credential (MOTIR-748) is the dedicated 403
+ *     `ORGANIZATION_SUSPENDED`: a 401 would send an MCP client into a
+ *     re-authentication loop for a credential that is valid. The verifier
+ *     raises the typed error on both arms — the PAT through
+ *     `apiTokensService.verify`, an OAuth connection through the workspace
+ *     access gate.
+ *   · A token check that LOST ITS DATABASE CONNECTION twice
+ *     (`McpAuthUnavailableError`, MOTIR-10168) is a handled 503 with
+ *     `Retry-After` — the credential was never judged, so a 401 would tell the
+ *     client to throw a good one away. It is reported to Sentry here, because a
+ *     handled answer is otherwise invisible to the monitor.
+ *   · Anything else is a fault, and is re-thrown, so it reaches the monitor and
+ *     answers 500 as any unhandled route error does — never 401.
  */
 async function handler(req: Request): Promise<Response> {
-  let suspended: OrganizationSuspendedError | null = null;
+  let thrown: { err: unknown } | null = null;
   const verify: typeof verifyMcpToken = async (r, bearer) => {
     try {
       return await verifyMcpToken(r, bearer);
     } catch (err) {
-      if (!(err instanceof OrganizationSuspendedError)) throw err;
-      suspended = err;
+      thrown = { err };
       return undefined;
     }
   };
@@ -141,18 +156,27 @@ async function handler(req: Request): Promise<Response> {
     resourceUrl: resolveBaseUrlTrimmed(),
     resourceMetadataPath: PROTECTED_RESOURCE_METADATA_PATH,
   })(req);
-  const refused = suspended as OrganizationSuspendedError | null;
-  if (refused) {
+  const outcome = thrown as { err: unknown } | null;
+  if (outcome === null) return res;
+  const caught = outcome.err;
+  if (caught instanceof OrganizationSuspendedError) {
     return Response.json(
       {
-        code: refused.code,
-        error: refused.message,
-        organizationId: refused.organizationId,
+        code: caught.code,
+        error: caught.message,
+        organizationId: caught.organizationId,
       },
       { status: 403 },
     );
   }
-  return res;
+  if (caught instanceof McpAuthUnavailableError) {
+    Sentry.captureException(caught, { tags: { mcp_auth: 'unavailable' } });
+    return Response.json(
+      { code: caught.code, error: caught.message },
+      { status: 503, headers: { 'Retry-After': String(MCP_AUTH_RETRY_AFTER_SECONDS) } },
+    );
+  }
+  throw caught;
 }
 
 /**
