@@ -61,6 +61,7 @@ SUMMARIES = {
     "get_project_state": "A project's planning preconditions — established, code connected, indexed, repo set — before you plan.",
     "get_code_health": "Each repository's index state, latest code-health audit summary and derived coding convention — what the hosted planner reads.",
     "get_coding_convention": "One repository's coding convention in full — derived or edited by a person, with its version — what a change in that repository follows.",
+    "update_coding_convention": "Write one repository's coding convention — a new version edited by you, refused when a newer one was saved since. Admins only.",
     "read_file": "One file's text from a project repository at a ref — capped, line-ranged, every absence a named outcome.",
     "list_changed_files": "The paths a branch changed in a project repository — bounded, every absence a named outcome.",
     "code_explore": "Explore the hosted code graph around a query — the hosted planner's own answer, paged, every absence a named state.",

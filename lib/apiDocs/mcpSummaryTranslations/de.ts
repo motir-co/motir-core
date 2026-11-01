@@ -502,6 +502,12 @@ export const de: McpSummaryTranslations = {
     summary: 'Eine Kante entfernen, angegeben mit derselben Beziehung, mit der sie angelegt wurde.',
     source: 'Remove an edge, given the same relationship used to create it.',
   },
+  update_coding_convention: {
+    summary:
+      'Die Coding-Konvention eines Repositorys schreiben – eine neue, von Ihnen bearbeitete Version; abgelehnt, wenn seitdem eine neuere gespeichert wurde. Nur für Admins.',
+    source:
+      "Write one repository's coding convention — a new version edited by you, refused when a newer one was saved since. Admins only.",
+  },
   update_folder: {
     summary:
       'Einen Ordner umbenennen oder verschieben und umsortieren – pro Aufruf das eine oder das andere, nie beides.',

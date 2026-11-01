@@ -621,6 +621,13 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
       "One repository's coding convention in full — derived or edited by a person, with its version — what a change in that repository follows.",
     descriptionFingerprint: '1c7784e4be1f',
   },
+  update_coding_convention: {
+    // MOTIR-10183 — the convention write, the /code editor's save on the MCP.
+    summary:
+      "Write one repository's coding convention — a new version edited by you, refused when a newer one was saved since. Admins only.",
+    // Pinned from the LIVE handshake, never hand-computed.
+    descriptionFingerprint: 'c9624fe0c6f8',
+  },
   read_file: {
     summary:
       "One file's text, or a directory's immediate entries, from a repository in the project's set, at a ref — capped and line-ranged like the hosted planner's read, every absence a named outcome.",

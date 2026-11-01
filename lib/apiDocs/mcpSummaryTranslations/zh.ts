@@ -455,6 +455,12 @@ export const zh: McpSummaryTranslations = {
     summary: '移除一条边，需给出创建它时使用的同一种关系。',
     source: 'Remove an edge, given the same relationship used to create it.',
   },
+  update_coding_convention: {
+    summary:
+      '写入某个仓库的编码规范：成为由你编辑的新版本；若此后已保存了更新的版本，则拒绝写入。仅限管理员。',
+    source:
+      "Write one repository's coding convention — a new version edited by you, refused when a newer one was saved since. Admins only.",
+  },
   update_folder: {
     summary: '重命名文件夹，或移动并重新排序，每次调用二选一，不能同时进行。',
     source: 'Rename a folder, or move and reorder it — one or the other per call, never both.',

@@ -103,6 +103,11 @@ export const EXEMPT_TOOLS = {
     'edited by), or a named `state` (absent / unavailable / repo_not_in_project) \u2014 a read of ' +
     'motir-ai\u2019s convention store assembled for an agent about to write code. No `/api/v1` ' +
     'operation returns a convention document, and no REST client has asked for one (MOTIR-9083).',
+  update_coding_convention:
+    'Answers the version a CONVENTION SAVE wrote (version, author, text) or the repository set ' +
+    '\u2014 the same convention document `get_coding_convention` returns, written through ' +
+    'motir-ai\u2019s convention store. No `/api/v1` operation returns or writes a convention ' +
+    'document (MOTIR-10183).',
   read_file:
     'Returns one repository FILE\u2019s TEXT at a git ref, plus a named `outcome` (found / not_found / ' +
     'ref_not_found / too_large / binary / \u2026 / repo_not_in_project) \u2014 a read made against the ' +

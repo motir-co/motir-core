@@ -200,6 +200,9 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   get_project_state: 'read',
   get_code_health: 'read',
   get_coding_convention: 'read',
+  // MOTIR-10183 — the convention write. Filed under `work_items:write` for totality
+  // only; its real gate is `ai:configure`, which no legacy scope confers.
+  update_coding_convention: 'work_items:write',
   read_file: 'read',
   list_changed_files: 'read',
   code_explore: 'read',

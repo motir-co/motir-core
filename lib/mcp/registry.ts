@@ -112,6 +112,10 @@ import {
   GET_CODING_CONVENTION_TOOL_NAME,
   registerGetCodingConvention,
 } from './tools/getCodingConvention';
+import {
+  UPDATE_CODING_CONVENTION_TOOL_NAME,
+  registerUpdateCodingConvention,
+} from './tools/updateCodingConvention';
 import { READ_FILE_TOOL_NAME, registerReadFile } from './tools/readFile';
 import { LIST_CHANGED_FILES_TOOL_NAME, registerListChangedFiles } from './tools/listChangedFiles';
 import {
@@ -272,6 +276,7 @@ export const MCP_TOOL_NAMES = [
   GET_PROJECT_STATE_TOOL_NAME,
   GET_CODE_HEALTH_TOOL_NAME,
   GET_CODING_CONVENTION_TOOL_NAME,
+  UPDATE_CODING_CONVENTION_TOOL_NAME,
   READ_FILE_TOOL_NAME,
   LIST_CHANGED_FILES_TOOL_NAME,
   CODE_EXPLORE_TOOL_NAME,
@@ -530,6 +535,10 @@ export function registerMcpTools(
   // point the agent at the stored convention instead of a file in the checkout.
   // Gated on `ai:plan`; the repo resolves against the PROJECT's set.
   registerGetCodingConvention(target, resolveContext);
+  // MOTIR-10183 — the convention WRITE: the /code editor's save, for an admin's
+  // agent applying an edit the admin approved. Gated on `ai:configure`, at the door
+  // and in the service; not in `CLI_TOKEN_GRANT`, so a `motir run` never writes one.
+  registerUpdateCodingConvention(target, resolveContext);
   // MOTIR-7861 — one file's TEXT from one of the project's repositories at a
   // ref: the read the hosted planner's `read_file` makes, for an agent planning
   // over the MCP. Gated on `ai:plan`; the repo resolves against the PROJECT's set.

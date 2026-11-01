@@ -105,6 +105,12 @@ export const DOCS_GUARD_SPECS = [
   // fails when either stops naming `read_file`, `code_explore`, `code_search`
   // or `code_grep`. Imports nothing from `lib/`.
   'tests/mcp/code-read-tool-docs.test.ts',
+  // ── tests/mcp/ — update_coding_convention's text homes (MOTIR-10183) ──────
+  // Reads `docs/mcp.md`, `docs/decisions/member-facing-permissions.md` and
+  // `design/mcp-server/build.py` and fails when the tool's section, its summary
+  // or the AMENDMENT 5 record goes missing. Split out of the tool's DB-backed
+  // spec, as `catch-up-disposition-adr` was; imports nothing from `lib/`.
+  'tests/mcp/update-coding-convention-docs.test.ts',
   // ── tests/permissions/ — the inventory, from THREE sides ──────────────────
   // All three open `docs/decisions/permission-inventory.md`, which maps every
   // user-initiated operation to the permission that governs it. `catalog`

@@ -500,6 +500,12 @@ export const it: McpSummaryTranslations = {
     summary: 'Rimuovi un arco, data la stessa relazione usata per crearlo.',
     source: 'Remove an edge, given the same relationship used to create it.',
   },
+  update_coding_convention: {
+    summary:
+      'Scrivere la convenzione di codice di un repository: una nuova versione modificata da te, rifiutata se nel frattempo ne è stata salvata una più recente. Solo amministratori.',
+    source:
+      "Write one repository's coding convention — a new version edited by you, refused when a newer one was saved since. Admins only.",
+  },
   update_folder: {
     summary:
       'Rinomina una Cartella, oppure spostala e riordinala: l’una o l’altra cosa per chiamata, mai entrambe.',

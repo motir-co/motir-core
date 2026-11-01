@@ -216,6 +216,9 @@ describe('LEGACY_SCOPE_PERMISSIONS (the forward map)', () => {
       'page:view',
       // MOTIR-7411 — the same, made grantable by `create_page` / `update_page`.
       'page:edit',
+      // MOTIR-10183 — made grantable by `update_coding_convention`, the first tool
+      // to assert it. No legacy string ever conferred it; no stale row may acquire it.
+      'ai:configure',
     ];
     expect([...union].sort()).toEqual(
       GRANTABLE_PERMISSIONS.filter((k) => !POSTDATE_THE_SCOPES.includes(k)).sort(),
@@ -274,6 +277,11 @@ describe('LEGACY_SCOPE_PERMISSIONS (the forward map)', () => {
       get_code_health: true,
       // MOTIR-9083 — `get_coding_convention`, the same loss and the same reason.
       get_coding_convention: true,
+      // MOTIR-10183 — `update_coding_convention`, the lesson tools' kind of loss:
+      // its `TOOL_SCOPES` row files it under `work_items:write` as the nearest
+      // bucket, and its key `ai:configure` was never conferred by any of the six
+      // strings, so a stale row cannot start rewriting a repository's house rules.
+      update_coding_convention: true,
       // MOTIR-7861 — `read_file`, the same loss as `get_code_health`: a read filed
       // under `read` whose service asserts `ai:plan`, and a tool that postdates
       // the six strings.

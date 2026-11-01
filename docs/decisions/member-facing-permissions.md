@@ -418,6 +418,41 @@ The owner decided that members see the whole `/code` page read-only, Health incl
 - **A role with `project:browse` but without `ai:plan`** (the built-in `viewer`) gets Health's admin-only
   empty state: the page catches `PermissionDeniedError` beside `NotProjectAdminError`.
 
+## AMENDMENT 5 (2026-11-01) — §4: the convention WRITE reaches the MCP on `ai:configure`, which becomes grantable (MOTIR-10183)
+
+**Source:** Task MOTIR-10183, which adds the `update_coding_convention` MCP tool — the /code editor's
+save (`aiConventionService.saveConvention`, MOTIR-9080 / MOTIR-9082), for an admin working with an
+agent who has approved an edit to a repository's house rules.
+
+AMENDMENT 4 kept `saveConvention` on `ai:configure`. That stands, and this amendment is the first time
+the key is reached by a token, so two sentences above stop being true and are superseded here rather
+than edited: AMENDMENT 3's _"`ai:configure` stays in `UNGRANTABLE_PERMISSIONS`"_ and its _"that key
+is ungrantable to any token today"_. Both were true when written, because no tool asserted the key.
+
+- **The tool's door permission is `ai:configure`, and the service asserts it again**
+  (`TOOL_PERMISSIONS.update_coding_convention`; `saveConventionByKey` → `saveConvention`). The door
+  and the service ask the same question, by `token-permissions.md` §3's rule: one key per tool, the
+  key its own service asserts. So a call needs the key in the token's GRANT and in its owner's ROLE.
+- **Why not `ai:plan` at the door, as the reads.** AMENDMENT 3's reason for `ai:plan` was that the
+  hosted planner already SHOWS the text to every `ai:plan` holder. Nothing already lets a member
+  WRITE it, and the editor refuses them; a door on `ai:plan` with `ai:configure` inside would let a
+  token minted for planning carry an admin's write — the narrowing the grant exists for would not
+  apply to the one write in this domain.
+- **`ai:configure` is therefore GRANTABLE**, by derivation (`GRANTABLE_PERMISSIONS` is computed from
+  `TOOL_PERMISSIONS`), and the token picker offers it to an actor who holds it — an admin.
+  **`DEFAULT_TOKEN_GRANT` carries it**, by the same derivation: the default withholds only the
+  irreversible key, and a convention save is reversible (every save is a new version; the replaced
+  text stays in the history). A member's default token is unaffected in practice, because `∩ role`
+  caps it.
+- **No stored grant is widened.** A token minted before this change holds no `ai:configure` and does
+  not gain it: the key postdates the six legacy scope strings (none of them confers it) and is not
+  read forward like the room view keys (AMENDMENT 2 of `token-permissions.md` — those were split OUT
+  of a reach tokens already had; this is a new capability). An admin mints a new token to use the
+  tool; changing an existing token's grant in place is MOTIR-10185.
+- **`CLI_TOKEN_GRANT` is NOT widened.** A `motir run` agent edits no repository's house rules, and
+  the planner sessions do not list the tool (`prompts/plan.py` passes every tool outside its surface
+  list to `--disallowedTools`; motir-ai's hosted planner has no MCP door at all).
+
 ## References
 
 - `lib/permissions/catalog.ts` — `PERMISSIONS`, and the `planned` /

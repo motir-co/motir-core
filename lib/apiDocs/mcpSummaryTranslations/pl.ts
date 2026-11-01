@@ -495,6 +495,12 @@ export const pl: McpSummaryTranslations = {
     summary: 'Usuń krawędź, podając tę samą relację, której użyto do jej utworzenia.',
     source: 'Remove an edge, given the same relationship used to create it.',
   },
+  update_coding_convention: {
+    summary:
+      'Zapisanie konwencji kodowania jednego repozytorium – nowa wersja zredagowana przez Ciebie, odrzucana, jeśli w międzyczasie zapisano nowszą. Tylko administratorzy.',
+    source:
+      "Write one repository's coding convention — a new version edited by you, refused when a newer one was saved since. Admins only.",
+  },
   update_folder: {
     summary:
       'Zmień nazwę folderu albo go przenieś i zmień kolejność — jedno albo drugie w jednym wywołaniu, nigdy oba naraz.',

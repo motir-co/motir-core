@@ -574,6 +574,14 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         get_code_health: { projectKey: 'PROD' },
         // MOTIR-9083 — no repository set, so `repo_not_in_project`, a named non-error.
         get_coding_convention: { projectKey: 'PROD', repo: 'motir-core' },
+        // MOTIR-10183 — no repository set, so `repo_not_in_project` when the grant and
+        // role allow it; nothing is written and motir-ai is never called.
+        update_coding_convention: {
+          projectKey: 'PROD',
+          repo: 'motir-core',
+          contentMd: '# House rules',
+          baseVersion: 0,
+        },
         // MOTIR-7861 — no repository set, so `repo_not_in_project`: a named,
         // non-error outcome answered before any host call.
         read_file: { projectKey: 'PROD', repo: 'motir-core', path: 'README.md' },

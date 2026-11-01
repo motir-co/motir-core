@@ -496,6 +496,12 @@ export const nl: McpSummaryTranslations = {
     summary: 'Verwijder een relatie, gegeven dezelfde relatie die voor het maken is gebruikt.',
     source: 'Remove an edge, given the same relationship used to create it.',
   },
+  update_coding_convention: {
+    summary:
+      'De codeconventie van één repository schrijven – een nieuwe versie die u bewerkt, geweigerd als er sindsdien een nieuwere is opgeslagen. Alleen beheerders.',
+    source:
+      "Write one repository's coding convention — a new version edited by you, refused when a newer one was saved since. Admins only.",
+  },
   update_folder: {
     summary:
       'Hernoem een Map, of verplaats en herorden hem — het een of het ander per aanroep, nooit beide.',

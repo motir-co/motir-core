@@ -499,6 +499,12 @@ export const fr: McpSummaryTranslations = {
     summary: 'Supprimer un lien, à partir de la même relation que celle utilisée pour le créer.',
     source: 'Remove an edge, given the same relationship used to create it.',
   },
+  update_coding_convention: {
+    summary:
+      "Écrire la convention de code d'un dépôt – une nouvelle version modifiée par vous, refusée si une plus récente a été enregistrée entre-temps. Administrateurs uniquement.",
+    source:
+      "Write one repository's coding convention — a new version edited by you, refused when a newer one was saved since. Admins only.",
+  },
   update_folder: {
     summary:
       "Renommer un Dossier, ou le déplacer et le réordonner — l'un ou l'autre par appel, jamais les deux.",
