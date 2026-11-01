@@ -26,6 +26,9 @@ export interface AwsStackInstanceState {
   readonly statusReason: string | null;
   readonly stackId: string | null;
   readonly parameterOverrides: Readonly<Record<string, string>>;
+  /** `StackInstance.LastOperationId`: the operation that last created or updated
+   *  the instance, when AWS names one (MOTIR-10204). */
+  readonly lastOperationId?: string | null;
 }
 
 /** The instance ended in a state no wait gets it out of. */
@@ -66,20 +69,32 @@ export class AwsStackOutputsMissingError extends Error {
  * carries: the same inputs always give the same id, so a repeated call attaches
  * to the operation already filed rather than starting a second one. At most 128
  * characters of `[a-zA-Z0-9-]`, starting with a letter.
+ *
+ * `after` is the operation the update follows — the instance's
+ * `LastOperationId` (MOTIR-10204). An operation id is spent once AWS has filed
+ * it, so an update that re-applies an instance whose last operation FAILED needs
+ * an id that operation never had: a re-run reading the same failed state still
+ * derives the same id (and attaches to its own filing), and a later failure gives
+ * the next re-apply a new one. Without `after` the id is the inputs' alone.
  */
 export function awsStackSetOperationId(
   action: 'create' | 'update',
   target: AwsStackInstanceTarget,
   parameterOverrides: Readonly<Record<string, string>>,
+  after?: string | null,
 ): string {
   const overrides = Object.keys(parameterOverrides)
     .sort()
     .map((key) => [key, parameterOverrides[key]]);
-  const digest = createHash('sha256')
-    .update(
-      JSON.stringify([action, target.stackSetName, target.accountId, target.region, overrides]),
-    )
-    .digest('hex');
+  const inputs: unknown[] = [
+    action,
+    target.stackSetName,
+    target.accountId,
+    target.region,
+    overrides,
+  ];
+  if (after) inputs.push(after);
+  const digest = createHash('sha256').update(JSON.stringify(inputs)).digest('hex');
   return `motir-${action}-${digest.slice(0, 48)}`;
 }
 
@@ -122,6 +137,28 @@ const TERMINAL = [
   'FAILED_IMPORT',
   'SKIPPED_SUSPENDED_ACCOUNT',
 ];
+
+/** The detailed statuses an `UpdateStackInstances` gets an OUTDATED instance out
+ *  of: its last operation failed or was stopped on it, or finished and left it
+ *  behind the stack set. Every other one is in flight (`PENDING`, `RUNNING`, or
+ *  none yet) or past what an update can repair (`INOPERABLE`, `FAILED_IMPORT`,
+ *  `SKIPPED_SUSPENDED_ACCOUNT`). */
+const REAPPLIABLE = ['FAILED', 'CANCELLED', 'SUCCEEDED'];
+
+/**
+ * Whether the instance must be applied again before it can become CURRENT
+ * (MOTIR-10204): it is `OUTDATED` and nothing is still working on it — its last
+ * operation failed, was cancelled, or ended without bringing it up to date. Such
+ * an instance stays where it is until someone files an `UpdateStackInstances`;
+ * waiting on it only reads the same failure again. Pure.
+ */
+export function stackInstanceNeedsReapply(instance: AwsStackInstanceState): boolean {
+  return (
+    instance.status === 'OUTDATED' &&
+    instance.detailedStatus !== null &&
+    REAPPLIABLE.includes(instance.detailedStatus)
+  );
+}
 
 /**
  * What the instance's status means to a caller waiting on it: `current`, or

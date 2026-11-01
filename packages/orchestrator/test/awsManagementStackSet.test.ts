@@ -11,6 +11,7 @@ import {
   parameterOverridesFor,
   parameterOverridesOf,
   sameParameterOverrides,
+  stackInstanceNeedsReapply,
   stackInstanceOutcome,
   type AwsManagementClientFactory,
   type AwsManagementOptions,
@@ -203,6 +204,16 @@ describe('awsStackSetOperationId', () => {
     ).not.toBe(id);
   });
 
+  it('follows the operation an update comes after, so a re-apply never reuses a spent id (MOTIR-10204)', () => {
+    const plain = awsStackSetOperationId('update', TARGET, OVERRIDES);
+    const after = awsStackSetOperationId('update', TARGET, OVERRIDES, 'op-failed-1');
+    expect(after).toMatch(/^motir-update-[a-f0-9]{48}$/);
+    expect(after).not.toBe(plain);
+    expect(awsStackSetOperationId('update', TARGET, OVERRIDES, 'op-failed-1')).toBe(after);
+    expect(awsStackSetOperationId('update', TARGET, OVERRIDES, 'op-failed-2')).not.toBe(after);
+    expect(awsStackSetOperationId('update', TARGET, OVERRIDES, null)).toBe(plain);
+  });
+
   it('compares overrides exactly', () => {
     expect(sameParameterOverrides({ ...OVERRIDES }, OVERRIDES)).toBe(true);
     expect(sameParameterOverrides({ ...OVERRIDES, Extra: 'x' }, OVERRIDES)).toBe(false);
@@ -377,24 +388,176 @@ describe('ensureStackInstance', () => {
   );
 
   it.each([
-    ['OUTDATED', 'FAILED'],
-    ['OUTDATED', 'CANCELLED'],
     ['INOPERABLE', undefined],
-  ])('an instance %s/%s throws with the status and AWS status reason', async (status, detailed) => {
-    const { api } = harness(
-      stackSet([
-        () =>
-          instance(status, OVERRIDES, {
-            StatusReason: 'Account 000000000001 should have a role',
-            ...(detailed ? { StackInstanceStatus: { DetailedStatus: detailed } } : {}),
-          }),
-      ]),
+    ['OUTDATED', 'SKIPPED_SUSPENDED_ACCOUNT'],
+    ['OUTDATED', 'FAILED_IMPORT'],
+  ])(
+    'an instance %s/%s no update repairs throws with the status and AWS status reason, filing nothing',
+    async (status, detailed) => {
+      const { api, sent } = harness(
+        stackSet([
+          () =>
+            instance(status, OVERRIDES, {
+              StatusReason: 'Account 000000000001 should have a role',
+              ...(detailed ? { StackInstanceStatus: { DetailedStatus: detailed } } : {}),
+            }),
+        ]),
+      );
+      const err = await api.ensureStackInstance(INPUT).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(AwsStackInstanceFailedError);
+      expect(err).toMatchObject({
+        status: detailed ? `${status}/${detailed}` : status,
+        statusReason: 'Account 000000000001 should have a role',
+      });
+      expect(sent('UpdateStackInstancesCommand')).toHaveLength(0);
+    },
+  );
+
+  describe('a re-run facing an instance an earlier operation left behind (MOTIR-10204)', () => {
+    const failedInstance = (detailed: string, lastOperationId: string | null = 'op-failed-1') =>
+      instance('OUTDATED', OVERRIDES, {
+        StatusReason: 'ServiceQuotas service-linked role could not be created',
+        StackInstanceStatus: { DetailedStatus: detailed },
+        ...(lastOperationId ? { LastOperationId: lastOperationId } : {}),
+      });
+
+    it.each(['FAILED', 'CANCELLED', 'SUCCEEDED'])(
+      'applies an OUTDATED/%s instance again with a fresh update, waits for it, and answers updated',
+      async (detailed) => {
+        const { api, sent } = harness(
+          stackSet([
+            () => failedInstance(detailed),
+            () =>
+              instance('OUTDATED', OVERRIDES, {
+                StackInstanceStatus: { DetailedStatus: 'RUNNING' },
+              }),
+            () => instance('CURRENT', OVERRIDES),
+          ]),
+        );
+        await expect(api.ensureStackInstance(INPUT)).resolves.toEqual({ action: 'updated' });
+        const id = awsStackSetOperationId('update', TARGET, OVERRIDES, 'op-failed-1');
+        expect(id).not.toBe(awsStackSetOperationId('update', TARGET, OVERRIDES));
+        expect(sent('CreateStackInstancesCommand')).toHaveLength(0);
+        expect(sent('UpdateStackInstancesCommand').map((c) => c.input)).toEqual([
+          {
+            StackSetName: TARGET.stackSetName,
+            Regions: [TARGET.region],
+            ParameterOverrides: parameterOverridesFor(OVERRIDES),
+            CallAs: 'DELEGATED_ADMIN',
+            DeploymentTargets: {
+              OrganizationalUnitIds: [UNIT],
+              Accounts: [TARGET.accountId],
+              AccountFilterType: 'INTERSECTION',
+            },
+            OperationId: id,
+          },
+        ]);
+        expect(sent('DescribeStackSetOperationCommand').map((c) => c.input['OperationId'])).toEqual(
+          [id],
+        );
+      },
     );
-    const err = await api.ensureStackInstance(INPUT).catch((e: unknown) => e);
-    expect(err).toBeInstanceOf(AwsStackInstanceFailedError);
-    expect(err).toMatchObject({
-      status: detailed ? `${status}/${detailed}` : status,
-      statusReason: 'Account 000000000001 should have a role',
+
+    it('re-applies a failed instance holding other overrides with the new ones', async () => {
+      const { api, sent } = harness(
+        stackSet([
+          () =>
+            instance(
+              'OUTDATED',
+              { ShardTag: 'default' },
+              { StackInstanceStatus: { DetailedStatus: 'FAILED' }, LastOperationId: 'op-auto' },
+            ),
+          () => instance('CURRENT', OVERRIDES),
+        ]),
+      );
+      await expect(api.ensureStackInstance(INPUT)).resolves.toEqual({ action: 'updated' });
+      expect(sent('UpdateStackInstancesCommand').map((c) => c.input['OperationId'])).toEqual([
+        awsStackSetOperationId('update', TARGET, OVERRIDES, 'op-auto'),
+      ]);
+    });
+
+    it('an update of a CURRENT instance with other overrides follows its last operation too', async () => {
+      const { api, sent } = harness(
+        stackSet([
+          () => instance('CURRENT', { ShardTag: 'default' }, { LastOperationId: 'op-auto' }),
+          () => instance('CURRENT', OVERRIDES),
+        ]),
+      );
+      await expect(api.ensureStackInstance(INPUT)).resolves.toEqual({ action: 'updated' });
+      expect(sent('UpdateStackInstancesCommand').map((c) => c.input['OperationId'])).toEqual([
+        awsStackSetOperationId('update', TARGET, OVERRIDES, 'op-auto'),
+      ]);
+    });
+
+    it('a failed instance AWS names no last operation for still gets an id unlike the plain one', async () => {
+      const { api, sent } = harness(
+        stackSet([() => failedInstance('FAILED', null), () => instance('CURRENT', OVERRIDES)]),
+      );
+      await expect(api.ensureStackInstance(INPUT)).resolves.toEqual({ action: 'updated' });
+      const [update] = sent('UpdateStackInstancesCommand');
+      expect(update?.input['OperationId']).toMatch(/^motir-update-[a-f0-9]{48}$/);
+      expect(update?.input['OperationId']).not.toBe(
+        awsStackSetOperationId('update', TARGET, OVERRIDES),
+      );
+    });
+
+    it('a second re-run after its own re-apply was filed attaches to it rather than filing again', async () => {
+      const { api, sent } = harness(
+        stackSet([() => failedInstance('FAILED'), () => instance('CURRENT', OVERRIDES)], {
+          UpdateStackInstancesCommand: () => {
+            throw sdkError('OperationIdAlreadyExistsException');
+          },
+        }),
+      );
+      await expect(api.ensureStackInstance(INPUT)).resolves.toEqual({ action: 'updated' });
+      expect(sent('DescribeStackSetOperationCommand')[0]?.input['OperationId']).toBe(
+        awsStackSetOperationId('update', TARGET, OVERRIDES, 'op-failed-1'),
+      );
+    });
+
+    it('waits on an operation someone else is running, then re-applies when it leaves the instance failed', async () => {
+      const { api, sent } = harness(
+        stackSet([
+          () =>
+            instance('OUTDATED', OVERRIDES, { StackInstanceStatus: { DetailedStatus: 'RUNNING' } }),
+          () => failedInstance('FAILED', 'op-auto-deploy'),
+          () => instance('CURRENT', OVERRIDES),
+        ]),
+      );
+      await expect(api.ensureStackInstance(INPUT)).resolves.toEqual({ action: 'updated' });
+      expect(sent('UpdateStackInstancesCommand').map((c) => c.input['OperationId'])).toEqual([
+        awsStackSetOperationId('update', TARGET, OVERRIDES, 'op-auto-deploy'),
+      ]);
+    });
+
+    it('the re-apply this run filed ending FAILED throws with AWS’s status reason', async () => {
+      const { api, sent } = harness(
+        stackSet([() => failedInstance('FAILED')], {
+          DescribeStackSetOperationCommand: () => ({
+            StackSetOperation: {
+              Status: 'FAILED',
+              StatusReason: 'The stack failed in 1 account: ServiceQuotas role',
+            },
+          }),
+        }),
+      );
+      const err = await api.ensureStackInstance(INPUT).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(AwsStackInstanceFailedError);
+      expect(err).toMatchObject({
+        status: 'operation FAILED',
+        statusReason: 'The stack failed in 1 account: ServiceQuotas role',
+      });
+      expect(sent('UpdateStackInstancesCommand')).toHaveLength(1);
+    });
+
+    it('an instance our operation left failed, though the operation succeeded, throws with its reason', async () => {
+      const { api } = harness(stackSet([absent, () => failedInstance('FAILED', 'op-ours')]));
+      const err = await api.ensureStackInstance(INPUT).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(AwsStackInstanceFailedError);
+      expect(err).toMatchObject({
+        status: 'OUTDATED/FAILED',
+        statusReason: 'ServiceQuotas service-linked role could not be created',
+      });
     });
   });
 
@@ -552,4 +715,33 @@ describe('stackInstanceOutcome', () => {
       stackInstanceOutcome(TARGET, state('OUTDATED', 'SKIPPED_SUSPENDED_ACCOUNT')),
     ).toThrow(AwsStackInstanceFailedError);
   });
+});
+
+describe('stackInstanceNeedsReapply (MOTIR-10204)', () => {
+  const state = (status: string, detailedStatus: string | null) => ({
+    status,
+    detailedStatus,
+    statusReason: null,
+    stackId: null,
+    parameterOverrides: {},
+  });
+  it.each(['FAILED', 'CANCELLED', 'SUCCEEDED'])('is true for OUTDATED/%s', (detailed) => {
+    expect(stackInstanceNeedsReapply(state('OUTDATED', detailed))).toBe(true);
+  });
+  it.each([
+    ['CURRENT', 'SUCCEEDED'],
+    ['CURRENT', 'FAILED'],
+    ['OUTDATED', 'PENDING'],
+    ['OUTDATED', 'RUNNING'],
+    ['OUTDATED', null],
+    ['OUTDATED', 'INOPERABLE'],
+    ['OUTDATED', 'FAILED_IMPORT'],
+    ['OUTDATED', 'SKIPPED_SUSPENDED_ACCOUNT'],
+    ['INOPERABLE', 'FAILED'],
+  ])(
+    'is false for %s/%s — current, in flight, or past what an update repairs',
+    (status, detailed) => {
+      expect(stackInstanceNeedsReapply(state(status, detailed))).toBe(false);
+    },
+  );
 });

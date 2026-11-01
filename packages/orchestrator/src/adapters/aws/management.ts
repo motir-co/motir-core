@@ -52,6 +52,7 @@ import {
   parameterOverridesFor,
   parameterOverridesOf,
   sameParameterOverrides,
+  stackInstanceNeedsReapply,
   stackInstanceOutcome,
   type AwsStackInstanceState,
   type AwsStackInstanceTarget,
@@ -164,6 +165,9 @@ export interface AwsOrganizationAccount {
   readonly accountId: string;
   readonly name: string;
   readonly status: string;
+  /** When the account joined the organization, when AWS says: what tells a
+   *  new account's EC2 activation from a real refusal (MOTIR-10204). */
+  readonly joinedAt?: Date;
 }
 
 /** What a lookup by name found: the account, a CreateAccount still running for
@@ -307,7 +311,9 @@ export interface AwsManagementApi {
     organizationalUnitId: string,
   ): Promise<{ moved: boolean }>;
   /** Make the account's stack instance exist with exactly these overrides, and
-   *  wait for it to be CURRENT. Answers what it sent, `none` on a resumed run. */
+   *  wait for it to be CURRENT. An instance an earlier operation left OUTDATED
+   *  (failed, cancelled) is applied again (MOTIR-10204). Answers what it sent,
+   *  `none` on a resumed run that found it CURRENT or in flight. */
   ensureStackInstance(
     input: AwsStackInstanceTarget & {
       organizationalUnitId: string;
@@ -401,6 +407,7 @@ function accountOf(account: Account): AwsOrganizationAccount {
     accountId: required(account.Id, 'Id'),
     name: account.Name ?? '',
     status: account.State ?? account.Status ?? '',
+    ...(account.JoinedTimestamp ? { joinedAt: account.JoinedTimestamp } : {}),
   };
 }
 
@@ -529,6 +536,9 @@ export function createAwsManagementApi(
           accountId: required(status?.AccountId, 'AccountId'),
           name: status?.AccountName ?? name,
           status: 'ACTIVE',
+          // The account joined when its creation completed; a request AWS
+          // answers without the time completed just now.
+          joinedAt: status?.CompletedTimestamp ?? new Date(now()),
         };
       }
       if (state === 'FAILED') {
@@ -590,6 +600,7 @@ export function createAwsManagementApi(
         statusReason: instance.StatusReason ?? null,
         stackId: instance.StackId ?? null,
         parameterOverrides: parameterOverridesOf(instance.ParameterOverrides),
+        lastOperationId: instance.LastOperationId ?? null,
       };
     } catch (err) {
       if (
@@ -1023,40 +1034,62 @@ export function createAwsManagementApi(
         CallAs: 'DELEGATED_ADMIN' as const,
       };
 
-      // Reach an instance with the wanted overrides, or an operation making one.
-      // Every state is read from AWS, so a re-run picks up where a run stopped.
-      let action: 'created' | 'updated' | 'none' = 'none';
-      let operationId: string | null = null;
+      // Reach a CURRENT instance with the wanted overrides, or an operation of
+      // ours making one. Every state is read from AWS, so a re-run picks up where
+      // a run stopped — including after a failure: an instance whose last
+      // operation failed or was cancelled is OUTDATED, often with the wanted
+      // overrides, and only a new update moves it (MOTIR-10204). That update's id
+      // follows the failed operation, so it is never the spent one again. An
+      // instance someone else's operation is still working on is waited on here,
+      // and applied again if that operation leaves it failed.
+      let action: 'created' | 'updated';
+      let operationId: string;
       for (;;) {
         const instance = await describeStackInstance(cfn, target);
-        if (instance && sameParameterOverrides(instance.parameterOverrides, parameterOverrides)) {
-          break;
+        const reapply = instance !== null && stackInstanceNeedsReapply(instance);
+        if (
+          instance &&
+          !reapply &&
+          sameParameterOverrides(instance.parameterOverrides, parameterOverrides)
+        ) {
+          // Throws on a state no update repairs (INOPERABLE, a suspended account).
+          if (stackInstanceOutcome(target, instance) === 'current') return { action: 'none' };
+          if (now() >= deadline) throw stackInstanceDeadline(target, instance.status);
+          await sleep(STACK_INSTANCE_POLL_MS);
+          continue;
         }
         const create = instance === null;
-        const id = awsStackSetOperationId(create ? 'create' : 'update', target, parameterOverrides);
-        operationId = await fileStackSetOperation(
+        const id = create
+          ? awsStackSetOperationId('create', target, parameterOverrides)
+          : awsStackSetOperationId(
+              'update',
+              target,
+              parameterOverrides,
+              // A failed instance AWS names no last operation for still needs an
+              // id its failed operation did not have.
+              instance.lastOperationId ?? (reapply ? `at-${now()}` : null),
+            );
+        const deploymentTargets = {
+          OrganizationalUnitIds: [organizationalUnitId],
+          Accounts: [target.accountId],
+          AccountFilterType: 'INTERSECTION' as const,
+        };
+        const filed = await fileStackSetOperation(
           cfn,
           create
             ? new CreateStackInstancesCommand({
                 ...common,
-                DeploymentTargets: {
-                  OrganizationalUnitIds: [organizationalUnitId],
-                  Accounts: [target.accountId],
-                  AccountFilterType: 'INTERSECTION',
-                },
+                DeploymentTargets: deploymentTargets,
                 OperationId: id,
               })
             : new UpdateStackInstancesCommand({
                 ...common,
-                DeploymentTargets: {
-                  OrganizationalUnitIds: [organizationalUnitId],
-                  Accounts: [target.accountId],
-                  AccountFilterType: 'INTERSECTION',
-                },
+                DeploymentTargets: deploymentTargets,
                 OperationId: id,
               }),
         );
-        if (operationId) {
+        if (filed) {
+          operationId = filed;
           action = create ? 'created' : 'updated';
           break;
         }
@@ -1066,8 +1099,8 @@ export function createAwsManagementApi(
       }
 
       // Our operation, to its end: until it finishes the instance may still read
-      // CURRENT with the old overrides.
-      while (operationId) {
+      // CURRENT with the old overrides. Its failure is the one that throws.
+      for (;;) {
         const { StackSetOperation: operation } = await call<{
           StackSetOperation?: { Status?: string; StatusReason?: string };
         }>(
