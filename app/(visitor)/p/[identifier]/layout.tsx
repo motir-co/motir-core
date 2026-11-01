@@ -54,7 +54,7 @@ export default async function VisitorLayout({
 }) {
   const { identifier: raw } = await params;
   const identifier = decodeURIComponent(raw);
-  const { ctx, actorName, actorEmail } = await settleVisitor(identifier);
+  const { ctx, actorName, actorEmail, actorImage } = await settleVisitor(identifier);
   const project = ctx.project;
   // The Visitor key set as the provider's array, in catalog order (it takes the
   // serialisable `ActorPermissionsDTO` shape).
@@ -80,7 +80,7 @@ export default async function VisitorLayout({
                     projectName={project.name}
                     projectKey={project.identifier}
                     landingHref={publicProjectUrl(project.identifier)}
-                    user={{ name: actorName, email: actorEmail }}
+                    user={{ name: actorName, email: actorEmail, image: actorImage }}
                   />
                 }
                 sidebar={<VisitorRail identifier={project.identifier} helpMenu={helpMenu} />}

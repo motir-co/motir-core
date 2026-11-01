@@ -8,10 +8,17 @@ import { Pill } from '@/components/ui/Pill';
 import { Popover } from '@/components/ui/Popover';
 import { cn } from '@/lib/utils/cn';
 import { signOut } from '@/lib/auth/client';
+import { UserAvatarFace } from './UserAvatarFace';
 
 export interface UserMenuProps {
   name: string;
   email: string;
+  /**
+   * The RESOLVED absolute URL of the user's profile photo
+   * (`storedAssetUrl(user.image)`), or null/absent when they have none — the
+   * trigger then draws their initial, exactly as before MOTIR-10182.
+   */
+  image?: string | null;
   /**
    * The acting user is platform staff — renders the staff-only "Platform admin"
    * row, the single door into the operator console (design
@@ -41,13 +48,11 @@ export interface UserMenuProps {
 // The design of record is `design/shell/account-menu.mock.html`, whose Panel B
 // drew FOUR state frames and now draws TWO for exactly this reason.
 
-export function UserMenu({ name, email, platformStaff = false }: UserMenuProps) {
+export function UserMenu({ name, email, image = null, platformStaff = false }: UserMenuProps) {
   const t = useTranslations('shell');
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
-
-  const initial = (name || email).trim().charAt(0).toUpperCase() || '?';
 
   function handleSignOut() {
     startTransition(async () => {
@@ -69,9 +74,10 @@ export function UserMenu({ name, email, platformStaff = false }: UserMenuProps) 
           // box is `--height-control` square, not `h-9`: at 375px the avatar
           // used to measure 28px wide against a 36px height and render as an
           // ELLIPSE, because a shrinking flex row squeezed a fixed `w-9`.
-          className="bg-(--el-text) text-(--el-text-inverted) focus-visible:ring-(--focus-ring-color) inline-flex h-(--height-control) w-(--height-control) items-center justify-center rounded-full font-sans text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          // `overflow-hidden` crops a profile photo to the circle (MOTIR-10182).
+          className="bg-(--el-text) text-(--el-text-inverted) focus-visible:ring-(--focus-ring-color) inline-flex h-(--height-control) w-(--height-control) items-center justify-center overflow-hidden rounded-full font-sans text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
-          {initial}
+          <UserAvatarFace image={image} name={name || email} />
         </button>
       </Popover.Trigger>
       {/* 336px is DERIVED from the widest row, not chosen (MOTIR-4270). The

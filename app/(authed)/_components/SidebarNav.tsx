@@ -112,11 +112,12 @@ export interface SidebarNavProps {
   settingsPermissions?: readonly PermissionKey[];
   /**
    * The signed-in user's identity (Subtask 7.8.12) — drives the account-settings
-   * area rail header (initial avatar + name + email) when the rail is inside the
+   * area rail header (avatar + name + email) when the rail is inside the
    * `/settings/account*` area. Resolved once in the (authed) layout from the
-   * session (the same `{ name, email }` the TopNav user menu shows).
+   * session (the same `{ name, email, image }` the TopNav user menu shows);
+   * `image` is the RESOLVED profile-photo URL, never the stored key (MOTIR-10182).
    */
-  user: { name: string; email: string };
+  user: { name: string; email: string; image?: string | null };
   /**
    * The ACTIVE ORGANISATION (Story MOTIR-4669 · MOTIR-4710) — its name for the
    * organisation-settings area rail header, and whether the actor administers it
